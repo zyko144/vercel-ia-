@@ -5,6 +5,8 @@ import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
 import { startReminderLoop } from './features/reminders.js';
 import { startVoiceKeeper } from './features/voice.js';
+import { ensureBinaries } from './music/binaries.js';
+import { handleMusicVoiceState } from './music/handlers.js';
 import { startHttpServer } from './server.js';
 import { storageBackend } from './storage.js';
 
@@ -49,7 +51,12 @@ client.on(Events.InteractionCreate, (interaction) => {
   onInteraction(client, interaction).catch((err) => console.error('[interactionCreate]', err));
 });
 
+client.on(Events.VoiceStateUpdate, (oldState, newState) => handleMusicVoiceState(oldState, newState));
+
 client.on(Events.Error, (err) => console.error('[discord]', err));
+
+// Prépare yt-dlp dès le démarrage pour que le premier /play soit rapide
+ensureBinaries().catch((err) => console.warn('[musique] yt-dlp indisponible :', err.message));
 process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
 
 startHttpServer(() => ({

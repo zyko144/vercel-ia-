@@ -6,6 +6,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from 'discord.js';
+import { musicCommands, MUSIC_COMMAND_NAMES } from '../music/commands.js';
 
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
 const TEXT_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum, ChannelType.GuildVoice];
@@ -70,7 +71,7 @@ const aiCommands = [
     .addStringOption((o) => o.setName('langue').setDescription('Langue voulue (par défaut : français, ou anglais si déjà en français)').setMaxLength(50)),
 
   new SlashCommandBuilder()
-    .setName('resume')
+    .setName('resume-salon')
     .setDescription("Résume les derniers messages du salon (t'as raté quoi ?)")
     .addIntegerOption((o) => o.setName('messages').setDescription('Nombre de messages à lire (10-100)').setMinValue(10).setMaxValue(100)),
 
@@ -251,11 +252,12 @@ const utilityCommands = [
     .addSubcommand((s) => s.setName('voc').setDescription('Force le bot à (re)rejoindre le vocal')),
 ];
 
-export const commandDefinitions = [...aiCommands, ...moderationCommands, ...utilityCommands];
+export const commandDefinitions = [...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands];
 
 // Commandes qui marchent partout (les autres seulement dans le salon IA)
 export const COMMANDS_ALLOWED_EVERYWHERE = new Set([
   ...moderationCommands.map((c) => c.name),
+  ...MUSIC_COMMAND_NAMES,
   'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin',
   'Expliquer ce message', 'Traduire en français',
 ]);

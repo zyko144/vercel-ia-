@@ -14,6 +14,8 @@ import { rejoinVoice, voiceStatus } from '../features/voice.js';
 import { storageBackend } from '../storage.js';
 import { allowedChannelsMention, attachmentsToContent, fetchBase64, isAllowedChannel, truncate } from '../utils/discord.js';
 import { buildAnswerPayload, handleCopyButton, handleCopyModal } from '../utils/reply.js';
+import { MUSIC_COMMAND_NAMES } from '../music/commands.js';
+import { handleMusicAutocomplete, handleMusicCommand, handleMusicComponent, isMusicComponent } from '../music/handlers.js';
 import { MODERATION_HANDLERS } from './moderation.js';
 import { UTILITY_HANDLERS } from './utility.js';
 
@@ -29,7 +31,12 @@ const isOwner = (user) => user.id === config.ownerId;
 
 export async function onInteraction(client, interaction) {
   try {
-    // Boutons et fenêtres (ils n'existent que là où le bot a déjà répondu)
+    if (interaction.isAutocomplete()) {
+      if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicAutocomplete(interaction);
+      return await interaction.respond([]);
+    }
+    // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
+    if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
     if (interaction.isButton()) {
       if (interaction.customId === 'copy:code') return await handleCopyButton(interaction);
       if (interaction.customId.startsWith('quiz')) return await handleQuizButton(client, interaction);
@@ -46,6 +53,7 @@ export async function onInteraction(client, interaction) {
     }
 
     if (interaction.isMessageContextMenuCommand()) return await handleContextMenu(client, interaction);
+    if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicCommand(client, interaction);
     const handler = SLASH_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
     if (handler) await handler(client, interaction);
   } catch (err) {
@@ -181,7 +189,7 @@ const SLASH_HANDLERS = {
     });
   },
 
-  async resume(client, interaction) {
+  async 'resume-salon'(client, interaction) {
     if (cooldownGuard(interaction, 'resume', 30_000)) return;
     await interaction.deferReply(PRIVATE);
     const limit = interaction.options.getInteger('messages') ?? 50;
@@ -291,10 +299,11 @@ const SLASH_HANDLERS = {
         ? `Écris dans ${config.aiChannelIds.map((id) => `<#${id}>`).join(', ')} : ta question part dans **ton fil privé**, personne d'autre (à part les admins) voit la conversation.`
         : `Mentionne-moi (${client.user}) pour discuter.`}\nToutes les réponses aux commandes sont visibles **que par toi**.`)
       .addFields(
-        { name: '💬 IA', value: '`/ask` question · `/explique` un sujet · `/code` aide en code · `/corriger` orthographe · `/traduire` traduction · `/resume` résume le salon · `/quiz` quiz perso' },
+        { name: '💬 IA', value: '`/ask` question · `/explique` un sujet · `/code` aide en code · `/corriger` orthographe · `/traduire` traduction · `/resume-salon` résume le salon · `/quiz` quiz perso' },
         ...(config.limits.imagesEnabled ? [{ name: '🎨 Images', value: '`/image` génère · `/modifier-image` retouche' }] : []),
         { name: '🧰 Pratique', value: '`/rappel` rappel en MP · `/sondage` sondage public · `/contacter-chef` écrire au chef · `/clear` efface ta conv IA · `/reset` efface juste la mémoire' },
         { name: '🛡️ Modération', value: '`/clear nombre` · `/kick` · `/ban` · `/unban` · `/mute` · `/unmute` · `/warn` · `/warns` · `/slowmode` · `/lock` · `/unlock` · `/role` · `/say`' },
+        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (lien, créée par IA, perso) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` · `/join` · `/leave`' },
         { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/pile-ou-face` · `/de` · `/choisir` · `/ping`' },
         { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français**' },
         { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },

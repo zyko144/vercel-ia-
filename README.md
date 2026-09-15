@@ -60,9 +60,28 @@ npm start
 
 ---
 
-## 5. Supabase (optionnel)
+## 5. Musique 🎶
 
-Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase, les rappels en attente sont perdus. Tout le reste marche sans.
+- `/play` : nom du son (suggestions en tapant, les plus connus en premier, fautes de frappe acceptées) ou lien **Spotify, YouTube, SoundCloud, Deezer**.
+- Panneau public « En cours de lecture » : pochette, titre cliquable vers le son, barre de progression, et boutons ⏮️ ⏸️ ⏭️ ⏹️ 🔀 🔉 🔊 🔁 🎧 8D 📜, menu des effets (8D, bass boost, nightcore, slowed + reverb, vaporwave, accéléré, karaoké, écho, tremolo, vibrato, surround), 🎤 paroles, ➕ ajouter, ❤️ favoris, ♾️ autoplay.
+- `/playlist` : jouer un lien de playlist/album, **playlist générée par l'IA** selon une ambiance, et playlists perso (créer, ajouter, retirer, voir, lancer, supprimer).
+- Le bot rejoint le vocal de la personne qui lance la musique, puis retourne dans son vocal habituel 3 min après la fin (ou tout de suite avec `/stop`). Il coupe tout seul si le vocal est vide depuis 2 min.
+- Pour contrôler la musique, il faut être dans le même vocal que le bot (les admins et le chef peuvent toujours).
+
+**Comment ça marche** : Spotify et Deezer ne donnent pas l'audio. Le bot lit les infos (titre, artiste, pochette), puis joue le son depuis YouTube Music. L'audio passe par [yt-dlp](https://github.com/yt-dlp/yt-dlp), téléchargé automatiquement au démarrage et mis à jour chaque jour, et par ffmpeg (effets). Les paroles viennent de lrclib.net.
+
+⚠️ **YouTube et les hébergeurs** : YouTube bloque parfois les serveurs cloud (message « YouTube bloque le serveur »). Dans ce cas, ajoute des cookies YouTube :
+1. Avec un **compte Google secondaire** (pas ton compte principal), connecte-toi sur youtube.com.
+2. Exporte les cookies au format `cookies.txt` avec l'extension « Get cookies.txt LOCALLY ».
+3. Encode le fichier en base64 (`base64 -w0 cookies.txt`) et colle le résultat dans la variable `YTDLP_COOKIES` sur Render.
+
+⚠️ **Performances** : Render gratuit n'a que 0,1 CPU. Si la musique saccade avec des effets, passe le service en plan **Starter**.
+
+---
+
+## 6. Supabase (conseillé pour la musique)
+
+Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase, **les playlists perso, les avertissements et les rappels sont perdus**. Tout le reste marche sans.
 
 1. Crée un projet sur https://supabase.com.
 2. **SQL Editor** : colle `supabase.sql`, puis **Run**.
@@ -83,7 +102,7 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 | Correction orthographe | `/corriger` |
 | Traduction | `/traduire` ou clic droit › Applications › *Traduire en français* |
 | Expliquer un message | Clic droit › Applications › *Expliquer ce message* |
-| Résumé du salon | `/resume` |
+| Résumé du salon | `/resume-salon` |
 | Quiz à boutons | `/quiz` |
 | Rappel | `/rappel dans:2h message:...` |
 | Sondage | `/sondage` |
@@ -94,8 +113,9 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 | Modération | `/clear nombre`, `/kick`, `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/warns`, `/slowmode`, `/lock`, `/unlock`, `/role`, `/say` |
 | Infos | `/userinfo`, `/serverinfo`, `/avatar`, `/ping` |
 | Fun | `/pile-ou-face`, `/de`, `/choisir` |
+| Musique | `/play`, `/playlist`, `/skip`, `/previous`, `/pause`, `/resume`, `/stop`, `/queue`, `/nowplaying`, `/volume`, `/loop`, `/shuffle`, `/seek`, `/remove`, `/move`, `/clearqueue`, `/filter`, `/autoplay`, `/lyrics`, `/join`, `/leave` |
 
-Les commandes de modération et d'infos marchent dans tous les salons ; les commandes IA et fun seulement dans le salon IA.
+Les commandes de modération, d'infos et de musique marchent dans tous les salons ; les commandes IA et fun seulement dans le salon IA.
 ⚠️ Pour que `/kick`, `/ban`, `/mute` et `/role` marchent, le **rôle du bot doit être au-dessus** des rôles des membres (Paramètres du serveur › Rôles › glisser « AI Vercel » vers le haut).
 
 **Anti-abus** : 3 s entre deux messages, aucun @everyone possible, le chef ne peut être pingé qu'une fois toutes les 10 min par la même personne.

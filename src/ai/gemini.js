@@ -117,11 +117,11 @@ function hostname(url) {
  * @param {string} [opts.thinking] minimal | low | medium | high
  * @param {object} [opts.responseFormat]
  */
-export async function chat({ history = [], content, system, web = true, thinking, responseFormat }) {
+export async function chat({ history = [], content, system, web = true, thinking, exactThinking = false, responseFormat }) {
   const tools = web ? webTools() : null;
   const base = {
     system_instruction: system,
-    generation_config: { thinking_level: thinkingLevel(thinking) },
+    generation_config: { thinking_level: exactThinking && thinking ? thinking : thinkingLevel(thinking) },
     store: false,
     ...(tools ? { tools } : {}),
     ...(responseFormat ? { response_format: responseFormat } : {}),
@@ -137,7 +137,7 @@ export async function chat({ history = [], content, system, web = true, thinking
       // Offre gratuite : la recherche Google peut avoir un quota à 0 -> on continue sans elle
       searchBlockedUntil = Date.now() + SEARCH_RETRY_MS;
       console.warn('[gemini] Recherche Google refusée (quota), on continue sans pendant 1 h');
-      return chat({ history, content, system, web, thinking, responseFormat });
+      return chat({ history, content, system, web, thinking, exactThinking, responseFormat });
     }
     if (statusOf(err) === 400 && history.length && !isConfigError(err)) {
       interaction = await attempt(config.models.chat, buildFlatInput(history, content));
@@ -155,12 +155,14 @@ export async function chat({ history = [], content, system, web = true, thinking
   };
 }
 
-export async function chatJson({ prompt, system, schema, thinking }) {
+/** exactThinking : utilise exactement ce niveau de réflexion (pour les petites tâches rapides). */
+export async function chatJson({ prompt, system, schema, thinking, exactThinking = false }) {
   const { text } = await chat({
     content: [{ type: 'text', text: prompt }],
     system,
     web: false,
     thinking,
+    exactThinking,
     responseFormat: { type: 'text', mime_type: 'application/json', schema },
   });
   const cleaned = text.replace(/^```(?:json)?\s*|\s*```$/g, '');
