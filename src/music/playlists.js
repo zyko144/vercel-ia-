@@ -2,8 +2,8 @@
 import { load, save } from '../storage.js';
 
 const KEY = 'music-playlists';
-const MAX_PLAYLISTS = 25;
-const MAX_TRACKS = 200;
+const MAX_PLAYLISTS = 100;
+const MAX_TRACKS = 5000;
 export const FAVORITES = 'Favoris';
 
 const keyOf = (name) => name.trim().toLowerCase();

@@ -1,5 +1,6 @@
-// Transforme ce que tape le membre (nom, lien Spotify / YouTube / SoundCloud / Deezer) en sons jouables.
+// Transforme ce que tape le membre (nom, lien Spotify / Apple Music / YouTube / SoundCloud / Deezer) en sons jouables.
 import { chatJson } from '../ai/gemini.js';
+import { appleTracks, parseAppleUrl } from './apple.js';
 import { bestMatch, deezer, matchRatio, trackFromDeezer } from './deezer.js';
 import { biggestImage, parseSpotifyUrl, spotifyEntity, spotifyTracks } from './spotify.js';
 import { MusicError, extractAudio, flatPlaylist, streamExpiry } from './ytdlp.js';
@@ -9,10 +10,14 @@ export const SOURCES = {
   spotify: { label: 'Spotify', color: 0x1db954 },
   soundcloud: { label: 'SoundCloud', color: 0xff5500 },
   deezer: { label: 'Deezer', color: 0xa238ff },
+  apple: { label: 'Apple Music', color: 0xfa243c },
   web: { label: 'Lien web', color: 0x5865f2 },
 };
 
-const MAX_PLAYLIST = 200;
+// Garde-fou mémoire uniquement : largement au-dessus de n'importe quelle playlist
+const MAX_QUEUE_ADD = 5000;
+const YOUTUBE_BLOCK_PAUSE_MS = 10 * 60_000;
+let youtubeBlockedUntil = 0;
 const isUrl = (s) => /^https?:\/\//i.test(s) || /^spotify:/i.test(s);
 const youtubeUrl = (id) => `https://www.youtube.com/watch?v=${id}`;
 const youtubeThumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
@@ -39,12 +44,12 @@ function trackFromMeta(meta) {
   };
 }
 
-function withStream(track, { streamUrl }) {
-  return { ...track, streamUrl, streamExpiresAt: streamExpiry(streamUrl) };
+function withStream(track, { streamUrl, meta }) {
+  return { ...track, streamUrl, streamExpiresAt: streamExpiry(streamUrl), acodec: meta?.acodec ?? null, protocol: meta?.protocol ?? null };
 }
 
 async function playlistFromYtDlp(url, source) {
-  const data = await flatPlaylist(url, MAX_PLAYLIST);
+  const data = await flatPlaylist(url, MAX_QUEUE_ADD);
   const tracks = (data.entries ?? [])
     .filter((e) => e && (e.id || e.url) && !/^\[(private|deleted)/i.test(e.title ?? ''))
     .map((e) => (source === 'youtube'
@@ -106,7 +111,7 @@ async function aiGuess(query) {
 export async function resolveQuery(input, { requestedBy, playlistMode = false }) {
   const query = input.trim();
   const result = await resolveRaw(query, playlistMode);
-  result.tracks = result.tracks.slice(0, MAX_PLAYLIST).map((track) => ({ ...track, requestedBy }));
+  result.tracks = result.tracks.slice(0, MAX_QUEUE_ADD).map((track) => ({ ...track, requestedBy }));
   return result;
 }
 
@@ -119,6 +124,12 @@ async function resolveRaw(query, playlistMode) {
     if (spotify) {
       const data = await spotifyTracks(query);
       return { name: data.name, cover: data.cover, isPlaylist: spotify.type !== 'track', tracks: data.tracks };
+    }
+
+    const apple = parseAppleUrl(query);
+    if (apple) {
+      const data = await appleTracks(query);
+      return { name: data.name, cover: data.cover, isPlaylist: apple.type !== 'song', tracks: data.tracks };
     }
 
     const fromDeezer = /deezer/i.test(query) ? await fromDeezerUrl(query) : null;
@@ -152,27 +163,39 @@ async function resolveRaw(query, playlistMode) {
 async function findAudio(track) {
   const query = track.query || `${track.artist ?? ''} ${track.title}`.trim();
   const closeEnough = (r) => !track.duration || !r.meta.duration || Math.abs(r.meta.duration - track.duration) <= 25;
-  let firstError;
-
+  let firstError = null;
   let best = null;
-  try {
-    best = await extractAudio(`https://music.youtube.com/search?q=${encodeURIComponent(query)}#songs`, { firstResult: true });
-    if (closeEnough(best)) return best;
-  } catch (err) {
-    firstError = err;
+
+  // YouTube bloqué il y a peu : on ne perd pas 2 recherches de plus, on passe direct à SoundCloud
+  if (Date.now() >= youtubeBlockedUntil) {
+    for (const target of [
+      `https://music.youtube.com/search?q=${encodeURIComponent(query)}#songs`,
+      `ytsearch1:${query} audio`,
+    ]) {
+      try {
+        const result = await extractAudio(target, { firstResult: true });
+        if (closeEnough(result)) return result;
+        best ??= result;
+      } catch (err) {
+        firstError ??= err;
+        if (err.blocked) {
+          youtubeBlockedUntil = Date.now() + YOUTUBE_BLOCK_PAUSE_MS;
+          break;
+        }
+      }
+    }
+    if (best) return best;
   }
-  try {
-    const video = await extractAudio(`ytsearch1:${query} audio`, { firstResult: true });
-    if (!best || closeEnough(video)) return video;
-  } catch (err) {
-    firstError ??= err;
-  }
-  if (best) return best;
 
   try {
-    return await extractAudio(`scsearch1:${query}`, { firstResult: true });
-  } catch {
-    throw firstError ?? new MusicError('son introuvable');
+    const result = await extractAudio(`scsearch1:${query}`, { firstResult: true });
+    // Pas d'extrait : si SoundCloud ne donne qu'un bout du son, on refuse
+    if (track.duration > 60 && result.meta.duration && result.meta.duration < track.duration * 0.6) {
+      throw new MusicError('seul un extrait est disponible sur SoundCloud');
+    }
+    return result;
+  } catch (err) {
+    throw firstError ?? err ?? new MusicError('son introuvable');
   }
 }
 
@@ -199,6 +222,8 @@ export async function prepareTrack(track, { force = false } = {}) {
   track.artist ||= found.artist;
   track.duration ||= found.duration;
   track.isLive = found.isLive;
+  track.acodec = result.meta.acodec ?? null;
+  track.protocol = result.meta.protocol ?? null;
   return track;
 }
 

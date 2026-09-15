@@ -62,20 +62,22 @@ npm start
 
 ## 5. Musique 🎶
 
-- `/play` : nom du son (suggestions en tapant, les plus connus en premier, fautes de frappe acceptées) ou lien **Spotify, YouTube, SoundCloud, Deezer**.
+- `/play` : nom du son (suggestions en tapant, les plus connus en premier, fautes de frappe acceptées) ou lien **Spotify, Apple Music, YouTube, SoundCloud, Deezer**.
 - Panneau public « En cours de lecture » : pochette, titre cliquable vers le son, barre de progression, et boutons ⏮️ ⏸️ ⏭️ ⏹️ 🔀 🔉 🔊 🔁 🎧 8D 📜, menu des effets (8D, bass boost, nightcore, slowed + reverb, vaporwave, accéléré, karaoké, écho, tremolo, vibrato, surround), 🎤 paroles, ➕ ajouter, ❤️ favoris, ♾️ autoplay.
 - `/playlist` : jouer un lien de playlist/album, **playlist générée par l'IA** selon une ambiance, et playlists perso (créer, ajouter, retirer, voir, lancer, supprimer).
 - Le bot rejoint le vocal de la personne qui lance la musique, puis retourne dans son vocal habituel 3 min après la fin (ou tout de suite avec `/stop`). Il coupe tout seul si le vocal est vide depuis 2 min.
 - Pour contrôler la musique, il faut être dans le même vocal que le bot (les admins et le chef peuvent toujours).
 
-**Comment ça marche** : Spotify et Deezer ne donnent pas l'audio. Le bot lit les infos (titre, artiste, pochette), puis joue le son depuis YouTube Music. L'audio passe par [yt-dlp](https://github.com/yt-dlp/yt-dlp), téléchargé automatiquement au démarrage et mis à jour chaque jour, et par ffmpeg (effets). Les paroles viennent de lrclib.net.
+**Comment ça marche** : Spotify, Apple Music et Deezer ne donnent pas l'audio. Le bot lit les infos (titre, artiste, pochette), puis joue le son depuis YouTube Music. L'audio passe par [yt-dlp](https://github.com/yt-dlp/yt-dlp), téléchargé automatiquement au démarrage et mis à jour chaque jour, et par ffmpeg (effets). Les paroles viennent de lrclib.net.
 
-⚠️ **YouTube et les hébergeurs** : YouTube bloque parfois les serveurs cloud (message « YouTube bloque le serveur »). Dans ce cas, ajoute des cookies YouTube :
-1. Avec un **compte Google secondaire** (pas ton compte principal), connecte-toi sur youtube.com.
-2. Exporte les cookies au format `cookies.txt` avec l'extension « Get cookies.txt LOCALLY ».
-3. Encode le fichier en base64 (`base64 -w0 cookies.txt`) et colle le résultat dans la variable `YTDLP_COOKIES` sur Render.
+**Playlists** : YouTube, Deezer, SoundCloud et Apple Music (albums) sont chargés en entier. Spotify ne donne que les 100 premiers titres d'une playlist sans compte développeur (limite de Spotify).
 
-⚠️ **Performances** : Render gratuit n'a que 0,1 CPU. Si la musique saccade avec des effets, passe le service en plan **Starter**.
+⚠️ **YouTube bloque les hébergeurs cloud** (message « YouTube bloque le serveur »). Le bot essaie déjà automatiquement d'autres modes de connexion YouTube, mais sur une IP de datacenter ça ne suffit pas toujours. Solutions, de la plus fiable à la moins fiable :
+1. **Héberger le bot sur une connexion normale** (un PC allumé avec `pm2`) : YouTube marche sans rien faire.
+2. **Proxy** : mets l'adresse d'un proxy HTTP dans `MUSIC_PROXY` (ex : `http://user:motdepasse@ip:port`). Les proxys « résidentiels » marchent, les proxys de datacenter rarement.
+3. **Cookies YouTube** (marche un temps) : connecte un **compte Google secondaire** sur youtube.com, exporte `cookies.txt` avec l'extension « Get cookies.txt LOCALLY », encode-le en base64 (`base64 -w0 cookies.txt`) et colle le résultat dans `YTDLP_COOKIES`.
+
+**Ce que coûte la musique en CPU** (mesuré) : trouver un son ≈ 1 s de CPU (donc ~10-15 s d'attente avec le 0,1 CPU de Render gratuit), jouer un son sans effet ≈ 0 (l'audio est recopié sans réencodage), avec effets ou volume modifié ≈ 1 % d'un processeur. Le son garde plusieurs minutes d'avance en mémoire et supporte jusqu'à 10 s de ralentissement sans couper.
 
 ---
 

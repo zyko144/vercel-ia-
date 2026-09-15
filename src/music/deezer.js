@@ -1,20 +1,32 @@
 // API publique Deezer (sans clé) : recherche, popularité, pochettes, charts, radios d'artiste.
 const API = 'https://api.deezer.com';
 
-async function call(pathname) {
-  const res = await fetch(`${API}${pathname}`, { signal: AbortSignal.timeout(5_000) });
+async function call(pathOrUrl) {
+  const res = await fetch(pathOrUrl.startsWith('http') ? pathOrUrl : `${API}${pathOrUrl}`, { signal: AbortSignal.timeout(8_000) });
   const data = await res.json();
   if (data?.error) throw new Error(`Deezer : ${data.error.message ?? 'erreur'}`);
   return data;
+}
+
+/** Récupère toutes les pages d'une liste (playlists et albums complets, sans limite). */
+async function allPages(pathname) {
+  const items = [];
+  let next = `${pathname}?limit=100&index=0`;
+  for (let page = 0; next && page < 100; page++) {
+    const data = await call(next);
+    items.push(...(data.data ?? []));
+    next = data.next ?? null;
+  }
+  return items;
 }
 
 export const deezer = {
   search: (query, limit = 25) => call(`/search?limit=${limit}&q=${encodeURIComponent(query)}`).then((r) => r.data ?? []),
   track: (id) => call(`/track/${id}`),
   album: (id) => call(`/album/${id}`),
-  albumTracks: (id) => call(`/album/${id}/tracks?limit=200`).then((r) => r.data ?? []),
+  albumTracks: (id) => allPages(`/album/${id}/tracks`),
   playlist: (id) => call(`/playlist/${id}`),
-  playlistTracks: (id) => call(`/playlist/${id}/tracks?limit=200`).then((r) => r.data ?? []),
+  playlistTracks: (id) => allPages(`/playlist/${id}/tracks`),
   artistRadio: (id) => call(`/artist/${id}/radio?limit=40`).then((r) => r.data ?? []),
   chart: () => call('/chart/0/tracks?limit=25').then((r) => r.data ?? []),
 };

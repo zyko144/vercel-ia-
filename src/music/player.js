@@ -1,5 +1,6 @@
 // Lecteur de musique d'un serveur : file d'attente, lecture via ffmpeg, effets, volume, boucle, autoplay, panneau.
 import { spawn } from 'node:child_process';
+import { PassThrough } from 'node:stream';
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
@@ -13,13 +14,32 @@ import { FFMPEG_PATH } from './binaries.js';
 import { filterChain, normalizeFilters, speedOf } from './filters.js';
 import { prepareTrack, recommendNext } from './sources.js';
 import { endedPayload, nowPlayingPayload } from './ui.js';
+import { MUSIC_PROXY } from './ytdlp.js';
 
-const DEFAULT_VOLUME = 80;
+const DEFAULT_VOLUME = 100;
+const BUFFER_BYTES = 2 * 1024 * 1024; // ~3 min d'audio d'avance
+const PREBUFFER_BYTES = 48 * 1024; // ~4 s avant de lancer le son
+const MAX_STALL_FRAMES = 500; // tolère 10 s de ralentissement avant de considérer le son fini
 const MAX_HISTORY = 50;
 const IDLE_RELEASE_MS = 3 * 60_000;
 const ALONE_STOP_MS = 2 * 60_000;
 const PANEL_REFRESH_MS = 15_000;
 const players = new Map();
+
+/** Attend d'avoir quelques secondes d'audio en réserve (ou la fin du flux / 8 s max). */
+function waitForBuffer(stream, ffmpeg) {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearInterval(check);
+      clearTimeout(timer);
+      resolve();
+    };
+    const check = setInterval(() => {
+      if (stream.readableLength >= PREBUFFER_BYTES || stream.writableEnded || ffmpeg.exitCode !== null) done();
+    }, 50);
+    const timer = setTimeout(done, 8_000);
+  });
+}
 
 export const getPlayer = (guildId) => players.get(guildId) ?? null;
 
@@ -61,7 +81,7 @@ export class GuildPlayer {
     this.failures = 0;
     this.playToken = 0;
 
-    this.audio = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
+    this.audio = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause, maxMissedFrames: MAX_STALL_FRAMES } });
     this.audio.on('stateChange', (oldState, newState) => {
       if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle
         && oldState.resource && oldState.resource === this.resource) {
@@ -116,7 +136,7 @@ export class GuildPlayer {
     try {
       await prepareTrack(track);
       if (token !== this.playToken || this.current !== track) return; // un autre son a été lancé entre temps
-      this.spawnStream(track, seek);
+      if (!(await this.spawnStream(track, seek, token))) return;
       this.failures = 0;
       if (newTrack) await this.sendNewPanel();
       else this.refreshPanel(true);
@@ -134,28 +154,49 @@ export class GuildPlayer {
     }
   }
 
-  spawnStream(track, seek) {
+  /**
+   * Lance ffmpeg et la lecture. On garde une réserve d'audio d'avance pour que les ralentissements
+   * (CPU limité, réseau) ne coupent pas le son.
+   */
+  async spawnStream(track, seek, token) {
     const isHttp = /^https?:/i.test(track.streamUrl);
+    // Son déjà en Opus, sans effet ni volume modifié : on recopie l'audio sans le réencoder (presque 0 CPU)
+    const copy = track.acodec === 'opus' && !this.filters.length && this.volume === 100 && !/m3u8/i.test(track.protocol ?? '');
     const args = [
       '-hide_banner', '-loglevel', 'error', '-nostdin',
-      ...(isHttp ? ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'] : []),
+      ...(isHttp ? ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '10'] : []),
+      ...(isHttp && /^http:\/\//i.test(MUSIC_PROXY) ? ['-http_proxy', MUSIC_PROXY] : []),
       ...(seek > 0 ? ['-ss', seek.toFixed(2)] : []),
       '-i', track.streamUrl,
-      '-vn', '-af', filterChain(this.filters, this.volume),
-      '-c:a', 'libopus', '-b:a', '128k', '-frame_duration', '20', '-application', 'audio',
-      '-ar', '48000', '-ac', '2', '-f', 'ogg', 'pipe:1',
+      '-vn',
+      ...(copy
+        ? ['-c:a', 'copy']
+        : ['-af', filterChain(this.filters, this.volume), '-c:a', 'libopus', '-b:a', '96k', '-compression_level', '5',
+          '-frame_duration', '20', '-application', 'audio', '-ar', '48000', '-ac', '2']),
+      '-f', 'ogg', 'pipe:1',
     ];
 
     const ffmpeg = spawn(FFMPEG_PATH, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
     ffmpeg.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-1500); });
     ffmpeg.on('error', (err) => console.warn('[musique] ffmpeg :', err.message));
-    ffmpeg.stdout.on('error', () => {});
     ffmpeg.on('close', (code) => {
       if (code && stderr && ffmpeg === this.ffmpeg) console.warn('[musique] ffmpeg :', stderr.trim().split('\n').pop());
     });
 
-    const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.OggOpus, metadata: track });
+    // Réserve : ffmpeg peut prendre jusqu'à ~3 min d'avance
+    const buffer = new PassThrough({ highWaterMark: BUFFER_BYTES });
+    ffmpeg.stdout.on('error', () => {});
+    buffer.on('error', () => {});
+    ffmpeg.stdout.pipe(buffer);
+    await waitForBuffer(buffer, ffmpeg);
+
+    if (token !== this.playToken) {
+      ffmpeg.kill('SIGKILL');
+      return false;
+    }
+
+    const resource = createAudioResource(buffer, { inputType: StreamType.OggOpus, metadata: track });
     const previous = this.ffmpeg;
     this.ffmpeg = ffmpeg;
     this.ffmpegErrors = () => stderr;
@@ -166,6 +207,7 @@ export class GuildPlayer {
     this.audio.play(resource);
     if (this.paused) this.audio.pause();
     previous?.kill('SIGKILL');
+    return true;
   }
 
   async handleEnd() {

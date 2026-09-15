@@ -4,7 +4,7 @@ import { FILTERS } from './filters.js';
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
 const searchOption = (o, required = true) => o
   .setName('recherche')
-  .setDescription('Nom du son, artiste, ou lien Spotify / YouTube / SoundCloud / Deezer')
+  .setDescription('Nom du son ou lien Spotify, Apple Music, YouTube, SoundCloud, Deezer')
   .setRequired(required)
   .setAutocomplete(true)
   .setMaxLength(500);
@@ -13,14 +13,14 @@ const playlistName = (o) => o.setName('nom').setDescription('Nom de la playlist'
 export const musicCommands = [
   new SlashCommandBuilder()
     .setName('play')
-    .setDescription('Joue un son : nom ou lien Spotify, YouTube, SoundCloud, Deezer')
+    .setDescription('Joue un son : nom ou lien Spotify, Apple Music, YouTube, SoundCloud, Deezer')
     .addStringOption((o) => searchOption(o))
     .addBooleanOption((o) => o.setName('suivant').setDescription('Le jouer juste après le son en cours')),
 
   new SlashCommandBuilder()
     .setName('playlist')
     .setDescription('Playlists : lien, playlist IA, ou tes playlists perso')
-    .addSubcommand((s) => s.setName('jouer').setDescription('Joue une playlist / un album (Spotify, YouTube, SoundCloud, Deezer)')
+    .addSubcommand((s) => s.setName('jouer').setDescription('Joue une playlist / un album complet (Spotify, Apple Music, YouTube, SoundCloud, Deezer)')
       .addStringOption((o) => o.setName('lien').setDescription('Lien de la playlist ou de l\'album').setRequired(true).setMaxLength(500))
       .addBooleanOption((o) => o.setName('melanger').setDescription('Mélanger les sons')))
     .addSubcommand((s) => s.setName('generer').setDescription("L'IA crée une playlist selon une ambiance")
@@ -52,7 +52,7 @@ export const musicCommands = [
   new SlashCommandBuilder().setName('nowplaying').setDescription('Réaffiche le panneau du son en cours'),
   new SlashCommandBuilder().setName('queue').setDescription("Affiche la file d'attente"),
   new SlashCommandBuilder().setName('volume').setDescription('Change le volume')
-    .addIntegerOption((o) => o.setName('niveau').setDescription('0 à 150 (défaut 80)').setRequired(true).setMinValue(0).setMaxValue(150)),
+    .addIntegerOption((o) => o.setName('niveau').setDescription('0 à 150 (défaut 100)').setRequired(true).setMinValue(0).setMaxValue(150)),
   new SlashCommandBuilder().setName('loop').setDescription('Répète le son ou la file')
     .addStringOption((o) => o.setName('mode').setDescription('Mode de boucle').setRequired(true).addChoices(
       { name: 'Désactivée', value: 'off' },
