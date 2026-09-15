@@ -3,6 +3,8 @@
 Assistant IA du serveur. Réponses claires et bien expliquées avec des liens utiles, lecture des images, PDF, fichiers et liens envoyés, aide en code, quiz, rappels, sondages et résumés de salon. En plus, il reste **24h/24 dans le vocal** `│・𝐃𝐢𝐜𝐭𝐚𝐭𝐮𝐫𝐞`.
 
 - Il répond **uniquement dans le salon IA** (`1549523857252028538`), à chaque message, sauf ceux adressés à quelqu'un d'autre.
+- **Réponses privées** : un message écrit dans le salon IA est déplacé dans le **fil privé** de la personne (seuls elle et les admins le voient). Toutes les commandes répondent en « visible seulement par toi », sauf `/sondage` et `/say`.
+- **1 seul message par réponse** (jusqu'à ~6000 caractères), avec un bouton **📋 Copier le code** quand il y a du code.
 - Quand il ne sait pas répondre (infos internes au serveur, décision humaine, bug…), il **ping le chef** (`1543726919168557087`), lui envoie un **MP avec le contexte** et dit au membre de contacter le chef directement.
 
 ---
@@ -73,7 +75,8 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 
 | Quoi | Comment |
 |---|---|
-| Discuter (mémoire de la conv, lit images/PDF/fichiers/liens) | Écrire dans le salon IA |
+| Discuter en privé (mémoire de la conv, lit images/PDF/fichiers/liens) | Écrire dans le salon IA → fil privé |
+| Effacer sa conversation IA | `/clear` (sans nombre) |
 | Question | `/ask` |
 | Explication (ultra simple → expert) | `/explique` |
 | Aide en code | `/code` |
@@ -88,5 +91,11 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 | Effacer la mémoire | `/reset` |
 | Images (si activées) | `/image`, `/modifier-image` |
 | Stats / forcer le vocal (chef) | `/admin stats`, `/admin voc` |
+| Modération | `/clear nombre`, `/kick`, `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/warns`, `/slowmode`, `/lock`, `/unlock`, `/role`, `/say` |
+| Infos | `/userinfo`, `/serverinfo`, `/avatar`, `/ping` |
+| Fun | `/pile-ou-face`, `/de`, `/choisir` |
+
+Les commandes de modération et d'infos marchent dans tous les salons ; les commandes IA et fun seulement dans le salon IA.
+⚠️ Pour que `/kick`, `/ban`, `/mute` et `/role` marchent, le **rôle du bot doit être au-dessus** des rôles des membres (Paramètres du serveur › Rôles › glisser « AI Vercel » vers le haut).
 
 **Anti-abus** : 3 s entre deux messages, aucun @everyone possible, le chef ne peut être pingé qu'une fois toutes les 10 min par la même personne.

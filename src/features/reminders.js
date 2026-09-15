@@ -60,13 +60,14 @@ export function startReminderLoop(client) {
     for (const r of due) {
       const content = `⏰ <@${r.userId}> rappel : **${r.text}**`;
       const allowedMentions = { users: [r.userId] };
+      // En MP pour rester privé, sinon dans le salon où le rappel a été créé
       try {
-        const channel = await client.channels.fetch(r.channelId);
-        await channel.send({ content, allowedMentions });
+        const user = await client.users.fetch(r.userId);
+        await user.send({ content, allowedMentions });
       } catch {
         try {
-          const user = await client.users.fetch(r.userId);
-          await user.send({ content, allowedMentions });
+          const channel = await client.channels.fetch(r.channelId);
+          await channel.send({ content, allowedMentions });
         } catch (err) {
           console.warn('[rappels] impossible de livrer le rappel', r.id, err.message);
         }

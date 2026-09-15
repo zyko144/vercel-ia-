@@ -1,16 +1,19 @@
+import { AttachmentBuilder } from 'discord.js';
 import { config } from '../config.js';
 import { describeError, errorDetail } from '../ai/gemini.js';
 import { askAI } from '../features/chat.js';
 import { createImageMessage } from '../features/images.js';
 import { hitCooldown } from '../features/limits.js';
 import { conversationKey } from '../features/memory.js';
-import { attachmentsToContent, fetchBase64, inChannelList, isAllowedChannel, truncate } from '../utils/discord.js';
+import { getPrivateThread, privateThreadOwner } from '../features/privateThreads.js';
+import { attachmentsToContent, displayName, fetchBase64, inChannelList, isAllowedChannel, truncate } from '../utils/discord.js';
 
 // "génère une image de...", "dessine-moi un logo...", "fais une photo de..."
 const IMAGE_INTENT = /^(?:(?:est-ce que\s+)?(?:tu\s+peux|peux[- ]tu|stp|svp|vas-y)\s+)?(?:me\s+)?(?:g[ée]n[èeé]rer?|cr[ée]er?|dessiner?|fais|fait|faire|imaginer?)(?:[- ]moi)?\s+(?:une?|des|l[ae']|ma|mon)?\s*(?:image|dessin|photo|illustration|logo|wallpaper|fond d'[ée]cran|affiche|banni[èe]re|avatar|pp|pdp)\b/i;
 // "modifie cette image", "mets-lui des lunettes"... (image jointe ou message cité qui contient une image)
 const EDIT_INTENT = /^(?:(?:tu\s+peux|peux[- ]tu|stp|svp|vas-y)\s+)?(?:me\s+)?(?:(?:modifie|retouche|transforme|[ée]dite)\b|(?:mets?|ajoute|enl[èe]ve|supprime|remplace|change)\b.*\b(?:image|photo|fond|arri[èe]re-plan|style|couleur|dessus|dessin|pp|pdp|lunettes|chapeau|ciel|texte)\b)/i;
 const isImage = (a) => a.contentType?.startsWith('image/');
+const MAX_REUPLOAD_BYTES = 8 * 1024 * 1024;
 
 export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
@@ -21,6 +24,12 @@ export async function onMessage(client, message) {
   const repliedToBot = message.mentions.repliedUser?.id === client.user.id;
   const inAiChannel = inChannelList(config.aiChannelIds, message.channel, message.channelId);
   if (!isDM && !mentioned && !repliedToBot && !inAiChannel) return;
+
+  // Dans le fil privé de quelqu'un, on ne répond qu'à son propriétaire (le chef peut y parler tranquille)
+  if (message.channel.isThread()) {
+    const owner = await privateThreadOwner(message.channelId);
+    if (owner && owner !== message.author.id && !mentioned) return;
+  }
   // Dans le salon IA, on laisse tranquilles les messages adressés à quelqu'un d'autre
   if (inAiChannel && !mentioned && !repliedToBot && (message.mentions.users.size || message.mentions.repliedUser)) return;
 
@@ -30,7 +39,11 @@ export async function onMessage(client, message) {
     .replace(/@(everyone|here)/g, '$1')
     .trim();
 
+  // Réponse privée : les messages écrits dans le salon IA partent dans le fil privé du membre
+  const moveToPrivateThread = config.privateReplies && inAiChannel && !isDM && !message.channel.isThread();
+
   if (!text && !message.attachments.size) {
+    if (moveToPrivateThread) return;
     return message.reply(`Yo ${message.author} 👋 pose-moi ta question direct, ou tape \`/aide\` pour voir tout ce que jsais faire.`);
   }
 
@@ -38,73 +51,100 @@ export async function onMessage(client, message) {
     return message.react('⏳').catch(() => {});
   }
 
-  const typing = startTyping(message.channel);
+  let target = message.channel;
+  let replyTo = message;
+  let typing = null;
+
   try {
+    // 1. On récupère tout AVANT de supprimer le message (les pièces jointes disparaissent avec lui)
     const ref = message.reference?.messageId ? await message.fetchReference().catch(() => null) : null;
     let imageAttachments = [...message.attachments.values()].filter(isImage);
     const wantsEdit = EDIT_INTENT.test(text);
     if (!imageAttachments.length && wantsEdit && ref) imageAttachments = [...ref.attachments.values()].filter(isImage);
+    const isImageRequest = (IMAGE_INTENT.test(text) && !imageAttachments.length) || (imageAttachments.length > 0 && wantsEdit);
 
-    // Génération / modification d'image directement en discutant
-    if ((IMAGE_INTENT.test(text) && !imageAttachments.length) || (imageAttachments.length && wantsEdit)) {
-      const images = [];
+    const images = [];
+    if (isImageRequest && config.limits.imagesEnabled) {
       for (const att of imageAttachments.slice(0, 3)) {
         images.push({ mimeType: att.contentType.split(';')[0], data: await fetchBase64(att.url) });
       }
-      const reply = await createImageMessage({ user: message.author, prompt: text, images });
-      return await safeReply(message, reply);
     }
 
-    const { content, notes } = await attachmentsToContent(message.attachments);
-
-    // Si la personne répond au message de quelqu'un d'autre, on donne ce message en contexte
-    if (ref && !repliedToBot) {
+    const { content, notes } = isImageRequest ? { content: [], notes: [] } : await attachmentsToContent(message.attachments);
+    if (!isImageRequest && ref && !repliedToBot) {
       if (ref.content) {
         content.unshift({
           type: 'text',
-          text: `(Message auquel ${message.member?.displayName ?? message.author.username} répond, écrit par ${ref.member?.displayName ?? ref.author.username} : "${truncate(ref.content, 1500)}")`,
+          text: `(Message auquel ${displayName(message.member, message.author)} répond, écrit par ${displayName(ref.member, ref.author)} : "${truncate(ref.content, 1500)}")`,
         });
       }
-      if (ref.attachments.size) {
-        const refAtt = await attachmentsToContent(ref.attachments, { maxImages: 2 });
-        content.push(...refAtt.content);
+      if (ref.attachments.size) content.push(...(await attachmentsToContent(ref.attachments, { maxImages: 2 })).content);
+    }
+
+    // 2. Direction le fil privé
+    if (moveToPrivateThread) {
+      const thread = await getPrivateThread(client, message.channel, message.author, message.member);
+      if (thread) {
+        const files = await reuploadAttachments(message);
+        await message.delete().catch(() => {});
+        await thread.send({
+          content: `💬 ${message.author} » ${truncate(text || '(pièce jointe)', 1900)}`,
+          files,
+          allowedMentions: { users: [message.author.id] },
+        });
+        target = thread;
+        replyTo = null;
       }
     }
 
-    const { chunks, allowedMentions } = await askAI({
-      client,
-      user: message.author,
-      member: message.member,
-      guild: message.guild,
-      channel: message.channel,
-      link: message.url,
-      prompt: text,
-      extraContent: content,
-      notes,
-      historyKey: conversationKey({ guildId: message.guildId, channelId: message.channelId, userId: message.author.id }),
-    });
+    typing = startTyping(target);
 
-    let first = true;
-    for (const chunk of chunks) {
-      if (first) await safeReply(message, { content: chunk, allowedMentions });
-      else await message.channel.send({ content: chunk, allowedMentions: { ...allowedMentions, repliedUser: false } });
-      first = false;
+    // 3. Réponse
+    let payload;
+    if (isImageRequest) {
+      payload = await createImageMessage({ user: message.author, prompt: text, images });
+    } else {
+      payload = await askAI({
+        client,
+        user: message.author,
+        member: message.member,
+        guild: message.guild,
+        channel: target,
+        link: replyTo ? message.url : target.url,
+        prompt: text,
+        extraContent: content,
+        notes,
+        historyKey: conversationKey({ userId: message.author.id }),
+      });
     }
+    await send(target, replyTo, payload);
   } catch (err) {
     console.error('[message]', err.body ? errorDetail(err) : err);
-    await safeReply(message, { content: `❌ ${describeError(err)}` });
+    await send(target, replyTo, { content: `❌ ${describeError(err)}` });
   } finally {
-    typing.stop();
+    typing?.stop();
   }
 }
 
-async function safeReply(message, payload) {
-  try {
-    return await message.reply(payload);
-  } catch {
-    // message supprimé entre temps -> on envoie dans le salon
-    return message.channel.send(payload).catch(() => {});
+async function send(target, replyTo, payload) {
+  if (replyTo) {
+    try {
+      return await replyTo.reply(payload);
+    } catch {
+      // message supprimé entre temps
+    }
   }
+  return target.send(payload).catch((err) => console.warn('[message] envoi impossible :', err.message));
+}
+
+async function reuploadAttachments(message) {
+  const files = [];
+  for (const att of [...message.attachments.values()].slice(0, 4)) {
+    if (att.size > MAX_REUPLOAD_BYTES) continue;
+    const res = await fetch(att.url).catch(() => null);
+    if (res?.ok) files.push(new AttachmentBuilder(Buffer.from(await res.arrayBuffer()), { name: att.name }));
+  }
+  return files;
 }
 
 function startTyping(channel) {

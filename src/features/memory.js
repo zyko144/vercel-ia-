@@ -1,10 +1,10 @@
-// Mémoire courte des conversations (par salon / par MP), gardée en RAM.
+// Mémoire courte des conversations, une par membre (gardée en RAM).
 const MAX_TURNS = 16;
 const TTL_MS = 45 * 60_000;
 const conversations = new Map();
 
-export function conversationKey({ guildId, channelId, userId }) {
-  return guildId ? `c:${channelId}` : `dm:${userId}`;
+export function conversationKey({ userId }) {
+  return `u:${userId}`;
 }
 
 export function getHistory(key) {

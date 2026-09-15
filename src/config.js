@@ -50,6 +50,8 @@ export const config = {
   aiChannelIds: list('AI_CHANNEL_IDS', '1549523857252028538'),
   // Si rempli : le bot ne répond QUE dans ces salons (et plus en MP). Mettre "*" pour autoriser partout.
   allowedChannelIds: list('ALLOWED_CHANNEL_IDS', '1549523857252028538').filter((id) => id !== '*'),
+  // Réponses visibles seulement par la personne (fil privé + messages éphémères)
+  privateReplies: bool('PRIVATE_REPLIES', true),
 
   limits: {
     // Les modèles d'image ne sont pas dans l'offre gratuite de Gemini

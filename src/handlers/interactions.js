@@ -2,6 +2,7 @@ import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
 import { chat, describeError, errorDetail } from '../ai/gemini.js';
 import { toolPrompt } from '../ai/persona.js';
+import { COMMANDS_ALLOWED_EVERYWHERE } from '../commands/definitions.js';
 import { askAI, channelLink } from '../features/chat.js';
 import { dmOwner, whereLabel } from '../features/escalation.js';
 import { createImageMessage } from '../features/images.js';
@@ -11,9 +12,10 @@ import { createQuiz, handleQuizButton } from '../features/quiz.js';
 import { addReminder, parseDuration } from '../features/reminders.js';
 import { rejoinVoice, voiceStatus } from '../features/voice.js';
 import { storageBackend } from '../storage.js';
-import {
-  allowedChannelsMention, attachmentsToContent, fetchBase64, isAllowedChannel, splitMessage, truncate,
-} from '../utils/discord.js';
+import { allowedChannelsMention, attachmentsToContent, fetchBase64, isAllowedChannel, truncate } from '../utils/discord.js';
+import { buildAnswerPayload, handleCopyButton, handleCopyModal } from '../utils/reply.js';
+import { MODERATION_HANDLERS } from './moderation.js';
+import { UTILITY_HANDLERS } from './utility.js';
 
 const EXPLAIN_LEVELS = {
   simple: "Explique comme à quelqu'un de 12 ans : mots simples, une analogie de la vie de tous les jours, pas de jargon.",
@@ -21,50 +23,43 @@ const EXPLAIN_LEVELS = {
   expert: 'Explication détaillée et rigoureuse, avec les termes techniques exacts, les nuances et les cas particuliers.',
 };
 
+// Toutes les réponses sont visibles seulement par la personne qui a tapé la commande
+const PRIVATE = { flags: MessageFlags.Ephemeral };
 const isOwner = (user) => user.id === config.ownerId;
-
-// Commandes utilisables hors du salon IA (réponses privées)
-const ALLOWED_EVERYWHERE = new Set(['admin', 'aide']);
 
 export async function onInteraction(client, interaction) {
   try {
-    if (interaction.isRepliable() && !ALLOWED_EVERYWHERE.has(interaction.commandName)
-      && !isAllowedChannel(interaction.channel, interaction.channelId)) {
-      return await interaction.reply({
-        content: `👉 Je réponds que dans ${allowedChannelsMention()}, viens me parler là-bas !`,
-        flags: MessageFlags.Ephemeral,
-      });
+    // Boutons et fenêtres (ils n'existent que là où le bot a déjà répondu)
+    if (interaction.isButton()) {
+      if (interaction.customId === 'copy:code') return await handleCopyButton(interaction);
+      if (interaction.customId.startsWith('quiz')) return await handleQuizButton(client, interaction);
+      return;
     }
-    if (interaction.isButton() && interaction.customId.startsWith('quiz:')) return await handleQuizButton(interaction);
-    if (interaction.isMessageContextMenuCommand()) return await handleContextMenu(client, interaction);
-    if (!interaction.isChatInputCommand()) return;
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'copy-modal') return await handleCopyModal(interaction);
+      return;
+    }
+    if (!interaction.isChatInputCommand() && !interaction.isMessageContextMenuCommand()) return;
 
-    const handler = SLASH_HANDLERS[interaction.commandName];
+    if (!COMMANDS_ALLOWED_EVERYWHERE.has(interaction.commandName) && !isAllowedChannel(interaction.channel, interaction.channelId)) {
+      return await interaction.reply({ content: `👉 Cette commande marche que dans ${allowedChannelsMention()}, viens me parler là-bas !`, ...PRIVATE });
+    }
+
+    if (interaction.isMessageContextMenuCommand()) return await handleContextMenu(client, interaction);
+    const handler = SLASH_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
     if (handler) await handler(client, interaction);
   } catch (err) {
     console.error(`[interaction] ${interaction.commandName ?? interaction.customId}`, err.body ? errorDetail(err) : err);
-    const payload = { content: `❌ ${describeError(err)}`, flags: MessageFlags.Ephemeral };
+    const payload = { content: `❌ ${err.body ? describeError(err) : "Ça a pas marché (permission manquante ou erreur Discord). Réessaie stp."}`, ...PRIVATE };
     if (interaction.deferred || interaction.replied) await interaction.followUp(payload).catch(() => {});
     else await interaction.reply(payload).catch(() => {});
-  }
-}
-
-/** Envoie des morceaux de texte en réponse à une interaction déjà "deferred". */
-async function sendChunks(interaction, chunks, { ephemeral = false, allowedMentions = { parse: [] } } = {}) {
-  const flags = ephemeral ? MessageFlags.Ephemeral : undefined;
-  await interaction.editReply({ content: chunks[0], allowedMentions });
-  for (const chunk of chunks.slice(1)) {
-    await interaction.followUp({ content: chunk, allowedMentions, flags });
   }
 }
 
 function cooldownGuard(interaction, bucket, ms) {
   const wait = hitCooldown(interaction.user.id, bucket, ms);
   if (!wait) return false;
-  interaction.reply({
-    content: `⏳ Doucement, attends encore ${Math.ceil(wait / 1000)}s stp.`,
-    flags: MessageFlags.Ephemeral,
-  }).catch(() => {});
+  interaction.reply({ content: `⏳ Doucement, attends encore ${Math.ceil(wait / 1000)}s stp.`, ...PRIVATE }).catch(() => {});
   return true;
 }
 
@@ -76,92 +71,89 @@ function askContext(client, interaction) {
     guild: interaction.guild,
     channel: interaction.channel,
     link: channelLink(interaction.guildId, interaction.channelId),
+    visibility: 'private',
   };
 }
 
-const historyKeyFor = (interaction) =>
-  conversationKey({ guildId: interaction.guildId, channelId: interaction.channelId, userId: interaction.user.id });
+const historyKeyFor = (interaction) => conversationKey({ userId: interaction.user.id });
 
-async function simpleTool(client, interaction, { task, prompt, thinking }) {
-  await interaction.deferReply();
+async function fileContent(interaction, optionName) {
+  const file = interaction.options.getAttachment(optionName);
+  return file ? attachmentsToContent(new Map([[file.id, file]])) : { content: [], notes: [] };
+}
+
+async function simpleTool(client, interaction, { task, prompt }) {
+  await interaction.deferReply(PRIVATE);
   const { text } = await chat({
     system: toolPrompt(client.user.username, task),
     content: [{ type: 'text', text: prompt }],
     web: false,
-    thinking,
   });
-  await sendChunks(interaction, splitMessage(text || "J'ai rien pu en tirer, désolé."));
+  await interaction.editReply(buildAnswerPayload({ text: text || "J'ai rien pu en tirer, désolé." }));
 }
 
 const SLASH_HANDLERS = {
   async ask(client, interaction) {
     if (cooldownGuard(interaction, 'chat', config.limits.chatCooldownMs)) return;
-    const ephemeral = interaction.options.getBoolean('prive') ?? false;
-    await interaction.deferReply({ flags: ephemeral ? MessageFlags.Ephemeral : undefined });
-
-    const file = interaction.options.getAttachment('fichier');
-    const { content, notes } = file ? await attachmentsToContent(new Map([[file.id, file]])) : { content: [], notes: [] };
-    const { chunks, allowedMentions } = await askAI({
+    await interaction.deferReply(PRIVATE);
+    const { content, notes } = await fileContent(interaction, 'fichier');
+    await interaction.editReply(await askAI({
       ...askContext(client, interaction),
       prompt: interaction.options.getString('question', true),
       extraContent: content,
       notes,
-      historyKey: ephemeral ? null : historyKeyFor(interaction),
-    });
-    await sendChunks(interaction, chunks, { ephemeral, allowedMentions });
+      historyKey: historyKeyFor(interaction),
+    }));
   },
 
   async image(client, interaction) {
     if (cooldownGuard(interaction, 'image', 15_000)) return;
-    await interaction.deferReply();
-    const reply = await createImageMessage({
+    await interaction.deferReply(PRIVATE);
+    await interaction.editReply(await createImageMessage({
       user: interaction.user,
       prompt: interaction.options.getString('prompt', true),
       aspectRatio: interaction.options.getString('format') ?? undefined,
       pro: interaction.options.getBoolean('pro') ?? false,
-    });
-    await interaction.editReply(reply);
+    }));
   },
 
   async 'modifier-image'(client, interaction) {
     if (cooldownGuard(interaction, 'image', 15_000)) return;
-    const attachments = [interaction.options.getAttachment('image', true), interaction.options.getAttachment('image2')]
-      .filter(Boolean);
+    const attachments = [interaction.options.getAttachment('image', true), interaction.options.getAttachment('image2')].filter(Boolean);
     if (attachments.some((a) => !a.contentType?.startsWith('image/'))) {
-      return interaction.reply({ content: 'Envoie une vraie image stp (png, jpg, webp).', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: 'Envoie une vraie image stp (png, jpg, webp).', ...PRIVATE });
     }
-    await interaction.deferReply();
+    await interaction.deferReply(PRIVATE);
     const images = [];
-    for (const att of attachments) images.push({ mimeType: att.contentType.split(';')[0], data: await fetchBase64(att.url) });
-    const reply = await createImageMessage({
+    if (config.limits.imagesEnabled) {
+      for (const att of attachments) images.push({ mimeType: att.contentType.split(';')[0], data: await fetchBase64(att.url) });
+    }
+    await interaction.editReply(await createImageMessage({
       user: interaction.user,
       prompt: interaction.options.getString('consigne', true),
       images,
-    });
-    await interaction.editReply(reply);
+    }));
   },
 
   async explique(client, interaction) {
     if (cooldownGuard(interaction, 'chat', config.limits.chatCooldownMs)) return;
-    await interaction.deferReply();
+    await interaction.deferReply(PRIVATE);
     const level = interaction.options.getString('niveau') ?? 'normal';
-    const { chunks, allowedMentions } = await askAI({
+    await interaction.editReply(await askAI({
       ...askContext(client, interaction),
       prompt: `Explique-moi : ${interaction.options.getString('sujet', true)}`,
       instructions: `${EXPLAIN_LEVELS[level]} Termine par un mini résumé en 1 phrase et, si pertinent, 1 ou 2 liens pour approfondir.`,
       historyKey: historyKeyFor(interaction),
       thinking: level === 'expert' ? 'high' : undefined,
-    });
-    await sendChunks(interaction, chunks, { allowedMentions });
+    }));
   },
 
   async code(client, interaction) {
     if (cooldownGuard(interaction, 'chat', config.limits.chatCooldownMs)) return;
-    await interaction.deferReply();
+    await interaction.deferReply(PRIVATE);
     const lang = interaction.options.getString('langage');
-    const file = interaction.options.getAttachment('fichier');
-    const { content, notes } = file ? await attachmentsToContent(new Map([[file.id, file]])) : { content: [], notes: [] };
-    const { chunks, allowedMentions } = await askAI({
+    const { content, notes } = await fileContent(interaction, 'fichier');
+    await interaction.editReply(await askAI({
       ...askContext(client, interaction),
       prompt: `${lang ? `[Langage : ${lang}] ` : ''}${interaction.options.getString('demande', true)}`,
       extraContent: content,
@@ -169,8 +161,7 @@ const SLASH_HANDLERS = {
       instructions: "Tu es un dev senior pédagogue. Donne du code complet, fonctionnel et commenté juste ce qu'il faut, dans des blocs avec le bon langage. S'il y a un bug, explique la cause puis la correction. Explique les points clés en quelques puces. Mets un lien vers la doc officielle si utile.",
       historyKey: historyKeyFor(interaction),
       thinking: 'high',
-    });
-    await sendChunks(interaction, chunks, { allowedMentions });
+    }));
   },
 
   async corriger(client, interaction) {
@@ -192,7 +183,7 @@ const SLASH_HANDLERS = {
 
   async resume(client, interaction) {
     if (cooldownGuard(interaction, 'resume', 30_000)) return;
-    await interaction.deferReply();
+    await interaction.deferReply(PRIVATE);
     const limit = interaction.options.getInteger('messages') ?? 50;
     const fetched = await interaction.channel?.messages.fetch({ limit }).catch(() => null);
     if (!fetched?.size) {
@@ -204,30 +195,29 @@ const SLASH_HANDLERS = {
       .map((m) => `${m.member?.displayName ?? m.author.username}${m.author.bot ? ' [bot]' : ''} : ${truncate(m.content || '[pièce jointe]', 400)}`)
       .join('\n');
 
-    const { chunks } = await askAI({
+    await interaction.editReply(await askAI({
       ...askContext(client, interaction),
       prompt: `Résume cette conversation du salon :\n\n${transcript}`,
-      instructions: "Fais un résumé clair : les sujets abordés en puces (qui a dit quoi d'important), les décisions ou infos à retenir, et les questions restées sans réponse. Pas de mention (@). Pas de recherche web nécessaire.",
+      instructions: "Fais un résumé clair : les sujets abordés en puces (qui a dit quoi d'important), les décisions ou infos à retenir, et les questions restées sans réponse. Pas de mention (@).",
       web: false,
-    });
-    await sendChunks(interaction, chunks);
+    }));
   },
 
   async quiz(client, interaction) {
     if (cooldownGuard(interaction, 'quiz', 10_000)) return;
-    await interaction.deferReply();
-    const payload = await createQuiz({
+    await interaction.deferReply(PRIVATE);
+    await interaction.editReply(await createQuiz({
       botName: client.user.username,
+      userId: interaction.user.id,
       topic: interaction.options.getString('sujet', true),
       difficulty: interaction.options.getString('difficulte') ?? 'moyen',
-    });
-    await interaction.editReply(payload);
+    }));
   },
 
   async rappel(client, interaction) {
     const delayMs = parseDuration(interaction.options.getString('dans', true));
     if (!delayMs || delayMs < 10_000) {
-      return interaction.reply({ content: 'Durée pas comprise 🤔 Exemples : `10m`, `2h`, `1h30`, `3j`.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: 'Durée pas comprise 🤔 Exemples : `10m`, `2h`, `1h30`, `3j`.', ...PRIVATE });
     }
     const text = interaction.options.getString('message', true);
     const { error, reminder } = await addReminder({
@@ -237,24 +227,19 @@ const SLASH_HANDLERS = {
       text,
       delayMs,
     });
-    if (error) return interaction.reply({ content: `❌ ${error}`, flags: MessageFlags.Ephemeral });
+    if (error) return interaction.reply({ content: `❌ ${error}`, ...PRIVATE });
     const when = Math.floor(reminder.at / 1000);
     await interaction.reply({
-      content: `✅ C'est noté ! Je te rappelle **${truncate(text, 200)}** <t:${when}:R> (<t:${when}:f>).`,
-      flags: MessageFlags.Ephemeral,
+      content: `✅ C'est noté ! Je te rappelle **${truncate(text, 200)}** en MP <t:${when}:R> (<t:${when}:f>).`,
+      ...PRIVATE,
     });
   },
 
+  // Seule commande publique : un sondage sert à faire voter tout le monde
   async sondage(client, interaction) {
-    const answers = interaction.options.getString('choix', true)
-      .split('|')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const answers = interaction.options.getString('choix', true).split('|').map((s) => s.trim()).filter(Boolean);
     if (answers.length < 2 || answers.length > 10 || answers.some((a) => a.length > 55)) {
-      return interaction.reply({
-        content: 'Il faut entre **2 et 10 choix** séparés par `|`, et chaque choix fait max 55 caractères.',
-        flags: MessageFlags.Ephemeral,
-      });
+      return interaction.reply({ content: 'Il faut entre **2 et 10 choix** séparés par `|`, et chaque choix fait max 55 caractères.', ...PRIVATE });
     }
     await interaction.reply({
       poll: {
@@ -280,23 +265,21 @@ const SLASH_HANDLERS = {
     });
 
     if (sent) {
-      return interaction.reply({
-        content: `✅ Message envoyé au chef en MP ! Tu peux aussi le contacter direct : <@${config.ownerId}>`,
-        flags: MessageFlags.Ephemeral,
-      });
+      return interaction.reply({ content: `✅ Message envoyé au chef en MP ! Tu peux aussi le contacter direct : <@${config.ownerId}>`, ...PRIVATE });
     }
-    // MP fermés : on le ping dans le salon
-    await interaction.reply({
-      content: `🔔 <@${config.ownerId}>, ${interaction.user} veut te parler :\n> ${truncate(text, 1500).replace(/\n/g, '\n> ')}`,
+    // MP du chef fermés : on le ping dans le salon, sans afficher le message
+    await interaction.channel?.send({
+      content: `🔔 <@${config.ownerId}>, ${interaction.user} veut te parler (ouvre tes MP pour recevoir son message).`,
       allowedMentions: { users: [config.ownerId] },
-    });
+    }).catch(() => {});
+    await interaction.reply({ content: `✅ Le chef a été pingé. Contacte-le aussi direct : <@${config.ownerId}>`, ...PRIVATE });
   },
 
   async reset(client, interaction) {
     const cleared = forget(historyKeyFor(interaction));
     await interaction.reply({
-      content: cleared ? '🧹 Mémoire de la conv effacée, on repart de zéro !' : 'Y avait rien en mémoire ici tkt 👌',
-      flags: MessageFlags.Ephemeral,
+      content: cleared ? "🧹 Mémoire de l'IA effacée, on repart de zéro ! (`/clear` pour supprimer aussi ton fil privé)" : 'Y avait rien en mémoire tkt 👌',
+      ...PRIVATE,
     });
   },
 
@@ -305,43 +288,36 @@ const SLASH_HANDLERS = {
       .setColor(0x5865f2)
       .setTitle(`🤖 ${client.user.username}, ton assistant IA`)
       .setDescription(`${config.aiChannelIds.length
-        ? `Écris simplement dans ${config.aiChannelIds.map((id) => `<#${id}>`).join(', ')} : je réponds à chaque message (sauf si tu parles à quelqu'un d'autre).`
-        : `Mentionne-moi (${client.user}) ou réponds à un de mes messages pour discuter.`} Je me souviens de la conv, je lis les images, PDF, fichiers et les liens que tu m'envoies.`)
+        ? `Écris dans ${config.aiChannelIds.map((id) => `<#${id}>`).join(', ')} : ta question part dans **ton fil privé**, personne d'autre (à part les admins) voit la conversation.`
+        : `Mentionne-moi (${client.user}) pour discuter.`}\nToutes les réponses aux commandes sont visibles **que par toi**.`)
       .addFields(
-        { name: '💬 Questions', value: '`/ask` pose une question\n`/explique` un sujet (simple → expert)\n`/code` aide en programmation\n`/resume` résume le salon' },
-        ...(config.limits.imagesEnabled
-          ? [{ name: '🎨 Images', value: '`/image` génère une image\n`/modifier-image` retouche une image\nOu écris « génère une image de… »' }]
-          : []),
-        { name: '📝 Outils', value: '`/corriger` orthographe\n`/traduire` traduction\n`/rappel` rappel perso\n`/sondage` sondage rapide\n`/quiz` question de quiz' },
+        { name: '💬 IA', value: '`/ask` question · `/explique` un sujet · `/code` aide en code · `/corriger` orthographe · `/traduire` traduction · `/resume` résume le salon · `/quiz` quiz perso' },
+        ...(config.limits.imagesEnabled ? [{ name: '🎨 Images', value: '`/image` génère · `/modifier-image` retouche' }] : []),
+        { name: '🧰 Pratique', value: '`/rappel` rappel en MP · `/sondage` sondage public · `/contacter-chef` écrire au chef · `/clear` efface ta conv IA · `/reset` efface juste la mémoire' },
+        { name: '🛡️ Modération', value: '`/clear nombre` · `/kick` · `/ban` · `/unban` · `/mute` · `/unmute` · `/warn` · `/warns` · `/slowmode` · `/lock` · `/unlock` · `/role` · `/say`' },
+        { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/pile-ou-face` · `/de` · `/choisir` · `/ping`' },
         { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français**' },
-        { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande-moi : si jsais pas, je préviens <@${config.ownerId}> direct.` },
-        { name: '🧹 Divers', value: '`/reset` efface ma mémoire ici · `/ping` état du bot' },
+        { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },
       )
-      .setFooter({ text: `Propulsé par Gemini${config.limits.imagesEnabled ? ` · ${config.limits.imagesPerDay} images/jour par personne` : ''}` });
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      .setFooter({ text: 'Propulsé par Gemini · 📋 bouton « Copier le code » sous les réponses avec du code' });
+    await interaction.reply({ embeds: [embed], ...PRIVATE });
   },
 
   async ping(client, interaction) {
     const voice = interaction.guild ? voiceStatus(interaction.guild) : '—';
-    await interaction.reply({
-      content: `🏓 Pong ! Latence : **${Math.round(client.ws.ping)} ms** · Vocal : ${voice}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply({ content: `🏓 Pong ! Latence : **${Math.round(client.ws.ping)} ms** · Vocal : ${voice}`, ...PRIVATE });
   },
 
   async admin(client, interaction) {
-    if (!isOwner(interaction.user)) {
-      return interaction.reply({ content: '🔒 Commande réservée au chef.', flags: MessageFlags.Ephemeral });
-    }
-    const sub = interaction.options.getSubcommand();
+    if (!isOwner(interaction.user)) return interaction.reply({ content: '🔒 Commande réservée au chef.', ...PRIVATE });
 
-    if (sub === 'voc') {
-      if (!interaction.guild) return interaction.reply({ content: 'À utiliser dans le serveur.', flags: MessageFlags.Ephemeral });
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (interaction.options.getSubcommand() === 'voc') {
+      if (!interaction.guild) return interaction.reply({ content: 'À utiliser dans le serveur.', ...PRIVATE });
+      await interaction.deferReply(PRIVATE);
       const ok = await rejoinVoice(interaction.guild);
       return interaction.editReply(ok
         ? `🎧 Reconnecté : ${voiceStatus(interaction.guild)}`
-        : `⚠️ Pas réussi à rejoindre le vocal. Vérifie qu'il existe un salon vocal contenant « ${config.voice.channelName} » dans la catégorie « ${config.voice.categoryName} » et que j'ai la permission Se connecter.`);
+        : "⚠️ Pas réussi à rejoindre le vocal. Vérifie l'ID du salon vocal et que j'ai la permission Se connecter.");
     }
 
     const uptime = process.uptime();
@@ -357,37 +333,37 @@ const SLASH_HANDLERS = {
         { name: "Images aujourd'hui", value: `${await imagesToday()}`, inline: true },
         { name: 'Vocal', value: interaction.guild ? voiceStatus(interaction.guild) : '—', inline: true },
         { name: 'Stockage', value: storageBackend, inline: true },
-        { name: 'Modèles', value: `Chat : \`${config.models.chat}\`\nSecours : \`${config.models.fallback}\`\nImage : \`${config.models.image}\`\nImage Pro : \`${config.models.imagePro}\`` },
+        { name: 'Modèles', value: `Chat : \`${config.models.chat}\` (réflexion ${config.models.thinkingLevel})\nSecours : \`${config.models.fallback}\`` },
       );
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await interaction.reply({ embeds: [embed], ...PRIVATE });
   },
 };
 
 async function handleContextMenu(client, interaction) {
   if (cooldownGuard(interaction, 'chat', config.limits.chatCooldownMs)) return;
   const target = interaction.targetMessage;
-  if (!target.content && !target.attachments.size) {
-    return interaction.reply({ content: 'Ce message est vide (ou je peux pas le lire).', flags: MessageFlags.Ephemeral });
+  const targetText = target.content || target.embeds.map((e) => e.description ?? '').join('\n');
+  if (!targetText && !target.attachments.size) {
+    return interaction.reply({ content: 'Ce message est vide (ou je peux pas le lire).', ...PRIVATE });
   }
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await interaction.deferReply(PRIVATE);
 
   if (interaction.commandName === 'Traduire en français') {
     const { text } = await chat({
       system: toolPrompt(client.user.username, 'Tu es un traducteur professionnel. Traduction naturelle et fidèle.'),
-      content: [{ type: 'text', text: `Traduis en français (s'il est déjà en français, traduis en anglais). Donne uniquement la traduction.\n\n${target.content}` }],
+      content: [{ type: 'text', text: `Traduis en français (s'il est déjà en français, traduis en anglais). Donne uniquement la traduction.\n\n${targetText}` }],
       web: false,
     });
-    return sendChunks(interaction, splitMessage(text || 'Rien à traduire.'), { ephemeral: true });
+    return interaction.editReply(buildAnswerPayload({ text: text || 'Rien à traduire.' }));
   }
 
   const { content, notes } = await attachmentsToContent(target.attachments);
   const author = target.member?.displayName ?? target.author.username;
-  const { chunks } = await askAI({
+  await interaction.editReply(await askAI({
     ...askContext(client, interaction),
-    prompt: `Explique-moi ce message de ${author} : "${target.content || '(voir pièce jointe)'}"`,
+    prompt: `Explique-moi ce message de ${author} : "${truncate(targetText || '(voir pièce jointe)', 3000)}"`,
     extraContent: content,
     notes,
-    instructions: 'Explique le sens du message (et les termes, références, abréviations ou le code qu\'il contient) de façon simple et courte.',
-  });
-  await sendChunks(interaction, chunks, { ephemeral: true });
+    instructions: "Explique le sens du message (et les termes, références, abréviations ou le code qu'il contient) de façon simple et courte.",
+  }));
 }
