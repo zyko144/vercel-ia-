@@ -26,6 +26,8 @@ export function adminRoutes(client) {
         position: Math.round(player.position()),
         queue: player.queue.length,
         blind: player.blind,
+        filters: player.filters,
+        node: player.backend?.node?.name ?? null,
         backend: player.backend?.name ?? null,
         voiceChannel: player.guild.channels.cache.get(player.botVoiceChannelId)?.name ?? null,
       })),

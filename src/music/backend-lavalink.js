@@ -1,7 +1,7 @@
 // Lecture via un serveur Lavalink : c'est lui qui récupère le son et l'envoie dans le vocal Discord.
 import { config } from '../config.js';
 import { anchorChannel, releaseExternalVoice, takeVoiceForExternal } from '../features/voice.js';
-import { matchRatio } from './deezer.js';
+import { deezer, matchRatio } from './deezer.js';
 import { lavalinkFilters, speedOf } from './filters.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
 import { MusicError } from './ytdlp.js';
@@ -13,7 +13,11 @@ const NODE_STALLS_BEFORE_BREAK = 3; // coupures en pleine lecture sur un serveur
 const FAST_PLAYBACK_BAN_MS = 60 * 60_000;
 const FAST_RATIO = 1.7; // le son avance 1,7x plus vite que l'horloge : le serveur audio déraille
 // Versions qui ne sont pas le son original (sauf si c'est justement ce qui est demandé)
-const VARIANT = /\b(sped ?up|speed ?up|slowed|reverb|nightcore|8d|bass ?boost(ed)?|karaok[eé]|instrumental|acapella|a cappella|mashup|cover|remix|extended|live|1[.,]\d+ ?x)\b/i;
+const VARIANT = /\b(sped ?up|speed ?up|slowed|reverb|nightcore|8d|bass ?boost(ed)?|karaok[eé]|instrumental|acapella|a cappella|mashup|cover|remix|extended|live|1[.,]\d+ ?x|x ?1[.,]\d+|lyrics?|paroles|tiktok|version|reggae|edit|mix)\b/i;
+// Mots qu'on trouve dans les titres des vraies vidéos officielles sans que ce soit une autre version
+const NOISE = new Set(['feat', 'ft', 'featuring', 'official', 'officiel', 'officielle', 'audio', 'video', 'clip', 'music', 'musique', 'visualizer', 'visualiser', 'prod', 'by', 'hd', 'hq', '4k', 'topic', 'x', 'et', 'and', 'with', 'avec', 'the', 'le', 'la', 'les', 'l', 'de', 'du', 'des', 'd', 'remastered', 'remaster', 'explicit', 'mv']);
+const normalizeText = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const words = (s) => normalizeText(s).split(' ').filter(Boolean);
 const cleanTitle = (text = '') => text.replace(/\s*[([].*?[)\]]/g, ' ').replace(/\s+-\s+.*$/, ' ').replace(/\s*(feat|ft)\.?\s.*$/i, ' ').trim();
 const EARLY_END_MARGIN_S = 15;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -167,8 +171,8 @@ export class LavalinkBackend {
       ...(track.isrc ? [`ytmsearch:"${track.isrc}"`] : []),
       ...(track.playUrl ? [track.playUrl] : []),
       `ytmsearch:${query}`,
-      `ytsearch:${query}`,
-      ...(track.strict ? [] : [`scsearch:${query}`]),
+      // Recherche YouTube classique / SoundCloud : pleine d'uploads de fans (accélérés, pitchés) -> jamais en blind test
+      ...(track.strict ? [] : [`ytsearch:${query}`, `scsearch:${query}`]),
     ])];
   }
 
@@ -189,13 +193,21 @@ export class LavalinkBackend {
     if (known) {
       const byIsrc = track.isrc && identifier.includes(track.isrc);
       const scored = full.map((item) => ({ item, ...this.matchScore(item, track) })).filter((s) => !s.variant);
-      const strictOk = scored
-        .filter((s) => (byIsrc ? s.title >= 0.5 && (s.artist >= 0.5 || s.gap <= 3) : s.title >= 0.6 && s.artist >= 0.5 && s.gap <= 25))
-        .sort((a, b) => (b.title + b.artist) - (a.title + a.artist) || a.gap - b.gap);
-      if (strictOk[0]) return strictOk[0].item;
+      // Version d'origine : même enregistrement (ISRC), ou chaîne de l'artiste + même titre sans mots en trop + même durée
+      const original = scored
+        .filter((s) => (byIsrc
+          ? s.title >= 0.6 && (s.author >= 0.5 || s.artist >= 0.5) && s.gap <= 6
+          : s.title >= 0.8 && s.keyTitle >= 1 && s.author >= 0.5 && s.extra <= 0.2 && s.gap <= 5))
+        .sort((a, b) => (b.title + b.author) - (a.title + a.author) || a.gap - b.gap);
+      if (original[0]) return original[0].item;
       if (track.strict) return null;
-      const relaxed = scored.filter((s) => s.title >= 0.5 && s.gap <= 30).sort((a, b) => b.title - a.title || a.gap - b.gap);
-      return relaxed[0]?.item ?? null;
+      // Musique normale : clip de la chaîne de l'artiste (quelques secondes d'intro en plus accepté),
+      // ou re-upload avec exactement la même durée (une version accélérée / pitchée change la durée)
+      const official = scored
+        .filter((s) => s.keyTitle >= 1 && !s.variant
+          && ((s.author >= 0.5 && s.extra <= 0.35 && s.gap <= 12) || (s.artist >= 0.5 && s.extra <= 0.15 && s.gap <= 4)))
+        .sort((a, b) => (b.title + b.author) - (a.title + a.author) || a.gap - b.gap);
+      return official[0]?.item ?? null;
     }
 
     const close = full.find((item) => !track.duration || item.info.isStream || Math.abs(item.info.length / 1000 - track.duration) <= 30);
@@ -206,10 +218,21 @@ export class LavalinkBackend {
   matchScore(item, track) {
     const { info } = item;
     const expectedTitle = cleanTitle(track.title) || track.title;
+    // Mots du titre de la vidéo qui ne viennent ni du titre, ni des artistes (ex : "paroles", "reggae", un pseudo de fan)
+    const allowed = new Set(words(`${track.title} ${track.artist ?? ''} ${(track.contributors ?? []).join(' ')}`));
+    const itemWords = words(info.title ?? '').filter((w) => !NOISE.has(w) && !/^\d{4}$/.test(w));
+    const unexplained = itemWords.filter((w) => !allowed.has(w) && ![...allowed].some((a) => a.length >= 4 && w.length >= 4 && (a.startsWith(w) || w.startsWith(a))));
     return {
       variant: VARIANT.test(info.title ?? '') && !VARIANT.test(track.title ?? ''),
       title: matchRatio(expectedTitle, info.title ?? ''),
+      // Les mots importants du titre (3 lettres et +) doivent tous y être : "à moi" ≠ "à nous"
+      keyTitle: (() => {
+        const key = words(expectedTitle).filter((w) => w.length >= 3);
+        return key.length ? matchRatio(key.join(' '), info.title ?? '') : 1;
+      })(),
       artist: track.artist ? matchRatio(track.artist, `${info.author ?? ''} ${info.title ?? ''}`) : 1,
+      author: track.artist ? Math.max(matchRatio(track.artist, info.author ?? ''), ...(track.contributors ?? []).map((name) => matchRatio(name, info.author ?? ''))) : 1,
+      extra: itemWords.length ? unexplained.length / itemWords.length : 0,
       gap: track.duration && info.length && !info.isStream ? Math.abs(info.length / 1000 - track.duration) : 0,
     };
   }
@@ -244,6 +267,8 @@ export class LavalinkBackend {
     const triedNodes = new Set();
     const tried = new Set();
     let lastError = null;
+    let serverError = false;
+    await this.ensureIsrc(track);
 
     // Ce serveur coupe trop en ce moment : on passe sur un autre qui va bien
     if (this.node && Date.now() < this.node.brokenUntil) {
@@ -284,6 +309,7 @@ export class LavalinkBackend {
           item = this.pick(result, track, /^\w+search:/.test(identifier), identifier);
         } catch (err) {
           lastError = err;
+          serverError = true;
           continue;
         }
         if (!item) continue;
@@ -296,19 +322,32 @@ export class LavalinkBackend {
           return true;
         } catch (err) {
           lastError = err;
+          serverError = true;
           this.markBad(track, item);
           lavalink.log(`${this.node.name} n'a pas pu lire "${track.title}" : ${shortError(err.message)}`);
           if (token !== this.player.playToken) return false;
         }
       }
 
-      // Ce serveur n'y arrive pas : on passe au suivant
+      // Aucune version d'origine trouvée : ce n'est pas la faute du serveur, on ne change pas de serveur pour rien
+      if (!serverError) break;
+      // Le serveur a vraiment eu des erreurs : on passe au suivant
       this.node.brokenUntil = Date.now() + NODE_BROKEN_MS;
       triedNodes.add(this.node.name);
       if (!(await this.switchNode(triedNodes))) break;
     }
 
+    if (!serverError && this.node?.usable) throw new MusicError("pas de version d'origine fiable trouvée pour ce son");
     throw new MusicError(lastError ? `aucun serveur audio n'a pu le lire (${shortError(lastError.message)})` : 'aucun serveur audio disponible');
+  }
+
+  /** Code ISRC du son (Deezer) : c'est la recherche la plus sûre pour tomber sur l'enregistrement d'origine. */
+  async ensureIsrc(track) {
+    if (track.isrc || !track.deezerId || track.isrcChecked) return;
+    track.isrcChecked = true;
+    const details = await deezer.track(track.deezerId).catch(() => null);
+    track.isrc = details?.isrc ?? null;
+    if (!track.contributors?.length) track.contributors = (details?.contributors ?? []).map((c) => c.name);
   }
 
   start(item, seek) {
@@ -328,6 +367,7 @@ export class LavalinkBackend {
       this.endTimer = null;
       this.currentEncoded = item.encoded;
       this.currentItem = item;
+      this.startedAt = Date.now();
       this.lastState = { position: seek * 1000, at: Date.now() };
 
       this.node.updatePlayer(this.guild.id, {
@@ -450,6 +490,8 @@ export class LavalinkBackend {
   }
 
   onPlayerUpdate(state) {
+    // Juste après un changement de son, le serveur renvoie encore la position de l'ancien : on l'ignore
+    if (this.pending || Date.now() - (this.startedAt ?? 0) < 2_000) return;
     if (typeof state.position === 'number') {
       this.checkSpeed(state.position);
       this.lastState = { position: state.position, at: Date.now() };
@@ -604,6 +646,7 @@ export class LavalinkBackend {
 
   /** Trouve et valide la bonne version d'un son à l'avance. true = prêt à démarrer instantanément. */
   async prepare(track) {
+    await this.ensureIsrc(track);
     if (!this.node?.usable) this.node = lavalink.bestNode();
     if (!this.node) return false;
     if (track.lavalinkReady?.node === this.node.name) return true;

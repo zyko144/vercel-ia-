@@ -178,9 +178,12 @@ export class GuildPlayer {
     const track = this.current;
 
     // Coupure en pleine lecture : on reprend au même endroit, avec une autre version / un autre serveur audio
-    if (track && failed && (track.retries ?? 0) < MAX_TRACK_RETRIES) {
+    const resumeAt = Math.max(0, this.position() - 2);
+    // Position incohérente (au-delà de la fin) : pas de reprise au mauvais endroit
+    const sensible = !track?.duration || resumeAt < track.duration - 5;
+    if (track && failed && sensible && (track.retries ?? 0) < MAX_TRACK_RETRIES) {
       track.retries = (track.retries ?? 0) + 1;
-      const position = Math.max(0, this.position() - 2);
+      const position = resumeAt;
       console.warn(`[musique] "${track.title}" coupé à ${Math.round(position)}s (${error?.message ?? 'erreur'}), reprise ${track.retries}/${MAX_TRACK_RETRIES}`);
       this.backend?.invalidate?.(track);
       if (this.blind) this.onBlindRetry?.();

@@ -12,11 +12,14 @@ const PL = {
   rap2026: 1140276541, best2025: 14478423703, rapstars2020: 9563400362, best2024: 13154564983, mega2024: 12251400891,
   best2023: 3525945442, rap2324: 12317765831, skyrock2022: 10704136442, ete2022: 10302916242,
   topFrance: 1109890291, topFrance2025: 14591586961, hits2024: 13200756823,
+  // 2016 → 2020
+  pnl: 5709242102, rapstars2010: 5175061384, rapfr2010: 10259601162, rap161718: 11022901282, bestof1821: 9400450122,
+  prime1520: 15613524303, annee2010: 8088419282,
 };
 
 // Playlists 100 % rap français : leurs artistes servent à écarter les sons étrangers des playlists mélangées
 // (« Certifié » et les mix Filtr contiennent aussi des tubes étrangers, ils ne comptent pas ici)
-const FRENCH_RAP_PLAYLISTS = [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.best2024, PL.best2023, PL.rapstars2020, PL.rap2324];
+const FRENCH_RAP_PLAYLISTS = [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.best2024, PL.best2023, PL.rapstars2020, PL.rap2324, PL.pnl, PL.rapstars2010, PL.rapfr2010, PL.annee2010];
 const FRENCH_ISRC = new Set(['FR', 'BE', 'CH', 'LU', 'MC']);
 // Titres qui ne disent rien en blind test, ou versions qui ne ressemblent pas au son connu (live, remix, émission TV...)
 const BAD_TITLE = /\b(intro|outro|interlude|skit|freestyle|live|session|colors show|acoustique|acoustic|remix|instrumental|sped up|slowed|nouvelle [ée]cole)\b/i;
@@ -29,6 +32,7 @@ export const THEMES = {
   y2024: { label: 'Rap FR 2024', emoji: '💿', french: true, years: [2024, 2024], playlists: [PL.best2024, PL.mega2024, PL.rapstars2020, PL.rap2324] },
   y2023: { label: 'Rap FR 2023', emoji: '💿', french: true, years: [2023, 2023], playlists: [PL.best2023, PL.rap2324, PL.rapstars2020, PL.mega2024] },
   y2022: { label: 'Rap FR 2022', emoji: '💿', french: true, years: [2022, 2022], playlists: [PL.skyrock2022, PL.ete2022, PL.rapstars2020] },
+  y1620: { label: 'Rap FR 2016 → 2020 (PNL, Nekfeu, Damso…)', emoji: '📼', french: true, years: [2016, 2020], playlists: [PL.pnl, PL.rapstars2010, PL.rapfr2010, PL.rap161718, PL.bestof1821, PL.prime1520, PL.annee2010, PL.rapstars2020] },
   hits: { label: 'Hits France du moment', emoji: '🇫🇷', years: [2023, 2026], playlists: [PL.topFrance, PL.topFrance2025, PL.hits2024] },
   server: { label: 'Sons du serveur', emoji: '🏠' },
   custom: { label: 'Thème perso', emoji: '✏️' },
@@ -165,7 +169,8 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
   const { tracks: raw, fromDeezer } = await rawTracks(settings, guildId);
   const played = await recentFor(guildId);
   const perArtist = new Map();
-  const artistOk = (name) => (perArtist.get(normalize(name)) ?? 0) < (level.maxPerArtist ?? 3);
+  let artistLimit = level.maxPerArtist ?? 3;
+  const artistOk = (name) => (perArtist.get(normalize(name)) ?? 0) < artistLimit;
   const countArtist = (name) => perArtist.set(normalize(name), (perArtist.get(normalize(name)) ?? 0) + 1);
 
   if (!fromDeezer) {
@@ -198,29 +203,43 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
   const fresh = candidates.filter((item) => !played.has(songKey({ title: item.title, artist: item.artist.name })));
   const ordered = shuffle(fresh.length >= wanted ? fresh : candidates);
 
-  // Vérification un par un (par petits paquets) jusqu'à avoir assez de sons valides
+  // Vérification un par un (par petits paquets) jusqu'à avoir assez de sons valides.
+  // Pas assez (vieux sons moins écoutés aujourd'hui...) : on élargit petit à petit.
   const pool = [];
+  const checked = new Set();
   const [minYear, maxYear] = settings.theme === 'custom' ? [0, 9999] : theme.years;
   const french = theme.french ? await frenchArtists() : null;
-  for (let i = 0; i < ordered.length && pool.length < wanted; i += 8) {
-    const batch = await Promise.all(ordered.slice(i, i + 8).map(async (item) => ({ item, details: await trackDetails(item.id) })));
-    for (const { item, details } of batch) {
-      if (pool.length >= wanted || !details || !artistOk(item.artist.name)) continue;
-      const year = yearOf(details);
-      if (year && (year < minYear || year > maxYear)) continue;
-      if (settings.mode === 'annee' && !year) continue;
-      // Thèmes rap FR : artiste connu du rap français ou son enregistré en France / Belgique / Suisse
-      if (french && !french.has(normalize(item.artist.name)) && !FRENCH_ISRC.has(details.isrc?.slice(0, 2))) continue;
-      countArtist(item.artist.name);
-      pool.push({
-        ...trackFromDeezer({ ...item, album: details.album ?? item.album }),
-        isrc: details.isrc ?? null,
-        year,
-        duration: details.duration ?? item.duration ?? 0,
-        deezerUrl: details.link ?? `https://www.deezer.com/track/${item.id}`,
-      });
+  const passes = [
+    { list: ordered, limit: level.maxPerArtist ?? 3 },
+    { list: shuffle(unique.slice(0, Math.max(level.top * 3, wanted * 4))), limit: (level.maxPerArtist ?? 3) + 1 },
+    { list: shuffle(unique), limit: 4 },
+  ];
+  for (const pass of passes) {
+    if (pool.length >= wanted) break;
+    artistLimit = pass.limit;
+    const todo = pass.list.filter((item) => !checked.has(item.id));
+    for (let i = 0; i < todo.length && pool.length < wanted; i += 8) {
+      const batch = await Promise.all(todo.slice(i, i + 8).map(async (item) => ({ item, details: await trackDetails(item.id) })));
+      for (const { item, details } of batch) {
+        if (pool.length >= wanted || !details || !artistOk(item.artist.name)) continue;
+        checked.add(item.id);
+        const year = yearOf(details);
+        if (year && (year < minYear || year > maxYear)) continue;
+        if (settings.mode === 'annee' && !year) continue;
+        // Thèmes rap FR : artiste connu du rap français ou son enregistré en France / Belgique / Suisse
+        if (french && !french.has(normalize(item.artist.name)) && !FRENCH_ISRC.has(details.isrc?.slice(0, 2))) continue;
+        countArtist(item.artist.name);
+        pool.push({
+          ...trackFromDeezer({ ...item, album: details.album ?? item.album }),
+          isrc: details.isrc ?? null,
+          contributors: (details.contributors ?? []).map((c) => c.name),
+          year,
+          duration: details.duration ?? item.duration ?? 0,
+          deezerUrl: details.link ?? `https://www.deezer.com/track/${item.id}`,
+        });
+      }
+      onProgress(pool.length, wanted);
     }
-    onProgress(pool.length, wanted);
   }
   return pool;
 }

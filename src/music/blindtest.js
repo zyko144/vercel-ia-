@@ -496,18 +496,30 @@ async function waitForSound(game, round) {
   }
   const from = round.seekTo * 1000;
   const deadline = Date.now() + SOUND_WAIT_MS;
+  let baseline = null;
+  let connected = null;
   while (Date.now() < deadline) {
     if (game.stopped || game.current !== round || round.revealed) return;
     const state = await backend.fetchState().catch(() => null);
     const position = state?.state?.position;
-    if (state?.track && state.state.connected !== false && typeof position === 'number' && position > from + 150) {
-      const heardMs = (position - from) / (speedOf(game.player.filters) || 1);
-      startCountdown(game, round, Date.now() - heardMs + AUDIO_LATENCY_MS);
-      return;
+    connected = state?.state?.connected ?? connected;
+    // Ça doit être CE son qui avance (l'ancien peut encore tourner quelques instants)
+    const ours = state?.track?.info?.identifier && state.track.info.identifier === backend.currentItem?.info?.identifier;
+    if (ours && connected !== false && typeof position === 'number') {
+      if (baseline === null) baseline = Math.abs(position - from) <= 1_500 ? Math.min(position, from) : position;
+      if (position > baseline + 150) {
+        const heardMs = Math.min(1_500, (position - baseline) / (speedOf(game.player.filters) || 1));
+        startCountdown(game, round, Date.now() - heardMs + AUDIO_LATENCY_MS);
+        return;
+      }
     }
     await sleep(SOUND_POLL_MS);
   }
-  replaceRound(game, round, 'aucun son ne sort dans le vocal');
+  if (connected === false) {
+    console.warn('[blindtest] le serveur audio n\'est plus connecté au vocal : reconnexion');
+    await backend.refreshVoice?.().catch(() => {});
+  }
+  replaceRound(game, round, connected === false ? 'vocal du serveur audio déconnecté' : 'aucun son ne sort dans le vocal');
 }
 
 function scheduleReveal(game, round) {
@@ -751,6 +763,7 @@ function replaceRound(game, round, reason) {
   console.warn(`[blindtest] manche ${round.index} rejouée avec un autre son (${reason}) : ${round.track.artist} - ${round.track.title}`);
   clearRoundTimers(game);
   round.message?.delete().catch(() => {});
+  if (!game.textOnly) game.player?.backend?.stopTrack?.();
   game.current = null;
   game.index--;
   if (++game.replacements > MAX_REPLACEMENTS) {

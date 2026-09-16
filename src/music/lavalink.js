@@ -137,7 +137,10 @@ class LavalinkNode {
   get penalty() {
     const cpu = this.stats?.cpu?.systemLoad ?? 0;
     const players = this.stats?.playingPlayers ?? 0;
-    return this.priority * 10 + (Date.now() < this.brokenUntil ? 1000 : 0) + (cpu > 0.9 ? 50 : 0) + players * 0.01;
+    // Trames perdues / en retard = micro-coupures qu'on entend dans le vocal
+    const frames = this.stats?.frameStats;
+    const lossy = frames?.sent ? Math.min(40, ((frames.nulled + frames.deficit) / frames.sent) * 400) : 0;
+    return this.priority * 10 + (Date.now() < this.brokenUntil ? 1000 : 0) + (cpu > 0.9 ? 50 : 0) + players * 0.01 + lossy;
   }
 }
 
@@ -285,6 +288,8 @@ class LavalinkManager {
       version: node.version,
       players: node.stats?.playingPlayers ?? 0,
       cpu: node.stats?.cpu?.systemLoad ?? null,
+      frames: node.stats?.frameStats ?? null,
+      penalty: Math.round(node.penalty * 10) / 10,
       secure: node.secure,
     }));
   }
