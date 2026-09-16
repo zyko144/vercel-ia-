@@ -367,7 +367,11 @@ export class LavalinkBackend {
 
   onEvent(message) {
     const pending = this.pending;
-    const sameTrack = !message.track?.encoded || message.track.encoded === this.currentEncoded;
+    const eventTrack = message.track;
+    // Les serveurs audio réécrivent le code du son dans leurs événements : on reconnaît le son à l'identifiant de la vidéo
+    const sameTrack = !eventTrack?.encoded
+      || eventTrack.encoded === this.currentEncoded
+      || Boolean(this.currentEncoded && eventTrack.info?.identifier && eventTrack.info.identifier === this.currentItem?.info?.identifier);
 
     switch (message.type) {
       case 'TrackStartEvent':

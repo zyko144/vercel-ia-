@@ -25,6 +25,7 @@ const ROUND_CHOICES = [5, 10, 15, 20, 30];
 const SETUP_TTL_MS = 30 * 60_000;
 const AUDIO_START_TIMEOUT_MS = 12_000; // le son ne part pas : on le remplace par un autre
 const EARLY_FAILURE_MS = 4_000; // son coupé juste après le départ : manche rejouée avec un autre son
+const AUDIO_LATENCY_MS = 600; // temps entre l'annonce du départ et le son vraiment entendu dans le vocal
 const MAX_REPLACEMENTS = 8;
 const PREPARE_AHEAD = 2;
 const TITLE_POINTS = 2;
@@ -416,10 +417,10 @@ async function nextRound(game) {
 async function onAudioStart(game, round) {
   if (game.stopped || game.current !== round || round.running) return;
   round.running = true;
-  round.audioAt = Date.now();
+  round.audioAt = Date.now() + AUDIO_LATENCY_MS;
   round.endsAt = round.audioAt + game.level.snippet * 1000;
   clearTimeout(game.timers.start);
-  game.timers.reveal = setTimeout(() => revealSafely(game, round), game.level.snippet * 1000);
+  game.timers.reveal = setTimeout(() => revealSafely(game, round), round.endsAt - Date.now());
   if (game.level.hintAt) game.timers.hint = setTimeout(() => showHint(game, round), game.level.snippet * game.level.hintAt * 1000);
 
   await game.lastReveal; // la réponse de la manche d'avant s'affiche d'abord
@@ -473,7 +474,7 @@ export function handleBlindTestMessage(message) {
   const artistOk = !round.artistBy && artists.some((artist) => covers(artist, guess));
 
   if (titleOk) {
-    const elapsed = Date.now() - round.audioAt;
+    const elapsed = Math.max(0, Date.now() - round.audioAt);
     let points = TITLE_POINTS;
     round.titleBy = userId;
     round.foundIn = elapsed;
