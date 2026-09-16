@@ -30,6 +30,8 @@ export class LavalinkBackend {
     this.endTimer = null;
     this.leaving = false;
     this.recovering = false;
+    this.connecting = false;
+    this.voiceBroken = false; // la connexion vocale du serveur audio a lâché pendant qu'aucun son jouait
   }
 
   get name() {
@@ -38,18 +40,38 @@ export class LavalinkBackend {
 
   // ===== Connexion vocale =====
 
+  /** Salon où Discord dit que le bot est VRAIMENT (et pas celui qu'on croit). */
+  actualVoiceChannelId() {
+    return lavalink.voiceStates.get(this.guild.id)?.channelId ?? this.guild.members.me?.voice?.channelId ?? null;
+  }
+
   async connect(voiceChannel) {
     if (!this.node?.usable) this.node = lavalink.bestNode();
     if (!this.node) throw new NoAudioNodeError('aucun serveur audio disponible');
     lavalink.attach(this.guild.id, this);
-    if (this.voice && this.voiceChannelId === voiceChannel.id) return;
+    const actual = this.actualVoiceChannelId();
+    if (this.voice && !this.voiceBroken && this.voiceChannelId === voiceChannel.id && actual === voiceChannel.id) return;
+
+    this.connecting = true;
     try {
+      // Session vocale morte : on sort et on revient pour en avoir une neuve
+      if (this.voiceBroken && actual) {
+        this.leaving = true;
+        this.guild.shard.send({ op: 4, d: { guild_id: this.guild.id, channel_id: null, self_mute: false, self_deaf: true } });
+        await sleep(900);
+        this.leaving = false;
+      }
+      this.voiceBroken = false;
+      this.voice = null;
       await this.joinVoice(voiceChannel.id);
     } catch (err) {
       // Échec du passage de relais : on rend le vocal au mode 24h/24
+      this.leaving = false;
       lavalink.detach(this.guild.id, this);
       await releaseExternalVoice(this.guild);
       throw err;
+    } finally {
+      this.connecting = false;
     }
   }
 
@@ -288,7 +310,15 @@ export class LavalinkBackend {
           if (this.node) this.node.incompatible = true;
           return this.recover('serveur incompatible');
         }
-        if ([4006, 4009, 4014, 4015].includes(message.code)) return this.recover(`connexion vocale perdue (code ${message.code})`);
+        if ([4006, 4009, 4014, 4015].includes(message.code)) {
+          lavalink.log(`Connexion vocale fermée (code ${message.code})${this.player.current ? '' : ' sans musique en cours'}`);
+          // Rien ne joue : on retient qu'il faudra une session neuve au prochain /play
+          if (!this.player.current) {
+            this.voiceBroken = true;
+            return undefined;
+          }
+          return this.recover(`connexion vocale perdue (code ${message.code})`);
+        }
         break;
       }
       default:
@@ -339,9 +369,14 @@ export class LavalinkBackend {
   onVoiceState(data) {
     if (this.leaving || !this.voiceChannelId) return;
     if (!data.channel_id) {
-      // Le bot a été déconnecté du vocal : on revient
+      // Le bot a été déconnecté du vocal
       setTimeout(() => {
-        if (!this.leaving && this.player.current) this.recover('déconnecté du vocal');
+        if (this.leaving || this.connecting || lavalink.players.get(this.guild.id) !== this) return;
+        if (this.actualVoiceChannelId()) return; // déjà revenu entre-temps
+        if (this.player.current) return this.recover('déconnecté du vocal');
+        // Rien ne joue : on rend la main au vocal 24h/24, qui le fait revenir direct dans son salon
+        lavalink.log('Sorti du vocal sans musique : retour au vocal 24h/24');
+        return this.player.destroy().catch(() => {});
       }, 2_000);
       return;
     }

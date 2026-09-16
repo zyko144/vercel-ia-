@@ -68,8 +68,15 @@ async function ensureInVoice(guild) {
 
 async function connect(guild) {
   if (externalOwners.has(guild.id)) {
-    // Sécurité : si plus aucune musique ne tourne côté serveur audio, on reprend la main
-    if (lavalink.players.has(guild.id)) return;
+    const backend = lavalink.players.get(guild.id);
+    const busy = backend && (backend.connecting || backend.leaving || backend.recovering || backend.player?.current);
+    if (busy || (backend && guild.members.me?.voice.channelId)) return;
+    if (backend) {
+      // Sécurité : le serveur audio "tient" le vocal mais le bot n'y est plus et rien ne joue -> on reprend la main
+      console.warn(`[voc] "${guild.name}" : bot sorti du vocal après la musique, retour au salon 24h/24`);
+      await backend.player.destroy().catch(() => {});
+      return;
+    }
     externalOwners.delete(guild.id);
   }
   const target = findTargetChannel(guild);
