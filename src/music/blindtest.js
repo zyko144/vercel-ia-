@@ -13,6 +13,18 @@ const ARTIST_POINTS = 1;
 
 export const blindTestActive = (guildId) => games.has(guildId);
 
+/** Résumé des parties en cours (API d'admin). */
+export function blindTestState() {
+  return [...games.values()].map((game) => ({
+    guildId: game.guildId,
+    channelId: game.channelId,
+    round: `${game.index}/${game.rounds}`,
+    current: game.current ? { title: game.current.track.title, artist: game.current.track.artist, running: Boolean(game.current.running) } : null,
+    pool: game.pool.length,
+    scores: Object.fromEntries(game.scores),
+  }));
+}
+
 const clean = (text = '') => text
   .replace(/\s*[([].*?[)\]]/g, ' ')
   .replace(/\s*-\s*(remaster|radio edit|clip officiel|official.*|live|version.*)$/i, ' ')
@@ -62,18 +74,19 @@ async function buildPool(theme, count, guildId, botName) {
   return pool;
 }
 
-export async function startBlindTest(client, interaction, { theme, rounds, snippetSeconds, voiceChannel }) {
+export async function startBlindTest(client, interaction, { theme, rounds, snippetSeconds, voiceChannel, textChannelId = null, forceVoice = false }) {
   const pool = await buildPool(theme, rounds, interaction.guildId, client.user.username);
   if (pool.length < 3) {
     return interaction.editReply("😕 J'ai pas trouvé assez de sons pour ce thème, essaie autre chose (ex : `rap fr`, `années 2000`, `serveur`).");
   }
 
   // Salon dédié aux blind tests s'il est configuré, sinon celui où la commande est tapée
-  const channelId = config.music.blindtestChannelId || interaction.channelId;
+  const channelId = textChannelId || config.music.blindtestChannelId || interaction.channelId;
 
   const player = getOrCreatePlayer(client, interaction.guild);
   player.textChannelId = channelId;
-  await player.connect(voiceChannel);
+  await player.connect(voiceChannel, { force: forceVoice });
+  console.log(`[blindtest] partie lancée : ${pool.length} sons, ${rounds} manches, ${snippetSeconds}s, vocal ${player.botVoiceChannelId}, moteur ${player.backend?.name}`);
   player.blind = true;
   player.queue = [];
   player.loop = 'off';
@@ -120,6 +133,7 @@ async function nextRound(game, { afterMessage = null } = {}) {
   const duration = track.duration ?? 0;
   const seekTo = duration > game.snippetSeconds + 45 ? Math.floor(duration * 0.28) : 0;
 
+  console.log(`[blindtest] manche ${game.index}/${game.rounds} : ${track.artist} - ${track.title} (départ ${seekTo}s)`);
   // Le chrono ne part que quand le son sort vraiment
   game.player.onStarted = () => startCountdown(game);
   game.player.onBlindEnd = ({ failed }) => onTrackGone(game, track, failed);
@@ -168,6 +182,7 @@ function onTrackGone(game, track, failed) {
 function startCountdown(game) {
   if (game.stopped || !game.current || game.current.running) return;
   game.current.running = true;
+  console.log(`[blindtest] chrono lancé ${Date.now() - game.current.startedAt} ms après le début de la manche`);
   game.current.startedAt = Date.now();
   clearTimeout(game.timer);
   game.timer = setTimeout(() => revealSafely(game, null), game.snippetSeconds * 1000);
@@ -225,6 +240,7 @@ function revealSafely(game, winnerId) {
 
 async function reveal(game, winnerId) {
   if (game.stopped || !game.current) return;
+  console.log(`[blindtest] réponse manche ${game.index} (${winnerId ? 'trouvé' : 'personne'}, chrono ${game.current.running ? 'lancé' : 'JAMAIS lancé'})`);
   const { track, artistFinder } = game.current;
   game.current = null;
   clearTimeout(game.timer);

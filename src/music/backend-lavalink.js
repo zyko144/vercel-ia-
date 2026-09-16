@@ -257,6 +257,7 @@ export class LavalinkBackend {
         if (token !== this.player.playToken) return false;
 
         try {
+          if (this.player.blind) console.log(`[lavalink] ${this.node.name} lance "${item.info.author} - ${item.info.title}" via ${identifier} à ${Math.round(seek)}s`);
           await this.start(item, seek);
           this.applyMetadata(track, item);
           return true;
@@ -337,6 +338,7 @@ export class LavalinkBackend {
 
     switch (message.type) {
       case 'TrackStartEvent':
+        if (this.player.blind) console.log(`[lavalink] ${this.node?.name} : départ du son (${sameTrack ? 'attendu' : 'AUTRE son'}${pending ? ', en attente' : ''})`);
         if (pending && sameTrack) {
           pending.graceTimer = setTimeout(() => pending.finish(), START_GRACE_MS);
         }

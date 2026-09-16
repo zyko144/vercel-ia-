@@ -63,9 +63,9 @@ export class GuildPlayer {
   // ===== Connexion =====
 
   /** Choisit le moteur : Lavalink si un serveur audio répond, sinon le lecteur local. */
-  async connect(voiceChannel) {
+  async connect(voiceChannel, { force = false } = {}) {
     // Le bot ne quitte jamais le chef : si le chef est en vocal, la musique se joue dans son salon
-    voiceChannel = followedChannel(this.guild) ?? voiceChannel;
+    if (!force) voiceChannel = followedChannel(this.guild) ?? voiceChannel;
     const wantLavalink = config.music.engine !== 'local' && lavalink.available;
     const isLavalink = this.backend instanceof LavalinkBackend;
 
@@ -122,7 +122,10 @@ export class GuildPlayer {
     const token = ++this.playToken;
 
     try {
-      if (!(await this.backend.play(track, seek, token))) return;
+      if (!(await this.backend.play(track, seek, token))) {
+        if (this.blind) console.log(`[blindtest] lecture de "${track.title}" abandonnée (remplacée)`);
+        return;
+      }
       if (token !== this.playToken || this.current !== track) return;
       this.failures = 0;
       if (newTrack) await this.sendNewPanel();
