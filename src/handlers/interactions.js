@@ -297,15 +297,15 @@ const SLASH_HANDLERS = {
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
       .setTitle(`🤖 ${client.user.username}, ton assistant IA`)
-      .setDescription(`${config.aiChannelIds.length
-        ? `Écris dans ${config.aiChannelIds.map((id) => `<#${id}>`).join(', ')} : ta question part dans **ton fil privé**, personne d'autre (à part les admins) voit la conversation.`
-        : `Mentionne-moi (${client.user}) pour discuter.`}\nToutes les réponses aux commandes sont visibles **que par toi**.`)
+      .setDescription(`Mes commandes marchent dans **tous les salons**, et tout le monde peut les utiliser.${config.aiChannelIds.length
+        ? `\nDans ${config.aiChannelIds.map((id) => `<#${id}>`).join(', ')}, écris directement : ta question part dans **ton fil privé**.`
+        : ''}\nAilleurs, mentionne-moi (${client.user}). Les réponses aux commandes sont visibles **que par toi**.`)
       .addFields(
         { name: '💬 IA', value: '`/ask` question · `/explique` un sujet · `/code` aide en code · `/corriger` orthographe · `/traduire` traduction · `/resume-salon` résume le salon · `/quiz` quiz perso' },
         ...(config.limits.imagesEnabled ? [{ name: '🎨 Images', value: '`/image` génère · `/modifier-image` retouche' }] : []),
         { name: '🧰 Pratique', value: '`/rappel` rappel en MP · `/sondage` sondage public · `/contacter-chef` écrire au chef · `/clear` efface ta conv IA · `/reset` efface juste la mémoire' },
         { name: '🛡️ Modération', value: '`/clear nombre` · `/kick` · `/ban` · `/unban` · `/mute` · `/unmute` · `/warn` · `/warns` · `/slowmode` · `/lock` · `/unlock` · `/role` · `/say`' },
-        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (lien, créée par IA, perso) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` · `/join` · `/leave`' },
+        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (lien, créée par IA, perso) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct, surlignées) · `/join` · `/leave`' },
         { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/pile-ou-face` · `/de` · `/choisir` · `/ping`' },
         { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français**' },
         { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },

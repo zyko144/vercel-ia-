@@ -26,6 +26,7 @@ export class LavalinkBackend {
     this.currentEncoded = null;
     this.pending = null;
     this.lastState = { position: 0, at: Date.now() };
+    this.endTimer = null;
     this.leaving = false;
     this.recovering = false;
   }
@@ -125,6 +126,20 @@ export class LavalinkBackend {
     const tried = new Set();
     let lastError = null;
 
+    // Son déjà préparé pendant le précédent : on démarre tout de suite (enchaînement quasi instantané)
+    if (track.lavalinkReady?.node === this.node?.name) {
+      const ready = track.lavalinkReady;
+      track.lavalinkReady = null;
+      try {
+        await this.start(ready.item, seek);
+        this.applyMetadata(track, ready.item);
+        return true;
+      } catch (err) {
+        lastError = err;
+        if (token !== this.player.playToken) return false;
+      }
+    }
+
     for (let attempt = 0; attempt < 6; attempt++) {
       if (token !== this.player.playToken) return false;
       if (!this.node?.usable && !(await this.switchNode(triedNodes))) break;
@@ -178,6 +193,8 @@ export class LavalinkBackend {
       };
       pending.timer = setTimeout(() => pending.finish(new Error('le serveur audio ne répond pas')), START_TIMEOUT_MS);
       this.pending = pending;
+      clearTimeout(this.endTimer);
+      this.endTimer = null;
       this.currentEncoded = item.encoded;
       this.lastState = { position: seek * 1000, at: Date.now() };
 
@@ -256,6 +273,26 @@ export class LavalinkBackend {
 
   onPlayerUpdate(state) {
     if (typeof state.position === 'number') this.lastState = { position: state.position, at: Date.now() };
+    this.watchEnd();
+  }
+
+  /**
+   * Filet de sécurité : si un serveur audio oublie d'annoncer la fin d'un son,
+   * on enchaîne quand même sur le suivant.
+   */
+  watchEnd() {
+    const track = this.player.current;
+    if (!track?.duration || track.isLive || this.pending || this.endTimer || this.player.paused) return;
+    const remaining = track.duration * 1000 - this.lastState.position;
+    if (remaining > 4_000) return;
+    this.endTimer = setTimeout(() => {
+      this.endTimer = null;
+      if (this.player.current !== track || !this.currentEncoded) return;
+      if (this.position() < track.duration - 2) return;
+      lavalink.log('Fin de son non signalée : on passe au suivant');
+      this.currentEncoded = null;
+      this.player.onTrackEnd({ failed: false });
+    }, Math.max(1_000, remaining) + 5_000);
   }
 
   onNodeDown() {
@@ -343,13 +380,33 @@ export class LavalinkBackend {
     return this.node?.updatePlayer(this.guild.id, { track: { encoded: null } }).catch(() => {});
   }
 
-  preload() {}
+  /** Prépare le son suivant pendant que le son actuel joue : le passage devient instantané. */
+  async preload(track) {
+    if (!track || !this.node?.usable || track.preloading) return;
+    if (track.lavalinkReady?.node === this.node.name) return;
+    track.preloading = true;
+    try {
+      for (const identifier of this.candidates(track)) {
+        const result = await this.node.loadTracks(identifier).catch(() => null);
+        const item = result && this.pick(result, track, /^\w+search:/.test(identifier));
+        if (item) {
+          track.lavalinkReady = { node: this.node.name, item };
+          this.applyMetadata(track, item);
+          return;
+        }
+      }
+    } finally {
+      track.preloading = false;
+    }
+  }
 
   invalidate(track) {
     track.playUrl = track.source === 'youtube' || track.source === 'soundcloud' ? track.playUrl : null;
   }
 
   destroy() {
+    clearTimeout(this.endTimer);
+    this.endTimer = null;
     lavalink.detach(this.guild.id, this);
     this.pending?.finish(new Error('lecteur fermé'));
     this.node?.destroyPlayer(this.guild.id);

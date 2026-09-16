@@ -11,7 +11,7 @@ import {
 import { config } from '../config.js';
 import { musicSuggestions } from './autocomplete.js';
 import { FILTERS, filtersLabel } from './filters.js';
-import { findLyrics } from './lyrics.js';
+import { showLyrics } from './livelyrics.js';
 import { getOrCreatePlayer, getPlayer } from './player.js';
 import * as playlists from './playlists.js';
 import { aiPlaylist, resolveQuery } from './sources.js';
@@ -353,7 +353,7 @@ const COMMANDS = {
       ? (await resolveQuery(query, { requestedBy: interaction.user.id })).tracks[0]
       : getPlayer(interaction.guildId)?.current;
     if (!track) return interaction.editReply('🎤 Y a rien en cours : précise le son dans `recherche`.');
-    return interaction.editReply(await lyricsPayload(track));
+    return interaction.editReply(await showLyrics(interaction, getPlayer(interaction.guildId), track));
   },
 
   async join(client, interaction) {
@@ -367,20 +367,6 @@ const COMMANDS = {
     return interaction.editReply(`🎧 Je suis dans <#${channel.id}>, balance un \`/play\` !`);
   },
 };
-
-async function lyricsPayload(track) {
-  const found = await findLyrics(track);
-  if (!found) return { content: `😕 J'ai pas trouvé les paroles de **${track.title}**.` };
-  const text = found.plainLyrics;
-  const embeds = [new EmbedBuilder()
-    .setColor(0xfee75c)
-    .setTitle(`🎤 ${found.trackName} — ${found.artistName}`.slice(0, 256))
-    .setDescription(text.slice(0, 4000))];
-  if (text.length > 4000) embeds.push(new EmbedBuilder().setColor(0xfee75c).setDescription(`${text.slice(4000, 5800)}${text.length > 5800 ? '\n…' : ''}`));
-  if (track.thumbnail) embeds[0].setThumbnail(track.thumbnail);
-  embeds.at(-1).setFooter({ text: 'Paroles : lrclib.net' });
-  return { content: '', embeds };
-}
 
 export async function handleMusicCommand(client, interaction) {
   try {
@@ -446,7 +432,7 @@ export async function handleMusicComponent(client, interaction) {
   if (action === 'lyrics') {
     if (!player?.current) return interaction.reply(say('🎵 Y a rien en cours de lecture.'));
     await interaction.deferReply(PRIVATE);
-    return interaction.editReply(await lyricsPayload(player.current));
+    return interaction.editReply(await showLyrics(interaction, player, player.current));
   }
   if (action === 'fav') {
     if (!player?.current) return interaction.reply(say('🎵 Y a rien en cours de lecture.'));

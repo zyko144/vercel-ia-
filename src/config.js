@@ -67,8 +67,8 @@ export const config = {
 
   // Salons où le bot répond à tous les messages (sans mention)
   aiChannelIds: list('AI_CHANNEL_IDS', '1549523857252028538'),
-  // Si rempli : le bot ne répond QUE dans ces salons (et plus en MP). Mettre "*" pour autoriser partout.
-  allowedChannelIds: list('ALLOWED_CHANNEL_IDS', '1549523857252028538').filter((id) => id !== '*'),
+  // Vide = le bot répond partout. Rempli = il ne répond QUE dans ces salons.
+  allowedChannelIds: list('ALLOWED_CHANNEL_IDS').filter((id) => id !== '*'),
   // Réponses visibles seulement par la personne (fil privé + messages éphémères)
   privateReplies: bool('PRIVATE_REPLIES', true),
 

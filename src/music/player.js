@@ -1,6 +1,7 @@
 // Lecteur de musique d'un serveur : file d'attente, boucle, autoplay, panneau.
 // La lecture elle-même passe par un "moteur" : Lavalink (serveur audio externe) ou le lecteur local.
 import { config } from '../config.js';
+import { dmOwner } from '../features/escalation.js';
 import { LavalinkBackend } from './backend-lavalink.js';
 import { LocalBackend } from './backend-local.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
@@ -13,7 +14,9 @@ const MAX_HISTORY = 50;
 const IDLE_RELEASE_MS = 3 * 60_000;
 const ALONE_STOP_MS = 2 * 60_000;
 const PANEL_REFRESH_MS = 15_000;
+const OWNER_PING_COOLDOWN_MS = 10 * 60_000;
 const players = new Map();
+let lastOwnerPing = 0;
 
 export const getPlayer = (guildId) => players.get(guildId) ?? null;
 
@@ -132,6 +135,7 @@ export class GuildPlayer {
 
       console.warn(`[musique] impossible de lire "${track.title}" :`, err.message);
       this.notify(`⚠️ Impossible de lire **${track.title}** (${err.message}), je passe au suivant.`);
+      this.alertOwner(track, err);
       this.current = null;
       if (++this.failures >= 5) {
         this.notify("❌ Trop d'erreurs d'affilée, j'arrête la musique.");
@@ -180,6 +184,30 @@ export class GuildPlayer {
 
   preloadNext() {
     this.backend?.preload?.(this.queue[0]);
+  }
+
+  /** Un son n'a pas pu être joué : le chef est prévenu (MP + ping, comme pour les questions sans réponse). */
+  async alertOwner(track, error) {
+    const requester = track.requestedBy && track.requestedBy !== 'autoplay' ? `<@${track.requestedBy}>` : '♾️ Autoplay';
+    await dmOwner(this.client, {
+      title: "🎵 Un son n'a pas pu être joué",
+      description: `**${track.title}**${track.artist ? ` — ${track.artist}` : ''}\n\`${error.message}\`${track.url ? `\n${track.url}` : ''}`,
+      fields: [
+        { name: 'Demandé par', value: requester, inline: true },
+        { name: 'Serveur', value: this.guild.name, inline: true },
+        { name: 'Moteur', value: this.backend?.name ?? '—', inline: true },
+      ],
+      link: this.textChannelId ? `https://discord.com/channels/${this.guild.id}/${this.textChannelId}` : undefined,
+    });
+
+    // Ping public limité : pas de spam si toute une playlist plante
+    if (Date.now() - lastOwnerPing < OWNER_PING_COOLDOWN_MS) return;
+    lastOwnerPing = Date.now();
+    const channel = await this.textChannel();
+    await channel?.send({
+      content: `🔔 <@${config.ownerId}> un son n'a pas pu être joué (**${track.title}**), jt'ai envoyé le détail en MP.`,
+      allowedMentions: { users: [config.ownerId] },
+    }).catch(() => {});
   }
 
   /** Position dans le son, en secondes. */
