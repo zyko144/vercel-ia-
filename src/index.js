@@ -42,7 +42,7 @@ client.once(Events.ClientReady, async (c) => {
   }
 
   lavalink.init(c);
-  startVoiceKeeper(c);
+  startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   startReminderLoop(c);
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);
@@ -66,6 +66,18 @@ client.on(Events.Error, (err) => console.error('[discord]', err));
 // Prépare yt-dlp dès le démarrage pour que le premier /play soit rapide
 ensureBinaries().catch((err) => console.warn('[musique] yt-dlp indisponible :', err.message));
 process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
+
+// Render arrête l'ancienne version à chaque mise à jour : on coupe proprement ses lecteurs audio
+let stopping = false;
+async function shutdown(signal) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`🛑 ${signal} reçu : arrêt propre`);
+  await Promise.race([lavalink.shutdown(), new Promise((resolve) => setTimeout(resolve, 5_000))]).catch(() => {});
+  process.exit(0);
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
 
 startHttpServer(() => ({
   bot: client.user?.username,

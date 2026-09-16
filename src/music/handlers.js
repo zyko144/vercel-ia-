@@ -77,12 +77,13 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
   const position = next ? 1 : player.queue.length + 1;
   player.add(tracks, { next });
 
+  const where = player.botVoiceChannelId && player.botVoiceChannelId !== channel.id ? `\n-# 🎧 Je reste avec le chef : ça joue dans <#${player.botVoiceChannelId}>` : '';
   if (tracks.length === 1 && !result.isPlaylist) {
-    return interaction.editReply(wasPlaying
+    return interaction.editReply((wasPlaying
       ? `✅ Ajouté à la file (position **${position}**) : ${trackLine(tracks[0])}`
-      : `▶️ C'est parti : ${trackLine(tracks[0])}`);
+      : `▶️ C'est parti : ${trackLine(tracks[0])}`) + where);
   }
-  return interaction.editReply(`📜 **${tracks.length} sons** ajoutés${label || (result.name ? ` depuis **${result.name}**` : '')}${wasPlaying ? '' : ', la lecture commence !'}`);
+  return interaction.editReply(`📜 **${tracks.length} sons** ajoutés${label || (result.name ? ` depuis **${result.name}**` : '')}${wasPlaying ? '' : ', la lecture commence !'}${where}`);
 }
 
 const stamp = (tracks, userId) => tracks.map((t) => ({ ...t, requestedBy: userId, streamUrl: null }));

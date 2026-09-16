@@ -2,6 +2,7 @@
 // La lecture elle-même passe par un "moteur" : Lavalink (serveur audio externe) ou le lecteur local.
 import { config } from '../config.js';
 import { dmOwner } from '../features/escalation.js';
+import { followedChannel } from '../features/voice.js';
 import { LavalinkBackend } from './backend-lavalink.js';
 import { LocalBackend } from './backend-local.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
@@ -62,6 +63,8 @@ export class GuildPlayer {
 
   /** Choisit le moteur : Lavalink si un serveur audio répond, sinon le lecteur local. */
   async connect(voiceChannel) {
+    // Le bot ne quitte jamais le chef : si le chef est en vocal, la musique se joue dans son salon
+    voiceChannel = followedChannel(this.guild) ?? voiceChannel;
     const wantLavalink = config.music.engine !== 'local' && lavalink.available;
     const isLavalink = this.backend instanceof LavalinkBackend;
 

@@ -1,6 +1,6 @@
 // Lecture via un serveur Lavalink : c'est lui qui récupère le son et l'envoie dans le vocal Discord.
 import { config } from '../config.js';
-import { homeChannel, releaseExternalVoice, takeVoiceForExternal } from '../features/voice.js';
+import { anchorChannel, releaseExternalVoice, takeVoiceForExternal } from '../features/voice.js';
 import { lavalinkFilters, speedOf } from './filters.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
 import { MusicError } from './ytdlp.js';
@@ -8,7 +8,9 @@ import { MusicError } from './ytdlp.js';
 const START_TIMEOUT_MS = 25_000;
 const START_GRACE_MS = 2_500; // certains serveurs annoncent le démarrage puis échouent juste après
 const NODE_BROKEN_MS = 10 * 60_000;
-const NODE_STALLS_BEFORE_BREAK = 2; // coupures en pleine lecture sur un serveur avant de le mettre de côté
+const NODE_STALLS_BEFORE_BREAK = 3; // coupures en pleine lecture sur un serveur avant de le mettre de côté
+const FAST_PLAYBACK_BAN_MS = 60 * 60_000;
+const FAST_RATIO = 1.7; // le son avance 1,7x plus vite que l'horloge : le serveur audio déraille
 const EARLY_END_MARGIN_S = 15;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const shortError = (text = '') => text.split('\n')[0].slice(0, 120);
@@ -34,6 +36,9 @@ export class LavalinkBackend {
     this.leaving = false;
     this.recovering = false;
     this.connecting = false;
+    this.lastVoiceKey = null;
+    this.speedSample = null;
+    this.fastStrikes = 0;
     this.voiceBroken = false; // la connexion vocale du serveur audio a lâché pendant qu'aucun son jouait
   }
 
@@ -96,26 +101,44 @@ export class LavalinkBackend {
     return this.sendVoice();
   }
 
-  /** Fin de la musique : le bot retourne dans son vocal habituel sans se déconnecter. */
+  /** Fin de la musique : le bot reste avec le chef (ou retourne dans son vocal) sans se déconnecter. */
   async moveToHome() {
-    const home = homeChannel(this.guild);
+    const home = anchorChannel(this.guild);
     if (!home || !config.voice.enabled) return this.destroy();
     await this.stopTrack();
-    if (this.voiceChannelId === home.id) return undefined;
+    return this.moveTo(home.id).catch(() => {});
+  }
 
-    const waiting = lavalink.waitForVoice(this.guild.id, home.id, 10_000).catch(() => null);
-    this.guild.shard.send({ op: 4, d: { guild_id: this.guild.id, channel_id: home.id, self_mute: false, self_deaf: true } });
-    const voice = await waiting;
-    this.voiceChannelId = home.id;
-    if (voice) this.voice = voice;
-    return this.sendVoice().catch(() => {});
+  /** Change de salon vocal sans quitter : la musique continue dans le nouveau salon. */
+  async moveTo(channelId) {
+    if (!channelId || (this.voiceChannelId === channelId && this.actualVoiceChannelId() === channelId)) return;
+    this.connecting = true;
+    try {
+      const waiting = lavalink.waitForVoice(this.guild.id, channelId, 10_000).catch(() => null);
+      this.guild.shard.send({ op: 4, d: { guild_id: this.guild.id, channel_id: channelId, self_mute: false, self_deaf: true } });
+      const voice = await waiting;
+      this.voiceChannelId = channelId;
+      if (voice) this.voice = voice;
+      if (this.voice) await this.sendVoice().catch(() => {});
+      this.speedSample = null;
+    } finally {
+      this.connecting = false;
+    }
   }
 
   sendVoice() {
+    const voice = { token: this.voice.token, endpoint: this.voice.endpoint, sessionId: this.voice.sessionId, channelId: this.voiceChannelId };
+    // Le même accès vocal envoyé deux fois fait dérailler certains serveurs audio (son accéléré) : on ne l'envoie qu'une fois
+    const key = [this.node.name, this.node.sessionId, voice.token, voice.endpoint, voice.sessionId, voice.channelId].join('|');
+    if (key === this.lastVoiceKey) return Promise.resolve();
+    this.lastVoiceKey = key;
     return this.node.updatePlayer(this.guild.id, {
-      voice: { token: this.voice.token, endpoint: this.voice.endpoint, sessionId: this.voice.sessionId, channelId: this.voiceChannelId },
+      voice,
       volume: this.player.volume,
       filters: lavalinkFilters(this.player.filters, this.node),
+    }).catch((err) => {
+      this.lastVoiceKey = null;
+      throw err;
     });
   }
 
@@ -288,10 +311,21 @@ export class LavalinkBackend {
     if (!next || next === this.node) return false;
     const previous = this.node;
     lavalink.log(`Bascule ${previous?.name ?? '?'} → ${next.name}`);
-    previous?.destroyPlayer(this.guild.id);
+    await previous?.destroyPlayer(this.guild.id);
     this.node = next;
     this.currentEncoded = null;
-    if (this.voiceChannelId) await this.refreshVoice();
+    this.speedSample = null;
+    if (this.voiceChannelId && this.voice) {
+      // Même session vocale passée au nouveau serveur : le bot ne quitte pas le vocal
+      await sleep(400);
+      try {
+        await this.sendVoice();
+      } catch {
+        await this.refreshVoice();
+      }
+    } else if (this.voiceChannelId) {
+      await this.refreshVoice();
+    }
     return true;
   }
 
@@ -345,6 +379,15 @@ export class LavalinkBackend {
           if (this.node) this.node.incompatible = true;
           return this.recover('serveur incompatible');
         }
+        // 4014 alors que le bot est toujours dans un salon = simple déplacement : on renvoie l'accès vocal, sans quitter
+        if (message.code === 4014 && this.actualVoiceChannelId()) {
+          setTimeout(() => {
+            if (!this.actualVoiceChannelId() || this.leaving) return;
+            this.lastVoiceKey = null;
+            if (this.voice) this.sendVoice().catch(() => {});
+          }, 1_500);
+          return undefined;
+        }
         if ([4006, 4009, 4014, 4015].includes(message.code)) {
           lavalink.log(`Connexion vocale fermée (code ${message.code})${this.player.current ? '' : ' sans musique en cours'}`);
           // Rien ne joue : on retient qu'il faudra une session neuve au prochain /play
@@ -368,8 +411,44 @@ export class LavalinkBackend {
   }
 
   onPlayerUpdate(state) {
-    if (typeof state.position === 'number') this.lastState = { position: state.position, at: Date.now() };
+    if (typeof state.position === 'number') {
+      this.checkSpeed(state.position);
+      this.lastState = { position: state.position, at: Date.now() };
+    }
     this.watchEnd();
+  }
+
+  /** Certains serveurs audio se mettent à jouer le son en accéléré : on le repère et on change de serveur. */
+  checkSpeed(position) {
+    const now = Date.now();
+    const previous = this.speedSample;
+    this.speedSample = { position, at: now, encoded: this.currentEncoded };
+    if (!previous || previous.encoded !== this.currentEncoded || this.pending || this.player.paused || !this.player.current || this.recovering) {
+      this.fastStrikes = 0;
+      return;
+    }
+    const wall = now - previous.at;
+    if (wall < 2_000) return;
+    const ratio = (position - previous.position) / wall / speedOf(this.player.filters);
+    if (ratio < FAST_RATIO) {
+      this.fastStrikes = 0;
+      return;
+    }
+    if (++this.fastStrikes === 1) this.fastFrom = previous.position;
+    if (this.fastStrikes < 2) return;
+
+    const node = this.node;
+    lavalink.log(`${node?.name} joue le son en accéléré (x${ratio.toFixed(1)}) : mis de côté 1 h`);
+    console.warn(`[musique] ${node?.name} : son accéléré x${ratio.toFixed(1)}, changement de serveur audio`);
+    if (node) node.brokenUntil = Date.now() + FAST_PLAYBACK_BAN_MS;
+    this.fastStrikes = 0;
+    this.speedSample = null;
+    const resumeAt = Math.max(0, (this.fastFrom ?? 0) / 1000 - 2);
+    this.recovering = true;
+    this.switchNode(new Set(node ? [node.name] : []))
+      .then((switched) => this.player.startCurrent(switched ? resumeAt : resumeAt))
+      .catch((err) => this.player.onTrackEnd({ failed: true, error: err }))
+      .finally(() => { this.recovering = false; });
   }
 
   /**
@@ -402,7 +481,7 @@ export class LavalinkBackend {
   }
 
   onVoiceServer(data) {
-    if (!this.voice || this.pending?.joining || !data.endpoint) return;
+    if (!this.voice || this.connecting || this.leaving || this.pending?.joining || !data.endpoint) return;
     this.voice = { ...this.voice, token: data.token, endpoint: data.endpoint };
     this.sendVoice().catch(() => {});
   }
@@ -421,7 +500,7 @@ export class LavalinkBackend {
       }, 2_000);
       return;
     }
-    if (data.channel_id !== this.voiceChannelId) {
+    if (data.channel_id !== this.voiceChannelId && !this.connecting) {
       this.voiceChannelId = data.channel_id;
       this.voice = { ...this.voice, sessionId: data.session_id };
       this.sendVoice().catch(() => {});
@@ -473,6 +552,7 @@ export class LavalinkBackend {
 
   async seek(seconds) {
     const position = Math.max(0, Math.round(seconds * 1000));
+    this.speedSample = null;
     await this.node?.updatePlayer(this.guild.id, { position });
     this.lastState = { position, at: Date.now() };
   }

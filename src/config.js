@@ -63,6 +63,8 @@ export const config = {
     channelId: str('VOICE_CHANNEL_ID', '1549504799806857236'),
     categoryName: str('VOICE_CATEGORY_NAME', 'vercel'),
     channelName: str('VOICE_CHANNEL_NAME', 'bureau'),
+    // Le bot suit le chef dans chaque vocal qu'il rejoint, et reste dans son dernier salon
+    followOwner: bool('VOICE_FOLLOW_OWNER', true),
   },
 
   // Salons où le bot répond à tous les messages (sans mention)

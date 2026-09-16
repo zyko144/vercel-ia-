@@ -8,8 +8,11 @@ import {
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { config } from '../config.js';
 import { lavalink } from '../music/lavalink.js';
+import { load, save } from '../storage.js';
 
-const CHECK_EVERY_MS = 60_000;
+const CHECK_EVERY_MS = 20_000;
+const ANCHOR_KEY = 'voice-anchor';
+const anchors = new Map(); // guildId -> dernier salon vocal du chef (le bot y reste)
 const joining = new Map(); // guildId -> Promise
 const warned = new Set();
 const managed = new WeakSet();
@@ -47,11 +50,37 @@ export function homeChannel(guild) {
   return null;
 }
 
+/** Salon vocal où est le chef en ce moment (null s'il n'est pas en vocal, ou dans le salon AFK). */
+export function followedChannel(guild) {
+  if (!config.voice.followOwner || !config.ownerId) return null;
+  const channel = guild.voiceStates.cache.get(config.ownerId)?.channel;
+  if (!channel || channel.id === guild.afkChannelId || !isVoice(channel)) return null;
+  return channel;
+}
+
+function rememberAnchor(guild, channel) {
+  if (anchors.get(guild.id) === channel.id) return;
+  anchors.set(guild.id, channel.id);
+  save(ANCHOR_KEY, Object.fromEntries(anchors));
+}
+
+/** Là où le bot doit être : avec le chef, sinon dans le dernier salon du chef, sinon son vocal habituel. */
+export function anchorChannel(guild) {
+  const owner = followedChannel(guild);
+  if (owner) {
+    rememberAnchor(guild, owner);
+    return owner;
+  }
+  const last = config.voice.followOwner && guild.channels.cache.get(anchors.get(guild.id));
+  if (last && isVoice(last)) return last;
+  return homeChannel(guild);
+}
+
 export function findTargetChannel(guild) {
   const musicChannelId = musicOverrides.get(guild.id);
   const musicChannel = musicChannelId && guild.channels.cache.get(musicChannelId);
   if (musicChannel) return musicChannel;
-  return config.voice.enabled ? homeChannel(guild) : null;
+  return config.voice.enabled ? anchorChannel(guild) : null;
 }
 
 async function ensureInVoice(guild) {
@@ -69,8 +98,16 @@ async function ensureInVoice(guild) {
 async function connect(guild) {
   if (externalOwners.has(guild.id)) {
     const backend = lavalink.players.get(guild.id);
-    const busy = backend && (backend.connecting || backend.leaving || backend.recovering || backend.player?.current);
-    if (busy || (backend && guild.members.me?.voice.channelId)) return;
+    const botChannelId = guild.members.me?.voice.channelId;
+    const busy = backend && (backend.connecting || backend.leaving || backend.recovering);
+    if (busy) return;
+    // Le serveur audio tient le vocal : on vérifie juste que le bot est bien avec le chef
+    if (backend && botChannelId) {
+      const target = config.voice.enabled ? anchorChannel(guild) : null;
+      if (target && target.id !== botChannelId) await backend.moveTo(target.id).catch((err) => console.warn('[voc] déplacement :', err.message));
+      return;
+    }
+    if (backend?.player?.current) return; // la reprise du son gère le retour
     if (backend) {
       // Sécurité : le serveur audio "tient" le vocal mais le bot n'y est plus et rien ne joue -> on reprend la main
       console.warn(`[voc] "${guild.name}" : bot sorti du vocal après la musique, retour au salon 24h/24`);
@@ -145,26 +182,61 @@ async function connect(guild) {
   }
 }
 
-export function startVoiceKeeper(client) {
+export async function startVoiceKeeper(client) {
   const checkAll = () => {
     for (const guild of client.guilds.cache.values()) {
       ensureInVoice(guild).catch((err) => console.warn('[voc]', err.message));
     }
   };
 
+  // Dernier salon du chef gardé en mémoire : après un redémarrage le bot y retourne direct
+  const saved = await load(ANCHOR_KEY, {}).catch(() => ({}));
+  for (const [guildId, channelId] of Object.entries(saved ?? {})) anchors.set(guildId, channelId);
+
   if (config.voice.enabled) {
     checkAll();
     setInterval(checkAll, CHECK_EVERY_MS);
   }
 
-  // Kick / déplacement du bot -> il revient là où il doit être
   client.on('voiceStateUpdate', (oldState, newState) => {
-    if (newState.id !== client.user.id || externalOwners.has(newState.guild.id)) return;
-    const target = findTargetChannel(newState.guild);
-    if (target && newState.channelId !== target.id) {
-      setTimeout(() => ensureInVoice(newState.guild).catch(() => {}), 3_000);
+    const { guild } = newState;
+
+    // Le chef rejoint ou change de vocal -> le bot le suit (avec la musique si elle tourne)
+    if (newState.id === config.ownerId && config.voice.enabled && newState.channelId !== oldState.channelId) {
+      const channel = followedChannel(guild);
+      if (!channel) return;
+      rememberAnchor(guild, channel);
+      console.log(`[voc] le chef est dans #${channel.name}, je le suis`);
+      setTimeout(() => followNow(guild).catch((err) => console.warn('[voc] suivre le chef :', err.message)), 700);
+      return;
     }
+
+    // Kick / déplacement du bot -> il revient là où il doit être
+    if (newState.id !== client.user.id) return;
+    const target = findTargetChannel(guild);
+    if (!target || newState.channelId === target.id) return;
+    setTimeout(() => {
+      if (externalOwners.has(guild.id)) {
+        const backend = lavalink.players.get(guild.id);
+        // Déplacé (pas éjecté) pendant que le serveur audio tient le vocal : on le ramène
+        if (backend && guild.members.me?.voice.channelId && !backend.connecting) backend.moveTo(findTargetChannel(guild)?.id).catch(() => {});
+        return;
+      }
+      ensureInVoice(guild).catch(() => {});
+    }, 3_000);
   });
+}
+
+/** Emmène le bot (et la musique) dans le salon du chef. */
+async function followNow(guild) {
+  const target = findTargetChannel(guild);
+  if (!target || guild.members.me?.voice.channelId === target.id) return;
+  if (externalOwners.has(guild.id)) {
+    const backend = lavalink.players.get(guild.id);
+    if (backend) return backend.moveTo(target.id);
+  }
+  musicOverrides.delete(guild.id);
+  return ensureInVoice(guild);
 }
 
 /** La musique emmène le bot dans le salon vocal de la personne. */

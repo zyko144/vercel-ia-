@@ -183,6 +183,18 @@ class LavalinkManager {
     return null;
   }
 
+  /** Arrêt du bot : on supprime nos lecteurs sur les serveurs audio (sinon ils continuent de jouer 60 s par-dessus la nouvelle version). */
+  async shutdown() {
+    await Promise.all(this.nodes.map(async (node) => {
+      if (!node.sessionId || !node.connected) return;
+      await node.request('PATCH', `/v4/sessions/${node.sessionId}`, { resuming: false }).catch(() => {});
+      await Promise.all([...this.players.keys()].map((guildId) => node.destroyPlayer(guildId)));
+      const { ws } = node;
+      node.ws = null;
+      ws?.close(1000);
+    }));
+  }
+
   attach(guildId, backend) {
     this.players.set(guildId, backend);
   }
