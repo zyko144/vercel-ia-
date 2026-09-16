@@ -11,7 +11,7 @@ import {
 import { config } from '../config.js';
 import { musicSuggestions } from './autocomplete.js';
 import { FILTERS, filtersLabel } from './filters.js';
-import { showLyrics } from './livelyrics.js';
+import { adjustLyrics, showLyrics } from './livelyrics.js';
 import { getOrCreatePlayer, getPlayer } from './player.js';
 import * as playlists from './playlists.js';
 import { aiPlaylist, resolveQuery } from './sources.js';
@@ -522,6 +522,15 @@ export async function handleMusicComponent(client, interaction) {
     } catch (err) {
       return interaction.editReply(`❌ ${err instanceof MusicError ? `Oups : ${err.message}.` : "Ça a pas marché, réessaie stp."}`);
     }
+  }
+
+  // Réglage des paroles (⏪ ⏩ 🔄) : ça ne touche pas à la musique
+  if (interaction.customId.startsWith('music:lyrics:')) {
+    const offset = adjustLyrics(interaction.user.id, interaction.customId.split(':')[2]);
+    if (offset === null) {
+      return interaction.reply(say('Ces paroles sont plus suivies en direct, relance `/lyrics` 😉'));
+    }
+    return interaction.deferUpdate();
   }
 
   const action = interaction.customId.split(':')[1];

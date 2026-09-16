@@ -87,6 +87,8 @@ export const config = {
     lavalinkNodes: parseNodes(str('LAVALINK_NODES')),
     // Rafraîchissement de la barre de progression (3 s minimum : Discord limite les modifications)
     panelRefreshMs: Math.max(3, int('MUSIC_PANEL_REFRESH_SECONDS', 4)) * 1000,
+    // Décalage des paroles : négatif = elles s'affichent plus tard (compense le retard du son)
+    lyricsOffsetMs: int('LYRICS_OFFSET_MS', -900),
   },
 
   port: int('PORT', 3000),

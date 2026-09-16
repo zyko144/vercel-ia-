@@ -1,16 +1,19 @@
 // Paroles synchronisées : la ligne en cours est surlignée et suit la musique, comme sur Spotify.
 // Le rafraîchissement est calé sur l'horodatage de chaque ligne (et pas sur un minuteur régulier),
 // donc le changement de ligne tombe pile au bon moment.
-import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
+import { config } from '../config.js';
 import { findLyrics } from './lyrics.js';
 
 const MIN_EDIT_MS = 1_100; // Discord limite le nombre de modifications : on garde une petite marge
 const IDLE_CHECK_MS = 4_000;
-const LEAD_MS = 350; // le temps que Discord affiche la modification
+const STEP_MS = 500; // réglage fin avec les boutons
+const MAX_OFFSET_MS = 15_000;
 const MAX_DURATION_MS = 14 * 60_000; // le jeton Discord de la commande expire au bout de 15 min
 const LINES_BEFORE = 3;
 const LINES_AFTER = 5;
-const sessions = new Map(); // userId -> arrêt de la session en cours
+const sessions = new Map(); // userId -> session en cours
+const savedOffsets = new Map(); // userId -> réglage gardé d'un son à l'autre
 
 /** Transforme des paroles LRC ("[01:23.45] texte") en lignes horodatées. */
 export function parseLrc(text = '') {
@@ -43,7 +46,15 @@ function formatTime(seconds) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function render(lines, index, { title, artist, thumbnail, position, duration }) {
+function syncButtons(offsetMs) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('music:lyrics:later').setLabel('Retarder').setEmoji('⏪').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('music:lyrics:reset').setLabel(`${offsetMs > 0 ? '+' : ''}${(offsetMs / 1000).toFixed(1)}s`).setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('music:lyrics:sooner').setLabel('Avancer').setEmoji('⏩').setStyle(ButtonStyle.Secondary),
+  );
+}
+
+function render(lines, index, { title, artist, thumbnail, position, duration, offsetMs = 0 }) {
   const from = Math.max(0, index - LINES_BEFORE);
   const shown = lines.slice(from, index + LINES_AFTER + 1);
   const body = shown.map((line, i) => {
@@ -56,9 +67,9 @@ function render(lines, index, { title, artist, thumbnail, position, duration }) 
     .setAuthor({ name: '🎤 Paroles en direct' })
     .setTitle(`${title}${artist ? ` — ${artist}` : ''}`.slice(0, 250))
     .setDescription(body.slice(0, 4000) || '♪')
-    .setFooter({ text: `Ça suit la musique · ${formatTime(position)} / ${formatTime(duration)}` });
+    .setFooter({ text: `Ça suit la musique · ${formatTime(position)} / ${formatTime(duration)} · ⏪ ⏩ si c'est décalé` });
   if (thumbnail) embed.setThumbnail(thumbnail);
-  return { content: '', embeds: [embed] };
+  return { content: '', embeds: [embed], components: [syncButtons(offsetMs)] };
 }
 
 function plainPayload(found, track) {
@@ -88,47 +99,71 @@ export async function showLyrics(interaction, player, track) {
 
   const info = { title: found.trackName, artist: found.artistName, thumbnail: track.thumbnail };
   const startedAt = Date.now();
+  // Le son entendu a un peu de retard sur la position annoncée : on décale les paroles d'autant
+  let offsetMs = savedOffsets.get(interaction.user.id) ?? config.music.lyricsOffsetMs;
   let timer = null;
   let stopped = false;
-  let lastIndex = currentLineIndex(lines, player.position() * 1000 + LEAD_MS);
-  let lastEdit = Date.now();
+  let lastIndex = -2;
+  let lastEdit = 0;
+
+  const positionMs = () => player.position() * 1000 + offsetMs;
+  const payload = () => render(lines, Math.max(currentLineIndex(lines, positionMs()), 0), {
+    ...info, position: player.position(), duration: track.duration, offsetMs,
+  });
 
   const stop = () => {
     stopped = true;
     clearTimeout(timer);
-    if (sessions.get(interaction.user.id) === stop) sessions.delete(interaction.user.id);
+    if (sessions.get(interaction.user.id)?.stop === stop) sessions.delete(interaction.user.id);
   };
 
   const schedule = () => {
     if (stopped) return;
-    const positionMs = player.position() * 1000 + LEAD_MS;
-    const next = lines[currentLineIndex(lines, positionMs) + 1];
+    const next = lines[currentLineIndex(lines, positionMs()) + 1];
     // On se réveille pile quand la ligne suivante commence
-    const delay = next && !player.paused ? Math.max(80, next.at - positionMs) : IDLE_CHECK_MS;
+    const delay = next && !player.paused ? Math.max(80, next.at - positionMs()) : IDLE_CHECK_MS;
     timer = setTimeout(tick, Math.min(delay, IDLE_CHECK_MS));
   };
 
-  const tick = async () => {
-    if (stopped) return;
+  const tick = async ({ force = false } = {}) => {
+    if (stopped) return undefined;
     if (player.current !== track || Date.now() - startedAt > MAX_DURATION_MS) return stop();
 
-    const position = player.position();
-    const index = currentLineIndex(lines, position * 1000 + LEAD_MS);
-    if (index !== lastIndex && Date.now() - lastEdit >= MIN_EDIT_MS) {
+    const index = currentLineIndex(lines, positionMs());
+    if ((index !== lastIndex || force) && Date.now() - lastEdit >= (force ? 0 : MIN_EDIT_MS)) {
       lastIndex = index;
       lastEdit = Date.now();
       try {
-        await interaction.editReply(render(lines, Math.max(index, 0), { ...info, position, duration: track.duration }));
+        await interaction.editReply(payload());
       } catch {
         return stop();
       }
     }
+    clearTimeout(timer);
     return schedule();
   };
 
-  sessions.set(interaction.user.id, stop);
+  /** Boutons ⏪ / ⏩ : la personne recale elle-même les paroles. */
+  const adjust = (deltaMs) => {
+    offsetMs = deltaMs === 0 ? config.music.lyricsOffsetMs : Math.max(-MAX_OFFSET_MS, Math.min(MAX_OFFSET_MS, offsetMs + deltaMs));
+    savedOffsets.set(interaction.user.id, offsetMs);
+    tick({ force: true }).catch(() => {});
+    return offsetMs;
+  };
+
+  sessions.set(interaction.user.id, { stop, adjust });
+  lastIndex = currentLineIndex(lines, positionMs());
   schedule();
-  return render(lines, Math.max(lastIndex, 0), { ...info, position: player.position(), duration: track.duration });
+  return payload();
+}
+
+/** Réglage du décalage depuis les boutons (⏪ retarder, ⏩ avancer, 🔄 remise à zéro). */
+export function adjustLyrics(userId, action) {
+  const session = sessions.get(userId);
+  if (!session) return null;
+  const delta = { later: -STEP_MS, sooner: STEP_MS, reset: 0 }[action];
+  if (delta === undefined) return null;
+  return session.adjust(delta);
 }
 
 export const LYRICS_FLAGS = MessageFlags.Ephemeral;
