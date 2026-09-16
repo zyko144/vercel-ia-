@@ -7,7 +7,7 @@ import { aiPlaylist } from './sources.js';
 import { popularTracks } from './stats.js';
 
 const games = new Map(); // guildId -> partie en cours
-const REVEAL_PAUSE_MS = 5_000;
+const START_SAFETY_S = 20; // si le son ne démarre jamais, on passe quand même à la suite
 const TITLE_POINTS = 2;
 const ARTIST_POINTS = 1;
 
@@ -105,9 +105,12 @@ async function channelOf(game) {
   return game.client.channels.fetch(game.channelId).catch(() => null);
 }
 
-async function nextRound(game) {
+async function nextRound(game, { afterMessage = null } = {}) {
   if (game.stopped) return;
-  if (game.index >= game.rounds || !game.pool.length) return endGame(game);
+  if (game.index >= game.rounds || !game.pool.length) {
+    await afterMessage;
+    return endGame(game);
+  }
 
   game.index++;
   const track = game.pool.shift();
@@ -117,12 +120,17 @@ async function nextRound(game) {
   const duration = track.duration ?? 0;
   const seekTo = duration > game.snippetSeconds + 45 ? Math.floor(duration * 0.28) : 0;
 
-  game.player.queue = [];
-  // Le chrono ne part que quand le son sort vraiment (le chargement prend quelques secondes)
+  // Le chrono ne part que quand le son sort vraiment
   game.player.onStarted = () => startCountdown(game);
-  game.player.add([{ ...track, requestedBy: 'blindtest', seekTo }]);
+  game.player.onBlindEnd = ({ failed }) => onTrackGone(game, track, failed);
+  // Le nouveau son remplace directement l'ancien : 0 blanc entre les manches
+  game.player.playNow({ ...track, requestedBy: 'blindtest', seekTo });
+  // Le son d'après est préparé pendant cette manche pour démarrer instantanément
+  if (game.pool[0]) game.player.backend?.preload?.(game.pool[0])?.catch?.(() => {});
 
   const channel = await channelOf(game);
+  await afterMessage; // le message de réponse de la manche précédente passe avant
+  if (game.current?.track !== track) return undefined; // son illisible déjà remplacé par une autre manche
   await channel?.send({
     embeds: [new EmbedBuilder()
       .setColor(0x5865f2)
@@ -132,9 +140,28 @@ async function nextRound(game) {
   }).catch(() => {});
 
   // Filet de sécurité : si le son ne démarre jamais, on passe à la suite
-  clearTimeout(game.timer);
-  game.timer = setTimeout(() => reveal(game, null), (game.snippetSeconds + 30) * 1000);
+  if (game.current?.track === track && !game.current.running) {
+    clearTimeout(game.timer);
+    game.timer = setTimeout(() => revealSafely(game, null), (game.snippetSeconds + START_SAFETY_S) * 1000);
+  }
   return undefined;
+}
+
+/** Le son de la manche s'est arrêté tout seul (fin du morceau, ou illisible). */
+function onTrackGone(game, track, failed) {
+  if (game.stopped || game.current?.track !== track) return;
+  if (failed && !game.current.running) {
+    // Son illisible avant même d'avoir été entendu : on le remplace sans compter la manche
+    console.warn(`[blindtest] son illisible, remplacé : ${track.title}`);
+    clearTimeout(game.timer);
+    game.current = null;
+    game.index--;
+    nextRound(game).catch((err) => console.warn('[blindtest]', err.message));
+    return;
+  }
+  // Morceau fini (ou coupé) pendant la manche : on révèle tout de suite
+  clearTimeout(game.timer);
+  revealSafely(game, null);
 }
 
 /** Appelé au vrai départ du son : l'extrait dure alors exactement le temps demandé. */
@@ -143,7 +170,7 @@ function startCountdown(game) {
   game.current.running = true;
   game.current.startedAt = Date.now();
   clearTimeout(game.timer);
-  game.timer = setTimeout(() => reveal(game, null), game.snippetSeconds * 1000);
+  game.timer = setTimeout(() => revealSafely(game, null), game.snippetSeconds * 1000);
 }
 
 function award(game, userId, points) {
@@ -177,7 +204,7 @@ export function handleBlindTestMessage(message) {
     }
     message.react('✅').catch(() => {});
     clearTimeout(game.timer);
-    reveal(game, message.author.id).catch(() => {});
+    revealSafely(game, message.author.id);
     return true;
   }
   if (artistOk) {
@@ -188,14 +215,19 @@ export function handleBlindTestMessage(message) {
   return true;
 }
 
+/** Une erreur pendant la révélation ne doit jamais bloquer la partie : on passe quand même à la manche suivante. */
+function revealSafely(game, winnerId) {
+  reveal(game, winnerId).catch((err) => {
+    console.warn('[blindtest] révélation :', err.message);
+    if (!game.stopped && !game.current) nextRound(game).catch(() => {});
+  });
+}
+
 async function reveal(game, winnerId) {
   if (game.stopped || !game.current) return;
   const { track, artistFinder } = game.current;
   game.current = null;
-  game.player.onStarted = null;
-  game.player.queue = [];
-  game.player.skipLoop = true;
-  game.player.backend?.stopTrack();
+  clearTimeout(game.timer);
 
   const scoreboard = [...game.scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
     .map(([id, points], i) => `${['🥇', '🥈', '🥉'][i] ?? '　'} <@${id}> · **${points}** pts`).join('\n');
@@ -210,13 +242,14 @@ async function reveal(game, winnerId) {
       scoreboard ? `\n**Classement**\n${scoreboard}` : '',
     ].filter(Boolean).join('\n'))
     .setFooter({ text: `Manche ${game.index}/${game.rounds}` });
-  if (track.thumbnail) embed.setThumbnail(track.thumbnail);
-  if (track.url) embed.setURL(track.url);
+  const isLink = (url) => typeof url === 'string' && /^https?:\/\//.test(url);
+  if (isLink(track.thumbnail)) embed.setThumbnail(track.thumbnail);
+  if (isLink(track.url)) embed.setURL(track.url);
 
-  const channel = await channelOf(game);
-  await channel?.send({ embeds: [embed], allowedMentions: { parse: [] } }).catch(() => {});
+  const sending = channelOf(game).then((channel) => channel?.send({ embeds: [embed], allowedMentions: { parse: [] } })).catch(() => {});
 
-  game.timer = setTimeout(() => nextRound(game).catch(() => {}), REVEAL_PAUSE_MS);
+  // Manche suivante lancée tout de suite : le son change pendant que la réponse s'affiche
+  await nextRound(game, { afterMessage: sending });
 }
 
 export async function endGame(game, { stopped = false } = {}) {
@@ -226,6 +259,7 @@ export async function endGame(game, { stopped = false } = {}) {
   games.delete(game.guildId);
   game.player.blind = false;
   game.player.onStarted = null;
+  game.player.onBlindEnd = null;
   game.player.queue = [];
   await game.player.stop();
 

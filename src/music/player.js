@@ -56,6 +56,7 @@ export class GuildPlayer {
     this.playToken = 0;
     this.blind = false; // blind test : on n'affiche pas le panneau (ça donnerait la réponse)
     this.onStarted = null;
+    this.onBlindEnd = null; // blind test : son fini ou illisible (sans dévoiler le titre dans le salon)
     this.skipVotes = new Set();
   }
 
@@ -148,6 +149,10 @@ export class GuildPlayer {
       }
 
       console.warn(`[musique] impossible de lire "${track.title}" :`, err.message);
+      if (this.blind) {
+        this.current = null;
+        return this.onBlindEnd?.({ failed: true, error: err });
+      }
       this.notify(`⚠️ Impossible de lire **${track.title}** (${err.message}), je passe au suivant.`);
       this.alertOwner(track, err);
       this.current = null;
@@ -173,6 +178,10 @@ export class GuildPlayer {
       return this.startCurrent(track.isLive ? 0 : position);
     }
     if (track) track.retries = 0;
+    if (this.blind) {
+      this.current = null;
+      return this.onBlindEnd?.({ failed, error });
+    }
     if (track && failed) {
       // Plus jamais d'arrêt silencieux : le salon et le chef sont prévenus
       const reason = error ?? new Error('coupé en pleine lecture');
@@ -328,6 +337,14 @@ export class GuildPlayer {
     if (!track) return null;
     this.queue.splice(Math.min(Math.max(to - 1, 0), this.queue.length), 0, track);
     return track;
+  }
+
+  /** Remplace tout de suite le son en cours (blind test) : aucun blanc entre deux sons. */
+  playNow(track) {
+    this.queue = [track];
+    this.paused = false;
+    clearTimeout(this.timers.idle);
+    return this.startNext();
   }
 
   stop() {
