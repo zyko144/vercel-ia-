@@ -10,6 +10,9 @@ import {
 } from 'discord.js';
 import { config } from '../config.js';
 import { musicSuggestions } from './autocomplete.js';
+import { blindTestActive, handleBlindTestMessage, startBlindTest, stopBlindTest } from './blindtest.js';
+import { deezer, rankResults, trackFromDeezer } from './deezer.js';
+import { musicStats } from './stats.js';
 import { FILTERS, filtersLabel } from './filters.js';
 import { adjustLyrics, showLyrics } from './livelyrics.js';
 import { getOrCreatePlayer, getPlayer } from './player.js';
@@ -60,6 +63,7 @@ function joinProblem(interaction) {
 }
 
 async function queueTracks(client, interaction, result, { next = false, shuffle = false, label = '' } = {}) {
+  if (blindTestActive(interaction.guildId)) return interaction.editReply('🎧 Un blind test est en cours ! Attends la fin (ou `/blindtest arreter:true`).');
   const { channel, error } = joinProblem(interaction);
   if (error) return interaction.editReply(error);
   if (!result.tracks.length) return interaction.editReply("😕 J'ai rien trouvé, essaie avec un autre nom ou un lien.");
@@ -82,6 +86,78 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
 }
 
 const stamp = (tracks, userId) => tracks.map((t) => ({ ...t, requestedBy: userId, streamUrl: null }));
+
+/** Sons d'une radio : un style demandé, sinon le top du moment. */
+async function radioTracks(style, userId) {
+  let tracks = [];
+  if (style) {
+    // Une playlist du style demandé donne des sons cohérents
+    const playlist = await deezer.searchPlaylist(style).catch(() => null);
+    if (playlist) {
+      const items = await deezer.playlistTracks(playlist.id).catch(() => []);
+      tracks = items.filter((t) => (t.rank ?? 0) > 300_000).map((t) => trackFromDeezer(t));
+    }
+    if (tracks.length < 15) {
+      const results = await deezer.search(style, 60).catch(() => []);
+      tracks = [...tracks, ...rankResults(style, results).filter((t) => (t.rank ?? 0) > 400_000).map((t) => trackFromDeezer(t))];
+    }
+    if (tracks.length < 10) {
+      const generated = await aiPlaylist(`radio ${style}`, 25).catch(() => null);
+      if (generated?.tracks?.length) tracks = [...tracks, ...generated.tracks];
+    }
+  } else {
+    tracks = (await deezer.chart().catch(() => [])).map((t) => trackFromDeezer(t));
+  }
+  const seen = new Set();
+  return tracks
+    .filter((t) => t.title && !seen.has(`${t.title}|${t.artist}`) && seen.add(`${t.title}|${t.artist}`))
+    .slice(0, 60)
+    .map((t) => ({ ...t, requestedBy: userId }));
+}
+
+/**
+ * Passer un son : le chef, les admins, celui qui l'a demandé ou une salle presque vide passent direct.
+ * Sinon il faut la moitié des personnes dans le vocal.
+ */
+function skipDecision(interaction, player) {
+  const listeners = interaction.guild.channels.cache.get(player.botVoiceChannelId)?.members.filter((m) => !m.user.bot).size ?? 1;
+  if (isDj(interaction) || player.current?.requestedBy === interaction.user.id || listeners <= 2) return { skip: true };
+  player.skipVotes.add(interaction.user.id);
+  const needed = Math.ceil(listeners / 2);
+  return { skip: player.skipVotes.size >= needed, votes: player.skipVotes.size, needed };
+}
+
+/** Salon jukebox : écrire un nom de son suffit à l'ajouter à la file. */
+export async function handleJukeboxMessage(client, message) {
+  const text = message.content.trim();
+  if (!text || text.length > 500 || /^[/!?.>]/.test(text)) return;
+  if (blindTestActive(message.guildId)) return;
+
+  const voiceChannel = message.member?.voice?.channel;
+  if (!voiceChannel) {
+    await message.react('🔇').catch(() => {});
+    return;
+  }
+
+  await message.react('⏳').catch(() => {});
+  const removeHourglass = () => message.reactions.cache.get('⏳')?.users.remove(client.user.id).catch(() => {});
+  try {
+    const result = await resolveQuery(text, { requestedBy: message.author.id });
+    if (!result.tracks.length) throw new MusicError('rien trouvé');
+    const player = getOrCreatePlayer(client, message.guild);
+    player.textChannelId = message.channelId;
+    await player.connect(voiceChannel);
+    player.add(result.tracks);
+    await removeHourglass();
+    await message.react('✅').catch(() => {});
+  } catch (err) {
+    await removeHourglass();
+    await message.react('❌').catch(() => {});
+    console.warn('[jukebox]', err.message);
+  }
+}
+
+export { handleBlindTestMessage, blindTestActive };
 
 // ===== Remplir une playlist perso rapidement =====
 
@@ -292,6 +368,13 @@ const COMMANDS = {
     if (problem) return interaction.reply(say(problem));
     const count = interaction.options.getInteger('nombre') ?? 1;
     const title = player.current.title;
+    const decision = skipDecision(interaction, player);
+    if (!decision.skip) {
+      return interaction.reply({
+        content: `🗳️ Vote pour passer **${title}** : **${decision.votes}/${decision.needed}**. Les autres peuvent voter avec \`/skip\` ou le bouton ⏭️.`,
+        allowedMentions: { parse: [] },
+      });
+    }
     player.skip(count);
     return interaction.reply(say(count > 1 ? `⏭️ ${count} sons passés.` : `⏭️ **${title}** passé.`));
   },
@@ -457,6 +540,101 @@ const COMMANDS = {
     return interaction.editReply(await showLyrics(interaction, getPlayer(interaction.guildId), track));
   },
 
+  async blindtest(client, interaction) {
+    if (interaction.options.getBoolean('arreter')) {
+      return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Blind test arrêté.' : "Y a pas de blind test en cours."));
+    }
+    if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎧 Un blind test est déjà en cours ! (`/blindtest arreter:true` pour le couper)'));
+    const { channel, error } = joinProblem(interaction);
+    if (error) return interaction.reply(say(error));
+
+    await interaction.deferReply(PRIVATE);
+    return startBlindTest(client, interaction, {
+      theme: interaction.options.getString('theme'),
+      rounds: interaction.options.getInteger('manches') ?? 8,
+      snippetSeconds: interaction.options.getInteger('duree') ?? 25,
+      voiceChannel: channel,
+    });
+  },
+
+  async karaoke(client, interaction) {
+    const { error } = joinProblem(interaction);
+    if (error) return interaction.reply(say(error));
+    await interaction.deferReply(PRIVATE);
+
+    const query = interaction.options.getString('recherche');
+    const player = getPlayer(interaction.guildId);
+    if (query) {
+      const result = await resolveQuery(query, { requestedBy: interaction.user.id });
+      await queueTracks(client, interaction, result);
+    } else if (!player?.current) {
+      return interaction.editReply('🎤 Lance un son ou précise-le dans `recherche`.');
+    }
+
+    // On attend que le son démarre, puis on enlève la voix et on affiche les paroles
+    const ready = getPlayer(interaction.guildId);
+    for (let i = 0; i < 20 && !ready?.current; i++) await new Promise((r) => setTimeout(r, 500));
+    if (!ready?.current) return interaction.editReply('🎤 Le son a pas démarré, réessaie.');
+    ready.setFilters([...new Set([...ready.filters, 'karaoke'])]);
+    ready.refreshPanel(true);
+    return interaction.editReply(await showLyrics(interaction, ready, ready.current));
+  },
+
+  async radio(client, interaction) {
+    const player = getPlayer(interaction.guildId);
+    if (interaction.options.getBoolean('arreter')) {
+      const problem = controlProblem(interaction, player);
+      if (problem) return interaction.reply(say(problem));
+      player.loop = 'off';
+      player.autoplay = false;
+      player.queue = [];
+      player.refreshPanel(true);
+      return interaction.reply(say('📻 Radio arrêtée, la file est vidée (le son en cours continue).'));
+    }
+
+    const { error } = joinProblem(interaction);
+    if (error) return interaction.reply(say(error));
+    await interaction.deferReply(PRIVATE);
+
+    const style = interaction.options.getString('style');
+    const tracks = await radioTracks(style, interaction.user.id);
+    if (!tracks.length) return interaction.editReply("😕 J'ai pas trouvé de sons pour ce style, essaie autre chose.");
+
+    const result = { name: style ? `Radio ${style}` : 'Radio top du moment', isPlaylist: true, tracks };
+    await queueTracks(client, interaction, result, { shuffle: true, label: ` : **${result.name}** 📻` });
+    const started = getPlayer(interaction.guildId);
+    if (started) {
+      started.loop = 'queue';
+      started.autoplay = true;
+      started.refreshPanel(true);
+    }
+    return undefined;
+  },
+
+  async topsons(client, interaction) {
+    await interaction.deferReply(PRIVATE);
+    const member = interaction.options.getUser('membre');
+    const period = interaction.options.getString('periode') ?? 'month';
+    const stats = await musicStats(interaction.guildId, { period, userId: member?.id ?? null });
+    if (!stats?.tracks.length) {
+      return interaction.editReply(member ? `Aucune écoute pour ${member} sur cette période.` : "Aucune écoute enregistrée sur cette période. Lance des sons avec `/play` !");
+    }
+
+    const podium = ['🥇', '🥈', '🥉'];
+    const embed = new EmbedBuilder()
+      .setColor(0x1db954)
+      .setAuthor({ name: member ? `🎧 Le top de ${member.username}` : '🎧 Top du serveur' })
+      .setTitle(period === 'month' ? 'Ce mois-ci' : 'Depuis le début')
+      .setDescription(stats.tracks.map((t, i) => `${podium[i] ?? `\`${i + 1}.\``} ${t.url ? `[${t.title}](${t.url})` : `**${t.title}**`}${t.artist ? ` · ${t.artist}` : ''} — **${t.plays}** écoute(s)`).join('\n'))
+      .addFields(
+        { name: '🎤 Artistes', value: stats.artists.map(([name, plays], i) => `${i + 1}. **${name}** (${plays})`).join('\n') || '—', inline: true },
+        ...(stats.listeners?.length ? [{ name: '👑 Qui met la musique', value: stats.listeners.map(([id, plays]) => `<@${id}> · ${plays}`).join('\n'), inline: true }] : []),
+        { name: '⏱️ Temps d\'écoute', value: `${Math.round(stats.totalSeconds / 60)} min · ${stats.totalPlays} sons joués`, inline: true },
+      );
+    if (stats.tracks[0]?.thumbnail) embed.setThumbnail(stats.tracks[0].thumbnail);
+    return interaction.editReply({ embeds: [embed], allowedMentions: { parse: [] } });
+  },
+
   async join(client, interaction) {
     const { channel, error } = joinProblem(interaction);
     if (error) return interaction.reply(say(error));
@@ -588,10 +766,13 @@ export async function handleMusicComponent(client, interaction) {
     case 'loop': player.cycleLoop(); break;
     case '8d': player.toggleFilter('8d'); break;
     case 'autoplay': player.autoplay = !player.autoplay; break;
-    case 'skip':
+    case 'skip': {
+      const decision = skipDecision(interaction, player);
+      if (!decision.skip) return interaction.reply(say(`🗳️ Vote enregistré : **${decision.votes}/${decision.needed}** pour passer ce son.`));
       await interaction.deferUpdate();
       player.skip();
       return;
+    }
     case 'back':
       await interaction.deferUpdate();
       await player.previous();

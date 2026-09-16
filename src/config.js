@@ -71,6 +71,10 @@ export const config = {
   allowedChannelIds: list('ALLOWED_CHANNEL_IDS').filter((id) => id !== '*'),
   // Réponses visibles seulement par la personne (fil privé + messages éphémères)
   privateReplies: bool('PRIVATE_REPLIES', true),
+  // Salons où écrire un nom de son l'ajoute direct à la file (jukebox)
+  jukeboxChannelIds: list('JUKEBOX_CHANNEL_IDS'),
+  // Salon où arrivent les signalements (vide = MP au chef)
+  staffChannelId: str('STAFF_CHANNEL_ID'),
 
   limits: {
     // Les modèles d'image ne sont pas dans l'offre gratuite de Gemini

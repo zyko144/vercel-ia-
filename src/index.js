@@ -8,6 +8,7 @@ import { startVoiceKeeper } from './features/voice.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
 import { lavalink } from './music/lavalink.js';
+import { restoreSessions } from './music/session.js';
 import { startHttpServer } from './server.js';
 import { storageBackend } from './storage.js';
 
@@ -43,6 +44,8 @@ client.once(Events.ClientReady, async (c) => {
   lavalink.init(c);
   startVoiceKeeper(c);
   startReminderLoop(c);
+  // Reprise de la musique interrompue par un redémarrage
+  setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);
 });
 
 client.on(Events.MessageCreate, (message) => {

@@ -6,6 +6,7 @@ import { COMMANDS_ALLOWED_EVERYWHERE } from '../commands/definitions.js';
 import { askAI, channelLink } from '../features/chat.js';
 import { dmOwner, whereLabel } from '../features/escalation.js';
 import { createImageMessage } from '../features/images.js';
+import { handleReport, handleReportButton } from '../features/report.js';
 import { hitCooldown, imagesToday } from '../features/limits.js';
 import { conversationKey, forget, memoryStats } from '../features/memory.js';
 import { createQuiz, handleQuizButton } from '../features/quiz.js';
@@ -40,6 +41,7 @@ export async function onInteraction(client, interaction) {
     // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('report:')) return await handleReportButton(client, interaction);
       if (interaction.customId === 'copy:code') return await handleCopyButton(interaction);
       if (interaction.customId.startsWith('quiz')) return await handleQuizButton(client, interaction);
       return;
@@ -54,6 +56,7 @@ export async function onInteraction(client, interaction) {
       return await interaction.reply({ content: `👉 Cette commande marche que dans ${allowedChannelsMention()}, viens me parler là-bas !`, ...PRIVATE });
     }
 
+    if (interaction.commandName === 'Signaler au staff') return await handleReport(client, interaction);
     if (interaction.isMessageContextMenuCommand()) return await handleContextMenu(client, interaction);
     if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicCommand(client, interaction);
     const handler = SLASH_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
@@ -305,9 +308,9 @@ const SLASH_HANDLERS = {
         ...(config.limits.imagesEnabled ? [{ name: '🎨 Images', value: '`/image` génère · `/modifier-image` retouche' }] : []),
         { name: '🧰 Pratique', value: '`/rappel` rappel en MP · `/sondage` sondage public · `/contacter-chef` écrire au chef · `/clear` efface ta conv IA · `/reset` efface juste la mémoire' },
         { name: '🛡️ Modération', value: '`/clear nombre` · `/kick` · `/ban` · `/unban` · `/mute` · `/unmute` · `/warn` · `/warns` · `/slowmode` · `/lock` · `/unlock` · `/role` · `/say`' },
-        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (importer un lien, plein de sons en une fois, playlist IA) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct, surlignées) · `/join` · `/leave`' },
+        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (importer un lien, plein de sons en une fois, playlist IA) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct) · `/radio` non-stop · `/karaoke` · `/blindtest` · `/topsons` · `/join` · `/leave`' },
         { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/pile-ou-face` · `/de` · `/choisir` · `/ping`' },
-        { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français**' },
+        { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français** / **Signaler au staff** (analysé par IA)' },
         { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },
       )
       .setFooter({ text: 'Propulsé par Gemini · 📋 bouton « Copier le code » sous les réponses avec du code' });

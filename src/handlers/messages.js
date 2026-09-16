@@ -6,6 +6,7 @@ import { createImageMessage } from '../features/images.js';
 import { hitCooldown } from '../features/limits.js';
 import { conversationKey } from '../features/memory.js';
 import { getPrivateThread, privateThreadOwner } from '../features/privateThreads.js';
+import { blindTestActive, handleBlindTestMessage, handleJukeboxMessage } from '../music/handlers.js';
 import { attachmentsToContent, displayName, fetchBase64, inChannelList, isAllowedChannel, truncate } from '../utils/discord.js';
 
 // "génère une image de...", "dessine-moi un logo...", "fais une photo de..."
@@ -18,6 +19,13 @@ const MAX_REUPLOAD_BYTES = 8 * 1024 * 1024;
 export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
   if (!isAllowedChannel(message.channel, message.channelId)) return;
+
+  // Blind test en cours : les messages du salon sont des réponses au jeu
+  if (message.inGuild() && blindTestActive(message.guildId) && handleBlindTestMessage(message)) return;
+  // Salon jukebox : écrire un nom de son l'ajoute à la file
+  if (message.inGuild() && inChannelList(config.jukeboxChannelIds, message.channel, message.channelId)) {
+    return handleJukeboxMessage(client, message);
+  }
 
   const isDM = !message.inGuild();
   const mentioned = message.mentions.users.has(client.user.id);

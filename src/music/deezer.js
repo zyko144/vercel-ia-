@@ -28,6 +28,9 @@ export const deezer = {
   playlist: (id) => call(`/playlist/${id}`),
   playlistTracks: (id) => allPages(`/playlist/${id}/tracks`),
   artistRadio: (id) => call(`/artist/${id}/radio?limit=40`).then((r) => r.data ?? []),
+  // Playlist publique qui colle le mieux au thème (la plus fournie)
+  searchPlaylist: (query) => call(`/search/playlist?limit=5&q=${encodeURIComponent(query)}`)
+    .then((r) => (r.data ?? []).sort((a, b) => (b.nb_tracks ?? 0) - (a.nb_tracks ?? 0))[0] ?? null),
   chart: () => call('/chart/0/tracks?limit=25').then((r) => r.data ?? []),
 };
 

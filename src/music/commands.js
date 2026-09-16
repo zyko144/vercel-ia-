@@ -84,6 +84,26 @@ export const musicCommands = [
   new SlashCommandBuilder().setName('autoplay').setDescription('Enchaîne des sons du même style quand la file est vide'),
   new SlashCommandBuilder().setName('lyrics').setDescription('Affiche les paroles (du son en cours ou d\'un autre)')
     .addStringOption((o) => searchOption(o, false)),
+  new SlashCommandBuilder().setName('blindtest').setDescription('Lance un blind test : devine les sons dans le salon')
+    .addStringOption((o) => o.setName('theme').setDescription('Ex : rap fr, années 2000, rock, « serveur » pour vos sons').setMaxLength(100))
+    .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de sons (3-20, défaut 8)').setMinValue(3).setMaxValue(20))
+    .addIntegerOption((o) => o.setName('duree').setDescription("Durée de l'extrait en secondes (10-45, défaut 25)").setMinValue(10).setMaxValue(45))
+    .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête le blind test en cours')),
+
+  new SlashCommandBuilder().setName('karaoke').setDescription('Joue un son sans la voix, avec les paroles en direct')
+    .addStringOption((o) => searchOption(o, false)),
+
+  new SlashCommandBuilder().setName('radio').setDescription('Lance une radio non-stop (le bot enchaîne tout seul)')
+    .addStringOption((o) => o.setName('style').setDescription('Ex : rap fr, chill, rock, années 90… (vide = top du moment)').setMaxLength(100))
+    .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la radio')),
+
+  new SlashCommandBuilder().setName('topsons').setDescription('Les sons les plus écoutés du serveur (ou les tiens)')
+    .addStringOption((o) => o.setName('periode').setDescription('Période').addChoices(
+      { name: 'Ce mois-ci', value: 'month' },
+      { name: 'Depuis le début', value: 'all' },
+    ))
+    .addUserOption((o) => o.setName('membre').setDescription('Voir le top de quelqu\'un (par défaut : tout le serveur)')),
+
   new SlashCommandBuilder().setName('join').setDescription('Fait venir le bot dans ton salon vocal'),
   new SlashCommandBuilder().setName('leave').setDescription('Arrête la musique et renvoie le bot dans son vocal'),
 ].map(guildOnly);

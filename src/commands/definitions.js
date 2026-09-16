@@ -109,6 +109,7 @@ const aiCommands = [
 
   new ContextMenuCommandBuilder().setName('Expliquer ce message').setType(ApplicationCommandType.Message),
   new ContextMenuCommandBuilder().setName('Traduire en français').setType(ApplicationCommandType.Message),
+  new ContextMenuCommandBuilder().setName('Signaler au staff').setType(ApplicationCommandType.Message),
 ];
 
 // ===== BASE / MODÉRATION =====
@@ -260,5 +261,5 @@ export const COMMANDS_ALLOWED_EVERYWHERE = new Set([
   ...moderationCommands.map((c) => c.name),
   ...MUSIC_COMMAND_NAMES,
   'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin',
-  'Expliquer ce message', 'Traduire en français',
+  'Expliquer ce message', 'Traduire en français', 'Signaler au staff',
 ]);

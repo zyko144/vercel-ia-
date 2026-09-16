@@ -73,6 +73,13 @@ npm start
 - **Enchaînement fluide** : le son suivant est préparé pendant que le précédent joue, donc le passage est quasi instantané. (Un vrai fondu entre deux sons est impossible : Discord ne laisse qu'un seul flux audio à la fois.)
 - **Le bot ne quitte plus le vocal** quand la musique démarre ou s'arrête : il garde sa place et se contente de changer de salon.
 - Si un son ne peut pas être joué, le chef reçoit un **MP avec le détail** et un **ping** dans le salon (1 ping max toutes les 10 min).
+- **`/blindtest`** : le bot joue des extraits, tout le monde devine dans le salon (titre = 2 pts, artiste = 1 pt), classement à la fin. Thèmes libres (`rap fr`, `années 2000`…) ou `serveur` pour vos propres sons.
+- **`/radio`** : enchaînement non-stop d'un style, en boucle.
+- **`/karaoke`** : le son sans la voix + les paroles qui défilent.
+- **`/topsons`** : les sons et artistes les plus écoutés du serveur (ou de quelqu'un), ce mois-ci ou depuis le début.
+- **Salon jukebox** : dans les salons listés dans `JUKEBOX_CHANNEL_IDS`, écrire un nom de son l'ajoute direct à la file (✅ quand c'est ajouté).
+- **Vote pour passer** : `/skip` ou le bouton ⏭️ demandent la moitié des personnes du vocal. Le chef, les admins et celui qui a demandé le son passent direct.
+- **Reprise après redémarrage** : la file est sauvegardée, et le bot reprend là où il s'était arrêté si des gens sont encore dans le vocal (nécessite Supabase sur Render).
 
 **Comment ça marche** : la musique passe par des **serveurs audio publics gratuits (Lavalink)**. Le bot leur dit quoi jouer, et c'est eux qui récupèrent le son et l'envoient dans le vocal Discord. Résultat : YouTube ne voit pas l'adresse IP de l'hébergeur (donc pas de blocage), et l'hébergeur n'utilise presque pas de processeur.
 
@@ -126,7 +133,8 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 | Infos | `/userinfo`, `/serverinfo`, `/avatar`, `/ping` |
 | Fun | `/pile-ou-face`, `/de`, `/choisir` |
 | Paroles en direct (surlignées, comme Spotify) | `/lyrics` ou bouton 🎤 |
-| Musique | `/play`, `/playlist`, `/skip`, `/previous`, `/pause`, `/resume`, `/stop`, `/queue`, `/nowplaying`, `/volume`, `/loop`, `/shuffle`, `/seek`, `/remove`, `/move`, `/clearqueue`, `/filter`, `/autoplay`, `/lyrics`, `/join`, `/leave` |
+| Signaler un message au staff (analysé par IA) | Clic droit › Applications › *Signaler au staff* |
+| Musique | `/play`, `/playlist`, `/skip`, `/previous`, `/pause`, `/resume`, `/stop`, `/queue`, `/nowplaying`, `/volume`, `/loop`, `/shuffle`, `/seek`, `/remove`, `/move`, `/clearqueue`, `/filter`, `/autoplay`, `/lyrics`, `/radio`, `/karaoke`, `/blindtest`, `/topsons`, `/join`, `/leave` |
 
 Toutes les commandes marchent dans tous les salons (variable `ALLOWED_CHANNEL_IDS` pour restreindre).
 ⚠️ Pour que `/kick`, `/ban`, `/mute` et `/role` marchent, le **rôle du bot doit être au-dessus** des rôles des membres (Paramètres du serveur › Rôles › glisser « AI Vercel » vers le haut).

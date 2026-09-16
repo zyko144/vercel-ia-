@@ -7,6 +7,8 @@ import { LocalBackend } from './backend-local.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
 import { normalizeFilters } from './filters.js';
 import { recommendNext } from './sources.js';
+import { recordPlay } from './stats.js';
+import { saveSession, clearSession } from './session.js';
 import { endedPayload, nowPlayingPayload } from './ui.js';
 
 const DEFAULT_VOLUME = 100;
@@ -50,6 +52,8 @@ export class GuildPlayer {
     this.skipLoop = false;
     this.failures = 0;
     this.playToken = 0;
+    this.blind = false; // blind test : on n'affiche pas le panneau (ça donnerait la réponse)
+    this.skipVotes = new Set();
   }
 
   // ===== Connexion =====
@@ -100,7 +104,10 @@ export class GuildPlayer {
     const next = this.queue.shift();
     if (!next) return this.finish();
     this.current = next;
-    return this.startCurrent(0, { newTrack: true });
+    this.skipVotes.clear();
+    const start = next.seekTo ?? 0;
+    delete next.seekTo;
+    return this.startCurrent(start, { newTrack: true });
   }
 
   async startCurrent(seek = 0, { newTrack = false } = {}) {
@@ -164,6 +171,7 @@ export class GuildPlayer {
     this.skipLoop = false;
 
     if (track && !failed) {
+      recordPlay(this.guild.id, track, Math.min(this.position() || track.duration || 0, track.duration || 0)).catch(() => {});
       this.history.push(track);
       if (this.history.length > MAX_HISTORY) this.history.shift();
       if (this.loop === 'queue') this.queue.push(track);
@@ -344,6 +352,7 @@ export class GuildPlayer {
 
   /** Retour au vocal habituel en gardant la connexion : le prochain /play démarre tout de suite. */
   async goHome() {
+    clearSession(this.guild.id).catch(() => {});
     if (this.backend?.moveToHome && config.voice.enabled) {
       await this.backend.moveToHome().catch((err) => console.warn('[musique] retour au vocal :', err.message));
       return;
@@ -388,6 +397,8 @@ export class GuildPlayer {
   }
 
   async sendNewPanel() {
+    saveSession(this).catch(() => {});
+    if (this.blind) return;
     const channel = await this.textChannel();
     if (!channel) return;
     const old = this.panel;
@@ -402,10 +413,12 @@ export class GuildPlayer {
     this.timers.panel = setInterval(() => {
       if (this.current && !this.paused) this.refreshPanel();
     }, config.music.panelRefreshMs);
+    clearInterval(this.timers.session);
+    this.timers.session = setInterval(() => saveSession(this).catch(() => {}), 15_000);
   }
 
   refreshPanel(force = false) {
-    if (!this.panel || !this.current) return;
+    if (!this.panel || !this.current || this.blind) return;
     if (!force && Date.now() - this.lastPanelEdit < 1_000) return;
     this.lastPanelEdit = Date.now();
     this.panel.edit(nowPlayingPayload(this)).catch((err) => {
