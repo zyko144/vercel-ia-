@@ -530,7 +530,7 @@ async function reveal(game, round) {
   const ranking = scoreboard(game, 5);
   const embed = new EmbedBuilder()
     .setColor(round.titleBy ? 0x57f287 : 0xed4245)
-    .setAuthor({ name: round.titleBy ? `✅ Trouvé en ${seconds(round.foundIn)} s !` : '⏱️ Personne a trouvé !' })
+    .setAuthor({ name: round.titleBy ? `✅ Trouvé en ${seconds(round.foundIn)} s !` : round.artistBy ? '🎤 Artiste trouvé, pas le titre !' : '⏱️ Personne a trouvé !' })
     .setTitle(`${track.title} — ${track.artist}`.slice(0, 256))
     .setDescription([
       round.titleBy ? `🎯 Titre : <@${round.titleBy}> **+${TITLE_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}` : null,
