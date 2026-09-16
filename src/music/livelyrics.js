@@ -90,7 +90,7 @@ function plainPayload(found, track) {
  * La réponse est privée : chacun peut ouvrir les siennes.
  */
 export async function showLyrics(interaction, player, track) {
-  sessions.get(interaction.user.id)?.();
+  sessions.get(interaction.user.id)?.stop?.();
   const found = await findLyrics(track);
   if (!found) return { content: `😕 J'ai pas trouvé les paroles de **${track.title}**.` };
 
