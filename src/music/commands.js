@@ -61,7 +61,7 @@ export const musicCommands = [
   new SlashCommandBuilder().setName('nowplaying').setDescription('Réaffiche le panneau du son en cours'),
   new SlashCommandBuilder().setName('queue').setDescription("Affiche la file d'attente"),
   new SlashCommandBuilder().setName('volume').setDescription('Change le volume')
-    .addIntegerOption((o) => o.setName('niveau').setDescription('0 à 150 (défaut 100)').setRequired(true).setMinValue(0).setMaxValue(150)),
+    .addIntegerOption((o) => o.setName('niveau').setDescription('0 à 100 (défaut 100)').setRequired(true).setMinValue(0).setMaxValue(100)),
   new SlashCommandBuilder().setName('loop').setDescription('Répète le son ou la file')
     .addStringOption((o) => o.setName('mode').setDescription('Mode de boucle').setRequired(true).addChoices(
       { name: 'Désactivée', value: 'off' },

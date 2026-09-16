@@ -13,6 +13,7 @@ import { saveSession, clearSession } from './session.js';
 import { endedPayload, nowPlayingPayload } from './ui.js';
 
 const DEFAULT_VOLUME = 100;
+const MAX_VOLUME = 100; // au-dessus, le serveur audio amplifie le son et il sature (voix déformées)
 const MAX_HISTORY = 50;
 const IDLE_RELEASE_MS = 3 * 60_000;
 const ALONE_STOP_MS = 2 * 60_000;
@@ -116,6 +117,9 @@ export class GuildPlayer {
     if (!next) return this.finish();
     this.current = next;
     this.skipVotes.clear();
+    // Les effets ne restent pas d'un son à l'autre : chaque nouveau son part en version d'origine
+    if (this.filters.length && !this.blind) this.filters = [];
+    if (this.volume > MAX_VOLUME) this.volume = MAX_VOLUME;
     const start = next.seekTo ?? 0;
     delete next.seekTo;
     return this.startCurrent(start, { newTrack: true });
@@ -302,7 +306,7 @@ export class GuildPlayer {
   }
 
   setVolume(volume) {
-    this.volume = Math.round(Math.min(Math.max(volume, 0), 150));
+    this.volume = Math.round(Math.min(Math.max(volume, 0), MAX_VOLUME));
     if (this.backend?.liveControls) this.backend.applyVolume(this.volume);
     else this.scheduleRestart();
     return this.volume;

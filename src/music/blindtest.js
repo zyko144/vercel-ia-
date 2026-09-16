@@ -352,6 +352,9 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
     player.loop = 'off';
     player.autoplay = false;
     player.textChannelId = channelId;
+    // Son d'origine : pas d'effet resté du panneau musique, volume normal (au-dessus ça sature)
+    player.filters = [];
+    player.volume = 100;
     if (!game.textOnly) {
       await player.connect(voiceChannel, { force: true });
       if (!(player.backend instanceof LavalinkBackend)) throw new Error('les serveurs audio sont indisponibles pour le moment');

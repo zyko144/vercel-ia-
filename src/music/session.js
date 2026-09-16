@@ -62,8 +62,8 @@ export async function restoreSessions(client) {
 
       const player = getOrCreatePlayer(client, guild);
       player.textChannelId = session.textChannelId;
-      player.volume = session.volume ?? 100;
-      player.filters = session.filters ?? [];
+      player.volume = Math.min(session.volume ?? 100, 100);
+      player.filters = [];
       player.loop = session.loop ?? 'off';
       player.autoplay = Boolean(session.autoplay);
       await player.connect(voiceChannel);
