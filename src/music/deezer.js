@@ -59,7 +59,7 @@ export function matchRatio(query, text) {
   const haystack = normalize(text);
   const words = haystack.split(' ');
   const found = tokens.filter((token) => words.some((word) => word.startsWith(token)
-    || (token.length >= 3 && similarity(token, word) >= 0.7)
+    || (token.length >= 3 && similarity(token, word) >= (token.length >= 5 ? 0.65 : 0.7)) // mots longs : 2 fautes tolérées
     || (token.length >= 4 && similarity(token, word.slice(0, token.length)) >= 0.75))
     || (token.length >= 4 && haystack.includes(token)));
   return found.length / tokens.length;
@@ -93,6 +93,30 @@ export async function bestMatch(query) {
   const results = await deezer.search(query, 25).catch(() => []);
   const top = rankResults(query, results)[0];
   return top && matchRatio(query, trackText(top)) === 1 ? top : null;
+}
+
+/**
+ * Recherche tolérante aux fautes : parmi les résultats qui ressemblent à ce qui est tapé,
+ * on prend le plus connu (Deezer classe déjà par popularité à l'intérieur de chaque niveau).
+ */
+export async function popularMatch(query, minRatio = 0.5) {
+  const tokens = normalize(query).split(' ').filter(Boolean);
+  const close = (track) => {
+    const ratio = matchRatio(query, trackText(track));
+    // Au moins deux mots retrouvés dès que la recherche en contient plusieurs (sinon c'est du hasard)
+    return ratio >= minRatio && (tokens.length < 2 || ratio * tokens.length >= 2);
+  };
+  const pick = (list) => rankResults(query, list).find(close) ?? null;
+
+  const direct = pick(await deezer.search(query, 25).catch(() => []));
+  if (direct) return direct;
+
+  // Recherche vide (trop de fautes d'un coup) : on retente mot par mot, l'artiste est souvent bien écrit
+  for (const token of normalize(query).split(' ').filter((t) => t.length >= 4).slice(0, 3)) {
+    const match = pick(await deezer.search(token, 25).catch(() => []));
+    if (match) return match;
+  }
+  return null;
 }
 
 export function trackFromDeezer(item, { cover } = {}) {

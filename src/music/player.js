@@ -53,6 +53,7 @@ export class GuildPlayer {
     this.failures = 0;
     this.playToken = 0;
     this.blind = false; // blind test : on n'affiche pas le panneau (ça donnerait la réponse)
+    this.onStarted = null;
     this.skipVotes = new Set();
   }
 
@@ -122,6 +123,8 @@ export class GuildPlayer {
       if (newTrack) await this.sendNewPanel();
       else this.refreshPanel(true);
       this.preloadNext();
+      // Sert au blind test : le chrono ne démarre qu'une fois le son vraiment lancé
+      if (newTrack) this.onStarted?.(track);
     } catch (err) {
       if (token !== this.playToken) return;
 

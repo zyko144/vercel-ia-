@@ -1,5 +1,6 @@
 // Blind test : le bot joue un extrait, les gens devinent le titre (et l'artiste) dans le salon.
 import { EmbedBuilder } from 'discord.js';
+import { config } from '../config.js';
 import { deezer, matchRatio, rankResults, trackFromDeezer } from './deezer.js';
 import { getOrCreatePlayer } from './player.js';
 import { aiPlaylist } from './sources.js';
@@ -67,8 +68,11 @@ export async function startBlindTest(client, interaction, { theme, rounds, snipp
     return interaction.editReply("😕 J'ai pas trouvé assez de sons pour ce thème, essaie autre chose (ex : `rap fr`, `années 2000`, `serveur`).");
   }
 
+  // Salon dédié aux blind tests s'il est configuré, sinon celui où la commande est tapée
+  const channelId = config.music.blindtestChannelId || interaction.channelId;
+
   const player = getOrCreatePlayer(client, interaction.guild);
-  player.textChannelId = interaction.channelId;
+  player.textChannelId = channelId;
   await player.connect(voiceChannel);
   player.blind = true;
   player.queue = [];
@@ -78,7 +82,7 @@ export async function startBlindTest(client, interaction, { theme, rounds, snipp
   const game = {
     client,
     guildId: interaction.guildId,
-    channelId: interaction.channelId,
+    channelId,
     player,
     pool,
     rounds: Math.min(rounds, pool.length),
@@ -91,7 +95,8 @@ export async function startBlindTest(client, interaction, { theme, rounds, snipp
   };
   games.set(interaction.guildId, game);
 
-  await interaction.editReply(`🎧 Blind test lancé : **${game.rounds} manches**, ${snippetSeconds}s par son. Écris ta réponse dans le salon !`);
+  const where = channelId === interaction.channelId ? 'dans le salon' : `dans <#${channelId}>`;
+  await interaction.editReply(`🎧 Blind test lancé : **${game.rounds} manches**, ${snippetSeconds}s par son. Écris ta réponse ${where} !`);
   nextRound(game).catch((err) => console.warn('[blindtest]', err.message));
   return undefined;
 }
@@ -108,9 +113,14 @@ async function nextRound(game) {
   const track = game.pool.shift();
   game.current = { track, titleFound: false, artistFinder: null, startedAt: Date.now() };
 
-  // Extrait pris au quart du son (pas l'intro, pas le refrain final)
+  // Extrait pris vers le premier tiers du son (pas l'intro, pas la fin)
+  const duration = track.duration ?? 0;
+  const seekTo = duration > game.snippetSeconds + 45 ? Math.floor(duration * 0.28) : 0;
+
   game.player.queue = [];
-  game.player.add([{ ...track, requestedBy: 'blindtest', seekTo: null }]);
+  // Le chrono ne part que quand le son sort vraiment (le chargement prend quelques secondes)
+  game.player.onStarted = () => startCountdown(game);
+  game.player.add([{ ...track, requestedBy: 'blindtest', seekTo }]);
 
   const channel = await channelOf(game);
   await channel?.send({
@@ -121,9 +131,19 @@ async function nextRound(game) {
       .setDescription(`Écris le **titre** dans le salon (+${TITLE_POINTS} pts) — l'**artiste** rapporte +${ARTIST_POINTS} pt.\nTu as **${game.snippetSeconds} secondes** ⏱️`)],
   }).catch(() => {});
 
+  // Filet de sécurité : si le son ne démarre jamais, on passe à la suite
+  clearTimeout(game.timer);
+  game.timer = setTimeout(() => reveal(game, null), (game.snippetSeconds + 30) * 1000);
+  return undefined;
+}
+
+/** Appelé au vrai départ du son : l'extrait dure alors exactement le temps demandé. */
+function startCountdown(game) {
+  if (game.stopped || !game.current || game.current.running) return;
+  game.current.running = true;
+  game.current.startedAt = Date.now();
   clearTimeout(game.timer);
   game.timer = setTimeout(() => reveal(game, null), game.snippetSeconds * 1000);
-  return undefined;
 }
 
 function award(game, userId, points) {
@@ -172,6 +192,7 @@ async function reveal(game, winnerId) {
   if (game.stopped || !game.current) return;
   const { track, artistFinder } = game.current;
   game.current = null;
+  game.player.onStarted = null;
   game.player.queue = [];
   game.player.skipLoop = true;
   game.player.backend?.stopTrack();
@@ -204,6 +225,7 @@ export async function endGame(game, { stopped = false } = {}) {
   game.current = null;
   games.delete(game.guildId);
   game.player.blind = false;
+  game.player.onStarted = null;
   game.player.queue = [];
   await game.player.stop();
 

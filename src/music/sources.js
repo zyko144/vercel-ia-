@@ -1,7 +1,7 @@
 // Transforme ce que tape le membre (nom, lien Spotify / Apple Music / YouTube / SoundCloud / Deezer) en sons jouables.
 import { chatJson } from '../ai/gemini.js';
 import { appleTracks, parseAppleUrl } from './apple.js';
-import { bestMatch, deezer, matchRatio, trackFromDeezer } from './deezer.js';
+import { bestMatch, deezer, matchRatio, popularMatch, trackFromDeezer } from './deezer.js';
 import { biggestImage, parseSpotifyUrl, spotifyEntity, spotifyTracks } from './spotify.js';
 import { lavalink } from './lavalink.js';
 import { MusicError, extractAudio, flatPlaylist, streamExpiry } from './ytdlp.js';
@@ -186,6 +186,9 @@ async function resolveRaw(query, playlistMode, fast = false) {
 
   // Texte : Deezer pour trouver le bon son (et sa pochette), puis l'IA si besoin, puis YouTube direct
   let match = await bestMatch(query);
+
+  // Faute de frappe : on garde le son le plus connu qui ressemble à ce qui est tapé
+  if (!match) match = await popularMatch(query, fast ? 0.7 : 0.5);
 
   // Ajout en masse : pas d'IA (trop lent) et pas de résultat approximatif
   if (fast) {

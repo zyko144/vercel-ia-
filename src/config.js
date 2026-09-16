@@ -72,7 +72,7 @@ export const config = {
   // Réponses visibles seulement par la personne (fil privé + messages éphémères)
   privateReplies: bool('PRIVATE_REPLIES', true),
   // Salons où écrire un nom de son l'ajoute direct à la file (jukebox)
-  jukeboxChannelIds: list('JUKEBOX_CHANNEL_IDS', '1549131947094048828,1549504182145392670'),
+  jukeboxChannelIds: list('JUKEBOX_CHANNEL_IDS', '1549658865002487839'),
   // Salon où arrivent les signalements (vide = MP au chef)
   staffChannelId: str('STAFF_CHANNEL_ID'),
 
@@ -93,6 +93,8 @@ export const config = {
     panelRefreshMs: Math.max(3, int('MUSIC_PANEL_REFRESH_SECONDS', 4)) * 1000,
     // Décalage des paroles : négatif = elles s'affichent plus tard (compense le retard du son)
     lyricsOffsetMs: int('LYRICS_OFFSET_MS', -900),
+    // Salon où se déroulent les blind tests (vide = là où la commande est tapée)
+    blindtestChannelId: str('BLINDTEST_CHANNEL_ID', '1549658986935222363'),
   },
 
   port: int('PORT', 3000),
