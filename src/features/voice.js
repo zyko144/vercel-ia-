@@ -179,16 +179,17 @@ export function releaseMusic(guild) {
   else getVoiceConnection(guild.id)?.destroy();
 }
 
-/** Le serveur audio (Lavalink) prend la main sur le vocal : on libère la connexion locale. */
+/**
+ * Le serveur audio (Lavalink) prend la main sur le vocal.
+ * On ferme la connexion locale SANS quitter le salon : le bot ne disparaît pas du vocal.
+ */
 export async function takeVoiceForExternal(guild) {
-  const alreadyExternal = externalOwners.has(guild.id);
   externalOwners.add(guild.id);
   musicOverrides.delete(guild.id);
-  if (alreadyExternal) return;
   const connection = getVoiceConnection(guild.id);
   if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
-    connection.destroy();
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    connection.destroy(false); // false = on ne renvoie pas l'ordre de quitter le vocal
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
 }
 

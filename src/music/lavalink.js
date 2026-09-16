@@ -147,6 +147,7 @@ class LavalinkManager {
     this.players = new Map(); // guildId -> LavalinkBackend
     this.waiters = new Set();
     this.lastServer = new Map(); // guildId -> dernier VOICE_SERVER_UPDATE
+    this.voiceStates = new Map(); // guildId -> { sessionId, channelId } du bot
     this.logs = [];
     this.userId = null;
   }
@@ -200,6 +201,7 @@ class LavalinkManager {
   handleRaw(packet) {
     if (!this.userId || !packet?.t) return;
     if (packet.t === 'VOICE_STATE_UPDATE' && packet.d?.user_id === this.userId && packet.d.guild_id) {
+      this.voiceStates.set(packet.d.guild_id, { sessionId: packet.d.session_id, channelId: packet.d.channel_id });
       for (const waiter of this.waiters) if (waiter.guildId === packet.d.guild_id) waiter.onState(packet.d);
       this.players.get(packet.d.guild_id)?.onVoiceState(packet.d);
     } else if (packet.t === 'VOICE_SERVER_UPDATE' && packet.d?.guild_id) {
@@ -207,6 +209,14 @@ class LavalinkManager {
       for (const waiter of this.waiters) if (waiter.guildId === packet.d.guild_id) waiter.onServer(packet.d);
       this.players.get(packet.d.guild_id)?.onVoiceServer(packet.d);
     }
+  }
+
+  /** Session vocale déjà ouverte par le bot dans ce salon : on la réutilise (évite de quitter/revenir). */
+  cachedVoice(guildId, channelId) {
+    const state = this.voiceStates.get(guildId);
+    const server = this.lastServer.get(guildId);
+    if (state?.channelId !== channelId || !state.sessionId || !server?.endpoint || !server.token) return null;
+    return { sessionId: state.sessionId, token: server.token, endpoint: server.endpoint, channelId };
   }
 
   /** Attend que Discord donne la session vocale après une demande de connexion. */

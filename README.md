@@ -67,6 +67,10 @@ npm start
 - `/playlist` : jouer un lien de playlist/album, **playlist générée par l'IA** selon une ambiance, et playlists perso (créer, ajouter, retirer, voir, lancer, supprimer).
 - Le bot rejoint le vocal de la personne qui lance la musique, puis retourne dans son vocal habituel 3 min après la fin (ou tout de suite avec `/stop`). Il coupe tout seul si le vocal est vide depuis 2 min.
 - Pour contrôler la musique, il faut être dans le même vocal que le bot (les admins et le chef peuvent toujours).
+- **Paroles en direct** (`/lyrics` ou le bouton 🎤) : la ligne chantée est surlignée et suit la musique, comme sur Spotify. Si le son n'a pas de paroles synchronisées, il affiche les paroles normales.
+- **Enchaînement fluide** : le son suivant est préparé pendant que le précédent joue, donc le passage est quasi instantané. (Un vrai fondu entre deux sons est impossible : Discord ne laisse qu'un seul flux audio à la fois.)
+- **Le bot ne quitte plus le vocal** quand la musique démarre ou s'arrête : il garde sa place et se contente de changer de salon.
+- Si un son ne peut pas être joué, le chef reçoit un **MP avec le détail** et un **ping** dans le salon (1 ping max toutes les 10 min).
 
 **Comment ça marche** : la musique passe par des **serveurs audio publics gratuits (Lavalink)**. Le bot leur dit quoi jouer, et c'est eux qui récupèrent le son et l'envoient dans le vocal Discord. Résultat : YouTube ne voit pas l'adresse IP de l'hébergeur (donc pas de blocage), et l'hébergeur n'utilise presque pas de processeur.
 

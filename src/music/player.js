@@ -314,12 +314,12 @@ export class GuildPlayer {
     this.paused = false;
     this.playToken++;
     this.backend?.stopTrack();
-    return this.finish({ release: true });
+    return this.finish({ home: true });
   }
 
   // ===== Fin / départ =====
 
-  async finish({ release = false } = {}) {
+  async finish({ home = false } = {}) {
     this.current = null;
     this.paused = false;
     clearInterval(this.timers.panel);
@@ -329,17 +329,26 @@ export class GuildPlayer {
       await this.panel.edit(endedPayload(last)).catch(() => {});
       this.panel = null;
     }
-    if (release) return this.destroy();
+    if (home) return this.goHome();
     this.scheduleIdle();
     return undefined;
   }
 
-  /** Sans musique pendant 3 min : le bot retourne dans son vocal habituel. */
+  /** Sans musique pendant 3 min : le bot retourne dans son vocal habituel (sans se déconnecter). */
   scheduleIdle() {
     clearTimeout(this.timers.idle);
     this.timers.idle = setTimeout(() => {
-      if (!this.current) this.destroy();
+      if (!this.current) this.goHome();
     }, IDLE_RELEASE_MS);
+  }
+
+  /** Retour au vocal habituel en gardant la connexion : le prochain /play démarre tout de suite. */
+  async goHome() {
+    if (this.backend?.moveToHome && config.voice.enabled) {
+      await this.backend.moveToHome().catch((err) => console.warn('[musique] retour au vocal :', err.message));
+      return;
+    }
+    await this.destroy();
   }
 
   async destroy() {

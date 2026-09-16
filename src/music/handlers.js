@@ -217,10 +217,8 @@ const COMMANDS = {
     if (player.current) {
       const problem = controlProblem(interaction, player);
       if (problem) return interaction.reply(say(problem));
-      await player.stop();
-    } else {
-      player.destroy();
     }
+    await player.stop();
     return interaction.reply(say('👋 Musique coupée, je retourne dans mon vocal.'));
   },
 

@@ -1,5 +1,6 @@
 // Lecture via un serveur Lavalink : c'est lui qui récupère le son et l'envoie dans le vocal Discord.
-import { releaseExternalVoice, takeVoiceForExternal } from '../features/voice.js';
+import { config } from '../config.js';
+import { homeChannel, releaseExternalVoice, takeVoiceForExternal } from '../features/voice.js';
 import { lavalinkFilters, speedOf } from './filters.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
 import { MusicError } from './ytdlp.js';
@@ -54,11 +55,35 @@ export class LavalinkBackend {
 
   async joinVoice(channelId) {
     await takeVoiceForExternal(this.guild);
+
+    // Le bot est déjà dans ce salon (vocal 24h/24) : on réutilise sa session, il ne quitte pas le vocal
+    const cached = lavalink.cachedVoice(this.guild.id, channelId);
+    if (cached) {
+      this.voice = cached;
+      this.voiceChannelId = channelId;
+      return this.sendVoice();
+    }
+
     const waiting = lavalink.waitForVoice(this.guild.id, channelId);
     this.guild.shard.send({ op: 4, d: { guild_id: this.guild.id, channel_id: channelId, self_mute: false, self_deaf: true } });
     this.voice = await waiting;
     this.voiceChannelId = channelId;
-    await this.sendVoice();
+    return this.sendVoice();
+  }
+
+  /** Fin de la musique : le bot retourne dans son vocal habituel sans se déconnecter. */
+  async moveToHome() {
+    const home = homeChannel(this.guild);
+    if (!home || !config.voice.enabled) return this.destroy();
+    await this.stopTrack();
+    if (this.voiceChannelId === home.id) return undefined;
+
+    const waiting = lavalink.waitForVoice(this.guild.id, home.id, 10_000).catch(() => null);
+    this.guild.shard.send({ op: 4, d: { guild_id: this.guild.id, channel_id: home.id, self_mute: false, self_deaf: true } });
+    const voice = await waiting;
+    this.voiceChannelId = home.id;
+    if (voice) this.voice = voice;
+    return this.sendVoice().catch(() => {});
   }
 
   sendVoice() {
@@ -296,10 +321,12 @@ export class LavalinkBackend {
   }
 
   onNodeDown() {
-    if (!this.player.current) return;
     // Le serveur garde les lecteurs 60 s : on lui laisse le temps de revenir
     setTimeout(() => {
-      if (!this.node?.usable) this.recover('serveur audio déconnecté');
+      if (this.node?.usable) return;
+      if (this.player.current) return this.recover('serveur audio déconnecté');
+      // Rien en cours : on rend le vocal au mode 24h/24
+      return this.player.destroy().catch(() => {});
     }, 15_000);
   }
 
