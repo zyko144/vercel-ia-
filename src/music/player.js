@@ -13,7 +13,7 @@ const DEFAULT_VOLUME = 100;
 const MAX_HISTORY = 50;
 const IDLE_RELEASE_MS = 3 * 60_000;
 const ALONE_STOP_MS = 2 * 60_000;
-const PANEL_REFRESH_MS = 15_000;
+
 const OWNER_PING_COOLDOWN_MS = 10 * 60_000;
 const players = new Map();
 let lastOwnerPing = 0;
@@ -401,12 +401,12 @@ export class GuildPlayer {
     clearInterval(this.timers.panel);
     this.timers.panel = setInterval(() => {
       if (this.current && !this.paused) this.refreshPanel();
-    }, PANEL_REFRESH_MS);
+    }, config.music.panelRefreshMs);
   }
 
   refreshPanel(force = false) {
     if (!this.panel || !this.current) return;
-    if (!force && Date.now() - this.lastPanelEdit < 2_000) return;
+    if (!force && Date.now() - this.lastPanelEdit < 1_000) return;
     this.lastPanelEdit = Date.now();
     this.panel.edit(nowPlayingPayload(this)).catch((err) => {
       if (err.code === 10008) this.panel = null; // message supprimé

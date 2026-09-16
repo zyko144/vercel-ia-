@@ -6,7 +6,7 @@ import {
   EmbedBuilder,
   StringSelectMenuBuilder,
 } from 'discord.js';
-import { FILTERS, filtersLabel } from './filters.js';
+import { FILTERS, filtersLabel, speedOf } from './filters.js';
 import { SOURCES } from './sources.js';
 
 const LOOP_LABELS = { off: 'Désactivée', track: '🔂 Ce son', queue: '🔁 Toute la file' };
@@ -51,9 +51,12 @@ export function nowPlayingPayload(player) {
   const position = player.position();
   const next = player.queue[0];
   const queueDuration = player.queue.reduce((sum, t) => sum + (t.duration || 0), 0);
+  // Minuterie de fin : Discord la fait défiler tout seul chez chaque personne, sans rien renvoyer
+  const speed = speedOf(player.filters) || 1;
+  const endsAt = Math.floor((Date.now() + Math.max(0, (track.duration - position) / speed) * 1000) / 1000);
   const timeLine = track.isLive
     ? '🔴 **EN DIRECT**'
-    : `${progressBar(position, track.duration)}\n\`${formatTime(position)} / ${formatTime(track.duration)}\``;
+    : `${progressBar(position, track.duration)}\n\`${formatTime(position)} / ${formatTime(track.duration)}\`${player.paused ? ' · ⏸️ en pause' : ` · fin <t:${endsAt}:R>`}`;
 
   const embed = new EmbedBuilder()
     .setColor(source.color)
