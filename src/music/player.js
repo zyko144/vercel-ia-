@@ -17,6 +17,7 @@ const IDLE_RELEASE_MS = 3 * 60_000;
 const ALONE_STOP_MS = 2 * 60_000;
 
 const OWNER_PING_COOLDOWN_MS = 10 * 60_000;
+const MAX_TRACK_RETRIES = 3; // reprises d'un son coupé en pleine lecture avant d'abandonner
 const players = new Map();
 let lastOwnerPing = 0;
 
@@ -160,15 +161,22 @@ export class GuildPlayer {
   async onTrackEnd({ failed = false, error = null } = {}) {
     const track = this.current;
 
-    // Coupure ou flux expiré : on réessaie une fois au même endroit
-    if (track && failed && !track.retried) {
-      track.retried = true;
+    // Coupure en pleine lecture : on reprend au même endroit, avec une autre version / un autre serveur audio
+    if (track && failed && (track.retries ?? 0) < MAX_TRACK_RETRIES) {
+      track.retries = (track.retries ?? 0) + 1;
+      const position = Math.max(0, this.position() - 2);
+      console.warn(`[musique] "${track.title}" coupé à ${Math.round(position)}s (${error?.message ?? 'erreur'}), reprise ${track.retries}/${MAX_TRACK_RETRIES}`);
       this.backend?.invalidate?.(track);
-      const position = Math.max(0, this.position() - 1);
       return this.startCurrent(track.isLive ? 0 : position);
     }
-    if (track) track.retried = false;
-    if (failed && error) console.warn(`[musique] "${track?.title}" :`, error.message);
+    if (track) track.retries = 0;
+    if (track && failed) {
+      // Plus jamais d'arrêt silencieux : le salon et le chef sont prévenus
+      const reason = error ?? new Error('coupé en pleine lecture');
+      console.warn(`[musique] "${track.title}" abandonné :`, reason.message);
+      this.notify(`⚠️ **${track.title}** a coupé ${MAX_TRACK_RETRIES + 1} fois (${reason.message}), je passe au suivant.`);
+      this.alertOwner(track, reason);
+    }
 
     if (track && !failed && this.loop === 'track' && !this.skipLoop) return this.startCurrent(0);
     this.skipLoop = false;

@@ -8,6 +8,8 @@ import { MusicError } from './ytdlp.js';
 const START_TIMEOUT_MS = 25_000;
 const START_GRACE_MS = 2_500; // certains serveurs annoncent le démarrage puis échouent juste après
 const NODE_BROKEN_MS = 10 * 60_000;
+const NODE_STALLS_BEFORE_BREAK = 2; // coupures en pleine lecture sur un serveur avant de le mettre de côté
+const EARLY_END_MARGIN_S = 15;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const shortError = (text = '') => text.split('\n')[0].slice(0, 120);
 
@@ -25,6 +27,7 @@ export class LavalinkBackend {
     this.voice = null;
     this.voiceChannelId = null;
     this.currentEncoded = null;
+    this.currentItem = null;
     this.pending = null;
     this.lastState = { position: 0, at: Date.now() };
     this.endTimer = null;
@@ -146,12 +149,24 @@ export class LavalinkBackend {
     if (result.loadType === 'track') items = [result.data];
     else if (result.loadType === 'search') items = result.data;
     else if (result.loadType === 'playlist') items = result.data.tracks;
-    items = items.filter(Boolean);
+    // Les versions qui ont déjà planté sur ce serveur sont écartées
+    items = items.filter((item) => item && !track.badItems?.has(this.itemKey(item)));
 
     const full = items.filter((item) => item.info.isStream || !track.duration || item.info.length / 1000 >= Math.min(35, track.duration * 0.6));
     if (!isSearch) return full[0] ?? null;
     const close = full.find((item) => !track.duration || item.info.isStream || Math.abs(item.info.length / 1000 - track.duration) <= 30);
     return close ?? full[0] ?? null;
+  }
+
+  itemKey(item) {
+    return `${this.node?.name}|${item.info.identifier ?? item.info.uri}`;
+  }
+
+  /** Cette version du son a planté sur ce serveur : on ne la reprendra plus pour ce son. */
+  markBad(track, item) {
+    if (!item) return;
+    track.badItems ??= new Set();
+    track.badItems.add(this.itemKey(item));
   }
 
   applyMetadata(track, item) {
@@ -161,7 +176,8 @@ export class LavalinkBackend {
     track.thumbnail ??= info.artworkUrl ?? null;
     track.title ||= info.title;
     track.artist ||= info.author;
-    track.duration ||= Math.round((info.length ?? 0) / 1000);
+    // Durée de la version vraiment jouée (sinon la barre déborde et la fin est mal calculée)
+    if (info.length && !info.isStream) track.duration = Math.round(info.length / 1000);
     track.isLive = Boolean(info.isStream);
     if (track.source === 'deezer') track.source = SOURCE_NAMES[info.sourceName?.toLowerCase()] ?? 'youtube';
   }
@@ -173,6 +189,15 @@ export class LavalinkBackend {
     const tried = new Set();
     let lastError = null;
 
+    // Ce serveur coupe trop en ce moment : on passe sur un autre qui va bien
+    if (this.node && Date.now() < this.node.brokenUntil) {
+      const other = lavalink.bestNode([this.node.name]);
+      if (other && Date.now() >= other.brokenUntil) {
+        triedNodes.add(this.node.name);
+        await this.switchNode(triedNodes).catch(() => {});
+      }
+    }
+
     // Son déjà préparé pendant le précédent : on démarre tout de suite (enchaînement quasi instantané)
     if (track.lavalinkReady?.node === this.node?.name) {
       const ready = track.lavalinkReady;
@@ -183,6 +208,7 @@ export class LavalinkBackend {
         return true;
       } catch (err) {
         lastError = err;
+        this.markBad(track, ready.item);
         if (token !== this.player.playToken) return false;
       }
     }
@@ -213,6 +239,7 @@ export class LavalinkBackend {
           return true;
         } catch (err) {
           lastError = err;
+          this.markBad(track, item);
           lavalink.log(`${this.node.name} n'a pas pu lire "${track.title}" : ${shortError(err.message)}`);
           if (token !== this.player.playToken) return false;
         }
@@ -243,6 +270,7 @@ export class LavalinkBackend {
       clearTimeout(this.endTimer);
       this.endTimer = null;
       this.currentEncoded = item.encoded;
+      this.currentItem = item;
       this.lastState = { position: seek * 1000, at: Date.now() };
 
       this.node.updatePlayer(this.guild.id, {
@@ -283,8 +311,9 @@ export class LavalinkBackend {
       case 'TrackExceptionEvent':
       case 'TrackStuckEvent': {
         if (!sameTrack) return;
-        const error = new Error(message.exception?.message ?? 'son bloqué');
+        const error = new Error(message.type === 'TrackStuckEvent' ? 'le son a calé (plus de données)' : message.exception?.message ?? 'erreur de lecture');
         if (pending) return pending.finish(error);
+        lavalink.log(`${this.node?.name} : "${this.player.current?.title}" coupé à ${Math.round(this.position())}s (${shortError(error.message)})`);
         this.currentEncoded = null;
         return this.player.onTrackEnd({ failed: true, error });
       }
@@ -298,6 +327,12 @@ export class LavalinkBackend {
           return this.player.onTrackEnd({ failed: true, error });
         }
         if (pending) return; // fin bizarre pendant le démarrage : le délai gère
+        // Le serveur dit "fini" alors qu'il restait un bon bout : c'est une coupure
+        if (message.reason === 'finished' && this.endedTooEarly()) {
+          lavalink.log(`${this.node?.name} : "${this.player.current?.title}" arrêté à ${Math.round(this.position())}s sur ${Math.round(this.currentItem.info.length / 1000)}s`);
+          this.currentEncoded = null;
+          return this.player.onTrackEnd({ failed: true, error: new Error("le son s'est coupé avant la fin") });
+        }
         this.currentEncoded = null;
         return this.player.onTrackEnd({ failed: message.reason === 'cleanup' });
       }
@@ -324,6 +359,12 @@ export class LavalinkBackend {
       default:
     }
     return undefined;
+  }
+
+  endedTooEarly() {
+    const info = this.currentItem?.info;
+    if (!info?.length || info.isStream) return false;
+    return this.position() < info.length / 1000 - EARLY_END_MARGIN_S;
   }
 
   onPlayerUpdate(state) {
@@ -462,8 +503,22 @@ export class LavalinkBackend {
     }
   }
 
+  /** Le son a planté en pleine lecture : on reprendra avec une autre version, et si ce serveur coupe souvent, sur un autre. */
   invalidate(track) {
+    this.markBad(track, this.currentItem);
+    track.lavalinkReady = null;
     track.playUrl = track.source === 'youtube' || track.source === 'soundcloud' ? track.playUrl : null;
+
+    const node = this.node;
+    if (!node) return;
+    const now = Date.now();
+    node.stalls = (node.stalls ?? []).filter((at) => now - at < NODE_BROKEN_MS);
+    node.stalls.push(now);
+    if (node.stalls.length >= NODE_STALLS_BEFORE_BREAK) {
+      node.brokenUntil = now + NODE_BROKEN_MS;
+      node.stalls = [];
+      lavalink.log(`${node.name} coupe les sons trop souvent : mis de côté 10 min`);
+    }
   }
 
   destroy() {
