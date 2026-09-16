@@ -9,6 +9,7 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import { config } from '../config.js';
+import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
 import { blindTestActive, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './blindtest.js';
 import { deezer, rankResults, trackFromDeezer } from './deezer.js';
@@ -51,6 +52,9 @@ function controlProblem(interaction, player) {
 
 /** Vérifie qu'on peut lancer de la musique pour ce membre. */
 function joinProblem(interaction) {
+  // Vocal verrouillé : la musique se joue toujours dans le vocal du bot, pas besoin d'être en vocal
+  const locked = lockedChannel(interaction.guild);
+  if (locked) return { channel: locked };
   const channel = interaction.member?.voice?.channel;
   if (!channel) return { error: "🎧 Rejoins d'abord un salon vocal, puis relance la commande." };
   const player = getPlayer(interaction.guildId);
@@ -77,7 +81,7 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
   const position = next ? 1 : player.queue.length + 1;
   player.add(tracks, { next });
 
-  const where = player.botVoiceChannelId && player.botVoiceChannelId !== channel.id ? `\n-# 🎧 Je reste avec le chef : ça joue dans <#${player.botVoiceChannelId}>` : '';
+  const where = player.botVoiceChannelId && player.botVoiceChannelId !== interaction.member?.voice?.channelId ? `\n-# 🎧 Ça joue dans <#${player.botVoiceChannelId}>` : '';
   if (tracks.length === 1 && !result.isPlaylist) {
     return interaction.editReply((wasPlaying
       ? `✅ Ajouté à la file (position **${position}**) : ${trackLine(tracks[0])}`
@@ -134,7 +138,7 @@ export async function handleJukeboxMessage(client, message) {
   if (!text || text.length > 500 || /^[/!?.>]/.test(text)) return;
   if (blindTestActive(message.guildId)) return;
 
-  const voiceChannel = message.member?.voice?.channel;
+  const voiceChannel = lockedChannel(message.guild) ?? message.member?.voice?.channel;
   if (!voiceChannel) {
     await message.react('🔇').catch(() => {});
     return;
@@ -550,9 +554,10 @@ const COMMANDS = {
     const theme = interaction.options.getString('theme');
     const custom = interaction.options.getString('theme_perso');
     const difficulty = interaction.options.getString('difficulte');
+    const mode = interaction.options.getString('mode');
     const rounds = interaction.options.getInteger('manches');
-    // Sans option : menu de réglages (thème, difficulté, manches)
-    if (!theme && !custom && !difficulty && !rounds) return openBlindTestSetup(client, interaction);
+    // Sans option : menu de réglages (thème, mode, difficulté, manches)
+    if (!theme && !custom && !difficulty && !rounds && !mode) return openBlindTestSetup(client, interaction);
 
     // Avec des options : la partie démarre direct
     const { channel, error } = joinProblem(interaction);
@@ -565,8 +570,9 @@ const COMMANDS = {
       voiceChannel: channel,
       hostId: interaction.user.id,
       settings: {
-        theme: custom ? 'custom' : theme ?? 'recent',
+        theme: custom ? 'custom' : theme ?? 'moment',
         customTheme: custom ?? '',
+        mode: mode ?? 'classique',
         difficulty: difficulty ?? 'normal',
         rounds: rounds ?? 10,
       },

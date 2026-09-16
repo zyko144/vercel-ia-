@@ -190,7 +190,7 @@ export class LavalinkBackend {
       const byIsrc = track.isrc && identifier.includes(track.isrc);
       const scored = full.map((item) => ({ item, ...this.matchScore(item, track) })).filter((s) => !s.variant);
       const strictOk = scored
-        .filter((s) => (byIsrc ? s.title >= 0.3 : s.title >= 0.6 && s.artist >= 0.5 && s.gap <= 25))
+        .filter((s) => (byIsrc ? s.title >= 0.5 && (s.artist >= 0.5 || s.gap <= 3) : s.title >= 0.6 && s.artist >= 0.5 && s.gap <= 25))
         .sort((a, b) => (b.title + b.artist) - (a.title + a.artist) || a.gap - b.gap);
       if (strictOk[0]) return strictOk[0].item;
       if (track.strict) return null;
@@ -613,10 +613,17 @@ export class LavalinkBackend {
       if (item) {
         track.lavalinkReady = { node: this.node.name, item };
         this.applyMetadata(track, item);
+        if (track.strict) console.log(`[blindtest] version : "${item.info.author} - ${item.info.title}" (${Math.round(item.info.length / 1000)}s) pour "${track.artist} - ${track.title}" via ${identifier.includes('"') ? 'ISRC' : identifier}`);
         return true;
       }
     }
     return false;
+  }
+
+  /** État du lecteur vu par le serveur audio : position réelle du son, connexion au vocal. */
+  fetchState() {
+    if (!this.node?.sessionId || !this.node.connected) return Promise.resolve(null);
+    return this.node.request('GET', `/v4/sessions/${this.node.sessionId}/players/${this.guild.id}`);
   }
 
   /** Prépare le son suivant pendant que le son actuel joue : le passage devient instantané. */

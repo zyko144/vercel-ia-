@@ -1,7 +1,8 @@
 // API d'admin (protégée par la clé dérivée du token) : lire les logs, voir l'état du bot, tester le blind test.
 import { lavalink } from './music/lavalink.js';
 import { allPlayers } from './music/player.js';
-import { blindTestState, handleBlindTestMessage, startGame, stopBlindTest } from './music/blindtest.js';
+import { config } from './config.js';
+import { blindTestState, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './music/blindtest.js';
 import { recentLogs } from './utils/logbuffer.js';
 
 export function adminRoutes(client) {
@@ -37,6 +38,13 @@ export function adminRoutes(client) {
     'POST /admin/blindtest': async (url, body) => {
       const guild = guildOf(body.guildId);
       if (body.action === 'stop') return { stopped: stopBlindTest(guild.id) };
+      // Envoie le vrai menu de réglages dans un salon (vérifie que Discord l'accepte)
+      if (body.action === 'menu') {
+        const replies = [];
+        const fake = { guildId: guild.id, guild, channelId: body.textChannelId, user: { id: body.userId ?? config.ownerId }, member: { displayName: 'test admin' }, reply: async (p) => replies.push(p.content), followUp: async (p) => replies.push(p.content) };
+        await openBlindTestSetup(client, fake, body.settings ?? {}, { channelId: body.textChannelId });
+        return { replies };
+      }
       if (body.action === 'guess') {
         const channel = await client.channels.fetch(body.textChannelId);
         const handled = handleBlindTestMessage({
@@ -57,7 +65,7 @@ export function adminRoutes(client) {
           channelId: body.textChannelId,
           voiceChannel,
           hostId: body.userId ?? client.user.id,
-          settings: { theme: body.theme ?? 'recent', customTheme: body.customTheme ?? '', difficulty: body.difficulty ?? 'normal', rounds: body.rounds ?? 3 },
+          settings: { theme: body.theme ?? 'moment', customTheme: body.customTheme ?? '', mode: body.mode ?? 'classique', difficulty: body.difficulty ?? 'normal', rounds: body.rounds ?? 3 },
           allowEmptyVoice: true,
         });
         return { state: blindTestState() };

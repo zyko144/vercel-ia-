@@ -2,7 +2,7 @@
 // La lecture elle-même passe par un "moteur" : Lavalink (serveur audio externe) ou le lecteur local.
 import { config } from '../config.js';
 import { dmOwner } from '../features/escalation.js';
-import { followedChannel, heldChannel } from '../features/voice.js';
+import { followedChannel, heldChannel, lockedChannel } from '../features/voice.js';
 import { LavalinkBackend } from './backend-lavalink.js';
 import { LocalBackend } from './backend-local.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
@@ -58,6 +58,7 @@ export class GuildPlayer {
     this.onStarted = null;
     this.onBlindEnd = null; // blind test : son fini ou illisible (sans dévoiler le titre dans le salon)
     this.onAudioStart = null; // le son sort vraiment (blind test : chrono sans décalage)
+    this.onBlindRetry = null; // blind test : son coupé puis repris pendant une manche
     this.skipVotes = new Set();
   }
 
@@ -66,7 +67,10 @@ export class GuildPlayer {
   /** Choisit le moteur : Lavalink si un serveur audio répond, sinon le lecteur local. */
   async connect(voiceChannel, { force = false } = {}) {
     // Le bot ne quitte jamais le chef : si le chef est en vocal, la musique se joue dans son salon
-    if (!force) voiceChannel = heldChannel(this.guild) ?? followedChannel(this.guild) ?? voiceChannel;
+    // Vocal verrouillé : toujours le vocal du bot, quoi qu'on demande
+    const locked = lockedChannel(this.guild);
+    if (locked) voiceChannel = locked;
+    else if (!force) voiceChannel = heldChannel(this.guild) ?? followedChannel(this.guild) ?? voiceChannel;
     const wantLavalink = config.music.engine !== 'local' && lavalink.available;
     const isLavalink = this.backend instanceof LavalinkBackend;
 
@@ -179,6 +183,7 @@ export class GuildPlayer {
       const position = Math.max(0, this.position() - 2);
       console.warn(`[musique] "${track.title}" coupé à ${Math.round(position)}s (${error?.message ?? 'erreur'}), reprise ${track.retries}/${MAX_TRACK_RETRIES}`);
       this.backend?.invalidate?.(track);
+      if (this.blind) this.onBlindRetry?.();
       return this.startCurrent(track.isLive ? 0 : position);
     }
     if (track) track.retries = 0;

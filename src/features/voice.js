@@ -51,6 +51,11 @@ export function homeChannel(guild) {
   return null;
 }
 
+/** Vocal verrouillé : le seul salon où le bot a le droit d'aller (null si pas de verrou). */
+export function lockedChannel(guild) {
+  return config.voice.lockHome ? homeChannel(guild) : null;
+}
+
 /** Pendant un blind test le bot reste dans le salon de la partie, même si le chef bouge. */
 export function holdVoice(guildId, channelId) {
   holds.set(guildId, channelId);
@@ -61,13 +66,14 @@ export function releaseVoiceHold(guildId) {
 }
 
 export function heldChannel(guild) {
+  if (config.voice.lockHome) return null;
   const channel = guild.channels.cache.get(holds.get(guild.id));
   return channel && isVoice(channel) ? channel : null;
 }
 
 /** Salon vocal où est le chef en ce moment (null s'il n'est pas en vocal, ou dans le salon AFK). */
 export function followedChannel(guild) {
-  if (!config.voice.followOwner || !config.ownerId) return null;
+  if (config.voice.lockHome || !config.voice.followOwner || !config.ownerId) return null;
   const channel = guild.voiceStates.cache.get(config.ownerId)?.channel;
   if (!channel || channel.id === guild.afkChannelId || !isVoice(channel)) return null;
   return channel;
@@ -81,6 +87,7 @@ function rememberAnchor(guild, channel) {
 
 /** Là où le bot doit être : avec le chef, sinon dans le dernier salon du chef, sinon son vocal habituel. */
 export function anchorChannel(guild) {
+  if (config.voice.lockHome) return homeChannel(guild);
   const owner = followedChannel(guild);
   if (owner) {
     rememberAnchor(guild, owner);
@@ -92,6 +99,7 @@ export function anchorChannel(guild) {
 }
 
 export function findTargetChannel(guild) {
+  if (config.voice.lockHome) return homeChannel(guild);
   const musicChannelId = musicOverrides.get(guild.id);
   const musicChannel = musicChannelId && guild.channels.cache.get(musicChannelId);
   if (musicChannel) return musicChannel;

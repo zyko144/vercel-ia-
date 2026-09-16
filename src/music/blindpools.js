@@ -1,7 +1,8 @@
-// Réserves de sons du blind test : thèmes (rap FR par année, hits du moment...), niveaux de difficulté,
+// Réserves de sons du blind test : thèmes (sons du moment, rap FR par année...), niveaux, modes de jeu,
 // sons vérifiés un par un (année de sortie + code ISRC pour jouer exactement le bon morceau).
 import { load, save } from '../storage.js';
 import { deezer, rankResults, trackFromDeezer } from './deezer.js';
+import { findLyrics } from './lyrics.js';
 import { aiPlaylist } from './sources.js';
 import { popularTracks } from './stats.js';
 
@@ -21,22 +22,39 @@ const FRENCH_ISRC = new Set(['FR', 'BE', 'CH', 'LU', 'MC']);
 const BAD_TITLE = /\b(intro|outro|interlude|skit|freestyle|live|session|colors show|acoustique|acoustic|remix|instrumental|sped up|slowed)\b/i;
 
 export const THEMES = {
-  recent: { label: 'Rap FR récent (2022 → 2026)', emoji: '🔥', french: true, years: [2022, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.certifie, PL.best2025, PL.best2024, PL.best2023, PL.rapstars2020, PL.skyrock2022] },
-  y2026: { french: true, label: 'Rap FR 2026', emoji: '🆕', years: [2026, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.certifie, PL.rap2026] },
-  y2025: { french: true, label: 'Rap FR 2025', emoji: '💿', years: [2025, 2025], playlists: [PL.best2025, PL.rapstars2020, PL.certifie, PL.hitsDeRue, PL.rap2026] },
-  y2024: { french: true, label: 'Rap FR 2024', emoji: '💿', years: [2024, 2024], playlists: [PL.best2024, PL.mega2024, PL.rapstars2020, PL.rap2324] },
-  y2023: { french: true, label: 'Rap FR 2023', emoji: '💿', years: [2023, 2023], playlists: [PL.best2023, PL.rap2324, PL.rapstars2020, PL.mega2024] },
-  y2022: { french: true, label: 'Rap FR 2022', emoji: '💿', years: [2022, 2022], playlists: [PL.skyrock2022, PL.ete2022, PL.rapstars2020] },
+  moment: { label: 'Sons du moment (2025-2026)', emoji: '🔥', french: true, years: [2025, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.rap2026] },
+  recent: { label: 'Rap FR récent (2022 → 2026)', emoji: '🎧', french: true, years: [2022, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.certifie, PL.best2025, PL.best2024, PL.best2023, PL.rapstars2020, PL.skyrock2022] },
+  y2026: { label: 'Rap FR 2026', emoji: '🆕', french: true, years: [2026, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.certifie, PL.rap2026] },
+  y2025: { label: 'Rap FR 2025', emoji: '💿', french: true, years: [2025, 2025], playlists: [PL.best2025, PL.rapstars2020, PL.certifie, PL.hitsDeRue, PL.rap2026] },
+  y2024: { label: 'Rap FR 2024', emoji: '💿', french: true, years: [2024, 2024], playlists: [PL.best2024, PL.mega2024, PL.rapstars2020, PL.rap2324] },
+  y2023: { label: 'Rap FR 2023', emoji: '💿', french: true, years: [2023, 2023], playlists: [PL.best2023, PL.rap2324, PL.rapstars2020, PL.mega2024] },
+  y2022: { label: 'Rap FR 2022', emoji: '💿', french: true, years: [2022, 2022], playlists: [PL.skyrock2022, PL.ete2022, PL.rapstars2020] },
   hits: { label: 'Hits France du moment', emoji: '🇫🇷', years: [2023, 2026], playlists: [PL.topFrance, PL.topFrance2025, PL.hits2024] },
   server: { label: 'Sons du serveur', emoji: '🏠' },
   custom: { label: 'Thème perso', emoji: '✏️' },
 };
 
 export const DIFFICULTIES = {
-  facile: { label: 'Facile', emoji: '🟢', color: 0x57f287, snippet: 30, minRank: 800_000, top: 60, start: [0.3, 0.42], hintAt: 0.35, speedBonus: 0.35, desc: 'Sons ultra connus · 30 s · refrain · indices' },
-  normal: { label: 'Normal', emoji: '🟡', color: 0xfee75c, snippet: 20, minRank: 650_000, top: 120, start: [0.25, 0.45], hintAt: 0.6, speedBonus: 0.35, desc: 'Sons connus · 20 s · un indice' },
-  difficile: { label: 'Difficile', emoji: '🔴', color: 0xed4245, snippet: 12, minRank: 450_000, top: 250, start: [0.12, 0.6], hintAt: null, speedBonus: 0.35, desc: 'Moins connus · 12 s · pas d\'indice' },
-  expert: { label: 'Expert', emoji: '💀', color: 0x2b2d31, snippet: 6, minRank: 300_000, top: 400, start: [0.05, 0.7], hintAt: null, speedBonus: 0.5, desc: '6 s seulement · n\'importe où dans le son' },
+  tresfacile: { label: 'Très facile', emoji: '🍼', color: 0x5865f2, snippet: 30, minRank: 900_000, top: 45, maxPerArtist: 1, start: [0.3, 0.42], hintAt: 0.25, speedBonus: 0.35, desc: 'Les plus gros sons du moment · 30 s · indices' },
+  facile: { label: 'Facile', emoji: '🟢', color: 0x57f287, snippet: 30, minRank: 800_000, top: 70, maxPerArtist: 2, start: [0.3, 0.42], hintAt: 0.35, speedBonus: 0.35, desc: 'Sons très connus · 30 s · refrain · indices' },
+  normal: { label: 'Normal', emoji: '🟡', color: 0xfee75c, snippet: 20, minRank: 650_000, top: 120, maxPerArtist: 2, start: [0.25, 0.45], hintAt: 0.6, speedBonus: 0.35, desc: 'Sons connus · 20 s · un indice' },
+  difficile: { label: 'Difficile', emoji: '🔴', color: 0xed4245, snippet: 12, minRank: 450_000, top: 250, maxPerArtist: 3, start: [0.12, 0.6], hintAt: null, speedBonus: 0.35, desc: "Moins connus · 12 s · pas d'indice" },
+  expert: { label: 'Expert', emoji: '💀', color: 0x2b2d31, snippet: 6, minRank: 300_000, top: 400, maxPerArtist: 3, start: [0.05, 0.7], hintAt: null, speedBonus: 0.5, desc: "6 s seulement · n'importe où dans le son" },
+};
+
+export const MODES = {
+  classique: { label: 'Classique', emoji: '🎯', desc: 'Titre +2 · artiste +1 · rapidité +1' },
+  titre: { label: 'Titre seulement', emoji: '🎵', desc: 'Seul le titre compte' },
+  artiste: { label: 'Artiste seulement', emoji: '🎤', desc: 'Trouve qui chante' },
+  intro: { label: 'Intro', emoji: '🎬', desc: 'Les toutes premières secondes du son' },
+  eclair: { label: 'Éclair', emoji: '⚡', desc: '3 secondes de son, pas une de plus', snippet: 3 },
+  accelere: { label: 'Accéléré', emoji: '🐿️', desc: 'Le son passe en accéléré', filter: 'nightcore' },
+  ralenti: { label: 'Ralenti', emoji: '🐌', desc: 'Le son passe au ralenti', filter: 'slowed' },
+  sansvoix: { label: 'Voix cachée', emoji: '🎙️', desc: 'La voix est presque effacée', filter: 'karaoke' },
+  annee: { label: 'Année', emoji: '📅', desc: "Devine l'année de sortie" },
+  paroles: { label: 'Paroles', emoji: '📝', desc: 'Pas de son : devine avec les paroles' },
+  premier10: { label: 'Premier à 10', emoji: '👑', desc: 'Le premier à 10 points gagne' },
+  unessai: { label: 'Un seul essai', emoji: '🎲', desc: 'Une seule réponse par manche' },
 };
 
 const PLAYLIST_CACHE_MS = 3 * 60 * 60_000;
@@ -46,8 +64,10 @@ const RECENT_MAX = 250;
 const playlistCache = new Map(); // id -> { at, tracks }
 const detailsCache = new Map(); // deezerId -> { at, details }
 let recent = null; // guildId -> [clés des derniers sons joués]
+let frenchArtistsCache = null;
 
 const normalize = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const tokens = (s) => normalize(s).split(' ').filter(Boolean);
 
 /** Titre sans (feat. ...), [Remix], - Radio Edit... */
 export const cleanTitle = (text = '') => text
@@ -59,16 +79,6 @@ export const cleanTitle = (text = '') => text
 
 const songKey = (track) => `${normalize(cleanTitle(track.title))}|${normalize(track.artist ?? '')}`;
 const yearOf = (details) => Number(details?.release_date?.slice(0, 4)) || null;
-let frenchArtistsCache = null;
-
-/** Artistes présents dans les playlists rap FR éditoriales. */
-async function frenchArtists() {
-  if (frenchArtistsCache && Date.now() - frenchArtistsCache.at < PLAYLIST_CACHE_MS) return frenchArtistsCache.names;
-  const lists = await Promise.all(FRENCH_RAP_PLAYLISTS.map(playlistTracks));
-  const names = new Set(lists.flat().flatMap((item) => [item.artist?.name, ...(item.contributors ?? []).map((c) => c.name)]).filter(Boolean).map(normalize));
-  frenchArtistsCache = { at: Date.now(), names };
-  return names;
-}
 
 async function playlistTracks(id) {
   const cached = playlistCache.get(id);
@@ -76,6 +86,15 @@ async function playlistTracks(id) {
   const tracks = await deezer.playlistTracks(id).catch(() => []);
   if (tracks.length) playlistCache.set(id, { at: Date.now(), tracks });
   return tracks;
+}
+
+/** Artistes présents dans les playlists rap FR éditoriales. */
+async function frenchArtists() {
+  if (frenchArtistsCache && Date.now() - frenchArtistsCache.at < PLAYLIST_CACHE_MS) return frenchArtistsCache.names;
+  const lists = await Promise.all(FRENCH_RAP_PLAYLISTS.map(playlistTracks));
+  const names = new Set(lists.flat().map((item) => item.artist?.name).filter(Boolean).map(normalize));
+  frenchArtistsCache = { at: Date.now(), names };
+  return names;
 }
 
 /** Infos complètes d'un son Deezer (date de sortie, ISRC). */
@@ -115,10 +134,8 @@ const shuffle = (list) => {
 
 /** Sons bruts (Deezer) du thème choisi. */
 async function rawTracks(settings, guildId) {
-  const theme = THEMES[settings.theme] ?? THEMES.recent;
-  if (settings.theme === 'server') {
-    return { tracks: await popularTracks(guildId, 80), fromDeezer: false };
-  }
+  const theme = THEMES[settings.theme] ?? THEMES.moment;
+  if (settings.theme === 'server') return { tracks: await popularTracks(guildId, 80), fromDeezer: false };
   if (settings.theme === 'custom') {
     const query = settings.customTheme?.trim() || 'rap fr';
     const playlist = await deezer.searchPlaylist(query).catch(() => null);
@@ -136,26 +153,31 @@ async function rawTracks(settings, guildId) {
 
 /**
  * Construit la liste des sons d'une partie : dédoublonnée, filtrée par popularité selon la difficulté,
- * vérifiée (année de sortie, ISRC), sans les sons joués dans les dernières parties.
- * @param {{ theme: string, customTheme?: string, difficulty: string, rounds: number }} settings
+ * variée (pas trop de sons du même artiste), vérifiée (année de sortie, ISRC), sans les sons des dernières parties.
+ * @param {{ theme: string, customTheme?: string, difficulty: string, mode?: string, rounds: number }} settings
  * @param {(done: number, total: number) => void} [onProgress]
  */
 export async function buildPool(settings, guildId, onProgress = () => {}) {
-  const theme = THEMES[settings.theme] ?? THEMES.recent;
+  const theme = THEMES[settings.theme] ?? THEMES.moment;
   const level = DIFFICULTIES[settings.difficulty] ?? DIFFICULTIES.normal;
-  const wanted = settings.rounds + 6; // quelques sons de secours si un son est illisible
+  // Sons de secours (son illisible, pas de paroles en mode Paroles...)
+  const wanted = settings.rounds + (settings.mode === 'paroles' ? 12 : 6);
   const { tracks: raw, fromDeezer } = await rawTracks(settings, guildId);
   const played = await recentFor(guildId);
+  const perArtist = new Map();
+  const artistOk = (name) => (perArtist.get(normalize(name)) ?? 0) < (level.maxPerArtist ?? 3);
+  const countArtist = (name) => perArtist.set(normalize(name), (perArtist.get(normalize(name)) ?? 0) + 1);
 
   if (!fromDeezer) {
     const seen = new Set();
-    const pool = shuffle(raw).filter((track) => {
+    return shuffle(raw).filter((track) => {
       const key = songKey(track);
-      if (!track.title || !track.artist || seen.has(key)) return false;
+      if (!track.title || !track.artist || seen.has(key) || !artistOk(track.artist)) return false;
+      if (settings.mode === 'annee' && !track.year) return false;
       seen.add(key);
+      countArtist(track.artist);
       return true;
-    });
-    return pool.slice(0, wanted);
+    }).slice(0, wanted);
   }
 
   // Doublons (même son sur plusieurs playlists, versions différentes) enlevés, du plus connu au moins connu
@@ -183,11 +205,13 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
   for (let i = 0; i < ordered.length && pool.length < wanted; i += 8) {
     const batch = await Promise.all(ordered.slice(i, i + 8).map(async (item) => ({ item, details: await trackDetails(item.id) })));
     for (const { item, details } of batch) {
-      if (pool.length >= wanted || !details) continue;
+      if (pool.length >= wanted || !details || !artistOk(item.artist.name)) continue;
       const year = yearOf(details);
       if (year && (year < minYear || year > maxYear)) continue;
+      if (settings.mode === 'annee' && !year) continue;
       // Thèmes rap FR : artiste connu du rap français ou son enregistré en France / Belgique / Suisse
       if (french && !french.has(normalize(item.artist.name)) && !FRENCH_ISRC.has(details.isrc?.slice(0, 2))) continue;
+      countArtist(item.artist.name);
       pool.push({
         ...trackFromDeezer({ ...item, album: details.album ?? item.album }),
         isrc: details.isrc ?? null,
@@ -199,4 +223,21 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
     onProgress(pool.length, wanted);
   }
   return pool;
+}
+
+/** Deux lignes des paroles qui ne donnent pas directement le titre ni l'artiste (mode Paroles). */
+export async function lyricsExcerpt(track) {
+  const found = await findLyrics({ title: track.title, artist: track.artist, duration: track.duration, source: 'deezer' }).catch(() => null);
+  const lines = (found?.plainLyrics ?? '').split('\n').map((line) => line.trim()).filter((line) => line && !/^[[(].*[\])]$/.test(line));
+  const hidden = [...tokens(cleanTitle(track.title)), ...tokens(track.artist)].filter((word) => word.length >= 3);
+  const usable = [];
+  for (let i = 0; i < lines.length - 1; i++) {
+    const words = tokens(`${lines[i]} ${lines[i + 1]}`);
+    if (words.length < 8 || words.length > 30) continue;
+    if (hidden.some((word) => words.includes(word))) continue;
+    usable.push(`${lines[i]}\n${lines[i + 1]}`);
+  }
+  if (!usable.length) return null;
+  // Évite le tout début et la toute fin (souvent l'intro et l'outro)
+  return usable[Math.floor(usable.length * (0.2 + Math.random() * 0.6))] ?? usable[0];
 }

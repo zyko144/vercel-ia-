@@ -1,5 +1,5 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
-import { DIFFICULTIES, THEMES } from './blindpools.js';
+import { DIFFICULTIES, MODES, THEMES } from './blindpools.js';
 import { FILTERS } from './filters.js';
 
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
@@ -88,6 +88,8 @@ export const musicCommands = [
   new SlashCommandBuilder().setName('blindtest').setDescription('Blind test : sans option, ouvre le menu (thème, difficulté, manches)')
     .addStringOption((o) => o.setName('theme').setDescription('Thème (lance direct la partie)')
       .addChoices(...Object.entries(THEMES).filter(([key]) => key !== 'custom').map(([key, theme]) => ({ name: `${theme.emoji} ${theme.label}`, value: key }))))
+    .addStringOption((o) => o.setName('mode').setDescription('Mode de jeu')
+      .addChoices(...Object.entries(MODES).map(([key, mode]) => ({ name: `${mode.emoji} ${mode.label}`, value: key }))))
     .addStringOption((o) => o.setName('difficulte').setDescription('Difficulté')
       .addChoices(...Object.entries(DIFFICULTIES).map(([key, level]) => ({ name: `${level.emoji} ${level.label} (${level.snippet} s)`, value: key }))))
     .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
