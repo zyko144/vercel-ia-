@@ -68,7 +68,7 @@ export function nowPlayingPayload(player) {
       { name: '📜 File', value: `${player.queue.length} son(s)${queueDuration ? ` · ${formatTime(queueDuration)}` : ''}`, inline: true },
       { name: '♾️ Autoplay', value: player.autoplay ? 'Activé' : 'Désactivé', inline: true },
     )
-    .setFooter({ text: cut(`${source.label}${next ? ` · Ensuite : ${next.title}${next.artist ? ` — ${next.artist}` : ''}` : ''}`, 200) });
+    .setFooter({ text: cut(`${source.label}${player.backend ? ` · ${player.backend.name}` : ''}${next ? ` · Ensuite : ${next.title}${next.artist ? ` — ${next.artist}` : ''}` : ''}`, 200) });
   if (track.url) embed.setURL(track.url);
   if (track.thumbnail) embed.setThumbnail(track.thumbnail);
 

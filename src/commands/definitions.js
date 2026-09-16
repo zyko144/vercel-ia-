@@ -249,7 +249,8 @@ const utilityCommands = [
     .setName('admin')
     .setDescription('Commandes réservées au chef')
     .addSubcommand((s) => s.setName('stats').setDescription('Statistiques du bot'))
-    .addSubcommand((s) => s.setName('voc').setDescription('Force le bot à (re)rejoindre le vocal')),
+    .addSubcommand((s) => s.setName('voc').setDescription('Force le bot à (re)rejoindre le vocal'))
+    .addSubcommand((s) => s.setName('musique').setDescription('État des serveurs audio (musique)')),
 ];
 
 export const commandDefinitions = [...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands];

@@ -16,6 +16,8 @@ import { allowedChannelsMention, attachmentsToContent, fetchBase64, isAllowedCha
 import { buildAnswerPayload, handleCopyButton, handleCopyModal } from '../utils/reply.js';
 import { MUSIC_COMMAND_NAMES } from '../music/commands.js';
 import { handleMusicAutocomplete, handleMusicCommand, handleMusicComponent, isMusicComponent } from '../music/handlers.js';
+import { lavalink } from '../music/lavalink.js';
+import { allPlayers } from '../music/player.js';
 import { MODERATION_HANDLERS } from './moderation.js';
 import { UTILITY_HANDLERS } from './utility.js';
 
@@ -326,7 +328,26 @@ const SLASH_HANDLERS = {
       const ok = await rejoinVoice(interaction.guild);
       return interaction.editReply(ok
         ? `🎧 Reconnecté : ${voiceStatus(interaction.guild)}`
-        : "⚠️ Pas réussi à rejoindre le vocal. Vérifie l'ID du salon vocal et que j'ai la permission Se connecter.");
+        : "⚠️ Pas réussi à rejoindre le vocal (ou la musique tient le vocal en ce moment). Vérifie l'ID du salon et la permission Se connecter.");
+    }
+
+    if (interaction.options.getSubcommand() === 'musique') {
+      const nodes = lavalink.status();
+      const players = allPlayers();
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🎶 Serveurs audio (musique)')
+        .setDescription(nodes.length
+          ? nodes.map((n) => {
+            const state = n.connected ? (n.incompatible ? '⛔ refusé par Discord' : n.broken ? '⚠️ problèmes de lecture' : '✅ connecté') : '❌ hors ligne';
+            return `**${n.name}** ${n.secure ? '🔒' : ''} · ${state}${n.version ? ` · v${n.version}` : ''}${n.connected ? ` · ${n.players} lecteur(s)` : ''}`;
+          }).join('\n')
+          : 'Aucun serveur audio configuré (lecteur local uniquement).')
+        .addFields(
+          { name: 'Moteur', value: players.length ? players.map((p) => `${p.guild.name} : ${p.backend?.name ?? 'inactif'}`).join('\n') : 'Aucune musique en cours' },
+          { name: 'Derniers événements', value: lavalink.logs.length ? lavalink.logs.slice(-8).map((l) => `<t:${Math.floor(l.at / 1000)}:t> ${truncate(l.text, 90)}`).join('\n') : 'Rien à signaler' },
+        );
+      return interaction.reply({ embeds: [embed], ...PRIVATE });
     }
 
     const uptime = process.uptime();

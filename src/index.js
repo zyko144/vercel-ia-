@@ -7,6 +7,7 @@ import { startReminderLoop } from './features/reminders.js';
 import { startVoiceKeeper } from './features/voice.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
+import { lavalink } from './music/lavalink.js';
 import { startHttpServer } from './server.js';
 import { storageBackend } from './storage.js';
 
@@ -39,6 +40,7 @@ client.once(Events.ClientReady, async (c) => {
     console.error('❌ Enregistrement des commandes impossible :', err);
   }
 
+  lavalink.init(c);
   startVoiceKeeper(c);
   startReminderLoop(c);
 });
@@ -52,6 +54,9 @@ client.on(Events.InteractionCreate, (interaction) => {
 });
 
 client.on(Events.VoiceStateUpdate, (oldState, newState) => handleMusicVoiceState(oldState, newState));
+
+// Les serveurs audio ont besoin des événements vocaux bruts de Discord
+client.on(Events.Raw, (packet) => lavalink.handleRaw(packet));
 
 client.on(Events.Error, (err) => console.error('[discord]', err));
 

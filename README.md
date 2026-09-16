@@ -68,16 +68,20 @@ npm start
 - Le bot rejoint le vocal de la personne qui lance la musique, puis retourne dans son vocal habituel 3 min après la fin (ou tout de suite avec `/stop`). Il coupe tout seul si le vocal est vide depuis 2 min.
 - Pour contrôler la musique, il faut être dans le même vocal que le bot (les admins et le chef peuvent toujours).
 
-**Comment ça marche** : Spotify, Apple Music et Deezer ne donnent pas l'audio. Le bot lit les infos (titre, artiste, pochette), puis joue le son depuis YouTube Music. L'audio passe par [yt-dlp](https://github.com/yt-dlp/yt-dlp), téléchargé automatiquement au démarrage et mis à jour chaque jour, et par ffmpeg (effets). Les paroles viennent de lrclib.net.
+**Comment ça marche** : la musique passe par des **serveurs audio publics gratuits (Lavalink)**. Le bot leur dit quoi jouer, et c'est eux qui récupèrent le son et l'envoient dans le vocal Discord. Résultat : YouTube ne voit pas l'adresse IP de l'hébergeur (donc pas de blocage), et l'hébergeur n'utilise presque pas de processeur.
 
-**Playlists** : YouTube, Deezer, SoundCloud et Apple Music (albums) sont chargés en entier. Spotify ne donne que les 100 premiers titres d'une playlist sans compte développeur (limite de Spotify).
+- Plusieurs serveurs sont configurés : si l'un tombe ou n'arrive pas à lire un son, le bot **bascule tout seul** sur le suivant.
+- Si aucun serveur ne répond, il repasse sur le **lecteur local** (yt-dlp + ffmpeg), qui marche bien depuis une connexion normale mais se fait bloquer par YouTube depuis un hébergeur.
+- `/admin musique` (chef) affiche l'état des serveurs audio, le moteur utilisé et les derniers problèmes.
+- Pour changer de serveurs : variable `LAVALINK_NODES` (du JSON), listes à jour sur [lavalink-list](https://lavalink.darrennathanael.com/). `MUSIC_ENGINE` accepte `auto` (défaut), `lavalink` ou `local`.
 
-⚠️ **YouTube bloque les hébergeurs cloud** (message « YouTube bloque le serveur »). Le bot essaie déjà automatiquement d'autres modes de connexion YouTube, mais sur une IP de datacenter ça ne suffit pas toujours. Solutions, de la plus fiable à la moins fiable :
-1. **Héberger le bot sur une connexion normale** (un PC allumé avec `pm2`) : YouTube marche sans rien faire.
-2. **Proxy** : mets l'adresse d'un proxy HTTP dans `MUSIC_PROXY` (ex : `http://user:motdepasse@ip:port`). Les proxys « résidentiels » marchent, les proxys de datacenter rarement.
-3. **Cookies YouTube** (marche un temps) : connecte un **compte Google secondaire** sur youtube.com, exporte `cookies.txt` avec l'extension « Get cookies.txt LOCALLY », encode-le en base64 (`base64 -w0 cookies.txt`) et colle le résultat dans `YTDLP_COOKIES`.
+⚠️ Ces serveurs sont tenus par des bénévoles : ils peuvent tomber ou ralentir. Leurs propriétaires voient aussi ce qui est joué.
 
-**Ce que coûte la musique en CPU** (mesuré) : trouver un son ≈ 1 s de CPU (donc ~10-15 s d'attente avec le 0,1 CPU de Render gratuit), jouer un son sans effet ≈ 0 (l'audio est recopié sans réencodage), avec effets ou volume modifié ≈ 1 % d'un processeur. Le son garde plusieurs minutes d'avance en mémoire et supporte jusqu'à 10 s de ralentissement sans couper.
+**Playlists** : YouTube, Deezer, SoundCloud et les albums Apple Music sont chargés en entier. Spotify est limité à 100 titres par playlist (limite de Spotify, même via les serveurs audio).
+
+**Si tu préfères tout faire tourner sans serveur externe** (`MUSIC_ENGINE=local`), YouTube bloque les hébergeurs cloud. Il faut alors une connexion normale (ton PC), un proxy résidentiel (`MUSIC_PROXY`) ou des cookies d'un compte Google secondaire (`YTDLP_COOKIES`).
+
+**Ce que coûte la musique en CPU** : avec les serveurs audio, presque rien (tout le travail est fait chez eux), donc le 0,1 CPU de Render gratuit suffit. Avec le lecteur local : trouver un son ≈ 1 s de CPU (~10-15 s d'attente sur Render gratuit), jouer sans effet ≈ 0 (audio recopié sans réencodage), avec effets ≈ 1 % d'un processeur.
 
 ---
 
@@ -111,7 +115,7 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 | Contacter le chef | `/contacter-chef` |
 | Effacer la mémoire | `/reset` |
 | Images (si activées) | `/image`, `/modifier-image` |
-| Stats / forcer le vocal (chef) | `/admin stats`, `/admin voc` |
+| Stats / vocal / serveurs audio (chef) | `/admin stats`, `/admin voc`, `/admin musique` |
 | Modération | `/clear nombre`, `/kick`, `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/warns`, `/slowmode`, `/lock`, `/unlock`, `/role`, `/say` |
 | Infos | `/userinfo`, `/serverinfo`, `/avatar`, `/ping` |
 | Fun | `/pile-ou-face`, `/de`, `/choisir` |

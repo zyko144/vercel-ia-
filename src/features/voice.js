@@ -7,12 +7,14 @@ import {
 } from '@discordjs/voice';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { config } from '../config.js';
+import { lavalink } from '../music/lavalink.js';
 
 const CHECK_EVERY_MS = 60_000;
 const joining = new Map(); // guildId -> Promise
 const warned = new Set();
 const managed = new WeakSet();
 const musicOverrides = new Map(); // guildId -> channelId
+const externalOwners = new Set(); // serveurs où c'est Lavalink qui tient le vocal
 const readyListeners = new Set();
 
 const normalize = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -65,6 +67,11 @@ async function ensureInVoice(guild) {
 }
 
 async function connect(guild) {
+  if (externalOwners.has(guild.id)) {
+    // Sécurité : si plus aucune musique ne tourne côté serveur audio, on reprend la main
+    if (lavalink.players.has(guild.id)) return;
+    externalOwners.delete(guild.id);
+  }
   const target = findTargetChannel(guild);
   if (!target) {
     if (config.voice.enabled && !warned.has(guild.id)) {
@@ -145,7 +152,7 @@ export function startVoiceKeeper(client) {
 
   // Kick / déplacement du bot -> il revient là où il doit être
   client.on('voiceStateUpdate', (oldState, newState) => {
-    if (newState.id !== client.user.id) return;
+    if (newState.id !== client.user.id || externalOwners.has(newState.guild.id)) return;
     const target = findTargetChannel(newState.guild);
     if (target && newState.channelId !== target.id) {
       setTimeout(() => ensureInVoice(newState.guild).catch(() => {}), 3_000);
@@ -172,7 +179,32 @@ export function releaseMusic(guild) {
   else getVoiceConnection(guild.id)?.destroy();
 }
 
+/** Le serveur audio (Lavalink) prend la main sur le vocal : on libère la connexion locale. */
+export async function takeVoiceForExternal(guild) {
+  const alreadyExternal = externalOwners.has(guild.id);
+  externalOwners.add(guild.id);
+  musicOverrides.delete(guild.id);
+  if (alreadyExternal) return;
+  const connection = getVoiceConnection(guild.id);
+  if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+    connection.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+}
+
+/** Fin de la musique Lavalink : le bot quitte puis retourne dans son vocal habituel. */
+export async function releaseExternalVoice(guild) {
+  if (!externalOwners.has(guild.id)) return;
+  guild.shard.send({ op: 4, d: { guild_id: guild.id, channel_id: null, self_mute: false, self_deaf: false } });
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  externalOwners.delete(guild.id);
+  if (config.voice.enabled) ensureInVoice(guild).catch(() => {});
+}
+
+export const isExternalVoice = (guildId) => externalOwners.has(guildId);
+
 export async function rejoinVoice(guild) {
+  if (externalOwners.has(guild.id)) return false;
   const existing = getVoiceConnection(guild.id);
   if (existing && existing.state.status !== VoiceConnectionStatus.Destroyed) existing.destroy();
   await ensureInVoice(guild);
@@ -181,6 +213,7 @@ export async function rejoinVoice(guild) {
 
 export function voiceStatus(guild) {
   const conn = getVoiceConnection(guild.id);
+  if (externalOwners.has(guild.id)) return 'tenu par le serveur audio (musique)';
   if (!conn) return 'déconnecté';
   const channel = guild.channels.cache.get(conn.joinConfig.channelId);
   return `${conn.state.status} dans #${channel?.name ?? '?'}`;

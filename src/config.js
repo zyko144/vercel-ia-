@@ -22,6 +22,25 @@ if (missing.length) {
   process.exit(1);
 }
 
+// Serveurs audio publics gratuits (testés le 16/09/2026), essayés dans cet ordre
+const DEFAULT_LAVALINK_NODES = [
+  { name: 'kasawa', host: 'lava2.kasawa.pro', port: 2334, password: 'youshallnotpass', secure: false },
+  { name: 'serenetia', host: 'lavalinkv4.serenetia.com', port: 443, password: 'https://seretia.link/discord', secure: true },
+  { name: 'nodelink', host: 'nodelink.triniumhost.com', port: 443, password: 'free', secure: true },
+  { name: 'trinium', host: 'lavalink-v4.triniumhost.com', port: 443, password: 'free', secure: true },
+];
+
+function parseNodes(raw) {
+  if (!raw) return DEFAULT_LAVALINK_NODES;
+  try {
+    const nodes = JSON.parse(raw);
+    return Array.isArray(nodes) && nodes.length ? nodes : DEFAULT_LAVALINK_NODES;
+  } catch {
+    console.error('❌ LAVALINK_NODES doit être du JSON : [{"host":"...","port":443,"password":"...","secure":true}]');
+    return DEFAULT_LAVALINK_NODES;
+  }
+}
+
 export const config = {
   discordToken: str('DISCORD_TOKEN'),
   geminiKey: str('GEMINI_API_KEY'),
@@ -60,6 +79,12 @@ export const config = {
     proImageOwnerOnly: bool('PRO_IMAGE_OWNER_ONLY', true),
     chatCooldownMs: int('CHAT_COOLDOWN_SECONDS', 3) * 1000,
     escalationCooldownMs: int('ESCALATION_COOLDOWN_MINUTES', 10) * 60_000,
+  },
+
+  music: {
+    // auto = Lavalink si dispo, sinon lecteur local · lavalink = uniquement Lavalink · local = uniquement local
+    engine: str('MUSIC_ENGINE', 'auto'),
+    lavalinkNodes: parseNodes(str('LAVALINK_NODES')),
   },
 
   port: int('PORT', 3000),

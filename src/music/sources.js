@@ -3,6 +3,7 @@ import { chatJson } from '../ai/gemini.js';
 import { appleTracks, parseAppleUrl } from './apple.js';
 import { bestMatch, deezer, matchRatio, trackFromDeezer } from './deezer.js';
 import { biggestImage, parseSpotifyUrl, spotifyEntity, spotifyTracks } from './spotify.js';
+import { lavalink } from './lavalink.js';
 import { MusicError, extractAudio, flatPlaylist, streamExpiry } from './ytdlp.js';
 
 export const SOURCES = {
@@ -46,6 +47,42 @@ function trackFromMeta(meta) {
 
 function withStream(track, { streamUrl, meta }) {
   return { ...track, streamUrl, streamExpiresAt: streamExpiry(streamUrl), acodec: meta?.acodec ?? null, protocol: meta?.protocol ?? null };
+}
+
+const LAVALINK_SOURCES = {
+  youtube: 'youtube', ytmusic: 'youtube', youtubemusic: 'youtube', soundcloud: 'soundcloud',
+  spotify: 'spotify', applemusic: 'apple', deezer: 'deezer',
+};
+
+function trackFromLavalink(item) {
+  const info = item.info;
+  const source = LAVALINK_SOURCES[info.sourceName?.toLowerCase()] ?? 'web';
+  return {
+    title: info.title,
+    artist: info.author ?? null,
+    duration: Math.round((info.length ?? 0) / 1000),
+    isLive: Boolean(info.isStream),
+    thumbnail: info.artworkUrl ?? (source === 'youtube' && info.identifier ? youtubeThumb(info.identifier) : null),
+    url: info.uri,
+    playUrl: info.uri,
+    source,
+    query: `${info.author ?? ''} ${info.title}`.trim(),
+  };
+}
+
+/** Passe le lien (ou la recherche) aux serveurs audio : ils gèrent YouTube, SoundCloud et bien d'autres sites. */
+async function resolveWithLavalink(identifier, { searchOnly = false } = {}) {
+  const loaded = await lavalink.loadAny(identifier);
+  if (!loaded) return null;
+  const { result } = loaded;
+  if (result.loadType === 'playlist') {
+    const tracks = result.data.tracks.map(trackFromLavalink);
+    return tracks.length ? { name: result.data.info?.name, isPlaylist: true, tracks } : null;
+  }
+  const items = result.loadType === 'search' ? result.data : [result.data];
+  const first = items?.[0];
+  if (!first) return null;
+  return { tracks: [trackFromLavalink(first)], isPlaylist: false, searched: searchOnly };
 }
 
 async function playlistFromYtDlp(url, source) {
@@ -135,12 +172,14 @@ async function resolveRaw(query, playlistMode) {
     const fromDeezer = /deezer/i.test(query) ? await fromDeezerUrl(query) : null;
     if (fromDeezer) return fromDeezer;
 
-    if (/(youtube\.com|youtu\.be)/i.test(query)) {
-      const list = new URL(query).searchParams.get('list');
-      if (list && (!youtubeId(query) || playlistMode)) return playlistFromYtDlp(query, 'youtube');
-    }
-    if (/soundcloud\.com\/[^/]+\/sets\//i.test(query)) return playlistFromYtDlp(query, 'soundcloud');
+    const youtubeList = /(youtube\.com|youtu\.be)/i.test(query) ? new URL(query).searchParams.get('list') : null;
+    const wholePlaylist = (youtubeList && (!youtubeId(query) || playlistMode)) || /soundcloud\.com\/[^/]+\/sets\//i.test(query);
 
+    // Les serveurs audio savent tout charger (et ne se font pas bloquer par YouTube)
+    const viaLavalink = await resolveWithLavalink(wholePlaylist ? query : query.replace(/[?&]list=[^&]+/, ''));
+    if (viaLavalink) return viaLavalink;
+
+    if (wholePlaylist) return playlistFromYtDlp(query, youtubeList ? 'youtube' : 'soundcloud');
     const extracted = await extractAudio(query);
     return { tracks: [withStream(trackFromMeta(extracted.meta), extracted)] };
   }
@@ -154,6 +193,9 @@ async function resolveRaw(query, playlistMode) {
     if (guessed && matchRatio(query, `${guessed.title} ${guessed.artist?.name ?? ''}`) >= 0.5) match = guessed;
   }
   if (match) return { tracks: [trackFromDeezer(match)] };
+
+  const viaLavalink = await resolveWithLavalink(`ytsearch:${query}`, { searchOnly: true });
+  if (viaLavalink) return viaLavalink;
 
   const extracted = await extractAudio(`ytsearch1:${query}`, { firstResult: true });
   return { tracks: [withStream(trackFromMeta(extracted.meta), extracted)] };
