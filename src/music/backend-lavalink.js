@@ -1,6 +1,7 @@
 // Lecture via un serveur Lavalink : c'est lui qui récupère le son et l'envoie dans le vocal Discord.
 import { config } from '../config.js';
 import { anchorChannel, releaseExternalVoice, takeVoiceForExternal } from '../features/voice.js';
+import { matchRatio } from './deezer.js';
 import { lavalinkFilters, speedOf } from './filters.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
 import { MusicError } from './ytdlp.js';
@@ -11,6 +12,9 @@ const NODE_BROKEN_MS = 10 * 60_000;
 const NODE_STALLS_BEFORE_BREAK = 3; // coupures en pleine lecture sur un serveur avant de le mettre de côté
 const FAST_PLAYBACK_BAN_MS = 60 * 60_000;
 const FAST_RATIO = 1.7; // le son avance 1,7x plus vite que l'horloge : le serveur audio déraille
+// Versions qui ne sont pas le son original (sauf si c'est justement ce qui est demandé)
+const VARIANT = /\b(sped ?up|speed ?up|slowed|reverb|nightcore|8d|bass ?boost(ed)?|karaok[eé]|instrumental|acapella|a cappella|mashup|cover|remix|extended|live|1[.,]\d+ ?x)\b/i;
+const cleanTitle = (text = '') => text.replace(/\s*[([].*?[)\]]/g, ' ').replace(/\s+-\s+.*$/, ' ').replace(/\s*(feat|ft)\.?\s.*$/i, ' ').trim();
 const EARLY_END_MARGIN_S = 15;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const shortError = (text = '') => text.split('\n')[0].slice(0, 120);
@@ -159,15 +163,17 @@ export class LavalinkBackend {
   candidates(track) {
     const query = track.query || `${track.artist ?? ''} ${track.title}`.trim();
     return [...new Set([
+      // Le code ISRC désigne exactement l'enregistrement : c'est la recherche la plus sûre
+      ...(track.isrc ? [`ytmsearch:"${track.isrc}"`] : []),
       ...(track.playUrl ? [track.playUrl] : []),
       `ytmsearch:${query}`,
       `ytsearch:${query}`,
-      `scsearch:${query}`,
+      ...(track.strict ? [] : [`scsearch:${query}`]),
     ])];
   }
 
-  /** Choisit le meilleur résultat : bonne durée, et jamais un extrait de 30 s. */
-  pick(result, track, isSearch) {
+  /** Choisit le meilleur résultat : le bon morceau (titre + artiste), bonne durée, jamais un extrait de 30 s. */
+  pick(result, track, isSearch, identifier = '') {
     let items = [];
     if (result.loadType === 'track') items = [result.data];
     else if (result.loadType === 'search') items = result.data;
@@ -177,8 +183,35 @@ export class LavalinkBackend {
 
     const full = items.filter((item) => item.info.isStream || !track.duration || item.info.length / 1000 >= Math.min(35, track.duration * 0.6));
     if (!isSearch) return full[0] ?? null;
+
+    // Son connu (Deezer, Spotify...) : on vérifie que c'est bien lui, pas un autre son de l'artiste ni une version accélérée
+    const known = Boolean(track.deezerId || track.spotifyId || track.isrc || track.appleId);
+    if (known) {
+      const byIsrc = track.isrc && identifier.includes(track.isrc);
+      const scored = full.map((item) => ({ item, ...this.matchScore(item, track) })).filter((s) => !s.variant);
+      const strictOk = scored
+        .filter((s) => (byIsrc ? s.title >= 0.3 : s.title >= 0.6 && s.artist >= 0.5 && s.gap <= 25))
+        .sort((a, b) => (b.title + b.artist) - (a.title + a.artist) || a.gap - b.gap);
+      if (strictOk[0]) return strictOk[0].item;
+      if (track.strict) return null;
+      const relaxed = scored.filter((s) => s.title >= 0.5 && s.gap <= 30).sort((a, b) => b.title - a.title || a.gap - b.gap);
+      return relaxed[0]?.item ?? null;
+    }
+
     const close = full.find((item) => !track.duration || item.info.isStream || Math.abs(item.info.length / 1000 - track.duration) <= 30);
     return close ?? full[0] ?? null;
+  }
+
+  /** Ressemblance entre un résultat et le son attendu. */
+  matchScore(item, track) {
+    const { info } = item;
+    const expectedTitle = cleanTitle(track.title) || track.title;
+    return {
+      variant: VARIANT.test(info.title ?? '') && !VARIANT.test(track.title ?? ''),
+      title: matchRatio(expectedTitle, info.title ?? ''),
+      artist: track.artist ? matchRatio(track.artist, `${info.author ?? ''} ${info.title ?? ''}`) : 1,
+      gap: track.duration && info.length && !info.isStream ? Math.abs(info.length / 1000 - track.duration) : 0,
+    };
   }
 
   itemKey(item) {
@@ -248,7 +281,7 @@ export class LavalinkBackend {
         let item = null;
         try {
           const result = await this.node.loadTracks(identifier);
-          item = this.pick(result, track, /^\w+search:/.test(identifier));
+          item = this.pick(result, track, /^\w+search:/.test(identifier), identifier);
         } catch (err) {
           lastError = err;
           continue;
@@ -338,7 +371,7 @@ export class LavalinkBackend {
 
     switch (message.type) {
       case 'TrackStartEvent':
-        if (this.player.blind) console.log(`[lavalink] ${this.node?.name} : départ du son (${sameTrack ? 'attendu' : 'AUTRE son'}${pending ? ', en attente' : ''})`);
+        if (sameTrack) this.player.onAudioStart?.(this.player.current);
         if (pending && sameTrack) {
           pending.graceTimer = setTimeout(() => pending.finish(), START_GRACE_MS);
         }
@@ -565,6 +598,23 @@ export class LavalinkBackend {
     return this.node?.updatePlayer(this.guild.id, { track: { encoded: null } }).catch(() => {});
   }
 
+  /** Trouve et valide la bonne version d'un son à l'avance. true = prêt à démarrer instantanément. */
+  async prepare(track) {
+    if (!this.node?.usable) this.node = lavalink.bestNode();
+    if (!this.node) return false;
+    if (track.lavalinkReady?.node === this.node.name) return true;
+    for (const identifier of this.candidates(track)) {
+      const result = await this.node.loadTracks(identifier).catch(() => null);
+      const item = result && this.pick(result, track, /^\w+search:/.test(identifier), identifier);
+      if (item) {
+        track.lavalinkReady = { node: this.node.name, item };
+        this.applyMetadata(track, item);
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Prépare le son suivant pendant que le son actuel joue : le passage devient instantané. */
   async preload(track) {
     if (!track || !this.node?.usable || track.preloading) return;
@@ -573,7 +623,7 @@ export class LavalinkBackend {
     try {
       for (const identifier of this.candidates(track)) {
         const result = await this.node.loadTracks(identifier).catch(() => null);
-        const item = result && this.pick(result, track, /^\w+search:/.test(identifier));
+        const item = result && this.pick(result, track, /^\w+search:/.test(identifier), identifier);
         if (item) {
           track.lavalinkReady = { node: this.node.name, item };
           this.applyMetadata(track, item);

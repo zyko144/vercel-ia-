@@ -1,7 +1,7 @@
 // API d'admin (protégée par la clé dérivée du token) : lire les logs, voir l'état du bot, tester le blind test.
 import { lavalink } from './music/lavalink.js';
 import { allPlayers } from './music/player.js';
-import { blindTestState, handleBlindTestMessage, startBlindTest, stopBlindTest } from './music/blindtest.js';
+import { blindTestState, handleBlindTestMessage, startGame, stopBlindTest } from './music/blindtest.js';
 import { recentLogs } from './utils/logbuffer.js';
 
 export function adminRoutes(client) {
@@ -38,38 +38,29 @@ export function adminRoutes(client) {
       const guild = guildOf(body.guildId);
       if (body.action === 'stop') return { stopped: stopBlindTest(guild.id) };
       if (body.action === 'guess') {
+        const channel = await client.channels.fetch(body.textChannelId);
         const handled = handleBlindTestMessage({
           guildId: guild.id,
           channelId: body.textChannelId,
           content: String(body.text ?? ''),
           author: { id: body.userId ?? client.user.id },
-          member: null,
           react: async () => {},
-          reply: async () => {},
+          reply: (payload) => channel.send(payload),
         });
-        return { handled };
+        return { handled, state: blindTestState() };
       }
       if (body.action === 'start') {
         const voiceChannel = guild.channels.cache.get(body.voiceChannelId);
         if (!voiceChannel) throw new Error('salon vocal introuvable');
-        const replies = [];
-        const interaction = {
-          guildId: guild.id,
+        await startGame(client, {
           guild,
           channelId: body.textChannelId,
-          user: { id: client.user.id },
-          editReply: async (content) => replies.push(content),
-        };
-        await startBlindTest(client, interaction, {
-          theme: body.theme ?? null,
-          rounds: body.rounds ?? 5,
-          snippetSeconds: body.snippet ?? 15,
-          difficulty: body.difficulty,
           voiceChannel,
-          textChannelId: body.textChannelId,
-          forceVoice: true,
+          hostId: body.userId ?? client.user.id,
+          settings: { theme: body.theme ?? 'recent', customTheme: body.customTheme ?? '', difficulty: body.difficulty ?? 'normal', rounds: body.rounds ?? 3 },
+          allowEmptyVoice: true,
         });
-        return { replies };
+        return { state: blindTestState() };
       }
       throw new Error('action inconnue (start, guess, stop)');
     },

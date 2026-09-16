@@ -1,10 +1,36 @@
 // API publique Deezer (sans clé) : recherche, popularité, pochettes, charts, radios d'artiste.
 const API = 'https://api.deezer.com';
 
-async function call(pathOrUrl) {
+// Deezer limite à 50 requêtes par 5 s : on reste en dessous, et on réessaie si la limite est quand même atteinte
+const WINDOW_MS = 5_000;
+const MAX_PER_WINDOW = 40;
+const sent = [];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function waitForSlot() {
+  for (;;) {
+    const now = Date.now();
+    while (sent.length && now - sent[0] > WINDOW_MS) sent.shift();
+    if (sent.length < MAX_PER_WINDOW) {
+      sent.push(now);
+      return;
+    }
+    await sleep(WINDOW_MS - (now - sent[0]) + 20);
+  }
+}
+
+async function call(pathOrUrl, attempt = 0) {
+  await waitForSlot();
   const res = await fetch(pathOrUrl.startsWith('http') ? pathOrUrl : `${API}${pathOrUrl}`, { signal: AbortSignal.timeout(8_000) });
   const data = await res.json();
-  if (data?.error) throw new Error(`Deezer : ${data.error.message ?? 'erreur'}`);
+  if (data?.error) {
+    // Code 4 = limite de requêtes atteinte : on patiente un peu et on réessaie
+    if (data.error.code === 4 && attempt < 3) {
+      await sleep(1_500 * (attempt + 1));
+      return call(pathOrUrl, attempt + 1);
+    }
+    throw new Error(`Deezer : ${data.error.message ?? 'erreur'}`);
+  }
   return data;
 }
 

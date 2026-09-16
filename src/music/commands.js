@@ -1,4 +1,5 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
+import { DIFFICULTIES, THEMES } from './blindpools.js';
 import { FILTERS } from './filters.js';
 
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
@@ -84,10 +85,13 @@ export const musicCommands = [
   new SlashCommandBuilder().setName('autoplay').setDescription('Enchaîne des sons du même style quand la file est vide'),
   new SlashCommandBuilder().setName('lyrics').setDescription('Affiche les paroles (du son en cours ou d\'un autre)')
     .addStringOption((o) => searchOption(o, false)),
-  new SlashCommandBuilder().setName('blindtest').setDescription('Lance un blind test : devine les sons dans le salon')
-    .addStringOption((o) => o.setName('theme').setDescription('Ex : rap fr, années 2000, rock, « serveur » pour vos sons').setMaxLength(100))
-    .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de sons (3-20, défaut 8)').setMinValue(3).setMaxValue(20))
-    .addIntegerOption((o) => o.setName('duree').setDescription("Durée de l'extrait en secondes (10-45, défaut 25)").setMinValue(10).setMaxValue(45))
+  new SlashCommandBuilder().setName('blindtest').setDescription('Blind test : sans option, ouvre le menu (thème, difficulté, manches)')
+    .addStringOption((o) => o.setName('theme').setDescription('Thème (lance direct la partie)')
+      .addChoices(...Object.entries(THEMES).filter(([key]) => key !== 'custom').map(([key, theme]) => ({ name: `${theme.emoji} ${theme.label}`, value: key }))))
+    .addStringOption((o) => o.setName('difficulte').setDescription('Difficulté')
+      .addChoices(...Object.entries(DIFFICULTIES).map(([key, level]) => ({ name: `${level.emoji} ${level.label} (${level.snippet} s)`, value: key }))))
+    .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
+    .addStringOption((o) => o.setName('theme_perso').setDescription('Ton propre thème : afro trap, Jul, années 2000…').setMaxLength(80))
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête le blind test en cours')),
 
   new SlashCommandBuilder().setName('karaoke').setDescription('Joue un son sans la voix, avec les paroles en direct')

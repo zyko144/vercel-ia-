@@ -10,7 +10,7 @@ import {
 } from 'discord.js';
 import { config } from '../config.js';
 import { musicSuggestions } from './autocomplete.js';
-import { blindTestActive, handleBlindTestMessage, startBlindTest, stopBlindTest } from './blindtest.js';
+import { blindTestActive, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './blindtest.js';
 import { deezer, rankResults, trackFromDeezer } from './deezer.js';
 import { musicStats } from './stats.js';
 import { FILTERS, filtersLabel } from './filters.js';
@@ -546,16 +546,31 @@ const COMMANDS = {
       return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Blind test arrêté.' : "Y a pas de blind test en cours."));
     }
     if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎧 Un blind test est déjà en cours ! (`/blindtest arreter:true` pour le couper)'));
+
+    const theme = interaction.options.getString('theme');
+    const custom = interaction.options.getString('theme_perso');
+    const difficulty = interaction.options.getString('difficulte');
+    const rounds = interaction.options.getInteger('manches');
+    // Sans option : menu de réglages (thème, difficulté, manches)
+    if (!theme && !custom && !difficulty && !rounds) return openBlindTestSetup(client, interaction);
+
+    // Avec des options : la partie démarre direct
     const { channel, error } = joinProblem(interaction);
     if (error) return interaction.reply(say(error));
-
-    await interaction.deferReply(PRIVATE);
-    return startBlindTest(client, interaction, {
-      theme: interaction.options.getString('theme'),
-      rounds: interaction.options.getInteger('manches') ?? 8,
-      snippetSeconds: interaction.options.getInteger('duree') ?? 25,
+    const channelId = config.music.blindtestChannelId || interaction.channelId;
+    await interaction.reply(say(`🎧 C'est parti ! Ça se passe dans <#${channelId}>.`));
+    return startGame(client, {
+      guild: interaction.guild,
+      channelId,
       voiceChannel: channel,
-    });
+      hostId: interaction.user.id,
+      settings: {
+        theme: custom ? 'custom' : theme ?? 'recent',
+        customTheme: custom ?? '',
+        difficulty: difficulty ?? 'normal',
+        rounds: rounds ?? 10,
+      },
+    }).catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
   },
 
   async karaoke(client, interaction) {

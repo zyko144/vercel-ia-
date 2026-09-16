@@ -13,6 +13,7 @@ import { load, save } from '../storage.js';
 const CHECK_EVERY_MS = 20_000;
 const ANCHOR_KEY = 'voice-anchor';
 const anchors = new Map(); // guildId -> dernier salon vocal du chef (le bot y reste)
+const holds = new Map(); // guildId -> salon bloqué (blind test en cours : le bot ne bouge pas)
 const joining = new Map(); // guildId -> Promise
 const warned = new Set();
 const managed = new WeakSet();
@@ -50,6 +51,20 @@ export function homeChannel(guild) {
   return null;
 }
 
+/** Pendant un blind test le bot reste dans le salon de la partie, même si le chef bouge. */
+export function holdVoice(guildId, channelId) {
+  holds.set(guildId, channelId);
+}
+
+export function releaseVoiceHold(guildId) {
+  holds.delete(guildId);
+}
+
+export function heldChannel(guild) {
+  const channel = guild.channels.cache.get(holds.get(guild.id));
+  return channel && isVoice(channel) ? channel : null;
+}
+
 /** Salon vocal où est le chef en ce moment (null s'il n'est pas en vocal, ou dans le salon AFK). */
 export function followedChannel(guild) {
   if (!config.voice.followOwner || !config.ownerId) return null;
@@ -80,6 +95,8 @@ export function findTargetChannel(guild) {
   const musicChannelId = musicOverrides.get(guild.id);
   const musicChannel = musicChannelId && guild.channels.cache.get(musicChannelId);
   if (musicChannel) return musicChannel;
+  const held = heldChannel(guild);
+  if (held) return held;
   return config.voice.enabled ? anchorChannel(guild) : null;
 }
 
@@ -103,7 +120,7 @@ async function connect(guild) {
     if (busy) return;
     // Le serveur audio tient le vocal : on vérifie juste que le bot est bien avec le chef
     if (backend && botChannelId) {
-      const target = config.voice.enabled ? anchorChannel(guild) : null;
+      const target = findTargetChannel(guild);
       if (target && target.id !== botChannelId) await backend.moveTo(target.id).catch((err) => console.warn('[voc] déplacement :', err.message));
       return;
     }
@@ -206,6 +223,7 @@ export async function startVoiceKeeper(client) {
       const channel = followedChannel(guild);
       if (!channel) return;
       rememberAnchor(guild, channel);
+      if (holds.has(guild.id)) return; // blind test en cours : le bot reste avec les joueurs
       console.log(`[voc] le chef est dans #${channel.name}, je le suis`);
       setTimeout(() => followNow(guild).catch((err) => console.warn('[voc] suivre le chef :', err.message)), 700);
       return;

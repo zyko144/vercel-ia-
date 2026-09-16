@@ -1,4 +1,5 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { handleBlindTestComponent, isBlindTestComponent } from '../music/blindtest.js';
 import { config } from '../config.js';
 import { chat, describeError, errorDetail } from '../ai/gemini.js';
 import { toolPrompt } from '../ai/persona.js';
@@ -39,6 +40,7 @@ export async function onInteraction(client, interaction) {
       return await interaction.respond([]);
     }
     // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
+    if (isBlindTestComponent(interaction)) return await handleBlindTestComponent(client, interaction);
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('report:')) return await handleReportButton(client, interaction);
