@@ -14,7 +14,14 @@ export function adminRoutes(client) {
       grep: url.searchParams.get('grep') ?? '',
     }),
 
-    'GET /admin/state': async () => ({
+    'GET /admin/state': async () => {
+      // Ce que le serveur audio joue vraiment (pour vérifier qu'il n'y a pas de décalage avec le jeu)
+      const playing = {};
+      for (const player of allPlayers()) {
+        const state = await player.backend?.fetchState?.().catch(() => null);
+        if (state?.track) playing[player.guild.id] = { title: `${state.track.info.author} - ${state.track.info.title}`, position: Math.round(state.state.position / 1000), connected: state.state.connected, paused: state.paused, filters: Object.keys(state.filters ?? {}) };
+      }
+      return {
       uptime: Math.round(process.uptime()),
       voice: client.guilds.cache.map((guild) => ({
         guild: guild.name,
@@ -34,7 +41,9 @@ export function adminRoutes(client) {
       nodes: lavalink.status(),
       nodeLog: lavalink.logs?.slice(-25) ?? [],
       blindtests: blindTestState(),
-    }),
+      playing,
+    };
+    },
 
     // Partie de test dans un salon précis (ex : { action: 'start', textChannelId, voiceChannelId, theme, rounds, difficulty })
     'POST /admin/blindtest': async (url, body) => {
