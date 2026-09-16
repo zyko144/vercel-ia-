@@ -18,8 +18,8 @@ const PL = {
 // (« Certifié » et les mix Filtr contiennent aussi des tubes étrangers, ils ne comptent pas ici)
 const FRENCH_RAP_PLAYLISTS = [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.best2024, PL.best2023, PL.rapstars2020, PL.rap2324];
 const FRENCH_ISRC = new Set(['FR', 'BE', 'CH', 'LU', 'MC']);
-// Titres qui ne disent rien en blind test, ou versions qui ne ressemblent pas au son connu
-const BAD_TITLE = /\b(intro|outro|interlude|skit|freestyle|live|session|colors show|acoustique|acoustic|remix|instrumental|sped up|slowed)\b/i;
+// Titres qui ne disent rien en blind test, ou versions qui ne ressemblent pas au son connu (live, remix, émission TV...)
+const BAD_TITLE = /\b(intro|outro|interlude|skit|freestyle|live|session|colors show|acoustique|acoustic|remix|instrumental|sped up|slowed|nouvelle [ée]cole)\b/i;
 
 export const THEMES = {
   moment: { label: 'Sons du moment (2025-2026)', emoji: '🔥', french: true, years: [2025, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.rap2026] },
