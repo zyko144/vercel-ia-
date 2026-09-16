@@ -142,17 +142,17 @@ async function aiGuess(query) {
 
 /**
  * @param {string} input
- * @param {{ requestedBy: string, playlistMode?: boolean }} opts playlistMode = lien YouTube avec &list= -> toute la playlist
+ * @param {{ requestedBy: string, playlistMode?: boolean, fast?: boolean }} opts fast = ajout en masse (pas d'IA, résultats sûrs uniquement) playlistMode = lien YouTube avec &list= -> toute la playlist
  * @returns {Promise<{ tracks: object[], name?: string, isPlaylist?: boolean, cover?: string }>}
  */
-export async function resolveQuery(input, { requestedBy, playlistMode = false }) {
+export async function resolveQuery(input, { requestedBy, playlistMode = false, fast = false }) {
   const query = input.trim();
-  const result = await resolveRaw(query, playlistMode);
+  const result = await resolveRaw(query, playlistMode, fast);
   result.tracks = result.tracks.slice(0, MAX_QUEUE_ADD).map((track) => ({ ...track, requestedBy }));
   return result;
 }
 
-async function resolveRaw(query, playlistMode) {
+async function resolveRaw(query, playlistMode, fast = false) {
   // Choix venant des suggestions
   if (/^dz:\d+$/.test(query)) return { tracks: [trackFromDeezer(await deezer.track(query.slice(3)))] };
 
@@ -186,6 +186,17 @@ async function resolveRaw(query, playlistMode) {
 
   // Texte : Deezer pour trouver le bon son (et sa pochette), puis l'IA si besoin, puis YouTube direct
   let match = await bestMatch(query);
+
+  // Ajout en masse : pas d'IA (trop lent) et pas de résultat approximatif
+  if (fast) {
+    if (match) return { tracks: [trackFromDeezer(match)] };
+    const fromMusic = await resolveWithLavalink(`ytmsearch:${query}`, { searchOnly: true });
+    const found = fromMusic?.tracks?.[0];
+    // On n'ajoute pas un son au hasard : il doit vraiment ressembler à ce qui est demandé
+    if (found && matchRatio(query, `${found.title} ${found.artist ?? ''}`) >= 0.7) return fromMusic;
+    throw new MusicError('son introuvable');
+  }
+
   if (!match) {
     const guess = await aiGuess(query);
     const guessed = guess ? await bestMatch(guess) : null;

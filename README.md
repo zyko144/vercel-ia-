@@ -64,7 +64,8 @@ npm start
 
 - `/play` : nom du son (suggestions en tapant, les plus connus en premier, fautes de frappe acceptées) ou lien **Spotify, Apple Music, YouTube, SoundCloud, Deezer**.
 - Panneau public « En cours de lecture » : pochette, titre cliquable vers le son, barre de progression, et boutons ⏮️ ⏸️ ⏭️ ⏹️ 🔀 🔉 🔊 🔁 🎧 8D 📜, menu des effets (8D, bass boost, nightcore, slowed + reverb, vaporwave, accéléré, karaoké, écho, tremolo, vibrato, surround), 🎤 paroles, ➕ ajouter, ❤️ favoris, ♾️ autoplay.
-- `/playlist` : jouer un lien de playlist/album, **playlist générée par l'IA** selon une ambiance, et playlists perso (créer, ajouter, retirer, voir, lancer, supprimer).
+- `/playlist` : jouer un lien de playlist/album, **playlist générée par l'IA** selon une ambiance, et playlists perso.
+- **Remplir une playlist vite fait** : `/playlist importer` (une playlist Spotify/YouTube/Apple/Deezer entière d'un coup), `/playlist ajouter-plusieurs` (une fenêtre s'ouvre : un son par ligne, jusqu'à 100), `/playlist ajouter-file` (toute la file d'attente), `/playlist creer` avec un lien, ou `/playlist ajouter` avec plusieurs sons séparés par `|`. Les sons introuvables sont listés dans la réponse.
 - Le bot rejoint le vocal de la personne qui lance la musique, puis retourne dans son vocal habituel 3 min après la fin (ou tout de suite avec `/stop`). Il coupe tout seul si le vocal est vide depuis 2 min.
 - Pour contrôler la musique, il faut être dans le même vocal que le bot (les admins et le chef peuvent toujours).
 - **Paroles en direct** (`/lyrics` ou le bouton 🎤) : la ligne chantée est surlignée et suit la musique, comme sur Spotify. Si le son n'a pas de paroles synchronisées, il affiche les paroles normales.

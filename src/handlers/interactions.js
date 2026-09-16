@@ -305,7 +305,7 @@ const SLASH_HANDLERS = {
         ...(config.limits.imagesEnabled ? [{ name: '🎨 Images', value: '`/image` génère · `/modifier-image` retouche' }] : []),
         { name: '🧰 Pratique', value: '`/rappel` rappel en MP · `/sondage` sondage public · `/contacter-chef` écrire au chef · `/clear` efface ta conv IA · `/reset` efface juste la mémoire' },
         { name: '🛡️ Modération', value: '`/clear nombre` · `/kick` · `/ban` · `/unban` · `/mute` · `/unmute` · `/warn` · `/warns` · `/slowmode` · `/lock` · `/unlock` · `/role` · `/say`' },
-        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (lien, créée par IA, perso) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct, surlignées) · `/join` · `/leave`' },
+        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (importer un lien, plein de sons d'un coup, playlist IA) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct, surlignées) · `/join` · `/leave`' },
         { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/pile-ou-face` · `/de` · `/choisir` · `/ping`' },
         { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français**' },
         { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },

@@ -16,6 +16,7 @@ import { getOrCreatePlayer, getPlayer } from './player.js';
 import * as playlists from './playlists.js';
 import { aiPlaylist, resolveQuery } from './sources.js';
 import { nowPlayingPayload, parseTime, queuePayload, trackLine } from './ui.js';
+import { truncate } from '../utils/discord.js';
 import { MusicError } from './ytdlp.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
@@ -82,6 +83,76 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
 
 const stamp = (tracks, userId) => tracks.map((t) => ({ ...t, requestedBy: userId, streamUrl: null }));
 
+// ===== Remplir une playlist perso rapidement =====
+
+const MAX_ENTRIES = 100;
+const splitEntries = (text) => text.split(/[\n|;]+/).map((s) => s.trim()).filter(Boolean);
+
+/** Cherche plusieurs sons en parallèle, en gardant l'ordre. */
+async function resolveMany(entries, userId) {
+  const wanted = entries.slice(0, MAX_ENTRIES);
+  const results = new Array(wanted.length).fill(null);
+  const missing = [];
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < wanted.length) {
+      const index = cursor++;
+      const entry = wanted[index];
+      try {
+        const found = await resolveQuery(entry, { requestedBy: userId, playlistMode: true, fast: true });
+        if (found.tracks.length) results[index] = found.tracks;
+        else missing.push(entry);
+      } catch {
+        missing.push(entry);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
+
+  return { tracks: results.filter(Boolean).flat(), missing, ignored: Math.max(0, entries.length - MAX_ENTRIES) };
+}
+
+/** Enregistre les sons dans la playlist et répond avec le résumé. */
+async function saveTracks(interaction, userId, name, tracks, from = '', missing = [], ignored = 0) {
+  const { error, playlist, added } = await playlists.addToPlaylist(userId, name, tracks);
+  if (error) return interaction.editReply(`❌ ${error}`);
+
+  const duplicates = tracks.length - added;
+  const details = [
+    duplicates > 0 ? `${duplicates} déjà dedans` : '',
+    missing.length ? `${missing.length} introuvable(s) : ${truncate(missing.join(', '), 300)}` : '',
+    ignored > 0 ? `${ignored} ligne(s) ignorée(s) (max ${MAX_ENTRIES})` : '',
+  ].filter(Boolean);
+
+  const summary = added
+    ? `✅ **${added} son(s)** ajouté(s)${from ? ` ${from}` : ''} à **${playlist.name}** (${playlist.tracks.length} au total).`
+    : `Rien de nouveau à ajouter à **${playlist.name}** 👌`;
+  return interaction.editReply(`${summary}${details.length ? `\n-# ${details.join(' · ')}` : ''}\n-# Écoute-la avec \`/playlist lancer nom:${playlist.name}\``);
+}
+
+/** Importe une playlist / un album entier dans une playlist perso. */
+async function importLink(interaction, userId, name, link) {
+  const result = await resolveQuery(link, { requestedBy: userId, playlistMode: true }).catch((err) => ({ error: err.message }));
+  if (result.error || !result.tracks?.length) {
+    return interaction.editReply(`😕 J'ai pas réussi à lire ce lien${result.error ? ` (${result.error})` : ''}. Il est peut-être privé.`);
+  }
+  return saveTracks(interaction, userId, name, result.tracks, result.name ? `depuis **${result.name}**` : '');
+}
+
+/** Fenêtre « un son par ligne ». */
+export async function handlePlaylistModal(client, interaction) {
+  const name = interaction.customId.slice('music:playlist-add:'.length);
+  await interaction.deferReply(PRIVATE);
+  const entries = splitEntries(interaction.fields.getTextInputValue('sons'));
+  if (!entries.length) return interaction.editReply('Aucun son dans la liste 🤔');
+
+  await interaction.editReply(`🔎 Je cherche **${Math.min(entries.length, MAX_ENTRIES)} sons**…`);
+  const { tracks, missing, ignored } = await resolveMany(entries, interaction.user.id);
+  if (!tracks.length) return interaction.editReply(`😕 J'ai trouvé aucun de ces sons : ${truncate(missing.join(', '), 800)}`);
+  return saveTracks(interaction, interaction.user.id, name, tracks, '', missing, ignored);
+}
+
 // ===== Commandes =====
 
 const COMMANDS = {
@@ -118,26 +189,58 @@ const COMMANDS = {
         });
       }
       case 'creer': {
+        const link = interaction.options.getString('lien');
         const { error, playlist } = await playlists.createPlaylist(userId, interaction.options.getString('nom', true));
-        return interaction.reply(say(error ? `❌ ${error}` : `✅ Playlist **${playlist.name}** créée ! Ajoute des sons avec \`/playlist ajouter\` ou le bouton ❤️.`));
+        if (error) return interaction.reply(say(`❌ ${error}`));
+        if (!link) {
+          return interaction.reply(say(`✅ Playlist **${playlist.name}** créée ! Remplis-la vite avec \`/playlist importer\` (lien), \`/playlist ajouter-plusieurs\` (plein de sons d'un coup) ou le bouton ❤️.`));
+        }
+        await interaction.deferReply(PRIVATE);
+        return importLink(interaction, userId, playlist.name, link);
+      }
+      case 'importer': {
+        await interaction.deferReply(PRIVATE);
+        return importLink(interaction, userId, interaction.options.getString('nom', true), interaction.options.getString('lien', true));
+      }
+      case 'ajouter-plusieurs': {
+        const name = interaction.options.getString('nom', true);
+        if (!(await playlists.getPlaylist(userId, name))) {
+          return interaction.reply(say(`❌ Tu as pas de playlist « ${name} ». Crée-la avec \`/playlist creer\`.`));
+        }
+        return interaction.showModal(new ModalBuilder()
+          .setCustomId(`music:playlist-add:${name}`)
+          .setTitle(truncate(`➕ Ajouter à ${name}`, 45))
+          .addLabelComponents(new LabelBuilder()
+            .setLabel('Un son par ligne')
+            .setDescription('Noms ou liens (Spotify, YouTube…), 100 lignes max')
+            .setTextInputComponent(new TextInputBuilder()
+              .setCustomId('sons')
+              .setStyle(TextInputStyle.Paragraph)
+              .setPlaceholder('ninho jefe\nlaylow maladresse\nhttps://open.spotify.com/track/...')
+              .setRequired(true)
+              .setMaxLength(4000))));
+      }
+      case 'ajouter-file': {
+        await interaction.deferReply(PRIVATE);
+        const player = getPlayer(interaction.guildId);
+        const tracks = [...(player?.current ? [player.current] : []), ...(player?.queue ?? [])];
+        if (!tracks.length) return interaction.editReply("🎵 La file d'attente est vide.");
+        return saveTracks(interaction, userId, interaction.options.getString('nom', true), tracks, "depuis la file d'attente");
       }
       case 'ajouter': {
         await interaction.deferReply(PRIVATE);
         const name = interaction.options.getString('nom', true);
         const query = interaction.options.getString('recherche');
-        let tracks;
-        if (query) {
-          tracks = (await resolveQuery(query, { requestedBy: userId })).tracks;
-        } else {
+        if (!query) {
           const current = getPlayer(interaction.guildId)?.current;
-          if (!current) return interaction.editReply('🎵 Y a rien en cours : précise le son à ajouter dans `recherche`.');
-          tracks = [current];
+          if (!current) return interaction.editReply('🎵 Y a rien en cours : précise le ou les sons dans `recherche` (séparés par `|`).');
+          return saveTracks(interaction, userId, name, [current]);
         }
-        const { error, playlist, added } = await playlists.addToPlaylist(userId, name, tracks);
-        if (error) return interaction.editReply(`❌ ${error}`);
-        return interaction.editReply(added
-          ? `✅ ${added > 1 ? `**${added} sons** ajoutés` : `${trackLine(tracks[0])} ajouté`} à **${playlist.name}** (${playlist.tracks.length} sons).`
-          : `Ce son est déjà dans **${playlist.name}** 👌`);
+        // Plusieurs sons d'un coup : "ninho jefe | laylow maladresse | ..."
+        const entries = splitEntries(query);
+        const { tracks, missing } = await resolveMany(entries, userId);
+        if (!tracks.length) return interaction.editReply(`😕 J'ai rien trouvé pour : ${missing.join(', ')}`);
+        return saveTracks(interaction, userId, name, tracks, '', missing);
       }
       case 'retirer': {
         const { error, playlist, removed } = await playlists.removeFromPlaylist(userId, interaction.options.getString('nom', true), interaction.options.getInteger('position', true));
@@ -409,6 +512,7 @@ export async function handleMusicComponent(client, interaction) {
   }
 
   if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith('music:playlist-add:')) return handlePlaylistModal(client, interaction);
     const { error } = joinProblem(interaction);
     if (error) return interaction.reply(say(error));
     await interaction.deferReply(PRIVATE);
