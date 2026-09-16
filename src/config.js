@@ -72,7 +72,7 @@ export const config = {
   // Réponses visibles seulement par la personne (fil privé + messages éphémères)
   privateReplies: bool('PRIVATE_REPLIES', true),
   // Salons où écrire un nom de son l'ajoute direct à la file (jukebox)
-  jukeboxChannelIds: list('JUKEBOX_CHANNEL_IDS'),
+  jukeboxChannelIds: list('JUKEBOX_CHANNEL_IDS', '1549131947094048828,1549504182145392670'),
   // Salon où arrivent les signalements (vide = MP au chef)
   staffChannelId: str('STAFF_CHANNEL_ID'),
 
