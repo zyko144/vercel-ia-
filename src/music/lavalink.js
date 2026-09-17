@@ -5,7 +5,7 @@ import { config } from '../config.js';
 
 const RECONNECT_MIN_MS = 5_000;
 const RECONNECT_MAX_MS = 5 * 60_000;
-const RATE_LIMITED_MS = 10 * 60_000; // serveur public qui limite les connexions : on le laisse respirer
+const RATE_LIMITED_MS = 4 * 60_000; // serveur public qui limite les connexions : on le laisse respirer
 const RESUME_TIMEOUT_S = 60;
 const LOG_SIZE = 25;
 
@@ -61,16 +61,15 @@ class LavalinkNode {
     });
     ws.on('close', (code) => {
       if (this.ws !== ws) return;
+      const limited = code === 4000 || /too many/i.test(this.lastError ?? '');
       const wasConnected = this.connected;
       this.connected = false;
       if (wasConnected) this.manager.log(`${this.name} déconnecté (code ${code})`);
       // Pourquoi on n'arrive pas à s'y connecter (utile quand un serveur public nous bloque)
-      else if (this.attempts % 4 === 0) this.manager.log(`${this.name} injoignable (code ${code}${this.lastError ? ' · ' + this.lastError.slice(0, 80) : ''})`);
+      else if (limited || this.attempts % 4 === 0) this.manager.log(`${this.name} injoignable (code ${code}${this.lastError ? ' · ' + this.lastError.slice(0, 80) : ''})${limited ? ` · nouvelle tentative dans ${RATE_LIMITED_MS / 60_000} min` : ''}`);
       this.manager.nodeDown(this);
       // Session refusée (déjà expirée côté serveur) : on repart de zéro au lieu de boucler dans le vide
       if (code === 4000 || this.attempts >= 1) this.sessionId = null;
-      // Serveur public qui nous limite (« trop de connexions ») : on attend longtemps avant de réessayer
-      const limited = code === 4000 || /too many/i.test(this.lastError ?? '');
       const delay = limited ? RATE_LIMITED_MS : Math.min(RECONNECT_MAX_MS, RECONNECT_MIN_MS * 2 ** Math.min(this.attempts++, 6));
       setTimeout(() => this.connect(), delay);
     });
