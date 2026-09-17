@@ -58,7 +58,7 @@ function controlProblem(interaction, player) {
 /** Vérifie qu'on peut lancer de la musique pour ce membre. */
 function joinProblem(interaction) {
   // Vocal verrouillé : la musique se joue toujours dans le vocal du bot, pas besoin d'être en vocal
-  const locked = lockedChannel(interaction.guild);
+  const locked = lockedChannel(interaction.guild, interaction.member?.voice?.channel ?? null);
   if (locked) return { channel: locked };
   const channel = interaction.member?.voice?.channel;
   if (!channel) return { error: "🎧 Rejoins d'abord un salon vocal, puis relance la commande." };
@@ -143,7 +143,7 @@ export async function handleJukeboxMessage(client, message) {
   if (!text || text.length > 500 || /^[/!?.>]/.test(text)) return;
   if (blindTestActive(message.guildId)) return;
 
-  const voiceChannel = lockedChannel(message.guild) ?? message.member?.voice?.channel;
+  const voiceChannel = lockedChannel(message.guild, message.member?.voice?.channel ?? null) ?? message.member?.voice?.channel;
   if (!voiceChannel) {
     await message.react('🔇').catch(() => {});
     return;

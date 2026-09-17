@@ -69,7 +69,7 @@ export class GuildPlayer {
   async connect(voiceChannel, { force = false } = {}) {
     // Le bot ne quitte jamais le chef : si le chef est en vocal, la musique se joue dans son salon
     // Vocal verrouillé : toujours le vocal du bot, quoi qu'on demande
-    const locked = lockedChannel(this.guild);
+    const locked = lockedChannel(this.guild, voiceChannel);
     if (locked) voiceChannel = locked;
     else if (!force) voiceChannel = heldChannel(this.guild) ?? followedChannel(this.guild) ?? voiceChannel;
     const wantLavalink = config.music.engine !== 'local' && lavalink.available;

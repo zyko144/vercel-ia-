@@ -51,9 +51,24 @@ export function homeChannel(guild) {
   return null;
 }
 
-/** Vocal verrouillé : le seul salon où le bot a le droit d'aller (null si pas de verrou). */
-export function lockedChannel(guild) {
-  return config.voice.lockHome ? homeChannel(guild) : null;
+/** Salon vocal autorisé en plus du salon habituel (bureau…). */
+export function isAllowedVoice(guild, channel) {
+  if (!channel) return false;
+  return channel.id === homeChannel(guild)?.id || config.voice.extraChannels.includes(channel.id);
+}
+
+/**
+ * Vocal verrouillé : le bot ne va que dans son salon... sauf dans les salons autorisés en plus.
+ * @param {import('discord.js').Guild} guild
+ * @param {import('discord.js').VoiceBasedChannel|null} [wanted] salon demandé (s'il est autorisé, il est gardé)
+ */
+export function lockedChannel(guild, wanted = null) {
+  if (!config.voice.lockHome) return null;
+  if (wanted && config.voice.extraChannels.includes(wanted.id)) return wanted;
+  // Déjà dans un salon autorisé (on l'y a emmené) : il y reste
+  const current = guild.members.me?.voice?.channel;
+  if (!wanted && current && config.voice.extraChannels.includes(current.id)) return current;
+  return homeChannel(guild);
 }
 
 /** Pendant un blind test le bot reste dans le salon de la partie, même si le chef bouge. */
@@ -99,7 +114,7 @@ export function anchorChannel(guild) {
 }
 
 export function findTargetChannel(guild) {
-  if (config.voice.lockHome) return homeChannel(guild);
+  if (config.voice.lockHome) return lockedChannel(guild);
   const musicChannelId = musicOverrides.get(guild.id);
   const musicChannel = musicChannelId && guild.channels.cache.get(musicChannelId);
   if (musicChannel) return musicChannel;

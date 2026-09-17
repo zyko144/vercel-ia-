@@ -265,7 +265,7 @@ export async function handleBlindTestComponent(client, interaction) {
       setups.delete(messageId);
       return interaction.update({ embeds: [settingsEmbed(setup, '❌ Partie annulée.')], components: [] });
     case 'start': {
-      const voiceChannel = lockedChannel(interaction.guild) ?? interaction.member?.voice?.channel ?? (SILENT_MODES.has(setup.settings.mode) ? interaction.guild.channels.cache.get(config.voice.channelId) : null);
+      const voiceChannel = lockedChannel(interaction.guild, interaction.member?.voice?.channel ?? null) ?? interaction.member?.voice?.channel ?? (SILENT_MODES.has(setup.settings.mode) ? interaction.guild.channels.cache.get(config.voice.channelId) : null);
       if (!voiceChannel) return interaction.reply({ content: "🎧 Rejoins d'abord un salon vocal, puis appuie sur Lancer.", ...PRIVATE });
       if (games.has(interaction.guildId)) return interaction.reply({ content: '🎧 Une partie est déjà en cours !', ...PRIVATE });
       if (setup.settings.theme === 'custom' && !setup.settings.customTheme) return showCustomModal(interaction, messageId);
@@ -353,7 +353,7 @@ function throttled(fn, delay = 1200) {
 export async function startGame(client, { guild, channelId, voiceChannel, hostId, settings, panel = null, setup = null, allowEmptyVoice = false }) {
   if (games.has(guild.id)) throw new Error('une partie est déjà en cours');
   // Vocal verrouillé : la partie se joue toujours dans le vocal du bot
-  voiceChannel = lockedChannel(guild) ?? voiceChannel;
+  voiceChannel = lockedChannel(guild, voiceChannel) ?? voiceChannel;
   if (!voiceChannel) throw new Error('salon vocal introuvable');
   settings = fixSettings({ ...defaultSettings(), ...settings });
 

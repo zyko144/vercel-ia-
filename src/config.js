@@ -116,6 +116,8 @@ export const config = {
     channelName: str('VOICE_CHANNEL_NAME', 'bureau'),
     // Le bot ne va jamais dans un autre vocal que le sien (musique et mini-jeux compris), 24h/24
     lockHome: bool('VOICE_LOCK_HOME', true),
+    // Autres salons vocaux autorisés : le bot y reste si on l'y emmène (│・𝔅𝔲𝔯𝔢𝔞𝔲 par défaut)
+    extraChannels: list('VOICE_EXTRA_CHANNELS', '1550190591302828185'),
     // Le bot suit le chef dans chaque vocal (seulement si le vocal n'est pas verrouillé)
     followOwner: bool('VOICE_FOLLOW_OWNER', false),
   },
