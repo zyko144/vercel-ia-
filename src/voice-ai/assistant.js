@@ -258,6 +258,8 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
   // On ne se met plus en sourdine : il faut entendre la personne
   conn.rejoin({ ...conn.joinConfig, selfDeaf: false, selfMute: false });
   primeReceive();
+  // Un peu de silence tout de suite : la 1re réponse arrive aussi vite que les suivantes
+  for (let i = 0; i < 5; i++) sendAudio(session, Buffer.alloc(SEND_CHUNK_BYTES));
   listen(session, conn);
   console.log(`[vocal] conversation avec ${userName} (${userId})`);
   return { started: true };
