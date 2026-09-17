@@ -66,6 +66,8 @@ class LavalinkNode {
       // Pourquoi on n'arrive pas à s'y connecter (utile quand un serveur public nous bloque)
       else if (this.attempts % 4 === 0) this.manager.log(`${this.name} injoignable (code ${code}${this.lastError ? ' · ' + this.lastError.slice(0, 80) : ''})`);
       this.manager.nodeDown(this);
+      // Session refusée (déjà expirée côté serveur) : on repart de zéro au lieu de boucler dans le vide
+      if (code === 4000 || this.attempts >= 1) this.sessionId = null;
       const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_MIN_MS * 2 ** Math.min(this.attempts++, 6));
       setTimeout(() => this.connect(), delay);
     });
