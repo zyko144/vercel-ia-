@@ -24,6 +24,7 @@ import { blindTestActive } from '../music/blindtest.js';
 import { getOrCreatePlayer, getPlayer } from '../music/player.js';
 import { resolveQuery } from '../music/sources.js';
 import { truncate } from '../utils/discord.js';
+import { findSong, popularArtistNames, voiceVocabulary } from './songs.js';
 
 const GROUP = 'ia-vocale'; // connexion vocale séparée de celle du bot principal
 const CHECK_EVERY_MS = 20_000;
@@ -140,6 +141,7 @@ export async function startVoiceAssistant(mainClient) {
     c.user.setPresence({ activities: [{ name: 'custom', type: ActivityType.Custom, state: '🎙️ /vocal pour me parler' }], status: 'online' });
     ensureInVoice();
     state.checker = setInterval(ensureInVoice, CHECK_EVERY_MS);
+    voiceVocabulary().then((words) => console.log(`[vocal] vocabulaire rap FR prêt (${words.length} mots)`)).catch(() => {});
   });
   client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     // Déplacé ou éjecté : retour dans son salon
@@ -170,7 +172,7 @@ export function voiceAssistantState() {
 
 // ===================== Conversation =====================
 
-function systemPrompt(session) {
+function systemPrompt(session, artists = []) {
   const date = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
   return [
     `Tu es « AI Vocal Vercel », l'assistante vocale du serveur Discord DDV. Tu parles en direct avec ${session.userName} dans le salon vocal.`,
@@ -178,7 +180,9 @@ function systemPrompt(session) {
     'Style jeune et détendu, tutoiement, quelques expressions courantes mais sans en faire trop.',
     'Si tu ne sais pas quelque chose, dis-le franchement au lieu d\'inventer.',
     'Tu peux piloter la musique du serveur avec tes outils (lancer un son, pause, reprendre, passer, arrêter, volume, dire ce qui joue). Utilise-les dès qu\'on te le demande puis confirme en une phrase courte.',
-    'Corrige l\'orthographe des artistes de rap français quand tu cherches un son (Jul, Ninho, PNL, Werenoi, Tiakola, Gazo, SDM, Damso...).',
+    'La personne parle TOUJOURS en français, même si un mot ressemble à une autre langue : c\'est souvent un nom de rappeur ou de son.',
+    `Rappeurs français souvent demandés : ${artists.join(', ')}.`,
+    'Pour lancer un son, donne à jouer_musique l\'artiste et le titre séparément, bien orthographiés. Si tu n\'as compris que l\'artiste, laisse le titre vide. Si l\'outil ne trouve pas, propose les sons qu\'il te renvoie ou demande de répéter : ne lance jamais un son au hasard.',
     'La musique du serveur est jouée par l\'autre bot dans le salon vocal Dictature, pas dans le tien : quand tu lances un son, précise que ça joue dans Dictature.',
     'Si la personne dit au revoir ou qu\'elle a fini, réponds brièvement puis appelle l\'outil terminer_conversation.',
     `Nous sommes le ${date}.`,
@@ -189,14 +193,15 @@ const TOOLS = [{
   functionDeclarations: [
     {
       name: 'jouer_musique',
-      description: 'Lance un son, un artiste ou une playlist dans le vocal (ajouté à la file si de la musique joue déjà).',
+      description: 'Lance un son dans le salon Dictature (ajouté à la file si de la musique joue déjà). Donne l\'artiste et le titre séparément, bien orthographiés.',
       parameters: {
         type: Type.OBJECT,
         properties: {
-          recherche: { type: Type.STRING, description: 'Titre et/ou artiste, ou lien' },
+          artiste: { type: Type.STRING, description: 'Nom de l\'artiste, bien orthographié (ex : Lagui, Timar, Tiakola, Bello&Dallas)' },
+          titre: { type: Type.STRING, description: 'Titre du son (vide si seulement l\'artiste est demandé)' },
+          recherche: { type: Type.STRING, description: 'Seulement pour un lien, ou si ni l\'artiste ni le titre ne sont clairs' },
           maintenant: { type: Type.BOOLEAN, description: 'true pour le jouer tout de suite au lieu de l\'ajouter à la file' },
         },
-        required: ['recherche'],
       },
     },
     { name: 'pause_musique', description: 'Met la musique en pause' },
@@ -275,13 +280,16 @@ export async function stopVoiceSession(userId = null) {
 }
 
 async function connectLive(session) {
+  session.vocabulary ??= await voiceVocabulary().catch(() => []);
+  session.artists ??= await popularArtistNames(80).catch(() => []);
   session.live = await ai.live.connect({
     model: config.voiceAi.model,
     config: {
       responseModalities: [Modality.AUDIO],
-      systemInstruction: systemPrompt(session),
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceAi.voice } } },
-      inputAudioTranscription: {},
+      systemInstruction: systemPrompt(session, session.artists),
+      speechConfig: { languageCode: 'fr-FR', voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceAi.voice } } },
+      // Français uniquement + noms de rappeurs et titres à bien reconnaître
+      inputAudioTranscription: { languageCodes: ['fr-FR'], ...(session.vocabulary.length ? { customVocabulary: session.vocabulary } : {}) },
       outputAudioTranscription: {},
       // Fin de phrase détectée vite (0,4 s de silence) : réponse sans attendre
       realtimeInputConfig: {
@@ -552,7 +560,20 @@ async function runTool(session, call) {
 
   switch (call.name) {
     case 'jouer_musique': {
-      const result = await resolveQuery(String(args.recherche ?? ''), { requestedBy: session.userId });
+      // Lien : on le joue tel quel. Sinon : artiste corrigé + titre rapproché, jamais un son au hasard
+      const link = /^https?:\/\//i.test(String(args.recherche ?? '').trim());
+      let query = String(args.recherche ?? '').trim();
+      let how = null;
+      if (!link) {
+        const song = await findSong({ artiste: args.artiste, titre: args.titre, recherche: args.recherche });
+        if (song.error) {
+          console.log(`[vocal] son introuvable : ${JSON.stringify(args)} -> ${song.error}`);
+          return { erreur: song.error, ...(song.artist ? { artiste_compris: song.artist } : {}), ...(song.suggestions?.length ? { sons_de_cet_artiste: song.suggestions } : {}) };
+        }
+        query = `dz:${song.id}`;
+        how = song.how;
+      }
+      const result = await resolveQuery(query, { requestedBy: session.userId });
       if (!result.tracks.length) return { erreur: 'aucun son trouvé' };
       const target = getOrCreatePlayer(state.mainClient, guild);
       target.textChannelId ??= config.voice.channelId;
@@ -567,7 +588,7 @@ async function runTool(session, call) {
       }
       const label = result.isPlaylist ? `playlist ${result.name ?? ''} (${tracks.length} sons)` : describe(tracks[0]);
       session.actions.push(`🎵 ${wasPlaying && !args.maintenant ? 'Ajouté à la file' : 'Lancé'} : **${label}**`);
-      return { resultat: `${wasPlaying && !args.maintenant ? 'ajouté à la file' : 'lancé'} : ${label}` };
+      return { resultat: `${wasPlaying && !args.maintenant ? 'ajouté à la file' : 'lancé'} dans Dictature : ${label}`, ...(how ? { comment: how } : {}) };
     }
     case 'pause_musique':
       if (!player?.current) return { erreur: 'aucune musique en cours' };

@@ -92,6 +92,31 @@ async function playlistTracks(id) {
   return tracks;
 }
 
+let catalogCache = null;
+
+/** Rappeurs FR (du plus présent au moins présent) et leurs sons, tirés des playlists rap FR + Top France. */
+export async function frenchRapCatalog() {
+  if (catalogCache && Date.now() - catalogCache.at < PLAYLIST_CACHE_MS) return catalogCache;
+  const lists = await Promise.all([...FRENCH_RAP_PLAYLISTS, PL.topFrance].map(playlistTracks));
+  const artists = new Map();
+  const tracks = new Map();
+  for (const item of lists.flat()) {
+    if (!item?.artist?.name) continue;
+    const artist = artists.get(item.artist.id) ?? { id: item.artist.id, name: item.artist.name, count: 0, rank: 0 };
+    artist.count++;
+    artist.rank = Math.max(artist.rank, item.rank ?? 0);
+    artists.set(item.artist.id, artist);
+    if (!tracks.has(item.id)) tracks.set(item.id, { id: item.id, title: item.title, artist: item.artist.name, artistId: item.artist.id, rank: item.rank ?? 0 });
+  }
+  const catalog = {
+    at: Date.now(),
+    artists: [...artists.values()].sort((a, b) => b.count - a.count || b.rank - a.rank),
+    tracks: [...tracks.values()],
+  };
+  if (catalog.artists.length) catalogCache = catalog;
+  return catalog;
+}
+
 /** Artistes présents dans les playlists rap FR éditoriales. */
 async function frenchArtists() {
   if (frenchArtistsCache && Date.now() - frenchArtistsCache.at < PLAYLIST_CACHE_MS) return frenchArtistsCache.names;
