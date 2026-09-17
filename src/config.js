@@ -19,10 +19,11 @@ const list = (key, fallback = '') =>
 // Nouveau serveur « DDV PRV ANTI ZAIROX REBELLION » : l'ancien serveur DDV a été supprimé.
 // Ses anciens salons (encore réglés dans l'hébergeur) sont remplacés automatiquement par ceux du nouveau serveur.
 const DICTATURE = '1550190587142082582';
+const IA_VOCAL = '1550196141902008340'; // │・𝐈𝐀-𝐕𝐎𝐂𝐀𝐋, dans la catégorie VERCEL
 const IA_CHANNEL = '1550195587922661607'; // │・𝐈𝐀, dans la catégorie VERCEL
 const MOVED_CHANNELS = new Map([
   ['1549504799806857236', DICTATURE], // Dictature
-  ['1550100131569868871', DICTATURE], // IA-VOCAL : l'IA vocale est maintenant aussi dans Dictature
+  ['1550100131569868871', IA_VOCAL], // IA-VOCAL
   ['1549523857252028538', IA_CHANNEL], // salon IA
   ['1549658865002487839', ''], // salon musique / jukebox (pas d'équivalent)
   ['1549658986935222363', ''], // salon blindtest (le jeu se joue là où on lance la commande)
@@ -84,7 +85,7 @@ export const config = {
     voice: str('GEMINI_VOICE_NAME', 'Puck'),
     idleSeconds: int('VOICE_AI_IDLE_SECONDS', 45),
     // Salon vocal de l'IA vocale (le bot musique, lui, reste dans VOICE_CHANNEL_ID)
-    channelId: channel('VOICE_AI_CHANNEL_ID', DICTATURE),
+    channelId: channel('VOICE_AI_CHANNEL_ID', IA_VOCAL),
     // Seuls ces comptes peuvent utiliser /vocal (vide = tout le monde)
     allowedUsers: list('VOICE_AI_USERS', '855176142096039997,734865069904756766,923551925113323542'),
   },
