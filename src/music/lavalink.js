@@ -63,6 +63,8 @@ class LavalinkNode {
       const wasConnected = this.connected;
       this.connected = false;
       if (wasConnected) this.manager.log(`${this.name} déconnecté (code ${code})`);
+      // Pourquoi on n'arrive pas à s'y connecter (utile quand un serveur public nous bloque)
+      else if (this.attempts % 4 === 0) this.manager.log(`${this.name} injoignable (code ${code}${this.lastError ? ' · ' + this.lastError.slice(0, 80) : ''})`);
       this.manager.nodeDown(this);
       const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_MIN_MS * 2 ** Math.min(this.attempts++, 6));
       setTimeout(() => this.connect(), delay);
