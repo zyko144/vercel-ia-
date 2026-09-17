@@ -217,24 +217,29 @@ async function playInVoice() {
   if (!guild || !voiceChannel) return;
   const player = getOrCreatePlayer(client, guild);
   const before = player.current?.isLiveStream ? null : { current: player.current, queue: [...player.queue], position: Math.round(player.position()) };
-  await player.connect(voiceChannel);
-  if (live !== session) return; // la diffusion s'est arrêtée entre-temps
   // Ce qui jouait avant : on le remettra à la fin de la diffusion
   if (before) live.before = before;
 
   // Lecture par le bot lui-même : le son va du PC au vocal sans passer par le serveur audio public
-  if (!(player.backend instanceof LocalBackend)) {
-    await player.useBackend(new LocalBackend(player));
+  let local = true;
+  try {
+    if (!(player.backend instanceof LocalBackend)) await player.useBackend(new LocalBackend(player));
     await player.backend.connect(voiceChannel);
+  } catch (err) {
+    // Pas grave : on repasse par le serveur audio (un peu plus de retard, mais ça marche)
+    console.warn('[direct] lecteur local indisponible, passage par le serveur audio :', err.message);
+    local = false;
+    await player.connect(voiceChannel).catch(() => {});
   }
   if (live !== session) return;
   const name = guild.members.cache.get(live.userId)?.displayName ?? 'le chef';
+  const source = local ? localUrl() : liveUrl();
   player.playNow({
     title: `Son du PC de ${name}`,
     artist: 'en direct',
     url: null,
-    playUrl: localUrl(),
-    streamUrl: localUrl(),
+    playUrl: source,
+    streamUrl: source,
     source: 'web',
     isLive: true,
     isLiveStream: true,

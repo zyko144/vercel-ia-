@@ -15,7 +15,7 @@ const serialize = (t) => ({
 });
 
 export async function saveSession(player) {
-  if (player.blind) return;
+  if (player.blind || player.current?.isLiveStream) return;
   const sessions = await load(KEY, {});
   if (!player.current) {
     delete sessions[player.guild.id];
