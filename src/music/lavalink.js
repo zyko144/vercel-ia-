@@ -5,6 +5,7 @@ import { config } from '../config.js';
 
 const RECONNECT_MIN_MS = 5_000;
 const RECONNECT_MAX_MS = 5 * 60_000;
+const RATE_LIMITED_MS = 10 * 60_000; // serveur public qui limite les connexions : on le laisse respirer
 const RESUME_TIMEOUT_S = 60;
 const LOG_SIZE = 25;
 
@@ -68,7 +69,9 @@ class LavalinkNode {
       this.manager.nodeDown(this);
       // Session refusée (déjà expirée côté serveur) : on repart de zéro au lieu de boucler dans le vide
       if (code === 4000 || this.attempts >= 1) this.sessionId = null;
-      const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_MIN_MS * 2 ** Math.min(this.attempts++, 6));
+      // Serveur public qui nous limite (« trop de connexions ») : on attend longtemps avant de réessayer
+      const limited = code === 4000 || /too many/i.test(this.lastError ?? '');
+      const delay = limited ? RATE_LIMITED_MS : Math.min(RECONNECT_MAX_MS, RECONNECT_MIN_MS * 2 ** Math.min(this.attempts++, 6));
       setTimeout(() => this.connect(), delay);
     });
   }
