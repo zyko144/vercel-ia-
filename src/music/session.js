@@ -52,6 +52,11 @@ export async function restoreSessions(client) {
       continue;
     }
     try {
+      // Un direct (son du PC) ne se reprend pas : il n'existe plus après un redémarrage
+      if ((session.current?.playUrl ?? '').includes('/live/audio')) {
+        delete sessions[guildId];
+        continue;
+      }
       const guild = client.guilds.cache.get(guildId);
       const voiceChannel = guild?.channels.cache.get(session.voiceChannelId);
       const humans = voiceChannel?.members.filter((m) => !m.user.bot).size ?? 0;
