@@ -3,6 +3,7 @@
 import { load, save } from '../storage.js';
 import { deezer, rankResults, trackFromDeezer } from './deezer.js';
 import { findLyrics } from './lyrics.js';
+import { resolveWorkSong, WORK_CATEGORIES, workKey, worksOf } from './blindworks.js';
 import { aiPlaylist } from './sources.js';
 import { popularTracks } from './stats.js';
 
@@ -15,6 +16,17 @@ const PL = {
   // 2016 → 2020
   pnl: 5709242102, rapstars2010: 5175061384, rapfr2010: 10259601162, rap161718: 11022901282, bestof1821: 9400450122,
   prime1520: 15613524303, annee2010: 8088419282,
+  // Tendances TikTok
+  tiktokFr: 1082651151, tiktokWorld: 4403076402, laTrend: 1589484015, tiktokViralFr: 9013665122, rapViral: 7764652862,
+  // Notre génération : les tubes des années 2010
+  hitsDeRue2010: 14055903761, enMode2010: 2051712324, party10s: 715215865, tubes2010: 2474339902, bleuBlanc2010: 1162725851,
+  carreVip2010: 10039276362, best2015: 1103656501, best2016: 1376135575, best2018: 5229773802, afro2010: 12546279743,
+  // Rap US
+  hotUrban: 1677006641, rapBangers: 1996494362, rap10s: 7662551722, rapUs2026: 1060978321, rapUs2024: 13241781803, newSchool: 6712593324,
+  // Afro
+  hitsAfroFr: 1440933255, afroHits: 1440614715, afrobeats: 3153080842,
+  // Hits
+  titresDuMoment: 53362031, bleuBlancHits: 1189520191,
 };
 
 // Playlists 100 % rap français : leurs artistes servent à écarter les sons étrangers des playlists mélangées
@@ -22,10 +34,19 @@ const PL = {
 const FRENCH_RAP_PLAYLISTS = [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.best2024, PL.best2023, PL.rapstars2020, PL.rap2324, PL.pnl, PL.rapstars2010, PL.rapfr2010, PL.annee2010];
 const FRENCH_ISRC = new Set(['FR', 'BE', 'CH', 'LU', 'MC']);
 // Titres qui ne disent rien en blind test, ou versions qui ne ressemblent pas au son connu (live, remix, émission TV...)
-const BAD_TITLE = /\b(intro|outro|interlude|skit|freestyle|live|session|colors show|acoustique|acoustic|remix|instrumental|sped up|slowed|nouvelle [ée]cole)\b/i;
+const BAD_TITLE = /\b(intro|outro|interlude|skit|freestyle|nouvelle [ée]cole)\b/i;
+// Tout ce qui n'est pas le son d'origine : remix, accéléré, ralenti, live, reprise, karaoké...
+const VARIANT_TITLE = /\b(remix(ed)?|rmx|sped ?up|speed ?up|slowed|reverb|nightcore|8d|bass ?boost(ed)?|karaok[eé]|instrumental|acapella|a cappella|acoustique|acoustic|unplugged|live|session|colors show|cover|reprise|tribute|mashup|medley|version|(?<!radio )edit|mix|rework|bootleg|vip|flip|extended|acc[eé]l[eé]r[eé]e?|piano|orchestral|lofi|lo-fi|jersey club|super slowed|techno|phonk remix)\b/i;
+const VARIANT_ALBUM = /\b(remix(es)?|sped ?up|slowed|nightcore|karaok[eé]|instrumentals?|acoustic|live|tribute|covers?|8d|lofi|lo-fi|piano)\b/i;
+const VARIANT_ARTIST = /\b(sped ?up|slowed|nightcore|8d|karaok[eé]|tribute|covers?|lofi|piano|orchestra|remix(es)?|reverb)\b/i;
+const isVariant = (item) => VARIANT_TITLE.test(`${item.title ?? ''} ${item.title_version ?? ''}`)
+  || VARIANT_ALBUM.test(item.album?.title ?? '')
+  || VARIANT_ARTIST.test(item.artist?.name ?? '');
 
 export const THEMES = {
-  moment: { label: 'Sons du moment (2025-2026)', emoji: '🔥', french: true, years: [2025, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.rap2026] },
+  moment: { label: 'Sons du moment (2025-2026)', emoji: '🔥', french: true, years: [2025, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.best2025, PL.rap2026, PL.rapViral] },
+  tiktok: { label: 'Trends TikTok', emoji: '📱', playlists: [PL.tiktokFr, PL.tiktokWorld, PL.laTrend, PL.tiktokViralFr, PL.rapViral] },
+  genz: { label: 'Notre enfance : tubes 2010-2020', emoji: '🧃', years: [2009, 2020], playlists: [PL.hitsDeRue2010, PL.enMode2010, PL.party10s, PL.tubes2010, PL.bleuBlanc2010, PL.carreVip2010, PL.best2015, PL.best2016, PL.best2018, PL.afro2010] },
   recent: { label: 'Rap FR récent (2022 → 2026)', emoji: '🎧', french: true, years: [2022, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.certifie, PL.best2025, PL.best2024, PL.best2023, PL.rapstars2020, PL.skyrock2022] },
   y2026: { label: 'Rap FR 2026', emoji: '🆕', french: true, years: [2026, 2026], playlists: [PL.actuRap, PL.rapstars, PL.hitsDeRue, PL.tasCapte, PL.certifie, PL.rap2026] },
   y2025: { label: 'Rap FR 2025', emoji: '💿', french: true, years: [2025, 2025], playlists: [PL.best2025, PL.rapstars2020, PL.certifie, PL.hitsDeRue, PL.rap2026] },
@@ -33,15 +54,21 @@ export const THEMES = {
   y2023: { label: 'Rap FR 2023', emoji: '💿', french: true, years: [2023, 2023], playlists: [PL.best2023, PL.rap2324, PL.rapstars2020, PL.mega2024] },
   y2022: { label: 'Rap FR 2022', emoji: '💿', french: true, years: [2022, 2022], playlists: [PL.skyrock2022, PL.ete2022, PL.rapstars2020] },
   y1620: { label: 'Rap FR 2016 → 2020 (PNL, Nekfeu, Damso…)', emoji: '📼', french: true, years: [2016, 2020], playlists: [PL.pnl, PL.rapstars2010, PL.rapfr2010, PL.rap161718, PL.bestof1821, PL.prime1520, PL.annee2010, PL.rapstars2020] },
-  hits: { label: 'Hits France du moment', emoji: '🇫🇷', years: [2023, 2026], playlists: [PL.topFrance, PL.topFrance2025, PL.hits2024] },
+  hits: { label: 'Hits France du moment', emoji: '🇫🇷', years: [2023, 2026], playlists: [PL.topFrance, PL.topFrance2025, PL.hits2024, PL.titresDuMoment, PL.bleuBlancHits] },
+  usrap: { label: 'Rap US', emoji: '🇺🇸', years: [2010, 2026], playlists: [PL.hotUrban, PL.rapBangers, PL.rap10s, PL.rapUs2026, PL.rapUs2024, PL.newSchool] },
+  afro: { label: 'Afro, shatta, amapiano', emoji: '🌍', playlists: [PL.hitsAfroFr, PL.afroHits, PL.afrobeats, PL.afro2010] },
+  films: { label: 'Films (musiques de films)', emoji: '🎬', works: 'films' },
+  series: { label: 'Séries et dessins animés', emoji: '📺', works: 'series' },
+  anime: { label: 'Animés (openings)', emoji: '🍥', works: 'anime' },
+  jeux: { label: 'Jeux vidéo', emoji: '🎮', works: 'games' },
   server: { label: 'Sons du serveur', emoji: '🏠' },
   custom: { label: 'Thème perso', emoji: '✏️' },
 };
 
 export const DIFFICULTIES = {
-  tresfacile: { label: 'Très facile', emoji: '🍼', color: 0x5865f2, snippet: 30, minRank: 900_000, top: 45, maxPerArtist: 1, start: [0.3, 0.42], hintAt: 0.25, speedBonus: 0.35, desc: 'Les plus gros sons du moment · 30 s · indices' },
-  facile: { label: 'Facile', emoji: '🟢', color: 0x57f287, snippet: 30, minRank: 800_000, top: 70, maxPerArtist: 2, start: [0.3, 0.42], hintAt: 0.35, speedBonus: 0.35, desc: 'Sons très connus · 30 s · refrain · indices' },
-  normal: { label: 'Normal', emoji: '🟡', color: 0xfee75c, snippet: 20, minRank: 650_000, top: 120, maxPerArtist: 2, start: [0.25, 0.45], hintAt: 0.6, speedBonus: 0.35, desc: 'Sons connus · 20 s · un indice' },
+  tresfacile: { label: 'Très facile', emoji: '🍼', color: 0x5865f2, snippet: 30, minRank: 900_000, top: 60, maxPerArtist: 1, start: [0.3, 0.42], hintAt: 0.25, speedBonus: 0.35, desc: 'Les plus gros sons du moment · 30 s · indices' },
+  facile: { label: 'Facile', emoji: '🟢', color: 0x57f287, snippet: 30, minRank: 800_000, top: 100, maxPerArtist: 2, start: [0.3, 0.42], hintAt: 0.35, speedBonus: 0.35, desc: 'Sons très connus · 30 s · refrain · indices' },
+  normal: { label: 'Normal', emoji: '🟡', color: 0xfee75c, snippet: 20, minRank: 650_000, top: 160, maxPerArtist: 2, start: [0.25, 0.45], hintAt: 0.6, speedBonus: 0.35, desc: 'Sons connus · 20 s · un indice' },
   difficile: { label: 'Difficile', emoji: '🔴', color: 0xed4245, snippet: 12, minRank: 450_000, top: 250, maxPerArtist: 3, start: [0.12, 0.6], hintAt: null, speedBonus: 0.35, desc: "Moins connus · 12 s · pas d'indice" },
   expert: { label: 'Expert', emoji: '💀', color: 0x2b2d31, snippet: 6, minRank: 300_000, top: 400, maxPerArtist: 3, start: [0.05, 0.7], hintAt: null, speedBonus: 0.5, desc: "6 s seulement · n'importe où dans le son" },
 };
@@ -52,11 +79,9 @@ export const MODES = {
   artiste: { label: 'Artiste seulement', emoji: '🎤', desc: 'Trouve qui chante' },
   intro: { label: 'Intro', emoji: '🎬', desc: 'Les toutes premières secondes du son' },
   eclair: { label: 'Éclair', emoji: '⚡', desc: '3 secondes de son, pas une de plus', snippet: 3 },
-  accelere: { label: 'Accéléré', emoji: '🐿️', desc: 'Le son passe en accéléré', filter: 'nightcore' },
-  ralenti: { label: 'Ralenti', emoji: '🐌', desc: 'Le son passe au ralenti', filter: 'slowed' },
-  sansvoix: { label: 'Voix cachée', emoji: '🎙️', desc: 'La voix est presque effacée', filter: 'karaoke' },
   annee: { label: 'Année', emoji: '📅', desc: "Devine l'année de sortie" },
   paroles: { label: 'Paroles', emoji: '📝', desc: 'Pas de son : devine avec les paroles' },
+  images: { label: 'Images', emoji: '🖼️', desc: "Pas de son : devine le film, la série, l'animé ou le jeu avec une image floutée" },
   premier10: { label: 'Premier à 10', emoji: '👑', desc: 'Le premier à 10 points gagne' },
   unessai: { label: 'Un seul essai', emoji: '🎲', desc: 'Une seule réponse par manche' },
 };
@@ -64,7 +89,7 @@ export const MODES = {
 const PLAYLIST_CACHE_MS = 3 * 60 * 60_000;
 const DETAILS_CACHE_MS = 24 * 60 * 60_000;
 const RECENT_KEY = 'blindtest-recent';
-const RECENT_MAX = 250;
+const RECENT_MAX = 900;
 const playlistCache = new Map(); // id -> { at, tracks }
 const detailsCache = new Map(); // deezerId -> { at, details }
 let recent = null; // guildId -> [clés des derniers sons joués]
@@ -146,8 +171,9 @@ async function recentFor(guildId) {
 /** Mémorise les sons joués pour ne pas les ressortir à la prochaine partie. */
 export function rememberPlayed(guildId, track) {
   if (!recent) recent = new Map();
-  const list = (recent.get(guildId) ?? []).filter((key) => key !== songKey(track));
-  list.push(songKey(track));
+  const key = track.work ? workKey(track) : songKey(track);
+  const list = (recent.get(guildId) ?? []).filter((saved) => saved !== key);
+  list.push(key);
   recent.set(guildId, list.slice(-RECENT_MAX));
   save(RECENT_KEY, Object.fromEntries(recent));
 }
@@ -191,6 +217,7 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
   const level = DIFFICULTIES[settings.difficulty] ?? DIFFICULTIES.normal;
   // Sons de secours (son illisible, pas de paroles en mode Paroles...)
   const wanted = settings.rounds + (settings.mode === 'paroles' ? 12 : 6);
+  if (theme.works || settings.mode === 'images') return buildWorksPool(settings, theme, guildId, wanted, onProgress);
   const { tracks: raw, fromDeezer } = await rawTracks(settings, guildId);
   const played = await recentFor(guildId);
   const perArtist = new Map();
@@ -213,7 +240,7 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
   // Doublons (même son sur plusieurs playlists, versions différentes) enlevés, du plus connu au moins connu
   const seen = new Set();
   const unique = raw
-    .filter((item) => item?.id && item.readable !== false && item.title && item.artist?.name && !BAD_TITLE.test(item.title))
+    .filter((item) => item?.id && item.readable !== false && item.title && item.artist?.name && !BAD_TITLE.test(item.title) && !isVariant(item))
     .sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0))
     .filter((item) => {
       const key = songKey({ title: item.title, artist: item.artist.name });
@@ -222,21 +249,24 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
       return true;
     });
 
-  let candidates = unique.filter((item) => (item.rank ?? 0) >= level.minRank).slice(0, level.top);
+  // Les sons joués lors des dernières parties passent en dernier : chaque partie est différente
+  const isFresh = (item) => !played.has(songKey({ title: item.title, artist: item.artist.name }));
+  const freshUnique = unique.filter(isFresh);
+  const base = freshUnique.length >= wanted * 2 ? freshUnique : unique;
+  let candidates = base.filter((item) => (item.rank ?? 0) >= level.minRank).slice(0, level.top);
   // Pas assez de sons assez connus : on élargit
-  if (candidates.length < wanted * 2) candidates = unique.slice(0, Math.max(level.top, wanted * 3));
-  const fresh = candidates.filter((item) => !played.has(songKey({ title: item.title, artist: item.artist.name })));
-  const ordered = shuffle(fresh.length >= wanted ? fresh : candidates);
+  if (candidates.length < wanted * 2) candidates = base.slice(0, Math.max(level.top, wanted * 3));
+  const ordered = shuffle(candidates);
 
   // Vérification un par un (par petits paquets) jusqu'à avoir assez de sons valides.
   // Pas assez (vieux sons moins écoutés aujourd'hui...) : on élargit petit à petit.
   const pool = [];
   const checked = new Set();
-  const [minYear, maxYear] = settings.theme === 'custom' ? [0, 9999] : theme.years;
+  const [minYear, maxYear] = settings.theme === 'custom' ? [0, 9999] : theme.years ?? [0, 9999];
   const french = theme.french ? await frenchArtists() : null;
   const passes = [
     { list: ordered, limit: level.maxPerArtist ?? 3 },
-    { list: shuffle(unique.slice(0, Math.max(level.top * 3, wanted * 4))), limit: (level.maxPerArtist ?? 3) + 1 },
+    { list: shuffle(base.slice(0, Math.max(level.top * 3, wanted * 4))), limit: (level.maxPerArtist ?? 3) + 1 },
     { list: shuffle(unique), limit: 4 },
   ];
   for (const pass of passes) {
@@ -265,6 +295,27 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
       }
       onProgress(pool.length, wanted);
     }
+  }
+  return pool;
+}
+
+/**
+ * Partie « œuvres » (films, séries, animés, jeux) : la musique de l'œuvre, ou une image en mode Images.
+ * Les œuvres des dernières parties passent en dernier.
+ */
+async function buildWorksPool(settings, theme, guildId, wanted, onProgress) {
+  const played = await recentFor(guildId);
+  const categories = theme.works ? [theme.works] : Object.keys(WORK_CATEGORIES);
+  const entries = shuffle(worksOf(categories));
+  const chosen = [...entries.filter((e) => !played.has(workKey(e))), ...entries.filter((e) => played.has(workKey(e)))].slice(0, wanted);
+  if (settings.mode === 'images') {
+    return chosen.map((entry) => ({ ...entry, title: entry.work, artist: WORK_CATEGORIES[entry.category].label, visual: true, requestedBy: 'blindtest' }));
+  }
+  const pool = [];
+  for (let i = 0; i < chosen.length; i += 6) {
+    const batch = await Promise.all(chosen.slice(i, i + 6).map((entry) => resolveWorkSong(entry).catch(() => null)));
+    pool.push(...batch.filter(Boolean));
+    onProgress(pool.length, chosen.length);
   }
   return pool;
 }

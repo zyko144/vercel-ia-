@@ -4,6 +4,7 @@ import { anchorChannel, releaseExternalVoice, takeVoiceForExternal } from '../fe
 import { deezer, matchRatio } from './deezer.js';
 import { lavalinkFilters, speedOf } from './filters.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
+import { isWorkVariant } from './blindworks.js';
 import { MusicError } from './ytdlp.js';
 
 const START_TIMEOUT_MS = 25_000;
@@ -11,10 +12,13 @@ const START_GRACE_MS = 2_500; // certains serveurs annoncent le démarrage puis 
 const NODE_BROKEN_MS = 10 * 60_000;
 const NODE_STALLS_BEFORE_BREAK = 3; // coupures en pleine lecture sur un serveur avant de le mettre de côté
 const FAST_PLAYBACK_BAN_MS = 60 * 60_000;
-const FAST_RATIO = 1.7; // le son avance 1,7x plus vite que l'horloge : le serveur audio déraille
+const FAST_RATIO = 1.07; // le son avance plus vite que l'horloge du serveur (voix aiguës) : le serveur audio déraille
+const FAST_RATIO_NO_CLOCK = 1.5; // sans l'horloge du serveur, les mesures sont moins précises
 // Versions qui ne sont pas le son original (sauf si c'est justement ce qui est demandé)
 const VARIANT = /\b(sped ?up|speed ?up|slowed|reverb|nightcore|8d|bass ?boost(ed)?|karaok[eé]|instrumental|acapella|a cappella|mashup|cover|remix|extended|live|1[.,]\d+ ?x|x ?1[.,]\d+|lyrics?|paroles|tiktok|version|reggae|edit|mix)\b/i;
 // Mots qu'on trouve dans les titres des vraies vidéos officielles sans que ce soit une autre version
+// Chaînes qui ne publient que des versions modifiées
+const VARIANT_AUTHOR = /\b(sped ?up|slowed|nightcore|8d|karaok[eé]|reverb|lyrics?|paroles|remix(es)?|tiktok)\b/i;
 const NOISE = new Set(['feat', 'ft', 'featuring', 'official', 'officiel', 'officielle', 'audio', 'video', 'clip', 'music', 'musique', 'visualizer', 'visualiser', 'prod', 'by', 'hd', 'hq', '4k', 'topic', 'x', 'et', 'and', 'with', 'avec', 'the', 'le', 'la', 'les', 'l', 'de', 'du', 'des', 'd', 'remastered', 'remaster', 'explicit', 'mv']);
 const normalizeText = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const words = (s) => normalizeText(s).split(' ').filter(Boolean);
@@ -173,6 +177,8 @@ export class LavalinkBackend {
       `ytmsearch:${query}`,
       // Recherche YouTube classique / SoundCloud : pleine d'uploads de fans (accélérés, pitchés) -> jamais en blind test
       ...(track.strict ? [] : [`ytsearch:${query}`, `scsearch:${query}`]),
+      // Musique de film / jeu pas sur Deezer : YouTube (versions modifiées écartées au choix)
+      ...(track.strict && track.curated && !track.isrc ? [`ytsearch:${query}`] : []),
     ])];
   }
 
@@ -196,7 +202,7 @@ export class LavalinkBackend {
       // Version d'origine : même enregistrement (ISRC), ou chaîne de l'artiste + même titre sans mots en trop + même durée
       const original = scored
         .filter((s) => (byIsrc
-          ? s.title >= 0.6 && (s.author >= 0.5 || s.artist >= 0.5) && s.gap <= 6
+          ? s.title >= 0.75 && s.keyTitle >= 1 && s.extra <= 0.35 && (s.author >= 0.5 || s.artist >= 0.5) && s.gap <= 6
           : s.title >= 0.8 && s.keyTitle >= 1 && s.author >= 0.5 && s.extra <= 0.2 && s.gap <= 5))
         .sort((a, b) => (b.title + b.author) - (a.title + a.author) || a.gap - b.gap);
       if (original[0]) return original[0].item;
@@ -210,6 +216,14 @@ export class LavalinkBackend {
       return official[0]?.item ?? null;
     }
 
+    if (track.curated) {
+      const clean = full
+        .filter((item) => !item.info.isStream && item.info.length >= 30_000 && item.info.length <= 12 * 60_000 && !isWorkVariant(`${item.info.title} ${item.info.author}`))
+        .map((item) => ({ item, title: matchRatio(cleanTitle(track.title) || track.title, item.info.title ?? '') }))
+        .filter((s) => s.title >= 0.6)
+        .sort((a, b) => b.title - a.title);
+      return clean[0]?.item ?? null;
+    }
     const close = full.find((item) => !track.duration || item.info.isStream || Math.abs(item.info.length / 1000 - track.duration) <= 30);
     return close ?? full[0] ?? null;
   }
@@ -223,7 +237,7 @@ export class LavalinkBackend {
     const itemWords = words(info.title ?? '').filter((w) => !NOISE.has(w) && !/^\d{4}$/.test(w));
     const unexplained = itemWords.filter((w) => !allowed.has(w) && ![...allowed].some((a) => a.length >= 4 && w.length >= 4 && (a.startsWith(w) || w.startsWith(a))));
     return {
-      variant: VARIANT.test(info.title ?? '') && !VARIANT.test(track.title ?? ''),
+      variant: (VARIANT.test(info.title ?? '') && !VARIANT.test(track.title ?? '')) || VARIANT_AUTHOR.test(info.author ?? ''),
       title: matchRatio(expectedTitle, info.title ?? ''),
       // Les mots importants du titre (3 lettres et +) doivent tous y être : "à moi" ≠ "à nous"
       keyTitle: (() => {
@@ -291,6 +305,8 @@ export class LavalinkBackend {
         lastError = err;
         this.markBad(track, ready.item);
         if (token !== this.player.playToken) return false;
+        // Blind test : le son a déjà été entendu, on ne met pas une autre version en douce (la partie relance proprement)
+        if (this.player.blind && err.announced) throw new MusicError('le son a coupé juste après le départ');
       }
     }
 
@@ -326,6 +342,7 @@ export class LavalinkBackend {
           this.markBad(track, item);
           lavalink.log(`${this.node.name} n'a pas pu lire "${track.title}" : ${shortError(err.message)}`);
           if (token !== this.player.playToken) return false;
+          if (this.player.blind && err.announced) throw new MusicError('le son a coupé juste après le départ');
         }
       }
 
@@ -358,6 +375,7 @@ export class LavalinkBackend {
         this.pending = null;
         clearTimeout(pending.timer);
         clearTimeout(pending.graceTimer);
+        if (err) err.announced = pending.announced;
         if (err) reject(err);
         else resolve();
       };
@@ -437,6 +455,7 @@ export class LavalinkBackend {
       case 'TrackStartEvent':
         if (sameTrack) this.player.onAudioStart?.(this.player.current);
         if (pending && sameTrack) {
+          pending.announced = true;
           pending.graceTimer = setTimeout(() => pending.finish(), START_GRACE_MS);
         }
         break;
@@ -527,25 +546,26 @@ export class LavalinkBackend {
     // Juste après un changement de son, le serveur renvoie encore la position de l'ancien : on l'ignore
     if (this.pending || Date.now() - (this.startedAt ?? 0) < 2_000) return;
     if (typeof state.position === 'number') {
-      this.checkSpeed(state.position);
+      this.checkSpeed(state.position, state.time);
       this.lastState = { position: state.position, at: Date.now() };
     }
     this.watchEnd();
   }
 
   /** Certains serveurs audio se mettent à jouer le son en accéléré : on le repère et on change de serveur. */
-  checkSpeed(position) {
-    const now = Date.now();
+  checkSpeed(position, serverTime) {
+    const clock = Boolean(serverTime);
+    const now = serverTime || Date.now();
     const previous = this.speedSample;
-    this.speedSample = { position, at: now, encoded: this.currentEncoded };
-    if (!previous || previous.encoded !== this.currentEncoded || this.pending || this.player.paused || !this.player.current || this.recovering) {
+    this.speedSample = { position, at: now, clock, encoded: this.currentEncoded };
+    if (!previous || previous.clock !== clock || previous.encoded !== this.currentEncoded || this.pending || this.player.paused || !this.player.current || this.recovering) {
       this.fastStrikes = 0;
       return;
     }
     const wall = now - previous.at;
     if (wall < 2_000) return;
     const ratio = (position - previous.position) / wall / speedOf(this.player.filters);
-    if (ratio < FAST_RATIO) {
+    if (ratio < (clock ? FAST_RATIO : FAST_RATIO_NO_CLOCK)) {
       this.fastStrikes = 0;
       return;
     }

@@ -2,6 +2,7 @@
 // les joueurs écrivent leur réponse dans le salon. Le chrono part quand le son sort vraiment dans le vocal.
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
@@ -18,6 +19,7 @@ import { reportProblem } from '../features/alerts.js';
 import { holdVoice, lockedChannel, releaseVoiceHold } from '../features/voice.js';
 import { LavalinkBackend } from './backend-lavalink.js';
 import { buildPool, cleanTitle, DIFFICULTIES, lyricsExcerpt, MODES, rememberPlayed, THEMES } from './blindpools.js';
+import { guessesWork, WORK_CATEGORIES, workImages } from './blindworks.js';
 import { matchRatio } from './deezer.js';
 import { speedOf } from './filters.js';
 import { getOrCreatePlayer } from './player.js';
@@ -38,6 +40,9 @@ const ARTIST_POINTS = 1;
 const SPEED_POINTS = 1;
 const YEAR_POINTS = 3;
 const WIN_SCORE = 10;
+const IMAGE_STAGES_AT = [0, 0.35, 0.65]; // mode Images : l'image devient plus nette à ces moments de la manche
+const RESTART_IF_HEARD_UNDER_MS = 6_000; // son coupé juste après le départ : on relance le même son
+const SPEED_TOLERANCE = 0.07; // vitesse de lecture acceptée : 0,93x à 1,07x
 const MEDALS = ['🥇', '🥈', '🥉'];
 
 const games = new Map(); // guildId -> partie en cours
@@ -60,7 +65,19 @@ const canManage = (interaction, hostId) => interaction.user.id === hostId
 const defaultSettings = () => ({ theme: 'moment', customTheme: '', mode: 'classique', difficulty: 'normal', rounds: 10 });
 const modeOf = (settings) => MODES[settings.mode] ?? MODES.classique;
 const levelOf = (settings) => DIFFICULTIES[settings.difficulty] ?? DIFFICULTIES.normal;
-const snippetOf = (settings) => modeOf(settings).snippet ?? levelOf(settings).snippet;
+const worksTheme = (settings) => Boolean(THEMES[settings.theme]?.works);
+const isWorkGame = (settings) => worksTheme(settings) || settings.mode === 'images';
+const snippetOf = (settings) => {
+  const base = modeOf(settings).snippet ?? levelOf(settings).snippet;
+  return settings.mode === 'images' ? Math.max(base, 15) : base;
+};
+
+/** Réglages cohérents : les modes Titre / Artiste / Année / Paroles n'existent pas pour les films, séries, jeux. */
+function fixSettings(settings) {
+  if (!MODES[settings.mode]) settings.mode = 'classique';
+  if (worksTheme(settings) && ['titre', 'artiste', 'annee', 'paroles'].includes(settings.mode)) settings.mode = 'classique';
+  return settings;
+}
 
 function themeLabel(settings) {
   if (settings.theme === 'custom') return `✏️ ${settings.customTheme || 'Thème perso'}`;
@@ -69,6 +86,10 @@ function themeLabel(settings) {
 }
 
 function pointsLine(settings) {
+  if (isWorkGame(settings)) {
+    const extra = settings.mode === 'unessai' ? ' · 🎲 une seule réponse par manche' : settings.mode === 'premier10' ? ` · 👑 le 1er à **${WIN_SCORE}** pts gagne` : '';
+    return `🎯 Bonne réponse **+${TITLE_POINTS}** · ⚡ Rapide **+${SPEED_POINTS}**${extra}`;
+  }
   switch (settings.mode) {
     case 'titre': return `🎵 Titre **+${TITLE_POINTS}** · ⚡ Rapide **+${SPEED_POINTS}**`;
     case 'artiste': return `🎤 Artiste **+${TITLE_POINTS}** · ⚡ Rapide **+${SPEED_POINTS}**`;
@@ -105,7 +126,7 @@ function mask(text) {
 // ===================== Réglages =====================
 
 function settingsEmbed(setup, status = null) {
-  const { settings } = setup;
+  const settings = fixSettings(setup.settings);
   const level = levelOf(settings);
   const mode = modeOf(settings);
   const voice = setup.voiceChannelId ? `🔊 Le son sera dans <#${setup.voiceChannelId}>. ` : 'Rejoins un vocal avant de lancer. ';
@@ -115,11 +136,11 @@ function settingsEmbed(setup, status = null) {
     .setTitle(status ? 'Préparation de la partie' : 'Règle ta partie')
     .setDescription(status ?? `Choisis le **thème**, le **mode**, la **difficulté** et le nombre de **manches**, puis appuie sur **Lancer**.\n${voice}Les réponses s'écrivent dans <#${setup.channelId}>.`)
     .addFields(
-      { name: 'Thème', value: themeLabel(settings), inline: true },
+      { name: 'Thème', value: settings.mode === 'images' && !worksTheme(settings) ? '🖼️ Films, séries, animés, jeux' : themeLabel(settings), inline: true },
       { name: 'Mode', value: `${mode.emoji} ${mode.label}`, inline: true },
       { name: 'Difficulté', value: `${level.emoji} ${level.label}`, inline: true },
       { name: 'Manches', value: settings.mode === 'premier10' ? `jusqu'à ${WIN_SCORE} pts` : String(settings.rounds), inline: true },
-      { name: 'Extrait', value: settings.mode === 'paroles' ? `${snippetOf(settings)} s pour lire` : `${snippetOf(settings)} s`, inline: true },
+      { name: settings.mode === 'images' ? 'Temps' : 'Extrait', value: settings.mode === 'paroles' ? `${snippetOf(settings)} s pour lire` : settings.mode === 'images' ? `${snippetOf(settings)} s par image` : `${snippetOf(settings)} s`, inline: true },
       { name: 'Règles', value: `${mode.desc} · ${level.desc}\n${pointsLine(settings)}` },
     )
     .setFooter({ text: `Hôte : ${setup.hostName}` });
@@ -208,7 +229,10 @@ export async function handleBlindTestComponent(client, interaction) {
   if (!canManage(interaction, setup.hostId)) {
     return interaction.reply({ content: `Seul <@${setup.hostId}> peut régler cette partie (lance ton propre \`/blindtest\` après).`, ...PRIVATE });
   }
-  const refresh = () => interaction.update({ embeds: [settingsEmbed(setup)], components: settingsComponents(setup) });
+  const refresh = () => {
+    fixSettings(setup.settings);
+    return interaction.update({ embeds: [settingsEmbed(setup)], components: settingsComponents(setup) });
+  };
 
   switch (action) {
     case 'theme':
@@ -324,8 +348,7 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
   // Vocal verrouillé : la partie se joue toujours dans le vocal du bot
   voiceChannel = lockedChannel(guild) ?? voiceChannel;
   if (!voiceChannel) throw new Error('salon vocal introuvable');
-  settings = { ...defaultSettings(), ...settings };
-  if (!MODES[settings.mode]) settings.mode = 'classique';
+  settings = fixSettings({ ...defaultSettings(), ...settings });
 
   const channel = await client.channels.fetch(channelId);
   const game = {
@@ -333,7 +356,9 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
     level: levelOf(settings),
     mode: settings.mode,
     snippet: snippetOf(settings),
-    textOnly: settings.mode === 'paroles',
+    textOnly: settings.mode === 'paroles' || settings.mode === 'images',
+    visual: settings.mode === 'images',
+    works: isWorkGame(settings),
     voiceChannelId: voiceChannel.id,
     allowEmptyVoice,
     pool: [], rounds: settings.mode === 'premier10' ? 30 : settings.rounds, index: 0, replacements: 0,
@@ -359,17 +384,17 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
     if (!game.textOnly) {
       await player.connect(voiceChannel, { force: true });
       if (!(player.backend instanceof LavalinkBackend)) throw new Error('les serveurs audio sont indisponibles pour le moment');
-      // Effet du mode (accéléré, ralenti, voix cachée)
-      player.filters = modeOf(settings).filter ? [modeOf(settings).filter] : [];
+      // Jamais d'effet : le son d'origine, tel quel
+      player.filters = [];
     }
     player.blind = true;
     game.player = player;
 
     game.pool = await buildPool({ ...settings, rounds: game.rounds }, guild.id, (done, total) => progress(`⏳ Sons choisis : **${done}/${total}**…`));
-    progress(game.textOnly ? '📝 Je récupère les paroles…' : '🔎 Je vérifie que chaque son est le bon…');
+    progress(game.visual ? '🖼️ Je prépare les images…' : game.textOnly ? '📝 Je récupère les paroles…' : '🔎 Je vérifie que chaque son est le bon…');
     await prepareAhead(game, Math.min(3, game.pool.length));
     game.rounds = Math.min(game.rounds, game.pool.length);
-    if (game.rounds < 3) throw new Error('pas assez de sons jouables pour ce thème et ce mode, essaie autre chose');
+    if (game.rounds < 3) throw new Error(game.visual ? "pas assez d'images disponibles pour le moment, réessaie dans un instant" : 'pas assez de sons jouables pour ce thème et ce mode, essaie autre chose');
   } catch (err) {
     console.warn('[blindtest] lancement impossible :', err.message);
     progress.cancel();
@@ -390,7 +415,7 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
       .setTitle("C'est parti !")
       .setDescription([
         `${themeLabel(settings)} · ${mode.emoji} ${mode.label} · ${game.level.emoji} ${game.level.label} · **${settings.mode === 'premier10' ? `premier à ${WIN_SCORE} pts` : `${game.rounds} manches`}**`,
-        game.textOnly ? '📝 Pas de son dans ce mode : lisez les paroles et écrivez vos réponses ici.' : `🔊 Le son est dans <#${voiceChannel.id}>, écrivez vos réponses ici.`,
+        game.visual ? "🖼️ Pas de son dans ce mode : l'image devient de plus en plus nette, écrivez vos réponses ici." : game.textOnly ? '📝 Pas de son dans ce mode : lisez les paroles et écrivez vos réponses ici.' : `🔊 Le son est dans <#${voiceChannel.id}>, écrivez vos réponses ici.`,
         pointsLine(settings),
       ].join('\n'))],
     components: panel ? [] : gameControls(),
@@ -414,13 +439,16 @@ async function prepareAhead(game, count = PREPARE_AHEAD) {
     if (!batch.length || game.stopped) return;
     await Promise.all(batch.map(async (track) => {
       track.strict = true;
-      if (game.textOnly) {
+      if (game.visual) {
+        track.frames = await workImages(track).catch(() => null);
+        track.ready = Boolean(track.frames);
+      } else if (game.textOnly) {
         track.lyrics = await lyricsExcerpt(track).catch(() => null);
         track.ready = Boolean(track.lyrics);
       } else {
         track.ready = backend?.prepare ? await backend.prepare(track).catch(() => false) : true;
       }
-      if (!track.ready) console.warn(`[blindtest] ${game.textOnly ? 'pas de paroles' : 'pas de version fiable'} pour "${track.artist} - ${track.title}", son retiré`);
+      if (!track.ready) console.warn(`[blindtest] ${game.visual ? 'pas d\'image' : game.textOnly ? 'pas de paroles' : 'pas de version fiable'} pour "${track.work ?? `${track.artist} - ${track.title}`}", retiré`);
     }));
     game.pool = game.pool.filter((track) => track.ready !== false);
   }
@@ -436,6 +464,11 @@ const leader = (game) => [...game.scores.entries()].sort((a, b) => b[1] - a[1])[
 function seekFor(game, track) {
   const duration = track.duration || 180;
   if (game.mode === 'intro') return 0;
+  // Musiques de films / jeux / génériques : le thème connu est souvent au début
+  if (track.work) {
+    const [from, to] = game.mode === 'eclair' ? [0.08, 0.25] : [0, 0.15];
+    return Math.max(0, Math.min(Math.floor(duration * (from + Math.random() * (to - from))), Math.floor(duration - game.snippet - 5)));
+  }
   const [from, to] = game.mode === 'eclair' ? [0.3, 0.45] : game.level.start;
   let seek = Math.floor(duration * (from + Math.random() * (to - from)));
   if (seek + game.snippet + 8 > duration) seek = Math.max(0, Math.floor(duration - game.snippet - 12));
@@ -466,7 +499,7 @@ async function nextRound(game) {
     titleBy: null, artistBy: null, bonusBy: null, message: null, tried: new Set(), close: new Set(),
   };
   game.current = round;
-  console.log(`[blindtest] manche ${round.index}/${game.rounds} : ${track.artist} - ${track.title}${game.textOnly ? ' (paroles)' : ` (à ${round.seekTo}s)`}`);
+  console.log(`[blindtest] manche ${round.index}/${game.rounds} : ${track.work ? `[${track.work}] ` : ''}${game.visual ? '(image)' : `${track.artist} - ${track.title}${game.textOnly ? ' (paroles)' : ` (à ${round.seekTo}s)`}`}`);
 
   // Mode Paroles : pas de son, le chrono part tout de suite
   if (game.textOnly) return startCountdown(game, round, Date.now());
@@ -514,6 +547,7 @@ async function waitForSound(game, round) {
       if (position > baseline + 150) {
         const heardMs = Math.min(1_500, (position - baseline) / (speedOf(game.player.filters) || 1));
         startCountdown(game, round, Date.now() - heardMs + AUDIO_LATENCY_MS);
+        checkSpeed(game, round, { position, time: state.state.time, at: Date.now() }).catch(() => {});
         return;
       }
     }
@@ -524,6 +558,31 @@ async function waitForSound(game, round) {
     await backend.refreshVoice?.().catch(() => {});
   }
   replaceRound(game, round, connected === false ? 'vocal du serveur audio déconnecté' : 'aucun son ne sort dans le vocal');
+}
+
+/**
+ * Vitesse réelle du son sur ~3 s : un serveur audio qui lit trop vite (voix aiguës) ou trop lentement
+ * est mis de côté et le même son est relancé sur un autre serveur.
+ */
+async function checkSpeed(game, round, first) {
+  await sleep(3_000);
+  const backend = game.player?.backend;
+  if (game.stopped || game.current !== round || round.revealed || !backend?.fetchState) return;
+  const state = await backend.fetchState().catch(() => null);
+  const position = state?.state?.position;
+  if (typeof position !== 'number' || state?.track?.info?.identifier !== backend.currentItem?.info?.identifier) return;
+  const useServerClock = first.time && state.state.time && state.state.time > first.time;
+  const elapsed = useServerClock ? state.state.time - first.time : Date.now() - first.at;
+  if (elapsed < 2_000) return;
+  const ratio = (position - first.position) / elapsed;
+  console.log(`[blindtest] manche ${round.index} : vitesse x${ratio.toFixed(2)} sur ${backend.node?.name}${useServerClock ? '' : ' (horloge locale)'}`);
+  const tolerance = useServerClock ? SPEED_TOLERANCE : 0.25;
+  if (Math.abs(ratio - 1) <= tolerance || game.current !== round || round.revealed) return;
+  const node = backend.node;
+  if (node) node.brokenUntil = Date.now() + 60 * 60_000;
+  console.warn(`[blindtest] ${node?.name} lit le son à x${ratio.toFixed(2)} : serveur mis de côté, son relancé ailleurs`);
+  await backend.switchNode(new Set(node ? [node.name] : [])).catch(() => false);
+  restartRound(game, round, `vitesse anormale x${ratio.toFixed(2)}`);
 }
 
 function scheduleReveal(game, round) {
@@ -539,14 +598,34 @@ async function startCountdown(game, round, audioAt) {
   round.endsAt = audioAt + game.snippet * 1000;
   clearTimeout(game.timers.start);
   scheduleReveal(game, round);
-  if (game.level.hintAt && game.mode !== 'annee' && game.mode !== 'eclair') {
+  if (game.level.hintAt && game.mode !== 'annee' && game.mode !== 'eclair' && !game.visual) {
     game.timers.hint = setTimeout(() => showHint(game, round), Math.max(0, audioAt + game.snippet * game.level.hintAt * 1000 - Date.now()));
   }
-  console.log(`[blindtest] manche ${round.index} : ${game.textOnly ? 'paroles affichées' : 'son entendu'}, chrono ${game.snippet}s`);
+  console.log(`[blindtest] manche ${round.index} : ${game.visual ? 'image affichée' : game.textOnly ? 'paroles affichées' : 'son entendu'}, chrono ${game.snippet}s`);
 
   await game.lastReveal; // la réponse de la manche d'avant s'affiche d'abord
   if (game.current !== round || round.revealed) return;
-  round.message = await game.channel.send({ embeds: [roundEmbed(game, round)] }).catch(() => null);
+  round.stage = 0;
+  round.message = await game.channel.send(roundPayload(game, round)).catch(() => null);
+  if (game.visual) {
+    // L'image devient plus nette au fil de la manche
+    IMAGE_STAGES_AT.slice(1).forEach((at, i) => {
+      game.timers[`stage${i + 1}`] = setTimeout(() => {
+        if (game.current !== round || round.revealed || !round.message) return;
+        round.stage = i + 1;
+        round.message.edit(roundPayload(game, round, round.hint)).catch(() => {});
+      }, Math.max(0, audioAt + game.snippet * 1000 * at - Date.now()));
+    });
+  }
+}
+
+/** Message de la manche (avec l'image du moment en mode Images). */
+function roundPayload(game, round, hint = null) {
+  const embed = roundEmbed(game, round, hint);
+  if (!game.visual || !round.track.frames) return { embeds: [embed] };
+  const name = `manche${round.index}-${round.stage ?? 0}.jpg`;
+  embed.setImage(`attachment://${name}`);
+  return { embeds: [embed], files: [new AttachmentBuilder(round.track.frames.stages[round.stage ?? 0], { name })], attachments: [] };
 }
 
 /** Son coupé puis repris pendant la manche : on rajoute un peu de temps. */
@@ -565,29 +644,37 @@ function roundEmbed(game, round, hint = null) {
     paroles: '📝 Quel son a ces paroles ?',
   };
   const mode = MODES[game.mode];
+  const category = round.track.work ? WORK_CATEGORIES[round.track.category] : null;
+  const title = category ? `${category.emoji} ${game.visual ? category.imageQuestion : category.question}` : titles[game.mode] ?? '🎶 Devine le son !';
   return new EmbedBuilder()
     .setColor(game.level.color)
     .setAuthor({ name: `🎧 Manche ${round.index}/${game.mode === 'premier10' ? `∞ · 1er à ${WIN_SCORE} pts` : game.rounds} · ${mode.emoji} ${mode.label} · ${game.level.emoji} ${game.level.label}` })
-    .setTitle(titles[game.mode] ?? '🎶 Devine le son !')
+    .setTitle(title)
     .setDescription([
       game.textOnly && round.track.lyrics ? `>>> *${round.track.lyrics.replace(/\*/g, '').replace(/\n/g, '*\n*')}*\n` : null,
+      game.visual ? `🔍 Image ${(round.stage ?? 0) + 1}/${IMAGE_STAGES_AT.length} : elle devient plus nette avec le temps` : null,
       `⏱️ Fin **<t:${Math.ceil(round.endsAt / 1000)}:R>**`,
       pointsLine(game.settings),
       hint ? `\n💡 **Indice**\n${hint}` : null,
     ].filter(Boolean).join('\n'))
-    .setFooter({ text: `${themeLabel(game.settings)} · écris ta réponse dans le salon` });
+    .setFooter({ text: `${game.visual && !worksTheme(game.settings) ? '🖼️ Films, séries, animés, jeux' : themeLabel(game.settings)} · écris ta réponse dans le salon` });
 }
 
 function showHint(game, round) {
   if (game.current !== round || round.revealed || !round.message) return;
   const title = cleanTitle(round.track.title) || round.track.title;
   const lines = [];
+  if (round.track.work) {
+    round.hint = `${WORK_CATEGORIES[round.track.category].emoji} \`${mask(round.track.work)}\``;
+    round.message.edit(roundPayload(game, round, round.hint)).catch(() => {});
+    return;
+  }
   if (game.mode !== 'titre' && (game.settings.difficulty === 'tresfacile' || game.settings.difficulty === 'facile' || game.mode === 'artiste') && !round.artistBy) {
     lines.push(`🎤 \`${mask(round.track.artist)}\``);
   }
   if (game.mode !== 'artiste') lines.push(`🎵 \`${mask(title)}\``);
   round.hint = lines.join('\n');
-  round.message.edit({ embeds: [roundEmbed(game, round, round.hint)] }).catch(() => {});
+  round.message.edit(roundPayload(game, round, round.hint)).catch(() => {});
 }
 
 function award(game, userId, points) {
@@ -622,6 +709,19 @@ export function handleBlindTestMessage(message) {
       award(game, userId, 1);
       message.react('🔥').catch(() => {});
     } else {
+      message.react('❌').catch(() => {});
+    }
+    return true;
+  }
+
+  // Films, séries, animés, jeux : on devine le nom de l'œuvre
+  if (track.work) {
+    const longest = Math.max(...track.aliases.map((alias) => tokens(alias).length));
+    if (tokens(guess).length > longest + 3) return true;
+    if (guessesWork(track, guess, covers)) {
+      winRound(game, round, message, TITLE_POINTS + (fast ? SPEED_POINTS : 0), { fast, elapsed, what: 'work' });
+    } else if (oneTry) {
+      round.tried.add(userId);
       message.react('❌').catch(() => {});
     }
     return true;
@@ -712,7 +812,10 @@ async function reveal(game, round) {
   else if (round.artistBy) header = '🎤 Artiste trouvé, pas le titre !';
 
   const lines = [];
-  if (game.mode === 'annee') {
+  if (track.work) {
+    if (found) lines.push(`🎯 <@${round.titleBy}> **+${TITLE_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
+    if (!game.visual) lines.push(`🎵 ${track.title} — ${track.artist}`);
+  } else if (game.mode === 'annee') {
     lines.push(`📅 Sorti en **${track.year}**`);
     if (found) lines.push(`🎯 <@${round.titleBy}> **+${YEAR_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
     if (round.close.size) lines.push(`🔥 À 1 an près : ${[...round.close].map((id) => `<@${id}>`).join(', ')} **+1**`);
@@ -729,17 +832,22 @@ async function reveal(game, round) {
   const embed = new EmbedBuilder()
     .setColor(found ? 0x57f287 : 0xed4245)
     .setAuthor({ name: header })
-    .setTitle(`${track.title} — ${track.artist}`.slice(0, 256))
+    .setTitle((track.work ? `${WORK_CATEGORIES[track.category].emoji} ${track.work}` : `${track.title} — ${track.artist}`).slice(0, 256))
     .setDescription(lines.join('\n') || '\u200b')
     .setFooter({ text: `Manche ${round.index}${game.mode === 'premier10' ? '' : `/${game.rounds}`}${last ? '' : ` · manche suivante dans ${REVEAL_HOLD_MS / 1000} s`}` });
-  if (isLink(track.thumbnail)) embed.setThumbnail(track.thumbnail);
-  if (isLink(track.deezerUrl)) embed.setURL(track.deezerUrl);
-
   const payload = { embeds: [embed], allowedMentions: { parse: [] } };
+  if (game.visual && track.frames?.full) {
+    // L'image entière, nette
+    embed.setImage(`attachment://reponse${round.index}.jpg`);
+    payload.files = [new AttachmentBuilder(track.frames.full, { name: `reponse${round.index}.jpg` })];
+  } else if (isLink(track.thumbnail)) {
+    embed.setThumbnail(track.thumbnail);
+  }
+  if (isLink(track.deezerUrl)) embed.setURL(track.deezerUrl);
   let sending;
   if (found) {
     // Le gagnant est pingé et félicité en réponse à son message
-    const what = game.mode === 'annee' ? `l'année **${track.year}**` : round.winWhat === 'artist' ? `l'artiste **${track.artist}**` : `**${cleanTitle(track.title) || track.title}**`;
+    const what = track.work ? `**${track.work}**` : game.mode === 'annee' ? `l'année **${track.year}**` : round.winWhat === 'artist' ? `l'artiste **${track.artist}**` : `**${cleanTitle(track.title) || track.title}**`;
     payload.content = `🎉 GG <@${round.titleBy}> ! T'as trouvé ${what}${round.bonusBy ? ' en un éclair ⚡' : ''} (+${plural(round.winnerPoints)})`;
     payload.allowedMentions = { users: [round.titleBy] };
     sending = round.winnerMessage?.reply
@@ -761,12 +869,46 @@ async function reveal(game, round) {
   if (!game.stopped) continueGame(game);
 }
 
+/** Le son a coupé juste après le départ : on relance LE MÊME son (une fois), en le disant dans le salon. */
+function restartRound(game, round, reason) {
+  if (game.stopped || game.current !== round || round.revealed) return;
+  const { track } = round;
+  if ((track.restarts ?? 0) >= 1) {
+    replaceRound(game, round, reason);
+    return;
+  }
+  track.restarts = (track.restarts ?? 0) + 1;
+  track.lavalinkReady = null;
+  console.warn(`[blindtest] manche ${round.index} relancée avec le même son (${reason}) : ${track.artist} - ${track.title}`);
+  clearRoundTimers(game);
+  round.message?.delete().catch(() => {});
+  if (round.running) notice(game, '🔁 Petit souci de son, je relance le même son depuis le début de la manche.');
+  if (!game.textOnly) game.player?.backend?.stopTrack?.();
+  game.current = null;
+  game.index--;
+  game.pool.unshift(track);
+  if (++game.replacements > MAX_REPLACEMENTS) {
+    endGame(game, { error: 'trop de sons impossibles à lire, les serveurs audio ont un souci' }).catch(() => {});
+    return;
+  }
+  continueGame(game);
+}
+
+/** Petit message qui s'efface tout seul. */
+function notice(game, content) {
+  game.channel.send({ content, allowedMentions: { parse: [] } })
+    .then((message) => setTimeout(() => message.delete().catch(() => {}), 8_000))
+    .catch(() => {});
+}
+
 /** Le son de la manche ne peut pas être joué : on le remplace sans compter la manche. */
 function replaceRound(game, round, reason) {
   if (game.stopped || game.current !== round || round.revealed) return;
   console.warn(`[blindtest] manche ${round.index} rejouée avec un autre son (${reason}) : ${round.track.artist} - ${round.track.title}`);
   clearRoundTimers(game);
   round.message?.delete().catch(() => {});
+  // Le son avait déjà été entendu : on prévient, sinon ça ressemble à un bug
+  if (round.running) notice(game, '🔁 Ce son ne passe pas bien, on en met un autre (manche pas comptée).');
   if (!game.textOnly) game.player?.backend?.stopTrack?.();
   game.current = null;
   game.index--;
@@ -780,6 +922,12 @@ function replaceRound(game, round, reason) {
 /** Le son s'est arrêté tout seul (fin du morceau, ou coupure définitive). */
 function onTrackGone(game, round, failed) {
   if (game.stopped || game.current !== round || round.revealed) return;
+  // Coupure au tout début : on relance le même son plutôt que d'en mettre un autre
+  const heardMs = round.running ? Date.now() - round.audioAt : 0;
+  if (failed && round.running && heardMs < RESTART_IF_HEARD_UNDER_MS) {
+    restartRound(game, round, 'son coupé au démarrage');
+    return;
+  }
   if (!round.running) {
     replaceRound(game, round, failed ? 'son illisible' : 'son terminé avant le départ');
     return;
