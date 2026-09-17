@@ -1,16 +1,20 @@
 // Commandes, boutons, menus et suggestions de la musique.
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   EmbedBuilder,
   LabelBuilder,
   MessageFlags,
   ModalBuilder,
   PermissionFlagsBits,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
 import { config } from '../config.js';
 import { reportProblem } from '../features/alerts.js';
-import { isLive, liveInfo, stopLive } from '../features/livestream.js';
+import { isLive, liveDevices, liveInfo, setLiveDevice, stopLive } from '../features/livestream.js';
 import { setShare, shareNow, spotifyActivity } from '../features/spotify.js';
 import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
@@ -616,16 +620,63 @@ async function devineGame(client, interaction, fixedTheme = null) {
     .catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
 }
 
+/** Panneau du direct : entrée audio captée sur le PC + bouton pour couper. */
+export function livePanel() {
+  const { devices, current } = liveDevices();
+  const since = Math.floor((liveInfo()?.since ?? Date.now()) / 1000);
+  const loopback = /cable output|voicemeeter out|mix st[ée]r[ée]o|stereo mix|what u hear/i;
+  const embed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setAuthor({ name: '🔴 EN DIRECT · son du PC' })
+    .setDescription([
+      `Ton PC diffuse dans le vocal depuis <t:${since}:R>.`,
+      `🎚️ Entrée captée : **${current ?? 'inconnue'}**`,
+      '-# Pour ne capter que Spotify : mets la sortie de Spotify sur « Voicemeeter Aux Input » et envoie cette tranche sur B2, puis choisis « Voicemeeter Out B2 » ci-dessous.',
+    ].join('\n'));
+  const options = devices.slice(0, 25).map((name) => ({
+    label: name.slice(0, 100),
+    value: name.slice(0, 100),
+    emoji: { name: loopback.test(name) ? '🔊' : '🎙️' },
+    default: name === current,
+  }));
+  const rows = [];
+  if (options.length) {
+    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('live:device').setPlaceholder('Entrée audio à capter').addOptions(options)));
+  }
+  rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('live:stop').setLabel('Arrêter le direct').setEmoji('⏹️').setStyle(ButtonStyle.Danger)));
+  return { embeds: [embed], components: rows };
+}
+
+export const isLiveComponent = (interaction) => (interaction.customId ?? '').startsWith('live:');
+
+export async function handleLiveComponent(client, interaction) {
+  if (interaction.user.id !== config.ownerId) {
+    return interaction.reply({ content: 'Ce panneau est réservé au chef.', flags: MessageFlags.Ephemeral });
+  }
+  const [, action] = interaction.customId.split(':');
+  if (action === 'stop') {
+    stopLive('depuis le panneau');
+    return interaction.update({ content: '⏹️ Direct arrêté.', embeds: [], components: [] });
+  }
+  if (action === 'device') {
+    const name = interaction.values[0];
+    const ok = setLiveDevice(name);
+    if (!ok) return interaction.update({ content: '❌ Le programme du PC n\'est plus connecté.', embeds: [], components: [] });
+    await interaction.deferUpdate();
+    // Le programme redémarre sa capture : on laisse une seconde avant de réafficher
+    setTimeout(() => interaction.editReply(livePanel()).catch(() => {}), 1_200);
+    return undefined;
+  }
+  return undefined;
+}
+
 const MORE_COMMANDS = {
   async direct(client, interaction) {
     if (interaction.user.id !== config.ownerId) return interaction.reply(say('Cette commande est réservée au chef.'));
     if (interaction.options.getBoolean('arreter')) {
       return interaction.reply(say(stopLive('demandé par le chef') ? '⏹️ Diffusion du son de ton PC arrêtée.' : "Y a pas de diffusion en cours."));
     }
-    if (isLive()) {
-      const since = Math.floor(liveInfo().since / 1000);
-      return interaction.reply(say(`🔴 Ton PC diffuse déjà dans le vocal depuis <t:${since}:R>. Pour couper : /direct arreter:true`));
-    }
+    if (isLive()) return interaction.reply({ ...livePanel(), flags: MessageFlags.Ephemeral });
     return interaction.reply(say([
       '🔴 **Diffuser le son de ton PC dans le vocal** (Spotify, YouTube, jeu… tel quel)',
       'Sur ton ordinateur, dans le dossier du bot, lance :',

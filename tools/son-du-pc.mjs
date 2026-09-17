@@ -108,6 +108,7 @@ let ffmpeg;
 let stopping = false;
 
 function startFfmpeg() {
+  const previous = ffmpeg;
   ffmpeg = spawn(ffmpegPath, [
     '-hide_banner', '-loglevel', 'error',
     '-f', 'dshow', '-audio_buffer_size', '20', '-i', `audio=${device}`,
@@ -115,23 +116,43 @@ function startFfmpeg() {
     '-c:a', 'libmp3lame', '-b:a', '160k', '-reservoir', '0', '-flush_packets', '1', '-fflags', '+nobuffer', '-flags', 'low_delay',
     '-f', 'mp3', '-',
   ]);
-  ffmpeg.stderr.on('data', (chunk) => process.stderr.write(`[ffmpeg] ${chunk}`));
-  ffmpeg.stdout.on('data', (chunk) => {
-    if (ws?.readyState === WebSocket.OPEN) ws.send(chunk);
+  const own = ffmpeg;
+  own.stderr.on('data', (chunk) => process.stderr.write(`[ffmpeg] ${chunk}`));
+  own.stdout.on('data', (chunk) => {
+    if (own === ffmpeg && ws?.readyState === WebSocket.OPEN) ws.send(chunk);
   });
-  ffmpeg.on('close', (code) => {
-    if (!stopping) {
-      console.error(`ffmpeg s'est arrêté (code ${code})`);
-      process.exit(1);
-    }
+  own.on('close', (code) => {
+    if (own !== ffmpeg || stopping) return; // remplacé par un changement d'entrée
+    console.error(`ffmpeg s'est arrêté (code ${code})`);
+    process.exit(1);
   });
+  previous?.kill('SIGKILL');
+}
+
+/** Change l'entrée captée (demandé depuis le panneau Discord). */
+function switchDevice(name) {
+  if (!name || name === device) return;
+  device = name;
+  console.log(`🎚️ Nouvelle entrée : ${device}`);
+  startFfmpeg();
 }
 
 function connect() {
   ws = new WebSocket(url);
   ws.on('open', () => {
     console.log('✅ Connecté au bot : le son de ton PC part dans le vocal.');
+    // Le bot affiche ces entrées dans /direct pour pouvoir en changer sans toucher au PC
+    ws.send(JSON.stringify({ type: 'devices', devices, current: device }));
     if (!ffmpeg) startFfmpeg();
+  });
+  ws.on('message', (data) => {
+    try {
+      const order = JSON.parse(String(data));
+      if (order.type === 'device') switchDevice(order.name);
+      if (order.type === 'stop') process.kill(process.pid, 'SIGINT');
+    } catch {
+      // message inconnu
+    }
   });
   ws.on('close', (code) => {
     console.warn(`Connexion fermée (${code})${code === 1006 ? ' : clé refusée ou bot injoignable' : ''}. Nouvelle tentative dans 5 s…`);

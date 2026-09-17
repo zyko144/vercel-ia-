@@ -26,6 +26,16 @@ const keyOk = (given) => {
 };
 
 export const isLive = () => Boolean(live);
+/** Entrées audio du PC, vues par le petit programme. */
+export const liveDevices = () => ({ devices: live?.devices ?? [], current: live?.device ?? null });
+
+/** Change l'entrée captée sur le PC (le programme redémarre sa capture). */
+export function setLiveDevice(name) {
+  if (!live || live.ws?.readyState !== 1) return false;
+  live.ws.send(JSON.stringify({ type: 'device', name }));
+  live.device = name;
+  return true;
+}
 export const liveInfo = () => (live ? { userId: live.userId, since: live.since, auditeurs: live.listeners.size } : null);
 
 /** Adresse publique (secours) et adresse locale : le bot se sert de la locale, sans détour par internet. */
@@ -62,7 +72,21 @@ function startLive(ws, userId) {
   console.log(`[direct] diffusion du son du PC démarrée (${userId})`);
   playInVoice().catch((err) => console.warn('[direct] lecture :', err.message));
 
-  ws.on('message', (data) => {
+  ws.on('message', (data, isBinary) => {
+    // Message texte : infos du programme (entrées audio disponibles, entrée en cours)
+    if (isBinary === false) {
+      try {
+        const info = JSON.parse(String(data));
+        if (info.type === 'devices') {
+          live.devices = info.devices ?? [];
+          live.device = info.current ?? null;
+          console.log(`[direct] ${live.devices.length} entrées audio · en cours : ${live.device}`);
+        }
+      } catch {
+        // message inconnu : on ignore
+      }
+      return;
+    }
     const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
     clearTimeout(stopTimer);
     stopTimer = setTimeout(() => stopLive('plus rien ne rentre'), STOP_AFTER_MS);

@@ -18,7 +18,7 @@ import { storageBackend } from '../storage.js';
 import { allowedChannelsMention, attachmentsToContent, fetchBase64, isAllowedChannel, truncate } from '../utils/discord.js';
 import { buildAnswerPayload, handleCopyButton, handleCopyModal } from '../utils/reply.js';
 import { MUSIC_COMMAND_NAMES } from '../music/commands.js';
-import { handleMusicAutocomplete, handleMusicCommand, handleMusicComponent, isMusicComponent } from '../music/handlers.js';
+import { handleLiveComponent, handleMusicAutocomplete, handleMusicCommand, handleMusicComponent, isLiveComponent, isMusicComponent } from '../music/handlers.js';
 import { lavalink } from '../music/lavalink.js';
 import { allPlayers } from '../music/player.js';
 import { MODERATION_HANDLERS } from './moderation.js';
@@ -43,6 +43,7 @@ export async function onInteraction(client, interaction) {
     // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
     if (isBlindTestComponent(interaction)) return await handleBlindTestComponent(client, interaction);
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
+    if (isLiveComponent(interaction)) return await handleLiveComponent(client, interaction);
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('report:')) return await handleReportButton(client, interaction);
       if (interaction.customId === 'copy:code') return await handleCopyButton(interaction);
