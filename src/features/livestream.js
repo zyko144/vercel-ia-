@@ -224,7 +224,16 @@ async function playInVoice() {
   let local = true;
   try {
     if (!(player.backend instanceof LocalBackend)) await player.useBackend(new LocalBackend(player));
-    await player.backend.connect(voiceChannel);
+    // Le bot vient de rendre le vocal au serveur audio : il lui faut un instant pour y revenir
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await player.backend.connect(voiceChannel);
+        break;
+      } catch (err) {
+        if (attempt >= 3) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
+      }
+    }
   } catch (err) {
     // Pas grave : on repasse par le serveur audio (un peu plus de retard, mais ça marche)
     console.warn('[direct] lecteur local indisponible, passage par le serveur audio :', err.message);
