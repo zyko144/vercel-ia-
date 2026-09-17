@@ -19,6 +19,20 @@ const list = (key, fallback = '') =>
 const missing = ['DISCORD_TOKEN', 'GEMINI_API_KEY'].filter((k) => !str(k));
 // DISCORD_TOKEN peut contenir 2 tokens séparés par ";" : le bot principal, puis le bot de l'IA vocale
 const discordTokens = str('DISCORD_TOKEN').split(/[;,\s]+/).filter(Boolean);
+
+// Token du bot de l'IA vocale : VOICE_BOT_TOKEN, 2e token de DISCORD_TOKEN,
+// ou n'importe quelle variable qui contient un autre token de bot (peu importe son nom)
+const TOKEN_SHAPE = /^[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}$/;
+function findVoiceToken() {
+  for (const name of ['VOICE_BOT_TOKEN', 'DISCORD_VOICE_TOKEN']) if (str(name)) return { token: str(name), source: name };
+  if (discordTokens[1]) return { token: discordTokens[1], source: 'DISCORD_TOKEN (2e token)' };
+  for (const [name, value] of Object.entries(process.env)) {
+    const candidate = (value ?? '').trim();
+    if (TOKEN_SHAPE.test(candidate) && candidate !== discordTokens[0]) return { token: candidate, source: name };
+  }
+  return { token: '', source: null };
+}
+const voiceToken = findVoiceToken();
 if (missing.length) {
   console.error(`❌ Variables manquantes : ${missing.join(', ')}. Copie .env.example en .env (ou ajoute-les dans Render > Environment).`);
   process.exit(1);
@@ -49,7 +63,8 @@ export const config = {
 
   // IA vocale (2e bot qui écoute et répond à voix haute dans le vocal du bot)
   voiceAi: {
-    token: str('VOICE_BOT_TOKEN') || str('DISCORD_VOICE_TOKEN') || discordTokens[1] || '',
+    token: voiceToken.token,
+    tokenSource: voiceToken.source,
     model: str('GEMINI_VOICE_MODEL', 'gemini-2.5-flash-native-audio-latest'),
     voice: str('GEMINI_VOICE_NAME', 'Puck'),
     idleSeconds: int('VOICE_AI_IDLE_SECONDS', 45),

@@ -129,6 +129,7 @@ export async function startVoiceAssistant(mainClient) {
     console.log('🎙️ IA vocale désactivée : pas de token pour le 2e bot (DISCORD_TOKEN=token1;token2 ou VOICE_BOT_TOKEN)');
     return;
   }
+  console.log(`🎙️ IA vocale : token lu dans ${config.voiceAi.tokenSource}`);
   state.mainClient = mainClient;
   state.player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Play, maxMissedFrames: 250 } });
   state.player.on('error', (err) => console.warn('[vocal] lecture :', err.message));
@@ -160,6 +161,7 @@ export function voiceAssistantState() {
   const s = state.session;
   return {
     enabled: Boolean(config.voiceAi.token),
+    tokenSource: config.voiceAi.tokenSource,
     bot: state.client?.user?.tag ?? null,
     voice: conn?.state.status ?? 'déconnecté',
     model: config.voiceAi.model,
