@@ -390,9 +390,10 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
     player.volume = 100;
     if (!game.textOnly) {
       await player.connect(voiceChannel, { force: true });
-      // Serveurs audio en panne : on joue quand même avec le lecteur de secours du bot (versions moins sûres)
-      game.backupPlayer = !(player.backend instanceof LavalinkBackend);
-      if (game.backupPlayer) console.warn('[blindtest] serveurs audio indisponibles : lecteur de secours');
+      // Serveurs audio en panne : les modes avec son ne peuvent pas marcher, on le dit clairement
+      if (!(player.backend instanceof LavalinkBackend)) {
+        throw new Error('les serveurs audio publics sont en panne : en attendant, les modes sans son marchent (Image floutée, Zoom, Paroles)');
+      }
       // Jamais d'effet : le son d'origine, tel quel
       player.filters = [];
     }
