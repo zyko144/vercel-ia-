@@ -5,6 +5,7 @@ import { reportProblem } from '../features/alerts.js';
 import { askAI } from '../features/chat.js';
 import { createImageMessage } from '../features/images.js';
 import { hitCooldown } from '../features/limits.js';
+import { protectOwner } from '../features/protectOwner.js';
 import { conversationKey } from '../features/memory.js';
 import { getPrivateThread, privateThreadOwner } from '../features/privateThreads.js';
 import { blindTestActive, handleBlindTestMessage, handleJukeboxMessage } from '../music/handlers.js';
@@ -19,6 +20,8 @@ const MAX_REUPLOAD_BYTES = 8 * 1024 * 1024;
 
 export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
+  // Insultes envers le chef : vérifié sur tout le serveur, sans bloquer le reste
+  if (message.inGuild()) protectOwner(client, message).catch((err) => console.warn('[protection]', err.message));
   if (!isAllowedChannel(message.channel, message.channelId)) return;
 
   // Blind test en cours : les messages du salon sont des réponses au jeu
