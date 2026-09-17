@@ -180,6 +180,8 @@ export class LavalinkBackend {
       ...(curatedYoutube && track.sfx ? [`scsearch:${query}`] : [`ytmsearch:${query}`]),
       // Recherche YouTube classique / SoundCloud : pleine d'uploads de fans (accélérés, pitchés) -> jamais en blind test
       ...(track.strict ? [] : [`ytsearch:${query}`, `scsearch:${query}`]),
+      // Dernier recours quand YouTube Music ne donne rien : recherche YouTube (le choix reste aussi strict)
+      ...(track.strict && !track.curated ? [`ytsearch:${query}`] : []),
     ])];
   }
 
@@ -721,14 +723,20 @@ export class LavalinkBackend {
     if (!this.node?.usable) this.node = lavalink.bestNode();
     if (!this.node) return false;
     if (track.lavalinkReady?.node === this.node.name) return true;
-    for (const identifier of this.candidates(track)) {
-      const result = await this.node.loadTracks(identifier).catch(() => null);
-      const item = result && this.pick(result, track, /^\w+search:/.test(identifier), identifier);
-      if (item) {
-        track.lavalinkReady = { node: this.node.name, item };
-        this.applyMetadata(track, item);
-        if (track.strict) console.log(`[blindtest] version : "${item.info.author} - ${item.info.title}" (${Math.round(item.info.length / 1000)}s) pour "${track.artist} - ${track.title}" via ${identifier.includes('"') ? 'ISRC' : identifier}`);
-        return true;
+    // Le serveur audio du moment d'abord, puis les autres : un serveur qui rame ne fait pas sauter le son
+    const nodes = [this.node, ...lavalink.nodes.filter((node) => node.usable && node !== this.node)];
+    for (const node of nodes) {
+      for (const identifier of this.candidates(track)) {
+        const result = await node.loadTracks(identifier).catch(() => null);
+        const item = result && this.pick(result, track, /^\w+search:/.test(identifier), identifier);
+        if (item) {
+          track.lavalinkReady = { node: node.name, item };
+          this.applyMetadata(track, item);
+          if (track.strict) console.log(`[blindtest] version : "${item.info.author} - ${item.info.title}" (${Math.round(item.info.length / 1000)}s) pour "${track.artist} - ${track.title}" via ${identifier.includes('"') ? 'ISRC' : identifier}${node === this.node ? '' : ` (${node.name})`}`);
+          // Le son est prêt sur un autre serveur : on bascule dessus pour le jouer
+          if (node !== this.node && !this.player.current) this.node = node;
+          return true;
+        }
       }
     }
     return false;

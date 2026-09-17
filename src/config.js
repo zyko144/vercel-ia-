@@ -61,6 +61,7 @@ if (missing.length) {
 // Serveurs audio publics gratuits (testés le 16/09/2026), essayés dans cet ordre
 const DEFAULT_LAVALINK_NODES = [
   { name: 'kasawa', host: 'lava2.kasawa.pro', port: 2334, password: 'youshallnotpass', secure: false },
+  { name: 'serenetia2', host: 'lavalink.serenetia.com', port: 443, password: 'https://dsc.gg/ajidevserver', secure: true },
   { name: 'serenetia', host: 'lavalinkv4.serenetia.com', port: 443, password: 'https://seretia.link/discord', secure: true },
   { name: 'nodelink', host: 'nodelink.triniumhost.com', port: 443, password: 'free', secure: true },
   { name: 'trinium', host: 'lavalink-v4.triniumhost.com', port: 443, password: 'free', secure: true },

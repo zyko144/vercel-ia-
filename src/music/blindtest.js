@@ -500,7 +500,9 @@ async function nextRound(game) {
 
   await prepareAhead(game, 1);
   const track = game.pool.shift();
-  if (!track || game.stopped) return endGame(game);
+  if (game.stopped) return endGame(game);
+  // Plus aucun son jouable alors que la partie devait continuer : c'est le serveur audio
+  if (!track) return endGame(game, game.index < game.rounds ? { error: 'les serveurs audio ne trouvent plus les sons, réessaie dans quelques minutes' } : {});
   game.index++;
 
   const round = {
