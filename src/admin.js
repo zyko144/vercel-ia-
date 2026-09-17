@@ -111,6 +111,8 @@ export function adminRoutes(client) {
       }
       return {
       uptime: Math.round(process.uptime()),
+      ownerId: config.ownerId,
+      voiceAiUsers: config.voiceAi.allowedUsers,
       voice: client.guilds.cache.map((guild) => ({
         guild: guild.name,
         bot: guild.members.me?.voice.channel?.name ?? null,

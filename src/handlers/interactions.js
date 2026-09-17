@@ -5,6 +5,7 @@ import { chat, describeError, errorDetail } from '../ai/gemini.js';
 import { toolPrompt } from '../ai/persona.js';
 import { COMMANDS_ALLOWED_EVERYWHERE } from '../commands/definitions.js';
 import { askAI, channelLink } from '../features/chat.js';
+import { reportProblem } from '../features/alerts.js';
 import { dmOwner, whereLabel } from '../features/escalation.js';
 import { createImageMessage } from '../features/images.js';
 import { handleReport, handleReportButton } from '../features/report.js';
@@ -68,6 +69,14 @@ export async function onInteraction(client, interaction) {
     const payload = { content: `❌ ${err.body ? describeError(err) : "Ça a pas marché (permission manquante ou erreur Discord). Réessaie stp."}`, ...PRIVATE };
     if (interaction.deferred || interaction.replied) await interaction.followUp(payload).catch(() => {});
     else await interaction.reply(payload).catch(() => {});
+    reportProblem({
+      what: interaction.commandName ? `/${interaction.commandName}` : `bouton ${interaction.customId}`,
+      error: err.body ? errorDetail(err) : err,
+      userId: interaction.user.id,
+      guild: interaction.guild,
+      channelId: interaction.channelId,
+      shown: payload.content,
+    }).catch(() => {});
   }
 }
 

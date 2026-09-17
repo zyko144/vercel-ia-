@@ -14,6 +14,7 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import { config } from '../config.js';
+import { reportProblem } from '../features/alerts.js';
 import { holdVoice, lockedChannel, releaseVoiceHold } from '../features/voice.js';
 import { LavalinkBackend } from './backend-lavalink.js';
 import { buildPool, cleanTitle, DIFFICULTIES, lyricsExcerpt, MODES, rememberPlayed, THEMES } from './blindpools.js';
@@ -789,6 +790,7 @@ function onTrackGone(game, round, failed) {
 export async function endGame(game, { stopped = false, error = null } = {}) {
   if (game.ended) return;
   game.ended = true;
+  if (error) reportProblem({ what: 'blind test', error, userId: game.hostId, guild: game.guild, channelId: game.channelId }).catch(() => {});
   game.stopped = true;
   clearRoundTimers(game);
   game.wake?.();

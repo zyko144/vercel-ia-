@@ -23,6 +23,7 @@ import { config } from '../config.js';
 import { blindTestActive } from '../music/blindtest.js';
 import { getOrCreatePlayer, getPlayer } from '../music/player.js';
 import { resolveQuery } from '../music/sources.js';
+import { reportProblem } from '../features/alerts.js';
 import { truncate } from '../utils/discord.js';
 import { findSong, popularArtistNames, voiceVocabulary } from './songs.js';
 
@@ -224,10 +225,11 @@ const TOOLS = [{
  */
 export async function startVoiceSession({ guildId, userId, userName, memberChannelId, force = false }) {
   const allowed = config.voiceAi.allowedUsers;
-  if (!force && allowed.length && !allowed.includes(userId)) return { error: "🔒 L'IA vocale est réservée à certains membres." };
-  if (!state.client?.isReady()) return { error: "🎙️ L'IA vocale est pas connectée pour le moment (token du 2e bot manquant ou invalide)." };
+  // Le créateur du bot a toujours accès, en plus des membres autorisés
+  if (!force && allowed.length && !allowed.includes(userId) && userId !== config.ownerId) return { error: "🔒 L'IA vocale est réservée à certains membres." };
+  if (!state.client?.isReady()) return problem("🎙️ L'IA vocale est pas connectée pour le moment (token du 2e bot manquant ou invalide).", { userId, guildId });
   const channel = homeGuildChannel();
-  if (!channel || channel.guild.id !== guildId) return { error: "🎙️ L'IA vocale trouve pas son salon." };
+  if (!channel || channel.guild.id !== guildId) return problem("🎙️ L'IA vocale trouve pas son salon.", { userId, guildId });
   if (!force && memberChannelId !== channel.id) return { error: `🎧 Rejoins <#${channel.id}> pour parler à l'IA vocale.` };
   if (state.session) {
     if (state.session.userId === userId) {
@@ -242,7 +244,7 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
   try {
     await entersState(conn, VoiceConnectionStatus.Ready, 10_000);
   } catch {
-    return { error: "🎙️ L'IA vocale arrive pas à se connecter au vocal, réessaie dans quelques secondes." };
+    return problem("🎙️ L'IA vocale arrive pas à se connecter au vocal, réessaie dans quelques secondes.", { userId, guildId });
   }
 
   const session = {
@@ -260,7 +262,7 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
   } catch (err) {
     state.session = null;
     console.warn('[vocal] Gemini Live :', err.message);
-    return { error: `🎙️ L'IA vocale est indispo (${truncate(err.message, 120)}).` };
+    return problem(`🎙️ L'IA vocale est indispo (${truncate(err.message, 120)}).`, { userId, guildId });
   }
 
   // On ne se met plus en sourdine : il faut entendre la personne
@@ -317,7 +319,9 @@ function onLiveClose(session, event) {
   if (session.closing || state.session !== session) return;
   console.warn(`[vocal] Gemini Live fermé (${event?.code ?? '?'} ${event?.reason ?? ''})`);
   if (session.reconnects >= MAX_RECONNECTS) {
-    stopSession(/quota|resource|exhausted|limit/i.test(event?.reason ?? '') ? 'quota gratuit de Gemini atteint, réessaie plus tard' : 'connexion à Gemini perdue').catch(() => {});
+    const reason = /quota|resource|exhausted|limit/i.test(event?.reason ?? '') ? 'quota gratuit de Gemini atteint, réessaie plus tard' : 'connexion à Gemini perdue';
+    problem(`conversation coupée : ${reason} (${event?.code ?? '?'} ${event?.reason ?? ''})`, session);
+    stopSession(reason).catch(() => {});
     return;
   }
   session.reconnects++;
@@ -326,6 +330,7 @@ function onLiveClose(session, event) {
     if (session.closing || state.session !== session) return;
     connectLive(session).then(() => { session.reconnects = 0; }).catch((err) => {
       console.warn('[vocal] reconnexion impossible :', err.message);
+      problem(`conversation coupée : reconnexion à Gemini impossible (${err.message})`, session);
       stopSession('connexion à Gemini perdue').catch(() => {});
     });
   }, 300);
@@ -517,6 +522,18 @@ function postTranscript(session) {
       ...actions,
     ].filter(Boolean).join('\n'), 4000));
   channel?.send({ embeds: [embed], allowedMentions: { parse: [] } }).catch(() => {});
+}
+
+/** Problème vu par un membre : le chef est prévenu (MP + ping dans le salon de l'IA vocale). */
+function problem(error, { userId, guildId }) {
+  reportProblem({
+    what: 'IA vocale',
+    error,
+    userId,
+    guild: state.mainClient?.guilds.cache.get(guildId),
+    channelId: config.voiceAi.channelId,
+  }).catch(() => {});
+  return { error };
 }
 
 async function stopSession(reason) {

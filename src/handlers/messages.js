@@ -1,6 +1,7 @@
 import { AttachmentBuilder } from 'discord.js';
 import { config } from '../config.js';
 import { describeError, errorDetail } from '../ai/gemini.js';
+import { reportProblem } from '../features/alerts.js';
 import { askAI } from '../features/chat.js';
 import { createImageMessage } from '../features/images.js';
 import { hitCooldown } from '../features/limits.js';
@@ -128,7 +129,9 @@ export async function onMessage(client, message) {
     await send(target, replyTo, payload);
   } catch (err) {
     console.error('[message]', err.body ? errorDetail(err) : err);
-    await send(target, replyTo, { content: `❌ ${describeError(err)}` });
+    const shown = `❌ ${describeError(err)}`;
+    await send(target, replyTo, { content: shown });
+    reportProblem({ what: 'réponse de l\'IA', error: err.body ? errorDetail(err) : err, userId: message.author.id, guild: message.guild, channelId: message.channelId, shown }).catch(() => {});
   } finally {
     typing?.stop();
   }

@@ -9,6 +9,7 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import { config } from '../config.js';
+import { reportProblem } from '../features/alerts.js';
 import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
 import { blindTestActive, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './blindtest.js';
@@ -677,6 +678,9 @@ export async function handleMusicCommand(client, interaction) {
     const content = `❌ ${err instanceof MusicError ? `Oups : ${err.message}.` : err.message?.startsWith('Impossible') ? err.message : "Ça a pas marché, réessaie stp."}`;
     if (interaction.deferred || interaction.replied) await interaction.editReply({ content, embeds: [], components: [] }).catch(() => {});
     else await interaction.reply(say(content)).catch(() => {});
+    if (!(err instanceof MusicError) || /serveur audio|trop de temps/i.test(err.message)) {
+      reportProblem({ what: `/${interaction.commandName}`, error: err, userId: interaction.user.id, guild: interaction.guild, channelId: interaction.channelId, shown: content }).catch(() => {});
+    }
   }
 }
 

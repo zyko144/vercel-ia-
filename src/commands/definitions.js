@@ -262,6 +262,6 @@ export const commandDefinitions = [...aiCommands, ...moderationCommands, ...util
 export const COMMANDS_ALLOWED_EVERYWHERE = new Set([
   ...moderationCommands.map((c) => c.name),
   ...MUSIC_COMMAND_NAMES,
-  'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin',
+  'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin', 'vocal',
   'Expliquer ce message', 'Traduire en français', 'Signaler au staff',
 ]);

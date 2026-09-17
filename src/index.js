@@ -6,6 +6,7 @@ import { config } from './config.js';
 import { commandDefinitions } from './commands/definitions.js';
 import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
+import { reportProblem, setAlertClient } from './features/alerts.js';
 import { startReminderLoop } from './features/reminders.js';
 import { startVoiceKeeper } from './features/voice.js';
 import { ensureBinaries } from './music/binaries.js';
@@ -29,6 +30,7 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, async (c) => {
+  setAlertClient(c);
   console.log(`✅ Connecté en tant que ${c.user.tag} sur ${c.guilds.cache.size} serveur(s)`);
   console.log(`🧠 Chat : ${config.models.chat} (réflexion ${config.models.thinkingLevel}) · 🎨 Images : ${config.limits.imagesEnabled ? config.models.image : 'désactivées'} · 💾 Stockage : ${storageBackend}`);
 
@@ -65,11 +67,17 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => handleMusicVoiceState
 // Les serveurs audio ont besoin des événements vocaux bruts de Discord
 client.on(Events.Raw, (packet) => lavalink.handleRaw(packet));
 
-client.on(Events.Error, (err) => console.error('[discord]', err));
+client.on(Events.Error, (err) => {
+  console.error('[discord]', err);
+  reportProblem({ what: 'erreur Discord', error: err, ping: false }).catch(() => {});
+});
 
 // Prépare yt-dlp dès le démarrage pour que le premier /play soit rapide
 ensureBinaries().catch((err) => console.warn('[musique] yt-dlp indisponible :', err.message));
-process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+  reportProblem({ what: 'erreur interne', error: err, ping: false }).catch(() => {});
+});
 
 // Render arrête l'ancienne version à chaque mise à jour : on coupe proprement ses lecteurs audio
 let stopping = false;
