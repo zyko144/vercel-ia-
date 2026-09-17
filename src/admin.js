@@ -2,6 +2,7 @@
 import { lavalink } from './music/lavalink.js';
 import { allPlayers } from './music/player.js';
 import { config } from './config.js';
+import { bilanPayload } from './features/tribunal.js';
 import { blindTestState, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './music/blindtest.js';
 import { recentLogs } from './utils/logbuffer.js';
 import { startVoiceSession, stopVoiceSession, voiceAssistantState } from './voice-ai/assistant.js';
@@ -162,6 +163,16 @@ export function adminRoutes(client) {
         return { ok: true, url: track.playUrl };
       }
       throw new Error('action inconnue (start, stop, say)');
+    },
+
+    'POST /admin/tribunal': async (url, body) => {
+      const guild = guildOf(body.guildId);
+      const payload = await bilanPayload(guild);
+      if (body.publier) {
+        const channel = await client.channels.fetch(config.tribunal.announceChannelId);
+        await channel.send(payload);
+      }
+      return { ok: true, gifKo: Math.round(payload.files[0].attachment.length / 1024), contenu: payload.content };
     },
 
     'POST /admin/blindtest': async (url, body) => {
