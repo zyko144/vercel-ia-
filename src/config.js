@@ -74,6 +74,8 @@ export const config = {
     allowedUsers: list('VOICE_AI_USERS', '855176142096039997,734865069904756766,923551925113323542'),
   },
   ownerId: str('OWNER_ID', '1543726919168557087'),
+  // Membres protégés contre les insultes, en plus du chef (warn puis exclusion 1 min)
+  protectedUsers: list('PROTECTED_USERS', '923551925113323542'),
   // Statut affiché sous le nom du bot
   botStatus: str('BOT_STATUS', 'dictature'),
 
