@@ -1,4 +1,4 @@
-// IA vocale : un 2e bot (« IA Vocal Vercel ») reste 24h/24 dans le vocal du bot.
+// IA vocale : un 2e bot (« AI Vocal Vercel ») reste 24h/24 dans le vocal du bot.
 // Avec /vocal, il écoute la personne et lui répond à voix haute en direct (Gemini Live),
 // et peut piloter la musique du bot principal. Il ne va dans aucun autre salon.
 import { PassThrough, Readable } from 'node:stream';
@@ -173,7 +173,7 @@ export function voiceAssistantState() {
 function systemPrompt(session) {
   const date = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
   return [
-    `Tu es « IA Vocal Vercel », l'assistante vocale du serveur Discord DDV. Tu parles en direct avec ${session.userName} dans le salon vocal.`,
+    `Tu es « AI Vocal Vercel », l'assistante vocale du serveur Discord DDV. Tu parles en direct avec ${session.userName} dans le salon vocal.`,
     'Réponds TOUJOURS en français, à l\'oral : phrases courtes et naturelles, une à trois phrases, sans liste, sans émoji, sans markdown.',
     'Style jeune et détendu, tutoiement, quelques expressions courantes mais sans en faire trop.',
     'Si tu ne sais pas quelque chose, dis-le franchement au lieu d\'inventer.',
