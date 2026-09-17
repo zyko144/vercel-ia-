@@ -5,7 +5,7 @@ import http from 'node:http';
 import { config } from './config.js';
 
 const KEEP_ALIVE_MS = 10 * 60_000;
-const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 /** Clé d'admin : personne ne peut la deviner sans le token du bot. */
 export function adminKey() {

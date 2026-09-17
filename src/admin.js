@@ -21,11 +21,11 @@ export function testAudioFile(pathname) {
   return entry.buffer;
 }
 
-async function liveSelfTest({ text, model, gapMs = 0 }) {
+async function liveSelfTest({ text, wavBase64, model, gapMs = 0 }) {
   const ai = new GoogleGenAI({ apiKey: config.geminiKey });
-  const wav = await speechWav(text);
+  const wav = wavBase64 ? Buffer.from(wavBase64, 'base64') : await speechWav(text);
   const rate = wav.readUInt32LE(24);
-  const data = wav.subarray(44);
+  const data = wav.subarray(wav.indexOf(Buffer.from('data')) + 8);
   const count = Math.floor((data.length / 2) * 16_000 / rate);
   const pcm = Buffer.alloc(count * 2);
   for (let i = 0; i < count; i++) pcm.writeInt16LE(data.readInt16LE(Math.min(data.length / 2 - 1, Math.floor(i * rate / 16_000)) * 2), i * 2);
@@ -142,11 +142,11 @@ export function adminRoutes(client) {
       if (body.action === 'start') return startVoiceSession({ guildId: guild.id, userId: body.userId ?? client.user.id, userName: body.userName ?? 'test', memberChannelId: null, force: true });
       // Fait parler le bot principal (synthèse vocale du serveur audio) : sert de « personne » pour tester
       if (body.action === 'selftest') {
-        return liveSelfTest({ text: String(body.text ?? 'Salut, quelle est la capitale du Japon ?'), model: body.model ?? config.voiceAi.model, gapMs: Number(body.gapMs ?? 0) });
+        return liveSelfTest({ text: String(body.text ?? 'Salut, quelle est la capitale du Japon ?'), wavBase64: body.wav, model: body.model ?? config.voiceAi.model, gapMs: Number(body.gapMs ?? 0) });
       }
       if (body.action === 'say') {
         const id = randomBytes(16).toString('hex');
-        testAudio.set(id, { buffer: await speechWav(String(body.text ?? '')), at: Date.now() });
+        testAudio.set(id, { buffer: body.wav ? Buffer.from(body.wav, 'base64') : await speechWav(String(body.text ?? '')), at: Date.now() });
         for (const [key, entry] of testAudio) if (Date.now() - entry.at > TEST_AUDIO_TTL_MS) testAudio.delete(key);
         const player = getOrCreatePlayer(client, guild);
         await player.connect(guild.channels.cache.get(config.voice.channelId));
