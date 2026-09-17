@@ -19,10 +19,11 @@ const list = (key, fallback = '') =>
 // Nouveau serveur « DDV PRV ANTI ZAIROX REBELLION » : l'ancien serveur DDV a été supprimé.
 // Ses anciens salons (encore réglés dans l'hébergeur) sont remplacés automatiquement par ceux du nouveau serveur.
 const DICTATURE = '1550190587142082582';
+const IA_CHANNEL = '1550195587922661607'; // │・𝐈𝐀, dans la catégorie VERCEL
 const MOVED_CHANNELS = new Map([
   ['1549504799806857236', DICTATURE], // Dictature
   ['1550100131569868871', DICTATURE], // IA-VOCAL : l'IA vocale est maintenant aussi dans Dictature
-  ['1549523857252028538', ''], // salon IA (pas d'équivalent)
+  ['1549523857252028538', IA_CHANNEL], // salon IA
   ['1549658865002487839', ''], // salon musique / jukebox (pas d'équivalent)
   ['1549658986935222363', ''], // salon blindtest (le jeu se joue là où on lance la commande)
 ]);
@@ -115,7 +116,7 @@ export const config = {
   },
 
   // Salons où le bot répond à tous les messages (sans mention)
-  aiChannelIds: channels('AI_CHANNEL_IDS'),
+  aiChannelIds: channels('AI_CHANNEL_IDS', IA_CHANNEL),
   // Vide = le bot répond partout. Rempli = il ne répond QUE dans ces salons.
   allowedChannelIds: list('ALLOWED_CHANNEL_IDS').filter((id) => id !== '*'),
   // Réponses visibles seulement par la personne (fil privé + messages éphémères)

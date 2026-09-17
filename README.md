@@ -2,7 +2,7 @@
 
 Assistant IA du serveur. Réponses claires et bien expliquées avec des liens utiles, lecture des images, PDF, fichiers et liens envoyés, aide en code, quiz, rappels, sondages et résumés de salon. En plus, il reste **24h/24 dans le vocal** `│・𝐃𝐢𝐜𝐭𝐚𝐭𝐮𝐫𝐞`.
 
-- Il marche dans **tous les salons** et tout le monde peut l'utiliser. Dans les **salons IA** (`AI_CHANNEL_IDS`, aucun pour l’instant sur le nouveau serveur) il répond à chaque message ; ailleurs, il faut le mentionner.
+- Il marche dans **tous les salons** et tout le monde peut l'utiliser. Dans les **salons IA** (`1550195587922661607`, dans la catégorie VERCEL) il répond à chaque message ; ailleurs, il faut le mentionner.
 - **Réponses privées** : un message écrit dans le salon IA est déplacé dans le **fil privé** de la personne (seuls elle et les admins le voient). Toutes les commandes répondent en « visible seulement par toi », sauf `/sondage` et `/say`.
 - **1 seul message par réponse** (jusqu'à ~6000 caractères), avec un bouton **📋 Copier le code** quand il y a du code.
 - Quand il ne sait pas répondre (infos internes au serveur, décision humaine, bug…), il **ping le chef** (`1543726919168557087`), lui envoie un **MP avec le contexte** et dit au membre de contacter le chef directement.
