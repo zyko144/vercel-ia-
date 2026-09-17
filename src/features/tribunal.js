@@ -1,7 +1,7 @@
 // Tribunal des sons : chaque semaine, chaque membre doit déposer un son de lui dans │・sons.
 // L'IA vérifie que ce n'est pas un faux (son de quelqu'un d'autre, repost, extrait commercial),
 // les deux juges tranchent depuis │・tribunal, et ceux qui n'ont rien rendu deviennent Bouffon du Roi.
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import { AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { config } from '../config.js';
 import { chatJson } from '../ai/gemini.js';
 import { deezer, matchRatio } from '../music/deezer.js';
@@ -11,7 +11,10 @@ import { truncate } from '../utils/discord.js';
 const KEY = 'tribunal';
 const WEEK_MS = 7 * 24 * 60 * 60_000;
 const COOLDOWN_MS = 3 * 24 * 60 * 60_000; // un dépôt par personne tous les 3 jours
-const NAPOLEON = 'https://upload.wikimedia.org/wikipedia/commons/5/50/Jacques-Louis_David_-_The_Emperor_Napoleon_in_His_Study_at_the_Tuileries_-_Google_Art_Project.jpg';
+const IMAGE_FILE = 'assets/tribunal.jpg';
+const IMAGE_NAME = 'tribunal.jpg';
+const IMAGE_URL = `attachment://${IMAGE_NAME}`;
+const image = () => new AttachmentBuilder(IMAGE_FILE, { name: IMAGE_NAME });
 const AUDIO_LINK = /(youtube\.com|youtu\.be|soundcloud\.com|spotify\.com|deezer\.com|music\.apple\.com|audiomack\.com|drive\.google\.com|dropbox\.com|on\.soundcloud\.com|vocaroo\.com|voca\.ro|fromsmash|wetransfer)/i;
 const RELEASED = /(spotify\.com|deezer\.com|music\.apple\.com)/i;
 
@@ -48,6 +51,7 @@ const deadline = (weekStart) => Math.floor((weekStart + WEEK_MS) / 1000);
 export function reglementPayload(guild) {
   const juges = config.tribunal.judges.map((id) => `<@${id}>`).join(' et ');
   const sons = config.tribunal.sonsChannelId ? `<#${config.tribunal.sonsChannelId}>` : '#sons';
+  const annonces = config.tribunal.announceChannelId ? `<#${config.tribunal.announceChannelId}>` : null;
   const bouffon = config.tribunal.jesterRoleId ? `<@&${config.tribunal.jesterRoleId}>` : '**Bouffon du Roi**';
   const embed = new EmbedBuilder()
     .setColor(0xc8a24a)
@@ -84,13 +88,15 @@ export function reglementPayload(guild) {
       '• Personne d\'autre ne peut ouvrir le tribunal, valider un son, ou retirer un rôle.',
       '• Tout le reste du serveur est **égal devant le décret** : tout le monde doit rendre un son, sans exception.',
       '',
+      annonces ? `• Les verdicts de fin de semaine sont publiés dans ${annonces}.` : null,
+      '',
       '**🎯 En résumé**',
       'Tu fais un son. Tu le déposes ici. Le tribunal vérifie. Tu passes, ou tu portes le chapeau.',
     ].join('\n'))
-    .setImage(NAPOLEON)
+    .setImage(IMAGE_URL)
     .setFooter({ text: `${guild?.name ?? 'Le serveur'} · décret applicable immédiatement` })
     .setTimestamp();
-  return { embeds: [embed], allowedMentions: { parse: [] } };
+  return { embeds: [embed], files: [image()], allowedMentions: { parse: [] } };
 }
 
 // ===================== Analyse d'un dépôt =====================
@@ -326,9 +332,9 @@ export async function weekPayload(guild) {
       { name: `⏳ En attente de jugement (${waiting.length})`, value: list(waiting) },
       { name: `🤡 Rien rendu (${missing.length})`, value: list(missing) },
     )
-    .setThumbnail(NAPOLEON)
+    .setThumbnail(IMAGE_URL)
     .setTimestamp();
-  return { embeds: [embed], allowedMentions: { parse: [] } };
+  return { embeds: [embed], files: [image()], allowedMentions: { parse: [] } };
 }
 
 /** Fin de semaine : le rôle du Bouffon pour ceux qui n'ont rien rendu. */
@@ -369,7 +375,7 @@ export async function closeWeek(guild) {
       '',
       `Nouvelle semaine ouverte. Prochaine échéance : <t:${deadline(data.weekStart)}:F>.`,
     ].filter(Boolean).join('\n'))
-    .setImage(NAPOLEON)
+    .setImage(IMAGE_URL)
     .setTimestamp();
-  return { embeds: [embed], allowedMentions: { parse: [] } };
+  return { embeds: [embed], files: [image()], allowedMentions: { parse: [] } };
 }

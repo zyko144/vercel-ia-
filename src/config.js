@@ -150,7 +150,8 @@ export const config = {
 
   // Tribunal des sons : un son par semaine et par membre, jugé par le chef et _8xr
   tribunal: {
-    sonsChannelId: str('TRIBUNAL_SONS_CHANNEL_ID', '1550286905722011758'),
+    sonsChannelId: str('TRIBUNAL_SONS_CHANNEL_ID', '1550287520007200809'),
+    announceChannelId: str('TRIBUNAL_ANNONCES_CHANNEL_ID', '1550286905722011758'),
     tribunalChannelId: str('TRIBUNAL_CHANNEL_ID', '1550277941563494453'),
     jesterRoleId: str('TRIBUNAL_JESTER_ROLE_ID', '1550286906393231492'),
     judges: list('TRIBUNAL_JUDGES', '1543726919168557087,855176142096039997'),
