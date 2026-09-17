@@ -48,7 +48,32 @@ function listDevices() {
   });
 }
 
-const PREFERRED = [/cable output/i, /mix st[ée]r[ée]o/i, /stereo mix/i, /what u hear/i, /virtual-audio-capturer/i, /loopback/i];
+const PREFERRED = [/cable output/i, /voicemeeter out b1/i, /voicemeeter out b2/i, /voicemeeter out b3/i, /voicemeeter out/i, /mix st[ée]r[ée]o/i, /stereo mix/i, /what u hear/i, /virtual-audio-capturer/i, /loopback/i];
+
+/** Niveau sonore moyen d'une entrée (en dB) : sert à trouver celle qui reçoit vraiment le son du PC. */
+function levelOf(name, seconds = 2) {
+  return new Promise((resolve) => {
+    const proc = spawn(ffmpegPath, ['-hide_banner', '-f', 'dshow', '-i', `audio=${name}`, '-t', String(seconds), '-af', 'volumedetect', '-f', 'null', '-']);
+    let text = '';
+    proc.stderr.on('data', (chunk) => { text += chunk; });
+    proc.on('close', () => {
+      const mean = Number(text.match(/mean_volume:\s*(-?\d+(?:\.\d+)?) dB/)?.[1]);
+      resolve(Number.isFinite(mean) ? mean : -999);
+    });
+    proc.on('error', () => resolve(-999));
+  });
+}
+
+/** Cherche l'entrée qui capte le son du PC : celle qui a du son en ce moment. */
+async function findLoudest(candidates) {
+  const results = [];
+  for (const name of candidates) {
+    const level = await levelOf(name);
+    results.push({ name, level });
+    console.log(`   ${level > -70 ? '🔊' : '🔇'} ${name} : ${level > -900 ? `${level.toFixed(1)} dB` : 'pas de son'}`);
+  }
+  return results.sort((a, b) => b.level - a.level)[0];
+}
 
 const devices = await listDevices();
 if (option('liste')) {
@@ -56,9 +81,23 @@ if (option('liste')) {
   process.exit(0);
 }
 
-const device = option('entree') ?? PREFERRED.map((rx) => devices.find((d) => rx.test(d))).find(Boolean);
+// Entrées qui peuvent capter la sortie du PC (VB-CABLE, Voicemeeter, Mix stéréo…)
+const candidates = [...new Set(PREFERRED.flatMap((rx) => devices.filter((d) => rx.test(d))))];
+
+let device = option('entree');
+if (!device && candidates.length) {
+  console.log('🔎 Je cherche laquelle reçoit le son (mets un son en route) :');
+  const best = await findLoudest(candidates);
+  device = best?.level > -70 ? best.name : candidates[0];
+  if (!(best?.level > -70)) console.warn(`⚠️ Aucune entrée n'a de son en ce moment. Je prends « ${device} » : si personne n'entend rien, lance un son puis relance, ou choisis avec --entree "nom".`);
+}
+if (option('test')) {
+  if (!candidates.length) console.log('Aucune entrée capable de capter le son du PC.');
+  else await findLoudest(candidates);
+  process.exit(0);
+}
 if (!device) {
-  console.error(`❌ Aucune entrée qui capte le son du PC.\nEntrées disponibles :\n - ${devices.join('\n - ') || '(aucune)'}\n\nActive « Mix stéréo » dans Paramètres son › Enregistrement, ou installe VB-CABLE, puis relance avec --entree "nom".`);
+  console.error(`❌ Aucune entrée qui capte le son du PC.\nEntrées disponibles :\n - ${devices.join('\n - ') || '(aucune)'}\n\nAvec Voicemeeter : mets la sortie de Spotify sur « Voicemeeter Input », et envoie-la sur le bus B1.\nSinon : active « Mix stéréo » dans Paramètres son › Enregistrement, ou installe VB-CABLE. Puis relance avec --entree "nom".`);
   process.exit(1);
 }
 
@@ -71,9 +110,9 @@ let stopping = false;
 function startFfmpeg() {
   ffmpeg = spawn(ffmpegPath, [
     '-hide_banner', '-loglevel', 'error',
-    '-f', 'dshow', '-audio_buffer_size', '50', '-i', `audio=${device}`,
+    '-f', 'dshow', '-audio_buffer_size', '20', '-i', `audio=${device}`,
     '-ac', '2', '-ar', '48000',
-    '-c:a', 'libmp3lame', '-b:a', '160k', '-reservoir', '0',
+    '-c:a', 'libmp3lame', '-b:a', '160k', '-reservoir', '0', '-flush_packets', '1', '-fflags', '+nobuffer', '-flags', 'low_delay',
     '-f', 'mp3', '-',
   ]);
   ffmpeg.stderr.on('data', (chunk) => process.stderr.write(`[ffmpeg] ${chunk}`));

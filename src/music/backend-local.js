@@ -18,6 +18,7 @@ import { MUSIC_PROXY } from './ytdlp.js';
 
 const BUFFER_BYTES = 2 * 1024 * 1024; // ~3 min d'audio d'avance
 const PREBUFFER_BYTES = 48 * 1024; // ~4 s avant de lancer le son
+const LIVE_PREBUFFER_BYTES = 4 * 1024; // en direct : on démarre presque tout de suite
 const MAX_STALL_FRAMES = 500; // tolère 10 s de ralentissement avant de considérer le son fini
 const backends = new Map(); // guildId -> LocalBackend
 
@@ -28,7 +29,7 @@ onVoiceReady((guild, connection) => {
 });
 
 /** Attend d'avoir quelques secondes d'audio en réserve (ou la fin du flux / 8 s max). */
-function waitForBuffer(stream, ffmpeg) {
+function waitForBuffer(stream, ffmpeg, target = PREBUFFER_BYTES) {
   return new Promise((resolve) => {
     const done = () => {
       clearInterval(check);
@@ -36,7 +37,7 @@ function waitForBuffer(stream, ffmpeg) {
       resolve();
     };
     const check = setInterval(() => {
-      if (stream.readableLength >= PREBUFFER_BYTES || stream.writableEnded || ffmpeg.exitCode !== null) done();
+      if (stream.readableLength >= target || stream.writableEnded || ffmpeg.exitCode !== null) done();
     }, 50);
     const timer = setTimeout(done, 8_000);
   });
@@ -97,8 +98,11 @@ export class LocalBackend {
     const isHttp = /^https?:/i.test(track.streamUrl);
     // Son déjà en Opus, sans effet ni volume modifié : on recopie l'audio sans le réencoder (presque 0 CPU)
     const copy = track.acodec === 'opus' && !this.player.filters.length && this.player.volume === 100 && !/m3u8/i.test(track.protocol ?? '');
+    // Direct (son du PC) : on coupe tous les tampons de ffmpeg pour rester au plus près du temps réel
+    const liveMode = Boolean(track.lowLatency);
     const args = [
       '-hide_banner', '-loglevel', 'error', '-nostdin',
+      ...(liveMode ? ['-fflags', 'nobuffer+discardcorrupt', '-flags', 'low_delay', '-probesize', '32', '-analyzeduration', '0', '-thread_queue_size', '512'] : []),
       ...(isHttp ? ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1', '-reconnect_delay_max', '10'] : []),
       ...(isHttp && /^http:\/\//i.test(MUSIC_PROXY) ? ['-http_proxy', MUSIC_PROXY] : []),
       ...(seek > 0 ? ['-ss', seek.toFixed(2)] : []),
@@ -123,7 +127,7 @@ export class LocalBackend {
     ffmpeg.stdout.on('error', () => {});
     buffer.on('error', () => {});
     ffmpeg.stdout.pipe(buffer);
-    await waitForBuffer(buffer, ffmpeg);
+    await waitForBuffer(buffer, ffmpeg, liveMode ? LIVE_PREBUFFER_BYTES : PREBUFFER_BYTES);
 
     if (token !== this.player.playToken) {
       ffmpeg.kill('SIGKILL');

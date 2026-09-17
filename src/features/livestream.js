@@ -5,6 +5,8 @@ import { PassThrough } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { config } from '../config.js';
 import { lockedChannel } from './voice.js';
+import { LavalinkBackend } from '../music/backend-lavalink.js';
+import { LocalBackend } from '../music/backend-local.js';
 import { getOrCreatePlayer, getPlayer } from '../music/player.js';
 
 const MAX_BUFFER = 1 << 20; // 1 Mo d'avance au maximum par auditeur
@@ -26,8 +28,9 @@ const keyOk = (given) => {
 export const isLive = () => Boolean(live);
 export const liveInfo = () => (live ? { userId: live.userId, since: live.since, auditeurs: live.listeners.size } : null);
 
-/** Adresse publique que le serveur audio vient écouter. */
+/** Adresse publique (secours) et adresse locale : le bot se sert de la locale, sans détour par internet. */
 export const liveUrl = () => `${config.publicUrl}/live/audio.mp3?key=${streamKey()}`;
+const localUrl = () => `http://127.0.0.1:${config.port}/live/audio.mp3?key=${streamKey()}`;
 
 export function setLiveClient(discordClient) {
   client = discordClient;
@@ -85,6 +88,8 @@ export function stopLive(reason = 'arrêt') {
   console.log(`[direct] diffusion arrêtée (${reason})`);
   const player = client && getPlayer(guildId());
   if (player?.current?.isLiveStream) {
+    // Retour au serveur audio habituel pour la musique
+    restoreBackend(player).catch((err) => console.warn('[direct] retour au serveur audio :', err.message));
     // On rend la musique d'avant telle qu'elle était
     const before = previous.before;
     if (before?.current) {
@@ -126,6 +131,15 @@ export function serveLive(req, res, url) {
   return undefined;
 }
 
+/** Après un direct : on rend la main au serveur audio (meilleure qualité pour la musique). */
+async function restoreBackend(player) {
+  if (!(player.backend instanceof LocalBackend)) return;
+  const guild = player.guild;
+  const voiceChannel = lockedChannel(guild) ?? guild.channels.cache.get(config.voice.channelId);
+  await player.useBackend(new LavalinkBackend(player));
+  if (voiceChannel) await player.backend.connect(voiceChannel).catch(() => {});
+}
+
 // ===================== Lecture dans le vocal =====================
 
 const guildId = () => client?.guilds.cache.first()?.id;
@@ -139,16 +153,23 @@ async function playInVoice() {
   await player.connect(voiceChannel);
   // Ce qui jouait avant : on le remettra à la fin de la diffusion
   if (!player.current?.isLiveStream) live.before = { current: player.current, queue: [...player.queue], position: Math.round(player.position()) };
+
+  // Lecture par le bot lui-même : le son va du PC au vocal sans passer par le serveur audio public
+  if (!(player.backend instanceof LocalBackend)) {
+    await player.useBackend(new LocalBackend(player));
+    await player.backend.connect(voiceChannel);
+  }
   const name = guild.members.cache.get(live.userId)?.displayName ?? 'le chef';
   player.playNow({
     title: `Son du PC de ${name}`,
     artist: 'en direct',
     url: null,
-    playUrl: liveUrl(),
-    streamUrl: liveUrl(),
+    playUrl: localUrl(),
+    streamUrl: localUrl(),
     source: 'web',
     isLive: true,
     isLiveStream: true,
+    lowLatency: true,
     duration: 0,
     requestedBy: live.userId,
   });
