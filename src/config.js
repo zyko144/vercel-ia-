@@ -65,7 +65,7 @@ export const config = {
   voiceAi: {
     token: voiceToken.token,
     tokenSource: voiceToken.source,
-    model: str('GEMINI_VOICE_MODEL', 'gemini-2.5-flash-native-audio-latest'),
+    model: str('GEMINI_VOICE_MODEL', 'gemini-3.8-live'),
     voice: str('GEMINI_VOICE_NAME', 'Puck'),
     idleSeconds: int('VOICE_AI_IDLE_SECONDS', 45),
   },
