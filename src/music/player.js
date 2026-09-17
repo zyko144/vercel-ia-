@@ -189,7 +189,7 @@ export class GuildPlayer {
       track.retries = (track.retries ?? 0) + 1;
       const position = resumeAt;
       console.warn(`[musique] "${track.title}" coupé à ${Math.round(position)}s (${error?.message ?? 'erreur'}), reprise ${track.retries}/${MAX_TRACK_RETRIES}`);
-      this.backend?.invalidate?.(track);
+      if (!this.blind || track.retries > 1) this.backend?.invalidate?.(track);
       if (this.blind) this.onBlindRetry?.();
       return this.startCurrent(track.isLive ? 0 : position);
     }

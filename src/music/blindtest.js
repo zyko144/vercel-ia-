@@ -18,7 +18,7 @@ import { config } from '../config.js';
 import { reportProblem } from '../features/alerts.js';
 import { holdVoice, lockedChannel, releaseVoiceHold } from '../features/voice.js';
 import { LavalinkBackend } from './backend-lavalink.js';
-import { buildPool, cleanTitle, DIFFICULTIES, lyricsExcerpt, MODES, rememberPlayed, THEMES } from './blindpools.js';
+import { buildPool, cleanTitle, DIFFICULTIES, IMAGE_MODES, lyricsExcerpt, MODES, QUIZ_MODES, QUIZ_THEMES, rememberPlayed, SILENT_MODES, THEMES } from './blindpools.js';
 import { guessesWork, WORK_CATEGORIES, workImages } from './blindworks.js';
 import { matchRatio } from './deezer.js';
 import { speedOf } from './filters.js';
@@ -66,10 +66,10 @@ const defaultSettings = () => ({ theme: 'moment', customTheme: '', mode: 'classi
 const modeOf = (settings) => MODES[settings.mode] ?? MODES.classique;
 const levelOf = (settings) => DIFFICULTIES[settings.difficulty] ?? DIFFICULTIES.normal;
 const worksTheme = (settings) => Boolean(THEMES[settings.theme]?.works);
-const isWorkGame = (settings) => worksTheme(settings) || settings.mode === 'images';
+const isWorkGame = (settings) => worksTheme(settings) || IMAGE_MODES.has(settings.mode);
 const snippetOf = (settings) => {
   const base = modeOf(settings).snippet ?? levelOf(settings).snippet;
-  return settings.mode === 'images' ? Math.max(base, 15) : base;
+  return SILENT_MODES.has(settings.mode) && settings.mode !== 'paroles' ? Math.max(base, 15) : base;
 };
 
 /** Réglages cohérents : les modes Titre / Artiste / Année / Paroles n'existent pas pour les films, séries, jeux. */
@@ -132,15 +132,15 @@ function settingsEmbed(setup, status = null) {
   const voice = setup.voiceChannelId ? `🔊 Le son sera dans <#${setup.voiceChannelId}>. ` : 'Rejoins un vocal avant de lancer. ';
   return new EmbedBuilder()
     .setColor(level.color)
-    .setAuthor({ name: '🎧 BLIND TEST' })
+    .setAuthor({ name: setup.kind === 'quiz' ? '🎬 DEVINE : FILMS, DISNEY, SÉRIES, ANIMÉS, JEUX' : '🎧 BLIND TEST' })
     .setTitle(status ? 'Préparation de la partie' : 'Règle ta partie')
-    .setDescription(status ?? `Choisis le **thème**, le **mode**, la **difficulté** et le nombre de **manches**, puis appuie sur **Lancer**.\n${voice}Les réponses s'écrivent dans <#${setup.channelId}>.`)
+    .setDescription(status ?? `Choisis ${setup.kind === 'quiz' ? 'la **catégorie**' : 'le **thème**'}, le **mode**, la **difficulté** et le nombre de **manches**, puis appuie sur **Lancer**.\n${SILENT_MODES.has(settings.mode) ? '🖼️ Pas besoin de vocal dans ce mode. ' : voice}Les réponses s'écrivent dans <#${setup.channelId}>.`)
     .addFields(
-      { name: 'Thème', value: settings.mode === 'images' && !worksTheme(settings) ? '🖼️ Films, séries, animés, jeux' : themeLabel(settings), inline: true },
+      { name: setup.kind === 'quiz' ? 'Catégorie' : 'Thème', value: IMAGE_MODES.has(settings.mode) && !worksTheme(settings) ? '🎲 Films, Disney, séries, animés, jeux' : themeLabel(settings), inline: true },
       { name: 'Mode', value: `${mode.emoji} ${mode.label}`, inline: true },
       { name: 'Difficulté', value: `${level.emoji} ${level.label}`, inline: true },
       { name: 'Manches', value: settings.mode === 'premier10' ? `jusqu'à ${WIN_SCORE} pts` : String(settings.rounds), inline: true },
-      { name: settings.mode === 'images' ? 'Temps' : 'Extrait', value: settings.mode === 'paroles' ? `${snippetOf(settings)} s pour lire` : settings.mode === 'images' ? `${snippetOf(settings)} s par image` : `${snippetOf(settings)} s`, inline: true },
+      { name: SILENT_MODES.has(settings.mode) ? 'Temps' : 'Extrait', value: settings.mode === 'paroles' ? `${snippetOf(settings)} s pour lire` : SILENT_MODES.has(settings.mode) ? `${snippetOf(settings)} s par image` : `${snippetOf(settings)} s`, inline: true },
       { name: 'Règles', value: `${mode.desc} · ${level.desc}\n${pointsLine(settings)}` },
     )
     .setFooter({ text: `Hôte : ${setup.hostName}` });
@@ -151,14 +151,16 @@ function settingsComponents(setup) {
   const select = (id, placeholder, options) => new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
     .setCustomId(id).setPlaceholder(placeholder).addOptions(options));
   return [
-    select('bt:theme', 'Thème', Object.entries(THEMES).map(([key, theme]) => ({
+    select('bt:theme', setup.kind === 'quiz' ? 'Catégorie' : 'Thème', Object.entries(THEMES).filter(([key]) => setup.kind !== 'quiz' || QUIZ_THEMES.includes(key)).map(([key, theme]) => ({
       label: key === 'custom' && settings.customTheme ? `Thème perso : ${settings.customTheme}`.slice(0, 100) : theme.label,
       value: key,
       emoji: { name: theme.emoji },
       default: key === settings.theme,
     }))),
-    select('bt:mode', 'Mode de jeu', Object.entries(MODES).map(([key, mode]) => ({
-      label: mode.label, value: key, emoji: { name: mode.emoji }, description: mode.desc.slice(0, 100), default: key === settings.mode,
+    select('bt:mode', 'Mode de jeu', Object.entries(MODES).filter(([key]) => (setup.kind === 'quiz' ? QUIZ_MODES.includes(key) : key !== 'sonimage' && key !== 'zoom')).map(([key, mode]) => ({
+      ...(setup.kind === 'quiz' && key === 'classique' ? { label: 'Musique', emoji: { name: '🎵' }, description: 'Devine avec la musique (et les sons cultes pour les jeux)' } : { label: mode.label, emoji: { name: mode.emoji }, description: mode.desc.slice(0, 100) }),
+      value: key,
+      default: key === settings.mode,
     }))),
     select('bt:difficulty', 'Difficulté', Object.entries(DIFFICULTIES).map(([key, level]) => ({
       label: level.label, value: key, emoji: { name: level.emoji }, description: level.desc.slice(0, 100), default: key === settings.difficulty,
@@ -166,7 +168,7 @@ function settingsComponents(setup) {
     select('bt:rounds', 'Manches', ROUND_CHOICES.map((count) => ({ label: `${count} manches`, value: String(count), default: count === settings.rounds }))),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('bt:start').setLabel('Lancer').setEmoji('▶️').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('bt:custom').setLabel('Thème perso').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
+      ...(setup.kind === 'quiz' ? [] : [new ButtonBuilder().setCustomId('bt:custom').setLabel('Thème perso').setEmoji('✏️').setStyle(ButtonStyle.Secondary)]),
       new ButtonBuilder().setCustomId('bt:cancel').setLabel('Annuler').setStyle(ButtonStyle.Danger),
     ),
   ];
@@ -182,7 +184,7 @@ const replayControls = () => [new ActionRowBuilder().addComponents(
 )];
 
 /** Ouvre le menu de réglages (dans le salon du blind test). */
-export async function openBlindTestSetup(client, interaction, preset = {}, { channelId: forcedChannelId = null } = {}) {
+export async function openBlindTestSetup(client, interaction, preset = {}, { channelId: forcedChannelId = null, kind = 'music' } = {}) {
   if (games.has(interaction.guildId)) return interaction.reply({ content: '🎧 Une partie est déjà en cours !', ...PRIVATE });
   const channelId = forcedChannelId || config.music.blindtestChannelId || interaction.channelId;
   const channel = await client.channels.fetch(channelId).catch(() => null);
@@ -194,7 +196,8 @@ export async function openBlindTestSetup(client, interaction, preset = {}, { cha
     guildId: interaction.guildId,
     channelId,
     voiceChannelId: lockedChannel(interaction.guild)?.id ?? null,
-    settings: { ...defaultSettings(), ...preset },
+    kind,
+    settings: { ...defaultSettings(), ...(kind === 'quiz' ? { theme: 'films', mode: 'sonimage', difficulty: 'facile' } : {}), ...preset },
     createdAt: Date.now(),
   };
   const message = await channel.send({ embeds: [settingsEmbed(setup)], components: settingsComponents(setup) });
@@ -221,7 +224,10 @@ export async function handleBlindTestComponent(client, interaction) {
     return undefined;
   }
 
-  if (action === 'replay') return openBlindTestSetup(client, interaction, lastSettings.get(interaction.guildId) ?? {});
+  if (action === 'replay') {
+    const previous = lastSettings.get(interaction.guildId) ?? {};
+    return openBlindTestSetup(client, interaction, previous, { kind: isWorkGame({ ...defaultSettings(), ...previous }) ? 'quiz' : 'music' });
+  }
 
   const messageId = action === 'custommodal' ? extra : interaction.message?.id;
   const setup = setups.get(messageId);
@@ -258,7 +264,7 @@ export async function handleBlindTestComponent(client, interaction) {
       setups.delete(messageId);
       return interaction.update({ embeds: [settingsEmbed(setup, '❌ Partie annulée.')], components: [] });
     case 'start': {
-      const voiceChannel = lockedChannel(interaction.guild) ?? interaction.member?.voice?.channel;
+      const voiceChannel = lockedChannel(interaction.guild) ?? interaction.member?.voice?.channel ?? (SILENT_MODES.has(setup.settings.mode) ? interaction.guild.channels.cache.get(config.voice.channelId) : null);
       if (!voiceChannel) return interaction.reply({ content: "🎧 Rejoins d'abord un salon vocal, puis appuie sur Lancer.", ...PRIVATE });
       if (games.has(interaction.guildId)) return interaction.reply({ content: '🎧 Une partie est déjà en cours !', ...PRIVATE });
       if (setup.settings.theme === 'custom' && !setup.settings.customTheme) return showCustomModal(interaction, messageId);
@@ -356,8 +362,8 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
     level: levelOf(settings),
     mode: settings.mode,
     snippet: snippetOf(settings),
-    textOnly: settings.mode === 'paroles' || settings.mode === 'images',
-    visual: settings.mode === 'images',
+    textOnly: SILENT_MODES.has(settings.mode),
+    visual: IMAGE_MODES.has(settings.mode),
     works: isWorkGame(settings),
     voiceChannelId: voiceChannel.id,
     allowEmptyVoice,
@@ -391,10 +397,10 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
     game.player = player;
 
     game.pool = await buildPool({ ...settings, rounds: game.rounds }, guild.id, (done, total) => progress(`⏳ Sons choisis : **${done}/${total}**…`));
-    progress(game.visual ? '🖼️ Je prépare les images…' : game.textOnly ? '📝 Je récupère les paroles…' : '🔎 Je vérifie que chaque son est le bon…');
+    progress(game.visual && game.textOnly ? '🖼️ Je prépare les images…' : game.visual ? '🔎 Je vérifie les sons et je prépare les images…' : game.textOnly ? '📝 Je récupère les paroles…' : '🔎 Je vérifie que chaque son est le bon…');
     await prepareAhead(game, Math.min(3, game.pool.length));
     game.rounds = Math.min(game.rounds, game.pool.length);
-    if (game.rounds < 3) throw new Error(game.visual ? "pas assez d'images disponibles pour le moment, réessaie dans un instant" : 'pas assez de sons jouables pour ce thème et ce mode, essaie autre chose');
+    if (game.rounds < 3) throw new Error(game.visual && game.textOnly ? "pas assez d'images disponibles pour le moment, réessaie dans un instant" : 'pas assez de sons jouables pour ce thème et ce mode, essaie autre chose');
   } catch (err) {
     console.warn('[blindtest] lancement impossible :', err.message);
     progress.cancel();
@@ -415,7 +421,7 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
       .setTitle("C'est parti !")
       .setDescription([
         `${themeLabel(settings)} · ${mode.emoji} ${mode.label} · ${game.level.emoji} ${game.level.label} · **${settings.mode === 'premier10' ? `premier à ${WIN_SCORE} pts` : `${game.rounds} manches`}**`,
-        game.visual ? "🖼️ Pas de son dans ce mode : l'image devient de plus en plus nette, écrivez vos réponses ici." : game.textOnly ? '📝 Pas de son dans ce mode : lisez les paroles et écrivez vos réponses ici.' : `🔊 Le son est dans <#${voiceChannel.id}>, écrivez vos réponses ici.`,
+        game.visual && game.textOnly ? `🖼️ Pas de son dans ce mode : ${game.mode === 'zoom' ? "l'image part d'un détail et recule" : "l'image devient de plus en plus nette"}, écrivez vos réponses ici.` : game.visual ? `🔊 Le son est dans <#${voiceChannel.id}> et l'image floutée s'affiche ici : écrivez vos réponses ici.` : game.textOnly ? '📝 Pas de son dans ce mode : lisez les paroles et écrivez vos réponses ici.' : `🔊 Le son est dans <#${voiceChannel.id}>, écrivez vos réponses ici.`,
         pointsLine(settings),
       ].join('\n'))],
     components: panel ? [] : gameControls(),
@@ -439,16 +445,18 @@ async function prepareAhead(game, count = PREPARE_AHEAD) {
     if (!batch.length || game.stopped) return;
     await Promise.all(batch.map(async (track) => {
       track.strict = true;
-      if (game.visual) {
-        track.frames = await workImages(track).catch(() => null);
-        track.ready = Boolean(track.frames);
-      } else if (game.textOnly) {
+      const [frames, audioOk] = await Promise.all([
+        game.visual ? workImages(track, { style: game.mode === 'zoom' ? 'zoom' : 'pixel', difficulty: game.settings.difficulty }).catch(() => null) : null,
+        game.textOnly ? true : backend?.prepare ? backend.prepare(track).catch(() => false) : true,
+      ]);
+      if (game.visual) track.frames = frames;
+      if (game.mode === 'paroles') {
         track.lyrics = await lyricsExcerpt(track).catch(() => null);
         track.ready = Boolean(track.lyrics);
       } else {
-        track.ready = backend?.prepare ? await backend.prepare(track).catch(() => false) : true;
+        track.ready = Boolean(audioOk) && (!game.visual || Boolean(frames));
       }
-      if (!track.ready) console.warn(`[blindtest] ${game.visual ? 'pas d\'image' : game.textOnly ? 'pas de paroles' : 'pas de version fiable'} pour "${track.work ?? `${track.artist} - ${track.title}`}", retiré`);
+      if (!track.ready) console.warn(`[blindtest] ${game.visual && !track.frames ? 'pas d\'image' : game.textOnly ? 'pas de paroles' : 'pas de version fiable'} pour "${track.work ?? `${track.artist} - ${track.title}`}", retiré`);
     }));
     game.pool = game.pool.filter((track) => track.ready !== false);
   }
@@ -465,8 +473,10 @@ function seekFor(game, track) {
   const duration = track.duration || 180;
   if (game.mode === 'intro') return 0;
   // Musiques de films / jeux / génériques : le thème connu est souvent au début
+  if (track.sfx) return 0;
   if (track.work) {
-    const [from, to] = game.mode === 'eclair' ? [0.08, 0.25] : [0, 0.15];
+    const byLevel = { tresfacile: [0, 0.08], facile: [0, 0.12], normal: [0, 0.2], difficile: [0.1, 0.45], expert: [0.1, 0.65] };
+    const [from, to] = game.mode === 'eclair' ? [0.08, 0.25] : byLevel[game.settings.difficulty] ?? byLevel.normal;
     return Math.max(0, Math.min(Math.floor(duration * (from + Math.random() * (to - from))), Math.floor(duration - game.snippet - 5)));
   }
   const [from, to] = game.mode === 'eclair' ? [0.3, 0.45] : game.level.start;
@@ -499,7 +509,7 @@ async function nextRound(game) {
     titleBy: null, artistBy: null, bonusBy: null, message: null, tried: new Set(), close: new Set(),
   };
   game.current = round;
-  console.log(`[blindtest] manche ${round.index}/${game.rounds} : ${track.work ? `[${track.work}] ` : ''}${game.visual ? '(image)' : `${track.artist} - ${track.title}${game.textOnly ? ' (paroles)' : ` (à ${round.seekTo}s)`}`}`);
+  console.log(`[blindtest] manche ${round.index}/${game.rounds} : ${track.work ? `[${track.work}] ` : ''}${game.visual && game.textOnly ? '(image)' : `${track.artist} - ${track.title}${game.textOnly ? ' (paroles)' : ` (à ${round.seekTo}s)`}`}`);
 
   // Mode Paroles : pas de son, le chrono part tout de suite
   if (game.textOnly) return startCountdown(game, round, Date.now());
@@ -601,7 +611,7 @@ async function startCountdown(game, round, audioAt) {
   if (game.level.hintAt && game.mode !== 'annee' && game.mode !== 'eclair' && !game.visual) {
     game.timers.hint = setTimeout(() => showHint(game, round), Math.max(0, audioAt + game.snippet * game.level.hintAt * 1000 - Date.now()));
   }
-  console.log(`[blindtest] manche ${round.index} : ${game.visual ? 'image affichée' : game.textOnly ? 'paroles affichées' : 'son entendu'}, chrono ${game.snippet}s`);
+  console.log(`[blindtest] manche ${round.index} : ${game.visual && game.textOnly ? 'image affichée' : game.textOnly ? 'paroles affichées' : 'son entendu'}, chrono ${game.snippet}s`);
 
   await game.lastReveal; // la réponse de la manche d'avant s'affiche d'abord
   if (game.current !== round || round.revealed) return;
@@ -645,19 +655,19 @@ function roundEmbed(game, round, hint = null) {
   };
   const mode = MODES[game.mode];
   const category = round.track.work ? WORK_CATEGORIES[round.track.category] : null;
-  const title = category ? `${category.emoji} ${game.visual ? category.imageQuestion : category.question}` : titles[game.mode] ?? '🎶 Devine le son !';
+  const title = category ? `${category.emoji} ${game.visual && game.textOnly ? category.imageQuestion : round.track.sfx ? 'Ce son vient de quel jeu ?' : category.question}` : titles[game.mode] ?? '🎶 Devine le son !';
   return new EmbedBuilder()
     .setColor(game.level.color)
     .setAuthor({ name: `🎧 Manche ${round.index}/${game.mode === 'premier10' ? `∞ · 1er à ${WIN_SCORE} pts` : game.rounds} · ${mode.emoji} ${mode.label} · ${game.level.emoji} ${game.level.label}` })
     .setTitle(title)
     .setDescription([
       game.textOnly && round.track.lyrics ? `>>> *${round.track.lyrics.replace(/\*/g, '').replace(/\n/g, '*\n*')}*\n` : null,
-      game.visual ? `🔍 Image ${(round.stage ?? 0) + 1}/${IMAGE_STAGES_AT.length} : elle devient plus nette avec le temps` : null,
+      game.visual ? `🔍 Image ${(round.stage ?? 0) + 1}/${IMAGE_STAGES_AT.length} : ${game.mode === 'zoom' ? 'on recule petit à petit' : 'elle devient plus nette avec le temps'}` : null,
       `⏱️ Fin **<t:${Math.ceil(round.endsAt / 1000)}:R>**`,
       pointsLine(game.settings),
       hint ? `\n💡 **Indice**\n${hint}` : null,
     ].filter(Boolean).join('\n'))
-    .setFooter({ text: `${game.visual && !worksTheme(game.settings) ? '🖼️ Films, séries, animés, jeux' : themeLabel(game.settings)} · écris ta réponse dans le salon` });
+    .setFooter({ text: `${game.visual && !worksTheme(game.settings) ? '🎲 Films, Disney, séries, animés, jeux' : themeLabel(game.settings)} · écris ta réponse dans le salon` });
 }
 
 function showHint(game, round) {
@@ -814,7 +824,7 @@ async function reveal(game, round) {
   const lines = [];
   if (track.work) {
     if (found) lines.push(`🎯 <@${round.titleBy}> **+${TITLE_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
-    if (!game.visual) lines.push(`🎵 ${track.title} — ${track.artist}`);
+    if (!game.textOnly) lines.push(track.sfx ? `🔊 ${track.title}` : `🎵 ${track.title} — ${track.artist}`);
   } else if (game.mode === 'annee') {
     lines.push(`📅 Sorti en **${track.year}**`);
     if (found) lines.push(`🎯 <@${round.titleBy}> **+${YEAR_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
@@ -922,6 +932,15 @@ function replaceRound(game, round, reason) {
 /** Le son s'est arrêté tout seul (fin du morceau, ou coupure définitive). */
 function onTrackGone(game, round, failed) {
   if (game.stopped || game.current !== round || round.revealed) return;
+  if (!failed && round.track.sfx) {
+    if (!round.running) startCountdown(game, round, Date.now() - 500);
+    clearTimeout(game.timers.sfx);
+    game.timers.sfx = setTimeout(() => {
+      if (game.stopped || game.current !== round || round.revealed) return;
+      game.player?.playNow({ ...round.track, requestedBy: 'blindtest', seekTo: 0 });
+    }, 1_500);
+    return;
+  }
   // Coupure au tout début : on relance le même son plutôt que d'en mettre un autre
   const heardMs = round.running ? Date.now() - round.audioAt : 0;
   if (failed && round.running && heardMs < RESTART_IF_HEARD_UNDER_MS) {

@@ -1,5 +1,5 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
-import { DIFFICULTIES, MODES, THEMES } from './blindpools.js';
+import { DIFFICULTIES, MODES, QUIZ_MODES, QUIZ_THEMES, THEMES } from './blindpools.js';
 import { FILTERS } from './filters.js';
 
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
@@ -95,6 +95,16 @@ export const musicCommands = [
     .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
     .addStringOption((o) => o.setName('theme_perso').setDescription('Ton propre thème : afro trap, Jul, années 2000…').setMaxLength(80))
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête le blind test en cours')),
+
+  new SlashCommandBuilder().setName('devine').setDescription('Devine le film, le Disney, la série, l\'animé ou le jeu vidéo : musique, image floutée, zoom…')
+    .addStringOption((o) => o.setName('categorie').setDescription('Catégorie (lance direct la partie)')
+      .addChoices(...QUIZ_THEMES.map((key) => ({ name: `${THEMES[key].emoji} ${THEMES[key].label}`, value: key }))))
+    .addStringOption((o) => o.setName('mode').setDescription('Mode de jeu')
+      .addChoices(...QUIZ_MODES.map((key) => ({ name: key === 'classique' ? '🎵 Musique' : `${MODES[key].emoji} ${MODES[key].label}`, value: key }))))
+    .addStringOption((o) => o.setName('difficulte').setDescription('Difficulté')
+      .addChoices(...Object.entries(DIFFICULTIES).map(([key, level]) => ({ name: `${level.emoji} ${level.label}`, value: key }))))
+    .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
+    .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la partie en cours')),
 
   new SlashCommandBuilder().setName('karaoke').setDescription('Joue un son sans la voix, avec les paroles en direct')
     .addStringOption((o) => searchOption(o, false)),

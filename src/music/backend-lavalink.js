@@ -4,7 +4,7 @@ import { anchorChannel, releaseExternalVoice, takeVoiceForExternal } from '../fe
 import { deezer, matchRatio } from './deezer.js';
 import { lavalinkFilters, speedOf } from './filters.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
-import { isWorkVariant } from './blindworks.js';
+import { isBadSoundVideo, isWorkVariant } from './blindworks.js';
 import { MusicError } from './ytdlp.js';
 
 const START_TIMEOUT_MS = 25_000;
@@ -217,10 +217,13 @@ export class LavalinkBackend {
     }
 
     if (track.curated) {
+      // Effet sonore : court, pas une compilation ; musique : entre 30 s et 12 min, pas une version modifiée
       const clean = full
-        .filter((item) => !item.info.isStream && item.info.length >= 30_000 && item.info.length <= 12 * 60_000 && !isWorkVariant(`${item.info.title} ${item.info.author}`))
+        .filter((item) => !item.info.isStream && (track.sfx
+          ? item.info.length >= 800 && item.info.length <= 30_000 && !isBadSoundVideo(item.info.title)
+          : item.info.length >= 30_000 && item.info.length <= 12 * 60_000 && !isWorkVariant(`${item.info.title} ${item.info.author}`)))
         .map((item) => ({ item, title: matchRatio(cleanTitle(track.title) || track.title, item.info.title ?? '') }))
-        .filter((s) => s.title >= 0.6)
+        .filter((s) => s.title >= (track.sfx ? 0.5 : 0.6))
         .sort((a, b) => b.title - a.title);
       return clean[0]?.item ?? null;
     }

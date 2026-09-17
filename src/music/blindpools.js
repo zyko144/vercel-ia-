@@ -60,7 +60,9 @@ export const THEMES = {
   films: { label: 'Films (musiques de films)', emoji: '🎬', works: 'films' },
   series: { label: 'Séries et dessins animés', emoji: '📺', works: 'series' },
   anime: { label: 'Animés (openings)', emoji: '🍥', works: 'anime' },
-  jeux: { label: 'Jeux vidéo', emoji: '🎮', works: 'games' },
+  jeux: { label: 'Jeux vidéo (musiques et sons cultes)', emoji: '🎮', works: 'games' },
+  disney: { label: 'Disney & Pixar', emoji: '🏰', works: 'disney' },
+  oeuvres: { label: 'Tout mélangé (films, Disney, séries, jeux…)', emoji: '🎲', works: 'all' },
   server: { label: 'Sons du serveur', emoji: '🏠' },
   custom: { label: 'Thème perso', emoji: '✏️' },
 };
@@ -68,10 +70,18 @@ export const THEMES = {
 export const DIFFICULTIES = {
   tresfacile: { label: 'Très facile', emoji: '🍼', color: 0x5865f2, snippet: 30, minRank: 900_000, top: 60, maxPerArtist: 1, start: [0.3, 0.42], hintAt: 0.25, speedBonus: 0.35, desc: 'Les plus gros sons du moment · 30 s · indices' },
   facile: { label: 'Facile', emoji: '🟢', color: 0x57f287, snippet: 30, minRank: 800_000, top: 100, maxPerArtist: 2, start: [0.3, 0.42], hintAt: 0.35, speedBonus: 0.35, desc: 'Sons très connus · 30 s · refrain · indices' },
-  normal: { label: 'Normal', emoji: '🟡', color: 0xfee75c, snippet: 20, minRank: 650_000, top: 160, maxPerArtist: 2, start: [0.25, 0.45], hintAt: 0.6, speedBonus: 0.35, desc: 'Sons connus · 20 s · un indice' },
+  normal: { label: 'Moyen', emoji: '🟡', color: 0xfee75c, snippet: 20, minRank: 650_000, top: 160, maxPerArtist: 2, start: [0.25, 0.45], hintAt: 0.6, speedBonus: 0.35, desc: 'Sons connus · 20 s · un indice' },
   difficile: { label: 'Difficile', emoji: '🔴', color: 0xed4245, snippet: 12, minRank: 450_000, top: 250, maxPerArtist: 3, start: [0.12, 0.6], hintAt: null, speedBonus: 0.35, desc: "Moins connus · 12 s · pas d'indice" },
   expert: { label: 'Expert', emoji: '💀', color: 0x2b2d31, snippet: 6, minRank: 300_000, top: 400, maxPerArtist: 3, start: [0.05, 0.7], hintAt: null, speedBonus: 0.5, desc: "6 s seulement · n'importe où dans le son" },
 };
+
+/** Modes qui montrent une image (films, Disney, séries, animés, jeux). */
+export const IMAGE_MODES = new Set(['images', 'sonimage', 'zoom']);
+/** Modes sans son. */
+export const SILENT_MODES = new Set(['paroles', 'images', 'zoom']);
+/** Commande /devine : ses catégories et ses modes. */
+export const QUIZ_THEMES = ['films', 'disney', 'series', 'anime', 'jeux', 'oeuvres'];
+export const QUIZ_MODES = ['classique', 'sonimage', 'images', 'zoom', 'eclair', 'intro', 'unessai', 'premier10'];
 
 export const MODES = {
   classique: { label: 'Classique', emoji: '🎯', desc: 'Titre +2 · artiste +1 · rapidité +1' },
@@ -81,7 +91,9 @@ export const MODES = {
   eclair: { label: 'Éclair', emoji: '⚡', desc: '3 secondes de son, pas une de plus', snippet: 3 },
   annee: { label: 'Année', emoji: '📅', desc: "Devine l'année de sortie" },
   paroles: { label: 'Paroles', emoji: '📝', desc: 'Pas de son : devine avec les paroles' },
-  images: { label: 'Images', emoji: '🖼️', desc: "Pas de son : devine le film, la série, l'animé ou le jeu avec une image floutée" },
+  images: { label: 'Image floutée', emoji: '🖼️', desc: "Pas de son : l'image floutée devient de plus en plus nette" },
+  sonimage: { label: 'Son + image', emoji: '🎬', desc: "La musique et l'image floutée en même temps" },
+  zoom: { label: 'Zoom', emoji: '🔍', desc: "Pas de son : l'image part d'un détail et recule petit à petit" },
   premier10: { label: 'Premier à 10', emoji: '👑', desc: 'Le premier à 10 points gagne' },
   unessai: { label: 'Un seul essai', emoji: '🎲', desc: 'Une seule réponse par manche' },
 };
@@ -217,7 +229,7 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
   const level = DIFFICULTIES[settings.difficulty] ?? DIFFICULTIES.normal;
   // Sons de secours (son illisible, pas de paroles en mode Paroles...)
   const wanted = settings.rounds + (settings.mode === 'paroles' ? 12 : 6);
-  if (theme.works || settings.mode === 'images') return buildWorksPool(settings, theme, guildId, wanted, onProgress);
+  if (theme.works || IMAGE_MODES.has(settings.mode)) return buildWorksPool(settings, theme, guildId, wanted, onProgress);
   const { tracks: raw, fromDeezer } = await rawTracks(settings, guildId);
   const played = await recentFor(guildId);
   const perArtist = new Map();
@@ -305,10 +317,18 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
  */
 async function buildWorksPool(settings, theme, guildId, wanted, onProgress) {
   const played = await recentFor(guildId);
-  const categories = theme.works ? [theme.works] : Object.keys(WORK_CATEGORIES);
-  const entries = shuffle(worksOf(categories));
+  const categories = theme.works && theme.works !== 'all' ? [theme.works] : Object.keys(WORK_CATEGORIES);
+  const imageOnly = SILENT_MODES.has(settings.mode);
+  // Image seule : pas d'effets sonores (même image que la musique du jeu). Chaque œuvre une seule fois par partie.
+  const seenWorks = new Set();
+  const entries = shuffle(worksOf(categories, { sounds: !imageOnly })).filter((entry) => {
+    const name = normalize(entry.work);
+    if (seenWorks.has(name)) return false;
+    seenWorks.add(name);
+    return true;
+  });
   const chosen = [...entries.filter((e) => !played.has(workKey(e))), ...entries.filter((e) => played.has(workKey(e)))].slice(0, wanted);
-  if (settings.mode === 'images') {
+  if (imageOnly) {
     return chosen.map((entry) => ({ ...entry, title: entry.work, artist: WORK_CATEGORIES[entry.category].label, visual: true, requestedBy: 'blindtest' }));
   }
   const pool = [];

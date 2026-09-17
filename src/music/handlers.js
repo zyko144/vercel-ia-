@@ -12,6 +12,7 @@ import { config } from '../config.js';
 import { reportProblem } from '../features/alerts.js';
 import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
+import { SILENT_MODES } from './blindpools.js';
 import { blindTestActive, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './blindtest.js';
 import { deezer, rankResults, trackFromDeezer } from './deezer.js';
 import { musicStats } from './stats.js';
@@ -578,6 +579,33 @@ const COMMANDS = {
         rounds: rounds ?? 10,
       },
     }).catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
+  },
+
+  async devine(client, interaction) {
+    if (interaction.options.getBoolean('arreter')) {
+      return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Partie arrêtée.' : "Y a pas de partie en cours."));
+    }
+    if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎬 Une partie est déjà en cours ! (`/devine arreter:true` pour la couper)'));
+
+    const theme = interaction.options.getString('categorie');
+    const mode = interaction.options.getString('mode');
+    const difficulty = interaction.options.getString('difficulte');
+    const rounds = interaction.options.getInteger('manches');
+    // Sans option : menu de réglages
+    if (!theme && !mode && !difficulty && !rounds) return openBlindTestSetup(client, interaction, {}, { kind: 'quiz' });
+
+    const settings = { theme: theme ?? 'films', mode: mode ?? 'sonimage', difficulty: difficulty ?? 'facile', rounds: rounds ?? 10 };
+    // Modes sans son : pas besoin d'être en vocal
+    let voiceChannel = lockedChannel(interaction.guild) ?? interaction.guild.channels.cache.get(config.voice.channelId);
+    if (!SILENT_MODES.has(settings.mode)) {
+      const { channel, error } = joinProblem(interaction);
+      if (error) return interaction.reply(say(error));
+      voiceChannel = channel;
+    }
+    const channelId = config.music.blindtestChannelId || interaction.channelId;
+    await interaction.reply(say(`🎬 C'est parti ! Ça se passe dans <#${channelId}>.`));
+    return startGame(client, { guild: interaction.guild, channelId, voiceChannel, hostId: interaction.user.id, settings })
+      .catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
   },
 
   async karaoke(client, interaction) {

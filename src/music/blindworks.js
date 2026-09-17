@@ -11,7 +11,6 @@ const FILMS = [
   ['Star Wars', 'la guerre des etoiles', 'John Williams', 'Star Wars (Main Theme)', 'wiki:Star Wars (film)'],
   ['Pirates des Caraïbes', 'pirates of the caribbean|pirate des caraibes', 'Klaus Badelt', "He's a Pirate", 'wiki:Pirates of the Caribbean: The Curse of the Black Pearl'],
   ['Titanic', '', 'Céline Dion', 'My Heart Will Go On', 'wiki:Titanic (1997 film)'],
-  ['Le Roi Lion', 'the lion king|roi lion', 'Elton John', 'Circle of Life', 'wiki:The Lion King'],
   ['Interstellar', '', 'Hans Zimmer', 'Cornfield Chase', 'wiki:Interstellar (film)'],
   ['Inception', '', 'Hans Zimmer', 'Time', 'wiki:Inception'],
   ['Le Seigneur des Anneaux', 'lord of the rings|seigneur des anneaux|lotr|sda', 'Howard Shore', 'Concerning Hobbits', 'wiki:The Lord of the Rings: The Fellowship of the Ring'],
@@ -24,7 +23,6 @@ const FILMS = [
   ['Les Dents de la mer', 'jaws|dents de la mer', 'John Williams', 'Main Title (Theme From Jaws)', 'wiki:Jaws (film)'],
   ['SOS Fantômes', 'ghostbusters|sos fantome', 'Ray Parker Jr.', 'Ghostbusters', 'wiki:Ghostbusters'],
   ['Top Gun', '', 'Kenny Loggins', 'Danger Zone', 'wiki:Top Gun'],
-  ['La Reine des neiges', 'frozen|reine des neiges', 'Anaïs Delva', 'Libérée, délivrée', 'wiki:Frozen (2013 film)'],
   ['Spider-Man', 'spiderman|spider man|spider verse|new generation', 'Post Malone', 'Sunflower', 'wiki:Spider-Man: Into the Spider-Verse'],
   ['Avengers', 'the avengers|marvel', 'Alan Silvestri', 'The Avengers', 'wiki:The Avengers (2012 film)'],
   ['Batman', 'the dark knight|dark knight|joker', 'Hans Zimmer', 'Why So Serious?', 'wiki:The Dark Knight'],
@@ -33,22 +31,50 @@ const FILMS = [
   ['Pulp Fiction', '', 'Dick Dale and His Del-Tones', 'Misirlou', 'wiki:Pulp Fiction'],
   ['Intouchables', 'intouchable', 'Ludovico Einaudi', 'Fly', 'wiki:The Intouchables'],
   ["Le Fabuleux Destin d'Amélie Poulain", 'amelie poulain|amelie', 'Yann Tiersen', "Comptine d'un autre été, l'après-midi", 'wiki:Amélie'],
-  ['Toy Story', '', 'Randy Newman', "You've Got a Friend in Me", 'wiki:Toy Story'],
   ['Shrek', '', 'Smash Mouth', 'All Star', 'wiki:Shrek'],
-  ['Vaiana', 'moana', 'Cerise Calixte', "Le bleu lumière", 'wiki:Moana (2016 film)'],
-  ['Aladdin', '', 'Karine Costa', 'Ce rêve bleu', 'wiki:Aladdin (1992 Disney film)'],
   ['Fast & Furious', 'fast and furious|furious 7|fast furious', 'Wiz Khalifa', 'See You Again', 'wiki:Furious 7'],
   ['Barbie', '', 'Dua Lipa', 'Dance The Night', 'wiki:Barbie (film)'],
   ['Oppenheimer', '', 'Ludwig Göransson', 'Can You Hear The Music', 'wiki:Oppenheimer (film)'],
   ['La Panthère rose', 'pink panther|panthere rose', 'Henry Mancini', 'The Pink Panther Theme', 'wiki:The Pink Panther (1963 film)'],
   ['E.T.', 'et l extraterrestre|l extraterrestre|extraterrestre', 'John Williams', 'Flying Theme', 'wiki:E.T. the Extra-Terrestrial'],
-  ['Encanto', '', 'Carolina Gaitán - La Gaita', "We Don't Talk About Bruno", 'wiki:Encanto (film)'],
   ['Kill Bill', '', 'Tomoyasu Hotei', 'Battle Without Honor or Humanity', 'wiki:Kill Bill: Volume 1'],
   ['Grease', '', 'John Travolta', "You're The One That I Want", 'wiki:Grease (film)'],
   ['Dirty Dancing', '', 'Bill Medley', "(I've Had) The Time of My Life", 'wiki:Dirty Dancing'],
-  ['Le Livre de la jungle', 'the jungle book|livre de la jungle', 'Phil Harris', 'The Bare Necessities', 'wiki:The Jungle Book (1967 film)'],
   ['Super Mario Bros. le film', 'super mario|mario', 'Jack Black', 'Peaches', 'wiki:The Super Mario Bros. Movie'],
+];
+
+const DISNEY = [
+  ['Le Roi Lion', 'the lion king|roi lion', 'Elton John', 'Circle of Life', 'wiki:The Lion King'],
+  ['La Reine des neiges', 'frozen|reine des neiges', 'Anaïs Delva', 'Libérée, délivrée', 'wiki:Frozen (2013 film)'],
+  ['Toy Story', '', 'Randy Newman', "You've Got a Friend in Me", 'wiki:Toy Story'],
+  ['Vaiana', 'moana', 'Cerise Calixte', "Le bleu lumière", 'wiki:Moana (2016 film)'],
+  ['Aladdin', '', 'Karine Costa', 'Ce rêve bleu', 'wiki:Aladdin (1992 Disney film)'],
+  ['Encanto', '', 'Carolina Gaitán - La Gaita', "We Don't Talk About Bruno", 'wiki:Encanto (film)'],
+  ['Le Livre de la jungle', 'the jungle book|livre de la jungle', 'Phil Harris', 'The Bare Necessities', 'wiki:The Jungle Book (1967 film)'],
   ['Coco', '', 'Benjamin Bratt', 'Remember Me (Ernesto de la Cruz)', 'wiki:Coco (2017 film)'],
+  ['La Petite Sirène', 'the little mermaid|little mermaid|petite sirene', 'Samuel E. Wright', 'Under the Sea', 'wiki:The Little Mermaid (1989 film)'],
+  ['La Belle et la Bête', 'beauty and the beast|belle et la bete', 'Angela Lansbury', 'Beauty and the Beast', 'wiki:Beauty and the Beast (1991 film)'],
+  ['Mulan', '', 'Donny Osmond', "I'll Make a Man Out of You", 'wiki:Mulan (1998 film)'],
+  ['Raiponce', 'tangled', 'Mandy Moore', 'I See the Light', 'wiki:Tangled'],
+  ['Pocahontas', '', 'Judy Kuhn', 'Colors of the Wind', 'wiki:Pocahontas (1995 film)'],
+  ['Hercule', 'hercules', 'Susan Egan', "I Won't Say (I'm in Love)", 'wiki:Hercules (1997 film)'],
+  ['Tarzan', '', 'Phil Collins', "You'll Be in My Heart", 'wiki:Tarzan (1999 film)'],
+  ['Lilo & Stitch', 'lilo et stitch|lilo and stitch|stitch', 'Mark Keali\'i Ho\'omalu', 'He Mele No Lilo', 'wiki:Lilo & Stitch'],
+  ['Cendrillon', 'cinderella', 'Ilene Woods', 'Bibbidi-Bobbidi-Boo', 'wiki:Cinderella (1950 film)'],
+  ['Blanche-Neige', 'snow white|blanche neige', 'Adriana Caselotti', 'Someday My Prince Will Come', 'wiki:Snow White and the Seven Dwarfs (1937 film)'],
+  ['Mary Poppins', '', 'Julie Andrews', 'Supercalifragilisticexpialidocious', 'wiki:Mary Poppins (film)'],
+  ['Les Aristochats', 'aristochats|the aristocats|aristocats', 'Phil Harris', 'Ev\'rybody Wants to Be a Cat', 'wiki:The Aristocats'],
+  ['Zootopie', 'zootopia', 'Shakira', 'Try Everything', 'wiki:Zootopia'],
+  ['Là-haut', 'up|la haut', 'Michael Giacchino', 'Married Life', 'wiki:Up (2009 film)'],
+  ['Ratatouille', '', 'Camille', 'Le Festin', 'wiki:Ratatouille (film)'],
+  ['Cars', '', 'Rascal Flatts', 'Life Is a Highway', 'wiki:Cars (film)'],
+  ['Les Indestructibles', 'the incredibles|incredibles|indestructibles', 'Michael Giacchino', 'The Incredits', 'wiki:The Incredibles'],
+  ['Pinocchio', '', 'Cliff Edwards', 'When You Wish Upon a Star', 'wiki:Pinocchio (1940 film)'],
+  ['High School Musical', 'hsm', 'Zac Efron', 'Breaking Free', 'wiki:High School Musical'],
+  ['Les 101 Dalmatiens', '101 dalmatiens|cruella|101 dalmatians', 'Bill Lee', 'Cruella De Vil', 'wiki:One Hundred and One Dalmatians'],
+  ['Frère des ours', 'brother bear|frere des ours', 'Phil Collins', 'On My Way', 'wiki:Brother Bear'],
+  ['Wish', 'wish asha et la bonne etoile', 'Ariana DeBose', 'This Wish', 'wiki:Wish (2023 film)'],
+  ['Vice-versa', 'inside out|vice versa', 'Michael Giacchino', 'Bundle of Joy', 'wiki:Inside Out (2015 film)'],
 ];
 
 const SERIES = [
@@ -139,11 +165,41 @@ const GAMES = [
   ['Mario Kart', 'mario kart 8', 'Nintendo Sound Team', 'Mario Kart 8 Main Theme', 'wiki:Mario Kart 8 Deluxe'],
 ];
 
+// [jeu, autres noms, recherche YouTube, image]
+const GAME_SOUNDS = [
+  ['Super Mario Bros.', 'super mario|mario|mario bros', 'Super Mario Bros Coin Sound Effect', 'wiki:Super Mario Bros.'],
+  ['Among Us', '', 'Among Us Emergency Meeting Sound Effect', 'steam:945360'],
+  ['Pac-Man', 'pacman|pac man', 'Pac-Man Death Sound Effect', 'wiki:Pac-Man'],
+  ['Roblox', '', 'Roblox Death Sound Oof Sound Effect', 'wiki:Roblox'],
+  ['GTA San Andreas', 'gta|san andreas|gta sa', 'GTA San Andreas Mission Passed Sound Effect', 'steam:12120'],
+  ['GTA V', 'gta|gta 5|gta five|grand theft auto', 'GTA 5 Wasted Sound Effect', 'steam:271590'],
+  ['Street Fighter', '', 'Street Fighter Hadouken Sound Effect', 'steam:1364780'],
+  ['Mortal Kombat', '', 'Mortal Kombat Finish Him Sound Effect', 'steam:1971870'],
+  ['PlayStation', 'ps1|playstation 1|play station|ps', 'PS1 Startup Sound', 'wiki:PlayStation (console)'],
+  ['Xbox 360', 'xbox', 'Xbox 360 Startup Sound', 'wiki:Xbox 360'],
+  ['GameCube', 'gamecube|game cube|nintendo gamecube', 'GameCube Startup Sound', 'wiki:GameCube'],
+  ['Clash Royale', '', 'Clash Royale King Laugh Sound Effect', 'wiki:Clash Royale'],
+  ['Metal Gear Solid', 'metal gear|mgs', 'Metal Gear Solid Alert Sound Effect', 'wiki:Metal Gear Solid (1998 video game)'],
+  ['Minecraft', '', 'Minecraft Villager Sound Effect', 'steam:1672970'],
+  ['Zelda', 'the legend of zelda|legend of zelda', 'Zelda Secret Discovery Sound Effect', 'wiki:The Legend of Zelda: Ocarina of Time'],
+  ['Sonic', 'sonic the hedgehog', 'Sonic Ring Sound Effect', 'wiki:Sonic the Hedgehog (1991 video game)'],
+  ['Pokémon', 'pokemon', 'Pokemon Center Healing Sound Effect', 'wiki:Pokémon Red and Blue'],
+  ['Counter-Strike', 'counter strike|cs|csgo|cs go|cs2', 'Counter Strike Terrorists Win Sound Effect', 'steam:730'],
+  ['Call of Duty', 'cod|modern warfare', 'Call of Duty Hitmarker Sound Effect', 'steam:10180'],
+  ['Skyrim', 'the elder scrolls|elder scrolls', 'Skyrim Level Up Sound Effect', 'steam:489830'],
+  ['Fortnite', '', 'Fortnite Chest Opening Sound Effect', 'wiki:Fortnite: Save the World'],
+  ['Duck Hunt', '', 'Duck Hunt Dog Laugh Sound Effect', 'wiki:Duck Hunt'],
+  ['League of Legends', 'lol|league', 'League of Legends Pentakill Sound Effect', 'wiki:League of Legends'],
+  ['Wii', 'nintendo wii|wii sports', 'Wii Shop Channel Music', 'wiki:Wii'],
+  ['Nintendo Switch', 'switch', 'Nintendo Switch Click Sound Effect', 'wiki:Nintendo Switch'],
+];
+
 export const WORK_CATEGORIES = {
   films: { label: 'film', question: 'De quel film ça vient ?', imageQuestion: "C'est quel film ?", emoji: '🎬', list: FILMS },
+  disney: { label: 'Disney', question: 'De quel Disney ça vient ?', imageQuestion: "C'est quel Disney ?", emoji: '🏰', list: DISNEY },
   series: { label: 'série / dessin animé', question: 'De quelle série ça vient ?', imageQuestion: "C'est quelle série ?", emoji: '📺', list: SERIES },
   anime: { label: 'animé', question: 'De quel animé ça vient ?', imageQuestion: "C'est quel animé ?", emoji: '🍥', list: ANIME },
-  games: { label: 'jeu vidéo', question: 'De quel jeu vidéo ça vient ?', imageQuestion: "C'est quel jeu vidéo ?", emoji: '🎮', list: GAMES },
+  games: { label: 'jeu vidéo', question: 'De quel jeu vidéo ça vient ?', imageQuestion: "C'est quel jeu vidéo ?", emoji: '🎮', list: GAMES, sounds: GAME_SOUNDS },
 };
 
 const normalize = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -151,18 +207,19 @@ const VARIANT = /\b(remix|rmx|mix|sped ?up|slowed|reverb|nightcore|8d|karaok[eé
 const pickRandom = (list) => list[Math.floor(Math.random() * list.length)];
 
 /** Toutes les œuvres d'une ou plusieurs catégories. */
-export function worksOf(categories) {
-  return categories.flatMap((category) => WORK_CATEGORIES[category].list.map(([work, aliases, artist, title, image]) => ({
-    work,
-    aliases: [work, ...aliases.split('|')].map((a) => a.trim()).filter(Boolean),
-    category,
-    artist,
-    songTitle: title,
-    image,
-  })));
+export function worksOf(categories, { sounds = true } = {}) {
+  const aliasesOf = (work, aliases) => [work, ...aliases.split('|')].map((a) => a.trim()).filter(Boolean);
+  return categories.flatMap((category) => [
+    ...WORK_CATEGORIES[category].list.map(([work, aliases, artist, title, image]) => ({
+      work, aliases: aliasesOf(work, aliases), category, artist, songTitle: title, image,
+    })),
+    ...(sounds ? WORK_CATEGORIES[category].sounds ?? [] : []).map(([work, aliases, query, image]) => ({
+      work, aliases: aliasesOf(work, aliases), category, artist: 'effet sonore', songTitle: query, image, sfx: true,
+    })),
+  ]);
 }
 
-export const workKey = (entry) => `oeuvre|${normalize(entry.work)}`;
+export const workKey = (entry) => `oeuvre|${normalize(entry.work)}${entry.sfx ? '|son' : ''}`;
 
 /** La réponse donne-t-elle le nom de l'œuvre ? */
 export function guessesWork(track, guess, covers) {
@@ -181,6 +238,10 @@ export function guessesWork(track, guess, covers) {
  * Son d'une œuvre : la version Deezer officielle (code ISRC = bon enregistrement), sinon une recherche YouTube soignée.
  */
 export async function resolveWorkSong(entry) {
+  if (entry.sfx) {
+    const title = entry.songTitle.replace(/ sound effect$/i, '');
+    return { ...entry, strict: true, curated: true, requestedBy: 'blindtest', title, artist: 'Effet sonore', duration: 0, thumbnail: null, source: 'youtube', query: entry.songTitle };
+  }
   // Le bon son ET le bon artiste (sinon c'est souvent une reprise), jamais une autre version
   const good = (item) => item?.readable !== false && !VARIANT.test(`${item.title ?? ''} ${item.title_version ?? ''}`)
     && matchRatio(entry.songTitle, item.title ?? '') >= 0.75
@@ -210,6 +271,8 @@ export async function resolveWorkSong(entry) {
 }
 
 export const isWorkVariant = (text = '') => VARIANT.test(text);
+// Vidéos d'effets sonores à éviter : compilations, évolutions, boucles
+export const isBadSoundVideo = (text = '') => /\b(variations?|evolution|comparison|compilation|every|all|loop|hour|hours|remix|green ?screen|meme|earrape|bass ?boost(ed)?|reverse|slowed)\b/i.test(text);
 
 // ===================== Images =====================
 
@@ -282,15 +345,17 @@ function ffmpegImage(input, filter) {
   });
 }
 
-// Largeur de l'image pixelisée à chaque étape (plus c'est petit, plus c'est flou)
-const STAGES = [16, 32, 64];
+// Flou : largeur de l'image pixelisée à chaque étape (plus c'est petit, plus c'est flou), selon la difficulté
+const PIXEL_STAGES = { tresfacile: [32, 64, 128], facile: [24, 48, 96], normal: [16, 32, 64], difficile: [10, 20, 40], expert: [8, 14, 24] };
+// Zoom : grossissement à chaque étape (on part d'un détail et on recule)
+const ZOOM_STAGES = { tresfacile: [3, 2, 1.3], facile: [4, 2.5, 1.5], normal: [5, 3, 1.8], difficile: [7, 4, 2.2], expert: [9, 5, 3] };
 const WIDTH = 640;
 
 /**
  * Prépare les images d'une manche : 3 étapes de plus en plus nettes, puis l'image complète pour la réponse.
  * @returns {Promise<{ stages: Buffer[], full: Buffer } | null>}
  */
-export async function workImages(entry) {
+export async function workImages(entry, { style = 'pixel', difficulty = 'normal' } = {}) {
   const found = await imageUrl(entry.image).catch(() => null);
   if (!found?.url) return null;
   const response = await fetch(found.url, { headers: UA, signal: AbortSignal.timeout(15_000) });
@@ -300,8 +365,17 @@ export async function workImages(entry) {
   const crop = found.poster ? 'crop=iw:ih*0.6:0:ih*0.2,' : '';
   const full = await ffmpegImage(original, `scale=${WIDTH}:-2`);
   const stages = [];
-  for (const width of STAGES) {
-    stages.push(await ffmpegImage(original, `${crop}scale=${width}:-2:flags=area,scale=${WIDTH}:-2:flags=neighbor`));
+  if (style === 'zoom') {
+    // Même point de départ pour toutes les étapes (pas trop près des bords, ni du titre sur une affiche)
+    const rx = (0.25 + Math.random() * 0.5).toFixed(3);
+    const ry = (found.poster ? 0.35 + Math.random() * 0.3 : 0.25 + Math.random() * 0.5).toFixed(3);
+    for (const zoom of ZOOM_STAGES[difficulty] ?? ZOOM_STAGES.normal) {
+      stages.push(await ffmpegImage(original, `crop=iw/${zoom}:ih/${zoom}:(iw-iw/${zoom})*${rx}:(ih-ih/${zoom})*${ry},scale=${WIDTH}:-2`));
+    }
+  } else {
+    for (const width of PIXEL_STAGES[difficulty] ?? PIXEL_STAGES.normal) {
+      stages.push(await ffmpegImage(original, `${crop}scale=${width}:-2:flags=area,scale=${WIDTH}:-2:flags=neighbor`));
+    }
   }
   return { stages, full };
 }
