@@ -2,6 +2,7 @@
 import { lavalink } from './music/lavalink.js';
 import { allPlayers } from './music/player.js';
 import { config } from './config.js';
+import { FFMPEG_PATH } from './music/binaries.js';
 import { bilanPayload } from './features/tribunal.js';
 import { blindTestState, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './music/blindtest.js';
 import { recentLogs } from './utils/logbuffer.js';
@@ -163,6 +164,19 @@ export function adminRoutes(client) {
         return { ok: true, url: track.playUrl };
       }
       throw new Error('action inconnue (start, stop, say)');
+    },
+
+    'GET /admin/ffmpeg': async () => {
+      const { spawnSync } = await import('node:child_process');
+      const out = spawnSync(FFMPEG_PATH, ['-hide_banner', '-filters']).stdout?.toString() ?? '';
+      const version = spawnSync(FFMPEG_PATH, ['-hide_banner', '-version']).stdout?.toString() ?? '';
+      return {
+        drawtext: /drawtext/.test(out),
+        palettegen: /palettegen/.test(out),
+        gif: /gif/.test(version),
+        version: version.split('\n')[0],
+        configuration: version.split('configuration:')[1]?.slice(0, 400) ?? '',
+      };
     },
 
     'POST /admin/tribunal': async (url, body) => {
