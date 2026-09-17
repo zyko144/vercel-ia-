@@ -217,6 +217,8 @@ const TOOLS = [{
  * @returns {Promise<{ error?: string, stopped?: boolean, started?: boolean }>}
  */
 export async function startVoiceSession({ guildId, userId, userName, memberChannelId, force = false }) {
+  const allowed = config.voiceAi.allowedUsers;
+  if (!force && allowed.length && !allowed.includes(userId)) return { error: "🔒 L'IA vocale est réservée à certains membres." };
   if (!state.client?.isReady()) return { error: "🎙️ L'IA vocale est pas connectée pour le moment (token du 2e bot manquant ou invalide)." };
   const channel = homeGuildChannel();
   if (!channel || channel.guild.id !== guildId) return { error: "🎙️ L'IA vocale trouve pas son salon." };

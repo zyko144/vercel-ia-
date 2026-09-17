@@ -68,6 +68,8 @@ export const config = {
     model: str('GEMINI_VOICE_MODEL', 'gemini-3.8-live'),
     voice: str('GEMINI_VOICE_NAME', 'Puck'),
     idleSeconds: int('VOICE_AI_IDLE_SECONDS', 45),
+    // Seuls ces comptes peuvent utiliser /vocal (vide = tout le monde)
+    allowedUsers: list('VOICE_AI_USERS', '855176142096039997,734865069904756766'),
   },
   ownerId: str('OWNER_ID', '1543726919168557087'),
   // Statut affiché sous le nom du bot
