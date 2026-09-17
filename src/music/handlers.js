@@ -10,6 +10,7 @@ import {
 } from 'discord.js';
 import { config } from '../config.js';
 import { reportProblem } from '../features/alerts.js';
+import { setShare, shareNow, spotifyActivity } from '../features/spotify.js';
 import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
 import { SILENT_MODES } from './blindpools.js';
@@ -615,6 +616,29 @@ async function devineGame(client, interaction, fixedTheme = null) {
 }
 
 const MORE_COMMANDS = {
+  async spotify(client, interaction) {
+    if (!config.spotify.enabled) return interaction.reply(say("Le partage Spotify est désactivé (il faut activer « Presence Intent » côté Discord)."));
+    const member = interaction.member;
+    if (interaction.options.getBoolean('arreter')) {
+      setShare(interaction.guildId, interaction.user.id, { share: false });
+      return interaction.reply(say('⏹️ Partage Spotify arrêté.'));
+    }
+
+    const track = spotifyActivity(member);
+    if (!track) {
+      return interaction.reply(say("Je vois pas de Spotify sur ton profil 🤔 Lance un son sur Spotify, et vérifie dans Discord : Paramètres › Connexions › Spotify (avec « Afficher Spotify comme statut »)."));
+    }
+    const follow = interaction.options.getBoolean('suivre');
+    if (follow && !isDj(interaction)) return interaction.reply(say("Seul le chef (ou un DJ) peut faire suivre la musique du bot."));
+    const state = setShare(interaction.guildId, interaction.user.id, { share: true, follow });
+    await interaction.reply(say([
+      `🎧 Je partage en direct ce que tu écoutes : **${track.title}** — ${track.artist}`,
+      config.spotify.channelId ? `Ça s'affiche dans <#${config.spotify.channelId}>.` : '',
+      state.follow ? "🔊 Le bot joue la même chose en vocal et te suit quand tu changes de son." : '',
+    ].filter(Boolean).join('\n')));
+    return shareNow(client, member).catch(() => {});
+  },
+
   async karaoke(client, interaction) {
     const { error } = joinProblem(interaction);
     if (error) return interaction.reply(say(error));

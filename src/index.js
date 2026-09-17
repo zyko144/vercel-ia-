@@ -1,5 +1,5 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
-import { ActivityType, Client, Events, GatewayIntentBits, Partials } from 'discord.js';
+import { ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, Partials } from 'discord.js';
 import { adminRoutes, testAudioFile } from './admin.js';
 import { startVoiceAssistant } from './voice-ai/assistant.js';
 import { config } from './config.js';
@@ -8,6 +8,7 @@ import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
 import { reportProblem, setAlertClient } from './features/alerts.js';
 import { startReminderLoop } from './features/reminders.js';
+import { startSpotifyWatch } from './features/spotify.js';
 import { startVoiceKeeper } from './features/voice.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
@@ -16,14 +17,17 @@ import { restoreSessions } from './music/session.js';
 import { startHttpServer } from './server.js';
 import { storageBackend } from './storage.js';
 
+const INTENTS = [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.MessageContent,
+  GatewayIntentBits.GuildVoiceStates,
+  GatewayIntentBits.DirectMessages,
+];
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.DirectMessages,
-  ],
+  // L'intent « Présence » sert au partage Spotify ; il est retiré au démarrage s'il n'est pas activé dans le portail Discord
+  intents: config.spotify.enabled ? [...INTENTS, GatewayIntentBits.GuildPresences] : INTENTS,
   partials: [Partials.Channel],
   // Par défaut le bot ne ping personne (pas de @everyone même si l'IA l'écrit)
   allowedMentions: { parse: [], repliedUser: true },
@@ -50,6 +54,7 @@ client.once(Events.ClientReady, async (c) => {
   startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
   startReminderLoop(c);
+  startSpotifyWatch(c);
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);
 });
@@ -97,7 +102,25 @@ startHttpServer(() => ({
   uptime: Math.round(process.uptime()),
 }), adminRoutes(client), testAudioFile);
 
-client.login(config.discordToken).catch((err) => {
-  console.error('❌ Connexion à Discord impossible (token invalide ou intents pas activés ?) :', err.message);
-  process.exit(1);
-});
+/** L'intent « Présence » (statut Spotify) est-il activé dans le portail Discord ? */
+async function presenceAllowed() {
+  try {
+    const response = await fetch('https://discord.com/api/v10/applications/@me', { headers: { Authorization: `Bot ${config.discordToken}` } });
+    const flags = BigInt((await response.json())?.flags ?? 0);
+    return Boolean(flags & ((1n << 12n) | (1n << 13n)));
+  } catch {
+    return false;
+  }
+}
+
+(async () => {
+  if (config.spotify.enabled && !(await presenceAllowed())) {
+    console.warn("⚠️ Partage Spotify désactivé : active « Presence Intent » dans le portail Discord (Developer Portal › Bot), puis redémarre.");
+    config.spotify.enabled = false;
+    client.options.intents = new IntentsBitField(INTENTS);
+  }
+  await client.login(config.discordToken).catch((err) => {
+    console.error('❌ Connexion à Discord impossible (token invalide ou intents pas activés ?) :', err.message);
+    process.exit(1);
+  });
+})();

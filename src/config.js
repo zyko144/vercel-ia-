@@ -146,6 +146,13 @@ export const config = {
     miniGamesChannelId: channel('GAMES_MINI_CHANNEL_ID', MINI_GAMES_CHANNEL),
   },
 
+  // Partage en direct de ce qu'on écoute sur Spotify (lu dans le statut Discord)
+  spotify: {
+    enabled: bool('SPOTIFY_SHARE', true),
+    users: list('SPOTIFY_USERS', str('OWNER_ID', '1543726919168557087')),
+    channelId: channel('SPOTIFY_CHANNEL_ID', MUSIC_CHANNEL),
+  },
+
   music: {
     // auto = Lavalink si dispo, sinon lecteur local · lavalink = uniquement Lavalink · local = uniquement local
     engine: str('MUSIC_ENGINE', 'auto'),
