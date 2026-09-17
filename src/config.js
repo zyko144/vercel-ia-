@@ -71,7 +71,7 @@ export const config = {
     // Salon vocal de l'IA vocale (le bot musique, lui, reste dans VOICE_CHANNEL_ID)
     channelId: str('VOICE_AI_CHANNEL_ID', '1550100131569868871'),
     // Seuls ces comptes peuvent utiliser /vocal (vide = tout le monde)
-    allowedUsers: list('VOICE_AI_USERS', '855176142096039997,734865069904756766'),
+    allowedUsers: list('VOICE_AI_USERS', '855176142096039997,734865069904756766,923551925113323542'),
   },
   ownerId: str('OWNER_ID', '1543726919168557087'),
   // Statut affiché sous le nom du bot
