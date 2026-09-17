@@ -277,10 +277,10 @@ async function connectLive(session) {
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceAi.voice } } },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
-      // Fin de phrase détectée vite (0,5 s de silence) : réponse sans attendre
+      // Fin de phrase détectée vite (0,4 s de silence) : réponse sans attendre
       realtimeInputConfig: {
         automaticActivityDetection: {
-          silenceDurationMs: 500,
+          silenceDurationMs: 400,
           prefixPaddingMs: 100,
           endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH,
           startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_HIGH,
