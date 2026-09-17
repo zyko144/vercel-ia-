@@ -485,7 +485,7 @@ export class LavalinkBackend {
 
   endedTooEarly() {
     const info = this.currentItem?.info;
-    if (!info?.length || info.isStream) return false;
+    if (!info?.length || info.isStream || info.length > 12 * 3600_000) return false;
     return this.position() < info.length / 1000 - EARLY_END_MARGIN_S;
   }
 

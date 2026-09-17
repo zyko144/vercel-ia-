@@ -1,5 +1,7 @@
 // Commandes d'infos et petits jeux (réponses visibles seulement par la personne).
 import { ChannelType, EmbedBuilder, GuildPremiumTier, MessageFlags } from 'discord.js';
+import { config } from '../config.js';
+import { startVoiceSession, stopVoiceSession } from '../voice-ai/assistant.js';
 import { load } from '../storage.js';
 import { BRAND_COLOR } from '../utils/reply.js';
 import { truncate } from '../utils/discord.js';
@@ -9,6 +11,23 @@ const private_ = (payload) => ({ ...payload, flags: MessageFlags.Ephemeral });
 const random = (max) => Math.floor(Math.random() * max);
 
 export const UTILITY_HANDLERS = {
+  async vocal(client, interaction) {
+    const reply = (content) => (interaction.deferred ? interaction.editReply(content) : interaction.reply({ content, flags: MessageFlags.Ephemeral }));
+    if (interaction.options.getBoolean('arreter')) {
+      return reply((await stopVoiceSession(interaction.user.id)) ? '🎙️ Conversation arrêtée.' : "Y a pas de conversation en cours avec toi.");
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const result = await startVoiceSession({
+      guildId: interaction.guildId,
+      userId: interaction.user.id,
+      userName: interaction.member?.displayName ?? interaction.user.username,
+      memberChannelId: interaction.member?.voice?.channelId ?? null,
+    });
+    if (result.error) return reply(result.error);
+    if (result.stopped) return reply('🎙️ Conversation arrêtée.');
+    return reply(`🎙️ Je t'écoute ! Parle normalement, je te réponds à voix haute.\n-# Je peux aussi gérer la musique (« mets du Jul », « pause », « passe »). Je m'arrête après ${config.voiceAi.idleSeconds} s sans parler, si tu dis « au revoir », ou avec \`/vocal arreter:true\`.`);
+  },
+
   async userinfo(client, interaction) {
     const user = await (interaction.options.getUser('membre') ?? interaction.user).fetch();
     const member = await interaction.guild.members.fetch(user.id).catch(() => null);

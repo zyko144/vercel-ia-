@@ -17,6 +17,8 @@ const list = (key, fallback = '') =>
     .filter(Boolean);
 
 const missing = ['DISCORD_TOKEN', 'GEMINI_API_KEY'].filter((k) => !str(k));
+// DISCORD_TOKEN peut contenir 2 tokens séparés par ";" : le bot principal, puis le bot de l'IA vocale
+const discordTokens = str('DISCORD_TOKEN').split(/[;,\s]+/).filter(Boolean);
 if (missing.length) {
   console.error(`❌ Variables manquantes : ${missing.join(', ')}. Copie .env.example en .env (ou ajoute-les dans Render > Environment).`);
   process.exit(1);
@@ -42,8 +44,16 @@ function parseNodes(raw) {
 }
 
 export const config = {
-  discordToken: str('DISCORD_TOKEN'),
+  discordToken: discordTokens[0] ?? '',
   geminiKey: str('GEMINI_API_KEY'),
+
+  // IA vocale (2e bot qui écoute et répond à voix haute dans le vocal du bot)
+  voiceAi: {
+    token: str('VOICE_BOT_TOKEN') || str('DISCORD_VOICE_TOKEN') || discordTokens[1] || '',
+    model: str('GEMINI_VOICE_MODEL', 'gemini-2.5-flash-native-audio-latest'),
+    voice: str('GEMINI_VOICE_NAME', 'Puck'),
+    idleSeconds: int('VOICE_AI_IDLE_SECONDS', 45),
+  },
   ownerId: str('OWNER_ID', '1543726919168557087'),
   // Statut affiché sous le nom du bot
   botStatus: str('BOT_STATUS', 'dictature'),

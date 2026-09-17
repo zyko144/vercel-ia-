@@ -1,6 +1,7 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { adminRoutes } from './admin.js';
+import { startVoiceAssistant } from './voice-ai/assistant.js';
 import { config } from './config.js';
 import { commandDefinitions } from './commands/definitions.js';
 import { onInteraction } from './handlers/interactions.js';
@@ -45,6 +46,7 @@ client.once(Events.ClientReady, async (c) => {
 
   lavalink.init(c);
   startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
+  startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
   startReminderLoop(c);
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);

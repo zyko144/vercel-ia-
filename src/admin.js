@@ -4,6 +4,8 @@ import { allPlayers } from './music/player.js';
 import { config } from './config.js';
 import { blindTestState, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './music/blindtest.js';
 import { recentLogs } from './utils/logbuffer.js';
+import { startVoiceSession, stopVoiceSession, voiceAssistantState } from './voice-ai/assistant.js';
+import { getOrCreatePlayer } from './music/player.js';
 
 export function adminRoutes(client) {
   const guildOf = (id) => client.guilds.cache.get(id) ?? client.guilds.cache.first();
@@ -41,11 +43,28 @@ export function adminRoutes(client) {
       nodes: lavalink.status(),
       nodeLog: lavalink.logs?.slice(-25) ?? [],
       blindtests: blindTestState(),
+      voiceAi: voiceAssistantState(),
       playing,
     };
     },
 
     // Partie de test dans un salon précis (ex : { action: 'start', textChannelId, voiceChannelId, theme, rounds, difficulty })
+    // Test de l'IA vocale : { action: 'start', userId } pour écouter quelqu'un (le bot principal pour un test), 'stop'
+    'POST /admin/vocal': async (url, body) => {
+      const guild = guildOf(body.guildId);
+      if (body.action === 'stop') return { stopped: await stopVoiceSession() };
+      if (body.action === 'start') return startVoiceSession({ guildId: guild.id, userId: body.userId ?? client.user.id, userName: body.userName ?? 'test', memberChannelId: null, force: true });
+      // Fait parler le bot principal (synthèse vocale du serveur audio) : sert de « personne » pour tester
+      if (body.action === 'say') {
+        const player = getOrCreatePlayer(client, guild);
+        await player.connect(guild.channels.cache.get(config.voice.channelId));
+        player.add([{ title: 'Test IA vocale', artist: null, playUrl: `ftts://${body.text}`, url: null, source: 'web', requestedBy: client.user.id }], { next: true });
+        if (player.current?.title !== 'Test IA vocale') player.skip();
+        return { ok: true };
+      }
+      throw new Error('action inconnue (start, stop, say)');
+    },
+
     'POST /admin/blindtest': async (url, body) => {
       const guild = guildOf(body.guildId);
       if (body.action === 'stop') return { stopped: stopBlindTest(guild.id) };

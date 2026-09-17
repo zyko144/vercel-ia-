@@ -245,6 +245,8 @@ const utilityCommands = [
 
   new SlashCommandBuilder().setName('aide').setDescription('Tout ce que le bot sait faire'),
   new SlashCommandBuilder().setName('ping').setDescription('Vérifie si le bot est en forme'),
+  new SlashCommandBuilder().setName('vocal').setDescription("Parle à l'IA vocale dans le vocal du bot : elle te répond à voix haute")
+    .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la conversation en cours')),
 
   new SlashCommandBuilder()
     .setName('admin')
