@@ -159,8 +159,13 @@ function connect() {
       // message inconnu
     }
   });
-  ws.on('close', (code) => {
-    console.warn(`Connexion fermée (${code})${code === 1006 ? ' : clé refusée ou bot injoignable' : ''}. Nouvelle tentative dans 5 s…`);
+  ws.on('close', (code, raison) => {
+    if (code === 4001) {
+      console.error('❌ Une autre fenêtre diffuse déjà. Ferme-la (ou clique sur Arrêter), puis relance celle-ci.');
+      stopping = true;
+      process.exit(1);
+    }
+    console.warn(`Connexion fermée (${code})${code === 1006 ? ' : clé refusée ou bot injoignable' : ''}${raison ? ' · ' + raison : ''}. Nouvelle tentative dans 5 s…`);
     if (!stopping) setTimeout(connect, 5_000);
   });
   ws.on('error', (err) => console.warn('Erreur :', err.message));

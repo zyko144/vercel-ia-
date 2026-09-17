@@ -61,6 +61,12 @@ export function attachLiveServer(server) {
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
+      // Déjà une fenêtre qui diffuse : on refuse la deuxième (sinon les deux se coupent l'une l'autre)
+      if (live && Date.now() - (live.lastChunkAt ?? 0) < 3_000) {
+        console.warn('[direct] deuxième programme refusé : une diffusion est déjà en cours');
+        ws.close(4001, 'déjà en cours');
+        return;
+      }
       const userId = url.searchParams.get('user') || config.ownerId;
       startLive(ws, userId);
     });
@@ -111,6 +117,7 @@ function startLive(ws, userId) {
       return;
     }
     const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    live.lastChunkAt = Date.now();
     clearTimeout(stopTimer);
     stopTimer = setTimeout(() => stopLive('plus rien ne rentre'), STOP_AFTER_MS);
     for (const listener of live.listeners) {
