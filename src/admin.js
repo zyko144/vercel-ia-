@@ -6,7 +6,7 @@ import { blindTestState, handleBlindTestMessage, openBlindTestSetup, startGame, 
 import { recentLogs } from './utils/logbuffer.js';
 import { startVoiceSession, stopVoiceSession, voiceAssistantState } from './voice-ai/assistant.js';
 import { randomBytes } from 'node:crypto';
-import { GoogleGenAI } from '@google/genai';
+import { EndSensitivity, GoogleGenAI, Modality, StartSensitivity } from '@google/genai';
 import { getOrCreatePlayer } from './music/player.js';
 
 // Fichiers audio de test (question parlée) servis quelques minutes au serveur audio
@@ -19,6 +19,60 @@ export function testAudioFile(pathname) {
   const entry = id && testAudio.get(id);
   if (!entry || Date.now() - entry.at > TEST_AUDIO_TTL_MS) return null;
   return entry.buffer;
+}
+
+async function liveSelfTest({ text, model, gapMs = 0 }) {
+  const ai = new GoogleGenAI({ apiKey: config.geminiKey });
+  const wav = await speechWav(text);
+  const rate = wav.readUInt32LE(24);
+  const data = wav.subarray(44);
+  const count = Math.floor((data.length / 2) * 16_000 / rate);
+  const pcm = Buffer.alloc(count * 2);
+  for (let i = 0; i < count; i++) pcm.writeInt16LE(data.readInt16LE(Math.min(data.length / 2 - 1, Math.floor(i * rate / 16_000)) * 2), i * 2);
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const result = { model, speechSeconds: Math.round(count / 1600) / 10 };
+  let firstHeard = null;
+  let firstAudio = null;
+  let heard = '';
+  let done;
+  const t0 = Date.now();
+  const live = await ai.live.connect({
+    model,
+    config: {
+      responseModalities: [Modality.AUDIO],
+      systemInstruction: 'Réponds en français en une phrase.',
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      realtimeInputConfig: { automaticActivityDetection: { silenceDurationMs: 400, prefixPaddingMs: 100, endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH, startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_HIGH } },
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+    callbacks: {
+      onmessage: (message) => {
+        if (message.serverContent?.inputTranscription?.text) {
+          firstHeard ??= Date.now();
+          heard += message.serverContent.inputTranscription.text;
+        }
+        for (const part of message.serverContent?.modelTurn?.parts ?? []) if (part.inlineData) firstAudio ??= Date.now();
+        if (message.serverContent?.turnComplete) done?.();
+      },
+    },
+  });
+  result.connectMs = Date.now() - t0;
+  if (gapMs) await sleep(gapMs);
+  const finished = new Promise((resolve) => { done = resolve; });
+  for (let i = 0; i < pcm.length; i += 3_200) {
+    live.sendRealtimeInput({ audio: { data: pcm.subarray(i, i + 3_200).toString('base64'), mimeType: 'audio/pcm;rate=16000' } });
+    await sleep(100);
+  }
+  const speechEnd = Date.now();
+  for (let i = 0; i < 15; i++) {
+    live.sendRealtimeInput({ audio: { data: Buffer.alloc(3_200).toString('base64'), mimeType: 'audio/pcm;rate=16000' } });
+    await sleep(100);
+  }
+  live.sendRealtimeInput({ audioStreamEnd: true });
+  await Promise.race([finished, sleep(30_000)]);
+  live.close();
+  return { ...result, heard: heard.trim(), transcriptionMs: firstHeard ? firstHeard - speechEnd : null, answerMs: firstAudio ? firstAudio - speechEnd : null };
 }
 
 async function speechWav(text) {
@@ -87,6 +141,9 @@ export function adminRoutes(client) {
       if (body.action === 'stop') return { stopped: await stopVoiceSession() };
       if (body.action === 'start') return startVoiceSession({ guildId: guild.id, userId: body.userId ?? client.user.id, userName: body.userName ?? 'test', memberChannelId: null, force: true });
       // Fait parler le bot principal (synthèse vocale du serveur audio) : sert de « personne » pour tester
+      if (body.action === 'selftest') {
+        return liveSelfTest({ text: String(body.text ?? 'Salut, quelle est la capitale du Japon ?'), model: body.model ?? config.voiceAi.model, gapMs: Number(body.gapMs ?? 0) });
+      }
       if (body.action === 'say') {
         const id = randomBytes(16).toString('hex');
         testAudio.set(id, { buffer: await speechWav(String(body.text ?? '')), at: Date.now() });
