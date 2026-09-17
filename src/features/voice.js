@@ -65,9 +65,10 @@ export function isAllowedVoice(guild, channel) {
 export function lockedChannel(guild, wanted = null) {
   if (!config.voice.lockHome) return null;
   if (wanted && config.voice.extraChannels.includes(wanted.id)) return wanted;
-  // Déjà dans un salon autorisé (on l'y a emmené) : il y reste
+  // Déjà dans un salon autorisé (on l'y a emmené) : il y reste tant qu'il y a du monde
   const current = guild.members.me?.voice?.channel;
-  if (!wanted && current && config.voice.extraChannels.includes(current.id)) return current;
+  const withSomeone = current?.members?.some((m) => !m.user.bot);
+  if (!wanted && current && withSomeone && config.voice.extraChannels.includes(current.id)) return current;
   return homeChannel(guild);
 }
 
