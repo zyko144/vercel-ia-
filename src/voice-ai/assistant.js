@@ -68,6 +68,12 @@ function toDiscord(pcm, previous) {
   return { out, last };
 }
 
+// Avant de parler, on garde un peu d'avance (sinon le moindre ralentissement coupe la voix)
+const JITTER_BYTES = 48_000 * 2 * 2 * 0.25; // 250 ms de son prêt d'avance
+const JITTER_MAX_WAIT_MS = 400; // au-delà, on parle quand même (on garde la réponse rapide)
+const FRAME_BYTES = 3_840; // 20 ms de son Discord (48 kHz, stéréo)
+const FILLER = Buffer.alloc(FRAME_BYTES);
+
 // ===================== Bot vocal =====================
 
 /** Émet un court silence : sans ça, Discord n'envoie jamais la voix des autres au bot. */
@@ -449,6 +455,8 @@ async function onLiveMessage(session, message) {
     stopSpeaking(session);
   }
   if (content.turnComplete) {
+    clearInterval(session.filler);
+    session.filler = null;
     session.output?.end();
     session.output = null;
     session.turns++;
@@ -460,21 +468,53 @@ async function onLiveMessage(session, message) {
 
 /** Voix de l'IA jouée au fur et à mesure qu'elle arrive (pas d'attente de la réponse complète). */
 function playChunk(session, pcm) {
-  if (!session.output) {
-    session.output = new PassThrough({ highWaterMark: 1 << 22 });
-    session.outLast = 0;
-    session.speaking = true;
-    session.turnAudioAt = Date.now();
-    if (session.speechEndAt) console.log(`[vocal] réponse ${session.turnAudioAt - session.speechEndAt} ms après la fin de la phrase`);
-    duckMusic(session, true);
-    state.player.play(createAudioResource(session.output, { inputType: StreamType.Raw }));
-  }
   const { out, last } = toDiscord(pcm, session.outLast);
   session.outLast = last;
-  session.output.write(out);
+  if (session.output) {
+    session.output.write(out);
+    return;
+  }
+
+  // On attend d'avoir un peu d'avance (ou 400 ms) avant de commencer à parler
+  session.buffered = session.buffered ? Buffer.concat([session.buffered, out]) : out;
+  session.bufferedSince ??= Date.now();
+  if (session.buffered.length < JITTER_BYTES && Date.now() - session.bufferedSince < JITTER_MAX_WAIT_MS) {
+    clearTimeout(session.bufferTimer);
+    session.bufferTimer = setTimeout(() => {
+      if (state.session === session && session.buffered && !session.output) startSpeaking(session);
+    }, JITTER_MAX_WAIT_MS);
+    return;
+  }
+  startSpeaking(session);
+}
+
+/** Commence à parler avec ce qui est déjà prêt, et ne laisse jamais le flux à sec. */
+function startSpeaking(session) {
+  clearTimeout(session.bufferTimer);
+  session.output = new PassThrough({ highWaterMark: 1 << 22 });
+  session.speaking = true;
+  session.turnAudioAt = Date.now();
+  if (session.speechEndAt) console.log(`[vocal] réponse ${session.turnAudioAt - session.speechEndAt} ms après la fin de la phrase`);
+  duckMusic(session, true);
+  state.player.play(createAudioResource(session.output, { inputType: StreamType.Raw }));
+  if (session.buffered) session.output.write(session.buffered);
+  session.buffered = null;
+  session.bufferedSince = null;
+  // Rien de nouveau à jouer : on envoie du silence plutôt que de laisser la voix se couper
+  clearInterval(session.filler);
+  session.filler = setInterval(() => {
+    if (!session.output || session.output.destroyed) return;
+    if (session.output.writableLength < FRAME_BYTES) session.output.write(FILLER);
+  }, 20);
+  session.filler.unref?.();
 }
 
 function stopSpeaking(session) {
+  clearTimeout(session.bufferTimer);
+  clearInterval(session.filler);
+  session.filler = null;
+  session.buffered = null;
+  session.bufferedSince = null;
   session.output?.destroy();
   session.output = null;
   state.player.stop(true);
@@ -486,6 +526,7 @@ function onPlayerIdle() {
   session.speaking = false;
   session.lastActivity = Date.now();
   duckMusic(session, false);
+  if (session.buffered && !session.output) startSpeaking(session);
   if (session.endAfterTurn && !session.output) stopSession('au revoir').catch(() => {});
 }
 
