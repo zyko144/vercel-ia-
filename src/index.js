@@ -8,6 +8,7 @@ import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
 import { reportProblem, setAlertClient } from './features/alerts.js';
 import { startReminderLoop } from './features/reminders.js';
+import { attachLiveServer, serveLive, setLiveClient } from './features/livestream.js';
 import { startSpotifyWatch } from './features/spotify.js';
 import { startVoiceKeeper } from './features/voice.js';
 import { ensureBinaries } from './music/binaries.js';
@@ -55,6 +56,7 @@ client.once(Events.ClientReady, async (c) => {
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
   startReminderLoop(c);
   startSpotifyWatch(c);
+  setLiveClient(c);
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);
 });
@@ -96,11 +98,13 @@ async function shutdown(signal) {
 process.once('SIGTERM', () => shutdown('SIGTERM'));
 process.once('SIGINT', () => shutdown('SIGINT'));
 
-startHttpServer(() => ({
+const httpServer = startHttpServer(() => ({
   bot: client.user?.username,
   discord: client.isReady() ? 'ready' : 'connecting',
   uptime: Math.round(process.uptime()),
-}), adminRoutes(client), testAudioFile);
+}), adminRoutes(client), testAudioFile, serveLive);
+// Le PC du chef envoie son son ici, en direct
+attachLiveServer(httpServer);
 
 /** L'intent « Présence » (statut Spotify) est-il activé dans le portail Discord ? */
 async function presenceAllowed() {

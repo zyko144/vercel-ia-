@@ -51,7 +51,7 @@ const send = (res, status, body) => {
  * @param {() => object} getStatus
  * @param {Record<string, (url: URL, body: object) => Promise<unknown>>} adminRoutes ex : { 'GET /admin/logs': fn }
  */
-export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null) {
+export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null, liveRoute = null) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
 
@@ -61,6 +61,9 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': file.length });
       return res.end(file);
     }
+
+    // Son du PC diffusé en direct (le serveur audio vient le chercher ici)
+    if (url.pathname.startsWith('/live/') && liveRoute) return liveRoute(req, res, url);
 
     if (url.pathname.startsWith('/admin/')) {
       if (!isAdmin(req)) return send(res, 401, { error: 'clé admin invalide' });
@@ -80,6 +83,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
   });
 
   server.listen(config.port, () => console.log(`🌐 Serveur HTTP sur le port ${config.port}`));
+  startHttpServer.server = server;
 
   // Render gratuit met le service en veille après 15 min sans visite : on se ping soi-même
   if (config.publicUrl) {
@@ -88,4 +92,5 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     }, KEEP_ALIVE_MS);
     console.log(`⏰ Keep-alive activé sur ${config.publicUrl}/health`);
   }
+  return server;
 }

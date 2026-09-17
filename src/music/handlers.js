@@ -10,6 +10,7 @@ import {
 } from 'discord.js';
 import { config } from '../config.js';
 import { reportProblem } from '../features/alerts.js';
+import { isLive, liveInfo, stopLive } from '../features/livestream.js';
 import { setShare, shareNow, spotifyActivity } from '../features/spotify.js';
 import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
@@ -616,6 +617,25 @@ async function devineGame(client, interaction, fixedTheme = null) {
 }
 
 const MORE_COMMANDS = {
+  async direct(client, interaction) {
+    if (interaction.user.id !== config.ownerId) return interaction.reply(say('Cette commande est réservée au chef.'));
+    if (interaction.options.getBoolean('arreter')) {
+      return interaction.reply(say(stopLive('demandé par le chef') ? '⏹️ Diffusion du son de ton PC arrêtée.' : "Y a pas de diffusion en cours."));
+    }
+    if (isLive()) {
+      const since = Math.floor(liveInfo().since / 1000);
+      return interaction.reply(say(`🔴 Ton PC diffuse déjà dans le vocal depuis <t:${since}:R>. Pour couper : /direct arreter:true`));
+    }
+    return interaction.reply(say([
+      '🔴 **Diffuser le son de ton PC dans le vocal** (Spotify, YouTube, jeu… tel quel)',
+      'Sur ton ordinateur, dans le dossier du bot, lance :',
+      '```bash',
+      'node tools/son-du-pc.mjs',
+      '```',
+      'Dès que le son arrive, le bot le joue dans le vocal. Ctrl+C sur le PC pour arrêter.',
+      "-# Si aucune entrée n'est trouvée : `node tools/son-du-pc.mjs --liste`, puis `--entree \"nom\"`. Il faut « Mix stéréo » activé dans Windows, ou VB-CABLE.",
+    ].join('\n')));
+  },
   async spotify(client, interaction) {
     if (!config.spotify.enabled) return interaction.reply(say("Le partage Spotify est désactivé (il faut activer « Presence Intent » côté Discord)."));
     const member = interaction.member;

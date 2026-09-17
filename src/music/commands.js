@@ -112,6 +112,9 @@ export const musicCommands = [
   gameCommand('jeu-animes', "🍥 Devine l'animé avec son opening ou son image"),
   gameCommand('jeu-jeuxvideo', "🎮 Devine le jeu vidéo : musiques, sons cultes et images"),
 
+  new SlashCommandBuilder().setName('direct').setDescription("🔴 Diffuse le son de ton PC (Spotify compris) dans le vocal, sans passer par YouTube")
+    .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la diffusion')),
+
   new SlashCommandBuilder().setName('spotify').setDescription("🎧 Partage en direct ce que tu écoutes sur Spotify (et le bot peut le jouer en vocal)")
     .addBooleanOption((o) => o.setName('suivre').setDescription('Le bot joue la même chose en vocal, au même moment'))
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête le partage')),
