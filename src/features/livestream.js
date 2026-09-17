@@ -84,7 +84,16 @@ export function stopLive(reason = 'arrêt') {
   }
   console.log(`[direct] diffusion arrêtée (${reason})`);
   const player = client && getPlayer(guildId());
-  if (player?.current?.isLiveStream) player.stop();
+  if (player?.current?.isLiveStream) {
+    // On rend la musique d'avant telle qu'elle était
+    const before = previous.before;
+    if (before?.current) {
+      player.queue = before.queue;
+      player.playNow({ ...before.current, seekTo: before.position });
+    } else {
+      player.stop();
+    }
+  }
   return true;
 }
 
@@ -128,6 +137,8 @@ async function playInVoice() {
   if (!guild || !voiceChannel) return;
   const player = getOrCreatePlayer(client, guild);
   await player.connect(voiceChannel);
+  // Ce qui jouait avant : on le remettra à la fin de la diffusion
+  if (!player.current?.isLiveStream) live.before = { current: player.current, queue: [...player.queue], position: Math.round(player.position()) };
   const name = guild.members.cache.get(live.userId)?.displayName ?? 'le chef';
   player.playNow({
     title: `Son du PC de ${name}`,
