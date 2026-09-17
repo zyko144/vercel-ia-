@@ -391,7 +391,8 @@ export class LavalinkBackend {
       if (!track || this.pending || this.player.paused || !this.currentEncoded || this.recovering) return;
       if (Date.now() - this.lastState.at < 12_000) return;
       const state = await this.fetchState().catch(() => undefined);
-      if (state === undefined || state?.track || this.player.current !== track || this.pending || !this.currentEncoded) return;
+      // Pas de réponse (serveur injoignable) = on ne sait pas : on ne touche à rien
+      if (!state || state.track || this.player.current !== track || this.pending || !this.currentEncoded) return;
       lavalink.log(`${this.node?.name} : "${track.title}" n'est plus joué, passage à la suite`);
       this.currentEncoded = null;
       this.player.onTrackEnd({ failed: false });
