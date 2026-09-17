@@ -390,7 +390,9 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
     player.volume = 100;
     if (!game.textOnly) {
       await player.connect(voiceChannel, { force: true });
-      if (!(player.backend instanceof LavalinkBackend)) throw new Error('les serveurs audio sont indisponibles pour le moment');
+      // Serveurs audio en panne : on joue quand même avec le lecteur de secours du bot (versions moins sûres)
+      game.backupPlayer = !(player.backend instanceof LavalinkBackend);
+      if (game.backupPlayer) console.warn('[blindtest] serveurs audio indisponibles : lecteur de secours');
       // Jamais d'effet : le son d'origine, tel quel
       player.filters = [];
     }
@@ -424,7 +426,8 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
         `${themeLabel(settings)} · ${mode.emoji} ${mode.label} · ${game.level.emoji} ${game.level.label} · **${settings.mode === 'premier10' ? `premier à ${WIN_SCORE} pts` : `${game.rounds} manches`}**`,
         game.visual && game.textOnly ? `🖼️ Pas de son dans ce mode : ${game.mode === 'zoom' ? "l'image part d'un détail et recule" : "l'image devient de plus en plus nette"}, écrivez vos réponses ici.` : game.visual ? `🔊 Le son est dans <#${voiceChannel.id}> et l'image floutée s'affiche ici : écrivez vos réponses ici.` : game.textOnly ? '📝 Pas de son dans ce mode : lisez les paroles et écrivez vos réponses ici.' : `🔊 Le son est dans <#${voiceChannel.id}>, écrivez vos réponses ici.`,
         pointsLine(settings),
-      ].join('\n'))],
+        game.backupPlayer ? "-# ⚠️ Les serveurs audio habituels sont en panne : lecteur de secours, les extraits peuvent être moins précis." : null,
+      ].filter(Boolean).join('\n'))],
     components: panel ? [] : gameControls(),
   }).catch(() => null);
   continueGame(game);
