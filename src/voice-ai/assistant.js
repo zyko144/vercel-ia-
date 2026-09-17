@@ -335,6 +335,9 @@ function listen(session, conn) {
     const { out, carry } = toGemini(pcm, session.carry);
     session.carry = carry;
     session.pending = session.pending.length ? Buffer.concat([session.pending, out]) : out;
+    if (!session.burst) session.burst = { at: Date.now(), frames: 0, energy: 0 };
+    session.burst.frames++;
+    session.burst.energy += rms(out);
     session.lastPacketAt = Date.now();
     session.lastActivity = Date.now();
     session.silenceSent = 0;
@@ -353,7 +356,13 @@ function listen(session, conn) {
       sendAudio(session, session.pending);
       session.pending = Buffer.alloc(0);
     }
-    if (session.silenceSent === 0) session.speechEndAt = session.lastPacketAt;
+    if (session.silenceSent === 0) {
+      session.speechEndAt = session.lastPacketAt;
+      if (session.burst) {
+        console.log(`[vocal] voix reçue : ${(session.burst.frames * 0.02).toFixed(1)} s, niveau moyen ${Math.round(session.burst.energy / session.burst.frames)}`);
+        session.burst = null;
+      }
+    }
     if (session.silenceSent < SILENCE_AFTER_SPEECH_MS) {
       sendAudio(session, Buffer.alloc(SEND_CHUNK_BYTES));
       session.silenceSent += 100;
@@ -366,6 +375,16 @@ function listen(session, conn) {
       stopSession(`${config.voiceAi.idleSeconds} s sans parler`).catch(() => {});
     }
   }, 100);
+}
+
+function rms(pcm) {
+  let sum = 0;
+  const samples = Math.floor(pcm.length / 2);
+  for (let i = 0; i < samples; i++) {
+    const v = pcm.readInt16LE(i * 2);
+    sum += v * v;
+  }
+  return samples ? Math.round(Math.sqrt(sum / samples)) : 0;
 }
 
 function sendAudio(session, chunk) {
@@ -395,7 +414,10 @@ async function onLiveMessage(session, message) {
 
   const content = message.serverContent;
   if (!content) return;
-  if (content.inputTranscription?.text) session.heard += content.inputTranscription.text;
+  if (content.inputTranscription?.text) {
+    session.heard += content.inputTranscription.text;
+    console.log(`[vocal] Gemini entend : « ${content.inputTranscription.text.trim()} »`);
+  }
   if (content.outputTranscription?.text) session.said += content.outputTranscription.text;
 
   for (const part of content.modelTurn?.parts ?? []) {
