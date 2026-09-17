@@ -368,6 +368,7 @@ export class LavalinkBackend {
       this.currentEncoded = item.encoded;
       this.currentItem = item;
       this.startedAt = Date.now();
+      if (!this.watchdog) this.startWatchdog();
       this.lastState = { position: seek * 1000, at: Date.now() };
 
       this.node.updatePlayer(this.guild.id, {
@@ -378,6 +379,24 @@ export class LavalinkBackend {
         filters: lavalinkFilters(this.player.filters, this.node),
       }).catch((err) => pending.finish(err));
     });
+  }
+
+  /**
+   * Filet de sécurité : si le serveur audio ne donne plus de nouvelles d'un son "en cours",
+   * on lui demande s'il le joue encore ; sinon on passe à la suite (la file ne reste jamais bloquée).
+   */
+  startWatchdog() {
+    this.watchdog = setInterval(async () => {
+      const track = this.player.current;
+      if (!track || this.pending || this.player.paused || !this.currentEncoded || this.recovering) return;
+      if (Date.now() - this.lastState.at < 12_000) return;
+      const state = await this.fetchState().catch(() => undefined);
+      if (state === undefined || state?.track || this.player.current !== track || this.pending || !this.currentEncoded) return;
+      lavalink.log(`${this.node?.name} : "${track.title}" n'est plus joué, passage à la suite`);
+      this.currentEncoded = null;
+      this.player.onTrackEnd({ failed: false });
+    }, 5_000);
+    this.watchdog.unref?.();
   }
 
   async switchNode(exclude) {
@@ -439,7 +458,21 @@ export class LavalinkBackend {
           this.currentEncoded = null;
           return this.player.onTrackEnd({ failed: true, error });
         }
-        if (pending) return; // fin bizarre pendant le démarrage : le délai gère
+        if (pending) {
+          if (message.reason !== 'finished') return;
+          const info = this.currentItem?.info;
+          // Un vrai son (plus de 30 s) fini dès le départ : le flux est cassé, on essaie une autre version
+          if (info?.length > 30_000 && !info.isStream) return pending.finish(new Error('son terminé dès le départ'));
+          // Son très court fini avant la fin du démarrage : démarrage validé, puis passage à la suite
+          const encoded = this.currentEncoded;
+          pending.finish();
+          setTimeout(() => {
+            if (this.currentEncoded !== encoded) return;
+            this.currentEncoded = null;
+            this.player.onTrackEnd({ failed: false });
+          }, 50);
+          return undefined;
+        }
         // Le serveur dit "fini" alors qu'il restait un bon bout : c'est une coupure
         if (message.reason === 'finished' && this.endedTooEarly()) {
           lavalink.log(`${this.node?.name} : "${this.player.current?.title}" arrêté à ${Math.round(this.position())}s sur ${Math.round(this.currentItem.info.length / 1000)}s`);
@@ -708,6 +741,8 @@ export class LavalinkBackend {
   }
 
   destroy() {
+    clearInterval(this.watchdog);
+    this.watchdog = null;
     clearTimeout(this.endTimer);
     this.endTimer = null;
     lavalink.detach(this.guild.id, this);
