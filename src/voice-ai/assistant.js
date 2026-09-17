@@ -2,11 +2,13 @@
 // Avec /vocal, il écoute la personne et lui répond à voix haute en direct (Gemini Live),
 // et peut piloter la musique du bot principal. Il ne va dans aucun autre salon.
 import { PassThrough, Readable } from 'node:stream';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import {
   AudioPlayerStatus,
   createAudioPlayer,
   createAudioResource,
   EndBehaviorType,
+  generateDependencyReport,
   entersState,
   getVoiceConnection,
   joinVoiceChannel,
@@ -32,23 +34,19 @@ const MAX_RECONNECTS = 3;
 const PRIME_FRAMES = 25; // 0,5 s de silence émis pour que Discord commence à nous envoyer la voix des autres
 
 const ai = new GoogleGenAI({ apiKey: config.geminiKey });
+const loopDelay = monitorEventLoopDelay({ resolution: 20 });
+loopDelay.enable();
+const load = { cpu: 0, lastUsage: process.cpuUsage(), lastAt: Date.now() };
+setInterval(() => {
+  const usage = process.cpuUsage(load.lastUsage);
+  const elapsed = Date.now() - load.lastAt;
+  load.cpu = Math.round(((usage.user + usage.system) / 1000 / elapsed) * 100);
+  load.lastUsage = process.cpuUsage();
+  load.lastAt = Date.now();
+}, 5_000).unref();
 const state = { client: null, mainClient: null, player: null, session: null, checker: null };
 
 // ===================== Conversion audio =====================
-
-/** Voix Discord (48 kHz stéréo) -> 16 kHz mono pour Gemini. */
-function toGemini(pcm, carry) {
-  const data = carry.length ? Buffer.concat([carry, pcm]) : pcm;
-  const groups = Math.floor(data.length / 12); // 3 trames stéréo = 1 échantillon à 16 kHz
-  const out = Buffer.alloc(groups * 2);
-  for (let i = 0; i < groups; i++) {
-    const o = i * 12;
-    const sum = data.readInt16LE(o) + data.readInt16LE(o + 2) + data.readInt16LE(o + 4)
-      + data.readInt16LE(o + 6) + data.readInt16LE(o + 8) + data.readInt16LE(o + 10);
-    out.writeInt16LE(Math.round(sum / 6), i * 2);
-  }
-  return { out, carry: data.subarray(groups * 12) };
-}
 
 /** Voix de Gemini (24 kHz mono) -> 48 kHz stéréo pour Discord (interpolation entre deux échantillons). */
 function toDiscord(pcm, previous) {
@@ -129,7 +127,7 @@ export async function startVoiceAssistant(mainClient) {
     console.log('🎙️ IA vocale désactivée : pas de token pour le 2e bot (DISCORD_TOKEN=token1;token2 ou VOICE_BOT_TOKEN)');
     return;
   }
-  console.log(`🎙️ IA vocale : token lu dans ${config.voiceAi.tokenSource}`);
+  console.log(`🎙️ IA vocale : token lu dans ${config.voiceAi.tokenSource} · ${generateDependencyReport().split('\n').filter((line) => /opus/i.test(line)).map((line) => line.trim()).join(' ')}`);
   state.mainClient = mainClient;
   state.player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Play, maxMissedFrames: 250 } });
   state.player.on('error', (err) => console.warn('[vocal] lecture :', err.message));
@@ -165,6 +163,7 @@ export function voiceAssistantState() {
     bot: state.client?.user?.tag ?? null,
     voice: conn?.state.status ?? 'déconnecté',
     model: config.voiceAi.model,
+    load: { cpu: `${load.cpu} %`, loopDelayMs: Math.round(loopDelay.mean / 1e6), loopDelayMaxMs: Math.round(loopDelay.max / 1e6) },
     session: s ? { userId: s.userId, since: Math.round((Date.now() - s.startedAt) / 1000), speaking: s.speaking, turns: s.turns, stats: s.stats } : null,
   };
 }
@@ -322,7 +321,8 @@ function onLiveClose(session, event) {
 /** Écoute la personne : sa voix part en direct vers Gemini, par morceaux de 100 ms. */
 function listen(session, conn) {
   const opus = conn.receiver.subscribe(session.userId, { end: { behavior: EndBehaviorType.Manual } });
-  const decoder = new prism.opus.Decoder({ rate: 48_000, channels: 2, frameSize: 960 });
+  // Le décodeur Opus sort directement du 16 kHz mono : 6 fois moins de données à traiter
+  const decoder = new prism.opus.Decoder({ rate: 16_000, channels: 1, frameSize: 320 });
   session.opus = opus;
   session.decoder = decoder;
   opus.on('error', (err) => console.warn('[vocal] réception :', err.message));
@@ -332,8 +332,7 @@ function listen(session, conn) {
   decoder.on('data', (pcm) => {
     if (session.closing) return;
     session.stats.packets++;
-    const { out, carry } = toGemini(pcm, session.carry);
-    session.carry = carry;
+    const out = pcm;
     session.pending = session.pending.length ? Buffer.concat([session.pending, out]) : out;
     if (!session.burst) session.burst = { at: Date.now(), frames: 0, energy: 0 };
     session.burst.frames++;
