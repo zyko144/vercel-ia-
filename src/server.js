@@ -51,9 +51,16 @@ const send = (res, status, body) => {
  * @param {() => object} getStatus
  * @param {Record<string, (url: URL, body: object) => Promise<unknown>>} adminRoutes ex : { 'GET /admin/logs': fn }
  */
-export function startHttpServer(getStatus, adminRoutes = {}) {
+export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
+
+    if (url.pathname.startsWith('/voice-test/')) {
+      const file = publicFile(url.pathname);
+      if (!file) return send(res, 404, 'introuvable');
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': file.length });
+      return res.end(file);
+    }
 
     if (url.pathname.startsWith('/admin/')) {
       if (!isAdmin(req)) return send(res, 401, { error: 'clé admin invalide' });

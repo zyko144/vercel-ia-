@@ -5,7 +5,39 @@ import { config } from './config.js';
 import { blindTestState, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './music/blindtest.js';
 import { recentLogs } from './utils/logbuffer.js';
 import { startVoiceSession, stopVoiceSession, voiceAssistantState } from './voice-ai/assistant.js';
+import { randomBytes } from 'node:crypto';
+import { GoogleGenAI } from '@google/genai';
 import { getOrCreatePlayer } from './music/player.js';
+
+// Fichiers audio de test (question parlée) servis quelques minutes au serveur audio
+const testAudio = new Map(); // id -> { buffer, at }
+const TEST_AUDIO_TTL_MS = 10 * 60_000;
+
+/** Fichier audio de test demandé par le serveur audio (public, identifiant aléatoire, expire vite). */
+export function testAudioFile(pathname) {
+  const id = pathname.match(/^\/voice-test\/([a-f0-9]{32})\.wav$/)?.[1];
+  const entry = id && testAudio.get(id);
+  if (!entry || Date.now() - entry.at > TEST_AUDIO_TTL_MS) return null;
+  return entry.buffer;
+}
+
+async function speechWav(text) {
+  const ai = new GoogleGenAI({ apiKey: config.geminiKey });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.1-flash-tts-preview',
+    contents: [{ role: 'user', parts: [{ text }] }],
+    config: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } },
+  });
+  const part = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
+  if (!part) throw new Error('pas de voix générée');
+  const pcm = Buffer.from(part.inlineData.data, 'base64');
+  const rate = Number(part.inlineData.mimeType.match(/rate=(\d+)/)?.[1] ?? 24000);
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0); header.writeUInt32LE(36 + pcm.length, 4); header.write('WAVE', 8); header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22); header.writeUInt32LE(rate, 24);
+  header.writeUInt32LE(rate * 2, 28); header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34); header.write('data', 36); header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
 
 export function adminRoutes(client) {
   const guildOf = (id) => client.guilds.cache.get(id) ?? client.guilds.cache.first();
@@ -56,11 +88,19 @@ export function adminRoutes(client) {
       if (body.action === 'start') return startVoiceSession({ guildId: guild.id, userId: body.userId ?? client.user.id, userName: body.userName ?? 'test', memberChannelId: null, force: true });
       // Fait parler le bot principal (synthèse vocale du serveur audio) : sert de « personne » pour tester
       if (body.action === 'say') {
+        const id = randomBytes(16).toString('hex');
+        testAudio.set(id, { buffer: await speechWav(String(body.text ?? '')), at: Date.now() });
+        for (const [key, entry] of testAudio) if (Date.now() - entry.at > TEST_AUDIO_TTL_MS) testAudio.delete(key);
         const player = getOrCreatePlayer(client, guild);
         await player.connect(guild.channels.cache.get(config.voice.channelId));
-        player.add([{ title: 'Test IA vocale', artist: null, playUrl: `ftts://${body.text}`, url: null, source: 'web', requestedBy: client.user.id }], { next: true });
-        if (player.current?.title !== 'Test IA vocale') player.skip();
-        return { ok: true };
+        const track = { title: 'Test IA vocale', artist: null, playUrl: `${config.publicUrl}/voice-test/${id}.wav`, url: null, source: 'web', requestedBy: client.user.id };
+        if (player.current) {
+          player.add([track], { next: true });
+          player.skip();
+        } else {
+          player.add([track]);
+        }
+        return { ok: true, url: track.playUrl };
       }
       throw new Error('action inconnue (start, stop, say)');
     },

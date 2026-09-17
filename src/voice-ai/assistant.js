@@ -1,7 +1,7 @@
 // IA vocale : un 2e bot (« IA Vocal Vercel ») reste 24h/24 dans le vocal du bot.
 // Avec /vocal, il écoute la personne et lui répond à voix haute en direct (Gemini Live),
 // et peut piloter la musique du bot principal. Il ne va dans aucun autre salon.
-import { PassThrough } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import {
   AudioPlayerStatus,
   createAudioPlayer,
@@ -29,6 +29,7 @@ const SEND_CHUNK_BYTES = 3_200; // 100 ms de voix à 16 kHz mono
 const SILENCE_AFTER_SPEECH_MS = 1_500; // silence envoyé quand la personne se tait (Discord n'envoie plus rien)
 const DUCK_VOLUME = 25; // musique baissée pendant que l'IA parle
 const MAX_RECONNECTS = 3;
+const PRIME_FRAMES = 25; // 0,5 s de silence émis pour que Discord commence à nous envoyer la voix des autres
 
 const ai = new GoogleGenAI({ apiKey: config.geminiKey });
 const state = { client: null, mainClient: null, player: null, session: null, checker: null };
@@ -68,6 +69,12 @@ function toDiscord(pcm, previous) {
 }
 
 // ===================== Bot vocal =====================
+
+/** Émet un court silence : sans ça, Discord n'envoie jamais la voix des autres au bot. */
+function primeReceive() {
+  if (!state.player || state.session?.speaking) return;
+  state.player.play(createAudioResource(Readable.from([Buffer.alloc(3_840 * PRIME_FRAMES)]), { inputType: StreamType.Raw }));
+}
 
 function homeGuildChannel() {
   const channel = state.client?.channels.cache.get(config.voice.channelId);
@@ -110,7 +117,10 @@ function ensureInVoice() {
   });
   conn.subscribe(state.player);
   entersState(conn, VoiceConnectionStatus.Ready, 30_000)
-    .then(() => console.log(`[vocal] IA vocale dans #${channel.name} 🎙️`))
+    .then(() => {
+      console.log(`[vocal] IA vocale dans #${channel.name} 🎙️`);
+      primeReceive();
+    })
     .catch(() => {});
 }
 
@@ -153,7 +163,7 @@ export function voiceAssistantState() {
     bot: state.client?.user?.tag ?? null,
     voice: conn?.state.status ?? 'déconnecté',
     model: config.voiceAi.model,
-    session: s ? { userId: s.userId, since: Math.round((Date.now() - s.startedAt) / 1000), speaking: s.speaking, turns: s.turns } : null,
+    session: s ? { userId: s.userId, since: Math.round((Date.now() - s.startedAt) / 1000), speaking: s.speaking, turns: s.turns, stats: s.stats } : null,
   };
 }
 
@@ -232,6 +242,7 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
     carry: Buffer.alloc(0), pending: Buffer.alloc(0), lastPacketAt: 0, silenceSent: 0, streamEnded: true,
     output: null, outLast: 0, speaking: false, turnAudioAt: null, speechEndAt: null,
     heard: '', said: '', actions: [], endAfterTurn: false, ducked: false, opus: null, decoder: null, ticker: null,
+    stats: { packets: 0, chunks: 0, messages: 0, audioParts: 0 },
   };
   state.session = session;
 
@@ -245,6 +256,7 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
 
   // On ne se met plus en sourdine : il faut entendre la personne
   conn.rejoin({ ...conn.joinConfig, selfDeaf: false, selfMute: false });
+  primeReceive();
   listen(session, conn);
   console.log(`[vocal] conversation avec ${userName} (${userId})`);
   return { started: true };
@@ -317,6 +329,7 @@ function listen(session, conn) {
 
   decoder.on('data', (pcm) => {
     if (session.closing) return;
+    session.stats.packets++;
     const { out, carry } = toGemini(pcm, session.carry);
     session.carry = carry;
     session.pending = session.pending.length ? Buffer.concat([session.pending, out]) : out;
@@ -354,6 +367,7 @@ function listen(session, conn) {
 }
 
 function sendAudio(session, chunk) {
+  session.stats.chunks++;
   try {
     session.live?.sendRealtimeInput({ audio: { data: chunk.toString('base64'), mimeType: 'audio/pcm;rate=16000' } });
   } catch (err) {
@@ -363,6 +377,7 @@ function sendAudio(session, chunk) {
 
 async function onLiveMessage(session, message) {
   if (session.closing) return;
+  session.stats.messages++;
   if (message.sessionResumptionUpdate?.newHandle) session.handle = message.sessionResumptionUpdate.newHandle;
   if (message.goAway) console.log(`[vocal] Gemini va couper la connexion (${message.goAway.timeLeft}), reprise automatique`);
 
@@ -382,7 +397,10 @@ async function onLiveMessage(session, message) {
   if (content.outputTranscription?.text) session.said += content.outputTranscription.text;
 
   for (const part of content.modelTurn?.parts ?? []) {
-    if (part.inlineData?.data) playChunk(session, Buffer.from(part.inlineData.data, 'base64'));
+    if (part.inlineData?.data) {
+      session.stats.audioParts++;
+      playChunk(session, Buffer.from(part.inlineData.data, 'base64'));
+    }
   }
 
   if (content.interrupted) {
@@ -423,7 +441,7 @@ function stopSpeaking(session) {
 
 function onPlayerIdle() {
   const session = state.session;
-  if (!session) return;
+  if (!session || !session.speaking) return;
   session.speaking = false;
   session.lastActivity = Date.now();
   duckMusic(session, false);

@@ -1,6 +1,6 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from 'discord.js';
-import { adminRoutes } from './admin.js';
+import { adminRoutes, testAudioFile } from './admin.js';
 import { startVoiceAssistant } from './voice-ai/assistant.js';
 import { config } from './config.js';
 import { commandDefinitions } from './commands/definitions.js';
@@ -87,7 +87,7 @@ startHttpServer(() => ({
   bot: client.user?.username,
   discord: client.isReady() ? 'ready' : 'connecting',
   uptime: Math.round(process.uptime()),
-}), adminRoutes(client));
+}), adminRoutes(client), testAudioFile);
 
 client.login(config.discordToken).catch((err) => {
   console.error('❌ Connexion à Discord impossible (token invalide ou intents pas activés ?) :', err.message);
