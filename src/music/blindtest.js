@@ -417,7 +417,7 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
   game.lastReveal = channel.send({
     embeds: [new EmbedBuilder()
       .setColor(game.level.color)
-      .setAuthor({ name: '🎧 BLIND TEST' })
+      .setAuthor({ name: game.works ? '🎬 DEVINE' : '🎧 BLIND TEST' })
       .setTitle("C'est parti !")
       .setDescription([
         `${themeLabel(settings)} · ${mode.emoji} ${mode.label} · ${game.level.emoji} ${game.level.label} · **${settings.mode === 'premier10' ? `premier à ${WIN_SCORE} pts` : `${game.rounds} manches`}**`,
@@ -585,9 +585,13 @@ async function checkSpeed(game, round, first) {
   const elapsed = useServerClock ? state.state.time - first.time : Date.now() - first.at;
   if (elapsed < 2_000) return;
   const ratio = (position - first.position) / elapsed;
-  console.log(`[blindtest] manche ${round.index} : vitesse x${ratio.toFixed(2)} sur ${backend.node?.name}${useServerClock ? '' : ' (horloge locale)'}`);
+  console.log(`[blindtest] manche ${round.index} : vitesse x${ratio.toFixed(2)} sur ${backend.node?.name}${useServerClock ? '' : ' (horloge locale)'}${first.confirming ? ' (2e mesure)' : ''}`);
   const tolerance = useServerClock ? SPEED_TOLERANCE : 0.25;
   if (Math.abs(ratio - 1) <= tolerance || game.current !== round || round.revealed) return;
+  if (!first.confirming) {
+    checkSpeed(game, round, { position, time: state.state.time, at: Date.now(), confirming: true }).catch(() => {});
+    return;
+  }
   const node = backend.node;
   if (node) node.brokenUntil = Date.now() + 60 * 60_000;
   console.warn(`[blindtest] ${node?.name} lit le son à x${ratio.toFixed(2)} : serveur mis de côté, son relancé ailleurs`);
@@ -982,7 +986,7 @@ export async function endGame(game, { stopped = false, error = null } = {}) {
   const mode = MODES[game.mode];
   const embed = new EmbedBuilder()
     .setColor(error ? 0xed4245 : 0xfee75c)
-    .setAuthor({ name: '🎧 BLIND TEST' })
+    .setAuthor({ name: game.works ? '🎬 DEVINE' : '🎧 BLIND TEST' })
     .setTitle(error || stopped ? '⏹️ Partie arrêtée' : '🏁 Partie terminée')
     .setDescription([
       error ? `😕 ${error.charAt(0).toUpperCase()}${error.slice(1)}.` : null,

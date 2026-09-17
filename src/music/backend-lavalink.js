@@ -170,15 +170,16 @@ export class LavalinkBackend {
 
   candidates(track) {
     const query = track.query || `${track.artist ?? ''} ${track.title}`.trim();
+    const curatedYoutube = Boolean(track.strict && track.curated && !track.isrc);
     return [...new Set([
       // Le code ISRC désigne exactement l'enregistrement : c'est la recherche la plus sûre
       ...(track.isrc ? [`ytmsearch:"${track.isrc}"`] : []),
       ...(track.playUrl ? [track.playUrl] : []),
-      `ytmsearch:${query}`,
+      // Musique / son de jeu pas sur Deezer : YouTube classique d'abord (jamais YouTube Music pour un effet sonore)
+      ...(curatedYoutube ? [`ytsearch:${query}`] : []),
+      ...(curatedYoutube && track.sfx ? [] : [`ytmsearch:${query}`]),
       // Recherche YouTube classique / SoundCloud : pleine d'uploads de fans (accélérés, pitchés) -> jamais en blind test
       ...(track.strict ? [] : [`ytsearch:${query}`, `scsearch:${query}`]),
-      // Musique de film / jeu pas sur Deezer : YouTube (versions modifiées écartées au choix)
-      ...(track.strict && track.curated && !track.isrc ? [`ytsearch:${query}`] : []),
     ])];
   }
 
@@ -222,9 +223,17 @@ export class LavalinkBackend {
         .filter((item) => !item.info.isStream && (track.sfx
           ? item.info.length >= 800 && item.info.length <= 30_000 && !isBadSoundVideo(item.info.title)
           : item.info.length >= 30_000 && item.info.length <= 12 * 60_000 && !isWorkVariant(`${item.info.title} ${item.info.author}`)))
-        .map((item) => ({ item, title: matchRatio(cleanTitle(track.title) || track.title, item.info.title ?? '') }))
-        .filter((s) => s.title >= (track.sfx ? 0.5 : 0.6))
-        .sort((a, b) => b.title - a.title);
+        .map((item) => {
+          const text = `${item.info.title ?? ''} ${item.info.author ?? ''}`;
+          return {
+            item,
+            title: matchRatio(cleanTitle(track.title) || track.title, item.info.title ?? ''),
+            work: track.work ? matchRatio(track.work, text) : 1,
+            artist: track.sfx ? 0 : matchRatio(track.artist ?? '', text),
+          };
+        })
+        .filter((s) => s.title >= (track.sfx ? 0.5 : 0.6) && (track.sfx ? s.work >= 0.5 : s.work >= 0.5 || s.artist >= 0.5))
+        .sort((a, b) => (b.title + (b.work + b.artist) / 2) - (a.title + (a.work + a.artist) / 2));
       return clean[0]?.item ?? null;
     }
     const close = full.find((item) => !track.duration || item.info.isStream || Math.abs(item.info.length / 1000 - track.duration) <= 30);
