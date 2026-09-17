@@ -11,6 +11,7 @@ const START_TIMEOUT_MS = 25_000;
 const START_GRACE_MS = 2_500; // certains serveurs annoncent le démarrage puis échouent juste après
 const NODE_BROKEN_MS = 10 * 60_000;
 const NODE_STALLS_BEFORE_BREAK = 2; // coupures en pleine lecture sur un serveur avant de le mettre de côté
+const YOUTUBE_TROUBLE_MS = 5 * 60_000; // YouTube bloque parfois les serveurs publics : on passe par SoundCloud pendant ce temps
 const FAST_PLAYBACK_BAN_MS = 60 * 60_000;
 const FAST_RATIO = 1.07; // le son avance plus vite que l'horloge du serveur (voix aiguës) : le serveur audio déraille
 const FAST_RATIO_NO_CLOCK = 1.5; // sans l'horloge du serveur, les mesures sont moins précises
@@ -185,6 +186,15 @@ export class LavalinkBackend {
     ])];
   }
 
+  /** Les recherches à essayer, SoundCloud en premier si YouTube ne se lance plus sur ce serveur. */
+  searchOrder(track) {
+    const list = this.candidates(track);
+    if (!this.youtubeInTrouble()) return list;
+    const query = track.query || `${track.artist ?? ''} ${track.title}`.trim();
+    const soundcloud = `scsearch:${query}`;
+    return [...new Set([soundcloud, ...list])];
+  }
+
   /** Choisit le meilleur résultat : le bon morceau (titre + artiste), bonne durée, jamais un extrait de 30 s. */
   pick(result, track, isSearch, identifier = '') {
     let items = [];
@@ -265,6 +275,18 @@ export class LavalinkBackend {
     };
   }
 
+  /** YouTube refuse de se lancer sur ce serveur en ce moment ? (les serveurs publics se font bloquer par moments) */
+  youtubeInTrouble() {
+    const fails = (this.node?.youtubeFails ?? []).filter((at) => Date.now() - at < YOUTUBE_TROUBLE_MS);
+    if (this.node) this.node.youtubeFails = fails;
+    return fails.length >= 3;
+  }
+
+  noteYoutubeFail(item) {
+    if (!this.node || !/youtube/i.test(item?.info?.sourceName ?? '')) return;
+    this.node.youtubeFails = [...(this.node.youtubeFails ?? []), Date.now()].slice(-10);
+  }
+
   itemKey(item) {
     return `${this.node?.name}|${item.info.identifier ?? item.info.uri}`;
   }
@@ -318,6 +340,7 @@ export class LavalinkBackend {
       } catch (err) {
         lastError = err;
         this.markBad(track, ready.item);
+        this.noteYoutubeFail(ready.item);
         if (token !== this.player.playToken) return false;
         // Blind test : le son a déjà été entendu, on ne met pas une autre version en douce (la partie relance proprement)
         if (this.player.blind && err.announced && this.player.blindRunning?.()) throw new MusicError('le son a coupé juste après le départ');
@@ -328,7 +351,7 @@ export class LavalinkBackend {
       if (token !== this.player.playToken) return false;
       if (!this.node?.usable && !(await this.switchNode(triedNodes))) break;
 
-      for (const identifier of this.candidates(track)) {
+      for (const identifier of this.searchOrder(track)) {
         const key = `${this.node.name}|${identifier}`;
         if (tried.has(key)) continue;
         tried.add(key);
@@ -354,6 +377,7 @@ export class LavalinkBackend {
           lastError = err;
           serverError = true;
           this.markBad(track, item);
+          this.noteYoutubeFail(item);
           lavalink.log(`${this.node.name} n'a pas pu lire "${track.title}" : ${shortError(err.message)}`);
           if (token !== this.player.playToken) return false;
           if (this.player.blind && err.announced && this.player.blindRunning?.()) throw new MusicError('le son a coupé juste après le départ');
@@ -726,7 +750,7 @@ export class LavalinkBackend {
     // Le serveur audio du moment d'abord, puis les autres : un serveur qui rame ne fait pas sauter le son
     const nodes = [this.node, ...lavalink.nodes.filter((node) => node.usable && node !== this.node)];
     for (const node of nodes) {
-      for (const identifier of this.candidates(track)) {
+      for (const identifier of this.searchOrder(track)) {
         const result = await node.loadTracks(identifier).catch(() => null);
         const item = result && this.pick(result, track, /^\w+search:/.test(identifier), identifier);
         if (item) {

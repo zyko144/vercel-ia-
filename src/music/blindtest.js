@@ -27,8 +27,9 @@ import { getOrCreatePlayer } from './player.js';
 const PRIVATE = { flags: MessageFlags.Ephemeral };
 const ROUND_CHOICES = [5, 10, 15, 20, 30];
 const SETUP_TTL_MS = 30 * 60_000;
-const AUDIO_START_TIMEOUT_MS = 12_000; // le serveur audio n'annonce pas le son : on le remplace
+const AUDIO_START_TIMEOUT_MS = 20_000; // le serveur audio n'annonce pas le son : on le remplace
 const SOUND_WAIT_MS = 8_000; // le son est annoncé mais rien ne sort dans le vocal : on le remplace
+const SOUND_WAIT_TRYING_MS = 20_000; // ...sauf si le serveur audio est encore en train d'essayer d'autres versions
 const SOUND_POLL_MS = 300;
 const AUDIO_LATENCY_MS = 250; // du serveur audio jusqu'aux oreilles
 const REVEAL_HOLD_MS = 3_000; // le son révélé continue un peu : ce qu'on entend correspond à la réponse affichée
@@ -547,11 +548,13 @@ async function waitForSound(game, round) {
     return;
   }
   const from = round.seekTo * 1000;
-  const deadline = Date.now() + SOUND_WAIT_MS;
+  let deadline = Date.now() + SOUND_WAIT_MS;
   let baseline = null;
   let connected = null;
   while (Date.now() < deadline) {
     if (game.stopped || game.current !== round || round.revealed) return;
+    // Le serveur audio essaie encore une autre version : on patiente un peu plus
+    if (backend.pending) deadline = Math.max(deadline, Date.now() + SOUND_WAIT_TRYING_MS);
     const state = await backend.fetchState().catch(() => null);
     const position = state?.state?.position;
     connected = state?.state?.connected ?? connected;
