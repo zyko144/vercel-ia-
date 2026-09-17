@@ -20,13 +20,15 @@ const list = (key, fallback = '') =>
 // Ses anciens salons (encore réglés dans l'hébergeur) sont remplacés automatiquement par ceux du nouveau serveur.
 const DICTATURE = '1550190587142082582';
 const IA_VOCAL = '1550196141902008340'; // │・𝐈𝐀-𝐕𝐎𝐂𝐀𝐋, dans la catégorie VERCEL
-const IA_CHANNEL = '1550195587922661607'; // │・𝐈𝐀, dans la catégorie VERCEL
+const IA_CHANNEL = '1550195587922661607';
+const MUSIC_CHANNEL = '1550197426391097445'; // │・musique (jukebox), catégorie VERCEL
+const BLINDTEST_CHANNEL = '1550197427573755924'; // │・blindtest, catégorie VERCEL // │・𝐈𝐀, dans la catégorie VERCEL
 const MOVED_CHANNELS = new Map([
   ['1549504799806857236', DICTATURE], // Dictature
   ['1550100131569868871', IA_VOCAL], // IA-VOCAL
   ['1549523857252028538', IA_CHANNEL], // salon IA
-  ['1549658865002487839', ''], // salon musique / jukebox (pas d'équivalent)
-  ['1549658986935222363', ''], // salon blindtest (le jeu se joue là où on lance la commande)
+  ['1549658865002487839', MUSIC_CHANNEL], // salon musique / jukebox
+  ['1549658986935222363', BLINDTEST_CHANNEL], // salon blindtest
 ]);
 const moved = (id) => (MOVED_CHANNELS.has(id) ? MOVED_CHANNELS.get(id) : id);
 const channel = (key, fallback = '') => moved(str(key, fallback));
@@ -123,7 +125,7 @@ export const config = {
   // Réponses visibles seulement par la personne (fil privé + messages éphémères)
   privateReplies: bool('PRIVATE_REPLIES', true),
   // Salons où écrire un nom de son l'ajoute direct à la file (jukebox)
-  jukeboxChannelIds: channels('JUKEBOX_CHANNEL_IDS'),
+  jukeboxChannelIds: channels('JUKEBOX_CHANNEL_IDS', MUSIC_CHANNEL),
   // Salon où arrivent les signalements (vide = MP au chef)
   staffChannelId: str('STAFF_CHANNEL_ID'),
 
@@ -145,7 +147,7 @@ export const config = {
     // Décalage des paroles : négatif = elles s'affichent plus tard (compense le retard du son)
     lyricsOffsetMs: int('LYRICS_OFFSET_MS', -900),
     // Salon où se déroulent les blind tests (vide = là où la commande est tapée)
-    blindtestChannelId: channel('BLINDTEST_CHANNEL_ID'),
+    blindtestChannelId: channel('BLINDTEST_CHANNEL_ID', BLINDTEST_CHANNEL),
   },
 
   port: int('PORT', 3000),
