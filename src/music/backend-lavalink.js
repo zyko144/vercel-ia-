@@ -10,15 +10,15 @@ import { MusicError } from './ytdlp.js';
 const START_TIMEOUT_MS = 25_000;
 const START_GRACE_MS = 2_500; // certains serveurs annoncent le démarrage puis échouent juste après
 const NODE_BROKEN_MS = 10 * 60_000;
-const NODE_STALLS_BEFORE_BREAK = 3; // coupures en pleine lecture sur un serveur avant de le mettre de côté
+const NODE_STALLS_BEFORE_BREAK = 2; // coupures en pleine lecture sur un serveur avant de le mettre de côté
 const FAST_PLAYBACK_BAN_MS = 60 * 60_000;
 const FAST_RATIO = 1.07; // le son avance plus vite que l'horloge du serveur (voix aiguës) : le serveur audio déraille
 const FAST_RATIO_NO_CLOCK = 1.5; // sans l'horloge du serveur, les mesures sont moins précises
 // Versions qui ne sont pas le son original (sauf si c'est justement ce qui est demandé)
 const VARIANT = /\b(sped ?up|speed ?up|slowed|reverb|nightcore|8d|bass ?boost(ed)?|karaok[eé]|instrumental|acapella|a cappella|mashup|cover|remix|extended|live|1[.,]\d+ ?x|x ?1[.,]\d+|lyrics?|paroles|tiktok|version|reggae|edit|mix)\b/i;
-// Mots qu'on trouve dans les titres des vraies vidéos officielles sans que ce soit une autre version
 // Chaînes qui ne publient que des versions modifiées
 const VARIANT_AUTHOR = /\b(sped ?up|slowed|nightcore|8d|karaok[eé]|reverb|lyrics?|paroles|remix(es)?|tiktok)\b/i;
+// Mots qu'on trouve dans les titres des vraies vidéos officielles sans que ce soit une autre version
 const NOISE = new Set(['feat', 'ft', 'featuring', 'official', 'officiel', 'officielle', 'audio', 'video', 'clip', 'music', 'musique', 'visualizer', 'visualiser', 'prod', 'by', 'hd', 'hq', '4k', 'topic', 'x', 'et', 'and', 'with', 'avec', 'the', 'le', 'la', 'les', 'l', 'de', 'du', 'des', 'd', 'remastered', 'remaster', 'explicit', 'mv']);
 const normalizeText = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const words = (s) => normalizeText(s).split(' ').filter(Boolean);
@@ -358,8 +358,13 @@ export class LavalinkBackend {
         }
       }
 
-      // Aucune version d'origine trouvée : ce n'est pas la faute du serveur, on ne change pas de serveur pour rien
-      if (!serverError) break;
+      // Aucune version d'origine trouvée : ce n'est pas la faute du serveur, on ne change pas de serveur pour rien...
+      if (!serverError) {
+        // ...sauf si la bonne version a planté sur CE serveur : sur un autre, elle a sa chance
+        if (!track.badItems?.size || !(await this.switchNode(new Set([...triedNodes, this.node.name])))) break;
+        triedNodes.add(this.node.name);
+        continue;
+      }
       // Le serveur a vraiment eu des erreurs : on passe au suivant
       this.node.brokenUntil = Date.now() + NODE_BROKEN_MS;
       triedNodes.add(this.node.name);

@@ -203,7 +203,7 @@ export const WORK_CATEGORIES = {
 };
 
 const normalize = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const VARIANT = /\b(remix|rmx|mix|sped ?up|slowed|reverb|nightcore|8d|karaok[eé]|cover|tribute|piano|lofi|lo fi|orchestral|epic|trailer|version|live|extended|hour|hours|heure|10h|1h|loop|mashup|medley|trap|drill|metal|8 ?bit|lyrics?)\b/i;
+const VARIANT = /\b(remix|rmx|mix|sped ?up|slowed|reverb|nightcore|8d|karaok[eé]|cover|tribute|piano|lofi|lo fi|orchestral|epic|trailer|version|live|extended|hour|hours|heure|10h|1h|loop|mashup|medley|trap|drill|metal|8 ?bit|lyrics?|bootleg|rework|flip|vip|edit|arr|arrangement|arranged|animation|guitar|violin|reaction|tutorial|fanmade|fan made)\b/i;
 const pickRandom = (list) => list[Math.floor(Math.random() * list.length)];
 
 /** Toutes les œuvres d'une ou plusieurs catégories. */
