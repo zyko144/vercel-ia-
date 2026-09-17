@@ -88,16 +88,17 @@ export function stopLive(reason = 'arrêt') {
   console.log(`[direct] diffusion arrêtée (${reason})`);
   const player = client && getPlayer(guildId());
   if (player?.current?.isLiveStream) {
-    // Retour au serveur audio habituel pour la musique
-    restoreBackend(player).catch((err) => console.warn('[direct] retour au serveur audio :', err.message));
-    // On rend la musique d'avant telle qu'elle était
     const before = previous.before;
-    if (before?.current) {
-      player.queue = before.queue;
-      player.playNow({ ...before.current, seekTo: before.position });
-    } else {
-      player.stop();
-    }
+    // Retour au serveur audio habituel, puis on remet la musique d'avant telle qu'elle était
+    (async () => {
+      await restoreBackend(player);
+      if (before?.current) {
+        player.queue = before.queue;
+        player.playNow({ ...before.current, seekTo: before.position });
+      } else {
+        player.stop();
+      }
+    })().catch((err) => console.warn('[direct] reprise :', err.message));
   }
   return true;
 }
@@ -137,7 +138,7 @@ async function restoreBackend(player) {
   const guild = player.guild;
   const voiceChannel = lockedChannel(guild) ?? guild.channels.cache.get(config.voice.channelId);
   await player.useBackend(new LavalinkBackend(player));
-  if (voiceChannel) await player.backend.connect(voiceChannel).catch(() => {});
+  if (voiceChannel && player.backend) await player.backend.connect(voiceChannel).catch(() => {});
 }
 
 // ===================== Lecture dans le vocal =====================
