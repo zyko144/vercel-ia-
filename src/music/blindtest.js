@@ -402,7 +402,7 @@ export async function startGame(client, { guild, channelId, voiceChannel, hostId
 
     game.pool = await buildPool({ ...settings, rounds: game.rounds }, guild.id, (done, total) => progress(`⏳ Sons choisis : **${done}/${total}**…`));
     progress(game.visual && game.textOnly ? '🖼️ Je prépare les images…' : game.visual ? '🔎 Je vérifie les sons et je prépare les images…' : game.textOnly ? '📝 Je récupère les paroles…' : '🔎 Je vérifie que chaque son est le bon…');
-    await prepareAhead(game, Math.min(3, game.pool.length));
+    await prepareAhead(game, Math.min(2, game.pool.length));
     game.rounds = Math.min(game.rounds, game.pool.length);
     if (game.rounds < 3) throw new Error(game.visual && game.textOnly ? "pas assez d'images disponibles pour le moment, réessaie dans un instant" : 'pas assez de sons jouables pour ce thème et ce mode, essaie autre chose');
   } catch (err) {

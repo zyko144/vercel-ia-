@@ -285,8 +285,8 @@ export async function buildPool(settings, guildId, onProgress = () => {}) {
     if (pool.length >= wanted) break;
     artistLimit = pass.limit;
     const todo = pass.list.filter((item) => !checked.has(item.id));
-    for (let i = 0; i < todo.length && pool.length < wanted; i += 8) {
-      const batch = await Promise.all(todo.slice(i, i + 8).map(async (item) => ({ item, details: await trackDetails(item.id) })));
+    for (let i = 0; i < todo.length && pool.length < wanted; i += 4) {
+      const batch = await Promise.all(todo.slice(i, i + 4).map(async (item) => ({ item, details: await trackDetails(item.id) })));
       for (const { item, details } of batch) {
         if (pool.length >= wanted || !details || !artistOk(item.artist.name)) continue;
         checked.add(item.id);

@@ -5,7 +5,10 @@ import { config } from '../config.js';
 
 const RECONNECT_MIN_MS = 5_000;
 const RECONNECT_MAX_MS = 5 * 60_000;
-const RATE_LIMITED_MS = 4 * 60_000; // serveur public qui limite les connexions : on le laisse respirer
+const RATE_LIMITED_MS = 4 * 60_000;
+const MAX_PARALLEL_REQUESTS = 2; // les serveurs publics n'aiment pas les rafales de recherches
+const REQUEST_GAP_MS = 120;
+const TOO_MANY_WAIT_MS = 2_000; // serveur public qui limite les connexions : on le laisse respirer
 const RESUME_TIMEOUT_S = 60;
 const LOG_SIZE = 25;
 
@@ -102,7 +105,24 @@ class LavalinkNode {
     }
   }
 
+  /** Les requêtes passent une par une (deux au plus) : un serveur public nous coupe si on le bombarde. */
   async request(method, path, body) {
+    this.queue ??= [];
+    this.running ??= 0;
+    if (this.running >= MAX_PARALLEL_REQUESTS) await new Promise((resolve) => this.queue.push(resolve));
+    this.running++;
+    try {
+      const wait = REQUEST_GAP_MS - (Date.now() - (this.lastRequestAt ?? 0));
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+      this.lastRequestAt = Date.now();
+      return await this.send(method, path, body);
+    } finally {
+      this.running--;
+      this.queue.shift()?.();
+    }
+  }
+
+  async send(method, path, body, attempt = 0) {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: { Authorization: this.password, ...(body ? { 'Content-Type': 'application/json' } : {}) },
@@ -116,6 +136,12 @@ class LavalinkNode {
       data = text ? JSON.parse(text) : null;
     } catch {
       data = null;
+    }
+    // Trop de requêtes : on attend le temps demandé puis on réessaie
+    if (res.status === 429 && attempt < 3) {
+      const retryAfter = Number(res.headers.get('retry-after'));
+      await new Promise((resolve) => setTimeout(resolve, (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : TOO_MANY_WAIT_MS) * (attempt + 1)));
+      return this.send(method, path, body, attempt + 1);
     }
     if (!res.ok) throw new Error(data?.message ?? `HTTP ${res.status}`);
     return data;
