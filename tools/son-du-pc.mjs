@@ -7,12 +7,14 @@
 // Sur Windows il faut une entrée qui capte la SORTIE de ton PC : « Mix stéréo » (à activer dans
 // Paramètres son › Enregistrement) ou VB-CABLE (https://vb-audio.com/Cable/) avec Spotify réglé dessus.
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ffmpegPath from 'ffmpeg-static';
 import WebSocket from 'ws';
+import { FILTERS } from '../src/music/filters.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = process.argv.slice(2);
@@ -119,7 +121,10 @@ function startFfmpeg() {
   const own = ffmpeg;
   own.stderr.on('data', (chunk) => process.stderr.write(`[ffmpeg] ${chunk}`));
   own.stdout.on('data', (chunk) => {
-    if (own === ffmpeg && ws?.readyState === WebSocket.OPEN) ws.send(chunk);
+    if (own !== ffmpeg) return;
+    if (ws?.readyState === WebSocket.OPEN) ws.send(chunk);
+    // Écoute de contrôle dans le navigateur
+    for (const res of monitors) res.write(chunk);
   });
   own.on('close', (code) => {
     if (own !== ffmpeg || stopping) return; // remplacé par un changement d'entrée
@@ -169,4 +174,149 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+const monitors = new Set();
+const PANEL_PORT = Number(option('port', 8787));
+const loopback = /cable output|voicemeeter out|mix st[ée]r[ée]o|stereo mix|what u hear/i;
+let filters = [];
+
+function sendFilters() {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'filters', list: filters }));
+}
+
+const PAGE = () => `<!doctype html><html lang="fr"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Son du PC → Discord</title>
+<style>
+  :root { color-scheme: dark; --fond:#11131a; --carte:#1a1d27; --trait:#2b2f3d; --texte:#e7e9f0; --accent:#1db954; --rouge:#ed4245; }
+  * { box-sizing: border-box; font-family: system-ui, "Segoe UI", sans-serif; }
+  body { margin:0; padding:24px; background:var(--fond); color:#e7e9f0; }
+  .carte { max-width:680px; margin:0 auto 16px; background:var(--carte); border:1px solid var(--trait); border-radius:14px; padding:18px 20px; }
+  h1 { font-size:20px; margin:0 0 4px; } .sous { color:#9aa0b5; font-size:13px; margin:0 0 16px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:#9aa0b5; margin:0 0 10px; }
+  select, button { font-size:14px; border-radius:10px; border:1px solid var(--trait); background:#222634; color:#e7e9f0; padding:10px 12px; }
+  select { width:100%; }
+  .effets { display:flex; flex-wrap:wrap; gap:8px; }
+  .effets button.on { background:var(--accent); border-color:var(--accent); color:#06210f; font-weight:600; }
+  .ligne { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .etat { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:#9aa0b5; }
+  .pastille { width:9px; height:9px; border-radius:50%; background:var(--rouge); }
+  .pastille.ok { background:var(--accent); }
+  audio { width:100%; margin-top:10px; }
+  .stop { background:var(--rouge); border-color:var(--rouge); }
+</style>
+<div class="carte">
+  <h1>🎧 Son du PC → Discord</h1>
+  <p class="sous">Tout ce que tu changes ici s'applique tout de suite dans le vocal.</p>
+  <div class="etat"><span class="pastille" id="pastille"></span><span id="etat">…</span></div>
+</div>
+
+<div class="carte">
+  <h2>Entrée captée</h2>
+  <select id="entree"></select>
+  <p class="sous" id="astuce">🔊 = capte le son du PC · 🎙️ = micro. Pour ne capter que Spotify : mets Spotify sur « Voicemeeter Aux Input » et envoie cette tranche sur B2, puis choisis « Voicemeeter Out B2 ».</p>
+</div>
+
+<div class="carte">
+  <h2>Effets sur le son diffusé</h2>
+  <div class="effets" id="effets"></div>
+</div>
+
+<div class="carte">
+  <h2>M'entendre (écoute de contrôle)</h2>
+  <p class="sous">Tu entends exactement ce que le bot diffuse. Mets un casque pour éviter l'effet larsen.</p>
+  <audio id="ecoute" controls preload="none"></audio>
+</div>
+
+<div class="carte ligne">
+  <button id="stop" class="stop">⏹️ Arrêter la diffusion</button>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+async function etat() {
+  const r = await fetch('/api/etat').then((x) => x.json());
+  $('pastille').className = 'pastille' + (r.connecte ? ' ok' : '');
+  $('etat').textContent = r.connecte ? 'En direct dans le vocal · entrée : ' + r.entree : 'Pas connecté au bot…';
+  if (!$('entree').options.length) {
+    for (const nom of r.entrees) {
+      const o = document.createElement('option');
+      o.value = nom; o.textContent = (r.loopback.includes(nom) ? '🔊 ' : '🎙️ ') + nom;
+      $('entree').append(o);
+    }
+  }
+  $('entree').value = r.entree;
+  if (!$('effets').children.length) {
+    for (const f of r.effetsDispo) {
+      const b = document.createElement('button');
+      b.textContent = f.label; b.dataset.nom = f.nom;
+      b.onclick = async () => {
+        const actifs = await fetch('/api/effet?nom=' + encodeURIComponent(f.nom), { method: 'POST' }).then((x) => x.json());
+        marquer(actifs);
+      };
+      $('effets').append(b);
+    }
+  }
+  marquer(r.effets);
+}
+function marquer(actifs) {
+  for (const b of $('effets').children) b.className = actifs.includes(b.dataset.nom) ? 'on' : '';
+}
+$('entree').onchange = () => fetch('/api/entree?nom=' + encodeURIComponent($('entree').value), { method: 'POST' });
+$('stop').onclick = () => fetch('/api/stop', { method: 'POST' });
+$('ecoute').src = '/monitor.mp3';
+etat(); setInterval(etat, 3000);
+</script></html>`;
+
+function startPanel() {
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(PAGE());
+    }
+    if (url.pathname === '/api/etat') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        connecte: ws?.readyState === WebSocket.OPEN,
+        entree: device,
+        entrees: devices,
+        loopback: devices.filter((d) => loopback.test(d)),
+        effets: filters,
+        effetsDispo: Object.entries(FILTERS).map(([nom, f]) => ({ nom, label: `${f.emoji} ${f.label}` })),
+      }));
+    }
+    if (url.pathname === '/api/entree') {
+      switchDevice(url.searchParams.get('nom'));
+      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'devices', devices, current: device }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, entree: device }));
+    }
+    if (url.pathname === '/api/effet') {
+      const nom = url.searchParams.get('nom');
+      filters = filters.includes(nom) ? filters.filter((f) => f !== nom) : [...filters, nom];
+      sendFilters();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(filters));
+    }
+    if (url.pathname === '/api/stop') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return process.kill(process.pid, 'SIGINT');
+    }
+    if (url.pathname === '/monitor.mp3') {
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' });
+      monitors.add(res);
+      req.on('close', () => monitors.delete(res));
+      return undefined;
+    }
+    res.writeHead(404);
+    return res.end('introuvable');
+  });
+  server.listen(PANEL_PORT, '127.0.0.1', () => {
+    console.log(`🎛️ Panneau de contrôle : http://localhost:${PANEL_PORT}`);
+    if (!option('sansnavigateur')) spawn('cmd', ['/c', 'start', '', `http://localhost:${PANEL_PORT}`], { detached: true, stdio: 'ignore' }).unref();
+  });
+}
+
+startPanel();
 connect();

@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { config } from '../config.js';
 import { lockedChannel } from './voice.js';
+import { FILTERS } from '../music/filters.js';
 import { LavalinkBackend } from '../music/backend-lavalink.js';
 import { LocalBackend } from '../music/backend-local.js';
 import { getOrCreatePlayer, getPlayer } from '../music/player.js';
@@ -67,16 +68,38 @@ export function attachLiveServer(server) {
 }
 
 function startLive(ws, userId) {
-  stopLive('nouvelle diffusion');
-  live = { userId, since: Date.now(), listeners: new Set(), ws };
-  console.log(`[direct] diffusion du son du PC démarrée (${userId})`);
-  playInVoice().catch((err) => console.warn('[direct] lecture :', err.message));
+  const previous = live;
+  if (previous) {
+    // Le PC s'est reconnecté : on garde la diffusion en cours, on change juste la connexion
+    previous.ws?.removeAllListeners('close');
+    previous.ws?.removeAllListeners('error');
+    try {
+      previous.ws?.close();
+    } catch {
+      // déjà fermée
+    }
+  }
+  live = {
+    userId,
+    since: previous?.since ?? Date.now(),
+    listeners: previous?.listeners ?? new Set(),
+    before: previous?.before,
+    devices: previous?.devices ?? [],
+    device: previous?.device ?? null,
+    ws,
+  };
+  console.log(`[direct] ${previous ? 'reconnexion du PC' : 'diffusion du son du PC démarrée'} (${userId})`);
+  if (!previous) playInVoice().catch((err) => console.warn('[direct] lecture :', err.message));
 
   ws.on('message', (data, isBinary) => {
     // Message texte : infos du programme (entrées audio disponibles, entrée en cours)
     if (isBinary === false) {
       try {
         const info = JSON.parse(String(data));
+        if (info.type === 'filters') {
+          applyFilters(info.list ?? []);
+          return;
+        }
         if (info.type === 'devices') {
           live.devices = info.devices ?? [];
           live.device = info.current ?? null;
@@ -94,8 +117,12 @@ function startLive(ws, userId) {
       if (listener.writableLength < MAX_BUFFER) listener.write(chunk);
     }
   });
-  ws.on('close', () => stopLive('le PC a coupé'));
-  ws.on('error', () => stopLive('erreur de connexion'));
+  ws.on('close', () => {
+    if (live?.ws === ws) stopLive('le PC a coupé');
+  });
+  ws.on('error', () => {
+    if (live?.ws === ws) stopLive('erreur de connexion');
+  });
 }
 
 export function stopLive(reason = 'arrêt') {
@@ -126,6 +153,19 @@ export function stopLive(reason = 'arrêt') {
   }
   return true;
 }
+
+/** Effets appliqués au direct (8D, bass boost, voix aiguë…). */
+export function applyFilters(list) {
+  const player = client && getPlayer(guildId());
+  if (!player) return [];
+  player.filters = list.filter((name) => FILTERS[name]);
+  // Le lecteur local doit relancer ffmpeg pour changer les effets
+  if (player.current) player.startCurrent(player.position()).catch(() => {});
+  console.log(`[direct] effets : ${player.filters.join(', ') || 'aucun'}`);
+  return player.filters;
+}
+
+export const liveFilters = () => (client && getPlayer(guildId())?.filters) || [];
 
 // ===================== Envoi vers le serveur audio =====================
 
@@ -171,19 +211,23 @@ const guildId = () => client?.guilds.cache.first()?.id;
 
 async function playInVoice() {
   if (!client || !live) return;
+  const session = live;
   const guild = client.guilds.cache.get(guildId());
   const voiceChannel = lockedChannel(guild) ?? guild?.channels.cache.get(config.voice.channelId);
   if (!guild || !voiceChannel) return;
   const player = getOrCreatePlayer(client, guild);
+  const before = player.current?.isLiveStream ? null : { current: player.current, queue: [...player.queue], position: Math.round(player.position()) };
   await player.connect(voiceChannel);
+  if (live !== session) return; // la diffusion s'est arrêtée entre-temps
   // Ce qui jouait avant : on le remettra à la fin de la diffusion
-  if (!player.current?.isLiveStream) live.before = { current: player.current, queue: [...player.queue], position: Math.round(player.position()) };
+  if (before) live.before = before;
 
   // Lecture par le bot lui-même : le son va du PC au vocal sans passer par le serveur audio public
   if (!(player.backend instanceof LocalBackend)) {
     await player.useBackend(new LocalBackend(player));
     await player.backend.connect(voiceChannel);
   }
+  if (live !== session) return;
   const name = guild.members.cache.get(live.userId)?.displayName ?? 'le chef';
   player.playNow({
     title: `Son du PC de ${name}`,
