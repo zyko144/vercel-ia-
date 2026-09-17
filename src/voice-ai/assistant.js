@@ -75,7 +75,7 @@ function primeReceive() {
 }
 
 function homeGuildChannel() {
-  const channel = state.client?.channels.cache.get(config.voice.channelId);
+  const channel = state.client?.channels.cache.get(config.voiceAi.channelId);
   return channel?.isVoiceBased?.() ? channel : null;
 }
 
@@ -143,7 +143,7 @@ export async function startVoiceAssistant(mainClient) {
   });
   client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     // Déplacé ou éjecté : retour dans son salon
-    if (newState.id === client.user.id && newState.channelId !== config.voice.channelId) setTimeout(ensureInVoice, 2_000);
+    if (newState.id === client.user.id && newState.channelId !== config.voiceAi.channelId) setTimeout(ensureInVoice, 2_000);
     // La personne quitte le salon : fin de la conversation
     const session = state.session;
     if (session && newState.id === session.userId && newState.channelId !== session.channelId) {
@@ -179,6 +179,7 @@ function systemPrompt(session) {
     'Si tu ne sais pas quelque chose, dis-le franchement au lieu d\'inventer.',
     'Tu peux piloter la musique du serveur avec tes outils (lancer un son, pause, reprendre, passer, arrêter, volume, dire ce qui joue). Utilise-les dès qu\'on te le demande puis confirme en une phrase courte.',
     'Corrige l\'orthographe des artistes de rap français quand tu cherches un son (Jul, Ninho, PNL, Werenoi, Tiakola, Gazo, SDM, Damso...).',
+    'La musique du serveur est jouée par l\'autre bot dans le salon vocal Dictature, pas dans le tien : quand tu lances un son, précise que ça joue dans Dictature.',
     'Si la personne dit au revoir ou qu\'elle a fini, réponds brièvement puis appelle l\'outil terminer_conversation.',
     `Nous sommes le ${date}.`,
   ].join('\n');
@@ -478,7 +479,7 @@ function onPlayerIdle() {
 /** Musique baissée pendant que l'IA parle, puis remise au volume d'avant. */
 function duckMusic(session, down) {
   const player = getPlayer(session.guildId);
-  if (!player?.current || !player.backend?.applyVolume) {
+  if (!player?.current || !player.backend?.applyVolume || player.botVoiceChannelId !== session.channelId) {
     session.ducked = false;
     return;
   }
