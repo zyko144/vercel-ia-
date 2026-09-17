@@ -450,6 +450,12 @@ export class LavalinkBackend {
     this.watchdog = setInterval(async () => {
       const track = this.player.current;
       if (!track || this.pending || this.player.paused || !this.currentEncoded || this.recovering) return;
+      // Le son avance côté serveur mais plus rien n'arrive dans Discord : on refait la connexion vocale
+      if (await this.voiceLinkDead()) {
+        lavalink.log(`${this.node?.name} : le son n'arrive plus dans le vocal, reconnexion`);
+        this.voiceDeadSince = 0;
+        return this.recover('son bloqué avant Discord');
+      }
       if (Date.now() - this.lastState.at < 12_000) return;
       const state = await this.fetchState().catch(() => undefined);
       // Pas de réponse (serveur injoignable) = on ne sait pas : on ne touche à rien
@@ -459,6 +465,22 @@ export class LavalinkBackend {
       this.player.onTrackEnd({ failed: false });
     }, 5_000);
     this.watchdog.unref?.();
+  }
+
+  /**
+   * Le serveur audio joue mais Discord ne reçoit rien : sa connexion vocale répond plus (ping -1)
+   * ou il se dit déconnecté. Vrai seulement si ça dure (pour ne pas couper sur un simple à-coup).
+   */
+  async voiceLinkDead() {
+    const state = await this.fetchState().catch(() => null);
+    if (!state?.track) return false;
+    const broken = state.state.connected === false || state.state.ping < 0;
+    if (!broken) {
+      this.voiceDeadSince = 0;
+      return false;
+    }
+    this.voiceDeadSince ||= Date.now();
+    return Date.now() - this.voiceDeadSince > 6_000;
   }
 
   async switchNode(exclude) {

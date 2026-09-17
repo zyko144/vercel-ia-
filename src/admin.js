@@ -107,7 +107,7 @@ export function adminRoutes(client) {
       const playing = {};
       for (const player of allPlayers()) {
         const state = await player.backend?.fetchState?.().catch(() => null);
-        if (state?.track) playing[player.guild.id] = { title: `${state.track.info.author} - ${state.track.info.title}`, position: Math.round(state.state.position / 1000), connected: state.state.connected, paused: state.paused, volume: state.volume, filters: Object.keys(state.filters ?? {}).filter((key) => key !== 'pluginFilters' || Object.keys(state.filters.pluginFilters ?? {}).length) };
+        if (state?.track) playing[player.guild.id] = { title: `${state.track.info.author} - ${state.track.info.title}`, ping: state.state.ping, position: Math.round(state.state.position / 1000), connected: state.state.connected, paused: state.paused, volume: state.volume, filters: Object.keys(state.filters ?? {}).filter((key) => key !== 'pluginFilters' || Object.keys(state.filters.pluginFilters ?? {}).length) };
       }
       return {
       uptime: Math.round(process.uptime()),
