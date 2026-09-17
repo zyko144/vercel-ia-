@@ -181,7 +181,7 @@ export class LavalinkBackend {
       // Recherche YouTube classique / SoundCloud : pleine d'uploads de fans (accélérés, pitchés) -> jamais en blind test
       ...(track.strict ? [] : [`ytsearch:${query}`, `scsearch:${query}`]),
       // Dernier recours quand YouTube Music ne donne rien : recherche YouTube (le choix reste aussi strict)
-      ...(track.strict && !track.curated ? [`ytsearch:${query}`] : []),
+      ...(track.strict && !track.curated ? [`ytsearch:${query}`, `scsearch:${query}`] : []),
     ])];
   }
 
