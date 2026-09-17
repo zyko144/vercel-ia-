@@ -248,6 +248,7 @@ const utilityCommands = [
     .addStringOption((o) => o.setName('action').setDescription('Ce que tu veux faire').addChoices(
       { name: '📜 Publier le règlement dans le salon des sons', value: 'reglement' },
       { name: '📊 État de la semaine', value: 'semaine' },
+      { name: '🏛️ Bilan animé (GIF) dans les annonces', value: 'bilan' },
       { name: '⚖️ Clôturer la semaine (distribue les Bouffons)', value: 'cloturer' },
     ))),
 

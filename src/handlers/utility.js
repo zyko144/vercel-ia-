@@ -1,7 +1,7 @@
 // Commandes d'infos et petits jeux (réponses visibles seulement par la personne).
 import { ChannelType, EmbedBuilder, GuildPremiumTier, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
-import { closeWeek, isJudge, reglementPayload, weekPayload } from '../features/tribunal.js';
+import { bilanPayload, closeWeek, isJudge, reglementPayload, weekPayload } from '../features/tribunal.js';
 import { startVoiceSession, stopVoiceSession } from '../voice-ai/assistant.js';
 import { load } from '../storage.js';
 import { BRAND_COLOR } from '../utils/reply.js';
@@ -27,6 +27,12 @@ export const UTILITY_HANDLERS = {
       const message = await channel.send(reglementPayload(interaction.guild));
       await message.pin().catch(() => {});
       return interaction.editReply(`📜 Règlement publié et épinglé dans <#${channel.id}>.`);
+    }
+    if (action === 'bilan') {
+      const channel = client.channels.cache.get(config.tribunal.announceChannelId) ?? await client.channels.fetch(config.tribunal.announceChannelId).catch(() => null);
+      const payload = await bilanPayload(interaction.guild);
+      await (channel?.send ? channel.send(payload) : interaction.followUp(payload));
+      return interaction.editReply(channel?.send ? `🏛️ Bilan publié dans <#${channel.id}>.` : 'Bilan publié.');
     }
     if (action === 'cloturer') {
       const payload = await closeWeek(interaction.guild);

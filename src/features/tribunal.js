@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { chatJson } from '../ai/gemini.js';
 import { deezer, matchRatio } from '../music/deezer.js';
 import { load, save } from '../storage.js';
+import { buildWeekGif } from './tribunalgif.js';
 import { truncate } from '../utils/discord.js';
 
 const KEY = 'tribunal';
@@ -279,6 +280,11 @@ export async function handleTribunalComponent(client, interaction) {
 
   submission.verdict = action === 'ok' ? 'accepté' : 'refusé';
   submission.judgedBy = interaction.user.id;
+  data.totals ??= {};
+  if (action === 'ok' && !submission.counted) {
+    data.totals[userId] = (data.totals[userId] ?? 0) + 1;
+    submission.counted = true;
+  }
   save(KEY, data);
 
   // Réaction sur le message d'origine + annonce publique
@@ -300,6 +306,46 @@ export async function handleTribunalComponent(client, interaction) {
   return interaction.update({ embeds: [embed], components: [] });
 }
 
+// ===================== Bilan animé =====================
+
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const frDate = (at) => {
+  const d = new Date(at);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+/** GIF du bilan : chaque nom apparaît un par un, avec son statut et son nombre de sons. */
+export async function bilanPayload(guild) {
+  const { data, done, waiting, missing, jesters, count } = await weekReport(guild);
+  const sons = (id) => `${count(id)} son${count(id) > 1 ? 's' : ''}`;
+  const name = (member) => member.displayName ?? member.user.username;
+  const jesterIds = new Set(jesters.map((m) => m.id));
+  const lines = [
+    ...done.map((m) => ({ text: `EN REGLE · ${name(m)} · ${sons(m.id)}`, color: '#3ef08a' })),
+    ...waiting.map((m) => ({ text: `EN ATTENTE · ${name(m)} · ${sons(m.id)}`, color: '#ffe066' })),
+    ...jesters.map((m) => ({ text: `BOUFFON · ${name(m)} · ${sons(m.id)}`, color: '#ff8c1a' })),
+    ...missing.filter((m) => !jesterIds.has(m.id)).map((m) => ({ text: `RIEN RENDU · ${name(m)} · ${sons(m.id)}`, color: '#ed4245' })),
+  ];
+  const gif = await buildWeekGif({
+    title: 'TRIBUNAL DES SONS',
+    subtitle: `Bilan de la semaine du ${frDate(data.weekStart)}`,
+    lines,
+  });
+  const mention = (members, emoji) => (members.length ? `${emoji} ${members.map((m) => `<@${m.id}> (${sons(m.id)})`).join(' · ')}` : null);
+  const content = [
+    `⚖️ **Bilan de la semaine** · fin <t:${deadline(data.weekStart)}:R>`,
+    mention(done, '✅ **En règle** :'),
+    mention(waiting, '⏳ **En attente** :'),
+    mention(jesters, '🤡 **Bouffons du Roi** :'),
+    mention(missing.filter((m) => !jesterIds.has(m.id)), '❌ **Rien rendu** :'),
+  ].filter(Boolean).join('\n');
+  return {
+    content: truncate(content, 1900),
+    files: [{ attachment: gif, name: 'bilan-tribunal.gif' }],
+    allowedMentions: { users: [...done, ...waiting, ...missing].map((m) => m.id).slice(0, 50) },
+  };
+}
+
 // ===================== Semaine =====================
 
 /** Qui a rendu, qui n'a rien rendu. */
@@ -316,21 +362,30 @@ export async function weekReport(guild) {
     else if (submission && submission.verdict === 'en attente') waiting.push(member);
     else missing.push(member);
   }
-  return { data, done, waiting, missing };
+  // Les bouffons actuels : ceux qui portent le rôle (pas seulement ceux de la semaine)
+  const jesters = config.tribunal.jesterRoleId
+    ? humans.filter((m) => m.roles.cache.has(config.tribunal.jesterRoleId))
+    : [];
+  const totals = data.totals ?? {};
+  const count = (id) => totals[id] ?? 0;
+  return { data, done, waiting, missing, jesters, totals, count };
 }
 
 export async function weekPayload(guild) {
-  const { data, done, waiting, missing } = await weekReport(guild);
-  const list = (members) => (members.length ? members.map((m) => `<@${m.id}>`).join(' · ') : '—');
+  const { data, done, waiting, missing, jesters, count } = await weekReport(guild);
+  const list = (members) => (members.length
+    ? members.map((m) => `<@${m.id}> \`${count(m.id)} son${count(m.id) > 1 ? 's' : ''}\``).join('\n')
+    : '—');
   const embed = new EmbedBuilder()
     .setColor(0xc8a24a)
     .setAuthor({ name: '⚖️ TRIBUNAL DES SONS' })
     .setTitle('État de la semaine')
     .setDescription(`Fin de la semaine : <t:${deadline(data.weekStart)}:F> (<t:${deadline(data.weekStart)}:R>)`)
     .addFields(
-      { name: `✅ En règle (${done.length})`, value: list(done) },
-      { name: `⏳ En attente de jugement (${waiting.length})`, value: list(waiting) },
-      { name: `🤡 Rien rendu (${missing.length})`, value: list(missing) },
+      { name: `✅ Acceptés cette semaine (${done.length})`, value: truncate(list(done), 1000) },
+      { name: `⏳ En attente de jugement (${waiting.length})`, value: truncate(list(waiting), 1000) },
+      { name: `❌ Rien rendu cette semaine (${missing.length})`, value: truncate(list(missing), 1000) },
+      { name: `🤡 Bouffons du Roi en ce moment (${jesters.length})`, value: truncate(list(jesters), 1000) },
     )
     .setThumbnail(IMAGE_URL)
     .setTimestamp();
@@ -354,6 +409,7 @@ export async function closeWeek(guild) {
     }
   }
   // Nouvelle semaine
+  data.totals ??= {};
   data.history[String(data.weekStart)] = {
     accepted: done.map((m) => m.id),
     jesters: missing.map((m) => m.id),
