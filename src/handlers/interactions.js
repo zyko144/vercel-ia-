@@ -227,9 +227,10 @@ const SLASH_HANDLERS = {
     }));
   },
 
-  async quiz(client, interaction) {
+  async 'jeu-quiz'(client, interaction) {
     if (cooldownGuard(interaction, 'quiz', 10_000)) return;
-    await interaction.deferReply(PRIVATE);
+    // Dans │・mini-jeux, tout le monde voit le quiz et peut répondre
+    await interaction.deferReply(interaction.channelId === config.games.miniGamesChannelId ? {} : PRIVATE);
     await interaction.editReply(await createQuiz({
       botName: client.user.username,
       userId: interaction.user.id,
@@ -315,12 +316,19 @@ const SLASH_HANDLERS = {
         ? `\nDans ${config.aiChannelIds.map((id) => `<#${id}>`).join(', ')}, écris directement : ta question part dans **ton fil privé**.`
         : ''}\nAilleurs, mentionne-moi (${client.user}). Les réponses aux commandes sont visibles **que par toi**.`)
       .addFields(
-        { name: '💬 IA', value: '`/ask` question · `/explique` un sujet · `/code` aide en code · `/corriger` orthographe · `/traduire` traduction · `/resume-salon` résume le salon · `/quiz` quiz perso' },
+        { name: '💬 IA', value: '`/ask` question · `/explique` un sujet · `/code` aide en code · `/corriger` orthographe · `/traduire` traduction · `/resume-salon` résume le salon' },
         ...(config.limits.imagesEnabled ? [{ name: '🎨 Images', value: '`/image` génère · `/modifier-image` retouche' }] : []),
         { name: '🧰 Pratique', value: '`/rappel` rappel en MP · `/sondage` sondage public · `/contacter-chef` écrire au chef · `/clear` efface ta conv IA · `/reset` efface juste la mémoire' },
         { name: '🛡️ Modération', value: '`/clear nombre` · `/kick` · `/ban` · `/unban` · `/mute` · `/unmute` · `/warn` · `/warns` · `/slowmode` · `/lock` · `/unlock` · `/role` · `/say`' },
-        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (importer un lien, plein de sons en une fois, playlist IA) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct) · `/radio` non-stop · `/karaoke` · `/blindtest` · `/devine` (films, Disney, séries, animés, jeux) · `/topsons` · `/join` · `/leave`' },
-        { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/pile-ou-face` · `/de` · `/choisir` · `/ping`' },
+        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (importer un lien, plein de sons en une fois, playlist IA) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct) · `/radio` non-stop · `/karaoke` · `/topsons` · `/join` · `/leave`' },
+        {
+          name: '🎮 Jeux',
+          value: [
+            '`/jeu-blindtest` blind test musical · `/jeu-films` · `/jeu-disney` · `/jeu-series` · `/jeu-animes` · `/jeu-jeuxvideo` · `/jeu-devine` (tout mélangé : musique, son + image, image floutée, zoom) · `/jeu-quiz` · `/jeu-pile-ou-face` · `/jeu-des`',
+            config.games.devineChannelId ? `-# Parties dans <#${config.games.devineChannelId}>${config.music.blindtestChannelId ? ` et <#${config.music.blindtestChannelId}>` : ''} · mini-jeux dans <#${config.games.miniGamesChannelId}>` : null,
+          ].filter(Boolean).join('\n'),
+        },
+        { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/choisir` · `/ping`' },
         { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français** / **Signaler au staff** (analysé par IA)' },
         { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },
       )

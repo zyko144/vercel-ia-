@@ -33,7 +33,7 @@ https://discord.com/oauth2/authorize?client_id=TON_APP_ID&scope=bot+applications
 | Recherche Google | ❌ bloquée (quota à 0) | `GEMINI_WEB_SEARCH=true` si facturation activée |
 | Génération d'images (Nano Banana) | ❌ payant | `IMAGES_ENABLED=true` si facturation activée |
 
-**Réflexion** (`GEMINI_THINKING_LEVEL`) : `medium` par défaut, soit environ 15 s par réponse. `/code`, `/quiz` et `/explique` en niveau expert passent automatiquement en `high`. Si le quota gratuit du modèle principal est dépassé, le bot bascule tout seul sur le modèle de secours.
+**Réflexion** (`GEMINI_THINKING_LEVEL`) : `medium` par défaut, soit environ 15 s par réponse. `/code`, `/jeu-quiz` et `/explique` en niveau expert passent automatiquement en `high`. Si le quota gratuit du modèle principal est dépassé, le bot bascule tout seul sur le modèle de secours.
 
 ---
 
@@ -73,7 +73,7 @@ npm start
 - **Enchaînement fluide** : le son suivant est préparé pendant que le précédent joue, donc le passage est quasi instantané. (Un vrai fondu entre deux sons est impossible : Discord ne laisse qu'un seul flux audio à la fois.)
 - **Le bot ne quitte plus le vocal** quand la musique démarre ou s'arrête : il garde sa place et se contente de changer de salon.
 - Si un son ne peut pas être joué, le chef reçoit un **MP avec le détail** et un **ping** dans le salon (1 ping max toutes les 10 min).
-- **`/blindtest`** : le bot joue des extraits, tout le monde devine dans le salon (titre = 2 pts, artiste = 1 pt), classement à la fin. Thèmes libres (`rap fr`, `années 2000`…) ou `serveur` pour vos propres sons.
+- **`/jeu-blindtest`** : le bot joue des extraits, tout le monde devine dans le salon (titre = 2 pts, artiste = 1 pt), classement à la fin. Thèmes libres (`rap fr`, `années 2000`…) ou `serveur` pour vos propres sons.
 - **`/radio`** : enchaînement non-stop d'un style, en boucle.
 - **`/karaoke`** : le son sans la voix + les paroles qui défilent.
 - **`/topsons`** : les sons et artistes les plus écoutés du serveur (ou de quelqu'un), ce mois-ci ou depuis le début.
@@ -122,7 +122,7 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 | Traduction | `/traduire` ou clic droit › Applications › *Traduire en français* |
 | Expliquer un message | Clic droit › Applications › *Expliquer ce message* |
 | Résumé du salon | `/resume-salon` |
-| Quiz à boutons | `/quiz` |
+| Quiz à boutons | `/jeu-quiz` |
 | Rappel | `/rappel dans:2h message:...` |
 | Sondage | `/sondage` |
 | Contacter le chef | `/contacter-chef` |
@@ -131,7 +131,8 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 | Stats / vocal / serveurs audio (chef) | `/admin stats`, `/admin voc`, `/admin musique` |
 | Modération | `/clear nombre`, `/kick`, `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/warns`, `/slowmode`, `/lock`, `/unlock`, `/role`, `/say` |
 | Infos | `/userinfo`, `/serverinfo`, `/avatar`, `/ping` |
-| Fun | `/pile-ou-face`, `/de`, `/choisir` |
+| Jeux | `/jeu-blindtest`, `/jeu-films`, `/jeu-disney`, `/jeu-series`, `/jeu-animes`, `/jeu-jeuxvideo`, `/jeu-devine`, `/jeu-quiz`, `/jeu-pile-ou-face`, `/jeu-des` |
+| Fun | `/choisir` |
 | Paroles en direct (surlignées, comme Spotify) | `/lyrics` ou bouton 🎤 |
 | Signaler un message au staff (analysé par IA) | Clic droit › Applications › *Signaler au staff* |
 | Musique | `/play`, `/playlist`, `/skip`, `/previous`, `/pause`, `/resume`, `/stop`, `/queue`, `/nowplaying`, `/volume`, `/loop`, `/shuffle`, `/seek`, `/remove`, `/move`, `/clearqueue`, `/filter`, `/autoplay`, `/lyrics`, `/radio`, `/karaoke`, `/blindtest`, `/topsons`, `/join`, `/leave` |

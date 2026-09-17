@@ -22,7 +22,9 @@ const DICTATURE = '1550190587142082582';
 const IA_VOCAL = '1550196141902008340'; // │・𝐈𝐀-𝐕𝐎𝐂𝐀𝐋, dans la catégorie VERCEL
 const IA_CHANNEL = '1550195587922661607';
 const MUSIC_CHANNEL = '1550197426391097445'; // │・musique (jukebox), catégorie VERCEL
-const BLINDTEST_CHANNEL = '1550197427573755924'; // │・blindtest, catégorie VERCEL // │・𝐈𝐀, dans la catégorie VERCEL
+const BLINDTEST_CHANNEL = '1550197427573755924'; // │・blindtest, catégorie VERCEL
+const DEVINE_CHANNEL = '1550204552588951633'; // │・devine, catégorie JEUX
+const MINI_GAMES_CHANNEL = '1550204553578942469'; // │・mini-jeux, catégorie JEUX // │・𝐈𝐀, dans la catégorie VERCEL
 const MOVED_CHANNELS = new Map([
   ['1549504799806857236', DICTATURE], // Dictature
   ['1550100131569868871', IA_VOCAL], // IA-VOCAL
@@ -136,6 +138,12 @@ export const config = {
     proImageOwnerOnly: bool('PRO_IMAGE_OWNER_ONLY', true),
     chatCooldownMs: int('CHAT_COOLDOWN_SECONDS', 3) * 1000,
     escalationCooldownMs: int('ESCALATION_COOLDOWN_MINUTES', 10) * 60_000,
+  },
+
+  // Salons des jeux : les parties /jeu-films, /jeu-disney... s'y jouent, le quiz / pile ou face / dés y sont visibles par tous
+  games: {
+    devineChannelId: channel('GAMES_DEVINE_CHANNEL_ID', DEVINE_CHANNEL),
+    miniGamesChannelId: channel('GAMES_MINI_CHANNEL_ID', MINI_GAMES_CHANNEL),
   },
 
   music: {

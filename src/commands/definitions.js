@@ -76,8 +76,8 @@ const aiCommands = [
     .addIntegerOption((o) => o.setName('messages').setDescription('Nombre de messages à lire (10-100)').setMinValue(10).setMaxValue(100)),
 
   new SlashCommandBuilder()
-    .setName('quiz')
-    .setDescription('Lance un quiz perso sur un sujet')
+    .setName('jeu-quiz')
+    .setDescription('🧠 Quiz IA : une question à 4 choix sur le sujet de ton choix')
     .addStringOption((o) => o.setName('sujet').setDescription('Ex : histoire, maths, jeux vidéo, Naruto...').setRequired(true).setMaxLength(200))
     .addStringOption((o) =>
       o.setName('difficulte').setDescription('Difficulté').addChoices(
@@ -230,11 +230,11 @@ const utilityCommands = [
     .setDescription("Affiche la photo de profil d'un membre")
     .addUserOption((o) => o.setName('membre').setDescription('Le membre (par défaut : toi)')),
 
-  new SlashCommandBuilder().setName('pile-ou-face').setDescription('Lance une pièce'),
+  new SlashCommandBuilder().setName('jeu-pile-ou-face').setDescription('🪙 Pile ou face'),
 
   new SlashCommandBuilder()
-    .setName('de')
-    .setDescription('Lance un ou plusieurs dés')
+    .setName('jeu-des')
+    .setDescription('🎲 Lance un ou plusieurs dés')
     .addIntegerOption((o) => o.setName('faces').setDescription('Nombre de faces (défaut 6)').setMinValue(2).setMaxValue(1000))
     .addIntegerOption((o) => o.setName('nombre').setDescription('Nombre de dés (défaut 1)').setMinValue(1).setMaxValue(20)),
 

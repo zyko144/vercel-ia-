@@ -8,6 +8,8 @@ import { truncate } from '../utils/discord.js';
 
 const ts = (ms, style = 'D') => `<t:${Math.floor(ms / 1000)}:${style}>`;
 const private_ = (payload) => ({ ...payload, flags: MessageFlags.Ephemeral });
+// Dans │・mini-jeux, le résultat est visible par tout le monde
+const gameReply = (interaction, payload) => (interaction.channelId === config.games.miniGamesChannelId ? payload : private_(payload));
 const random = (max) => Math.floor(Math.random() * max);
 
 export const UTILITY_HANDLERS = {
@@ -105,16 +107,16 @@ export const UTILITY_HANDLERS = {
     await interaction.reply(private_({ embeds }));
   },
 
-  async 'pile-ou-face'(client, interaction) {
-    await interaction.reply(private_({ content: `🪙 La pièce tourne… **${random(2) ? 'Pile' : 'Face'}** !` }));
+  async 'jeu-pile-ou-face'(client, interaction) {
+    await interaction.reply(gameReply(interaction, { content: `🪙 La pièce tourne… **${random(2) ? 'Pile' : 'Face'}** !` }));
   },
 
-  async de(client, interaction) {
+  async 'jeu-des'(client, interaction) {
     const faces = interaction.options.getInteger('faces') ?? 6;
     const amount = interaction.options.getInteger('nombre') ?? 1;
     const rolls = Array.from({ length: amount }, () => random(faces) + 1);
     const total = rolls.reduce((a, b) => a + b, 0);
-    await interaction.reply(private_({
+    await interaction.reply(gameReply(interaction, {
       content: `🎲 ${amount > 1 ? `${amount} dés à ${faces} faces : ${rolls.map((r) => `**${r}**`).join(' + ')} = **${total}**` : `Dé à ${faces} faces : **${total}**`}`,
     }));
   },

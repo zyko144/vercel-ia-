@@ -72,7 +72,7 @@ export async function handleQuizButton(client, interaction) {
   const [kind, id, rawIndex] = interaction.customId.split(':');
   const quiz = quizzes.get(id);
   if (!quiz) {
-    return interaction.reply({ content: 'Ce quiz a expiré, relance-en un avec `/quiz` 😉', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'Ce quiz a expiré, relance-en un avec `/jeu-quiz` 😉', flags: MessageFlags.Ephemeral });
   }
 
   if (kind === 'quiz-next') {

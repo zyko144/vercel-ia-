@@ -79,7 +79,7 @@ export const DIFFICULTIES = {
 export const IMAGE_MODES = new Set(['images', 'sonimage', 'zoom']);
 /** Modes sans son. */
 export const SILENT_MODES = new Set(['paroles', 'images', 'zoom']);
-/** Commande /devine : ses catégories et ses modes. */
+/** Commandes /jeu-devine, /jeu-films... : leurs catégories et leurs modes. */
 export const QUIZ_THEMES = ['films', 'disney', 'series', 'anime', 'jeux', 'oeuvres'];
 export const QUIZ_MODES = ['classique', 'sonimage', 'images', 'zoom', 'eclair', 'intro', 'unessai', 'premier10'];
 

@@ -13,6 +13,7 @@ import { reportProblem } from '../features/alerts.js';
 import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
 import { SILENT_MODES } from './blindpools.js';
+import { GAME_COMMAND_THEMES } from './commands.js';
 import { blindTestActive, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './blindtest.js';
 import { deezer, rankResults, trackFromDeezer } from './deezer.js';
 import { musicStats } from './stats.js';
@@ -69,7 +70,7 @@ function joinProblem(interaction) {
 }
 
 async function queueTracks(client, interaction, result, { next = false, shuffle = false, label = '' } = {}) {
-  if (blindTestActive(interaction.guildId)) return interaction.editReply('🎧 Un blind test est en cours ! Attends la fin (ou `/blindtest arreter:true`).');
+  if (blindTestActive(interaction.guildId)) return interaction.editReply('🎧 Un blind test est en cours ! Attends la fin (ou `/jeu-blindtest arreter:true`).');
   const { channel, error } = joinProblem(interaction);
   if (error) return interaction.editReply(error);
   if (!result.tracks.length) return interaction.editReply("😕 J'ai rien trouvé, essaie avec un autre nom ou un lien.");
@@ -547,11 +548,11 @@ const COMMANDS = {
     return interaction.editReply(await showLyrics(interaction, getPlayer(interaction.guildId), track));
   },
 
-  async blindtest(client, interaction) {
+  async 'jeu-blindtest'(client, interaction) {
     if (interaction.options.getBoolean('arreter')) {
       return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Blind test arrêté.' : "Y a pas de blind test en cours."));
     }
-    if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎧 Un blind test est déjà en cours ! (`/blindtest arreter:true` pour le couper)'));
+    if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎧 Un blind test est déjà en cours ! (`/jeu-blindtest arreter:true` pour le couper)'));
 
     const theme = interaction.options.getString('theme');
     const custom = interaction.options.getString('theme_perso');
@@ -581,33 +582,39 @@ const COMMANDS = {
     }).catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
   },
 
-  async devine(client, interaction) {
-    if (interaction.options.getBoolean('arreter')) {
-      return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Partie arrêtée.' : "Y a pas de partie en cours."));
-    }
-    if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎬 Une partie est déjà en cours ! (`/devine arreter:true` pour la couper)'));
+  'jeu-devine': (client, interaction) => devineGame(client, interaction),
+  ...Object.fromEntries(Object.entries(GAME_COMMAND_THEMES).map(([name, theme]) => [name, (client, interaction) => devineGame(client, interaction, theme)])),
+};
 
-    const theme = interaction.options.getString('categorie');
-    const mode = interaction.options.getString('mode');
-    const difficulty = interaction.options.getString('difficulte');
-    const rounds = interaction.options.getInteger('manches');
-    // Sans option : menu de réglages
-    if (!theme && !mode && !difficulty && !rounds) return openBlindTestSetup(client, interaction, {}, { kind: 'quiz' });
+/** /jeu-devine et /jeu-films, /jeu-disney... (catégorie imposée) : la partie se joue dans le salon │・devine. */
+async function devineGame(client, interaction, fixedTheme = null) {
+  if (interaction.options.getBoolean('arreter')) {
+    return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Partie arrêtée.' : "Y a pas de partie en cours."));
+  }
+  if (blindTestActive(interaction.guildId)) return interaction.reply(say(`🎬 Une partie est déjà en cours ! (\`/${interaction.commandName} arreter:true\` pour la couper)`));
 
-    const settings = { theme: theme ?? 'films', mode: mode ?? 'sonimage', difficulty: difficulty ?? 'facile', rounds: rounds ?? 10 };
-    // Modes sans son : pas besoin d'être en vocal
-    let voiceChannel = lockedChannel(interaction.guild) ?? interaction.guild.channels.cache.get(config.voice.channelId);
-    if (!SILENT_MODES.has(settings.mode)) {
-      const { channel, error } = joinProblem(interaction);
-      if (error) return interaction.reply(say(error));
-      voiceChannel = channel;
-    }
-    const channelId = config.music.blindtestChannelId || interaction.channelId;
-    await interaction.reply(say(`🎬 C'est parti ! Ça se passe dans <#${channelId}>.`));
-    return startGame(client, { guild: interaction.guild, channelId, voiceChannel, hostId: interaction.user.id, settings })
-      .catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
-  },
+  const theme = fixedTheme ?? interaction.options.getString('categorie');
+  const mode = interaction.options.getString('mode');
+  const difficulty = interaction.options.getString('difficulte');
+  const rounds = interaction.options.getInteger('manches');
+  // Sans option : menu de réglages
+  if (!mode && !difficulty && !rounds && (fixedTheme || !theme)) return openBlindTestSetup(client, interaction, theme ? { theme } : {}, { kind: 'quiz' });
 
+  const settings = { theme: theme ?? 'oeuvres', mode: mode ?? 'sonimage', difficulty: difficulty ?? 'facile', rounds: rounds ?? 10 };
+  // Modes sans son : pas besoin d'être en vocal
+  let voiceChannel = lockedChannel(interaction.guild) ?? interaction.guild.channels.cache.get(config.voice.channelId);
+  if (!SILENT_MODES.has(settings.mode)) {
+    const { channel, error } = joinProblem(interaction);
+    if (error) return interaction.reply(say(error));
+    voiceChannel = channel;
+  }
+  const channelId = config.games.devineChannelId || config.music.blindtestChannelId || interaction.channelId;
+  await interaction.reply(say(`🎬 C'est parti ! Ça se passe dans <#${channelId}>.`));
+  return startGame(client, { guild: interaction.guild, channelId, voiceChannel, hostId: interaction.user.id, settings })
+    .catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
+}
+
+const MORE_COMMANDS = {
   async karaoke(client, interaction) {
     const { error } = joinProblem(interaction);
     if (error) return interaction.reply(say(error));
@@ -700,7 +707,7 @@ const COMMANDS = {
 
 export async function handleMusicCommand(client, interaction) {
   try {
-    await COMMANDS[interaction.commandName]?.(client, interaction);
+    await (COMMANDS[interaction.commandName] ?? MORE_COMMANDS[interaction.commandName])?.(client, interaction);
   } catch (err) {
     console.warn(`[musique] /${interaction.commandName} :`, err.message);
     const content = `❌ ${err instanceof MusicError ? `Oups : ${err.message}.` : err.message?.startsWith('Impossible') ? err.message : "Ça a pas marché, réessaie stp."}`;

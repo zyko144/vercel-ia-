@@ -186,7 +186,7 @@ const replayControls = () => [new ActionRowBuilder().addComponents(
 /** Ouvre le menu de réglages (dans le salon du blind test). */
 export async function openBlindTestSetup(client, interaction, preset = {}, { channelId: forcedChannelId = null, kind = 'music' } = {}) {
   if (games.has(interaction.guildId)) return interaction.reply({ content: '🎧 Une partie est déjà en cours !', ...PRIVATE });
-  const channelId = forcedChannelId || config.music.blindtestChannelId || interaction.channelId;
+  const channelId = forcedChannelId || (kind === 'quiz' ? config.games.devineChannelId : '') || config.music.blindtestChannelId || interaction.channelId;
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel?.send) return interaction.reply({ content: 'Je trouve pas le salon du blind test 😕', ...PRIVATE });
 
@@ -231,9 +231,9 @@ export async function handleBlindTestComponent(client, interaction) {
 
   const messageId = action === 'custommodal' ? extra : interaction.message?.id;
   const setup = setups.get(messageId);
-  if (!setup) return interaction.reply({ content: 'Ces réglages ont expiré, relance `/blindtest`.', ...PRIVATE });
+  if (!setup) return interaction.reply({ content: 'Ces réglages ont expiré, relance `/jeu-blindtest` ou `/jeu-devine`.', ...PRIVATE });
   if (!canManage(interaction, setup.hostId)) {
-    return interaction.reply({ content: `Seul <@${setup.hostId}> peut régler cette partie (lance ton propre \`/blindtest\` après).`, ...PRIVATE });
+    return interaction.reply({ content: `Seul <@${setup.hostId}> peut régler cette partie (lance ta propre partie après).`, ...PRIVATE });
   }
   const refresh = () => {
     fixSettings(setup.settings);

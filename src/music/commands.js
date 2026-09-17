@@ -85,7 +85,7 @@ export const musicCommands = [
   new SlashCommandBuilder().setName('autoplay').setDescription('Enchaîne des sons du même style quand la file est vide'),
   new SlashCommandBuilder().setName('lyrics').setDescription('Affiche les paroles (du son en cours ou d\'un autre)')
     .addStringOption((o) => searchOption(o, false)),
-  new SlashCommandBuilder().setName('blindtest').setDescription('Blind test : sans option, ouvre le menu (thème, difficulté, manches)')
+  new SlashCommandBuilder().setName('jeu-blindtest').setDescription('🎧 Blind test musical : rap FR, TikTok, rap US, années 2010… (sans option : menu)')
     .addStringOption((o) => o.setName('theme').setDescription('Thème (lance direct la partie)')
       .addChoices(...Object.entries(THEMES).filter(([key]) => key !== 'custom').map(([key, theme]) => ({ name: `${theme.emoji} ${theme.label}`, value: key }))))
     .addStringOption((o) => o.setName('mode').setDescription('Mode de jeu')
@@ -96,7 +96,7 @@ export const musicCommands = [
     .addStringOption((o) => o.setName('theme_perso').setDescription('Ton propre thème : afro trap, Jul, années 2000…').setMaxLength(80))
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête le blind test en cours')),
 
-  new SlashCommandBuilder().setName('devine').setDescription('Devine le film, le Disney, la série, l\'animé ou le jeu vidéo : musique, image floutée, zoom…')
+  new SlashCommandBuilder().setName('jeu-devine').setDescription('🎲 Devine films, Disney, séries, animés et jeux vidéo mélangés (sans option : menu)')
     .addStringOption((o) => o.setName('categorie').setDescription('Catégorie (lance direct la partie)')
       .addChoices(...QUIZ_THEMES.map((key) => ({ name: `${THEMES[key].emoji} ${THEMES[key].label}`, value: key }))))
     .addStringOption((o) => o.setName('mode').setDescription('Mode de jeu')
@@ -105,6 +105,12 @@ export const musicCommands = [
       .addChoices(...Object.entries(DIFFICULTIES).map(([key, level]) => ({ name: `${level.emoji} ${level.label}`, value: key }))))
     .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la partie en cours')),
+
+  gameCommand('jeu-films', "🎬 Devine le film avec sa musique ou son image"),
+  gameCommand('jeu-disney', "🏰 Devine le Disney ou le Pixar avec sa chanson ou son image"),
+  gameCommand('jeu-series', "📺 Devine la série ou le dessin animé avec son générique ou son image"),
+  gameCommand('jeu-animes', "🍥 Devine l'animé avec son opening ou son image"),
+  gameCommand('jeu-jeuxvideo', "🎮 Devine le jeu vidéo : musiques, sons cultes et images"),
 
   new SlashCommandBuilder().setName('karaoke').setDescription('Joue un son sans la voix, avec les paroles en direct')
     .addStringOption((o) => searchOption(o, false)),
@@ -123,5 +129,19 @@ export const musicCommands = [
   new SlashCommandBuilder().setName('join').setDescription('Fait venir le bot dans ton salon vocal'),
   new SlashCommandBuilder().setName('leave').setDescription('Arrête la musique et renvoie le bot dans son vocal'),
 ].map(guildOnly);
+
+/** Commande d'une catégorie de /jeu-devine (films, Disney...) : mode, difficulté, manches. */
+function gameCommand(name, description) {
+  return new SlashCommandBuilder().setName(name).setDescription(description)
+    .addStringOption((o) => o.setName('mode').setDescription('Mode de jeu (sans option : menu)')
+      .addChoices(...QUIZ_MODES.map((key) => ({ name: key === 'classique' ? '🎵 Musique' : `${MODES[key].emoji} ${MODES[key].label}`, value: key }))))
+    .addStringOption((o) => o.setName('difficulte').setDescription('Difficulté')
+      .addChoices(...Object.entries(DIFFICULTIES).map(([key, level]) => ({ name: `${level.emoji} ${level.label}`, value: key }))))
+    .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
+    .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la partie en cours'));
+}
+
+/** Commande -> catégorie de jeu */
+export const GAME_COMMAND_THEMES = { 'jeu-films': 'films', 'jeu-disney': 'disney', 'jeu-series': 'series', 'jeu-animes': 'anime', 'jeu-jeuxvideo': 'jeux' };
 
 export const MUSIC_COMMAND_NAMES = new Set(musicCommands.map((c) => c.name));
