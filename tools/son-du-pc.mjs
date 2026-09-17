@@ -123,8 +123,6 @@ function startFfmpeg() {
   own.stdout.on('data', (chunk) => {
     if (own !== ffmpeg) return;
     if (ws?.readyState === WebSocket.OPEN) ws.send(chunk);
-    // Écoute de contrôle dans le navigateur
-    for (const res of monitors) res.write(chunk);
   });
   own.on('close', (code) => {
     if (own !== ffmpeg || stopping) return; // remplacé par un changement d'entrée
@@ -179,7 +177,6 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-const monitors = new Set();
 const PANEL_PORT = Number(option('port', 8787));
 const loopback = /cable output|voicemeeter out|mix st[ée]r[ée]o|stereo mix|what u hear/i;
 let filters = [];
@@ -226,12 +223,6 @@ const PAGE = () => `<!doctype html><html lang="fr"><meta charset="utf-8">
   <div class="effets" id="effets"></div>
 </div>
 
-<div class="carte">
-  <h2>M'entendre (écoute de contrôle)</h2>
-  <p class="sous">Tu entends exactement ce que le bot diffuse. Mets un casque pour éviter l'effet larsen.</p>
-  <audio id="ecoute" controls preload="none"></audio>
-</div>
-
 <div class="carte ligne">
   <button id="stop" class="stop">⏹️ Arrêter la diffusion</button>
 </div>
@@ -268,7 +259,6 @@ function marquer(actifs) {
 }
 $('entree').onchange = () => fetch('/api/entree?nom=' + encodeURIComponent($('entree').value), { method: 'POST' });
 $('stop').onclick = () => fetch('/api/stop', { method: 'POST' });
-$('ecoute').src = '/monitor.mp3';
 etat(); setInterval(etat, 3000);
 </script></html>`;
 
@@ -307,12 +297,6 @@ function startPanel() {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
       return process.kill(process.pid, 'SIGINT');
-    }
-    if (url.pathname === '/monitor.mp3') {
-      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' });
-      monitors.add(res);
-      req.on('close', () => monitors.delete(res));
-      return undefined;
     }
     res.writeHead(404);
     return res.end('introuvable');

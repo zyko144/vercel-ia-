@@ -9,6 +9,7 @@ import { reportProblem } from '../features/alerts.js';
 import { dmOwner, whereLabel } from '../features/escalation.js';
 import { createImageMessage } from '../features/images.js';
 import { handleReport, handleReportButton } from '../features/report.js';
+import { handleTribunalComponent, isTribunalComponent } from '../features/tribunal.js';
 import { hitCooldown, imagesToday } from '../features/limits.js';
 import { conversationKey, forget, memoryStats } from '../features/memory.js';
 import { createQuiz, handleQuizButton } from '../features/quiz.js';
@@ -44,6 +45,7 @@ export async function onInteraction(client, interaction) {
     if (isBlindTestComponent(interaction)) return await handleBlindTestComponent(client, interaction);
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
     if (isLiveComponent(interaction)) return await handleLiveComponent(client, interaction);
+    if (isTribunalComponent(interaction)) return await handleTribunalComponent(client, interaction);
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('report:')) return await handleReportButton(client, interaction);
       if (interaction.customId === 'copy:code') return await handleCopyButton(interaction);

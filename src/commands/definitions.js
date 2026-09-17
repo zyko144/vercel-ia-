@@ -243,6 +243,14 @@ const utilityCommands = [
     .setDescription('Le bot choisit au hasard pour toi')
     .addStringOption((o) => o.setName('options').setDescription('Les options séparées par | (ex : Fortnite | Minecraft | Valo)').setRequired(true).setMaxLength(600)),
 
+  guildOnly(new SlashCommandBuilder().setName('tribunal').setDescription('⚖️ Tribunal des sons (réservé aux juges)')
+    .setDefaultMemberPermissions(0)
+    .addStringOption((o) => o.setName('action').setDescription('Ce que tu veux faire').addChoices(
+      { name: '📜 Publier le règlement dans le salon des sons', value: 'reglement' },
+      { name: '📊 État de la semaine', value: 'semaine' },
+      { name: '⚖️ Clôturer la semaine (distribue les Bouffons)', value: 'cloturer' },
+    ))),
+
   new SlashCommandBuilder().setName('aide').setDescription('Tout ce que le bot sait faire'),
   new SlashCommandBuilder().setName('ping').setDescription('Vérifie si le bot est en forme'),
   new SlashCommandBuilder().setName('vocal').setDescription("Parle à l'IA vocale dans le vocal du bot : elle te répond à voix haute")
@@ -262,6 +270,6 @@ export const commandDefinitions = [...aiCommands, ...moderationCommands, ...util
 export const COMMANDS_ALLOWED_EVERYWHERE = new Set([
   ...moderationCommands.map((c) => c.name),
   ...MUSIC_COMMAND_NAMES,
-  'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin', 'vocal',
+  'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin', 'vocal', 'tribunal',
   'Expliquer ce message', 'Traduire en français', 'Signaler au staff',
 ]);

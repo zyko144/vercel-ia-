@@ -1,6 +1,7 @@
 // Commandes d'infos et petits jeux (réponses visibles seulement par la personne).
 import { ChannelType, EmbedBuilder, GuildPremiumTier, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
+import { closeWeek, isJudge, reglementPayload, weekPayload } from '../features/tribunal.js';
 import { startVoiceSession, stopVoiceSession } from '../voice-ai/assistant.js';
 import { load } from '../storage.js';
 import { BRAND_COLOR } from '../utils/reply.js';
@@ -13,6 +14,29 @@ const gameReply = (interaction, payload) => (interaction.channelId === config.ga
 const random = (max) => Math.floor(Math.random() * max);
 
 export const UTILITY_HANDLERS = {
+  async tribunal(client, interaction) {
+    if (!isJudge(interaction.user.id)) {
+      return interaction.reply(private_({ content: "⚖️ Le tribunal est réservé aux juges. Retourne faire ton son." }));
+    }
+    const action = interaction.options.getString('action') ?? 'semaine';
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    if (action === 'reglement') {
+      const channel = client.channels.cache.get(config.tribunal.sonsChannelId) ?? await client.channels.fetch(config.tribunal.sonsChannelId).catch(() => null);
+      if (!channel?.send) return interaction.editReply('Je trouve pas le salon des sons 😕');
+      const message = await channel.send(reglementPayload(interaction.guild));
+      await message.pin().catch(() => {});
+      return interaction.editReply(`📜 Règlement publié et épinglé dans <#${channel.id}>.`);
+    }
+    if (action === 'cloturer') {
+      const payload = await closeWeek(interaction.guild);
+      const channel = client.channels.cache.get(config.tribunal.sonsChannelId);
+      await channel?.send(payload).catch(() => {});
+      return interaction.editReply('⚖️ Semaine clôturée : les bouffons sont désignés, une nouvelle semaine commence.');
+    }
+    return interaction.editReply(await weekPayload(interaction.guild));
+  },
+
   async vocal(client, interaction) {
     const reply = (content) => (interaction.deferred ? interaction.editReply(content) : interaction.reply({ content, flags: MessageFlags.Ephemeral }));
     if (interaction.options.getBoolean('arreter')) {

@@ -8,6 +8,7 @@ import { hitCooldown } from '../features/limits.js';
 import { protectOwner } from '../features/protectOwner.js';
 import { conversationKey } from '../features/memory.js';
 import { getPrivateThread, privateThreadOwner } from '../features/privateThreads.js';
+import { handleSonMessage } from '../features/tribunal.js';
 import { blindTestActive, handleBlindTestMessage, handleJukeboxMessage } from '../music/handlers.js';
 import { attachmentsToContent, displayName, fetchBase64, inChannelList, isAllowedChannel, truncate } from '../utils/discord.js';
 
@@ -23,6 +24,11 @@ export async function onMessage(client, message) {
   // Insultes envers le chef : vérifié sur tout le serveur, sans bloquer le reste
   if (message.inGuild()) protectOwner(client, message).catch((err) => console.warn('[protection]', err.message));
   if (!isAllowedChannel(message.channel, message.channelId)) return;
+
+  // Salon des sons : dépôt du son de la semaine (le tribunal vérifie)
+  if (message.inGuild() && message.channelId === config.tribunal.sonsChannelId) {
+    return handleSonMessage(client, message).catch((err) => console.warn('[tribunal]', err.message));
+  }
 
   // Blind test en cours : les messages du salon sont des réponses au jeu
   if (message.inGuild() && blindTestActive(message.guildId) && handleBlindTestMessage(message)) return;
