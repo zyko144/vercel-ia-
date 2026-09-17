@@ -177,7 +177,7 @@ export class LavalinkBackend {
       ...(track.playUrl ? [track.playUrl] : []),
       // Musique / son de jeu pas sur Deezer : YouTube classique d'abord (jamais YouTube Music pour un effet sonore)
       ...(curatedYoutube ? [`ytsearch:${query}`] : []),
-      ...(curatedYoutube && track.sfx ? [] : [`ytmsearch:${query}`]),
+      ...(curatedYoutube && track.sfx ? [`scsearch:${query}`] : [`ytmsearch:${query}`]),
       // Recherche YouTube classique / SoundCloud : pleine d'uploads de fans (accélérés, pitchés) -> jamais en blind test
       ...(track.strict ? [] : [`ytsearch:${query}`, `scsearch:${query}`]),
     ])];
@@ -318,7 +318,7 @@ export class LavalinkBackend {
         this.markBad(track, ready.item);
         if (token !== this.player.playToken) return false;
         // Blind test : le son a déjà été entendu, on ne met pas une autre version en douce (la partie relance proprement)
-        if (this.player.blind && err.announced) throw new MusicError('le son a coupé juste après le départ');
+        if (this.player.blind && err.announced && this.player.blindRunning?.()) throw new MusicError('le son a coupé juste après le départ');
       }
     }
 
@@ -354,7 +354,7 @@ export class LavalinkBackend {
           this.markBad(track, item);
           lavalink.log(`${this.node.name} n'a pas pu lire "${track.title}" : ${shortError(err.message)}`);
           if (token !== this.player.playToken) return false;
-          if (this.player.blind && err.announced) throw new MusicError('le son a coupé juste après le départ');
+          if (this.player.blind && err.announced && this.player.blindRunning?.()) throw new MusicError('le son a coupé juste après le départ');
         }
       }
 

@@ -454,9 +454,9 @@ async function prepareAhead(game, count = PREPARE_AHEAD) {
         track.lyrics = await lyricsExcerpt(track).catch(() => null);
         track.ready = Boolean(track.lyrics);
       } else {
-        track.ready = Boolean(audioOk) && (!game.visual || Boolean(frames));
+        track.ready = game.textOnly ? Boolean(frames) : Boolean(audioOk);
       }
-      if (!track.ready) console.warn(`[blindtest] ${game.visual && !track.frames ? 'pas d\'image' : game.textOnly ? 'pas de paroles' : 'pas de version fiable'} pour "${track.work ?? `${track.artist} - ${track.title}`}", retiré`);
+      if (!track.ready) console.warn(`[blindtest] ${game.textOnly && game.visual ? 'pas d\'image' : game.textOnly ? 'pas de paroles' : 'pas de version fiable'} pour "${track.work ?? `${track.artist} - ${track.title}`}", retiré`);
     }));
     game.pool = game.pool.filter((track) => track.ready !== false);
   }
@@ -519,7 +519,10 @@ async function nextRound(game) {
   player.onStarted = () => waitForSound(game, round); // secours si le serveur n'annonce pas le départ
   player.onBlindEnd = ({ failed }) => onTrackGone(game, round, failed);
   player.onBlindRetry = () => extendRound(game, round);
-  player.playNow({ ...track, requestedBy: 'blindtest', seekTo: round.seekTo });
+  player.blindRunning = () => game.current === round && round.running;
+  track.requestedBy = 'blindtest';
+  track.seekTo = round.seekTo;
+  player.playNow(track);
 
   game.timers.start = setTimeout(() => {
     if (game.current === round && !round.running && !round.checking) replaceRound(game, round, 'le serveur audio ne lance pas le son');
@@ -575,12 +578,13 @@ async function waitForSound(game, round) {
  * est mis de côté et le même son est relancé sur un autre serveur.
  */
 async function checkSpeed(game, round, first) {
+  if (round.track.sfx) return;
   await sleep(3_000);
   const backend = game.player?.backend;
   if (game.stopped || game.current !== round || round.revealed || !backend?.fetchState) return;
   const state = await backend.fetchState().catch(() => null);
   const position = state?.state?.position;
-  if (typeof position !== 'number' || state?.track?.info?.identifier !== backend.currentItem?.info?.identifier) return;
+  if (typeof position !== 'number' || position < first.position || state?.track?.info?.identifier !== backend.currentItem?.info?.identifier) return;
   const useServerClock = first.time && state.state.time && state.state.time > first.time;
   const elapsed = useServerClock ? state.state.time - first.time : Date.now() - first.at;
   if (elapsed < 2_000) return;
@@ -941,13 +945,14 @@ function onTrackGone(game, round, failed) {
     clearTimeout(game.timers.sfx);
     game.timers.sfx = setTimeout(() => {
       if (game.stopped || game.current !== round || round.revealed) return;
-      game.player?.playNow({ ...round.track, requestedBy: 'blindtest', seekTo: 0 });
+      round.track.seekTo = 0;
+      game.player?.playNow(round.track);
     }, 1_500);
     return;
   }
   // Coupure au tout début : on relance le même son plutôt que d'en mettre un autre
   const heardMs = round.running ? Date.now() - round.audioAt : 0;
-  if (failed && round.running && heardMs < RESTART_IF_HEARD_UNDER_MS) {
+  if (failed && (!round.running || heardMs < RESTART_IF_HEARD_UNDER_MS)) {
     restartRound(game, round, 'son coupé au démarrage');
     return;
   }
@@ -975,6 +980,7 @@ export async function endGame(game, { stopped = false, error = null } = {}) {
     player.onAudioStart = null;
     player.onBlindEnd = null;
     player.onBlindRetry = null;
+    player.blindRunning = null;
     player.queue = [];
     player.filters = [];
     if (player.current) await Promise.resolve(player.stop()).catch(() => {});
