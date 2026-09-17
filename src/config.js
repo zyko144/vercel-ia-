@@ -16,6 +16,20 @@ const list = (key, fallback = '') =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+// Nouveau serveur « DDV PRV ANTI ZAIROX REBELLION » : l'ancien serveur DDV a été supprimé.
+// Ses anciens salons (encore réglés dans l'hébergeur) sont remplacés automatiquement par ceux du nouveau serveur.
+const DICTATURE = '1550190587142082582';
+const MOVED_CHANNELS = new Map([
+  ['1549504799806857236', DICTATURE], // Dictature
+  ['1550100131569868871', DICTATURE], // IA-VOCAL : l'IA vocale est maintenant aussi dans Dictature
+  ['1549523857252028538', ''], // salon IA (pas d'équivalent)
+  ['1549658865002487839', ''], // salon musique / jukebox (pas d'équivalent)
+  ['1549658986935222363', ''], // salon blindtest (le jeu se joue là où on lance la commande)
+]);
+const moved = (id) => (MOVED_CHANNELS.has(id) ? MOVED_CHANNELS.get(id) : id);
+const channel = (key, fallback = '') => moved(str(key, fallback));
+const channels = (key, fallback = '') => list(key, fallback).map(moved).filter(Boolean);
+
 const missing = ['DISCORD_TOKEN', 'GEMINI_API_KEY'].filter((k) => !str(k));
 // DISCORD_TOKEN peut contenir 2 tokens séparés par ";" : le bot principal, puis le bot de l'IA vocale
 const discordTokens = str('DISCORD_TOKEN').split(/[;,\s]+/).filter(Boolean);
@@ -69,7 +83,7 @@ export const config = {
     voice: str('GEMINI_VOICE_NAME', 'Puck'),
     idleSeconds: int('VOICE_AI_IDLE_SECONDS', 45),
     // Salon vocal de l'IA vocale (le bot musique, lui, reste dans VOICE_CHANNEL_ID)
-    channelId: str('VOICE_AI_CHANNEL_ID', '1550100131569868871'),
+    channelId: channel('VOICE_AI_CHANNEL_ID', DICTATURE),
     // Seuls ces comptes peuvent utiliser /vocal (vide = tout le monde)
     allowedUsers: list('VOICE_AI_USERS', '855176142096039997,734865069904756766,923551925113323542'),
   },
@@ -91,7 +105,7 @@ export const config = {
 
   voice: {
     enabled: bool('VOICE_ENABLED', true),
-    channelId: str('VOICE_CHANNEL_ID', '1549504799806857236'),
+    channelId: channel('VOICE_CHANNEL_ID', DICTATURE),
     categoryName: str('VOICE_CATEGORY_NAME', 'vercel'),
     channelName: str('VOICE_CHANNEL_NAME', 'bureau'),
     // Le bot ne va jamais dans un autre vocal que le sien (musique et mini-jeux compris), 24h/24
@@ -101,13 +115,13 @@ export const config = {
   },
 
   // Salons où le bot répond à tous les messages (sans mention)
-  aiChannelIds: list('AI_CHANNEL_IDS', '1549523857252028538'),
+  aiChannelIds: channels('AI_CHANNEL_IDS'),
   // Vide = le bot répond partout. Rempli = il ne répond QUE dans ces salons.
   allowedChannelIds: list('ALLOWED_CHANNEL_IDS').filter((id) => id !== '*'),
   // Réponses visibles seulement par la personne (fil privé + messages éphémères)
   privateReplies: bool('PRIVATE_REPLIES', true),
   // Salons où écrire un nom de son l'ajoute direct à la file (jukebox)
-  jukeboxChannelIds: list('JUKEBOX_CHANNEL_IDS', '1549658865002487839'),
+  jukeboxChannelIds: channels('JUKEBOX_CHANNEL_IDS'),
   // Salon où arrivent les signalements (vide = MP au chef)
   staffChannelId: str('STAFF_CHANNEL_ID'),
 
@@ -129,7 +143,7 @@ export const config = {
     // Décalage des paroles : négatif = elles s'affichent plus tard (compense le retard du son)
     lyricsOffsetMs: int('LYRICS_OFFSET_MS', -900),
     // Salon où se déroulent les blind tests (vide = là où la commande est tapée)
-    blindtestChannelId: str('BLINDTEST_CHANNEL_ID', '1549658986935222363'),
+    blindtestChannelId: channel('BLINDTEST_CHANNEL_ID'),
   },
 
   port: int('PORT', 3000),
