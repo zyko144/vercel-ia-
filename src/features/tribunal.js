@@ -326,7 +326,7 @@ export async function bilanPayload(guild) {
     ...jesters.map((m) => ({ text: `BOUFFON · ${name(m)} · ${sons(m.id)}`, color: '#ff8c1a' })),
     ...missing.filter((m) => !jesterIds.has(m.id)).map((m) => ({ text: `RIEN RENDU · ${name(m)} · ${sons(m.id)}`, color: '#ed4245' })),
   ];
-  const gif = await buildWeekGif({
+  const image = await buildWeekGif({
     title: 'TRIBUNAL DES SONS',
     subtitle: `Bilan de la semaine du ${frDate(data.weekStart)}`,
     lines,
@@ -341,7 +341,7 @@ export async function bilanPayload(guild) {
   ].filter(Boolean).join('\n');
   return {
     content: truncate(content, 1900),
-    files: [{ attachment: gif, name: 'bilan-tribunal.gif' }],
+    files: [image],
     allowedMentions: { users: [...done, ...waiting, ...missing].map((m) => m.id).slice(0, 50) },
   };
 }
