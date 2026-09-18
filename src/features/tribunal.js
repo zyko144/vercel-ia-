@@ -39,9 +39,12 @@ async function state() {
     current.history[String(current.weekStart)] = {
       accepted: Object.entries(current.submissions).filter(([, s]) => s.verdict === 'accepté').map(([id]) => id),
     };
+    current.history[String(current.weekStart)].week = current.week ?? {};
     current.weekStart = startOfWeek(Date.now());
     current.submissions = {};
+    current.week = {};
   }
+  current.week ??= {};
   return current;
 }
 
@@ -78,6 +81,12 @@ export function reglementPayload(guild) {
       `• Dès qu'un son arrive, **l'IA l'analyse** : elle regarde si c'est bien un son perso, si ce n'est pas un morceau déjà sorti, un repost, un extrait piqué ailleurs ou un contournement.`,
       `• Elle transmet son rapport aux juges. **${juges}** tranchent : accepté ou refusé.`,
       '• **Toute tentative de triche** (son de quelqu\'un d\'autre, morceau commercial, repost d\'une semaine passée, fichier trafiqué) est refusée et comptée comme **aucun son rendu**.',
+      '',
+      '**📊 Le barème, chiffres en main**',
+      `• **0 son validé** à la fin de la semaine → ${bouffon}, sans discussion.`,
+      '• **1 son validé** → tu es **sauvé** : rien à signaler, tu as fait ton devoir.',
+      `• **3 sons validés ou plus** → **bonus**, dont la nature est décidée par ${juges} au cas par cas.`,
+      '• Le compte est public : le bilan hebdomadaire affiche la photo, le nom et le nombre exact de sons de chacun.',
       '',
       '**🤡 Les sanctions**',
       `• Pas de son à la fin de la semaine → tu reçois le rôle ${bouffon}, affiché en haut de la liste des membres, jusqu'à ce que tu rendes un son.`,
@@ -212,6 +221,9 @@ export async function handleSonMessage(client, message) {
     console.warn('[tribunal] analyse impossible :', err.message);
   }
 
+  data.week ??= {};
+  data.week[message.author.id] = { ...(data.week[message.author.id] ?? { sent: 0, accepted: 0 }) };
+  data.week[message.author.id].sent += 1;
   data.submissions[message.author.id] = {
     at: Date.now(),
     messageId: message.id,
@@ -281,8 +293,11 @@ export async function handleTribunalComponent(client, interaction) {
   submission.verdict = action === 'ok' ? 'accepté' : 'refusé';
   submission.judgedBy = interaction.user.id;
   data.totals ??= {};
+  data.week ??= {};
+  data.week[userId] ??= { sent: 1, accepted: 0 };
   if (action === 'ok' && !submission.counted) {
     data.totals[userId] = (data.totals[userId] ?? 0) + 1;
+    data.week[userId].accepted = (data.week[userId].accepted ?? 0) + 1;
     submission.counted = true;
   }
   save(KEY, data);
@@ -314,79 +329,125 @@ const frDate = (at) => {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 };
 
-/** GIF du bilan : chaque nom apparaît un par un, avec son statut et son nombre de sons. */
+const sonsLabel = (n) => `${n} son${n > 1 ? 's' : ''}`;
+
+/** GIF du bilan : photo, nom, statut et sons de la semaine de chacun, qui défilent un par un. */
 export async function bilanPayload(guild) {
-  const { data, done, waiting, missing, jesters, count } = await weekReport(guild);
-  const sons = (id) => `${count(id)} son${count(id) > 1 ? 's' : ''}`;
-  const name = (member) => member.displayName ?? member.user.username;
-  const jesterIds = new Set(jesters.map((m) => m.id));
-  const lines = [
-    ...done.map((m) => ({ text: `EN REGLE · ${name(m)} · ${sons(m.id)}`, color: '#3ef08a' })),
-    ...waiting.map((m) => ({ text: `EN ATTENTE · ${name(m)} · ${sons(m.id)}`, color: '#ffe066' })),
-    ...jesters.map((m) => ({ text: `BOUFFON · ${name(m)} · ${sons(m.id)}`, color: '#ff8c1a' })),
-    ...missing.filter((m) => !jesterIds.has(m.id)).map((m) => ({ text: `RIEN RENDU · ${name(m)} · ${sons(m.id)}`, color: '#ed4245' })),
-  ];
+  const { data, people } = await weekReport(guild);
+  const lines = people.map((p) => ({
+    text: `${STATUSES[p.status].label} · ${p.name}`,
+    detail: `${p.accepted}/${p.sent} · ${sonsLabel(p.total)} au total`,
+    color: STATUSES[p.status].color,
+    avatar: p.member.displayAvatarURL({ extension: 'png', size: 64, forceStatic: true }),
+  }));
   const image = await buildWeekGif({
     title: 'TRIBUNAL DES SONS',
-    subtitle: `Bilan de la semaine du ${frDate(data.weekStart)}`,
+    subtitle: `Semaine du ${frDate(data.weekStart)}`,
     lines,
   });
-  const mention = (members, emoji) => (members.length ? `${emoji} ${members.map((m) => `<@${m.id}> (${sons(m.id)})`).join(' · ')}` : null);
+  const group = (status) => {
+    const list = people.filter((p) => p.status === status);
+    if (!list.length) return null;
+    const { emoji, label, short } = STATUSES[status];
+    return `${emoji} **${label}** (${short}) : ${list.map((p) => `<@${p.id}> \`${p.accepted}\``).join(' · ')}`;
+  };
   const content = [
     `⚖️ **Bilan de la semaine** · fin <t:${deadline(data.weekStart)}:R>`,
-    mention(done, '✅ **En règle** :'),
-    mention(waiting, '⏳ **En attente** :'),
-    mention(jesters, '🤡 **Bouffons du Roi** :'),
-    mention(missing.filter((m) => !jesterIds.has(m.id)), '❌ **Rien rendu** :'),
+    group('bonus'),
+    group('sauve'),
+    group('attente'),
+    group('bouffon'),
+    '_Règle : 0 son validé = Bouffon du Roi · 1 son = sauvé · 3 sons et plus = bonus décidé par les juges._',
   ].filter(Boolean).join('\n');
   return {
     content: truncate(content, 1900),
     files: [image],
-    allowedMentions: { users: [...done, ...waiting, ...missing].map((m) => m.id).slice(0, 50) },
+    allowedMentions: { users: people.map((p) => p.id).slice(0, 50) },
   };
 }
 
 // ===================== Semaine =====================
 
-/** Qui a rendu, qui n'a rien rendu. */
+// Le sort de chacun en fin de semaine, selon le nombre de sons validés
+export const STATUSES = {
+  bonus: { label: 'BONUS', color: '#e3c37a', emoji: '👑', short: 'bonus à décider par les juges' },
+  sauve: { label: 'SAUVE', color: '#3ef08a', emoji: '✅', short: 'en règle' },
+  attente: { label: 'EN ATTENTE', color: '#ffe066', emoji: '⏳', short: 'en attente de jugement' },
+  bouffon: { label: 'BOUFFON', color: '#ed4245', emoji: '🤡', short: 'Bouffon du Roi' },
+};
+
+/** 0 son = Bouffon, 1 ou 2 = sauvé, 3 et plus = bonus décidé par les juges. */
+export function statusOf({ accepted = 0, pending = false }) {
+  if (accepted >= 3) return 'bonus';
+  if (accepted >= 1) return 'sauve';
+  return pending ? 'attente' : 'bouffon';
+}
+
+/** Qui a rendu, qui n'a rien rendu, et combien de sons chacun a validé cette semaine. */
 export async function weekReport(guild) {
   const data = await state();
-  const members = await guild.members.fetch().catch(() => guild.members.cache);
+  // Sans l'autorisation « Server Members », members.fetch() reste bloqué 2 minutes : on ne l'attend pas
+  const members = await Promise.race([
+    guild.members.fetch().catch(() => guild.members.cache),
+    new Promise((resolve) => setTimeout(() => resolve(guild.members.cache), 8000)),
+  ]);
   const humans = [...members.values()].filter((m) => !m.user.bot);
-  const done = [];
-  const waiting = [];
-  const missing = [];
-  for (const member of humans) {
-    const submission = data.submissions[member.id];
-    if (submission?.verdict === 'accepté') done.push(member);
-    else if (submission && submission.verdict === 'en attente') waiting.push(member);
-    else missing.push(member);
-  }
-  // Les bouffons actuels : ceux qui portent le rôle (pas seulement ceux de la semaine)
-  const jesters = config.tribunal.jesterRoleId
-    ? humans.filter((m) => m.roles.cache.has(config.tribunal.jesterRoleId))
-    : [];
   const totals = data.totals ?? {};
+  const week = data.week ?? {};
   const count = (id) => totals[id] ?? 0;
-  return { data, done, waiting, missing, jesters, totals, count };
+  const weekOf = (id) => ({ sent: week[id]?.sent ?? 0, accepted: week[id]?.accepted ?? 0 });
+
+  const people = humans.map((member) => {
+    const submission = data.submissions[member.id];
+    const { sent, accepted } = weekOf(member.id);
+    const pending = submission?.verdict === 'en attente';
+    return {
+      member,
+      id: member.id,
+      name: member.displayName ?? member.user.username,
+      sent,
+      accepted,
+      total: count(member.id),
+      pending,
+      jester: Boolean(config.tribunal.jesterRoleId && member.roles.cache.has(config.tribunal.jesterRoleId)),
+      status: statusOf({ accepted, pending }),
+    };
+  });
+  // D'abord les meilleurs, ensuite ceux qui attendent, les bouffons à la fin
+  const rank = { bonus: 0, sauve: 1, attente: 2, bouffon: 3 };
+  people.sort((a, b) => rank[a.status] - rank[b.status] || b.accepted - a.accepted || a.name.localeCompare(b.name));
+
+  const of = (status) => people.filter((p) => p.status === status);
+  return {
+    data, people, count, weekOf,
+    done: of('sauve').concat(of('bonus')).map((p) => p.member),
+    waiting: of('attente').map((p) => p.member),
+    missing: of('bouffon').map((p) => p.member),
+    jesters: people.filter((p) => p.jester).map((p) => p.member),
+  };
 }
 
 export async function weekPayload(guild) {
-  const { data, done, waiting, missing, jesters, count } = await weekReport(guild);
-  const list = (members) => (members.length
-    ? members.map((m) => `<@${m.id}> \`${count(m.id)} son${count(m.id) > 1 ? 's' : ''}\``).join('\n')
-    : '—');
+  const { data, people } = await weekReport(guild);
+  const list = (status) => {
+    const found = people.filter((p) => p.status === status);
+    if (!found.length) return '—';
+    return found.map((p) => `<@${p.id}> · **${p.accepted}** validé${p.accepted > 1 ? 's' : ''} sur ${p.sent} déposé${p.sent > 1 ? 's' : ''}${p.jester ? ' · 🤡' : ''}`).join('\n');
+  };
+  const field = (status) => {
+    const { emoji, label, short } = STATUSES[status];
+    const n = people.filter((p) => p.status === status).length;
+    return { name: `${emoji} ${label} — ${short} (${n})`, value: truncate(list(status), 1000) };
+  };
   const embed = new EmbedBuilder()
     .setColor(0xc8a24a)
     .setAuthor({ name: '⚖️ TRIBUNAL DES SONS' })
     .setTitle('État de la semaine')
-    .setDescription(`Fin de la semaine : <t:${deadline(data.weekStart)}:F> (<t:${deadline(data.weekStart)}:R>)`)
-    .addFields(
-      { name: `✅ Acceptés cette semaine (${done.length})`, value: truncate(list(done), 1000) },
-      { name: `⏳ En attente de jugement (${waiting.length})`, value: truncate(list(waiting), 1000) },
-      { name: `❌ Rien rendu cette semaine (${missing.length})`, value: truncate(list(missing), 1000) },
-      { name: `🤡 Bouffons du Roi en ce moment (${jesters.length})`, value: truncate(list(jesters), 1000) },
-    )
+    .setDescription([
+      `Fin de la semaine : <t:${deadline(data.weekStart)}:F> (<t:${deadline(data.weekStart)}:R>)`,
+      '**0 son validé** → Bouffon du Roi · **1 son** → sauvé · **3 sons et +** → bonus décidé par les juges.',
+    ].join('\n'))
+    .addFields(field('bonus'), field('sauve'), field('attente'), field('bouffon'))
     .setThumbnail(IMAGE_URL)
     .setTimestamp();
   return { embeds: [embed], files: [image()], allowedMentions: { parse: [] } };
@@ -411,12 +472,14 @@ export async function closeWeek(guild) {
   // Nouvelle semaine
   data.totals ??= {};
   data.history[String(data.weekStart)] = {
+    week: data.week ?? {},
     accepted: done.map((m) => m.id),
     jesters: missing.map((m) => m.id),
     keys: Object.values(data.submissions).map((s) => s.key).filter(Boolean),
   };
   data.weekStart = startOfWeek(Date.now());
   data.submissions = {};
+  data.week = {};
   save(KEY, data);
 
   const embed = new EmbedBuilder()
