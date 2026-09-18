@@ -8,11 +8,12 @@ import { FFMPEG_PATH } from '../music/binaries.js';
 
 const WIDTH = 480;
 const HEIGHT = 300;
-const FPS = 8;
+const FPS = 2; // le texte apparaît par paliers : inutile de calculer 8 images/seconde sur un petit serveur
 const BACKGROUND = 'assets/tribunal.jpg';
 const FONTS_DIR = 'assets';
 const MAX_LINES = 9;
 const TIMEOUT_MS = 150_000;
+let lowPriority = process.platform !== 'win32';
 
 /** Couleur #rrggbb -> format ASS (&H00BBGGRR). */
 function assColor(hex) {
@@ -36,7 +37,7 @@ function buildAss({ title, subtitle, lines, duration }) {
   };
   add(0, 'Titre', title, '#e3c37a', WIDTH / 2, 22);
   add(0.4, 'Sous', subtitle, '#cfd3e0', WIDTH / 2, 56);
-  lines.forEach((line, i) => add(0.9 + i * 0.35, 'Ligne', line.text, line.color, 26, 82 + i * 24));
+  lines.forEach((line, i) => add(1 + i * 0.5, 'Ligne', line.text, line.color, 26, 82 + i * 24));
 
   return [
     '[Script Info]',
@@ -60,14 +61,26 @@ function buildAss({ title, subtitle, lines, duration }) {
 /** Lance ffmpeg et renvoie ce qu'il écrit sur la sortie (avec la vraie raison en cas d'échec). */
 function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(FFMPEG_PATH, args, { windowsHide: true });
+    // Sur le serveur (0,1 CPU), ffmpeg passe en priorité basse : le bot reste réactif pendant le rendu
+    const [command, fullArgs] = lowPriority
+      ? ['nice', ['-n', '19', FFMPEG_PATH, ...args]]
+      : [FFMPEG_PATH, args];
+    const proc = spawn(command, fullArgs, { windowsHide: true });
     const chunks = [];
     let errors = '';
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; proc.kill('SIGKILL'); }, timeout);
     if (collect) proc.stdout.on('data', (chunk) => chunks.push(chunk));
     proc.stderr.on('data', (chunk) => { errors += chunk; });
-    proc.on('error', (err) => { clearTimeout(timer); reject(err); });
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      // Pas de commande « nice » sur cette machine : on relance normalement
+      if (lowPriority && err.code === 'ENOENT') {
+        lowPriority = false;
+        return runFfmpeg(args, { collect, timeout }).then(resolve, reject);
+      }
+      reject(err);
+    });
     proc.on('close', (code, signal) => {
       clearTimeout(timer);
       const out = Buffer.concat(chunks);
@@ -102,7 +115,7 @@ function videoFilters(assFile) {
  */
 export async function buildWeekGif({ title, subtitle, lines }) {
   const shown = lines.slice(0, MAX_LINES);
-  const duration = Math.min(11, 0.9 + shown.length * 0.35 + 2.2);
+  const duration = Math.min(11, 1 + shown.length * 0.5 + 2);
   const folder = await mkdtemp(path.join(os.tmpdir(), 'tribunal-'));
   const assFile = path.join(folder, 'bilan.ass');
   const palette = path.join(folder, 'palette.png');
@@ -111,15 +124,16 @@ export async function buildWeekGif({ title, subtitle, lines }) {
   const input = ['-loop', '1', '-t', duration.toFixed(1), '-i', BACKGROUND];
 
   try {
-    // 1) la palette de couleurs, 2) le GIF qui s'en sert : bien plus léger qu'un « split » en mémoire
+    // 1) la palette, calculée sur la seule dernière image (tous les textes y sont déjà) : presque gratuit
     await runFfmpeg([
-      '-hide_banner', '-loglevel', 'error', '-y',
-      ...input, '-vf', `${filters},palettegen=max_colors=128:stats_mode=full`,
-      '-frames:v', '1', palette,
+      '-hide_banner', '-loglevel', 'error', '-y', '-threads', '1',
+      ...input, '-vf', `${filters},palettegen=max_colors=128:stats_mode=single`,
+      '-ss', Math.max(0, duration - 0.3).toFixed(1), '-frames:v', '1', palette,
     ], { collect: false });
 
+    // 2) le GIF qui s'en sert
     const gif = await runFfmpeg([
-      '-hide_banner', '-loglevel', 'error',
+      '-hide_banner', '-loglevel', 'error', '-threads', '1',
       ...input, '-i', palette,
       '-filter_complex', `[0:v]${filters}[v];[v][1:v]paletteuse=dither=bayer:bayer_scale=2:diff_mode=rectangle`,
       '-loop', '0', '-f', 'gif', 'pipe:1',
@@ -129,7 +143,7 @@ export async function buildWeekGif({ title, subtitle, lines }) {
     console.warn('[tribunal] GIF impossible (%s), image fixe à la place', error.message);
     // Secours : une seule image (la dernière, tous les noms affichés), ça coûte presque rien
     const png = await runFfmpeg([
-      '-hide_banner', '-loglevel', 'error',
+      '-hide_banner', '-loglevel', 'error', '-threads', '1',
       ...input, '-vf', filters,
       '-ss', Math.max(0, duration - 0.3).toFixed(1), '-frames:v', '1',
       '-f', 'image2', '-c:v', 'png', 'pipe:1',
