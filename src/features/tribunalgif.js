@@ -81,8 +81,12 @@ function fontEnvironment() {
   return fontConfigReady;
 }
 
+// Chronomètre de la dernière fabrication, pour comprendre où part le temps sur le serveur
+export const lastTimings = [];
+
 /** Lance ffmpeg et renvoie ce qu'il écrit sur la sortie (avec la vraie raison en cas d'échec). */
-function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
+function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS, label = 'ffmpeg' } = {}) {
+  const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     // Sur le serveur (0,1 CPU), ffmpeg passe en priorité basse : le bot reste réactif pendant le rendu
     const [command, fullArgs] = lowPriority
@@ -103,12 +107,13 @@ function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
       // Pas de commande « nice » sur cette machine : on relance normalement
       if (lowPriority && err.code === 'ENOENT') {
         lowPriority = false;
-        return runFfmpeg(args, { collect, timeout }).then(resolve, reject);
+        return runFfmpeg(args, { collect, timeout, label }).then(resolve, reject);
       }
       reject(err);
     });
     proc.on('close', (code, signal) => {
       clearTimeout(timer);
+      lastTimings.push({ étape: label, secondes: Math.round((Date.now() - startedAt) / 100) / 10 });
       const out = Buffer.concat(chunks);
       if (code === 0 && (!collect || out.length)) return resolve(out);
       const last = errors.split('\n').filter(Boolean).pop();
@@ -118,6 +123,12 @@ function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
       reject(new Error(why));
     });
   });
+}
+
+/** Coût d'un lancement de ffmpeg qui ne fait rien : sépare le démarrage du vrai travail. */
+export function ffmpegStartupCost() {
+  return runFfmpeg(['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=32x32:d=0.1', '-f', 'null', '-'],
+    { collect: false, timeout: 60_000, label: 'démarrage à vide' });
 }
 
 /** Les sous-titres à graver (le fond est déjà prêt), écrits une fois par image. */
@@ -141,7 +152,7 @@ async function darkBackground() {
       `drawbox=x=0:y=40:w=${WIDTH}:h=${HEIGHT - 40}:color=black@0.55:t=fill`,
     ].join(','),
     '-frames:v', '1', file,
-  ], { collect: false }).then(() => file, (error) => { backgroundReady = null; throw error; });
+  ], { collect: false, label: 'fond' }).then(() => file, (error) => { backgroundReady = null; throw error; });
   return backgroundReady;
 }
 
@@ -151,6 +162,7 @@ async function darkBackground() {
  * @returns {Promise<{ attachment: Buffer, name: string }>} GIF animé, ou image fixe si ffmpeg n'y arrive pas
  */
 export async function buildWeekGif({ title, subtitle, lines }) {
+  lastTimings.length = 0;
   await fontEnvironment();
   const shown = lines.slice(0, MAX_LINES);
   if (lines.length > MAX_LINES) shown.push({ text: `… et ${lines.length - MAX_LINES} autre${lines.length - MAX_LINES > 1 ? 's' : ''}`, color: '#9aa0ad' });
@@ -170,7 +182,7 @@ export async function buildWeekGif({ title, subtitle, lines }) {
       '-hide_banner', '-loglevel', 'error', '-y', '-threads', '1',
       ...input, '-vf', `${filters},palettegen=max_colors=128:stats_mode=single`,
       '-ss', Math.max(0, duration - 0.3).toFixed(1), '-frames:v', '1', palette,
-    ], { collect: false });
+    ], { collect: false, label: 'palette' });
 
     // 2) le GIF qui s'en sert
     const gif = await runFfmpeg([
@@ -178,7 +190,7 @@ export async function buildWeekGif({ title, subtitle, lines }) {
       ...input, '-i', palette,
       '-filter_complex', `[0:v]${filters}[v];[v][1:v]paletteuse=dither=bayer:bayer_scale=2:diff_mode=rectangle`,
       '-loop', '0', '-f', 'gif', 'pipe:1',
-    ]);
+    ], { label: 'gif' });
     return { attachment: gif, name: 'bilan-tribunal.gif' };
   } catch (error) {
     console.warn('[tribunal] GIF impossible (%s), image fixe à la place', error.message);
@@ -188,7 +200,7 @@ export async function buildWeekGif({ title, subtitle, lines }) {
       ...input, '-vf', filters,
       '-ss', Math.max(0, duration - 0.3).toFixed(1), '-frames:v', '1',
       '-f', 'image2', '-c:v', 'png', 'pipe:1',
-    ], { timeout: 60_000 });
+    ], { timeout: 60_000, label: 'image de secours' });
     return { attachment: png, name: 'bilan-tribunal.png' };
   } finally {
     await rm(folder, { recursive: true, force: true }).catch(() => {});

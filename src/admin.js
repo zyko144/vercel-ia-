@@ -4,6 +4,7 @@ import { allPlayers } from './music/player.js';
 import { config } from './config.js';
 import { FFMPEG_PATH } from './music/binaries.js';
 import { bilanPayload } from './features/tribunal.js';
+import { ffmpegStartupCost, lastTimings } from './features/tribunalgif.js';
 import { blindTestState, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './music/blindtest.js';
 import { recentLogs } from './utils/logbuffer.js';
 import { startVoiceSession, stopVoiceSession, voiceAssistantState } from './voice-ai/assistant.js';
@@ -181,12 +182,13 @@ export function adminRoutes(client) {
 
     'POST /admin/tribunal': async (url, body) => {
       const guild = guildOf(body.guildId);
+      if (body.mesure) await ffmpegStartupCost();
       const payload = await bilanPayload(guild);
       if (body.publier) {
         const channel = await client.channels.fetch(config.tribunal.announceChannelId);
         await channel.send(payload);
       }
-      return { ok: true, fichier: payload.files[0].name, gifKo: Math.round(payload.files[0].attachment.length / 1024), contenu: payload.content };
+      return { ok: true, fichier: payload.files[0].name, gifKo: Math.round(payload.files[0].attachment.length / 1024), temps: lastTimings, contenu: payload.content };
     },
 
     'POST /admin/blindtest': async (url, body) => {
