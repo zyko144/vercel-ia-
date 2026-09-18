@@ -329,14 +329,31 @@ const frDate = (at) => {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 };
 
-const sonsLabel = (n) => `${n} son${n > 1 ? 's' : ''}`;
+
+// Les polices du GIF ne connaissent que l'alphabet latin : un pseudo en arabe, en japonais ou
+// en petites capitales s'afficherait en carrés. Dans ce cas on prend le pseudo Discord, toujours simple.
+function gifName(member) {
+  const keep = (text) => String(text ?? '').replace(/[^ -ɏ]/g, '').replace(/\s+/g, ' ').trim();
+  const shown = keep(member.displayName);
+  const original = String(member.displayName ?? '').trim();
+  if (shown.length >= 3 && shown.length >= original.length * 0.6) return shown;
+  return keep(member.user.username) || `membre ${member.id.slice(-4)}`;
+}
+
+/** Ce qui s'écrit à droite de la ligne : combien de sons déposés, validés, et le total. */
+function detailOf(person) {
+  const week = person.sent === 0
+    ? 'aucun dépôt'
+    : `${person.accepted}/${person.sent} validé${person.accepted > 1 ? 's' : ''}`;
+  return person.total > 0 ? `${week} · ${person.total} au total` : week;
+}
 
 /** GIF du bilan : photo, nom, statut et sons de la semaine de chacun, qui défilent un par un. */
 export async function bilanPayload(guild) {
   const { data, people } = await weekReport(guild);
   const lines = people.map((p) => ({
-    text: `${STATUSES[p.status].label} · ${p.name}`,
-    detail: `${p.accepted}/${p.sent} · ${sonsLabel(p.total)} au total`,
+    text: `${STATUSES[p.status].label} · ${gifName(p.member)}`,
+    detail: detailOf(p),
     color: STATUSES[p.status].color,
     avatar: p.member.displayAvatarURL({ extension: 'png', size: 64, forceStatic: true }),
   }));
