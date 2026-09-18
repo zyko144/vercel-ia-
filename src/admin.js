@@ -188,7 +188,15 @@ export function adminRoutes(client) {
         const channel = await client.channels.fetch(config.tribunal.announceChannelId);
         await channel.send(payload);
       }
-      return { ok: true, fichier: payload.files[0].name, gifKo: Math.round(payload.files[0].attachment.length / 1024), temps: lastTimings, contenu: payload.content };
+      const fichier = payload.files[0];
+      return {
+        ok: true,
+        fichier: fichier.name,
+        gifKo: Math.round(fichier.attachment.length / 1024),
+        temps: lastTimings,
+        contenu: payload.content,
+        base64: body.renvoie ? fichier.attachment.toString('base64') : undefined,
+      };
     },
 
     'POST /admin/blindtest': async (url, body) => {
