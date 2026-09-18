@@ -1,7 +1,7 @@
 // Fabrique le GIF du bilan du tribunal : les noms apparaissent un par un sur le tableau du décret.
 // Le texte est écrit avec des sous-titres stylés (libass) : le filtre « drawtext » n'existe plus dans ffmpeg 7.
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { FFMPEG_PATH } from '../music/binaries.js';
@@ -62,6 +62,25 @@ function buildAss({ title, subtitle, lines, duration }) {
   ].join('\n');
 }
 
+// Sans ça, ffmpeg passe en revue toutes les polices du système à chaque lancement (très long sur Render) :
+// on lui dit de ne regarder que nos deux polices et de garder le résultat en cache.
+const FONT_CACHE = path.join(os.tmpdir(), 'tribunal-fonts');
+const FONT_CONFIG = path.join(FONT_CACHE, 'fonts.conf');
+let fontConfigReady = null;
+function fontEnvironment() {
+  fontConfigReady ??= mkdir(FONT_CACHE, { recursive: true })
+    .then(() => writeFile(FONT_CONFIG, [
+      '<?xml version="1.0"?>',
+      '<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">',
+      '<fontconfig>',
+      `  <dir>${path.resolve(FONTS_DIR)}</dir>`,
+      `  <cachedir>${FONT_CACHE}</cachedir>`,
+      '</fontconfig>',
+    ].join('\n'), 'utf8'))
+    .catch(() => null);
+  return fontConfigReady;
+}
+
 /** Lance ffmpeg et renvoie ce qu'il écrit sur la sortie (avec la vraie raison en cas d'échec). */
 function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
@@ -69,7 +88,10 @@ function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
     const [command, fullArgs] = lowPriority
       ? ['nice', ['-n', '19', FFMPEG_PATH, ...args]]
       : [FFMPEG_PATH, args];
-    const proc = spawn(command, fullArgs, { windowsHide: true });
+    const proc = spawn(command, fullArgs, {
+      windowsHide: true,
+      env: { ...process.env, FONTCONFIG_FILE: FONT_CONFIG, FONTCONFIG_PATH: FONT_CACHE, XDG_CACHE_HOME: FONT_CACHE },
+    });
     const chunks = [];
     let errors = '';
     let timedOut = false;
@@ -129,6 +151,7 @@ async function darkBackground() {
  * @returns {Promise<{ attachment: Buffer, name: string }>} GIF animé, ou image fixe si ffmpeg n'y arrive pas
  */
 export async function buildWeekGif({ title, subtitle, lines }) {
+  await fontEnvironment();
   const shown = lines.slice(0, MAX_LINES);
   if (lines.length > MAX_LINES) shown.push({ text: `… et ${lines.length - MAX_LINES} autre${lines.length - MAX_LINES > 1 ? 's' : ''}`, color: '#9aa0ad' });
   const duration = Math.min(11, 1 + shown.length * 0.5 + 2);
