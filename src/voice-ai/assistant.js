@@ -1,6 +1,6 @@
 // IA vocale : un 2e bot (« AI Vocal Vercel ») reste 24h/24 dans le vocal du bot.
 // Avec /vocal, il écoute la personne et lui répond à voix haute en direct (Gemini Live),
-// et peut piloter la musique du bot principal. Il ne va dans aucun autre salon.
+// et peut piloter la musique du bot principal. Pour certains jeux (freestyle) il rejoint un autre salon puis revient.
 import { PassThrough, Readable } from 'node:stream';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import {
@@ -46,7 +46,8 @@ setInterval(() => {
   load.lastUsage = process.cpuUsage();
   load.lastAt = Date.now();
 }, 5_000).unref();
-const state = { client: null, mainClient: null, player: null, session: null, checker: null };
+// homeOverride : salon prêté le temps d'un jeu (freestyle dans Dictature) ; busy : ce qui occupe la voix (narrateur, enregistrement)
+const state = { client: null, mainClient: null, player: null, session: null, checker: null, homeOverride: null, busy: null, listening: false };
 
 // ===================== Conversion audio =====================
 
@@ -83,7 +84,7 @@ function primeReceive() {
 }
 
 function homeGuildChannel() {
-  const channel = state.client?.channels.cache.get(config.voiceAi.channelId);
+  const channel = state.client?.channels.cache.get(state.homeOverride ?? config.voiceAi.channelId);
   return channel?.isVoiceBased?.() ? channel : null;
 }
 
@@ -106,7 +107,7 @@ function ensureInVoice() {
     guildId: channel.guild.id,
     adapterCreator: channel.guild.voiceAdapterCreator,
     group: GROUP,
-    selfDeaf: !state.session,
+    selfDeaf: !state.session && !state.listening,
     selfMute: false,
   });
   conn.on('error', (err) => console.warn('[vocal] connexion :', err.message));
@@ -152,11 +153,16 @@ export async function startVoiceAssistant(mainClient) {
   });
   client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     // Déplacé ou éjecté : retour dans son salon
-    if (newState.id === client.user.id && newState.channelId !== config.voiceAi.channelId) setTimeout(ensureInVoice, 2_000);
+    if (newState.id === client.user.id && newState.channelId !== (state.homeOverride ?? config.voiceAi.channelId)) setTimeout(ensureInVoice, 2_000);
     // La personne quitte le salon : fin de la conversation
     const session = state.session;
-    if (session && newState.id === session.userId && newState.channelId !== session.channelId) {
+    if (session && !session.listenAll && newState.id === session.userId && newState.channelId !== session.channelId) {
       stopSession('tu as quitté le vocal').catch(() => {});
+    }
+    // Partie à plusieurs : elle s'arrête quand plus aucun joueur n'est dans le salon
+    if (session?.listenAll && oldState.channelId === session.channelId && newState.channelId !== session.channelId) {
+      const left = homeGuildChannel()?.members.filter((m) => !m.user.bot).size ?? 0;
+      if (!left) stopSession('plus personne dans le vocal').catch(() => {});
     }
   });
   client.on(Events.Error, (err) => console.warn('[vocal] discord :', err.message));
@@ -229,7 +235,11 @@ const TOOLS = [{
  * Démarre une conversation avec la personne (elle doit être dans le salon du bot).
  * @returns {Promise<{ error?: string, stopped?: boolean, started?: boolean }>}
  */
-export async function startVoiceSession({ guildId, userId, userName, memberChannelId, force = false }) {
+export async function startVoiceSession({
+  guildId, userId, userName, memberChannelId, force = false,
+  // Jeux : autre personnage, écoute de tous les joueurs du salon, durée limitée
+  persona = null, listenAll = false, tools = TOOLS, idleSeconds = null, maxMinutes = null, title = null, onEnd = null, kickoff = null,
+}) {
   const allowed = config.voiceAi.allowedUsers;
   // Le créateur du bot a toujours accès, en plus des membres autorisés
   if (!force && allowed.length && !allowed.includes(userId) && userId !== config.ownerId) return { error: "🔒 L'IA vocale est réservée à certains membres." };
@@ -237,12 +247,13 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
   const channel = homeGuildChannel();
   if (!channel || channel.guild.id !== guildId) return problem("🎙️ L'IA vocale trouve pas son salon.", { userId, guildId });
   if (!force && memberChannelId !== channel.id) return { error: `🎧 Rejoins <#${channel.id}> pour parler à l'IA vocale.` };
+  if (state.busy) return { error: `🎙️ L'IA vocale est occupée (${state.busy}), réessaie après.` };
   if (state.session) {
-    if (state.session.userId === userId) {
+    if (state.session.userId === userId && !listenAll) {
       await stopSession('arrêtée');
       return { stopped: true };
     }
-    return { error: `🎙️ L'IA vocale parle déjà avec <@${state.session.userId}>, attends qu'ils aient fini.` };
+    return { error: `🎙️ L'IA vocale est déjà occupée avec <@${state.session.userId}>, attends qu'ils aient fini.` };
   }
 
   ensureInVoice();
@@ -260,13 +271,17 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
     output: null, outLast: 0, speaking: false, turnAudioAt: null, speechEndAt: null,
     heard: '', said: '', actions: [], endAfterTurn: false, ducked: false, opus: null, decoder: null, ticker: null,
     stats: { packets: 0, chunks: 0, messages: 0, audioParts: 0 },
+    persona, listenAll, tools, title, onEnd, streams: new Map(),
+    idleSeconds: idleSeconds ?? config.voiceAi.idleSeconds,
   };
   state.session = session;
+  if (maxMinutes) session.maxTimer = setTimeout(() => stopSession(`${maxMinutes} min écoulées`).catch(() => {}), maxMinutes * 60_000);
 
   try {
     await connectLive(session);
   } catch (err) {
     state.session = null;
+    clearTimeout(session.maxTimer);
     console.warn('[vocal] Gemini Live :', err.message);
     return problem(`🎙️ L'IA vocale est indispo (${truncate(err.message, 120)}).`, { userId, guildId });
   }
@@ -277,7 +292,9 @@ export async function startVoiceSession({ guildId, userId, userName, memberChann
   // Un peu de silence tout de suite : la 1re réponse arrive aussi vite que les suivantes
   for (let i = 0; i < 5; i++) sendAudio(session, Buffer.alloc(SEND_CHUNK_BYTES));
   listen(session, conn);
-  console.log(`[vocal] conversation avec ${userName} (${userId})`);
+  // Jeu : l'IA parle la première (elle lance l'histoire sans attendre qu'on lui parle)
+  if (kickoff) session.live?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: kickoff }] }], turnComplete: true });
+  console.log(`[vocal] ${title ?? 'conversation'} avec ${listenAll ? 'tout le salon' : userName} (${userId})`);
   return { started: true };
 }
 
@@ -294,7 +311,7 @@ async function connectLive(session) {
     model: config.voiceAi.model,
     config: {
       responseModalities: [Modality.AUDIO],
-      systemInstruction: systemPrompt(session, session.artists),
+      systemInstruction: session.persona ?? systemPrompt(session, session.artists),
       speechConfig: { languageCode: 'fr-FR', voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceAi.voice } } },
       // Français uniquement + noms de rappeurs et titres à bien reconnaître
       inputAudioTranscription: { languageCodes: ['fr-FR'], ...(session.vocabulary.length ? { customVocabulary: session.vocabulary } : {}) },
@@ -311,7 +328,7 @@ async function connectLive(session) {
       sessionResumption: session.handle ? { handle: session.handle } : {},
       contextWindowCompression: { slidingWindow: {} },
       thinkingConfig: { thinkingBudget: 0 },
-      tools: TOOLS,
+      ...(session.tools ? { tools: session.tools } : {}),
     },
     callbacks: {
       onmessage: (message) => onLiveMessage(session, message),
@@ -342,35 +359,56 @@ function onLiveClose(session, event) {
   }, 300);
 }
 
-/** Écoute la personne : sa voix part en direct vers Gemini, par morceaux de 100 ms. */
-function listen(session, conn) {
-  const opus = conn.receiver.subscribe(session.userId, { end: { behavior: EndBehaviorType.Manual } });
+/** Écoute une personne du salon : sa voix part dans la conversation en cours. */
+function subscribeVoice(session, conn, userId) {
+  if (session.streams.has(userId) || session.closing) return;
+  const opus = conn.receiver.subscribe(userId, { end: { behavior: EndBehaviorType.Manual } });
   // Le décodeur Opus sort directement du 16 kHz mono : 6 fois moins de données à traiter
   const decoder = new prism.opus.Decoder({ rate: 16_000, channels: 1, frameSize: 320 });
-  session.opus = opus;
-  session.decoder = decoder;
+  session.streams.set(userId, { opus, decoder });
   opus.on('error', (err) => console.warn('[vocal] réception :', err.message));
   decoder.on('error', (err) => console.warn('[vocal] décodage :', err.message));
   opus.pipe(decoder);
+  decoder.on('data', (pcm) => onVoiceData(session, pcm));
+}
 
-  decoder.on('data', (pcm) => {
-    if (session.closing) return;
-    session.stats.packets++;
-    const out = pcm;
-    session.pending = session.pending.length ? Buffer.concat([session.pending, out]) : out;
-    if (!session.burst) session.burst = { at: Date.now(), frames: 0, energy: 0 };
-    session.burst.frames++;
-    session.burst.energy += rms(out);
-    session.lastPacketAt = Date.now();
-    session.lastActivity = Date.now();
-    session.silenceSent = 0;
-    session.streamEnded = false;
-    while (session.pending.length >= SEND_CHUNK_BYTES) {
-      sendAudio(session, session.pending.subarray(0, SEND_CHUNK_BYTES));
-      session.pending = session.pending.subarray(SEND_CHUNK_BYTES);
-    }
-  });
+/** Écoute la personne (ou tous les joueurs d'une partie) : la voix part en direct vers Gemini, par morceaux de 100 ms. */
+function listen(session, conn) {
+  if (session.listenAll) {
+    // Partie à plusieurs : chaque joueur qui prend la parole est écouté
+    for (const member of homeGuildChannel()?.members.values() ?? []) if (!member.user.bot) subscribeVoice(session, conn, member.id);
+    session.onSpeaking = (userId) => {
+      if (!state.client?.users.cache.get(userId)?.bot) subscribeVoice(session, conn, userId);
+    };
+    conn.receiver.speaking.on('start', session.onSpeaking);
+  } else {
+    subscribeVoice(session, conn, session.userId);
+  }
+  const first = session.streams.get(session.userId) ?? [...session.streams.values()][0];
+  session.opus = first?.opus ?? null;
+  session.decoder = first?.decoder ?? null;
+  startTicker(session);
+}
 
+function onVoiceData(session, pcm) {
+  if (session.closing) return;
+  session.stats.packets++;
+  const out = pcm;
+  session.pending = session.pending.length ? Buffer.concat([session.pending, out]) : out;
+  if (!session.burst) session.burst = { at: Date.now(), frames: 0, energy: 0 };
+  session.burst.frames++;
+  session.burst.energy += rms(out);
+  session.lastPacketAt = Date.now();
+  session.lastActivity = Date.now();
+  session.silenceSent = 0;
+  session.streamEnded = false;
+  while (session.pending.length >= SEND_CHUNK_BYTES) {
+    sendAudio(session, session.pending.subarray(0, SEND_CHUNK_BYTES));
+    session.pending = session.pending.subarray(SEND_CHUNK_BYTES);
+  }
+}
+
+function startTicker(session) {
   // Discord n'envoie rien quand la personne se tait : on envoie du silence comme un vrai micro,
   // pour que Gemini sache tout de suite que la phrase est finie
   session.ticker = setInterval(() => {
@@ -394,8 +432,8 @@ function listen(session, conn) {
       session.streamEnded = true;
     }
     // Plus personne ne parle depuis longtemps : fin de la conversation
-    if (!session.speaking && Date.now() - session.lastActivity > config.voiceAi.idleSeconds * 1000) {
-      stopSession(`${config.voiceAi.idleSeconds} s sans parler`).catch(() => {});
+    if (!session.speaking && Date.now() - session.lastActivity > session.idleSeconds * 1000) {
+      stopSession(`${session.idleSeconds} s sans parler`).catch(() => {});
     }
   }, 100);
 }
@@ -558,7 +596,7 @@ function postTranscript(session) {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setDescription(truncate([
-      heard ? `🎙️ **${session.userName}** : ${heard}` : null,
+      heard ? `🎙️ **${session.listenAll ? 'Joueurs' : session.userName}** : ${heard}` : null,
       said ? `🤖 **IA** : ${said}` : null,
       ...actions,
     ].filter(Boolean).join('\n'), 4000));
@@ -583,8 +621,13 @@ async function stopSession(reason) {
   session.closing = true;
   state.session = null;
   clearInterval(session.ticker);
-  session.opus?.destroy();
-  session.decoder?.destroy();
+  clearTimeout(session.maxTimer);
+  for (const { opus, decoder } of session.streams?.values() ?? []) {
+    opus.destroy();
+    decoder.destroy();
+  }
+  const conn = connection();
+  if (session.onSpeaking) conn?.receiver.speaking.off('start', session.onSpeaking);
   try {
     session.live?.close();
   } catch {
@@ -592,13 +635,220 @@ async function stopSession(reason) {
   }
   stopSpeaking(session);
   duckMusic(session, false);
-  const conn = connection();
-  if (conn && conn.state.status === VoiceConnectionStatus.Ready) conn.rejoin({ ...conn.joinConfig, selfDeaf: true, selfMute: false });
-  console.log(`[vocal] fin de la conversation (${reason})`);
+  if (conn && conn.state.status === VoiceConnectionStatus.Ready && !state.listening) conn.rejoin({ ...conn.joinConfig, selfDeaf: true, selfMute: false });
+  console.log(`[vocal] fin de ${session.title ?? 'la conversation'} (${reason})`);
   homeGuildChannel()?.send({
-    content: `🎙️ Conversation terminée (${reason}). Relance \`/vocal\` pour me reparler.`,
+    content: session.title
+      ? `🎙️ ${session.title} : fin (${reason}).`
+      : `🎙️ Conversation terminée (${reason}). Relance \`/vocal\` pour me reparler.`,
     allowedMentions: { parse: [] },
   }).catch(() => {});
+  try {
+    session.onEnd?.(reason);
+  } catch {
+    // le jeu gère sa fin lui-même
+  }
+}
+
+// ===================== Jeux : narrateur, enregistrement, salon prêté =====================
+
+/** L'IA vocale est-elle libre (connectée, sans conversation ni autre jeu) ? */
+export function voiceAiFree() {
+  if (!state.client?.isReady()) return { ok: false, why: "l'IA vocale n'est pas connectée" };
+  if (state.session) return { ok: false, why: `l'IA vocale parle déjà avec <@${state.session.userId}>` };
+  if (state.busy) return { ok: false, why: `l'IA vocale est occupée (${state.busy})` };
+  return { ok: true };
+}
+
+export const voiceAiChannelId = () => homeGuildChannel()?.id ?? config.voiceAi.channelId;
+
+/**
+ * Réserve l'IA vocale pour un jeu, éventuellement dans un autre salon (elle y va, puis revient chez elle).
+ * @returns {Promise<() => Promise<void>>} fonction qui libère l'IA vocale
+ */
+export async function borrowVoiceAi(what, { channelId = null, listen = false } = {}) {
+  const free = voiceAiFree();
+  if (!free.ok) throw new Error(free.why);
+  state.busy = what;
+  state.listening = listen;
+  if (channelId && channelId !== config.voiceAi.channelId) state.homeOverride = channelId;
+  const current = connection();
+  if (current && current.joinConfig.channelId !== homeGuildChannel()?.id) current.destroy();
+  ensureInVoice();
+  const conn = connection();
+  try {
+    if (!conn) throw new Error("l'IA vocale trouve pas le salon");
+    await entersState(conn, VoiceConnectionStatus.Ready, 15_000);
+    if (listen) conn.rejoin({ ...conn.joinConfig, selfDeaf: false, selfMute: false });
+    primeReceive();
+  } catch (err) {
+    await releaseVoiceAi();
+    throw new Error(err.message?.includes('trouve') ? err.message : "l'IA vocale arrive pas à se connecter au vocal");
+  }
+  return releaseVoiceAi;
+}
+
+async function releaseVoiceAi() {
+  const moved = Boolean(state.homeOverride);
+  state.busy = null;
+  state.listening = false;
+  state.homeOverride = null;
+  const conn = connection() ?? (state.client ? [...state.client.guilds.cache.values()].map((g) => getVoiceConnection(g.id, GROUP)).find(Boolean) : null);
+  if (moved) conn?.destroy();
+  else if (conn && conn.state.status === VoiceConnectionStatus.Ready) conn.rejoin({ ...conn.joinConfig, selfDeaf: true, selfMute: false });
+  setTimeout(ensureInVoice, moved ? 1_000 : 0);
+}
+
+/**
+ * Enregistre la voix d'une personne pendant un temps donné (16 kHz mono, silences compris).
+ * @returns {Promise<{ pcm: Buffer, spokenMs: number }>}
+ */
+export async function recordVoice(userId, ms) {
+  const conn = connection();
+  if (!conn) throw new Error("l'IA vocale n'est pas dans le vocal");
+  primeReceive();
+  const opus = conn.receiver.subscribe(userId, { end: { behavior: EndBehaviorType.Manual } });
+  const decoder = new prism.opus.Decoder({ rate: 16_000, channels: 1, frameSize: 320 });
+  opus.on('error', () => {});
+  decoder.on('error', () => {});
+  opus.pipe(decoder);
+  const startedAt = Date.now();
+  const pieces = [];
+  decoder.on('data', (pcm) => pieces.push({ at: Date.now() - startedAt, pcm }));
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  opus.destroy();
+  decoder.destroy();
+  // On replace chaque morceau à son moment : les silences restent des silences
+  const out = Buffer.alloc(Math.ceil((ms / 1000) * 16_000) * 2);
+  let cursor = 0;
+  for (const { at, pcm } of pieces) {
+    const offset = Math.max(cursor, Math.floor((at / 1000) * 16_000) * 2 - pcm.length);
+    if (offset + pcm.length > out.length) break;
+    pcm.copy(out, offset);
+    cursor = offset + pcm.length;
+  }
+  return { pcm: out, spokenMs: pieces.length * 20 };
+}
+
+/** PCM 16 bits mono -> fichier WAV. */
+export function toWav(pcm, rate = 16_000) {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(rate, 24);
+  header.writeUInt32LE(rate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+/**
+ * Narrateur : l'IA vocale lit des textes à voix haute (loup-garou, verdict du freestyle…).
+ * Une seule connexion Gemini pour toute la partie, reconnectée si besoin.
+ */
+export function createNarrator({ voice = 'Charon', style = 'Tu es un narrateur de jeu captivant.' } = {}) {
+  let live = null;
+  let turn = null; // { output, buffered, started, done }
+  let queue = Promise.resolve();
+
+  const connect = async () => {
+    if (live) return live;
+    live = await ai.live.connect({
+      model: config.voiceAi.model,
+      config: {
+        responseModalities: [Modality.AUDIO],
+        systemInstruction: `${style}\nQuand on t'envoie un texte, lis-le à voix haute en français, mot pour mot, avec le ton qui va bien. N'ajoute rien, ne commente pas, ne réponds pas aux questions du texte.`,
+        speechConfig: { languageCode: 'fr-FR', voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+      callbacks: {
+        onmessage: (message) => {
+          if (!turn) return;
+          for (const part of message.serverContent?.modelTurn?.parts ?? []) {
+            if (!part.inlineData?.data) continue;
+            const { out, last } = toDiscord(Buffer.from(part.inlineData.data, 'base64'), turn.last);
+            turn.last = last;
+            if (turn.output) turn.output.write(out);
+            else {
+              turn.buffered.push(out);
+              if (turn.buffered.reduce((n, b) => n + b.length, 0) >= JITTER_BYTES) startTurn();
+            }
+          }
+          if (message.serverContent?.turnComplete) {
+            if (!turn.output) startTurn();
+            turn.output?.end();
+          }
+        },
+        onerror: (event) => console.warn('[narrateur] Gemini :', event?.message ?? event),
+        onclose: () => {
+          live = null;
+          turn?.finish();
+        },
+      },
+    });
+    return live;
+  };
+
+  const startTurn = () => {
+    if (!turn || turn.output) return;
+    turn.output = new PassThrough({ highWaterMark: 1 << 22 });
+    for (const chunk of turn.buffered) turn.output.write(chunk);
+    turn.buffered = [];
+    state.player.play(createAudioResource(turn.output, { inputType: StreamType.Raw }));
+  };
+
+  const speak = async (text) => {
+    if (!state.player || !text?.trim()) return;
+    const session = await connect().catch((err) => {
+      console.warn('[narrateur] connexion :', err.message);
+      return null;
+    });
+    if (!session) return;
+    await new Promise((resolve) => {
+      const guard = setTimeout(() => finish(), Math.min(90_000, 8_000 + text.length * 120));
+      const finish = () => {
+        clearTimeout(guard);
+        state.player.off(AudioPlayerStatus.Idle, onIdle);
+        turn = null;
+        resolve();
+      };
+      const onIdle = () => {
+        if (turn?.output?.writableEnded) finish();
+      };
+      turn = { output: null, buffered: [], last: 0, finish };
+      state.player.on(AudioPlayerStatus.Idle, onIdle);
+      try {
+        session.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
+      } catch (err) {
+        console.warn('[narrateur] envoi :', err.message);
+        live = null;
+        finish();
+      }
+    });
+  };
+
+  return {
+    // Les textes sont lus les uns après les autres, jamais en même temps
+    say: (text) => {
+      queue = queue.then(() => speak(text)).catch(() => {});
+      return queue;
+    },
+    close: () => {
+      try {
+        live?.close();
+      } catch {
+        // déjà fermé
+      }
+      live = null;
+    },
+  };
 }
 
 // ===================== Outils (musique) =====================

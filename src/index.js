@@ -10,6 +10,7 @@ import { reportProblem, setAlertClient } from './features/alerts.js';
 import { startReminderLoop } from './features/reminders.js';
 import { attachLiveServer, serveLive, setLiveClient } from './features/livestream.js';
 import { startSpotifyWatch } from './features/spotify.js';
+import { startBattleLoop, startFantasyLoop } from './games/index.js';
 import { startVoiceKeeper } from './features/voice.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
@@ -56,6 +57,8 @@ client.once(Events.ClientReady, async (c) => {
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
   startReminderLoop(c);
   startSpotifyWatch(c);
+  startFantasyLoop(c);
+  startBattleLoop(c);
   setLiveClient(c);
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);

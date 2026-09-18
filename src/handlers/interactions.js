@@ -22,6 +22,7 @@ import { MUSIC_COMMAND_NAMES } from '../music/commands.js';
 import { handleLiveComponent, handleMusicAutocomplete, handleMusicCommand, handleMusicComponent, isLiveComponent, isMusicComponent } from '../music/handlers.js';
 import { lavalink } from '../music/lavalink.js';
 import { allPlayers } from '../music/player.js';
+import { GAME_HANDLERS, handleGameAutocomplete, handleGameComponent, isGameComponent } from '../games/index.js';
 import { MODERATION_HANDLERS } from './moderation.js';
 import { UTILITY_HANDLERS } from './utility.js';
 
@@ -39,9 +40,10 @@ export async function onInteraction(client, interaction) {
   try {
     if (interaction.isAutocomplete()) {
       if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicAutocomplete(interaction);
-      return await interaction.respond([]);
+      return await handleGameAutocomplete(interaction);
     }
     // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
+    if (isGameComponent(interaction)) return await handleGameComponent(client, interaction);
     if (isBlindTestComponent(interaction)) return await handleBlindTestComponent(client, interaction);
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
     if (isLiveComponent(interaction)) return await handleLiveComponent(client, interaction);
@@ -65,7 +67,7 @@ export async function onInteraction(client, interaction) {
     if (interaction.commandName === 'Signaler au staff') return await handleReport(client, interaction);
     if (interaction.isMessageContextMenuCommand()) return await handleContextMenu(client, interaction);
     if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicCommand(client, interaction);
-    const handler = SLASH_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
+    const handler = SLASH_HANDLERS[interaction.commandName] ?? GAME_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
     if (handler) await handler(client, interaction);
   } catch (err) {
     console.error(`[interaction] ${interaction.commandName ?? interaction.customId}`, err.body ? errorDetail(err) : err);
@@ -327,7 +329,10 @@ const SLASH_HANDLERS = {
         {
           name: '🎮 Jeux',
           value: [
-            '`/jeu-blindtest` blind test musical · `/jeu-films` · `/jeu-disney` · `/jeu-series` · `/jeu-animes` · `/jeu-jeuxvideo` · `/jeu-devine` (tout mélangé : musique, son + image, image floutée, zoom) · `/jeu-quiz` · `/jeu-pile-ou-face` · `/jeu-des`',
+            '`/jeu-blindtest` blind test musical · `/jeu-paroles` écris la suite des paroles · `/jeu-annee` devine l\'année · `/jeu-films` · `/jeu-disney` · `/jeu-series` · `/jeu-animes` · `/jeu-jeuxvideo` · `/jeu-devine` (tout mélangé : musique, son + image, image floutée, zoom)',
+            '`/jeu-freestyle` battle de freestyle notée par l\'IA · `/jeu-loupgarou` avec narrateur · `/jeu-histoire` aventure dont vous êtes les héros · `/jeu-imposteur` · `/jeu-rebus` rébus en emojis · `/jeu-fans` plus ou moins de fans · `/jeu-fantasy` ton équipe de rappeurs',
+            '`/jeu-quiz` · `/jeu-pile-ou-face` · `/jeu-des`',
+            config.games.rules?.freestyle ? `-# 📖 Les règles de chaque jeu sont dans la catégorie des règles (ex : <#${config.games.rules.freestyle}>)` : null,
             config.games.devineChannelId ? `-# Parties dans <#${config.games.devineChannelId}>${config.music.blindtestChannelId ? ` et <#${config.music.blindtestChannelId}>` : ''} · mini-jeux dans <#${config.games.miniGamesChannelId}>` : null,
           ].filter(Boolean).join('\n'),
         },

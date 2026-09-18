@@ -18,7 +18,7 @@ import { config } from '../config.js';
 import { reportProblem } from '../features/alerts.js';
 import { holdVoice, lockedChannel, releaseVoiceHold } from '../features/voice.js';
 import { LavalinkBackend } from './backend-lavalink.js';
-import { buildPool, cleanTitle, DIFFICULTIES, IMAGE_MODES, lyricsExcerpt, MODES, QUIZ_MODES, QUIZ_THEMES, rememberPlayed, SILENT_MODES, THEMES } from './blindpools.js';
+import { buildPool, cleanTitle, DIFFICULTIES, IMAGE_MODES, lyricsCut, lyricsExcerpt, lyricWords, MODES, QUIZ_MODES, QUIZ_THEMES, rememberPlayed, SILENT_MODES, THEMES } from './blindpools.js';
 import { guessesWork, WORK_CATEGORIES, workImages } from './blindworks.js';
 import { matchRatio } from './deezer.js';
 import { speedOf } from './filters.js';
@@ -45,6 +45,8 @@ const IMAGE_STAGES_AT = [0, 0.35, 0.65]; // mode Images : l'image devient plus n
 const RESTART_IF_HEARD_UNDER_MS = 6_000; // son coupé juste après le départ : on relance le même son
 const SPEED_TOLERANCE = 0.07; // vitesse de lecture acceptée : 0,93x à 1,07x
 const MEDALS = ['🥇', '🥈', '🥉'];
+const CUT_MARGIN_MS = 650; // mode Suite : le son se coupe un peu avant la phrase (le temps que la pause arrive dans le vocal)
+const SUITE_HOLD_MS = 6_000; // mode Suite : on laisse entendre la vraie phrase après la réponse
 
 const games = new Map(); // guildId -> partie en cours
 const setups = new Map(); // id du message de réglages -> réglages
@@ -70,13 +72,14 @@ const worksTheme = (settings) => Boolean(THEMES[settings.theme]?.works);
 const isWorkGame = (settings) => worksTheme(settings) || IMAGE_MODES.has(settings.mode);
 const snippetOf = (settings) => {
   const base = modeOf(settings).snippet ?? levelOf(settings).snippet;
+  if (settings.mode === 'suite') return Math.max(base, 15);
   return SILENT_MODES.has(settings.mode) && settings.mode !== 'paroles' ? Math.max(base, 15) : base;
 };
 
 /** Réglages cohérents : les modes Titre / Artiste / Année / Paroles n'existent pas pour les films, séries, jeux. */
 function fixSettings(settings) {
   if (!MODES[settings.mode]) settings.mode = 'classique';
-  if (worksTheme(settings) && ['titre', 'artiste', 'annee', 'paroles'].includes(settings.mode)) settings.mode = 'classique';
+  if (worksTheme(settings) && ['titre', 'artiste', 'annee', 'paroles', 'suite'].includes(settings.mode)) settings.mode = 'classique';
   return settings;
 }
 
@@ -94,7 +97,8 @@ function pointsLine(settings) {
   switch (settings.mode) {
     case 'titre': return `🎵 Titre **+${TITLE_POINTS}** · ⚡ Rapide **+${SPEED_POINTS}**`;
     case 'artiste': return `🎤 Artiste **+${TITLE_POINTS}** · ⚡ Rapide **+${SPEED_POINTS}**`;
-    case 'annee': return `📅 Bonne année **+${YEAR_POINTS}** · À 1 an près **+1** · une seule réponse par manche`;
+    case 'annee': return `📅 Bonne année **+${YEAR_POINTS}** · À 1 an près **+1** · le plus proche **+1** · une seule réponse par manche`;
+    case 'suite': return `🎙️ Bonne phrase **+${TITLE_POINTS}** · ⚡ Rapide **+${SPEED_POINTS}** · les fautes passent`;
     case 'unessai': return `🎯 Titre **+${TITLE_POINTS}** · 🎤 Artiste **+${ARTIST_POINTS}** · ⚡ **+${SPEED_POINTS}** · 🎲 une seule réponse par manche`;
     case 'premier10': return `🎯 Titre **+${TITLE_POINTS}** · 🎤 Artiste **+${ARTIST_POINTS}** · ⚡ **+${SPEED_POINTS}** · 👑 le 1er à **${WIN_SCORE}** pts gagne`;
     default: return `🎯 Titre **+${TITLE_POINTS}** · 🎤 Artiste **+${ARTIST_POINTS}** · ⚡ Rapide **+${SPEED_POINTS}**`;
@@ -141,7 +145,7 @@ function settingsEmbed(setup, status = null) {
       { name: 'Mode', value: `${mode.emoji} ${mode.label}`, inline: true },
       { name: 'Difficulté', value: `${level.emoji} ${level.label}`, inline: true },
       { name: 'Manches', value: settings.mode === 'premier10' ? `jusqu'à ${WIN_SCORE} pts` : String(settings.rounds), inline: true },
-      { name: SILENT_MODES.has(settings.mode) ? 'Temps' : 'Extrait', value: settings.mode === 'paroles' ? `${snippetOf(settings)} s pour lire` : SILENT_MODES.has(settings.mode) ? `${snippetOf(settings)} s par image` : `${snippetOf(settings)} s`, inline: true },
+      { name: SILENT_MODES.has(settings.mode) ? 'Temps' : 'Extrait', value: settings.mode === 'suite' ? `${snippetOf(settings)} s pour écrire la suite` : settings.mode === 'paroles' ? `${snippetOf(settings)} s pour lire` : SILENT_MODES.has(settings.mode) ? `${snippetOf(settings)} s par image` : `${snippetOf(settings)} s`, inline: true },
       { name: 'Règles', value: `${mode.desc} · ${level.desc}\n${pointsLine(settings)}` },
     )
     .setFooter({ text: `Hôte : ${setup.hostName}` });
@@ -450,18 +454,22 @@ async function prepareAhead(game, count = PREPARE_AHEAD) {
     if (!batch.length || game.stopped) return;
     await Promise.all(batch.map(async (track) => {
       track.strict = true;
-      const [frames, audioOk] = await Promise.all([
+      const [frames, audioOk, cut] = await Promise.all([
         game.visual ? workImages(track, { style: game.mode === 'zoom' ? 'zoom' : 'pixel', difficulty: game.settings.difficulty }).catch(() => null) : null,
         game.textOnly ? true : backend?.prepare ? backend.prepare(track).catch(() => false) : true,
+        game.mode === 'suite' ? lyricsCut(track, game.settings.difficulty).catch(() => null) : null,
       ]);
       if (game.visual) track.frames = frames;
-      if (game.mode === 'paroles') {
+      if (game.mode === 'suite') {
+        track.cut = cut;
+        track.ready = Boolean(audioOk && cut);
+      } else if (game.mode === 'paroles') {
         track.lyrics = await lyricsExcerpt(track).catch(() => null);
         track.ready = Boolean(track.lyrics);
       } else {
         track.ready = game.textOnly ? Boolean(frames) : Boolean(audioOk);
       }
-      if (!track.ready) console.warn(`[blindtest] ${game.textOnly && game.visual ? 'pas d\'image' : game.textOnly ? 'pas de paroles' : 'pas de version fiable'} pour "${track.work ?? `${track.artist} - ${track.title}`}", retiré`);
+      if (!track.ready) console.warn(`[blindtest] ${game.textOnly && game.visual ? 'pas d\'image' : game.textOnly ? 'pas de paroles' : game.mode === 'suite' && audioOk ? 'pas de paroles synchronisées' : 'pas de version fiable'} pour "${track.work ?? `${track.artist} - ${track.title}`}", retiré`);
     }));
     game.pool = game.pool.filter((track) => track.ready !== false);
   }
@@ -477,6 +485,7 @@ const leader = (game) => [...game.scores.entries()].sort((a, b) => b[1] - a[1])[
 function seekFor(game, track) {
   const duration = track.duration || 180;
   if (game.mode === 'intro') return 0;
+  if (game.mode === 'suite' && track.cut) return track.cut.seek;
   // Musiques de films / jeux / génériques : le thème connu est souvent au début
   if (track.sfx) return 0;
   if (track.work) {
@@ -590,9 +599,10 @@ async function checkSpeed(game, round, first) {
   if (round.track.sfx) return;
   await sleep(3_000);
   const backend = game.player?.backend;
-  if (game.stopped || game.current !== round || round.revealed || !backend?.fetchState) return;
+  if (game.stopped || game.current !== round || round.revealed || round.cut || !backend?.fetchState) return;
   const state = await backend.fetchState().catch(() => null);
   const position = state?.state?.position;
+  if (round.cut) return;
   if (typeof position !== 'number' || position < first.position || state?.track?.info?.identifier !== backend.currentItem?.info?.identifier) return;
   const useServerClock = first.time && state.state.time && state.state.time > first.time;
   const elapsed = useServerClock ? state.state.time - first.time : Date.now() - first.at;
@@ -624,8 +634,14 @@ async function startCountdown(game, round, audioAt) {
   round.audioAt = audioAt;
   round.endsAt = audioAt + game.snippet * 1000;
   clearTimeout(game.timers.start);
+  if (game.mode === 'suite' && round.track.cut) {
+    // On écoute jusqu'à la phrase à deviner, puis le son se coupe et le chrono pour écrire démarre
+    round.cutAt = audioAt + (round.track.cut.cutAt - round.seekTo) * 1000 - CUT_MARGIN_MS;
+    round.endsAt = round.cutAt + game.snippet * 1000;
+    game.timers.cut = setTimeout(() => cutSound(game, round), Math.max(0, round.cutAt - Date.now()));
+  }
   scheduleReveal(game, round);
-  if (game.level.hintAt && game.mode !== 'annee' && game.mode !== 'eclair' && !game.visual) {
+  if (game.level.hintAt && game.mode !== 'annee' && game.mode !== 'eclair' && game.mode !== 'suite' && !game.visual) {
     game.timers.hint = setTimeout(() => showHint(game, round), Math.max(0, audioAt + game.snippet * game.level.hintAt * 1000 - Date.now()));
   }
   console.log(`[blindtest] manche ${round.index} : ${game.visual && game.textOnly ? 'image affichée' : game.textOnly ? 'paroles affichées' : 'son entendu'}, chrono ${game.snippet}s`);
@@ -644,6 +660,15 @@ async function startCountdown(game, round, audioAt) {
       }, Math.max(0, audioAt + game.snippet * 1000 * at - Date.now()));
     });
   }
+}
+
+/** Mode Suite : le son s'arrête juste avant la phrase, à chacun d'écrire la suite. */
+function cutSound(game, round) {
+  if (game.stopped || game.current !== round || round.revealed) return;
+  round.cut = true;
+  if (game.player && !game.player.paused) game.player.togglePause();
+  console.log(`[blindtest] manche ${round.index} : son coupé avant « ${round.track.cut.answer} »`);
+  round.message?.edit(roundPayload(game, round, round.hint)).catch(() => {});
 }
 
 /** Message de la manche (avec l'image du moment en mode Images). */
@@ -669,6 +694,7 @@ function roundEmbed(game, round, hint = null) {
     artiste: '🎤 Qui chante ?',
     annee: '📅 En quelle année est sorti ce son ?',
     paroles: '📝 Quel son a ces paroles ?',
+    suite: round.cut ? '✍️ À toi : écris la phrase suivante !' : '🎙️ Écoute bien, le son va se couper…',
   };
   const mode = MODES[game.mode];
   const category = round.track.work ? WORK_CATEGORIES[round.track.category] : null;
@@ -679,8 +705,10 @@ function roundEmbed(game, round, hint = null) {
     .setTitle(title)
     .setDescription([
       game.textOnly && round.track.lyrics ? `>>> *${round.track.lyrics.replace(/\*/g, '').replace(/\n/g, '*\n*')}*\n` : null,
+      game.mode === 'suite' && round.track.cut ? `${round.track.cut.before.map((line) => `> ${line.replace(/[*_`]/g, '')}`).join('\n')}\n> **…… ?**\n` : null,
+      game.mode === 'suite' ? `🎵 **${round.track.artist}** · ${cleanTitle(round.track.title) || round.track.title}` : null,
       game.visual ? `🔍 Image ${(round.stage ?? 0) + 1}/${IMAGE_STAGES_AT.length} : ${game.mode === 'zoom' ? 'on recule petit à petit' : 'elle devient plus nette avec le temps'}` : null,
-      `⏱️ Fin **<t:${Math.ceil(round.endsAt / 1000)}:R>**`,
+      game.mode === 'suite' && !round.cut ? '⏸️ Le son se coupe juste avant la phrase à trouver' : `⏱️ Fin **<t:${Math.ceil(round.endsAt / 1000)}:R>**`,
       pointsLine(game.settings),
       hint ? `\n💡 **Indice**\n${hint}` : null,
     ].filter(Boolean).join('\n'))
@@ -716,19 +744,37 @@ export function handleBlindTestMessage(message) {
   if (!round?.running || round.revealed) return true;
 
   const guess = message.content.trim();
-  if (!guess || guess.length > 80) return true;
+  if (!guess || guess.length > (game.mode === 'suite' ? 220 : 80)) return true;
   const userId = message.author.id;
   const { track } = round;
   const oneTry = game.mode === 'unessai' || game.mode === 'annee';
   if (oneTry && round.tried.has(userId)) return true;
-  const elapsed = Math.max(0, Date.now() - round.audioAt);
+  const elapsed = Math.max(0, Date.now() - (round.cutAt && round.cut ? round.cutAt : round.audioAt));
   const fast = elapsed <= game.snippet * 1000 * game.level.speedBonus;
+
+  // Mode Suite : on écrit la phrase qui vient après la coupure (fautes tolérées)
+  if (game.mode === 'suite') {
+    const expected = lyricWords(track.cut?.answer ?? '');
+    if (!expected.length) return true;
+    if (tokens(guess).length > expected.length + 5) return true;
+    const ratio = matchRatio(expected.join(' '), guess);
+    const exact = expected.filter((word) => matchRatio(word, guess) === 1).length;
+    if (ratio >= 0.75 && exact >= Math.min(3, expected.length)) {
+      winRound(game, round, message, TITLE_POINTS + (fast ? SPEED_POINTS : 0), { fast, elapsed, what: 'suite' });
+    } else if (ratio >= 0.45 && !round.close.has(userId)) {
+      round.close.add(userId);
+      message.react('🔥').catch(() => {});
+    }
+    return true;
+  }
 
   // Mode Année : on devine l'année de sortie
   if (game.mode === 'annee') {
     const year = Number(guess.match(/\b(19|20)\d{2}\b/)?.[0]);
     if (!year || !track.year) return true;
     round.tried.add(userId);
+    round.years ??= new Map();
+    round.years.set(userId, year);
     if (year === track.year) {
       winRound(game, round, message, YEAR_POINTS + (fast ? SPEED_POINTS : 0), { fast, elapsed });
     } else if (Math.abs(year - track.year) === 1) {
@@ -835,17 +881,31 @@ async function reveal(game, round) {
 
   const found = Boolean(round.titleBy);
   let header = '⏱️ Personne a trouvé !';
-  if (found) header = game.mode === 'annee' ? `✅ Bonne année en ${seconds(round.foundIn)} s !` : `✅ Trouvé en ${seconds(round.foundIn)} s !`;
+  if (found) header = game.mode === 'annee' ? `✅ Bonne année en ${seconds(round.foundIn)} s !` : game.mode === 'suite' ? `✅ Phrase trouvée en ${seconds(round.foundIn)} s !` : `✅ Trouvé en ${seconds(round.foundIn)} s !`;
   else if (round.artistBy) header = '🎤 Artiste trouvé, pas le titre !';
 
   const lines = [];
   if (track.work) {
     if (found) lines.push(`🎯 <@${round.titleBy}> **+${TITLE_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
     if (!game.textOnly) lines.push(track.sfx ? `🔊 ${track.title}` : `🎵 ${track.title} — ${track.artist}`);
+  } else if (game.mode === 'suite') {
+    lines.push(`🎙️ La suite : **« ${(track.cut?.answer ?? '?').replace(/[*_`]/g, '')} »**`);
+    if (found) lines.push(`🎯 <@${round.titleBy}> **+${TITLE_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
+    else if (round.close.size) lines.push(`🔥 Pas loin : ${[...round.close].map((id) => `<@${id}>`).join(', ')}`);
   } else if (game.mode === 'annee') {
     lines.push(`📅 Sorti en **${track.year}**`);
     if (found) lines.push(`🎯 <@${round.titleBy}> **+${YEAR_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
     if (round.close.size) lines.push(`🔥 À 1 an près : ${[...round.close].map((id) => `<@${id}>`).join(', ')} **+1**`);
+    // Personne n'a la bonne année : le plus proche gagne quand même un point
+    if (!found && round.years?.size && track.year) {
+      const distance = (id) => Math.abs(round.years.get(id) - track.year);
+      const best = Math.min(...[...round.years.keys()].map(distance));
+      const closest = [...round.years.keys()].filter((id) => distance(id) === best);
+      if (best <= 5) {
+        for (const id of closest) award(game, id, 1);
+        lines.push(`🎯 Le plus proche (${best} an${best > 1 ? 's' : ''} d'écart) : ${closest.map((id) => `<@${id}>`).join(', ')} **+1**`);
+      }
+    }
   } else {
     if (found && round.winWhat === 'artist') lines.push(`🎤 Artiste : <@${round.titleBy}> **+${TITLE_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
     else if (found) lines.push(`🎯 Titre : <@${round.titleBy}> **+${TITLE_POINTS}**${round.bonusBy ? ` · ⚡ **+${SPEED_POINTS}**` : ''}`);
@@ -861,7 +921,7 @@ async function reveal(game, round) {
     .setAuthor({ name: header })
     .setTitle((track.work ? `${WORK_CATEGORIES[track.category].emoji} ${track.work}` : `${track.title} — ${track.artist}`).slice(0, 256))
     .setDescription(lines.join('\n') || '\u200b')
-    .setFooter({ text: `Manche ${round.index}${game.mode === 'premier10' ? '' : `/${game.rounds}`}${last ? '' : ` · manche suivante dans ${REVEAL_HOLD_MS / 1000} s`}` });
+    .setFooter({ text: `Manche ${round.index}${game.mode === 'premier10' ? '' : `/${game.rounds}`}${last ? '' : ` · manche suivante dans ${(game.mode === 'suite' ? SUITE_HOLD_MS : REVEAL_HOLD_MS) / 1000} s`}` });
   const payload = { embeds: [embed], allowedMentions: { parse: [] } };
   if (game.visual && track.frames?.full) {
     // L'image entière, nette
@@ -874,7 +934,7 @@ async function reveal(game, round) {
   let sending;
   if (found) {
     // Le gagnant est pingé et félicité en réponse à son message
-    const what = track.work ? `**${track.work}**` : game.mode === 'annee' ? `l'année **${track.year}**` : round.winWhat === 'artist' ? `l'artiste **${track.artist}**` : `**${cleanTitle(track.title) || track.title}**`;
+    const what = track.work ? `**${track.work}**` : game.mode === 'annee' ? `l'année **${track.year}**` : game.mode === 'suite' ? 'la suite des paroles' : round.winWhat === 'artist' ? `l'artiste **${track.artist}**` : `**${cleanTitle(track.title) || track.title}**`;
     payload.content = `🎉 GG <@${round.titleBy}> ! T'as trouvé ${what}${round.bonusBy ? ' en un éclair ⚡' : ''} (+${plural(round.winnerPoints)})`;
     payload.allowedMentions = { users: [round.titleBy] };
     sending = round.winnerMessage?.reply
@@ -885,12 +945,14 @@ async function reveal(game, round) {
   }
   game.lastReveal = Promise.resolve(sending).catch(() => null);
 
+  // Mode Suite : le son repart, on entend la vraie phrase
+  if (game.mode === 'suite' && game.player?.paused) game.player.togglePause();
   // Le son révélé continue quelques secondes (ce qu'on entend = la réponse affichée), puis manche suivante
   game.current = null;
   if (!last) {
     await new Promise((resolve) => {
       game.wake = resolve;
-      game.timers.hold = setTimeout(resolve, REVEAL_HOLD_MS);
+      game.timers.hold = setTimeout(resolve, game.mode === 'suite' ? SUITE_HOLD_MS : REVEAL_HOLD_MS);
     });
   }
   if (!game.stopped) continueGame(game);

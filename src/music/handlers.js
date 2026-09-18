@@ -19,7 +19,7 @@ import { setShare, shareNow, spotifyActivity } from '../features/spotify.js';
 import { lockedChannel } from '../features/voice.js';
 import { musicSuggestions } from './autocomplete.js';
 import { SILENT_MODES } from './blindpools.js';
-import { GAME_COMMAND_THEMES } from './commands.js';
+import { GAME_COMMAND_THEMES, MODE_COMMANDS } from './commands.js';
 import { blindTestActive, handleBlindTestMessage, openBlindTestSetup, startGame, stopBlindTest } from './blindtest.js';
 import { deezer, rankResults, trackFromDeezer } from './deezer.js';
 import { musicStats } from './stats.js';
@@ -589,8 +589,33 @@ const COMMANDS = {
   },
 
   'jeu-devine': (client, interaction) => devineGame(client, interaction),
+  ...Object.fromEntries(Object.entries(MODE_COMMANDS).map(([name, mode]) => [name, (client, interaction) => musicModeGame(client, interaction, mode)])),
   ...Object.fromEntries(Object.entries(GAME_COMMAND_THEMES).map(([name, theme]) => [name, (client, interaction) => devineGame(client, interaction, theme)])),
 };
+
+/** /jeu-paroles et /jeu-annee : un blind test musical dont le mode est imposé. */
+async function musicModeGame(client, interaction, mode) {
+  if (interaction.options.getBoolean('arreter')) {
+    return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Partie arrêtée.' : "Y a pas de partie en cours."));
+  }
+  if (blindTestActive(interaction.guildId)) return interaction.reply(say(`🎧 Une partie est déjà en cours ! (\`/${interaction.commandName} arreter:true\` pour la couper)`));
+  const theme = interaction.options.getString('theme');
+  const difficulty = interaction.options.getString('difficulte');
+  const rounds = interaction.options.getInteger('manches');
+  if (!theme && !difficulty && !rounds) return openBlindTestSetup(client, interaction, { mode });
+
+  const { channel, error } = joinProblem(interaction);
+  if (error) return interaction.reply(say(error));
+  const channelId = config.music.blindtestChannelId || interaction.channelId;
+  await interaction.reply(say(`🎧 C'est parti ! Ça se passe dans <#${channelId}>.`));
+  return startGame(client, {
+    guild: interaction.guild,
+    channelId,
+    voiceChannel: channel,
+    hostId: interaction.user.id,
+    settings: { theme: theme ?? 'moment', mode, difficulty: difficulty ?? 'normal', rounds: rounds ?? 10 },
+  }).catch((err) => interaction.followUp(say(`❌ ${err.message}`)).catch(() => {}));
+}
 
 /** /jeu-devine et /jeu-films, /jeu-disney... (catégorie imposée) : la partie se joue dans le salon │・devine. */
 async function devineGame(client, interaction, fixedTheme = null) {

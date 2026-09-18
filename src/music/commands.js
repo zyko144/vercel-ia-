@@ -111,6 +111,8 @@ export const musicCommands = [
   gameCommand('jeu-series', "📺 Devine la série ou le dessin animé avec son générique ou son image"),
   gameCommand('jeu-animes', "🍥 Devine l'animé avec son opening ou son image"),
   gameCommand('jeu-jeuxvideo', "🎮 Devine le jeu vidéo : musiques, sons cultes et images"),
+  musicModeCommand('jeu-paroles', '🎙️ Le son se coupe juste avant une phrase : écris la suite en premier'),
+  musicModeCommand('jeu-annee', "📅 Devine l'année de sortie du son : le plus proche marque aussi"),
 
   new SlashCommandBuilder().setName('direct').setDescription("🔴 Diffuse le son de ton PC (Spotify compris) dans le vocal, sans passer par YouTube")
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la diffusion')),
@@ -147,6 +149,20 @@ function gameCommand(name, description) {
     .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la partie en cours'));
 }
+
+/** Jeu musical à mode imposé (Suite des paroles, Année) : thème, difficulté, manches. */
+function musicModeCommand(name, description) {
+  return new SlashCommandBuilder().setName(name).setDescription(description)
+    .addStringOption((o) => o.setName('theme').setDescription('Thème (sans option : menu)')
+      .addChoices(...Object.entries(THEMES).filter(([key, theme]) => key !== 'custom' && !theme.works).map(([key, theme]) => ({ name: `${theme.emoji} ${theme.label}`, value: key }))))
+    .addStringOption((o) => o.setName('difficulte').setDescription('Difficulté')
+      .addChoices(...Object.entries(DIFFICULTIES).map(([key, level]) => ({ name: `${level.emoji} ${level.label}`, value: key }))))
+    .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de manches (3-30)').setMinValue(3).setMaxValue(30))
+    .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête la partie en cours'));
+}
+
+/** Commande -> mode de blind test imposé */
+export const MODE_COMMANDS = { 'jeu-paroles': 'suite', 'jeu-annee': 'annee' };
 
 /** Commande -> catégorie de jeu */
 export const GAME_COMMAND_THEMES = { 'jeu-films': 'films', 'jeu-disney': 'disney', 'jeu-series': 'series', 'jeu-animes': 'anime', 'jeu-jeuxvideo': 'jeux' };

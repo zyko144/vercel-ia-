@@ -90,6 +90,7 @@ export const MODES = {
   intro: { label: 'Intro', emoji: '🎬', desc: 'Les toutes premières secondes du son' },
   eclair: { label: 'Éclair', emoji: '⚡', desc: '3 secondes de son, pas une de plus', snippet: 3 },
   annee: { label: 'Année', emoji: '📅', desc: "Devine l'année de sortie" },
+  suite: { label: 'Suite des paroles', emoji: '🎙️', desc: 'Le son se coupe : écris la phrase qui suit' },
   paroles: { label: 'Paroles', emoji: '📝', desc: 'Pas de son : devine avec les paroles' },
   images: { label: 'Image floutée', emoji: '🖼️', desc: "Pas de son : l'image floutée devient de plus en plus nette" },
   sonimage: { label: 'Son + image', emoji: '🎬', desc: "La musique et l'image floutée en même temps" },
@@ -355,4 +356,55 @@ export async function lyricsExcerpt(track) {
   if (!usable.length) return null;
   // Évite le tout début et la toute fin (souvent l'intro et l'outro)
   return usable[Math.floor(usable.length * (0.2 + Math.random() * 0.6))] ?? usable[0];
+}
+
+/** Paroles synchronisées lrclib : « [01:23.45] texte » -> [{ time: 83.45, text }] (une ligne peut avoir plusieurs temps). */
+export function parseSyncedLyrics(synced = '') {
+  const lines = [];
+  for (const raw of String(synced).split('\n')) {
+    const stamps = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    const text = raw.replace(/\[[^\]]*\]/g, '').trim();
+    if (!stamps.length || !text) continue;
+    for (const [, min, sec] of stamps) lines.push({ time: Number(min) * 60 + Number(sec), text });
+  }
+  return lines.sort((a, b) => a.time - b.time);
+}
+
+// Les « (ouais) », « [Refrain] »… ne font pas partie de la phrase à deviner
+export const lyricWords = (text) => tokens(String(text).replace(/\([^)]*\)|\[[^\]]*\]/g, ' '));
+
+/**
+ * Mode Suite des paroles : un moment du son où il se coupe juste avant une phrase.
+ * Facile = une phrase du refrain (elle revient souvent), difficile = une phrase des couplets.
+ * @returns {Promise<null | { seek: number, cutAt: number, before: string[], answer: string }>}
+ */
+export async function lyricsCut(track, difficulty = 'normal') {
+  const found = await findLyrics({ title: track.title, artist: track.artist, duration: track.duration, source: 'deezer' }).catch(() => null);
+  const lines = parseSyncedLyrics(found?.syncedLyrics);
+  if (lines.length < 8) return null;
+  const counts = new Map();
+  for (const line of lines) counts.set(normalize(line.text), (counts.get(normalize(line.text)) ?? 0) + 1);
+  const end = (track.duration || lines.at(-1).time + 10) - 12;
+  const candidates = [];
+  for (let i = 2; i < lines.length; i++) {
+    const words = lyricWords(lines[i].text);
+    if (words.length < 4 || words.length > 14) continue;
+    if (lines[i].time < 18 || lines[i].time > end) continue;
+    // Deux phrases d'avant pour se repérer, sans trop attendre
+    if (lines[i].time - lines[i - 2].time > 16 || lines[i].time - lines[i - 1].time < 1.2) continue;
+    // La même phrase juste avant : trop facile
+    if (normalize(lines[i].text) === normalize(lines[i - 1].text)) continue;
+    candidates.push({ i, chorus: counts.get(normalize(lines[i].text)) >= 2 });
+  }
+  if (!candidates.length) return null;
+  let pool = candidates;
+  if (['tresfacile', 'facile'].includes(difficulty) && candidates.some((c) => c.chorus)) pool = candidates.filter((c) => c.chorus);
+  if (['difficile', 'expert'].includes(difficulty) && candidates.some((c) => !c.chorus)) pool = candidates.filter((c) => !c.chorus);
+  const { i } = pool[Math.floor(Math.random() * pool.length)];
+  return {
+    seek: Math.max(0, Math.floor(lines[i - 2].time - 1.5)),
+    cutAt: lines[i].time,
+    before: [lines[i - 2].text, lines[i - 1].text],
+    answer: lines[i].text,
+  };
 }

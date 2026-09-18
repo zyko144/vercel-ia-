@@ -9,6 +9,7 @@ import { protectOwner } from '../features/protectOwner.js';
 import { conversationKey } from '../features/memory.js';
 import { getPrivateThread, privateThreadOwner } from '../features/privateThreads.js';
 import { handleSonMessage } from '../features/tribunal.js';
+import { routeGameMessage } from '../games/index.js';
 import { blindTestActive, handleBlindTestMessage, handleJukeboxMessage } from '../music/handlers.js';
 import { attachmentsToContent, displayName, fetchBase64, inChannelList, isAllowedChannel, truncate } from '../utils/discord.js';
 
@@ -30,6 +31,8 @@ export async function onMessage(client, message) {
     return handleSonMessage(client, message).catch((err) => console.warn('[tribunal]', err.message));
   }
 
+  // Jeux en cours (rébus, imposteur, histoire…) : les messages du salon sont des réponses
+  if (message.inGuild() && routeGameMessage(message)) return;
   // Blind test en cours : les messages du salon sont des réponses au jeu
   if (message.inGuild() && blindTestActive(message.guildId) && handleBlindTestMessage(message)) return;
   // Salon jukebox : écrire un nom de son l'ajoute à la file

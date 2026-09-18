@@ -50,6 +50,14 @@ async function state() {
 
 const deadline = (weekStart) => Math.floor((weekStart + WEEK_MS) / 1000);
 
+/** Les sons validés cette semaine (pour la battle du tribunal). */
+export async function acceptedThisWeek() {
+  const data = await state();
+  return Object.entries(data.submissions)
+    .filter(([, s]) => s.verdict === 'accepté')
+    .map(([userId, s]) => ({ userId, url: s.url, messageId: s.messageId, file: s.file, link: s.link, at: s.at, summary: s.ia?.resume ?? '' }));
+}
+
 // ===================== Règlement =====================
 
 export function reglementPayload(guild) {

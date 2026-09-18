@@ -146,6 +146,19 @@ export const config = {
   games: {
     devineChannelId: channel('GAMES_DEVINE_CHANNEL_ID', DEVINE_CHANNEL),
     miniGamesChannelId: channel('GAMES_MINI_CHANNEL_ID', MINI_GAMES_CHANNEL),
+    // Salons des règles (catégorie │・𝐑𝐄𝐆𝐋𝐄𝐒 𝐃𝐄𝐒 𝐉𝐄𝐔𝐗・│), un par jeu
+    rules: {
+      freestyle: '1550426438279372921',
+      paroles: '1550426442603569272',
+      loupgarou: '1550426447615623298',
+      histoire: '1550426451466125312',
+      fans: '1550426454200811673',
+      annee: '1550426458533535795',
+      rebus: '1550426461570207744',
+      imposteur: '1550426464975986779',
+      fantasy: '1550426468474036374',
+      battle: '1550426472718671902',
+    },
   },
 
   // Tribunal des sons : un son par semaine et par membre, jugé par le chef et _8xr

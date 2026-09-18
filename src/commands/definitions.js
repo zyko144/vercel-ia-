@@ -7,6 +7,11 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { musicCommands, MUSIC_COMMAND_NAMES } from '../music/commands.js';
+import { FAN_THEMES } from '../games/fans.js';
+import { BEAT_STYLES } from '../games/freestyle.js';
+import { STORY_LENGTHS, STORY_THEMES } from '../games/histoire.js';
+import { IMPOSTOR_THEMES } from '../games/imposteur.js';
+import { REBUS_THEMES } from '../games/rebus.js';
 
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
 const TEXT_CHANNELS = [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum, ChannelType.GuildVoice];
@@ -249,6 +254,7 @@ const utilityCommands = [
       { name: '📜 Publier le règlement dans le salon des sons', value: 'reglement' },
       { name: '📊 État de la semaine', value: 'semaine' },
       { name: '🏛️ Bilan animé (GIF) dans les annonces', value: 'bilan' },
+      { name: '⚔️ Battle : deux sons validés, le serveur vote 24 h', value: 'battle' },
       { name: '⚖️ Clôturer la semaine (distribue les Bouffons)', value: 'cloturer' },
     ))),
 
@@ -265,12 +271,50 @@ const utilityCommands = [
     .addSubcommand((s) => s.setName('musique').setDescription('État des serveurs audio (musique)')),
 ];
 
-export const commandDefinitions = [...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands];
+// ===== JEUX =====
+const choicesOf = (map) => Object.entries(map).map(([value, item]) => ({ name: `${item.emoji} ${item.label}`, value }));
+
+const gameCommands = [
+  guildOnly(new SlashCommandBuilder().setName('jeu-freestyle').setDescription("🎤 Battle de freestyle sur une instru : l'IA écoute et désigne le gagnant")
+    .addUserOption((o) => o.setName('adversaire').setDescription('Qui tu défies').setRequired(true))
+    .addStringOption((o) => o.setName('instru').setDescription("Style de l'instru").addChoices(...choicesOf(BEAT_STYLES)))
+    .addIntegerOption((o) => o.setName('duree').setDescription('Secondes par rappeur').addChoices(
+      { name: '30 s', value: 30 }, { name: '45 s', value: 45 }, { name: '60 s', value: 60 },
+    ))),
+  guildOnly(new SlashCommandBuilder().setName('jeu-loupgarou').setDescription('🐺 Loup-garou avec le bot comme meneur (et un narrateur à voix haute)')),
+  guildOnly(new SlashCommandBuilder().setName('jeu-histoire').setDescription("📖 Histoire dont vous êtes les héros : l'IA raconte, vous décidez")
+    .addStringOption((o) => o.setName('univers').setDescription("Univers de l'histoire").addChoices(...choicesOf(STORY_THEMES)))
+    .addStringOption((o) => o.setName('mode').setDescription("À l'écrit ou 100 % à l'oral").addChoices(
+      { name: "📝 À l'écrit (+ narration à voix haute)", value: 'texte' },
+      { name: "🎙️ 100 % vocal (vous parlez à l'IA)", value: 'vocal' },
+    ))
+    .addStringOption((o) => o.setName('longueur').setDescription('Nombre de chapitres (mode écrit)').addChoices(
+      ...Object.entries(STORY_LENGTHS).map(([value, n]) => ({ name: `${value.charAt(0).toUpperCase()}${value.slice(1)} (${n} chapitres)`, value })),
+    ))),
+  guildOnly(new SlashCommandBuilder().setName('jeu-fans').setDescription('📊 Plus ou moins de fans sur Deezer ? Enchaîne les bonnes réponses')
+    .addStringOption((o) => o.setName('theme').setDescription('Quels artistes').addChoices(...choicesOf(FAN_THEMES)))),
+  guildOnly(new SlashCommandBuilder().setName('jeu-rebus').setDescription("🧩 Rébus en emojis : devine le film, l'animé ou le son")
+    .addStringOption((o) => o.setName('theme').setDescription('Thème').addChoices(...choicesOf(REBUS_THEMES)))
+    .addIntegerOption((o) => o.setName('manches').setDescription('Nombre de rébus (3-20)').setMinValue(3).setMaxValue(20))),
+  guildOnly(new SlashCommandBuilder().setName('jeu-imposteur').setDescription("🕵️ L'imposteur : un mot secret, un intrus qui ne le sait pas, un vote")
+    .addStringOption((o) => o.setName('theme').setDescription('Thème des mots').addChoices(...choicesOf(IMPOSTOR_THEMES)))),
+  guildOnly(new SlashCommandBuilder().setName('jeu-fantasy').setDescription('🏆 Fantasy Rap FR : ton équipe de 5 rappeurs, points avec les vrais chiffres Deezer')
+    .addSubcommand((s) => {
+      s.setName('equipe').setDescription('Choisis tes 5 rappeurs (sans option : voir ton équipe)');
+      for (let i = 1; i <= 5; i++) s.addStringOption((o) => o.setName(`rappeur${i}`).setDescription(`Rappeur n°${i}`).setAutocomplete(true).setMaxLength(100));
+      return s;
+    })
+    .addSubcommand((s) => s.setName('classement').setDescription('Classement de la saison'))),
+];
+export const GAME_COMMAND_NAMES = new Set(gameCommands.map((c) => c.name));
+
+export const commandDefinitions = [...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands, ...gameCommands];
 
 // Commandes qui marchent partout (les autres seulement dans le salon IA)
 export const COMMANDS_ALLOWED_EVERYWHERE = new Set([
   ...moderationCommands.map((c) => c.name),
   ...MUSIC_COMMAND_NAMES,
+  ...GAME_COMMAND_NAMES,
   'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin', 'vocal', 'tribunal',
   'Expliquer ce message', 'Traduire en français', 'Signaler au staff',
 ]);

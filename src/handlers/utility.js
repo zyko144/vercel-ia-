@@ -3,6 +3,7 @@ import { ChannelType, EmbedBuilder, GuildPremiumTier, MessageFlags } from 'disco
 import { config } from '../config.js';
 import { bilanPayload, closeWeek, isJudge, reglementPayload, weekPayload } from '../features/tribunal.js';
 import { startVoiceSession, stopVoiceSession } from '../voice-ai/assistant.js';
+import { startBattle } from '../games/battle.js';
 import { load } from '../storage.js';
 import { BRAND_COLOR } from '../utils/reply.js';
 import { truncate } from '../utils/discord.js';
@@ -34,6 +35,7 @@ export const UTILITY_HANDLERS = {
       await (channel?.send ? channel.send(payload) : interaction.followUp(payload));
       return interaction.editReply(channel?.send ? `🏛️ Bilan publié dans <#${channel.id}>.` : 'Bilan publié.');
     }
+    if (action === 'battle') return startBattle(interaction);
     if (action === 'cloturer') {
       const payload = await closeWeek(interaction.guild);
       const channel = client.channels.cache.get(config.tribunal.sonsChannelId);

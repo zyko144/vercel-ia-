@@ -54,6 +54,9 @@ export const deezer = {
   playlist: (id) => call(`/playlist/${id}`),
   playlistTracks: (id) => allPages(`/playlist/${id}/tracks`),
   artistRadio: (id) => call(`/artist/${id}/radio?limit=40`).then((r) => r.data ?? []),
+  artist: (id) => call(`/artist/${id}`),
+  artistAlbums: (id, limit = 10) => call(`/artist/${id}/albums?limit=${limit}`).then((r) => r.data ?? []),
+  chartArtists: (limit = 100) => call(`/chart/0/artists?limit=${limit}`).then((r) => r.data ?? []),
   artistTop: (id, limit = 25) => call(`/artist/${id}/top?limit=${limit}`).then((r) => r.data ?? []),
   searchArtist: (query, limit = 8) => call(`/search/artist?limit=${limit}&q=${encodeURIComponent(query)}`).then((r) => r.data ?? []),
   // Playlist publique qui colle le mieux au thème (la plus fournie)
