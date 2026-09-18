@@ -124,7 +124,7 @@ function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
 function videoFilters(assFile) {
   // ffmpeg n'aime ni les antislashs ni les deux-points dans un chemin de filtre
   const escaped = assFile.replace(/\\/g, '/').replace(/:/g, '\\:');
-  return `subtitles='${escaped}':fontsdir=${FONTS_DIR},fps=${FPS}`;
+  return `subtitles='${escaped}':fontsdir=${FONTS_DIR}`;
 }
 
 // Le fond (décret redimensionné et assombri) ne change jamais : on le prépare une seule fois.
@@ -160,7 +160,9 @@ export async function buildWeekGif({ title, subtitle, lines }) {
   const palette = path.join(folder, 'palette.png');
   await writeFile(assFile, buildAss({ title, subtitle, lines: shown, duration }), 'utf8');
   const filters = videoFilters(assFile);
-  const input = ['-loop', '1', '-t', duration.toFixed(1), '-i', await darkBackground()];
+  // -framerate : l'image de fond n'est répétée que 2 fois par seconde. Sans ça ffmpeg dessine
+  // le texte sur 25 images par seconde pour n'en garder que 2 : plus de dix fois trop de travail.
+  const input = ['-loop', '1', '-framerate', String(FPS), '-t', duration.toFixed(1), '-i', await darkBackground()];
 
   try {
     // 1) la palette, calculée sur la seule dernière image (tous les textes y sont déjà) : presque gratuit
