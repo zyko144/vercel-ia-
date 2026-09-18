@@ -11,7 +11,7 @@ const HEIGHT = 300;
 const FPS = 2; // le texte apparaît par paliers : inutile de calculer 8 images/seconde sur un petit serveur
 const BACKGROUND = 'assets/tribunal.jpg';
 const FONTS_DIR = 'assets';
-const MAX_LINES = 9;
+const MAX_LINES = 13;
 const TIMEOUT_MS = 150_000;
 let lowPriority = process.platform !== 'win32';
 
@@ -32,12 +32,16 @@ const clean = (text, max = 46) => String(text ?? '').replace(/[{}\\\n\r]/g, ' ')
 
 function buildAss({ title, subtitle, lines, duration }) {
   const dialogue = [];
-  const add = (start, style, text, color, x, y) => {
-    dialogue.push(`Dialogue: 0,${assTime(start)},${assTime(duration)},${style},,0,0,0,,{\\pos(${x},${y})\\c${assColor(color)}}${clean(text)}`);
+  const add = (start, style, text, color, x, y, size) => {
+    const font = size ? `\\fs${size}` : '';
+    dialogue.push(`Dialogue: 0,${assTime(start)},${assTime(duration)},${style},,0,0,0,,{\\pos(${x},${y})${font}\\c${assColor(color)}}${clean(text)}`);
   };
+  // Plus il y a de monde, plus les lignes se resserrent (tout le monde doit tenir sur l'image)
+  const step = lines.length <= 8 ? 24 : Math.max(15, Math.floor((HEIGHT - 92) / lines.length));
+  const size = step >= 22 ? 16 : step >= 18 ? 14 : 12;
   add(0, 'Titre', title, '#e3c37a', WIDTH / 2, 22);
   add(0.4, 'Sous', subtitle, '#cfd3e0', WIDTH / 2, 56);
-  lines.forEach((line, i) => add(1 + i * 0.5, 'Ligne', line.text, line.color, 26, 82 + i * 24));
+  lines.forEach((line, i) => add(1 + i * 0.5, 'Ligne', line.text, line.color, 26, 82 + i * step, size));
 
   return [
     '[Script Info]',
@@ -94,18 +98,29 @@ function runFfmpeg(args, { collect = true, timeout = TIMEOUT_MS } = {}) {
   });
 }
 
-/** Le décret assombri + les lignes du bilan, en deux passes pour ménager la mémoire de Render. */
+/** Les sous-titres à graver (le fond est déjà prêt), écrits une fois par image. */
 function videoFilters(assFile) {
   // ffmpeg n'aime ni les antislashs ni les deux-points dans un chemin de filtre
   const escaped = assFile.replace(/\\/g, '/').replace(/:/g, '\\:');
-  return [
-    `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase`,
-    `crop=${WIDTH}:${HEIGHT}`,
-    'eq=brightness=-0.16:saturation=0.35',
-    `drawbox=x=0:y=40:w=${WIDTH}:h=${HEIGHT - 40}:color=black@0.55:t=fill`,
-    `subtitles='${escaped}':fontsdir=${FONTS_DIR}`,
-    `fps=${FPS}`,
-  ].join(',');
+  return `subtitles='${escaped}':fontsdir=${FONTS_DIR},fps=${FPS}`;
+}
+
+// Le fond (décret redimensionné et assombri) ne change jamais : on le prépare une seule fois.
+let backgroundReady = null;
+async function darkBackground() {
+  const file = path.join(os.tmpdir(), `tribunal-fond-${WIDTH}x${HEIGHT}.png`);
+  backgroundReady ??= runFfmpeg([
+    '-hide_banner', '-loglevel', 'error', '-y', '-threads', '1',
+    '-i', BACKGROUND,
+    '-vf', [
+      `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase`,
+      `crop=${WIDTH}:${HEIGHT}`,
+      'eq=brightness=-0.16:saturation=0.35',
+      `drawbox=x=0:y=40:w=${WIDTH}:h=${HEIGHT - 40}:color=black@0.55:t=fill`,
+    ].join(','),
+    '-frames:v', '1', file,
+  ], { collect: false }).then(() => file, (error) => { backgroundReady = null; throw error; });
+  return backgroundReady;
 }
 
 /**
@@ -115,13 +130,14 @@ function videoFilters(assFile) {
  */
 export async function buildWeekGif({ title, subtitle, lines }) {
   const shown = lines.slice(0, MAX_LINES);
+  if (lines.length > MAX_LINES) shown.push({ text: `… et ${lines.length - MAX_LINES} autre${lines.length - MAX_LINES > 1 ? 's' : ''}`, color: '#9aa0ad' });
   const duration = Math.min(11, 1 + shown.length * 0.5 + 2);
   const folder = await mkdtemp(path.join(os.tmpdir(), 'tribunal-'));
   const assFile = path.join(folder, 'bilan.ass');
   const palette = path.join(folder, 'palette.png');
   await writeFile(assFile, buildAss({ title, subtitle, lines: shown, duration }), 'utf8');
   const filters = videoFilters(assFile);
-  const input = ['-loop', '1', '-t', duration.toFixed(1), '-i', BACKGROUND];
+  const input = ['-loop', '1', '-t', duration.toFixed(1), '-i', await darkBackground()];
 
   try {
     // 1) la palette, calculée sur la seule dernière image (tous les textes y sont déjà) : presque gratuit
