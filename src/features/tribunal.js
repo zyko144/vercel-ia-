@@ -408,7 +408,8 @@ export async function weekReport(guild) {
     guild.members.fetch().catch(() => guild.members.cache),
     new Promise((resolve) => setTimeout(() => resolve(guild.members.cache), 8000)),
   ]);
-  const humans = [...members.values()].filter((m) => !m.user.bot);
+  const dispensés = new Set(config.tribunal.exempt ?? []);
+  const humans = [...members.values()].filter((m) => !m.user.bot && !dispensés.has(m.id));
   const totals = data.totals ?? {};
   const week = data.week ?? {};
   const count = (id) => totals[id] ?? 0;

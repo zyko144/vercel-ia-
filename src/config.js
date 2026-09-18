@@ -155,6 +155,8 @@ export const config = {
     tribunalChannelId: str('TRIBUNAL_CHANNEL_ID', '1550277941563494453'),
     jesterRoleId: str('TRIBUNAL_JESTER_ROLE_ID', '1550286906393231492'),
     judges: list('TRIBUNAL_JUDGES', '1543726919168557087,855176142096039997'),
+    // Dispensés du tribunal : ils n'apparaissent ni dans le bilan ni dans l'état de la semaine
+    exempt: list('TRIBUNAL_EXEMPT', '1543726919168557087,855176142096039997,734865069904756766,1480010926085111848'),
   },
 
   // Partage en direct de ce qu'on écoute sur Spotify (lu dans le statut Discord)
