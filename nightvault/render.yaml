@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: casinho
+    runtime: node
+    plan: free
+    rootDir: nightvault
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm run start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: CASINO_NAME
+        value: CASINHO
+      - key: AI_IMAGE_PROVIDER
+        value: none
+      - key: AUTH_SECRET
+        generateValue: true
+      # Base de données : créer un Postgres sur Render et coller son URL interne ici
+      - key: DATABASE_URL
+        sync: false

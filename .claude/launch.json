@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nightvault",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "nightvault", "run", "dev", "--", "--port", "3030"],
+      "port": 3030
+    }
+  ]
+}

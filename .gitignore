@@ -4,3 +4,11 @@ node_modules/
 data/
 *.log
 bin/
+
+# Casino (site)
+nightvault/node_modules/
+nightvault/.next/
+nightvault/dev.db
+nightvault/dev.db-journal
+nightvault/.env
+logos casinho/
