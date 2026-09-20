@@ -55,12 +55,12 @@ async function main() {
 
   // ---------- Missions ----------
   const missions = [
-    { id: 'daily-rounds', title: 'Chauffe les machines', description: 'Joue 10 parties', metric: 'ROUNDS', target: 10, reward: 2_000, period: 'DAILY' },
-    { id: 'daily-wager', title: 'Mise du jour', description: 'Mise 50 000 NV au total', metric: 'WAGER', target: 50_000, reward: 5_000, period: 'DAILY' },
-    { id: 'daily-win', title: 'Belle prise', description: 'Gagne 25 000 NV en une journée', metric: 'WIN', target: 25_000, reward: 4_000, period: 'DAILY' },
-    { id: 'daily-explore', title: 'Curieux', description: 'Essaie 3 jeux différents', metric: 'GAMES_EXPLORED', target: 3, reward: 3_000, period: 'DAILY' },
-    { id: 'weekly-rounds', title: 'Habitué de la maison', description: 'Joue 150 parties cette semaine', metric: 'ROUNDS', target: 150, reward: 15_000, period: 'WEEKLY' },
-    { id: 'weekly-explore', title: 'Tour du propriétaire', description: 'Essaie 8 jeux différents cette semaine', metric: 'GAMES_EXPLORED', target: 8, reward: 20_000, period: 'WEEKLY' },
+    { id: 'daily-rounds', title: 'Chauffe les machines', description: 'Joue 10 parties', metric: 'ROUNDS', target: 10, reward: 600, period: 'DAILY' },
+    { id: 'daily-wager', title: 'Mise du jour', description: 'Mise 50 000 NV au total', metric: 'WAGER', target: 50_000, reward: 1_500, period: 'DAILY' },
+    { id: 'daily-win', title: 'Belle prise', description: 'Gagne 25 000 NV en une journée', metric: 'WIN', target: 25_000, reward: 1_200, period: 'DAILY' },
+    { id: 'daily-explore', title: 'Curieux', description: 'Essaie 3 jeux différents', metric: 'GAMES_EXPLORED', target: 3, reward: 900, period: 'DAILY' },
+    { id: 'weekly-rounds', title: 'Habitué de la maison', description: 'Joue 150 parties cette semaine', metric: 'ROUNDS', target: 150, reward: 5_000, period: 'WEEKLY' },
+    { id: 'weekly-explore', title: 'Tour du propriétaire', description: 'Essaie 8 jeux différents cette semaine', metric: 'GAMES_EXPLORED', target: 8, reward: 8_000, period: 'WEEKLY' },
   ];
   for (const mission of missions) {
     await db.mission.upsert({ where: { id: mission.id }, create: mission, update: mission });

@@ -82,5 +82,47 @@
     "prompt": "an ancient egyptian burial chamber, golden pharaoh mask, hieroglyph walls lit by torchlight, scarab amulets, vibrant casino slot game key art, game splash art, rich saturated colors, punchy contrast, glossy 3d render, polished metal and gemstones, dramatic rim lighting, volumetric god rays, magical glow, centered hero subject, full bleed illustration, highly detailed, crisp, 8k, trending game art",
     "hash": "01c7d4c2a3c32533",
     "createdAt": "2026-09-20T17:14:52.520Z"
+  },
+  "game/midnight-joker": {
+    "slug": "game/midnight-joker",
+    "kind": "thumbnail",
+    "path": "/generated/game/midnight-joker.webp",
+    "thumb": "/generated/game/midnight-joker@sm.webp",
+    "lqip": "data:image/webp;base64,UklGRm4AAABXRUJQVlA4IGIAAACQBACdASoUABQAPu1urFGppiQiqAqpMB2JQBbZAYrTyxDCKB1W1XZWNys5SaAA/uV0oItgwg1hjcNpkPTcbge0/t6ATkk/FB5oVIOXeOjE8Bq2WbIsLDyJs52gGttrWQAAAA==",
+    "width": 1024,
+    "height": 1024,
+    "provider": "local",
+    "seed": 247625209,
+    "prompt": "a sinister jester mask with purple neon grin, playing cards fanned in the dark, confetti of glowing sparks, vibrant casino slot game key art, game splash art, rich saturated colors, punchy contrast, glossy 3d render, polished metal and gemstones, dramatic rim lighting, volumetric god rays, magical glow, centered hero subject, full bleed illustration, highly detailed, crisp, 8k, trending game art",
+    "hash": "cc23f1bcc6c910b0",
+    "createdAt": "2026-09-20T17:17:06.043Z"
+  },
+  "game/dragon-crown": {
+    "slug": "game/dragon-crown",
+    "kind": "thumbnail",
+    "path": "/generated/game/dragon-crown.webp",
+    "thumb": "/generated/game/dragon-crown@sm.webp",
+    "lqip": "data:image/webp;base64,UklGRnwAAABXRUJQVlA4IHAAAADQBACdASoUABQAPtlcpE2oJaOiN/qoAQAbCUAToAKhzQBqLsfpR9XtiUJHz8H9+AD+6dKiJjjoEv+tRKK6Rd+PV+ZPSGBPcjxIOk24BIACyIRdthMDpyGLl3cphCm+HM25joiDdk113DoQzegRMegA",
+    "width": 1024,
+    "height": 1024,
+    "provider": "local",
+    "seed": 947337585,
+    "prompt": "an eastern dragon coiled around a burning golden crown, embers and smoke, dark red temple background, vibrant casino slot game key art, game splash art, rich saturated colors, punchy contrast, glossy 3d render, polished metal and gemstones, dramatic rim lighting, volumetric god rays, magical glow, centered hero subject, full bleed illustration, highly detailed, crisp, 8k, trending game art",
+    "hash": "c5e10467aaca87bc",
+    "createdAt": "2026-09-20T17:18:26.591Z"
+  },
+  "game/mystic-forest": {
+    "slug": "game/mystic-forest",
+    "kind": "thumbnail",
+    "path": "/generated/game/mystic-forest.webp",
+    "thumb": "/generated/game/mystic-forest@sm.webp",
+    "lqip": "data:image/webp;base64,UklGRngAAABXRUJQVlA4IGwAAADQAwCdASoUABQAPu1kp02ppaOiMAgBMB2JR6BjlzDhjYPglk2ZTpAA/uoA5F/ohQdk54jC3iI22lSPKXcvvKfkeazTfypP6m9n+3q01K6loZAD8D7CdevcAmUChrE/2u6ZkHfArgvQrzBgAAA=",
+    "width": 1024,
+    "height": 1024,
+    "provider": "local",
+    "seed": 275975156,
+    "prompt": "an enchanted forest clearing at night, glowing green runes on ancient trees, floating emerald orbs, fireflies, vibrant casino slot game key art, game splash art, rich saturated colors, punchy contrast, glossy 3d render, polished metal and gemstones, dramatic rim lighting, volumetric god rays, magical glow, centered hero subject, full bleed illustration, highly detailed, crisp, 8k, trending game art",
+    "hash": "66c4727fe30c9d7f",
+    "createdAt": "2026-09-20T17:22:08.972Z"
   }
 }

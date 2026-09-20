@@ -8,9 +8,11 @@ export const economy = {
 
   // Faucets (création de monnaie)
   welcomeBonus: 10_000,
-  daily: [1_000, 1_500, 2_000, 3_000, 4_000, 6_000, 10_000], // J1 → J7
-  safetyNet: { threshold: 500, amount: 2_000, cooldownHours: 24 },
-  levelReward: (level: number) => 1_000 * level,
+  // Calibré par le simulateur : ~1 000 NV/jour en moyenne, soit l'ordre de grandeur
+  // de ce que l'avantage de la maison retire à un joueur régulier. Au-delà, la monnaie s'effondre.
+  daily: [300, 450, 600, 900, 1_200, 1_800, 3_000], // J1 → J7
+  safetyNet: { threshold: 500, amount: 1_500, cooldownHours: 24 },
+  levelReward: (level: number) => 400 * level,
   xpPerBet: (bet: number) => Math.max(1, Math.floor(bet / 100)),
   xpForLevel: (level: number) => Math.floor(120 * level ** 1.45),
 
@@ -22,6 +24,11 @@ export const economy = {
   rewardMultiplier: 1,
   sinkMultiplier: 1,
   inflationTarget: 0.02, // +2 %/jour visé au maximum
+
+  // Les faucets sont un filet, pas un revenu : leur valeur fond quand le solde grossit.
+  // Sans ça, les récompenses créent plus de NV que l'avantage de la maison n'en détruit,
+  // et la monnaie perd tout son sens (vérifié par le simulateur : +14 %/jour).
+  faucetScale: (balance: number) => Math.max(0.08, Math.min(1, (40_000 / Math.max(1, balance)) ** 0.6)),
 
   // Bornes de mise par défaut (chaque jeu peut les resserrer)
   bet: { min: 10, max: 100_000, step: 10 },
