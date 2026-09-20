@@ -47,8 +47,13 @@ const TOKEN_SHAPE = /^[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}$/
 // Token du bot Casinho (le casino). Cherché en premier, et mis de côté, pour que la
 // recherche « au flair » de l'IA vocale juste en dessous ne se l'approprie pas.
 const CASINHO_TOKEN_NAMES = ['TOKEN_CASINHO', 'CASINHO_TOKEN', 'CASINHO_BOT_TOKEN', 'DISCORD_TOKEN_CASINHO'];
+const isCasinhoName = (name) => CASINHO_TOKEN_NAMES.includes(name.toUpperCase());
+
 function findCasinhoToken() {
-  for (const name of CASINHO_TOKEN_NAMES) if (str(name)) return { token: str(name), source: name };
+  // Sensible à la casse sous Linux : « token_casinho » compte autant que « TOKEN_CASINHO ».
+  for (const [name, value] of Object.entries(process.env)) {
+    if (isCasinhoName(name) && (value ?? '').trim()) return { token: value.trim(), source: name };
+  }
   if (discordTokens[2]) return { token: discordTokens[2], source: 'DISCORD_TOKEN (3e token)' };
   return { token: '', source: null };
 }
@@ -59,7 +64,7 @@ function findVoiceToken() {
   if (discordTokens[1]) return { token: discordTokens[1], source: 'DISCORD_TOKEN (2e token)' };
   for (const [name, value] of Object.entries(process.env)) {
     const candidate = (value ?? '').trim();
-    if (CASINHO_TOKEN_NAMES.includes(name)) continue; // réservé au casino
+    if (isCasinhoName(name)) continue; // réservé au casino
     if (TOKEN_SHAPE.test(candidate) && candidate !== discordTokens[0] && candidate !== casinhoToken.token) {
       return { token: candidate, source: name };
     }

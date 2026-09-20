@@ -116,6 +116,9 @@ processus. Sans token il reste simplement éteint : le bot principal n'est pas a
 
 1. Developer Portal › l'application **Casinho** › Bot › *Reset Token*, puis copie.
 2. Ajoute `TOKEN_CASINHO` dans `.env` en local, **et** dans Render › Environment.
+   La casse du nom n’a pas d’importance : `TOKEN_CASINHO` ou `token_casinho`, les deux marchent.
+   ⚠️ Ce token est réservé au casino : l’IA vocale ne le prendra jamais. Si elle n’a pas
+   le sien (`VOICE_BOT_TOKEN`, ou un 2e token dans `DISCORD_TOKEN=token1;token2`), elle reste éteinte.
 3. Invite-le avec les scopes `bot` + `applications.commands`.
 4. Au démarrage, les commandes sont enregistrées sur le serveur `CASINHO_GUILD_ID`
    (immédiat) ; sinon en global (jusqu'à une heure d'attente).
