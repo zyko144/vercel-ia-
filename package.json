@@ -9,7 +9,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "check": "node --check src/index.js",
-    "test:casino": "node tools/test-casinho.mjs"
+    "test:casino": "node tools/test-casinho.mjs",
+    "test:jeux": "node tools/test-jeux.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

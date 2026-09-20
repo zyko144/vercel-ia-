@@ -2,9 +2,10 @@
 // et un narrateur qui raconte la partie à voix haute dans le vocal de l'IA vocale.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { borrowVoiceAi, createNarrator, voiceAiChannelId, voiceAiFree } from '../voice-ai/assistant.js';
+import { missingDmNotice, sendRoleCards } from './roles.js';
 import { PRIVATE, gameChannel, gameThread, mentions, openLobby, pick, rulesLink, shortId, shuffle, sleep } from './common.js';
 
-const ROLE_LOOK_MS = 25_000;
+const ROLE_LOOK_MS = 10_000; // le temps de lire son MP avant la première nuit
 const NIGHT_MS = 50_000;
 const WITCH_MS = 35_000;
 const DISCUSS_MS = 90_000;
@@ -19,6 +20,10 @@ export const ROLES = {
   chasseur: { name: 'Chasseur', emoji: '🏹', team: 'village', desc: "Si tu meurs, tu tires une dernière balle sur le joueur de ton choix." },
   villageois: { name: 'Villageois', emoji: '🧑‍🌾', team: 'village', desc: 'Pas de pouvoir, mais ton vote compte : trouve les loups.' },
 };
+
+/** La carte animée de chaque rôle (assets/jeux). */
+const ROLE_CARDS = { loup: 'loup', voyante: 'voyante', sorciere: 'sorciere', chasseur: 'chasseur', villageois: 'villageois' };
+const ROLE_COLORS = { loup: 0xed4245, voyante: 0xb04aff, sorciere: 0x2fffc8, chasseur: 0xffb02f, villageois: 0x7ee83f };
 
 const NIGHT_LINES = [
   'La nuit tombe sur le village. Tout le monde ferme les yeux… Les loups-garous se réveillent et choisissent leur victime.',
@@ -81,14 +86,14 @@ async function tell(game, embed, { voice = null, ping = false } = {}) {
 export async function startWerewolf(interaction) {
   const channel = await gameChannel(interaction);
   await interaction.reply({ content: `🐺 La salle d'attente est ouverte dans <#${channel.id}> !`, ...PRIVATE });
-  const voice = voiceAiFree();
+  const free = voiceAiFree();
   const lobby = await openLobby({
     channel,
     hostId: interaction.user.id,
     title: '🐺 LOUP-GAROU',
     description: [
       'Le bot est le meneur : il distribue les rôles en secret, gère les nuits et les votes.',
-      voice.ok ? `🔊 Le narrateur raconte la partie à voix haute dans <#${voiceAiChannelId()}>.` : '📝 Partie à l\'écrit (l\'IA vocale est occupée).',
+      'Votre rôle arrive en **message privé** dès le départ, avec sa carte.',
       'Rôles : 🐺 Loups · 🔮 Voyante · 🧪 Sorcière (6 joueurs et +) · 🏹 Chasseur (8 et +) · 🧑‍🌾 Villageois',
       rulesLink('loupgarou'),
     ].filter(Boolean).join('\n'),
@@ -96,6 +101,7 @@ export async function startWerewolf(interaction) {
     max: 16,
     waitMs: 150_000,
     color: 0x2c2f33,
+    voice: { available: free.ok, channelId: voiceAiChannelId(), defaultOn: true },
   });
   if (!lobby) return undefined;
 
@@ -109,7 +115,7 @@ export async function startWerewolf(interaction) {
   game.thread = await gameThread(lobby.message, '🐺 Loup-garou');
   console.log(`[loup-garou] partie ${game.id} : ${[...game.roles.entries()].map(([id, role]) => `${nameOf(game, id)}=${role}`).join(', ')}`);
 
-  if (voiceAiFree().ok) {
+  if (lobby.withVoice && voiceAiFree().ok) {
     try {
       game.release = await borrowVoiceAi('loup-garou');
       game.narrator = createNarrator({ voice: 'Charon', style: "Tu es le narrateur d'une partie de loup-garou : voix grave, mystérieuse, théâtrale." });
@@ -120,12 +126,33 @@ export async function startWerewolf(interaction) {
 
   const composition = Object.entries([...game.roles.values()].reduce((acc, role) => ({ ...acc, [role]: (acc[role] ?? 0) + 1 }), {}))
     .map(([role, count]) => `${roleLabel(role)} ×${count}`).join(' · ');
-  await tell(game, new EmbedBuilder().setColor(0x2c2f33).setAuthor({ name: '🐺 LOUP-GAROU' }).setTitle('Les rôles sont distribués')
+
+  // Tous les rôles partent en même temps, avant même l'annonce dans le fil.
+  const { failed } = await sendRoleCards(interaction.client, game.players.map((userId) => {
+    const role = game.roles.get(userId);
+    const allies = role === 'loup' ? aliveWith(game, 'loup').filter((id) => id !== userId) : [];
+    return {
+      userId,
+      card: ROLE_CARDS[role] ?? 'villageois',
+      color: ROLE_COLORS[role] ?? 0x2c2f33,
+      title: `${ROLES[role].emoji} Tu es ${ROLES[role].name}`,
+      lines: [
+        ROLES[role].desc,
+        allies.length ? `🐺 Tes complices : ${mentions(allies)}` : null,
+        role === 'loup' && !allies.length ? '🐺 Tu es le seul loup : personne pour couvrir tes erreurs.' : null,
+        `Partie : <#${game.thread.id}>`,
+      ],
+      footer: role === 'loup' ? 'Le jour, fais-toi passer pour un villageois.' : 'Garde ton rôle pour toi 🤫',
+    };
+  }));
+
+  await tell(game, new EmbedBuilder().setColor(0x2c2f33).setAuthor({ name: '🐺 LOUP-GAROU' }).setTitle('📬 Vos rôles sont partis en message privé')
     .setDescription([
-      `Appuyez sur **Voir mon rôle** (personne d'autre ne le voit).`,
+      'Regardez vos MP : votre carte de rôle vous attend.',
       `Dans ce village : ${composition}`,
+      missingDmNotice(failed, 'Voir mon rôle'),
       game.narrator ? `🔊 Rejoignez <#${voiceAiChannelId()}> pour entendre le narrateur.` : null,
-      'La première nuit tombe dans 25 secondes.',
+      'La première nuit tombe dans quelques secondes.',
     ].filter(Boolean).join('\n')), { ping: true, voice: 'Bienvenue au village. Chacun a reçu son rôle en secret. Que la partie commence.' });
   await game.thread.send({ components: controls(game) }).catch(() => {});
   await sleep(ROLE_LOOK_MS);

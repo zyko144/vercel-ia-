@@ -77,6 +77,14 @@ export function routeGameMessage(message) {
 
 const lobbies = new Map(); // id -> salle
 
+function voiceLine(lobby) {
+  if (!lobby.voice) return null;
+  if (!lobby.voice.available) return '🔇 Partie à l’écrit : l’IA vocale est occupée ailleurs.';
+  return lobby.withVoice
+    ? `🔊 **Avec la voix** : le narrateur raconte la partie dans <#${lobby.voice.channelId}>.`
+    : '🔇 **Sans la voix** : partie entièrement à l’écrit.';
+}
+
 function lobbyEmbed(lobby, status = null) {
   return new EmbedBuilder()
     .setColor(lobby.color ?? 0x5865f2)
@@ -84,28 +92,49 @@ function lobbyEmbed(lobby, status = null) {
     .setTitle(status ?? `On cherche des joueurs (${lobby.players.length}/${lobby.max})`)
     .setDescription([
       lobby.description,
+      voiceLine(lobby),
       '',
       `👥 **Joueurs** : ${lobby.players.length ? mentions(lobby.players) : 'personne encore'}`,
       status ? null : `Il faut au moins **${lobby.min}** joueur${lobby.min > 1 ? 's' : ''}. Départ automatique <t:${Math.floor(lobby.endsAt / 1000)}:R>, ou quand <@${lobby.hostId}> appuie sur **Lancer**.`,
-    ].filter((line) => line !== null).join('\n'))
+    ].filter((line) => line !== null && line !== undefined).join('\n'))
     .setFooter(lobby.rulesChannelId ? { text: 'Règles complètes dans le salon des règles' } : null);
 }
 
 function lobbyButtons(lobby) {
-  return [new ActionRowBuilder().addComponents(
+  const rows = [new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`g:lobby:${lobby.id}:join`).setLabel('Rejoindre').setEmoji('✋').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`g:lobby:${lobby.id}:leave`).setLabel('Quitter').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`g:lobby:${lobby.id}:start`).setLabel('Lancer').setEmoji('▶️').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`g:lobby:${lobby.id}:cancel`).setLabel('Annuler').setStyle(ButtonStyle.Danger),
   )];
+  // L'hôte choisit si la partie est racontée à voix haute ou jouée uniquement à l'écrit.
+  if (lobby.voice?.available) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`g:lobby:${lobby.id}:voice`)
+        .setLabel(lobby.withVoice ? 'Voix : activée' : 'Voix : coupée')
+        .setEmoji(lobby.withVoice ? '🔊' : '🔇')
+        .setStyle(lobby.withVoice ? ButtonStyle.Success : ButtonStyle.Secondary),
+    ));
+  }
+  return rows;
 }
 
 /**
- * Ouvre une salle d'attente avec des boutons Rejoindre / Lancer.
- * @returns {Promise<{ players: string[], message: import('discord.js').Message } | null>} null si annulée ou pas assez de monde
+ * Ouvre une salle d'attente avec des boutons Rejoindre / Lancer, et si le jeu le
+ * propose, un interrupteur « avec ou sans la voix ».
+ *
+ * @param {object} options
+ * @param {{ available: boolean, channelId?: string, defaultOn?: boolean }} [options.voice]
+ * @returns {Promise<{ players: string[], message: import('discord.js').Message, withVoice: boolean } | null>}
+ *   null si la salle est annulée ou s'il n'y a pas assez de monde
  */
-export async function openLobby({ channel, hostId, title, description, min = 2, max = 10, waitMs = 120_000, color, rulesChannelId, joinCheck }) {
-  const lobby = { id: shortId(), hostId, title, description, min, max, color, rulesChannelId, joinCheck, players: [hostId], endsAt: Date.now() + waitMs };
+export async function openLobby({ channel, hostId, title, description, min = 2, max = 10, waitMs = 120_000, color, rulesChannelId, joinCheck, voice = null }) {
+  const lobby = {
+    id: shortId(), hostId, title, description, min, max, color, rulesChannelId, joinCheck, voice,
+    withVoice: Boolean(voice?.available && (voice.defaultOn ?? true)),
+    players: [hostId], endsAt: Date.now() + waitMs,
+  };
   lobby.message = await channel.send({ embeds: [lobbyEmbed(lobby)], components: lobbyButtons(lobby) });
   lobbies.set(lobby.id, lobby);
   const players = await new Promise((resolve) => {
@@ -118,7 +147,7 @@ export async function openLobby({ channel, hostId, title, description, min = 2, 
     embeds: [lobbyEmbed(lobby, players ? '▶️ La partie commence !' : lobby.cancelled ? '❌ Partie annulée' : `😕 Pas assez de joueurs (il en fallait ${lobby.min})`)],
     components: [],
   }).catch(() => {});
-  return players ? { players: [...players], message: lobby.message } : null;
+  return players ? { players: [...players], message: lobby.message, withVoice: lobby.withVoice } : null;
 }
 
 export async function handleLobbyButton(interaction) {
@@ -149,6 +178,9 @@ export async function handleLobbyButton(interaction) {
     lobby.cancelled = true;
     lobby.finish(null);
     return undefined;
+  } else if (action === 'voice') {
+    if (!isHost) return interaction.reply({ content: `Seul <@${lobby.hostId}> choisit si la partie est racontée à voix haute.`, ...PRIVATE });
+    lobby.withVoice = !lobby.withVoice;
   }
   return interaction.update({ embeds: [lobbyEmbed(lobby)], components: lobbyButtons(lobby) });
 }

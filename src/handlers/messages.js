@@ -24,6 +24,8 @@ export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
   // Insultes envers le chef : vérifié sur tout le serveur, sans bloquer le reste
   if (message.inGuild()) protectOwner(client, message).catch((err) => console.warn('[protection]', err.message));
+  // Jeux en cours (rébus, imposteur, histoire…) : les messages du salon sont des réponses
+  if (message.inGuild() && routeGameMessage(message)) return;
   if (!isAllowedChannel(message.channel, message.channelId)) return;
 
   // Salon des sons : dépôt du son de la semaine (le tribunal vérifie)
@@ -31,8 +33,6 @@ export async function onMessage(client, message) {
     return handleSonMessage(client, message).catch((err) => console.warn('[tribunal]', err.message));
   }
 
-  // Jeux en cours (rébus, imposteur, histoire…) : les messages du salon sont des réponses
-  if (message.inGuild() && routeGameMessage(message)) return;
   // Blind test en cours : les messages du salon sont des réponses au jeu
   if (message.inGuild() && blindTestActive(message.guildId) && handleBlindTestMessage(message)) return;
   // Salon jukebox : écrire un nom de son l'ajoute à la file

@@ -69,9 +69,10 @@ function toDiscord(pcm, previous) {
   return { out, last };
 }
 
-// Avant de parler, on garde un peu d'avance (sinon le moindre ralentissement coupe la voix)
-const JITTER_BYTES = 48_000 * 2 * 2 * 0.25; // 250 ms de son prêt d'avance
-const JITTER_MAX_WAIT_MS = 400; // au-delà, on parle quand même (on garde la réponse rapide)
+// Avant de parler, on garde de l'avance : sur Render gratuit la boucle d'événements
+// se fige parfois plus d'une demi-seconde, et tout ce qui n'a pas d'avance se coupe.
+const JITTER_BYTES = 48_000 * 2 * 2 * 0.5; // 500 ms de son prêt d'avance
+const JITTER_MAX_WAIT_MS = 650; // au-delà, on parle quand même (on garde la réponse rapide)
 const FRAME_BYTES = 3_840; // 20 ms de son Discord (48 kHz, stéréo)
 const FILLER = Buffer.alloc(FRAME_BYTES);
 
@@ -538,16 +539,25 @@ function startSpeaking(session) {
   if (session.buffered) session.output.write(session.buffered);
   session.buffered = null;
   session.bufferedSince = null;
-  // Rien de nouveau à jouer : on envoie du silence plutôt que de laisser la voix se couper
+  // Flux à sec : on envoie du silence plutôt que de laisser la voix se couper net.
+  // Seulement quand il ne reste VRAIMENT rien : injecter du silence alors qu'il reste
+  // de la voix à jouer, c'est ce qui hachait les phrases.
   clearInterval(session.filler);
+  session.fillerFrames = 0;
   session.filler = setInterval(() => {
     if (!session.output || session.output.destroyed) return;
-    if (session.output.writableLength < FRAME_BYTES) session.output.write(FILLER);
+    if (session.output.writableLength > 0) return;
+    session.output.write(FILLER);
+    session.fillerFrames += 1;
   }, 20);
   session.filler.unref?.();
 }
 
 function stopSpeaking(session) {
+  if (session.fillerFrames > 25) {
+    console.warn(`[vocal] voix rattrapée par ${session.fillerFrames} trames de silence (${session.fillerFrames * 20} ms) : serveur trop chargé`);
+  }
+  session.fillerFrames = 0;
   clearTimeout(session.bufferTimer);
   clearInterval(session.filler);
   session.filler = null;

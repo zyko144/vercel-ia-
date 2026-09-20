@@ -8,8 +8,9 @@ import { config } from './config.js';
 
 const KEEP_ALIVE_MS = 10 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
-// Animations du casino (GIFs préparés par tools/make-casino-gifs.mjs)
-const CASINO_DIR = path.resolve('assets/casinho');
+// Images préparées à l'avance (tools/make-casino-gifs.mjs, tools/make-jeux-gifs.mjs).
+// Elles sont servies telles quelles : Discord les récupère une fois puis les garde en cache.
+const PUBLIC_ASSETS = { '/casino/': path.resolve('assets/casinho'), '/jeux/': path.resolve('assets/jeux') };
 
 /** Clé d'admin : personne ne peut la deviner sans le token du bot. */
 export function adminKey() {
@@ -66,12 +67,13 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       return res.end(file);
     }
 
-    // Animations du casino : envoyées une fois, puis gardées en cache par Discord.
-    if (url.pathname.startsWith('/casino/')) {
+    // Animations du casino et cartes de rôle des jeux.
+    const assetDir = Object.entries(PUBLIC_ASSETS).find(([prefix]) => url.pathname.startsWith(prefix))?.[1];
+    if (assetDir) {
       const name = path.basename(url.pathname);
-      if (!/^[a-z]+\.gif$/.test(name)) return send(res, 404, 'introuvable');
+      if (!/^[a-z-]+\.gif$/.test(name)) return send(res, 404, 'introuvable');
       try {
-        const gif = await readFile(path.join(CASINO_DIR, name));
+        const gif = await readFile(path.join(assetDir, name));
         res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': gif.length, 'Cache-Control': 'public, max-age=604800' });
         return res.end(gif);
       } catch {
