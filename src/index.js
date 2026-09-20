@@ -1,6 +1,7 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
 import { ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, Partials } from 'discord.js';
 import { adminRoutes, testAudioFile } from './admin.js';
+import { startCasinho } from './casinho/index.js';
 import { startVoiceAssistant } from './voice-ai/assistant.js';
 import { config } from './config.js';
 import { commandDefinitions } from './commands/definitions.js';
@@ -130,4 +131,6 @@ async function presenceAllowed() {
     console.error('❌ Connexion à Discord impossible (token invalide ou intents pas activés ?) :', err.message);
     process.exit(1);
   });
+  // Le casino a son propre bot : il se connecte à côté, et son absence ne gêne pas le reste.
+  startCasinho().catch((err) => console.error('🎰 Casinho :', err.message));
 })();

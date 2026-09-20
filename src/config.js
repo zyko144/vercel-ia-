@@ -43,12 +43,26 @@ const discordTokens = str('DISCORD_TOKEN').split(/[;,\s]+/).filter(Boolean);
 // Token du bot de l'IA vocale : VOICE_BOT_TOKEN, 2e token de DISCORD_TOKEN,
 // ou n'importe quelle variable qui contient un autre token de bot (peu importe son nom)
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}$/;
+
+// Token du bot Casinho (le casino). Cherché en premier, et mis de côté, pour que la
+// recherche « au flair » de l'IA vocale juste en dessous ne se l'approprie pas.
+const CASINHO_TOKEN_NAMES = ['TOKEN_CASINHO', 'CASINHO_TOKEN', 'CASINHO_BOT_TOKEN', 'DISCORD_TOKEN_CASINHO'];
+function findCasinhoToken() {
+  for (const name of CASINHO_TOKEN_NAMES) if (str(name)) return { token: str(name), source: name };
+  if (discordTokens[2]) return { token: discordTokens[2], source: 'DISCORD_TOKEN (3e token)' };
+  return { token: '', source: null };
+}
+const casinhoToken = findCasinhoToken();
+
 function findVoiceToken() {
   for (const name of ['VOICE_BOT_TOKEN', 'DISCORD_VOICE_TOKEN']) if (str(name)) return { token: str(name), source: name };
   if (discordTokens[1]) return { token: discordTokens[1], source: 'DISCORD_TOKEN (2e token)' };
   for (const [name, value] of Object.entries(process.env)) {
     const candidate = (value ?? '').trim();
-    if (TOKEN_SHAPE.test(candidate) && candidate !== discordTokens[0]) return { token: candidate, source: name };
+    if (CASINHO_TOKEN_NAMES.includes(name)) continue; // réservé au casino
+    if (TOKEN_SHAPE.test(candidate) && candidate !== discordTokens[0] && candidate !== casinhoToken.token) {
+      return { token: candidate, source: name };
+    }
   }
   return { token: '', source: null };
 }
@@ -197,5 +211,27 @@ export const config = {
   supabase: {
     url: str('SUPABASE_URL').replace(/\/+$/, ''),
     key: str('SUPABASE_SERVICE_KEY'),
+  },
+
+  // Casino Casinho : deuxième bot, sur son propre serveur.
+  // Les jetons sont fictifs : aucun achat, aucun dépôt, aucun retrait, aucun argent réel.
+  casinho: {
+    token: casinhoToken.token,
+    tokenSource: casinhoToken.source,
+    // Serveur du casino : les commandes y sont enregistrées tout de suite
+    // (en global, Discord met jusqu'à une heure à les propager).
+    guildId: str('CASINHO_GUILD_ID', '1550554840877502547'),
+    status: str('CASINHO_STATUS', '🎰 /casino-aide'),
+    // Lien du site, affiché dans /casino-aide s'il est rempli
+    siteUrl: str('CASINHO_SITE_URL'),
+    startingBalance: int('CASINHO_START', 1_000),
+    dailyReward: int('CASINHO_DAILY', 500),
+    dailyStreakBonus: int('CASINHO_DAILY_STREAK', 100),
+    // Filet de sécurité pour un joueur à sec, une fois par heure
+    rescueThreshold: int('CASINHO_RESCUE_UNDER', 100),
+    rescueAmount: int('CASINHO_RESCUE', 250),
+    maxBet: int('CASINHO_MAX_BET', 100_000),
+    // Qui peut donner / retirer des jetons (le chef est toujours inclus)
+    admins: list('CASINHO_ADMINS'),
   },
 };

@@ -109,6 +109,52 @@ Sur Render gratuit, le disque est effacé à chaque redémarrage : sans Supabase
 
 ---
 
+## 7. Casinho : le bot du casino 🎰
+
+Un **deuxième bot**, avec son propre token et son propre serveur, qui tourne dans le même
+processus. Sans token il reste simplement éteint : le bot principal n'est pas affecté.
+
+1. Developer Portal › l'application **Casinho** › Bot › *Reset Token*, puis copie.
+2. Ajoute `TOKEN_CASINHO` dans `.env` en local, **et** dans Render › Environment.
+3. Invite-le avec les scopes `bot` + `applications.commands`.
+4. Au démarrage, les commandes sont enregistrées sur le serveur `CASINHO_GUILD_ID`
+   (immédiat) ; sinon en global (jusqu'à une heure d'attente).
+
+Les jetons sont **fictifs** : ils ne s'achètent pas, ne se retirent pas et ne valent rien
+en dehors du serveur. Chaque table affiche son **TRJ** — ce que le jeu rend en moyenne sur
+100 jetons misés — calculé à partir du code, jamais écrit à la main.
+
+**Une commande, un embed, et tout se joue dedans** : la mise se règle avec les boutons
+(10 · 50 · 100 · 500 · 1000, ÷2, ×2, Tout), le pari avec le menu déroulant, puis **Jouer**.
+Aucune option à retenir. À la fin d'une manche, **Rejouer** relance avec la même mise.
+Chaque table affiche son animation (`assets/casinho/*.gif`, servies par le bot sur `/casino/`).
+
+| Quoi | Commandes |
+|---|---|
+| Ouvrir le casino | `/casino` — le hall, avec le choix de la table |
+| Banque | `/solde`, `/quotidien`, `/secours`, `/donner`, `/classement`, `/stats` |
+| Blackjack (tirer, rester, doubler, séparer) | `/blackjack` |
+| Table | `/roulette`, `/rougenoir` |
+| Rapides | `/machine`, `/des`, `/pileouface` |
+| Encaissement | `/mines`, `/crash`, `/plusoumoins` |
+| Joueur contre joueur | `/duel` |
+| Règles et probabilités | `/casino-aide`, `/casino-gains` |
+| Gérer les jetons (chef) | `/casino-admin` |
+
+Les animations sont fabriquées une fois pour toutes par `node tools/make-casino-gifs.mjs`
+(roue européenne, rouleaux, dés, pièce, cartes, fusée, grille) et commitées : rien n'est
+encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
+
+**Réglages** (tous facultatifs) : `CASINHO_GUILD_ID`, `CASINHO_SITE_URL`, `CASINHO_START`,
+`CASINHO_DAILY`, `CASINHO_DAILY_STREAK`, `CASINHO_RESCUE`, `CASINHO_RESCUE_UNDER`,
+`CASINHO_MAX_BET`, `CASINHO_ADMINS`, `CASINHO_STATUS`.
+
+**Taux de redistribution** : blackjack ≈ 99,5 % · roulette 97,3 % · pile ou face et rouge/noir
+97,5 % · dés 95,8 à 96,7 % · mines, crash et plus ou moins 97 % · machine à sous 95,6 % ·
+`/duel` 100 % (aucun prélèvement, c'est du joueur contre joueur).
+
+---
+
 ## Fonctionnalités
 
 | Quoi | Comment |

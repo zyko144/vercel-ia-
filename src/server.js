@@ -1,11 +1,15 @@
 // Mini serveur HTTP : obligatoire pour un "Web Service" Render + garde le service réveillé.
 // Il expose aussi une petite API d'admin (logs, état, tests) protégée par une clé dérivée du token du bot.
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import http from 'node:http';
+import path from 'node:path';
 import { config } from './config.js';
 
 const KEEP_ALIVE_MS = 10 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+// Animations du casino (GIFs préparés par tools/make-casino-gifs.mjs)
+const CASINO_DIR = path.resolve('assets/casinho');
 
 /** Clé d'admin : personne ne peut la deviner sans le token du bot. */
 export function adminKey() {
@@ -60,6 +64,19 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       if (!file) return send(res, 404, 'introuvable');
       res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': file.length });
       return res.end(file);
+    }
+
+    // Animations du casino : envoyées une fois, puis gardées en cache par Discord.
+    if (url.pathname.startsWith('/casino/')) {
+      const name = path.basename(url.pathname);
+      if (!/^[a-z]+\.gif$/.test(name)) return send(res, 404, 'introuvable');
+      try {
+        const gif = await readFile(path.join(CASINO_DIR, name));
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': gif.length, 'Cache-Control': 'public, max-age=604800' });
+        return res.end(gif);
+      } catch {
+        return send(res, 404, 'introuvable');
+      }
     }
 
     // Son du PC diffusé en direct (le serveur audio vient le chercher ici)

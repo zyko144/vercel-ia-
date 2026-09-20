@@ -18,4 +18,7 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      # Token du bot Casinho (le casino). Sans lui, le casino reste simplement éteint.
+      - key: TOKEN_CASINHO
+        sync: false
       # Le reste a déjà les bonnes valeurs par défaut dans src/config.js

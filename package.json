@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "check": "node --check src/index.js"
+    "check": "node --check src/index.js",
+    "test:casino": "node tools/test-casinho.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
