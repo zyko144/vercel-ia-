@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { GameMark } from '@/components/brand/GameMark';
+import { GeneratedImage, hasAsset } from '@/components/ui/GeneratedImage';
 import type { CatalogEntry } from '@/lib/games/catalog';
 import { audio } from '@/lib/audio/engine';
 
@@ -70,7 +71,17 @@ export function Hero({ connected, featured }: { connected: boolean; featured: Ca
             style={{ background: `radial-gradient(circle, ${game.accent}55, transparent 70%)`, animation: 'glow-pulse 4s ease-in-out infinite' }}
           />
           <Link key={game.id} href={`/jeu/${game.id}`} className="rise relative" onClick={() => audio.ui.click()}>
-            <GameMark id={game.id} size={190} />
+            {hasAsset(`game/${game.id}`) ? (
+              <span className="relative block h-[230px] w-[180px] overflow-hidden rounded-2xl border border-[var(--border)] shadow-[var(--shadow-lg)]">
+                <GeneratedImage slug={`game/${game.id}`} alt={game.name} priority sizes="180px" className="h-full w-full object-cover" />
+                <span className="absolute inset-x-0 bottom-0 h-1/2" style={{ background: 'linear-gradient(180deg, transparent, rgba(6,7,12,0.92))' }} />
+                <span className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                  <GameMark id={game.id} size={56} />
+                </span>
+              </span>
+            ) : (
+              <GameMark id={game.id} size={190} />
+            )}
           </Link>
           <div className="mt-3 text-center">
             <div className="display text-sm tracking-[0.2em]">{game.name}</div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { assetOf } from '@/components/ui/GeneratedImage';
 
 /**
  * Fond de salle de casino : rangées de machines floutées, néons qui respirent,
@@ -121,8 +122,23 @@ export function CasinoBackdrop() {
     };
   }, []);
 
+  const room = assetOf('scene/casino-floor');
+
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      {/* photo de salle générée : floue, avec un lent mouvement de caméra */}
+      {room && (
+        <div
+          className="absolute inset-[-8%]"
+          style={{
+            backgroundImage: `url(${room.path})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(18px) saturate(125%) brightness(0.55)',
+            animation: 'drift 30s ease-in-out infinite alternate',
+          }}
+        />
+      )}
       {/* la salle, volontairement floue : profondeur de champ */}
       <canvas ref={canvas} className="absolute inset-0 h-full w-full" style={{ filter: 'blur(22px) saturate(160%)', opacity: 1 }} />
 
@@ -164,6 +180,15 @@ export function CasinoBackdrop() {
       />
 
       <style jsx>{`
+        @keyframes drift {
+          0% {
+            transform: scale(1.06) translate3d(-1%, 0, 0);
+          }
+          100% {
+            transform: scale(1.16) translate3d(1.5%, -1.5%, 0);
+          }
+        }
+
         @keyframes dust {
           0% {
             transform: translateY(0) translateX(0);

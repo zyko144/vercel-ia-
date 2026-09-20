@@ -9,7 +9,8 @@
     "lint": "eslint",
     "simulate": "tsx scripts/simulate.ts",
     "db:seed": "tsx prisma/seed.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "assets": "tsx scripts/assets.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -20,6 +21,7 @@
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "sharp": "^0.35.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {

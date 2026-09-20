@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { GameCard } from './GameCard';
+import { GameTile } from './GameTile';
 import { CATEGORIES, type CatalogEntry } from '@/lib/games/catalog';
 import { audio } from '@/lib/audio/engine';
 
@@ -68,9 +68,9 @@ export function GameBrowser({ games }: { games: CatalogEntry[] }) {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-3.5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-3 md:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
         {filtered.map((game) => (
-          <GameCard key={game.id} game={game} />
+          <GameTile key={game.id} game={game} size="lg" />
         ))}
         {filtered.length === 0 && <p className="p-6 text-sm text-[var(--muted)]">Aucun jeu ne correspond.</p>}
       </div>

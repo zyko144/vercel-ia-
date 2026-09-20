@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { GameMark } from '@/components/brand/GameMark';
+import { GeneratedImage, hasAsset } from '@/components/ui/GeneratedImage';
 import type { CatalogEntry } from '@/lib/games/catalog';
 import { audio } from '@/lib/audio/engine';
 
@@ -28,6 +29,8 @@ export function GameCard({ game, size = 'md' }: { game: CatalogEntry; size?: 'sm
     setTilt({ x: y * -10, y: x * 12, active: true });
   };
 
+  const art = hasAsset(`game/${game.id}`);
+
   const content = (
     <div
       ref={box}
@@ -43,6 +46,23 @@ export function GameCard({ game, size = 'md' }: { game: CatalogEntry; size?: 'sm
         boxShadow: tilt.active ? `0 24px 50px -20px ${game.accent}66, inset 0 1px 0 rgb(255 255 255 / 0.08)` : 'var(--shadow), inset 0 1px 0 rgb(255 255 255 / 0.05)',
       }}
     >
+      {/* illustration générée : elle occupe toute la carte, le brand mark reste par-dessus */}
+      {art && (
+        <div aria-hidden className="absolute inset-0">
+          <GeneratedImage
+            slug={`game/${game.id}`}
+            alt=""
+            small
+            sizes="220px"
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(180deg, rgba(6,7,12,0.1) 0%, rgba(6,7,12,0.55) 52%, rgba(6,7,12,0.94) 100%)` }}
+          />
+        </div>
+      )}
+
       {/* halo du jeu */}
       <div
         aria-hidden
@@ -57,8 +77,8 @@ export function GameCard({ game, size = 'md' }: { game: CatalogEntry; size?: 'sm
       />
 
       <div className="relative flex h-full flex-col items-center justify-between p-4" style={{ transform: 'translateZ(24px)' }}>
-        <div className="mt-3 grid place-items-center">
-          <GameMark id={game.id} size={dimensions.mark} />
+        <div className={`grid place-items-center ${art ? 'mt-1' : 'mt-3'}`}>
+          <GameMark id={game.id} size={art ? Math.round(dimensions.mark * 0.62) : dimensions.mark} />
         </div>
 
         <div className="w-full text-center">

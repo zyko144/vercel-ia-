@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { GameCard } from '@/components/lobby/GameCard';
+import { GameTile } from '@/components/lobby/GameTile';
 import { Jackpots } from '@/components/lobby/Jackpots';
 import { Row } from '@/components/lobby/Row';
 import { Hero } from '@/components/lobby/Hero';
@@ -23,31 +23,31 @@ export default async function LobbyPage() {
 
       <Row title="Populaires" subtitle="Ce qui tourne le plus en ce moment" href="/jeux">
         {playable.map((game) => (
-          <GameCard key={game.id} game={game} size="md" />
+          <GameTile key={game.id} game={game} size="md" />
         ))}
       </Row>
 
       <Row title="Machines à sous" subtitle="Rouleaux, wilds, tours gratuits" href="/jeux?c=slots">
         {byCategory('slots').map((game) => (
-          <GameCard key={game.id} game={game} />
+          <GameTile key={game.id} game={game} />
         ))}
       </Row>
 
       <Row title="Arcade & Risk" subtitle="Tu choisis quand encaisser" href="/jeux?c=arcade">
         {byCategory('arcade').map((game) => (
-          <GameCard key={game.id} game={game} />
+          <GameTile key={game.id} game={game} />
         ))}
       </Row>
 
       <Row title="Jeux de table" subtitle="Les classiques du casino" href="/jeux?c=table">
         {byCategory('table').map((game) => (
-          <GameCard key={game.id} game={game} />
+          <GameTile key={game.id} game={game} />
         ))}
       </Row>
 
       <Row title="Dés & jeux rapides" subtitle="Une manche en dix secondes" href="/jeux?c=quick">
         {[...byCategory('dice'), ...byCategory('quick')].map((game) => (
-          <GameCard key={game.id} game={game} />
+          <GameTile key={game.id} game={game} />
         ))}
       </Row>
 

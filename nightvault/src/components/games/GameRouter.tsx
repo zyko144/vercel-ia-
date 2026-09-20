@@ -6,6 +6,8 @@ import { CrashGame } from './Crash';
 import { DiceGame } from './Dice';
 import { MinesGame } from './Mines';
 import { PlinkoGame } from './Plinko';
+import { RouletteGame } from './Roulette';
+import { KenoGame, LimboGame, TowerGame, WheelGame } from './Simple';
 import { SlotGame, type SlotView } from './Slot';
 
 export type GameMeta = {
@@ -48,6 +50,16 @@ export function GameRouter({ meta, slot }: { meta: GameMeta; slot: SlotView | nu
       return <PlinkoGame meta={meta} />;
     case 'dice':
       return <DiceGame meta={meta} />;
+    case 'limbo':
+      return <LimboGame meta={meta} />;
+    case 'wheel':
+      return <WheelGame meta={meta} />;
+    case 'keno':
+      return <KenoGame meta={meta} />;
+    case 'tower':
+      return <TowerGame meta={meta} />;
+    case 'european-roulette':
+      return <RouletteGame meta={meta} />;
     default:
       return <NotReady meta={meta} />;
   }
