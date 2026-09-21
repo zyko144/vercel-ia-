@@ -595,6 +595,18 @@ await check('à plusieurs : blackjack, chacun joue sa main à son tour', async (
   console.log(`   ${turns} tour(s) joué(s), puis le croupier : ${descriptionOf(final).split('\n').filter((l) => /JOUEUR/.test(l)).map((l) => l.slice(0, 2)).join(' ')}`);
 });
 
+await check('le bouton du guide épinglé ouvre le casino', async () => {
+  const { guideButtons } = await import(new URL('guide.js', ROOT));
+  const [open, daily] = guideButtons()[0].components.map((b) => b.data.custom_id);
+  const click = mock({ __customId: open });
+  await handleTableComponent(click);
+  const hall = last(click);
+  assert.ok(hall.components[0].components[0].toJSON().options.length >= 13, 'un hall complet doit s’ouvrir');
+  const gift = mock({ __customId: daily });
+  await handleTableComponent(gift);
+  assert.ok(last(gift).embeds?.length || /Reviens/.test(last(gift).content ?? ''), 'le bouton jetons du jour doit répondre');
+});
+
 await check('seule /casino lance les jeux', () => {
   const names = casinhoCommands.map((c) => c.name);
   for (const game of ['blackjack', 'roulette', 'machine', 'des', 'pileouface', 'rougenoir', 'mines', 'crash', 'plusoumoins', 'duel']) {

@@ -359,6 +359,8 @@ export async function handleTableComponent(interaction) {
     if (choice.startsWith('multi-')) return openMultiTable(interaction, choice.slice('multi-'.length));
     return openTable(interaction, choice, { viaUpdate: true });
   }
+  // Le bouton du message épinglé dans le salon des jeux : ouvre un hall, comme /casino.
+  if (action === 'open') return openLobby(interaction);
   if (action === 'daily') return claimDaily(interaction);
   if (action === 'top') return showLeaderboard(interaction);
 

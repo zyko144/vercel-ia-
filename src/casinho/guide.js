@@ -1,6 +1,6 @@
 // Le guide du casino : ce qu'affiche /casino-aide, et le message épinglé du salon
 // des jeux. Un seul texte pour les deux, pour qu'ils ne se contredisent jamais.
-import { EmbedBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { config } from '../config.js';
 import { slotRtp } from './games.js';
 
@@ -85,4 +85,14 @@ export function guideEmbeds() {
     .setFooter({ text: 'Tout est calculé, rien n’est inventé : les chances affichées découlent du code. Joue pour le plaisir.' });
 
   return [welcome, games, commands];
+}
+
+/** Le bouton posé sous le guide épinglé : un clic ouvre le casino, sans taper /casino. */
+export function guideButtons() {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('ctb:open:guide').setLabel('Ouvrir le casino').setEmoji('🎰').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('ctb:daily:guide').setLabel('Jetons du jour').setEmoji('🎁').setStyle(ButtonStyle.Primary),
+    ),
+  ];
 }
