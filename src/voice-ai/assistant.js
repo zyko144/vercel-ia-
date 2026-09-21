@@ -29,6 +29,7 @@ import { findSong, popularArtistNames, voiceVocabulary } from './songs.js';
 
 const GROUP = 'ia-vocale'; // connexion vocale séparée de celle du bot principal
 const CHECK_EVERY_MS = 20_000;
+const STUCK_AFTER_MS = 45_000; // une connexion pas prête au bout de ce temps ne le sera plus
 const SEND_CHUNK_BYTES = 3_200; // 100 ms de voix à 16 kHz mono
 const SILENCE_AFTER_SPEECH_MS = 1_500; // silence envoyé quand la personne se tait (Discord n'envoie plus rien)
 const DUCK_VOLUME = 25; // musique baissée pendant que l'IA parle
@@ -99,9 +100,15 @@ function ensureInVoice() {
   const channel = homeGuildChannel();
   if (!channel) return;
   const existing = getVoiceConnection(channel.guild.id, GROUP);
-  const alive = existing && ![VoiceConnectionStatus.Destroyed, VoiceConnectionStatus.Disconnected].includes(existing.state.status);
-  if (alive && existing.joinConfig.channelId === channel.id) return;
+  const status = existing?.state.status;
+  const alive = existing && ![VoiceConnectionStatus.Destroyed, VoiceConnectionStatus.Disconnected].includes(status);
+  // Coincée en « signalling » ou « connecting » (souvent juste après un redéploiement,
+  // quand l'ancienne instance tient encore le vocal) : elle n'arrivera plus, on la refait.
+  const stuck = alive && status !== VoiceConnectionStatus.Ready && Date.now() - (state.joinedAt ?? 0) > STUCK_AFTER_MS;
+  if (alive && !stuck && existing.joinConfig.channelId === channel.id) return;
+  if (stuck) console.warn(`[vocal] connexion bloquée en « ${status} » depuis ${Math.round((Date.now() - state.joinedAt) / 1000)} s : on la relance`);
   existing?.destroy();
+  state.joinedAt = Date.now();
 
   const conn = joinVoiceChannel({
     channelId: channel.id,
@@ -129,7 +136,12 @@ function ensureInVoice() {
       console.log(`[vocal] IA vocale dans #${channel.name} 🎙️`);
       primeReceive();
     })
-    .catch(() => {});
+    .catch(() => {
+      // Avant, cet échec était ignoré et la voix restait muette jusqu'au redémarrage.
+      console.warn(`[vocal] pas de réponse du vocal après 30 s (état « ${conn.state.status} ») : nouvel essai`);
+      if (conn.state.status !== VoiceConnectionStatus.Destroyed) conn.destroy();
+      setTimeout(ensureInVoice, 5_000).unref?.();
+    });
 }
 
 export async function startVoiceAssistant(mainClient) {
