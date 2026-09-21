@@ -3,6 +3,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { chatJson } from '../ai/gemini.js';
 import { borrowVoiceAi, createNarrator, voiceAiChannelId, voiceAiFree } from '../voice-ai/assistant.js';
+import { botName, botPause, botsPlay, humans, isBot, pickFrom, who } from './bots.js';
 import { missingDmNotice, sendRoleCards } from './roles.js';
 import { PRIVATE, gameChannel, gameThread, listenChannel, mentions, normalize, openLobby, pick, rulesLink, shortId, shuffle, sleep, stopListening, tokens } from './common.js';
 
@@ -49,6 +50,36 @@ async function wordPair(theme) {
   return shuffle(pick(FALLBACK));
 }
 
+// Indices de repli, assez vagues pour ne rien trahir (et ne rien aider).
+const VAGUE_CLUES = ['assez connu', 'tout le monde connaît', 'on en parle souvent', 'ça dépend des goûts', 'plutôt populaire', 'classique', 'ça me parle', 'je vois bien'];
+
+/** Des indices pour les bots, sur le mot des civils et sur celui de l'imposteur. */
+async function botClues(civil, impostorWord) {
+  try {
+    const data = await chatJson({
+      system: "Tu joues au jeu de l'imposteur (Undercover) avec des amis.",
+      prompt: `Pour chacun des deux mots, donne 6 indices différents de 1 à 3 mots, en français, sans jamais écrire le mot lui-même ni une partie de ce mot.
+Mot A : « ${civil} »
+Mot B : « ${impostorWord} »
+Les indices doivent rester assez vagues pour qu'on hésite entre A et B.`,
+      schema: {
+        type: 'object',
+        properties: { a: { type: 'array', items: { type: 'string' } }, b: { type: 'array', items: { type: 'string' } } },
+        required: ['a', 'b'],
+      },
+      thinking: 'minimal',
+      exactThinking: true,
+    });
+    const clean = (list, word) => (list ?? []).map((c) => String(c).trim()).filter((c) => c && tokens(c).length <= 5 && !normalize(c).includes(normalize(word)));
+    const civilClues = clean(data?.a, civil);
+    const impostorClues = clean(data?.b, impostorWord);
+    if (civilClues.length >= 3 && impostorClues.length >= 3) return { civil: civilClues, imposteur: impostorClues };
+  } catch (err) {
+    console.warn('[imposteur] indices des bots :', err.message);
+  }
+  return { civil: VAGUE_CLUES, imposteur: VAGUE_CLUES };
+}
+
 const wordButton = (game) => new ActionRowBuilder().addComponents(
   new ButtonBuilder().setCustomId(`g:imp:${game.id}:word`).setLabel('Voir mon mot').setEmoji('👁️').setStyle(ButtonStyle.Primary),
   new ButtonBuilder().setCustomId(`g:imp:${game.id}:stop`).setLabel('Arrêter').setStyle(ButtonStyle.Secondary),
@@ -75,6 +106,7 @@ export async function startImpostor(interaction, theme = 'tout') {
     waitMs: 90_000,
     color: 0x9b59b6,
     voice: { available: free.ok, channelId: voiceAiChannelId(), defaultOn: true },
+    testSize: 4,
   });
   if (!lobby) return undefined;
 
@@ -83,8 +115,9 @@ export async function startImpostor(interaction, theme = 'tout') {
   const impostor = pick(players);
   const game = {
     id: shortId(), hostId: interaction.user.id, theme, civil, impostorWord, impostor,
-    players, alive: [...players], clues: new Map(), votes: new Map(), round: 0, stopped: false,
+    players, alive: [...players], clues: new Map(), votes: new Map(), round: 0, stopped: false, test: lobby.test,
   };
+  if (game.test) game.botClues = await botClues(civil, impostorWord);
   game.thread = await gameThread(lobby.message, `🕵️ Imposteur · ${info.label}`);
   games.set(game.id, game);
   console.log(`[imposteur] partie ${game.id} : ${players.length} joueurs · « ${civil} » / « ${impostorWord} »`);
@@ -99,7 +132,7 @@ export async function startImpostor(interaction, theme = 'tout') {
   }
 
   // Les rôles partent tous en même temps, avant même le premier message du fil.
-  const { failed } = await sendRoleCards(interaction.client, players.map((userId) => {
+  const { failed } = await sendRoleCards(interaction.client, humans(players).map((userId) => {
     const isImpostor = userId === impostor;
     return {
       userId,
@@ -127,7 +160,7 @@ export async function startImpostor(interaction, theme = 'tout') {
         'Premier tour d’indices dans quelques secondes.',
       ].filter(Boolean).join('\n'))],
     components: [wordButton(game)],
-    allowedMentions: { users: players },
+    allowedMentions: { users: humans(players) },
   }).catch(() => {});
   await say(game, `${players.length} joueurs, un imposteur. Les mots sont distribués. Que le meilleur menteur gagne.`);
   await sleep(READY_MS);
@@ -167,11 +200,21 @@ async function clueRound(game) {
   await say(game, game.round === 1 ? 'Premier tour. Un indice chacun, et pas de bêtise.' : `Tour ${game.round}. On recommence, et cette fois on regarde qui hésite.`);
   await game.thread.send({
     embeds: [new EmbedBuilder().setColor(0x9b59b6).setTitle(`🗣️ Tour ${game.round} : les indices`)
-      .setDescription(`Chacun à son tour écrit **un indice** (1 à 5 mots) sur son mot, sans le dire.\nOrdre : ${order.map((id, i) => `**${i + 1}.** <@${id}>`).join(' · ')}`)],
+      .setDescription(`Chacun à son tour écrit **un indice** (1 à 5 mots) sur son mot, sans le dire.\nOrdre : ${order.map((id, i) => `**${i + 1}.** ${who(id)}`).join(' · ')}`)],
     allowedMentions: { parse: [] },
   }).catch(() => {});
   for (const userId of order) {
     if (game.stopped) return;
+    if (isBot(userId)) {
+      await botPause();
+      if (game.stopped) return;
+      const pool = game.botClues?.[userId === game.impostor ? 'imposteur' : 'civil'] ?? VAGUE_CLUES;
+      const used = new Set([...game.clues.values()].flat());
+      const clue = pickFrom(pool, [...used]) ?? pickFrom(pool);
+      await game.thread.send({ content: `${botName(userId)} : « ${clue} »`, allowedMentions: { parse: [] } }).catch(() => {});
+      game.clues.set(userId, [...(game.clues.get(userId) ?? []), clue]);
+      continue;
+    }
     const clue = await new Promise((resolve) => {
       const timer = setTimeout(() => resolve(null), CLUE_MS);
       const reader = (message) => {
@@ -194,7 +237,7 @@ async function clueRound(game) {
       };
       game.reader = reader;
       listenChannel(game.thread.id, reader);
-      game.thread.send({ content: `👉 <@${userId}>, ton indice (fin <t:${Math.ceil((Date.now() + CLUE_MS) / 1000)}:R>)`, allowedMentions: { users: [userId] } }).catch(() => {});
+      game.thread.send({ content: `👉 ${who(userId)}, ton indice (fin <t:${Math.ceil((Date.now() + CLUE_MS) / 1000)}:R>)`, allowedMentions: { users: humans([userId]) } }).catch(() => {});
       game.skipClue = () => { clearTimeout(timer); resolve(null); };
     });
     stopListening(game.thread.id, game.reader);
@@ -209,25 +252,34 @@ function voteMenu(game) {
     .setCustomId(`g:imp:${game.id}:vote`)
     .setPlaceholder("Qui est l'imposteur ?")
     .addOptions(game.alive.map((id) => {
-      const member = game.thread.guild?.members.cache.get(id);
-      return { label: (member?.displayName ?? member?.user.username ?? id).slice(0, 100), value: id, description: `Indices : ${(game.clues.get(id) ?? []).join(' / ')}`.slice(0, 100) };
+      const member = isBot(id) ? null : game.thread.guild?.members.cache.get(id);
+      const label = isBot(id) ? botName(id) : (member?.displayName ?? member?.user.username ?? 'Joueur');
+      return { label: label.slice(0, 100), value: id, description: `Indices : ${(game.clues.get(id) ?? []).join(' / ') || '—'}`.slice(0, 100) };
     })));
 }
 
 /** Vote : le joueur le plus désigné est éliminé (égalité : personne). */
 async function voteRound(game) {
   game.votes = new Map();
-  const recap = game.alive.map((id) => `<@${id}> : ${(game.clues.get(id) ?? []).map((c) => `« ${c} »`).join(' · ')}`).join('\n');
+  const recap = game.alive.map((id) => `${who(id)} : ${(game.clues.get(id) ?? []).map((c) => `« ${c} »`).join(' · ')}`).join('\n');
   game.voteMessage = await game.thread.send({
     embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🗳️ Qui est l\'imposteur ?')
       .setDescription(`${recap}\n\nVotez avec le menu (vous pouvez changer d'avis). Fin <t:${Math.ceil((Date.now() + VOTE_MS) / 1000)}:R>.`)],
     components: [voteMenu(game)],
     allowedMentions: { parse: [] },
   }).catch(() => null);
+  const ballot = Symbol('vote');
+  game.ballot = ballot;
+  // Chaque bot vote pour quelqu'un d'autre au hasard, après un petit délai.
+  botsPlay(game.alive, () => !game.stopped && game.ballot === ballot && game.voteDone, (bot) => {
+    game.votes.set(bot, pickFrom(game.alive, [bot]));
+    if (game.alive.every((id) => game.votes.has(id))) game.voteDone?.();
+  });
   await new Promise((resolve) => {
     game.voteDone = resolve;
     game.voteTimer = setTimeout(resolve, VOTE_MS);
   });
+  game.ballot = null;
   clearTimeout(game.voteTimer);
   game.voteDone = null;
   await game.voteMessage?.edit({ components: [] }).catch(() => {});
@@ -236,7 +288,7 @@ async function voteRound(game) {
   const counts = new Map();
   for (const target of game.votes.values()) counts.set(target, (counts.get(target) ?? 0) + 1);
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const detail = sorted.map(([id, n]) => `<@${id}> : ${n}`).join(' · ') || 'aucun vote';
+  const detail = sorted.map(([id, n]) => `${who(id)} : ${n}`).join(' · ') || 'aucun vote';
   if (!sorted.length || (sorted[1] && sorted[1][1] === sorted[0][1])) {
     await game.thread.send({ content: `⚖️ Égalité (${detail}) : personne n'est éliminé, on refait un tour d'indices.`, allowedMentions: { parse: [] } }).catch(() => {});
     return null;
@@ -246,7 +298,7 @@ async function voteRound(game) {
   const wasImpostor = out === game.impostor;
   await say(game, wasImpostor ? "Éliminé... et c'était bien l'imposteur ! Belle lecture." : "Éliminé... mais c'était un innocent. Aïe.");
   await game.thread.send({
-    content: `🚪 <@${out}> est éliminé (${detail}).\n${wasImpostor ? "🎯 **C'était l'imposteur !**" : `😬 Raté, <@${out}> était innocent (son mot : **${game.civil}**).`}`,
+    content: `🚪 ${who(out)} est éliminé (${detail}).\n${wasImpostor ? "🎯 **C'était l'imposteur !**" : `😬 Raté, ${who(out)} était innocent (son mot : **${game.civil}**).`}`,
     allowedMentions: { parse: [] },
   }).catch(() => {});
   return out;
@@ -255,9 +307,18 @@ async function voteRound(game) {
 /** L'imposteur démasqué peut encore gagner s'il devine le mot des autres. */
 async function lastChance(game) {
   await game.thread.send({
-    content: `🕵️ <@${game.impostor}>, dernière chance : ton mot était **${game.impostorWord}**. Devine le mot des autres en <t:${Math.ceil((Date.now() + GUESS_MS) / 1000)}:R> et tu gagnes quand même !`,
-    allowedMentions: { users: [game.impostor] },
+    content: `🕵️ ${who(game.impostor)}, dernière chance : ton mot était **${game.impostorWord}**. Devine le mot des autres en <t:${Math.ceil((Date.now() + GUESS_MS) / 1000)}:R> et tu gagnes quand même !`,
+    allowedMentions: { users: humans([game.impostor]) },
   }).catch(() => {});
+  if (isBot(game.impostor)) {
+    // Un bot ne connaît pas le mot des civils : il tombe juste une fois sur trois.
+    await botPause();
+    const guess = Math.random() < 0.33 ? game.civil : game.impostorWord;
+    await game.thread.send({ content: `${botName(game.impostor)} tente : « ${guess} »`, allowedMentions: { parse: [] } }).catch(() => {});
+    const lucky = normalize(guess) === normalize(game.civil);
+    await finish(game, lucky ? 'imposteur' : 'civils', lucky ? "l'imposteur a deviné le mot secret" : "l'imposteur a été démasqué");
+    return;
+  }
   const found = await new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), GUESS_MS);
     const reader = (message) => {
@@ -296,7 +357,7 @@ async function finish(game, winners, reason) {
     embeds: [new EmbedBuilder().setColor(winners === 'imposteur' ? 0xed4245 : 0x57f287).setAuthor({ name: "🕵️ L'IMPOSTEUR" }).setTitle(title)
       .setDescription([
         reason ? `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.` : null,
-        `🕵️ Imposteur : <@${game.impostor}> (mot : **${game.impostorWord}**)`,
+        `🕵️ Imposteur : ${who(game.impostor)} (mot : **${game.impostorWord}**)`,
         `👥 Civils : ${mentions(civils)} (mot : **${game.civil}**)`,
       ].filter(Boolean).join('\n'))],
     allowedMentions: { parse: [] },
@@ -331,7 +392,7 @@ export async function handleImpostorComponent(interaction) {
     const target = interaction.values[0];
     if (target === userId) return interaction.reply({ content: 'Tu peux pas voter contre toi-même 😅', ...PRIVATE });
     game.votes.set(userId, target);
-    await interaction.reply({ content: `🗳️ Vote enregistré contre <@${target}> (tu peux changer).`, ...PRIVATE });
+    await interaction.reply({ content: `🗳️ Vote enregistré contre ${who(target)} (tu peux changer).`, ...PRIVATE });
     if (game.alive.every((id) => game.votes.has(id))) game.voteDone?.();
   }
   return undefined;

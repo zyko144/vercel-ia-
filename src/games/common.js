@@ -1,6 +1,7 @@
 // Outils partagés par les jeux : salle d'attente, réponses écrites dans un salon, petits utilitaires.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
+import { makeBots, who } from './bots.js';
 
 export const PRIVATE = { flags: MessageFlags.Ephemeral };
 export const MEDALS = ['🥇', '🥈', '🥉'];
@@ -8,7 +9,7 @@ export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const normalize = (s = '') => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 export const tokens = (s) => normalize(s).split(' ').filter(Boolean);
 export const pick = (list) => list[Math.floor(Math.random() * list.length)];
-export const mentions = (ids) => ids.map((id) => `<@${id}>`).join(', ');
+export const mentions = (ids) => ids.map(who).join(', ');
 export const shortId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 export function shuffle(list) {
@@ -107,16 +108,28 @@ function lobbyButtons(lobby) {
     new ButtonBuilder().setCustomId(`g:lobby:${lobby.id}:start`).setLabel('Lancer').setEmoji('▶️').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`g:lobby:${lobby.id}:cancel`).setLabel('Annuler').setStyle(ButtonStyle.Danger),
   )];
+  const extras = [];
   // L'hôte choisit si la partie est racontée à voix haute ou jouée uniquement à l'écrit.
   if (lobby.voice?.available) {
-    rows.push(new ActionRowBuilder().addComponents(
+    extras.push(
       new ButtonBuilder()
         .setCustomId(`g:lobby:${lobby.id}:voice`)
         .setLabel(lobby.withVoice ? 'Voix : activée' : 'Voix : coupée')
         .setEmoji(lobby.withVoice ? '🔊' : '🔇')
         .setStyle(lobby.withVoice ? ButtonStyle.Success : ButtonStyle.Secondary),
-    ));
+    );
   }
+  // Tester seul : des joueurs virtuels complètent la table et jouent tout seuls.
+  if (lobby.testSize) {
+    extras.push(
+      new ButtonBuilder()
+        .setCustomId(`g:lobby:${lobby.id}:test`)
+        .setLabel('Tester avec des bots')
+        .setEmoji('🧪')
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (extras.length) rows.push(new ActionRowBuilder().addComponents(extras));
   return rows;
 }
 
@@ -129,9 +142,9 @@ function lobbyButtons(lobby) {
  * @returns {Promise<{ players: string[], message: import('discord.js').Message, withVoice: boolean } | null>}
  *   null si la salle est annulée ou s'il n'y a pas assez de monde
  */
-export async function openLobby({ channel, hostId, title, description, min = 2, max = 10, waitMs = 120_000, color, rulesChannelId, joinCheck, voice = null }) {
+export async function openLobby({ channel, hostId, title, description, min = 2, max = 10, waitMs = 120_000, color, rulesChannelId, joinCheck, voice = null, testSize = 0 }) {
   const lobby = {
-    id: shortId(), hostId, title, description, min, max, color, rulesChannelId, joinCheck, voice,
+    id: shortId(), hostId, title, description, min, max, color, rulesChannelId, joinCheck, voice, testSize, test: false,
     withVoice: Boolean(voice?.available && (voice.defaultOn ?? true)),
     players: [hostId], endsAt: Date.now() + waitMs,
   };
@@ -143,11 +156,11 @@ export async function openLobby({ channel, hostId, title, description, min = 2, 
   });
   clearTimeout(lobby.timer);
   lobbies.delete(lobby.id);
-  await lobby.message.edit({
-    embeds: [lobbyEmbed(lobby, players ? '▶️ La partie commence !' : lobby.cancelled ? '❌ Partie annulée' : `😕 Pas assez de joueurs (il en fallait ${lobby.min})`)],
-    components: [],
-  }).catch(() => {});
-  return players ? { players: [...players], message: lobby.message, withVoice: lobby.withVoice } : null;
+  const status = players
+    ? (lobby.test ? '🧪 Partie de test : des bots complètent la table' : '▶️ La partie commence !')
+    : lobby.cancelled ? '❌ Partie annulée' : `😕 Pas assez de joueurs (il en fallait ${lobby.min})`;
+  await lobby.message.edit({ embeds: [lobbyEmbed(lobby, status)], components: [] }).catch(() => {});
+  return players ? { players: [...players], message: lobby.message, withVoice: lobby.withVoice, test: lobby.test } : null;
 }
 
 export async function handleLobbyButton(interaction) {
@@ -181,6 +194,13 @@ export async function handleLobbyButton(interaction) {
   } else if (action === 'voice') {
     if (!isHost) return interaction.reply({ content: `Seul <@${lobby.hostId}> choisit si la partie est racontée à voix haute.`, ...PRIVATE });
     lobby.withVoice = !lobby.withVoice;
+  } else if (action === 'test') {
+    if (!isHost) return interaction.reply({ content: `Seul <@${lobby.hostId}> peut lancer une partie de test.`, ...PRIVATE });
+    await interaction.deferUpdate();
+    lobby.test = true;
+    lobby.players.push(...makeBots(lobby.testSize - lobby.players.length));
+    lobby.finish(lobby.players);
+    return undefined;
   }
   return interaction.update({ embeds: [lobbyEmbed(lobby)], components: lobbyButtons(lobby) });
 }

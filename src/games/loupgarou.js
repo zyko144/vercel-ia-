@@ -2,6 +2,7 @@
 // et un narrateur qui raconte la partie à voix haute dans le vocal de l'IA vocale.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { borrowVoiceAi, createNarrator, voiceAiChannelId, voiceAiFree } from '../voice-ai/assistant.js';
+import { botName, botPause, botsPlay, humans, isBot, pickFrom, who } from './bots.js';
 import { missingDmNotice, sendRoleCards } from './roles.js';
 import { PRIVATE, gameChannel, gameThread, mentions, openLobby, pick, rulesLink, shortId, shuffle, sleep } from './common.js';
 
@@ -9,6 +10,7 @@ const ROLE_LOOK_MS = 10_000; // le temps de lire son MP avant la première nuit
 const NIGHT_MS = 50_000;
 const WITCH_MS = 35_000;
 const DISCUSS_MS = 90_000;
+const TEST_DISCUSS_MS = 15_000;
 const VOTE_MS = 60_000;
 const HUNTER_MS = 30_000;
 const games = new Map(); // id -> partie
@@ -53,7 +55,7 @@ function dealRoles(players) {
   return new Map(players.map((id, i) => [id, shuffled[i]]));
 }
 
-const nameOf = (game, id) => game.guild.members.cache.get(id)?.displayName ?? game.guild.client.users.cache.get(id)?.username ?? 'Joueur';
+const nameOf = (game, id) => (isBot(id) ? botName(id) : game.guild.members.cache.get(id)?.displayName ?? game.guild.client.users.cache.get(id)?.username ?? 'Joueur');
 const alive = (game) => game.players.filter((id) => game.alive.has(id));
 const aliveWith = (game, role) => alive(game).filter((id) => game.roles.get(id) === role);
 const roleLabel = (role) => `${ROLES[role].emoji} ${ROLES[role].name}`;
@@ -77,7 +79,7 @@ async function tell(game, embed, { voice = null, ping = false } = {}) {
   await game.thread.send({
     content: ping ? mentions(alive(game)) : undefined,
     embeds: [embed],
-    allowedMentions: ping ? { users: alive(game) } : { parse: [] },
+    allowedMentions: ping ? { users: humans(alive(game)) } : { parse: [] },
   }).catch(() => {});
   if (voice && game.narrator) await game.narrator.say(voice);
 }
@@ -102,6 +104,7 @@ export async function startWerewolf(interaction) {
     waitMs: 150_000,
     color: 0x2c2f33,
     voice: { available: free.ok, channelId: voiceAiChannelId(), defaultOn: true },
+    testSize: 6,
   });
   if (!lobby) return undefined;
 
@@ -109,7 +112,7 @@ export async function startWerewolf(interaction) {
     id: shortId(), guild: interaction.guild, hostId: interaction.user.id,
     players: lobby.players, roles: dealRoles(lobby.players), alive: new Set(lobby.players),
     potions: { life: true, death: true }, day: 0, phase: 'setup', votes: new Map(), wolfVotes: new Map(),
-    seen: new Set(), witch: null, stopped: false, release: null, narrator: null,
+    seen: new Set(), witch: null, stopped: false, release: null, narrator: null, test: lobby.test,
   };
   games.set(game.id, game);
   game.thread = await gameThread(lobby.message, '🐺 Loup-garou');
@@ -128,7 +131,7 @@ export async function startWerewolf(interaction) {
     .map(([role, count]) => `${roleLabel(role)} ×${count}`).join(' · ');
 
   // Tous les rôles partent en même temps, avant même l'annonce dans le fil.
-  const { failed } = await sendRoleCards(interaction.client, game.players.map((userId) => {
+  const { failed } = await sendRoleCards(interaction.client, humans(game.players).map((userId) => {
     const role = game.roles.get(userId);
     const allies = role === 'loup' ? aliveWith(game, 'loup').filter((id) => id !== userId) : [];
     return {
@@ -203,6 +206,15 @@ async function night(game) {
 
   const wolves = aliveWith(game, 'loup');
   const seer = aliveWith(game, 'voyante')[0];
+  const day = game.day;
+  botsPlay(alive(game), () => !game.stopped && game.phase === 'wolves' && game.day === day, (bot) => {
+    const role = game.roles.get(bot);
+    if (role === 'loup') {
+      const target = pickFrom(alive(game), aliveWith(game, 'loup'));
+      if (target) game.wolfVotes.set(bot, target);
+    }
+    if (role === 'voyante') game.seen.add(bot);
+  });
   await waitPhase(game, NIGHT_MS, () => wolves.every((id) => game.wolfVotes.has(id)) && (!seer || game.seen.has(seer)));
   if (game.stopped) return [];
 
@@ -220,6 +232,13 @@ async function night(game) {
     game.witch = { victim, done: false, saved: false, poisoned: null };
     await game.thread.send({ content: `🧪 La sorcière se réveille… (fin <t:${Math.ceil((Date.now() + WITCH_MS) / 1000)}:R>)` }).catch(() => {});
     if (game.narrator) await game.narrator.say('La sorcière se réveille. Va-t-elle utiliser ses potions ?');
+    botsPlay([witch], () => !game.stopped && game.phase === 'witch' && !game.witch.done, () => {
+      if (game.potions.life && game.witch.victim && Math.random() < 0.4) {
+        game.potions.life = false;
+        game.witch.saved = true;
+      }
+      game.witch.done = true;
+    });
     await waitPhase(game, WITCH_MS, () => game.witch.done);
     saved = game.witch.saved;
     poisoned = game.witch.poisoned;
@@ -232,7 +251,7 @@ async function kill(game, id, how) {
   if (!game.alive.has(id)) return [];
   game.alive.delete(id);
   const role = game.roles.get(id);
-  const lines = [`💀 <@${id}> ${how}. C'était ${roleLabel(role)}.`];
+  const lines = [`💀 ${who(id)} ${how}. C'était ${roleLabel(role)}.`];
   if (role === 'chasseur') {
     const shot = await hunterShot(game, id);
     if (shot) lines.push(...await kill(game, shot, 'reçoit la dernière balle du chasseur'));
@@ -244,10 +263,15 @@ async function hunterShot(game, hunter) {
   game.phase = 'hunter';
   game.hunter = { id: hunter, target: null };
   await game.thread.send({
-    content: `🏹 <@${hunter}>, tu es mort mais tu as une dernière balle : choisis ta cible (fin <t:${Math.ceil((Date.now() + HUNTER_MS) / 1000)}:R>).`,
-    components: [targetMenu(game, 'hunt', 'Sur qui tu tires ?', [hunter])],
-    allowedMentions: { users: [hunter] },
+    content: `🏹 ${who(hunter)}, tu es mort mais tu as une dernière balle : choisis ta cible (fin <t:${Math.ceil((Date.now() + HUNTER_MS) / 1000)}:R>).`,
+    components: isBot(hunter) ? [] : [targetMenu(game, 'hunt', 'Sur qui tu tires ?', [hunter])],
+    allowedMentions: { users: humans([hunter]) },
   }).catch(() => {});
+  if (isBot(hunter)) {
+    await botPause();
+    game.hunter.target = pickFrom(alive(game), [hunter]);
+    if (game.hunter.target) await game.thread.send({ content: `🏹 ${botName(hunter)} tire sur ${who(game.hunter.target)} !`, allowedMentions: { parse: [] } }).catch(() => {});
+  }
   await waitPhase(game, HUNTER_MS, () => Boolean(game.hunter.target));
   const target = game.hunter.target;
   game.hunter = null;
@@ -267,7 +291,8 @@ async function dawn(game, deaths) {
 
 async function dayVote(game) {
   game.phase = 'discussion';
-  const endsAt = Math.ceil((Date.now() + DISCUSS_MS) / 1000);
+  const discussMs = game.test ? TEST_DISCUSS_MS : DISCUSS_MS;
+  const endsAt = Math.ceil((Date.now() + discussMs) / 1000);
   await tell(game, new EmbedBuilder().setColor(0xf1c40f).setTitle('🗣️ Débat')
     .setDescription(`Discutez ici ou en vocal : qui est un loup ? Le vote commence <t:${endsAt}:R>.\n-# <@${game.hostId}> peut lancer le vote plus tôt.`),
   { ping: true, voice: 'Le village se réunit. Débattez, puis votez pour éliminer un suspect.' });
@@ -276,7 +301,7 @@ async function dayVote(game) {
       new ButtonBuilder().setCustomId(`g:lg:${game.id}:skip`).setLabel('Voter maintenant').setEmoji('🗳️').setStyle(ButtonStyle.Primary),
     )],
   }).catch(() => {});
-  await waitPhase(game, DISCUSS_MS, () => false);
+  await waitPhase(game, discussMs, () => false);
   if (game.stopped) return;
 
   game.phase = 'vote';
@@ -286,6 +311,13 @@ async function dayVote(game) {
       .setDescription(`Choisissez qui éliminer (vous pouvez changer d'avis). Fin <t:${Math.ceil((Date.now() + VOTE_MS) / 1000)}:R>.`)],
     components: [targetMenu(game, 'vote', 'Qui éliminer ?')],
   }).catch(() => null);
+  const day = game.day;
+  botsPlay(alive(game), () => !game.stopped && game.phase === 'vote' && game.day === day, (bot) => {
+    // Un loup bot ne vote jamais contre un autre loup.
+    const spared = game.roles.get(bot) === 'loup' ? aliveWith(game, 'loup') : [bot];
+    const target = pickFrom(alive(game), [bot, ...spared]);
+    if (target) game.votes.set(bot, target);
+  });
   await waitPhase(game, VOTE_MS, () => alive(game).every((id) => game.votes.has(id)));
   await message?.edit({ components: [] }).catch(() => {});
   if (game.stopped) return;
@@ -293,7 +325,7 @@ async function dayVote(game) {
   const counts = new Map();
   for (const target of game.votes.values()) counts.set(target, (counts.get(target) ?? 0) + 1);
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const detail = sorted.map(([id, n]) => `<@${id}> : ${n}`).join(' · ') || 'aucun vote';
+  const detail = sorted.map(([id, n]) => `${who(id)} : ${n}`).join(' · ') || 'aucun vote';
   if (!sorted.length || (sorted[1] && sorted[1][1] === sorted[0][1])) {
     await tell(game, new EmbedBuilder().setColor(0x95a5a6).setTitle('⚖️ Égalité : personne n\'est éliminé').setDescription(detail), { voice: 'Le village n\'arrive pas à se décider. Personne n\'est éliminé.' });
     return;
@@ -325,7 +357,7 @@ async function finish(game, winners, reason) {
   game.skipWait?.();
   games.delete(game.id);
   const title = winners === 'loups' ? '🐺 Les loups-garous ont gagné !' : winners === 'village' ? '🎉 Le village a gagné !' : '⏹️ Partie arrêtée';
-  const roles = game.players.map((id) => `${game.alive.has(id) ? '❤️' : '💀'} <@${id}> · ${roleLabel(game.roles.get(id))}`).join('\n');
+  const roles = game.players.map((id) => `${game.alive.has(id) ? '❤️' : '💀'} ${who(id)} · ${roleLabel(game.roles.get(id))}`).join('\n');
   await tell(game, new EmbedBuilder().setColor(winners === 'loups' ? 0xed4245 : 0x57f287).setAuthor({ name: '🐺 LOUP-GAROU' }).setTitle(title)
     .setDescription(`${reason ? `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.\n\n` : ''}${roles}`),
   { voice: winners ? `${title.replace(/^\S+\s/, '')} ${reason}.` : null });
@@ -370,13 +402,13 @@ export async function handleWerewolfComponent(interaction) {
     if (game.hunter?.id !== userId) return interaction.reply({ content: 'Seul le chasseur peut tirer.', ...PRIVATE });
     const target = interaction.values[0];
     game.hunter.target = target;
-    return interaction.update({ content: `🏹 <@${userId}> tire sur <@${target}> !`, components: [], allowedMentions: { parse: [] } });
+    return interaction.update({ content: `🏹 ${who(userId)} tire sur ${who(target)} !`, components: [], allowedMentions: { parse: [] } });
   }
   if (!game.alive.has(userId)) return interaction.reply({ content: 'Les morts ne jouent plus 💀 (mais restent muets !)', ...PRIVATE });
 
   if (action === 'act') {
     if (game.phase === 'wolves' && role === 'loup') {
-      const others = [...game.wolfVotes.entries()].filter(([w]) => w !== userId).map(([w, t]) => `<@${w}> → <@${t}>`).join(' · ');
+      const others = [...game.wolfVotes.entries()].filter(([w]) => w !== userId).map(([w, t]) => `${who(w)} → ${who(t)}`).join(' · ');
       return interaction.reply({ content: `🐺 Choisis ta victime.${others ? `\nVotes des autres loups : ${others}` : ''}`, components: [targetMenu(game, 'wolf', 'Qui dévorer ?', aliveWith(game, 'loup'))], ...PRIVATE });
     }
     if (game.phase === 'wolves' && role === 'voyante') {

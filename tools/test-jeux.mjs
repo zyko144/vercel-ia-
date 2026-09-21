@@ -76,6 +76,7 @@ function makeChannel(name, { thread = true } = {}) {
     isVoiceBased: () => false,
     isThread: () => !thread,
     async send(payload) {
+      discordRules(payload);
       const message = makeMessage(channel, payload);
       channel.sent.push(message);
       for (const hook of channel.hooks) hook(message);
@@ -84,6 +85,21 @@ function makeChannel(name, { thread = true } = {}) {
   };
   channel.hooks = [];
   return channel;
+}
+
+/**
+ * Ce que l'API Discord refuse vraiment. Un message qui enfreint ces règles est
+ * rejeté par Discord — et comme les jeux ignorent les erreurs d'envoi, il
+ * disparaîtrait sans bruit : c'est la panne qu'on veut attraper ici.
+ */
+export const violations = [];
+function discordRules(payload) {
+  if (typeof payload !== 'object' || !payload) return;
+  for (const id of payload.allowedMentions?.users ?? []) {
+    if (!/^\d{15,21}$/.test(String(id)) && !/^\d{4}$/.test(String(id))) violations.push(`allowedMentions.users contient « ${id} »`);
+  }
+  const text = [payload.content ?? '', ...(payload.embeds ?? []).map((e) => JSON.stringify(e.data ?? e))].join(' ');
+  if (/<@!?bot-/.test(text)) violations.push(`mention brute d'un bot : ${text.match(/<@!?bot-[^>]*>/)[0]}`);
 }
 
 function makeMessage(channel, payload) {
@@ -375,6 +391,88 @@ await check('loup-garou : salle d’attente, rôles en MP, et la nuit tombe', as
   const stopButton = buttonsOf(nightControls).find((b) => b.endsWith(':stop'));
   await handleWerewolfComponent(makeComponent(host, stopButton, { channel: thread }));
   await waitFor('fin de partie', () => thread.sent.some((m) => /arrêtée|Victoire/i.test(textOf(m))), 6_000);
+});
+
+// ====================== Mode test : seul avec des bots ======================
+
+/** Joue le rôle du seul humain : il répond aux demandes d'indice et vote quand on le lui demande. */
+function autopilot(thread, human, handlers) {
+  const handled = new Set();
+  const timer = setInterval(async () => {
+    for (const message of thread.sent) {
+      if (handled.has(message.id)) continue;
+      handled.add(message.id);
+      if (new RegExp(`👉 <@${human.id}>, ton indice`).test(message.content ?? '')) say(thread, human, 'plutôt connu');
+      const vote = buttonsOf(message).find((b) => b.endsWith(':vote'));
+      if (vote) {
+        const options = (message.components[0].components[0].options ?? []).map((o) => o.data ?? o);
+        const target = options.find((o) => o.value !== human.id)?.value;
+        if (target) await handlers.component(makeComponent(human, vote, { values: [target], channel: thread })).catch(() => {});
+      }
+    }
+  }, 10);
+  return () => clearInterval(timer);
+}
+
+async function launchTest(start, handlers, size, title) {
+  const channel = makeChannel(`test-${title}`);
+  const human = makeUser(`Solo-${title}`);
+  const interaction = makeInteraction(human, channel, {});
+  interaction.guild = channel.guild;
+  channel.guild.client = { users: { cache: new Map([[human.id, human]]) } };
+  channel.guild.members.cache.set(human.id, { displayName: human.username, user: human });
+
+  start(interaction).catch((err) => console.error(`   ⚠️ ${title} :`, err));
+  const lobby = await waitFor(`salle d’attente ${title}`, () => channel.sent.find((m) => buttonsOf(m).some((b) => b.endsWith(':test'))));
+  await handleLobbyButton(makeComponent(human, buttonsOf(lobby).find((b) => b.endsWith(':test')), { channel }));
+
+  assert.match(textOf(lobby), /Partie de test/, 'la salle doit annoncer une partie de test');
+  const bots = (textOf(lobby).match(/🤖/g) ?? []).length;
+  assert.equal(bots, size - 1, `il faut ${size - 1} bots pour compléter la table`);
+
+  const thread = await waitFor('fil de la partie', () => channel.sent.map((m) => m.thread).find(Boolean));
+  const stop = autopilot(thread, human, handlers);
+  return { channel, thread, human, stop };
+}
+
+await check('imposteur en test : seul avec 3 bots, la partie va jusqu’au bout', async () => {
+  const before = violations.length;
+  const { thread, human, stop } = await launchTest(
+    (interaction) => startImpostor(interaction, 'bouffe'),
+    { component: handleImpostorComponent },
+    4,
+    'imposteur',
+  );
+  await waitFor('MP du joueur humain', () => human.dms.length);
+  assert.equal(human.dms.length, 1, 'seul l’humain reçoit un MP, pas les bots');
+
+  // Les bots doivent donner leurs indices eux-mêmes.
+  await waitFor('indice d’un bot', () => thread.sent.some((m) => /🤖 \w+ : « /.test(m.content ?? '')));
+
+  const ending = await waitFor('fin de la partie de test', () => thread.sent.find((m) => /Victoire/.test(textOf(m))), 30_000);
+  stop();
+  assert.ok(!/bug/.test(textOf(ending)), `la partie ne doit pas finir sur un bug : ${textOf(ending)}`);
+  assert.deepEqual(violations.slice(before), [], 'aucun message refusé par Discord');
+  console.log(`   ${textOf(ending).replace(/\s+/g, ' ').slice(0, 100)}`);
+});
+
+await check('loup-garou en test : seul avec 5 bots, la partie va jusqu’au bout', async () => {
+  const before = violations.length;
+  const { thread, human, stop } = await launchTest(
+    (interaction) => startWerewolf(interaction),
+    { component: handleWerewolfComponent },
+    6,
+    'loupgarou',
+  );
+  await waitFor('MP du joueur humain', () => human.dms.length);
+  assert.equal(human.dms.length, 1, 'seul l’humain reçoit un MP, pas les bots');
+  const myRole = (human.dms[0].embeds[0].data ?? human.dms[0].embeds[0]).title;
+
+  const ending = await waitFor('fin de la partie de test', () => thread.sent.find((m) => /ont gagné|a gagné/.test(textOf(m))), 60_000);
+  stop();
+  assert.deepEqual(violations.slice(before), [], 'aucun message refusé par Discord');
+  const nights = thread.sent.filter((m) => /NUIT \d/.test(textOf(m))).length;
+  console.log(`   ton rôle : ${myRole} · ${nights} nuit(s) · ${textOf(ending).replace(/\s+/g, ' ').slice(0, 70)}`);
 });
 
 // ====================== Les autres mini-jeux ======================
