@@ -3,6 +3,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { config } from '../config.js';
 import { slotRtp } from './games.js';
+import { salleButton } from './salle-discord.js';
 
 const COLOR = 0xff3fa6;
 const n = (value) => Math.round(value).toLocaleString('fr-FR');
@@ -18,12 +19,12 @@ export function guideEmbeds() {
       [
         '**Une seule commande pour jouer : `/casino`.**',
         '',
+        '🎰 **Salle de jeux** : tous les jeux, où l’on joue **en cliquant** — tes jetons sur le tapis, les cartes, les cases des mines, la fusée du crash. Elle s’ouvre dans Discord (ou dans ton navigateur), et les tables sont partagées par tout le salon.',
+        '',
         '1️⃣ Tape `/casino` et choisis ta table dans le menu.',
         '2️⃣ Règle ta mise avec les boutons (100 · 1k · 10k · 100k · 1M, ÷2, ×2, Tout).',
         '3️⃣ Choisis ton pari dans le menu si le jeu en a un, puis appuie sur **▶️ Jouer**.',
         '4️⃣ À la fin, **🔁 Rejouer** relance avec la même mise.',
-        '',
-        '🎡 La **roulette** s’ouvre sur une vraie table : tu choisis un **jeton** (10, 20, 50, 100… jusqu’au million) et tu **cliques sur le tapis** pour le poser. Tout le salon joue à la même table.',
         '',
         '👥 **À plusieurs** : dans le même menu, choisis une table « à plusieurs » (crash, blackjack). Elle s’ouvre pour tout le salon : chacun mise de son côté, et un seul tirage vaut pour tout le monde.',
         '',
@@ -92,7 +93,8 @@ export function guideEmbeds() {
 export function guideButtons() {
   return [
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ctb:open:guide').setLabel('Ouvrir le casino').setEmoji('🎰').setStyle(ButtonStyle.Success),
+      salleButton(),
+      new ButtonBuilder().setCustomId('ctb:open:guide').setLabel('Ouvrir le casino').setEmoji('🎲').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('ctb:daily:guide').setLabel('Jetons du jour').setEmoji('🎁').setStyle(ButtonStyle.Primary),
     ),
   ];

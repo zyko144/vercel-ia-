@@ -19,7 +19,7 @@ import { startBlackjack } from './blackjack.js';
 import { AUTO_CASHOUTS, autoChance, minesMultiplier, startCrash, startDuel, startHiLo, startMines } from './live.js';
 import { claimDaily, showLeaderboard } from './wallet.js';
 import { MULTI_GAMES, openMultiTable } from './multi.js';
-import { openRouletteHall } from './roulette-discord.js';
+import { openGameHall, salleButton } from './salle-discord.js';
 import { CALL, animationFor } from './render/animations.js';
 import { resultImage } from './render/scenes.js';
 
@@ -46,7 +46,7 @@ const TABLES = {
     info: 'Croupier sur 17 · blackjack payé 3:2 · TRJ ≈ 99,5 %',
     start: (interaction, panel) => startBlackjack(interaction, panel.bet, { viaUpdate: true }),
   },
-  // La roulette a sa propre table, cliquable (roulette-discord.js, roulette-web.js).
+  // La roulette n'existe qu'en table cliquable (salle-discord.js, salle/).
   roulette: {
     title: '🎡 Roulette',
     kind: 'tapis',
@@ -274,7 +274,7 @@ function afterRoundComponents(panel) {
 export async function openTable(interaction, gameId, { bet = null, viaUpdate = false } = {}) {
   const table = TABLES[gameId];
   if (!table) return interaction.reply({ content: 'Jeu inconnu.', flags: MessageFlags.Ephemeral });
-  if (table.kind === 'tapis') return openRouletteHall(interaction);
+  if (table.kind === 'tapis') return openGameHall(interaction, 'roulette');
 
   const panel = {
     id: newId(),
@@ -298,8 +298,8 @@ export async function openLobby(interaction) {
     .setTitle('🎰 Casinho')
     .setDescription(
       [
-        'Choisis une table dans le menu. Tout se règle ensuite dans l’embed :',
-        'la mise avec les boutons, le pari avec le menu, puis **Jouer**.',
+        '🎰 **Salle de jeux** : tous les jeux, où l’on joue en cliquant (tes jetons sur le tapis, les cartes, la fusée…).',
+        'Ou choisis un jeu dans le menu : tu pourras l’ouvrir dans la salle, ou le jouer ici avec les boutons.',
         '👥 Les tables **à plusieurs** s’ouvrent ici même : tout le salon peut miser sur le même tirage.',
         '',
         `Solde : **${chips(await balance(interaction.user.id))}**`,
@@ -325,6 +325,7 @@ export async function openLobby(interaction) {
           ),
       ),
       new ActionRowBuilder().addComponents(
+        salleButton(),
         new ButtonBuilder().setCustomId('ctb:daily:hall').setLabel('Jetons du jour').setEmoji('🎁').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('ctb:top:hall').setLabel('Classement').setEmoji('🏆').setStyle(ButtonStyle.Secondary),
       ),
@@ -340,7 +341,8 @@ export async function handleTableComponent(interaction) {
   if (action === 'pick') {
     const choice = interaction.values[0];
     if (choice.startsWith('multi-')) return openMultiTable(interaction, choice.slice('multi-'.length));
-    return openTable(interaction, choice, { viaUpdate: true });
+    // Chaque jeu s'ouvre d'abord sur sa table cliquable (avec « Jouer ici » pour rester dans le message).
+    return openGameHall(interaction, choice);
   }
   // Le bouton du message épinglé dans le salon des jeux : ouvre un hall, comme /casino.
   if (action === 'open') return openLobby(interaction);

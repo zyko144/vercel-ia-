@@ -137,6 +137,13 @@ export async function daily(userId, now = Date.now()) {
   return { ok: true, amount, streak: me.streak, balance: me.chips };
 }
 
+/** Les jetons du jour sont-ils à prendre ? (sans les prendre : pour l'affichage) */
+export async function dailyStatus(userId, now = Date.now()) {
+  const me = await account(userId);
+  const taken = me.daily && dayOf(me.daily) === dayOf(now) && (me.dailyReward ?? 0) >= config.casinho.dailyReward;
+  return taken ? { available: false, wait: untilMidnight(now) } : { available: true, amount: config.casinho.dailyReward };
+}
+
 /** Filet de sécurité : un joueur à sec récupère de quoi rejouer, une fois par heure. */
 export async function rescue(userId) {
   const all = await bank();

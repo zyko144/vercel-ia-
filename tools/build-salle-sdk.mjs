@@ -1,8 +1,8 @@
 /**
  * Prépare le kit des Activités Discord pour le navigateur : un seul fichier,
- * web/roulette/sdk.js, servi par le bot. Il est versionné : Render n'a rien à construire.
+ * web/salle/sdk.js, servi par le bot. Il est versionné : Render n'a rien à construire.
  *
- *   npm run build:roulette
+ *   npm run build:salle
  */
 import { build } from 'esbuild';
 
@@ -13,7 +13,7 @@ await build({
   minify: true,
   target: 'es2020',
   platform: 'browser',
-  outfile: 'web/roulette/sdk.js',
+  outfile: 'web/salle/sdk.js',
   legalComments: 'eof',
 });
-console.log('web/roulette/sdk.js prêt');
+console.log('web/salle/sdk.js prêt');

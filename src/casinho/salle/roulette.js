@@ -1,5 +1,5 @@
 // La table de roulette du salon : un tapis par salon Discord, où chacun pose ses
-// jetons en cliquant (page web ou Activité Discord : voir roulette-web.js).
+// jetons en cliquant (la salle de jeux : page web ou Activité Discord, voir web.js).
 // Ce fichier est le moteur — règles, jetons, tours, paiements. Il ne parle ni à
 // Discord ni au navigateur.
 //
@@ -7,10 +7,11 @@
 // Quand tous ceux qui ont misé ont lancé — ou 15 s après le premier —, la bille
 // part : les mises sont prélevées, le numéro est tiré, chaque case est payée à
 // part. La roue tourne à l'écran, les gains restent affichés, puis tour suivant.
-import { config } from '../config.js';
-import { balance, rand, settle, stake } from './economy.js';
-import { ROULETTE_BETS } from './games.js';
-import { CHIPS, PLAYER_COLORS } from './render/tapis.js';
+import { config } from '../../config.js';
+import { balance, rand, settle, stake } from '../economy.js';
+import { ROULETTE_BETS } from '../games.js';
+import { CHIPS } from '../render/tapis.js';
+import { announceRoundEnd, freeColour, isRoomId, tableStore } from './common.js';
 
 /** Durées d'un tour (modifiables par les tests). */
 export const timing = {
@@ -18,7 +19,6 @@ export const timing = {
   spin: 7_000, // la roue tourne à l'écran
   results: 8_000, // les gains restent affichés sur le tapis
 };
-const IDLE_MS = 30 * 60_000; // une table sans visite disparaît
 const AWAY_MS = 2 * 60_000; // un joueur sans jeton qui ne regarde plus quitte la table
 const MAX_CHIPS = 60; // jetons par joueur et par tour
 const MAX_PLAYERS = 10;
@@ -58,31 +58,11 @@ export function payoutFor(bets, pocket) {
 }
 
 // ------------------------------------------------------------------- Les tables
-const rooms = new Map();
-const roundEndListeners = new Set();
-
-/** Prévient (par exemple le message Discord du salon) à la fin de chaque tour. */
-export function onRoundEnd(listener) {
-  roundEndListeners.add(listener);
-  return () => roundEndListeners.delete(listener);
-}
-
-export const isRoomId = (id) => typeof id === 'string' && /^[0-9]{5,25}$/.test(id);
-
-function roomFor(id) {
-  let room = rooms.get(id);
-  if (!room) {
-    room = { id, phase: 'mises', round: 0, version: 0, players: new Map(), history: [], spin: null, closesAt: null, timer: null };
-    rooms.set(id, room);
-  }
-  room.touched = Date.now();
-  clearTimeout(room.idle);
-  room.idle = setTimeout(() => {
-    clearTimeout(room.timer);
-    rooms.delete(id);
-  }, IDLE_MS).unref();
-  return room;
-}
+const rooms = tableStore(
+  (id) => ({ id, phase: 'mises', round: 0, version: 0, players: new Map(), history: [], spin: null, closesAt: null, timer: null }),
+  { cleanup: (room) => clearTimeout(room.timer) },
+);
+const roomFor = (id) => rooms.get(id);
 
 const bump = (room) => {
   room.version += 1;
@@ -92,8 +72,7 @@ function playerFor(room, user) {
   let player = room.players.get(user.id);
   if (!player) {
     // Chacun sa couleur de jetons : la première qui n'est pas prise.
-    const taken = new Set([...room.players.values()].map((other) => other.colour));
-    const colour = PLAYER_COLORS.find((c) => !taken.has(c)) ?? PLAYER_COLORS[room.players.size % PLAYER_COLORS.length];
+    const colour = freeColour([...room.players.values()].map((other) => other.colour));
     player = { userId: user.id, name: user.name, colour, bets: new Map(), order: [], ready: false, previous: null, result: null };
     room.players.set(user.id, player);
     bump(room);
@@ -271,8 +250,8 @@ async function spin(room) {
   room.timer = setTimeout(() => {
     room.phase = 'resultats';
     bump(room);
-    const summary = { roomId: room.id, pocket, round: room.round, results: results.map(({ player, ...rest }) => ({ ...rest, name: player.name, userId: player.userId, colour: player.colour, bets: [...player.bets].map(([key, values]) => [key, [...values]]) })) };
-    for (const listener of roundEndListeners) Promise.resolve(listener(summary)).catch((err) => console.warn('[casinho] roulette (fin de tour) :', err.message));
+    const summary = { game: 'roulette', roomId: room.id, pocket, round: room.round, results: results.map(({ player, ...rest }) => ({ ...rest, name: player.name, userId: player.userId, colour: player.colour, bets: [...player.bets].map(([key, values]) => [key, [...values]]) })) };
+    announceRoundEnd(summary);
     room.timer = setTimeout(() => nextRound(room), timing.results).unref();
   }, timing.spin).unref();
 }
@@ -335,10 +314,9 @@ export async function view(roomId, user) {
 
 export const openRooms = () => rooms.size;
 /** Pour les tests : oublie toutes les tables. */
-export function resetRooms() {
-  for (const room of rooms.values()) {
-    clearTimeout(room.timer);
-    clearTimeout(room.idle);
-  }
-  rooms.clear();
-}
+export const resetRooms = () => rooms.reset();
+/** Pour le hall : combien de joueurs ont des jetons sur ce tapis. */
+export const activity = (roomId) => {
+  const room = rooms.peek(roomId);
+  return room ? staked(room).length : 0;
+};

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Casinho · Salle de jeux</title>
+  <link rel="stylesheet" href="/salle/style.css">
+  <script type="module" src="/salle/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="bar">
+      <button id="back" class="back" type="button" hidden>← Salle</button>
+      <div class="brand">Casinho <span id="where">Salle de jeux</span></div>
+      <div class="spacer"></div>
+      <button id="gift" class="gift" type="button" hidden>🎁 Jetons du jour</button>
+      <div class="wallet"><small>Solde</small><strong id="balance">—</strong></div>
+    </header>
+    <main id="view"><div class="loading">Connexion à la salle…</div></main>
+  </div>
+  <div class="modal" id="modal" hidden></div>
+  <div class="toast" id="toast" role="alert" hidden></div>
+</body>
+</html>

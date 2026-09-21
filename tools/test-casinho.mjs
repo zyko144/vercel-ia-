@@ -17,9 +17,18 @@ const { grant, balance, chips, rand, reset } = await import(new URL('economy.js'
 const { startBlackjack, handleBlackjackButton } = await import(new URL('blackjack.js', ROOT));
 const { resolveInstant, slotRtp, rouletteRtp, diceRtp, evenRtp, slotSpin, diceRoll, coinToss, cardColour } =
   await import(new URL('games.js', ROOT));
-const { act, view, timing, onRoundEnd, resetRooms, payoutFor, spotRule, winningSpots } = await import(new URL('roulette.js', ROOT));
-const { createSession, readSession, personalLink, handleRouletteWeb } = await import(new URL('roulette-web.js', ROOT));
-const { handleRouletteButton } = await import(new URL('roulette-discord.js', ROOT));
+const roulette = await import(new URL('salle/roulette.js', ROOT));
+const { payoutFor, spotRule, winningSpots, resetRooms } = roulette;
+const crash = await import(new URL('salle/crash.js', ROOT));
+const { resetCrash } = crash;
+const blackjack = await import(new URL('salle/blackjack.js', ROOT));
+const { resetBlackjack } = blackjack;
+const duel = await import(new URL('salle/duel.js', ROOT));
+const { resetDuels, incomingFor } = duel;
+const { minesGame, hiloGame, machineGame, pieceGame, cartesGame, desGame, resetSolo } = await import(new URL('salle/solo.js', ROOT));
+const { onRoundEnd, markPresent } = await import(new URL('salle/common.js', ROOT));
+const { createSession, readSession, personalLink, handleSalleWeb, GAME_IDS } = await import(new URL('salle/web.js', ROOT));
+const { handleSalleButton } = await import(new URL('salle-discord.js', ROOT));
 const { startMines, startCrash, startHiLo, startDuel, handleLiveButton, minesMultiplier } = await import(new URL('live.js', ROOT));
 const { openTable, openLobby, handleTableComponent, TABLE_GAMES } = await import(new URL('table.js', ROOT));
 const wallet = await import(new URL('wallet.js', ROOT));
@@ -335,7 +344,7 @@ await check('choisir son pari dans le menu met la table à jour', async () => {
   assert.match(field.value, /Exactement 7/);
 });
 
-// ------------------------------------------------ Roulette : la table cliquable
+// ------------------------------------------------ La salle de jeux cliquable
 const ROOM = '100000000000000042';
 const who = (id, name = id) => ({ id, name });
 const A = who('900000000000000011', 'Alice');
@@ -347,6 +356,25 @@ const millionFor = async (id) => {
 };
 const mineIn = (state) => state.players.find((p) => p.me);
 const betOf = (state, spot) => (mineIn(state).bets.find(([key]) => key === spot)?.[1] ?? []);
+/** Attend qu'une condition devienne vraie (les tours partagés avancent tout seuls). */
+async function until(condition, { timeout = 4_000, step = 20 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (await condition()) return true;
+    await sleepMs(step);
+  }
+  throw new Error('délai dépassé');
+}
+/** Remplace les durées d'un jeu le temps d'un test. */
+async function quick(timing, values, fn) {
+  const saved = { ...timing };
+  Object.assign(timing, values);
+  try {
+    return await fn();
+  } finally {
+    Object.assign(timing, saved);
+  }
+}
 
 await check('roulette : chaque case paie 36/37, du rouge au numéro plein', () => {
   const spots = ['rouge', 'noir', 'pair', 'impair', 'manque', 'passe', 'douzaine1', 'douzaine2', 'douzaine3', 'colonne1', 'colonne2', 'colonne3'];
@@ -360,135 +388,249 @@ await check('roulette : chaque case paie 36/37, du rouge au numéro plein', () =
   for (const junk of ['constructor', 'plein-37', 'plein-07', 'plein-', 'plein', 42, null]) assert.equal(spotRule(junk), null, `case inconnue : ${junk}`);
 });
 
-await check('table cliquable : des jetons de 20, 50, 100… posés, empilés, retirés', async () => {
+await check('salle · roulette : des jetons de 20, 50, 100… posés, empilés, retirés', async () => {
   resetRooms();
   await millionFor(A.id);
-  assert.equal((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 20 })).ok, true);
-  await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 20 }); // empilé
-  await act(ROOM, A, { action: 'poser', spot: 'plein-17', value: 50 });
-  await act(ROOM, A, { action: 'poser', spot: 'douzaine3', value: 100 });
-  await act(ROOM, A, { action: 'poser', spot: 'plein-36', value: 500 });
-  let state = await view(ROOM, A);
+  assert.equal((await roulette.act(ROOM, A, { action: 'poser', spot: 'rouge', value: 20 })).ok, true);
+  await roulette.act(ROOM, A, { action: 'poser', spot: 'rouge', value: 20 }); // empilé
+  await roulette.act(ROOM, A, { action: 'poser', spot: 'plein-17', value: 50 });
+  await roulette.act(ROOM, A, { action: 'poser', spot: 'douzaine3', value: 100 });
+  await roulette.act(ROOM, A, { action: 'poser', spot: 'plein-36', value: 500 });
+  let state = await roulette.view(ROOM, A);
   assert.deepEqual(betOf(state, 'rouge'), [20, 20], 'deux jetons de 20 empilés sur rouge');
   assert.equal(state.me.onTable, 690);
   assert.equal(state.me.balance, 1_000_000, 'rien n’est prélevé avant le lancement');
-
-  await act(ROOM, A, { action: 'annuler' }); // le dernier : 500 sur le 36
-  await act(ROOM, A, { action: 'retirer', spot: 'rouge' }); // un jeton de 20 sur rouge (clic droit)
-  state = await view(ROOM, A);
+  await roulette.act(ROOM, A, { action: 'annuler' });
+  await roulette.act(ROOM, A, { action: 'retirer', spot: 'rouge' });
+  state = await roulette.view(ROOM, A);
   assert.deepEqual(betOf(state, 'rouge'), [20]);
   assert.deepEqual(betOf(state, 'plein-36'), [], '« Annuler » retire le dernier jeton posé');
-  assert.equal(state.me.onTable, 170);
-
-  await act(ROOM, A, { action: 'doubler' });
-  assert.equal((await view(ROOM, A)).me.onTable, 340, '×2 double tous les jetons');
-  await act(ROOM, A, { action: 'effacer' });
-  assert.equal((await view(ROOM, A)).me.onTable, 0);
-
-  // Les refus : jeton ou case inventés, solde, maximum par case.
-  assert.match((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 7 })).error, /Jeton inconnu/);
-  assert.match((await act(ROOM, A, { action: 'poser', spot: 'bleu', value: 20 })).error, /Case inconnue/);
-  assert.match((await act('pas-un-salon', A, { action: 'poser', spot: 'rouge', value: 20 })).error, /Table inconnue/);
-  await act(ROOM, A, { action: 'poser', spot: 'noir', value: 1_000_000 });
-  assert.match((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 10 })).error, /Il te reste 0/, 'le solde est déjà sur le tapis');
+  await roulette.act(ROOM, A, { action: 'doubler' });
+  assert.equal((await roulette.view(ROOM, A)).me.onTable, 340, '×2 double tous les jetons');
+  await roulette.act(ROOM, A, { action: 'effacer' });
+  assert.match((await roulette.act(ROOM, A, { action: 'poser', spot: 'rouge', value: 7 })).error, /Jeton inconnu/);
+  assert.match((await roulette.act(ROOM, A, { action: 'poser', spot: 'bleu', value: 20 })).error, /Case inconnue/);
+  await roulette.act(ROOM, A, { action: 'poser', spot: 'noir', value: 1_000_000 });
+  assert.match((await roulette.act(ROOM, A, { action: 'poser', spot: 'rouge', value: 10 })).error, /Il te reste 0/);
   await grant(A.id, 5_000_000);
-  assert.match((await act(ROOM, A, { action: 'poser', spot: 'noir', value: 1_000_000 })).error, /maximum par case/);
+  assert.match((await roulette.act(ROOM, A, { action: 'poser', spot: 'noir', value: 1_000_000 })).error, /maximum par case/);
   resetRooms();
 });
 
-await check('table cliquable : à deux, chacun ses jetons, une seule bille, payés au jeton près', async () => {
+await check('salle · roulette : à deux, une seule bille, payés au jeton près, puis « Remettre »', async () => {
   resetRooms();
-  const saved = { ...timing };
-  Object.assign(timing, { lastCall: 400, spin: 80, results: 150 });
   const ends = [];
   const stop = onRoundEnd((summary) => ends.push(summary));
   try {
-    await millionFor(A.id);
-    await millionFor(B.id);
-    const betsA = [['rouge', [1_000, 1_000]], ['plein-0', [100]], ['colonne1', [50, 20]]];
-    const betsB = [['noir', [20, 20, 20]], ['douzaine1', [10_000]]];
-    for (const [spot, values] of betsA) for (const value of values) await act(ROOM, A, { action: 'poser', spot, value });
-    for (const [spot, values] of betsB) for (const value of values) await act(ROOM, B, { action: 'poser', spot, value });
-
-    // Chacun voit les jetons de l'autre, dans sa couleur.
-    const seenByB = await view(ROOM, B);
-    const alice = seenByB.players.find((p) => p.name === 'Alice');
-    assert.ok(alice && !alice.me && alice.total === 2_170, 'B voit les jetons d’Alice');
-    assert.notEqual(alice.color, mineIn(seenByB).color, 'chacun sa couleur');
-
-    // A lance : dernier appel pour B. B lance : la bille part tout de suite.
-    await act(ROOM, A, { action: 'lancer' });
-    assert.ok((await view(ROOM, A)).closesAt, 'le premier « Lancer » ouvre le dernier appel');
-    assert.equal((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 10 })).ok, true, 'on peut encore miser pendant le dernier appel');
-    await act(ROOM, A, { action: 'retirer', spot: 'rouge' });
-    await act(ROOM, A, { action: 'lancer' });
-    await act(ROOM, B, { action: 'lancer' });
-    const spinning = await view(ROOM, A);
-    assert.equal(spinning.phase, 'tirage', 'tout le monde a lancé : la bille part');
-    const pocket = spinning.spin.pocket;
-    assert.match((await act(ROOM, B, { action: 'poser', spot: 'rouge', value: 10 })).error, /Rien ne va plus/);
-
-    await sleepMs(120);
-    const after = await view(ROOM, A);
-    assert.equal(after.phase, 'resultats');
-    assert.ok(after.spin.winning.includes(`plein-${pocket}`));
-    for (const [player, bets] of [[A, betsA], [B, betsB]]) {
-      const total = bets.reduce((sum, [, values]) => sum + values.reduce((a, v) => a + v, 0), 0);
-      assert.equal((await balance(player.id)) - 1_000_000, payoutFor(bets, pocket) - total, `${player.name} : paiement faux sur le ${pocket}`);
-    }
-    assert.equal(ends.length, 1, 'la fin du tour est annoncée une fois');
-    assert.equal(ends[0].results.length, 2);
-
-    // Tour suivant : tapis vide, et « Remettre » rejoue ses jetons.
-    await sleepMs(200);
-    const next = await view(ROOM, A);
-    assert.equal(next.phase, 'mises');
-    assert.equal(next.me.onTable, 0);
-    assert.equal(next.me.canRebet, true);
-    await act(ROOM, A, { action: 'remettre' });
-    assert.equal((await view(ROOM, A)).me.onTable, 2_170, '« Remettre » repose les mêmes jetons');
-    assert.deepEqual(next.history, [pocket]);
-    console.log(`   la bille tombe sur le ${pocket} : Alice ${payoutFor(betsA, pocket) - 2_170 >= 0 ? '+' : ''}${payoutFor(betsA, pocket) - 2_170}, Bruno ${payoutFor(betsB, pocket) - 10_060 >= 0 ? '+' : ''}${payoutFor(betsB, pocket) - 10_060}`);
+    await quick(roulette.timing, { lastCall: 400, spin: 80, results: 150 }, async () => {
+      await millionFor(A.id);
+      await millionFor(B.id);
+      const betsA = [['rouge', [1_000, 1_000]], ['plein-0', [100]], ['colonne1', [50, 20]]];
+      const betsB = [['noir', [20, 20, 20]], ['douzaine1', [10_000]]];
+      for (const [spot, values] of betsA) for (const value of values) await roulette.act(ROOM, A, { action: 'poser', spot, value });
+      for (const [spot, values] of betsB) for (const value of values) await roulette.act(ROOM, B, { action: 'poser', spot, value });
+      const seenByB = await roulette.view(ROOM, B);
+      const alice = seenByB.players.find((p) => p.name === 'Alice');
+      assert.ok(alice && !alice.me && alice.total === 2_170, 'B voit les jetons d’Alice');
+      assert.notEqual(alice.color, mineIn(seenByB).color, 'chacun sa couleur');
+      await roulette.act(ROOM, A, { action: 'lancer' });
+      assert.ok((await roulette.view(ROOM, A)).closesAt, 'le premier « Lancer » ouvre le dernier appel');
+      await roulette.act(ROOM, B, { action: 'lancer' });
+      const spinning = await roulette.view(ROOM, A);
+      assert.equal(spinning.phase, 'tirage', 'tout le monde a lancé : la bille part');
+      const { pocket } = spinning.spin;
+      await until(async () => (await roulette.view(ROOM, A)).phase === 'resultats');
+      for (const [player, bets] of [[A, betsA], [B, betsB]]) {
+        const total = bets.reduce((sum, [, values]) => sum + values.reduce((a, v) => a + v, 0), 0);
+        assert.equal((await balance(player.id)) - 1_000_000, payoutFor(bets, pocket) - total, `${player.name} : paiement faux sur le ${pocket}`);
+      }
+      assert.equal(ends.filter((e) => e.game === 'roulette').length, 1, 'la fin du tour est annoncée une fois');
+      await until(async () => (await roulette.view(ROOM, A)).phase === 'mises');
+      await roulette.act(ROOM, A, { action: 'remettre' });
+      assert.equal((await roulette.view(ROOM, A)).me.onTable, 2_170, '« Remettre » repose les mêmes jetons');
+      console.log(`   roulette : la bille tombe sur le ${pocket}`);
+    });
   } finally {
     stop();
-    Object.assign(timing, saved);
     resetRooms();
   }
 });
 
-await check('table cliquable : le dernier appel fait partir la bille sans attendre les retardataires', async () => {
-  resetRooms();
-  const saved = { ...timing };
-  Object.assign(timing, { lastCall: 80, spin: 40, results: 40 });
-  try {
+await check('salle · crash : une fusée pour deux, l’un encaisse à la main, l’autre en automatique', async () => {
+  resetCrash();
+  await quick(crash.timing, { countdown: 60, liftoff: 30, pause: 150, speed: 150 }, async () => {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await millionFor(A.id);
+      await millionFor(B.id);
+      assert.match((await crash.act(ROOM, A, { action: 'miser', bet: 2_000, auto: 0.5 })).error, /automatique invalide/);
+      await crash.act(ROOM, A, { action: 'miser', bet: 10_000, auto: 1.2 });
+      await crash.act(ROOM, B, { action: 'miser', bet: 1_000 });
+      const waiting = await crash.view(ROOM, B);
+      assert.ok(waiting.countdownEnds, 'la première mise lance le compte à rebours');
+      assert.equal(waiting.point, null, 'le point d’explosion reste secret');
+      await until(async () => (await crash.view(ROOM, B)).phase !== 'mises');
+      await sleepMs(60);
+      const cashed = await crash.act(ROOM, B, { action: 'encaisser' });
+      await until(async () => (await crash.view(ROOM, A)).phase === 'explose', { timeout: 5_000 });
+      const over = await crash.view(ROOM, A);
+      if (!cashed.ok) {
+        await until(async () => (await crash.view(ROOM, A)).phase === 'mises');
+        continue; // explosée tout de suite : on recommence
+      }
+      const bruno = over.players.find((p) => p.name === 'Bruno');
+      assert.equal((await balance(B.id)) - 1_000_000, Math.round(1_000 * bruno.cashedAt) - 1_000, 'Bruno est payé à son multiplicateur');
+      const alice = over.players.find((p) => p.name === 'Alice');
+      const expectedA = over.point > 1.2 ? Math.round(10_000 * 1.2) - 10_000 : -10_000;
+      assert.equal((await balance(A.id)) - 1_000_000, expectedA, `Alice : auto ×1,2, explosion à ×${over.point}`);
+      assert.equal(alice.cashedAt ?? null, over.point > 1.2 ? 1.2 : null);
+      assert.ok(over.point >= 1 && over.point <= 100);
+      console.log(`   crash : Bruno encaisse à ×${bruno.cashedAt}, explosion à ×${over.point}`);
+      return;
+    }
+    throw new Error('aucune fusée n’a volé en 40 essais');
+  });
+  resetCrash();
+});
+
+await check('salle · blackjack : deux places, un croupier, paiement selon les règles de Discord', async () => {
+  resetBlackjack();
+  await quick(blackjack.timing, { lastCall: 2_000, turn: 3_000, dealerStep: 5, results: 200 }, async () => {
     await millionFor(A.id);
     await millionFor(B.id);
-    await act(ROOM, A, { action: 'poser', spot: 'pair', value: 100 });
-    await act(ROOM, B, { action: 'poser', spot: 'impair', value: 100 });
-    await act(ROOM, A, { action: 'lancer' });
-    await sleepMs(120);
-    const state = await view(ROOM, B);
-    assert.notEqual(state.phase, 'mises', 'la bille est partie à la fin du dernier appel');
-    assert.equal((await balance(B.id)) - 1_000_000, payoutFor([['impair', [100]]], state.spin.pocket) - 100, 'les jetons de B ont joué aussi');
-  } finally {
-    Object.assign(timing, saved);
-    resetRooms();
-  }
+    await blackjack.act(ROOM, A, { action: 'miser', bet: 1_000 });
+    await blackjack.act(ROOM, B, { action: 'miser', bet: 5_000 });
+    await blackjack.act(ROOM, A, { action: 'distribuer' });
+    assert.ok((await blackjack.view(ROOM, A)).closesAt, 'on attend que Bruno distribue');
+    await blackjack.act(ROOM, B, { action: 'distribuer' });
+    const dealt = await blackjack.view(ROOM, A);
+    assert.notEqual(dealt.phase, 'mises', 'tout le monde est prêt : la donne part');
+    assert.ok(dealt.dealer.cards.length >= 1);
+    if (dealt.phase === 'jeu') assert.equal(dealt.dealer.hidden, 1, 'la carte cachée du croupier ne se voit pas');
+    // Chacun joue sa main : Alice reste, Bruno aussi.
+    for (const player of [A, B]) if ((await blackjack.view(ROOM, player)).players.find((p) => p.me).hands.some((h) => h.active)) await blackjack.act(ROOM, player, { action: 'rester' });
+    await until(async () => (await blackjack.view(ROOM, A)).phase === 'resultats');
+    const done = await blackjack.view(ROOM, A);
+    const dealerTotal = done.dealer.total;
+    assert.ok(done.dealer.bust || dealerTotal >= 17 || done.players.every((p) => p.hands.every((h) => h.bust || h.blackjack)), 'le croupier tire jusqu’à 17');
+    for (const [player, bet] of [[A, 1_000], [B, 5_000]]) {
+      const seat = done.players.find((p) => p.name === player.name);
+      const hand = seat.hands[0];
+      let payout;
+      if (hand.bust) payout = 0;
+      else if (hand.blackjack) payout = done.dealer.cards.length === 2 && dealerTotal === 21 ? bet : Math.round(bet * 2.5);
+      else if (done.dealer.cards.length === 2 && dealerTotal === 21) payout = 0;
+      else if (done.dealer.bust || hand.total > dealerTotal) payout = bet * 2;
+      else if (hand.total === dealerTotal) payout = bet;
+      else payout = 0;
+      assert.equal((await balance(player.id)) - 1_000_000, payout - bet, `${player.name} : ${hand.total} contre ${dealerTotal}`);
+    }
+    await until(async () => (await blackjack.view(ROOM, A)).phase === 'mises');
+    const next = await blackjack.view(ROOM, A);
+    assert.equal(next.players.find((p) => p.me).bet, 0, 'personne ne rejoue sans le vouloir');
+    assert.equal(next.me.previous, 1_000, '« Remettre » retrouve la mise');
+    console.log(`   blackjack : croupier ${dealerTotal}${done.dealer.bust ? ' (sauté)' : ''}`);
+  });
+  resetBlackjack();
 });
 
-await check('table cliquable : sessions signées, pages et API', async () => {
+await check('salle · mines et plus ou moins : les gains suivent les chances, encaissement compris', async () => {
+  resetSolo();
+  await millionFor(A.id);
+  assert.match((await minesGame.act(ROOM, A, { action: 'jouer', bet: 1_000, bombs: 4 })).error, /nombre de bombes/);
+  await minesGame.act(ROOM, A, { action: 'jouer', bet: 1_000, bombs: 1 });
+  assert.match((await minesGame.act(ROOM, A, { action: 'jouer', bet: 1_000, bombs: 1 })).error, /en cours/);
+  // Avec une seule bombe, on ouvre des cases jusqu'à en trouver deux sûres (ou sauter).
+  let state = await minesGame.view(ROOM, A);
+  assert.equal(state.round.bombs, null, 'les bombes restent cachées pendant la partie');
+  for (let cell = 0; cell < 20 && !state.round.over && state.round.opened.length < 2; cell++) {
+    await minesGame.act(ROOM, A, { action: 'ouvrir', cell });
+    state = await minesGame.view(ROOM, A);
+  }
+  if (!state.round.over) await minesGame.act(ROOM, A, { action: 'encaisser' });
+  state = await minesGame.view(ROOM, A);
+  const expected = state.round.over === 'bombe' ? -1_000 : Math.round(1_000 * minesMultiplier(1, state.round.opened.length)) - 1_000;
+  assert.equal((await balance(A.id)) - 1_000_000, expected, `mines : ${state.round.over} après ${state.round.opened.length} case(s)`);
+  assert.equal(state.round.bombs.length, 1, 'à la fin, la bombe se montre');
+
+  await millionFor(A.id);
+  await hiloGame.act(ROOM, A, { action: 'jouer', bet: 1_000 });
+  let hilo = await hiloGame.view(ROOM, A);
+  const { plus, moins } = hilo.round.odds;
+  assert.equal(plus.count + moins.count, 48, 'les égalités ne comptent ni pour plus ni pour moins');
+  if (plus.multiplier) assert.ok(Math.abs(plus.multiplier - (0.97 * 51) / plus.count) < 1e-9);
+  const side = plus.count >= moins.count ? 'plus' : 'moins';
+  await hiloGame.act(ROOM, A, { action: side });
+  hilo = await hiloGame.view(ROOM, A);
+  if (!hilo.round.over) {
+    await hiloGame.act(ROOM, A, { action: 'encaisser' });
+    hilo = await hiloGame.view(ROOM, A);
+    assert.equal((await balance(A.id)) - 1_000_000, Math.round(1_000 * hilo.round.multiplier) - 1_000);
+  } else assert.equal((await balance(A.id)) - 1_000_000, -1_000);
+  console.log(`   mines : ${state.round.over} · plus ou moins : ${hilo.round.over}, série ${hilo.round.streak}`);
+});
+
+await check('salle · machine, dés, pile ou face, rouge ou noir : le tirage et le solde concordent', async () => {
+  resetSolo();
+  await millionFor(A.id);
+  for (const [game, input] of [[machineGame, {}], [pieceGame, { side: 'face' }], [cartesGame, { colour: 'rouge' }]]) {
+    const before = await balance(A.id);
+    const reply = await game.act(ROOM, A, { action: 'jouer', bet: 1_000, ...input });
+    assert.equal(reply.ok, true);
+    assert.equal(reply.draw.balance - before, reply.draw.net, 'le solde bouge exactement du gain annoncé');
+    assert.equal(reply.draw.net, reply.draw.payout - 1_000);
+  }
+  assert.match((await pieceGame.act(ROOM, A, { action: 'jouer', bet: 1_000, side: 'tranche' })).error, /choix/);
+  // Dés : trois zones, un seul lancer.
+  const before = await balance(A.id);
+  const roll = await desGame.act(ROOM, A, { action: 'lancer', bets: { moins: 1_000, sept: 500, plus: 200 } });
+  const { a, b, total, net } = roll.draw;
+  assert.equal(total, a + b);
+  const pays = { moins: [total < 7, 2.32, 1_000], sept: [total === 7, 5.75, 500], plus: [total > 7, 2.32, 200] };
+  const payout = Object.values(pays).reduce((sum, [won, rate, amount]) => sum + (won ? Math.round(amount * rate) : 0), 0);
+  assert.equal(net, payout - 1_700, `dés : ${a} + ${b}`);
+  assert.equal((await balance(A.id)) - before, net);
+  assert.match((await desGame.act(ROOM, A, { action: 'lancer', bets: { constructor: 10 } })).error, /Zone inconnue/);
+});
+
+await check('salle · duel : défi, invitation, pièce, et mises rendues si refus', async () => {
+  resetDuels();
+  await millionFor(A.id);
+  await millionFor(B.id);
+  assert.match((await duel.act(ROOM, A, { action: 'defier', to: B.id, bet: 1_000 })).error, /plus dans la salle/, 'on ne défie que quelqu’un de présent');
+  markPresent(ROOM, A);
+  markPresent(ROOM, B);
+  const { id } = await duel.act(ROOM, A, { action: 'defier', to: B.id, bet: 5_000 });
+  assert.equal(await balance(A.id), 995_000, 'la mise du défieur est bloquée');
+  assert.equal(incomingFor(ROOM, B.id).length, 1, 'Bruno reçoit l’invitation');
+  await duel.act(ROOM, B, { action: 'refuser', id });
+  assert.equal(await balance(A.id), 1_000_000, 'refus : mise rendue');
+  const second = await duel.act(ROOM, A, { action: 'defier', to: B.id, bet: 5_000 });
+  await duel.act(ROOM, B, { action: 'accepter', id: second.id });
+  const seen = await duel.view(ROOM, A);
+  const played = seen.duels.find((d) => d.id === second.id);
+  assert.equal(played.status, 'fini');
+  const diffA = (await balance(A.id)) - 1_000_000;
+  const diffB = (await balance(B.id)) - 1_000_000;
+  assert.equal(diffA + diffB, 0, 'aucun avantage de la maison : ce que l’un gagne, l’autre le perd');
+  assert.equal(Math.abs(diffA), 5_000);
+  assert.equal(played.result.iWon, diffA > 0);
+  resetDuels();
+});
+
+await check('salle : sessions signées, pages, API et ancienne adresse de la roulette', async () => {
   const token = createSession(A);
   assert.deepEqual(readSession(token), { id: A.id, name: 'Alice' });
   assert.equal(readSession(`${token.slice(0, -2)}xx`), null, 'une session retouchée est refusée');
   assert.equal(readSession(createSession(A, -1)), null, 'une session expirée est refusée');
   const forged = `${Buffer.from(JSON.stringify({ u: B.id, n: 'Bruno', e: Date.now() + 1e6 })).toString('base64url')}.${token.split('.')[1]}`;
   assert.equal(readSession(forged), null, 'impossible de se faire passer pour un autre');
-  assert.match(personalLink(A, ROOM), new RegExp(`/roulette/\\?room=${ROOM}#s=`), 'la session du lien est après le #, jamais envoyée au serveur');
+  assert.match(personalLink(A, ROOM, 'mines'), new RegExp(`/salle/\\?room=${ROOM}&jeu=mines#s=`), 'la session du lien est après le #, jamais envoyée au serveur');
 
   resetRooms();
+  resetSolo();
   await millionFor(A.id);
   const server = http.createServer(async (req, res) => {
-    if (!(await handleRouletteWeb(req, res, new URL(req.url, 'http://localhost')))) {
+    if (!(await handleSalleWeb(req, res, new URL(req.url, 'http://localhost')))) {
       res.writeHead(404);
       res.end();
     }
@@ -496,87 +638,100 @@ await check('table cliquable : sessions signées, pages et API', async () => {
   await new Promise((resolve) => server.listen(0, resolve));
   const base = `http://localhost:${server.address().port}`;
   try {
-    for (const page of ['/roulette/', '/?instance_id=1&frame_id=2&platform=desktop', '/.proxy/roulette/']) {
+    for (const page of ['/salle/', '/?instance_id=1&frame_id=2&platform=desktop', '/.proxy/salle/']) {
       const response = await fetch(base + page);
-      assert.equal(response.status, 200, `${page} doit servir la table`);
-      assert.match(await response.text(), /<svg id="board"/);
+      assert.equal(response.status, 200, `${page} doit servir la salle`);
+      assert.match(await response.text(), /id="view"/);
     }
-    for (const file of ['app.js', 'style.css', 'sdk.js', 'fonts/noto.ttf', 'fond.jpg']) {
-      assert.equal((await fetch(`${base}/roulette/${file}`)).status, 200, `${file} manquant`);
+    const moved = await fetch(`${base}/roulette/?room=${ROOM}`, { redirect: 'manual' });
+    assert.equal(moved.status, 302);
+    assert.match(moved.headers.get('location'), new RegExp(`/salle/\\?room=${ROOM}&jeu=roulette`));
+    for (const file of ['app.js', 'kit.js', 'style.css', 'sdk.js', 'fonts/noto.ttf', 'fond.jpg', ...GAME_IDS.map((id) => `games/${id}.js`)]) {
+      assert.equal((await fetch(`${base}/salle/${file}`)).status, 200, `${file} manquant`);
     }
-    assert.equal((await fetch(`${base}/roulette/../src/config.js`)).status, 404);
-    assert.equal((await fetch(`${base}/roulette/api/state?room=${ROOM}`)).status, 401, 'sans session, rien');
-    const config = await (await fetch(`${base}/roulette/api/config`)).json();
-    assert.ok('clientId' in config && !('clientSecret' in config), 'le secret ne sort jamais');
+    assert.equal((await fetch(`${base}/salle/../src/config.js`)).status, 404);
+    assert.equal((await fetch(`${base}/salle/api/roulette?room=${ROOM}`)).status, 401, 'sans session, rien');
+    const cfg = await (await fetch(`${base}/salle/api/config`)).json();
+    assert.ok(cfg.games.length === GAME_IDS.length && !('clientSecret' in cfg), 'le catalogue, jamais le secret');
 
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const placed = await fetch(`${base}/roulette/api/action`, { method: 'POST', headers, body: JSON.stringify({ room: ROOM, action: 'poser', spot: 'plein-7', value: 50 }) });
+    const hall = await (await fetch(`${base}/salle/api/salle?room=${ROOM}`, { headers })).json();
+    assert.equal(hall.me.name, 'Alice');
+    assert.equal(hall.me.balance, 1_000_000);
+    assert.ok(hall.daily && 'available' in hall.daily, 'le cadeau du jour est signalé');
+    for (const id of GAME_IDS) assert.equal((await fetch(`${base}/salle/api/${id}?room=${ROOM}`, { headers })).status, 200, `${id} doit répondre`);
+    assert.equal((await fetch(`${base}/salle/api/constructor?room=${ROOM}`, { headers })).status, 404);
+    const placed = await fetch(`${base}/salle/api/roulette`, { method: 'POST', headers, body: JSON.stringify({ room: ROOM, action: 'poser', spot: 'plein-7', value: 50 }) });
     assert.equal(placed.status, 200);
-    const state = await (await fetch(`${base}/roulette/api/state?room=${ROOM}`, { headers })).json();
-    assert.deepEqual(betOf(state, 'plein-7'), [50]);
-    assert.equal(state.me.name, 'Alice');
-    const refused = await fetch(`${base}/roulette/api/action`, { method: 'POST', headers, body: JSON.stringify({ room: ROOM, action: 'poser', spot: 'plein-7', value: 3 }) });
+    assert.deepEqual(betOf((await placed.json()).state, 'plein-7'), [50]);
+    const refused = await fetch(`${base}/salle/api/mines`, { method: 'POST', headers, body: JSON.stringify({ room: ROOM, action: 'jouer', bet: '1000', bombs: 7 }) });
     assert.equal(refused.status, 409);
-    assert.match((await refused.json()).error, /Jeton inconnu/);
+    const started = await fetch(`${base}/salle/api/mines`, { method: 'POST', headers, body: JSON.stringify({ room: ROOM, action: 'jouer', bet: '1000', bombs: '3' }) });
+    assert.equal((await started.json()).state.round.bet, 1_000, 'les nombres arrivent en texte ou en nombre');
   } finally {
     server.close();
     resetRooms();
+    resetSolo();
   }
 });
 
-await check('roulette dans Discord : le hall ouvre la table, « Ouvrir » lance l’Activité ou donne un lien', async () => {
+await check('salle dans Discord : chaque jeu a sa table, « Ouvrir » lance l’Activité ou donne un lien', async () => {
+  for (const game of GAME_IDS) {
+    const hall = mock({});
+    await openLobby(hall);
+    const pick = follow(hall, { __customId: 'ctb:pick:hall', __values: [game] });
+    pick.channelId = ROOM;
+    pick.message = { edit: async (payload) => hall.sent.push({ edited: true, ...payload }) };
+    await handleTableComponent(pick);
+    const table = last(hall);
+    const ids = buttonIds(table);
+    assert.ok(ids.includes(`csl:ouvrir:${game}`) && ids.includes(`csl:lien:${game}`), `${game} : boutons de la salle`);
+    assert.equal(ids.includes(`csl:ici:${game}`), game !== 'roulette', `${game} : « Jouer ici » (sauf la roulette)`);
+  }
+
+  // « Jouer ici » : le jeu reste dans le message, comme avant.
+  const here = mock({ __customId: 'csl:ici:mines' });
+  here.channelId = ROOM;
+  await handleSalleButton(here);
+  assert.ok(buttonIds(last(here)).some((id) => id.startsWith('ctb:play')), 'la table des mines s’ouvre dans le message');
+
+  // Activité activée : Discord ouvre la salle, directement sur le jeu choisi.
+  const launch = mock({ __customId: 'csl:ouvrir:blackjack' }, A.id);
+  launch.channelId = ROOM;
+  let launched = false;
+  launch.launchActivity = async () => { launched = true; };
+  await handleSalleButton(launch);
+  assert.ok(launched, 'l’Activité doit être lancée');
+
+  // Pas encore activée : le joueur reçoit son lien, en privé.
+  const fallback = mock({ __customId: 'csl:ouvrir:crash' }, A.id);
+  fallback.channelId = ROOM;
+  fallback.launchActivity = async () => { throw new Error('Activité désactivée'); };
+  await handleSalleButton(fallback);
+  const reply = last(fallback);
+  assert.equal(reply.flags, MessageFlags.Ephemeral, 'le lien personnel reste privé');
+  const url = reply.components[0].components[0].data.url;
+  assert.match(url, new RegExp(`/salle/\\?room=${ROOM}&jeu=crash#s=`));
+  assert.deepEqual(readSession(url.split('#s=')[1]), { id: A.id, name: A.id }, 'le lien connecte le bon joueur');
+
+  // Fin d'un tour de roulette : le message du salon montre le tapis et les gains.
   const hall = mock({});
   await openLobby(hall);
   const pick = follow(hall, { __customId: 'ctb:pick:hall', __values: ['roulette'] });
   pick.channelId = ROOM;
   pick.message = { edit: async (payload) => hall.sent.push({ edited: true, ...payload }) };
   await handleTableComponent(pick);
-  const table = last(hall);
-  assert.match(table.embeds[0].data.title, /Roulette/);
-  assert.ok(attachmentOf(table)?.name?.endsWith('.jpg'), 'l’affiche de la table est jointe');
-  assert.deepEqual(buttonIds(table), ['crl:ouvrir', 'crl:lien']);
-
-  // Activité activée : Discord ouvre la table, rien d'autre à répondre.
-  const launch = follow(hall, { __customId: 'crl:ouvrir' });
-  launch.channelId = ROOM;
-  let launched = false;
-  launch.launchActivity = async () => { launched = true; };
-  await handleRouletteButton(launch);
-  assert.ok(launched, 'l’Activité doit être lancée');
-
-  // Pas encore activée : le joueur reçoit son lien, en privé.
-  const fallback = mock({ __customId: 'crl:ouvrir' }, A.id); // un vrai identifiant Discord (des chiffres)
-  fallback.sent = hall.sent;
-  fallback.channelId = ROOM;
-  fallback.launchActivity = async () => { throw new Error('Activité désactivée'); };
-  await handleRouletteButton(fallback);
-  const reply = last(hall);
-  assert.equal(reply.flags, MessageFlags.Ephemeral, 'le lien personnel reste privé');
-  const url = reply.components[0].components[0].data.url;
-  assert.match(url, new RegExp(`/roulette/\\?room=${ROOM}#s=`));
-  assert.deepEqual(readSession(url.split('#s=')[1]), { id: A.id, name: A.id }, 'le lien connecte le bon joueur');
-
-  // Fin d'un tour : le message du salon montre le tapis et les gains.
   resetRooms();
-  const saved = { ...timing };
-  Object.assign(timing, { lastCall: 50, spin: 30, results: 30 });
-  try {
-    await millionFor(USER);
-    await act(ROOM, { id: USER, name: USER }, { action: 'poser', spot: 'rouge', value: 1_000 });
-    await act(ROOM, { id: USER, name: USER }, { action: 'lancer' });
-    // Le tapis du tour se dessine après la roue : on lui laisse le temps.
-    let edited = null;
-    for (let i = 0; i < 40 && !edited; i++) {
-      await sleepMs(50);
-      edited = hall.sent.filter((p) => p.edited).at(-1);
-    }
-    assert.ok(edited, 'le message du salon doit être mis à jour');
-    assert.match(edited.embeds[0].data.description, /tombée sur/);
-    assert.ok(edited.files?.[0]?.name?.endsWith('.jpg'), 'avec le tapis du tour');
-  } finally {
-    Object.assign(timing, saved);
-    resetRooms();
-  }
+  await quick(roulette.timing, { lastCall: 50, spin: 30, results: 30 }, async () => {
+    await millionFor(A.id);
+    await roulette.act(ROOM, A, { action: 'poser', spot: 'rouge', value: 1_000 });
+    await roulette.act(ROOM, A, { action: 'lancer' });
+    await until(() => hall.sent.some((p) => p.edited), { timeout: 4_000 });
+  });
+  const edited = hall.sent.filter((p) => p.edited).at(-1);
+  assert.match(edited.embeds[0].data.description, /tombée sur/);
+  assert.ok(edited.files?.[0]?.name?.endsWith('.jpg'), 'avec le tapis du tour');
+  resetRooms();
 });
 
 await check('jouer depuis la table : animation, résultat, puis « Rejouer »', async () => {
@@ -840,7 +995,10 @@ await check('à plusieurs : blackjack, chacun joue sa main à son tour', async (
 
 await check('le bouton du guide épinglé ouvre le casino', async () => {
   const { guideButtons } = await import(new URL('guide.js', ROOT));
-  const [open, daily] = guideButtons()[0].components.map((b) => b.data.custom_id);
+  const ids = guideButtons()[0].components.map((b) => b.data.custom_id);
+  assert.ok(ids.includes('csl:ouvrir:salle'), 'le guide ouvre aussi la salle de jeux');
+  const open = ids.find((id) => id === 'ctb:open:guide');
+  const daily = ids.find((id) => id === 'ctb:daily:guide');
   const click = mock({ __customId: open });
   await handleTableComponent(click);
   const hall = last(click);

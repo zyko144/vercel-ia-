@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { config } from './config.js';
-import { handleRouletteWeb } from './casinho/roulette-web.js';
+import { handleSalleWeb } from './casinho/salle/web.js';
 
 const KEEP_ALIVE_MS = 10 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -84,8 +84,8 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       }
     }
 
-    // La table de roulette cliquable du casino (page, API, et entrée de l'Activité Discord)
-    if (await handleRouletteWeb(req, res, url)) return;
+    // La salle de jeux cliquable du casino (pages, API, et entrée de l'Activité Discord)
+    if (await handleSalleWeb(req, res, url)) return;
 
     // Son du PC diffusé en direct (le serveur audio vient le chercher ici)
     if (url.pathname.startsWith('/live/') && liveRoute) return liveRoute(req, res, url);

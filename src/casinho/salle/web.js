@@ -1,5 +1,5 @@
-// La table de roulette cliquable, servie par le bot : la page (web/roulette/) et
-// son API. On y arrive de deux façons :
+// La salle de jeux cliquable, servie par le bot : la page (web/salle/) et son API.
+// On y arrive de deux façons :
 //   • en Activité Discord : la page s'ouvre dans Discord, le joueur est reconnu par
 //     la connexion Discord (OAuth2, avec le secret de l'application) ;
 //   • par un lien personnel que le bot donne en privé : le lien porte une « session »
@@ -8,20 +8,38 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { config } from '../config.js';
-import { act, isRoomId, view } from './roulette.js';
+import { config } from '../../config.js';
+import { balance, daily, dailyStatus, waitLabel } from '../economy.js';
+import * as blackjack from './blackjack.js';
+import { CATALOG } from './catalog.js';
+import { isRoomId, markPresent, presentIn } from './common.js';
+import * as crash from './crash.js';
+import * as duel from './duel.js';
+import * as roulette from './roulette.js';
+import { cartesGame, desGame, hiloGame, machineGame, minesGame, pieceGame } from './solo.js';
 
-const WEB = path.resolve('web/roulette');
-const FONTS = path.resolve('assets');
+/** Les jeux de la salle : chacun sait se montrer (view) et répondre aux clics (act). */
+export const GAMES = {
+  roulette,
+  blackjack,
+  crash,
+  mines: minesGame,
+  plusoumoins: hiloGame,
+  machine: machineGame,
+  des: desGame,
+  pileouface: pieceGame,
+  rougenoir: cartesGame,
+  duel,
+};
+export const GAME_IDS = Object.keys(GAMES);
+
+const WEB = path.resolve('web/salle');
 const SESSION_MS = 12 * 60 * 60_000;
+const PENDING_MS = 3 * 60_000;
 const MAX_BODY = 16 * 1024;
 
-const FILES = {
-  'index.html': 'text/html; charset=utf-8',
-  'app.js': 'text/javascript; charset=utf-8',
-  'style.css': 'text/css; charset=utf-8',
-  'sdk.js': 'text/javascript; charset=utf-8',
-};
+const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8' };
+const STATIC = new Set(['index.html', 'app.js', 'kit.js', 'style.css', 'sdk.js', ...GAME_IDS.map((id) => `games/${id}.js`)]);
 const FONT_FILES = { 'cinzel.ttf': 'Cinzel-Bold.ttf', 'noto.ttf': 'NotoSans-Bold.ttf' };
 
 // ------------------------------------------------------------------ Sessions
@@ -52,10 +70,23 @@ export function readSession(token) {
   }
 }
 
-/** Le lien personnel vers la table d'un salon (donné en privé par le bot). */
-export function personalLink(user, roomId) {
+/** Le lien personnel vers la salle d'un salon (donné en privé par le bot), ouvert sur un jeu. */
+export function personalLink(user, roomId, game = null) {
   const base = config.publicUrl || `http://localhost:${config.port}`; // en local : le serveur du bot
-  return `${base}/roulette/?room=${roomId}#s=${createSession(user)}`;
+  const jeu = game && GAMES[game] ? `&jeu=${game}` : '';
+  return `${base}/salle/?room=${roomId}${jeu}#s=${createSession(user)}`;
+}
+
+// L'Activité Discord ne transmet pas de paramètre : le bouton « Ouvrir » d'un jeu
+// note ce jeu, et la salle l'ouvre directement à l'arrivée du joueur.
+const pending = new Map(); // joueur → { game, until }
+export function openOnArrival(userId, game) {
+  if (GAMES[game]) pending.set(userId, { game, until: Date.now() + PENDING_MS });
+}
+function takePending(userId) {
+  const entry = pending.get(userId);
+  pending.delete(userId);
+  return entry && entry.until > Date.now() ? entry.game : null;
 }
 
 // ------------------------------------------------------------------ Connexion Discord
@@ -119,41 +150,68 @@ async function serveFile(res, file, type, cache = 'no-cache') {
 /** L'Activité Discord charge la racine du site : on la reconnaît à ses paramètres. */
 export const isActivityEntry = (url) => url.pathname === '/' && url.searchParams.has('frame_id');
 
+/** Ce que la salle montre partout : le joueur, son solde, le cadeau du jour, les défis reçus. */
+async function lobbyState(roomId, user) {
+  markPresent(roomId, user);
+  return {
+    me: { id: user.id, name: user.name, balance: await balance(user.id) },
+    daily: await dailyStatus(user.id),
+    present: presentIn(roomId).length,
+    tables: Object.fromEntries(GAME_IDS.map((id) => [id, GAMES[id].activity?.(roomId) ?? 0])),
+    duels: duel.incomingFor(roomId, user.id),
+    start: takePending(user.id),
+  };
+}
+
 /**
- * Répond aux requêtes de la table. Renvoie false si l'adresse ne la concerne pas.
+ * Répond aux requêtes de la salle. Renvoie false si l'adresse ne la concerne pas.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {URL} url
  */
-export async function handleRouletteWeb(req, res, url) {
+export async function handleSalleWeb(req, res, url) {
   // Derrière le relais de Discord, les adresses peuvent arriver préfixées de « /.proxy ».
   const pathname = url.pathname.startsWith('/.proxy/') ? url.pathname.slice('/.proxy'.length) : url.pathname;
-  if (isActivityEntry(url) || pathname === '/roulette' || pathname === '/roulette/') {
-    await serveFile(res, path.join(WEB, 'index.html'), FILES['index.html']);
+
+  // L'ancienne adresse de la roulette mène à la salle, sur la roulette.
+  if (pathname === '/roulette' || pathname === '/roulette/') {
+    const query = new URLSearchParams(url.search);
+    query.set('jeu', 'roulette');
+    res.writeHead(302, { Location: `/salle/?${query}` });
+    res.end();
     return true;
   }
-  if (!pathname.startsWith('/roulette/')) return false;
-  const rest = pathname.slice('/roulette/'.length);
+  if (isActivityEntry(url) || pathname === '/salle' || pathname === '/salle/') {
+    await serveFile(res, path.join(WEB, 'index.html'), TYPES.html);
+    return true;
+  }
+  if (!pathname.startsWith('/salle/')) return false;
+  const rest = pathname.slice('/salle/'.length);
 
-  if (FILES[rest]) {
-    await serveFile(res, path.join(WEB, rest), FILES[rest], rest === 'sdk.js' ? 'public, max-age=86400' : 'no-cache');
+  if (STATIC.has(rest)) {
+    await serveFile(res, path.join(WEB, rest), TYPES[rest.split('.').pop()], rest === 'sdk.js' ? 'public, max-age=86400' : 'no-cache');
     return true;
   }
   if (rest.startsWith('fonts/') && FONT_FILES[rest.slice(6)]) {
-    await serveFile(res, path.join(FONTS, FONT_FILES[rest.slice(6)]), 'font/ttf', 'public, max-age=604800');
+    await serveFile(res, path.resolve('assets', FONT_FILES[rest.slice(6)]), 'font/ttf', 'public, max-age=604800');
     return true;
   }
   if (rest === 'fond.jpg') {
     await serveFile(res, path.resolve('assets/casinho/tables/roulette.jpg'), 'image/jpeg', 'public, max-age=86400');
     return true;
   }
+  if (!rest.startsWith('api/')) {
+    json(res, 404, { error: 'introuvable' });
+    return true;
+  }
 
   try {
-    if (req.method === 'GET' && rest === 'api/config') {
-      json(res, 200, { clientId: config.casinho.clientId, activity: Boolean(config.casinho.clientId && config.casinho.clientSecret) });
+    const route = rest.slice(4);
+    if (req.method === 'GET' && route === 'config') {
+      json(res, 200, { clientId: config.casinho.clientId, activity: Boolean(config.casinho.clientId && config.casinho.clientSecret), games: CATALOG });
       return true;
     }
-    if (req.method === 'POST' && rest === 'api/discord') {
+    if (req.method === 'POST' && route === 'discord') {
       const { code } = await readBody(req);
       if (typeof code !== 'string' || !code) {
         json(res, 400, { error: 'code manquant' });
@@ -163,31 +221,46 @@ export async function handleRouletteWeb(req, res, url) {
       return true;
     }
 
-    // Tout le reste demande de savoir qui joue.
+    // Tout le reste demande de savoir qui joue, et à quel salon.
     const user = sessionOf(req);
     if (!user) {
-      json(res, 401, { error: 'Session expirée : rouvre la table depuis Discord.' });
+      json(res, 401, { error: 'Session expirée : rouvre la salle depuis Discord.' });
       return true;
     }
-    if (req.method === 'GET' && rest === 'api/state') {
-      const room = url.searchParams.get('room') ?? '';
-      if (!isRoomId(room)) {
-        json(res, 400, { error: 'Table inconnue.' });
-        return true;
-      }
-      json(res, 200, await view(room, user));
+    const body = req.method === 'POST' ? await readBody(req) : {};
+    const roomId = String((req.method === 'POST' ? body.room : url.searchParams.get('room')) ?? '');
+    if (!isRoomId(roomId)) {
+      json(res, 400, { error: 'Salon inconnu.' });
       return true;
     }
-    if (req.method === 'POST' && rest === 'api/action') {
-      const body = await readBody(req);
-      const result = await act(String(body.room ?? ''), user, { action: body.action, spot: body.spot, value: Number(body.value) });
-      const state = isRoomId(String(body.room ?? '')) ? await view(String(body.room), user) : null;
-      json(res, result.ok ? 200 : 409, { ...result, state });
+
+    if (route === 'salle' && req.method === 'GET') {
+      json(res, 200, await lobbyState(roomId, user));
       return true;
     }
-    json(res, 404, { error: 'introuvable' });
+    if (route === 'jetons-du-jour' && req.method === 'POST') {
+      const result = await daily(user.id);
+      json(res, result.ok ? 200 : 409, result.ok ? { ok: true, amount: result.amount, streak: result.streak, balance: result.balance } : { ok: false, error: `Déjà récupérés aujourd’hui. Les prochains arrivent à minuit (dans ${waitLabel(result.wait)}).` });
+      return true;
+    }
+
+    const game = GAMES[route];
+    if (!game || !Object.hasOwn(GAMES, route)) {
+      json(res, 404, { error: 'Jeu inconnu.' });
+      return true;
+    }
+    markPresent(roomId, user);
+    if (req.method === 'GET') {
+      json(res, 200, await game.view(roomId, user));
+      return true;
+    }
+    const input = { ...body };
+    for (const key of ['bet', 'value', 'bombs', 'cell']) if (key in input) input[key] = Number(input[key]);
+    if ('auto' in input && input.auto !== null) input.auto = Number(input.auto);
+    const result = await game.act(roomId, user, input);
+    json(res, result.ok ? 200 : 409, { ...result, state: await game.view(roomId, user) });
   } catch (err) {
-    console.warn('[casinho] roulette web :', err.message);
+    console.warn('[casinho] salle :', err.message);
     json(res, 500, { error: err.message });
   }
   return true;

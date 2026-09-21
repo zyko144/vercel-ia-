@@ -198,5 +198,5 @@ export async function resolveInstant(gameId, userId, bet, option = {}) {
     title: net > 0 ? (multiplier >= 30 ? `JACKPOT ×${multiplier}` : 'GAGNÉ') : net < 0 ? 'PERDU' : 'ÉGALITÉ',
     sub: `${sign}${Math.round(net).toLocaleString('fr-FR')} jetons · solde ${Math.round(balance).toLocaleString('fr-FR')}`,
   };
-  return { ok: true, embed: resultEmbed({ title, lines, net, balance, footer }), won: multiplier > 0, scene: { ...scene, bet, outcome } };
+  return { ok: true, embed: resultEmbed({ title, lines, net, balance, footer }), won: multiplier > 0, payout, net, balance, scene: { ...scene, bet, outcome } };
 }
