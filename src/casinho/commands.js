@@ -1,19 +1,13 @@
-// Les commandes du bot Casinho.
-// Elles servent surtout à ouvrir une table : la mise, le pari et le jeu se règlent
-// ensuite dans l'embed, avec les boutons. Aucune option n'est obligatoire.
+// Les commandes du bot Casinho. Un seul point d'entrée pour jouer : /casino ouvre
+// le hall, on y choisit sa table, et tout se règle ensuite dans l'embed. Les autres
+// commandes servent à la banque et aux informations.
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
-import { config } from '../config.js';
 
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
-/** Mise de départ facultative : sans elle, la table reprend la dernière mise du joueur. */
-const betOption = (o) =>
-  o.setName('mise').setDescription('Mise de départ (réglable ensuite avec les boutons)').setMinValue(1).setMaxValue(config.casinho.maxBet);
-
-const game = (name, description) => guildOnly(new SlashCommandBuilder().setName(name).setDescription(description).addIntegerOption(betOption));
 
 export const casinhoCommands = [
-  // ---------- Entrée ----------
-  guildOnly(new SlashCommandBuilder().setName('casino').setDescription('Ouvrir le casino et choisir un jeu')),
+  // ---------- Jouer ----------
+  guildOnly(new SlashCommandBuilder().setName('casino').setDescription('Ouvrir le casino : choisis ton jeu, ta mise, et joue')),
 
   // ---------- Banque ----------
   guildOnly(
@@ -39,26 +33,8 @@ export const casinhoCommands = [
       .addUserOption((o) => o.setName('joueur').setDescription('Les statistiques de quelqu’un d’autre')),
   ),
 
-  // ---------- Tables ----------
-  game('blackjack', 'Blackjack : tirer, rester, doubler, séparer, tout dans l’embed'),
-  game('roulette', 'Roulette européenne : choisis ton pari et ta mise dans l’embed'),
-  game('machine', 'Machine à sous à trois rouleaux'),
-  game('des', 'Deux dés : parie sur le total'),
-  game('pileouface', 'Pile ou face, gain ×1,95'),
-  game('rougenoir', 'Une carte est tirée : rouge ou noir ?'),
-  game('mines', 'Ouvre des cases sans tomber sur une bombe, encaisse quand tu veux'),
-  game('crash', 'Le multiplicateur grimpe : encaisse avant l’explosion'),
-  game('plusoumoins', 'La carte suivante sera-t-elle plus haute ou plus basse ?'),
-  guildOnly(
-    new SlashCommandBuilder()
-      .setName('duel')
-      .setDescription('Défie un joueur à pile ou face : le gagnant prend les deux mises')
-      .addUserOption((o) => o.setName('joueur').setDescription('Qui tu défies').setRequired(true))
-      .addIntegerOption((o) => o.setName('mise').setDescription('Mise du duel').setRequired(true).setMinValue(1).setMaxValue(config.casinho.maxBet)),
-  ),
-
   // ---------- Informations ----------
-  guildOnly(new SlashCommandBuilder().setName('casino-aide').setDescription('Toutes les commandes du casino et comment ça marche')),
+  guildOnly(new SlashCommandBuilder().setName('casino-aide').setDescription('Comment jouer, et toutes les commandes du casino')),
   guildOnly(new SlashCommandBuilder().setName('casino-gains').setDescription('Les gains et les probabilités de chaque jeu')),
   guildOnly(
     new SlashCommandBuilder()

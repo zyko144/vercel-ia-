@@ -5,15 +5,13 @@ import { ActivityType, Client, Events, GatewayIntentBits, MessageFlags } from 'd
 import { config } from '../config.js';
 import { casinhoCommands } from './commands.js';
 import { handleBlackjackButton, isBlackjackButton } from './blackjack.js';
-import { handleLiveButton, isLiveButton, startDuel } from './live.js';
-import { handleTableComponent, isTableComponent, openLobby, openTable } from './table.js';
+import { handleLiveButton, isLiveButton } from './live.js';
+import { handleTableComponent, isTableComponent, openLobby } from './table.js';
 import { adminChips, claimDaily, claimRescue, givePlayer, showBalance, showHelp, showLeaderboard, showPaytable, showStats } from './wallet.js';
 
 let client = null;
 
-/** Les jeux passent tous par la table : la commande ouvre l'embed, le reste s'y joue. */
-const TABLE_COMMANDS = ['blackjack', 'roulette', 'machine', 'des', 'pileouface', 'rougenoir', 'mines', 'crash', 'plusoumoins'];
-
+// Tous les jeux, duel compris, se lancent depuis le hall ouvert par /casino.
 const HANDLERS = {
   casino: openLobby,
   // Banque
@@ -23,17 +21,11 @@ const HANDLERS = {
   donner: givePlayer,
   classement: showLeaderboard,
   stats: showStats,
-  // Duel : le seul jeu qui a besoin d'une option, puisqu'il lui faut un adversaire
-  duel: (interaction) => startDuel(interaction, { opponent: interaction.options.getUser('joueur'), bet: interaction.options.getInteger('mise') }),
   // Informations
   'casino-aide': showHelp,
   'casino-gains': showPaytable,
   'casino-admin': adminChips,
 };
-
-for (const name of TABLE_COMMANDS) {
-  HANDLERS[name] = (interaction) => openTable(interaction, name, { bet: interaction.options.getInteger('mise') });
-}
 
 async function onInteraction(interaction) {
   try {

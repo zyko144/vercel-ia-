@@ -51,6 +51,7 @@ function mock(options = {}, who = USER) {
     customId: options.__customId,
     isButton: () => Boolean(options.__customId) && !options.__values && !options.__modal,
     isStringSelectMenu: () => Boolean(options.__values),
+    isUserSelectMenu: () => false,
     isModalSubmit: () => Boolean(options.__modal),
     isChatInputCommand: () => !options.__customId,
     // On écrit dans self.sent pour partager le même fil entre la commande et ses boutons.
@@ -245,17 +246,28 @@ await check('les boutons de mise changent bien la mise', async () => {
   await openTable(table, 'machine');
   const betOf = (payload) => payload.embeds[0].data.fields.find((f) => f.name === 'Mise').value;
 
-  const set500 = buttonIds(last(table)).find((id) => id.startsWith('ctb:set500'));
-  await handleTableComponent(follow(table, { __customId: set500 }));
-  assert.equal(betOf(last(table)), chips(500));
+  const set10k = buttonIds(last(table)).find((id) => id.startsWith('ctb:set10000:'));
+  await handleTableComponent(follow(table, { __customId: set10k }));
+  assert.equal(betOf(last(table)), chips(10_000));
 
   const double = buttonIds(last(table)).find((id) => id.startsWith('ctb:double'));
   await handleTableComponent(follow(table, { __customId: double }));
-  assert.equal(betOf(last(table)), chips(1_000));
+  assert.equal(betOf(last(table)), chips(20_000));
 
   const half = buttonIds(last(table)).find((id) => id.startsWith('ctb:half'));
   await handleTableComponent(follow(table, { __customId: half }));
-  assert.equal(betOf(last(table)), chips(500));
+  assert.equal(betOf(last(table)), chips(10_000));
+
+  // Les mises rapides vont jusqu'au million, à l'échelle du cadeau quotidien.
+  const labels = (last(table).components ?? []).flatMap((row) => row.components.map((b) => b.data?.label)).filter(Boolean);
+  for (const label of ['100', '1k', '10k', '100k', '1M']) assert.ok(labels.includes(label), `mise rapide « ${label} » absente`);
+});
+
+await check('le cadeau quotidien donne un million de jetons', async () => {
+  await reset(USER);
+  const before = await balance(USER);
+  await wallet.claimDaily(mock({}));
+  assert.ok((await balance(USER)) - before >= 1_000_000, 'le quotidien doit rapporter au moins un million');
 });
 
 await check('choisir son pari dans le menu met la table à jour', async () => {
@@ -382,14 +394,89 @@ await check('plus ou moins : un tour puis encaissement', async () => {
   assert.ok(last(interaction).embeds?.length);
 });
 
-await check('crash : la partie démarre et propose l’encaissement', async () => {
-  await grant(USER, 10_000);
-  const interaction = mock({});
-  await startCrash(interaction, 100);
-  const cash = buttonIds(last(interaction)).find((id) => id.startsWith('ccr:cash'));
-  assert.ok(cash, 'un bouton Encaisser doit être proposé');
-  await handleLiveButton(follow(interaction, { __customId: cash }));
-  assert.ok(last(interaction).embeds?.length);
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const descriptionOf = (payload) => (payload?.embeds?.[0]?.data ?? payload?.embeds?.[0])?.description ?? '';
+
+await check('crash : décollage, vol en images, puis encaissement manuel', async () => {
+  // Une fusée qui ne part pas trop vite : on relance jusqu'à en avoir une qui vole au moins ×1,5.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await grant(USER, 100_000);
+    const interaction = mock({});
+    await startCrash(interaction, 100);
+    const start = last(interaction);
+    assert.ok(attachmentOf(start), 'le décollage doit être illustré');
+    assert.equal(buttonIds(start).length, 0, 'on ne peut pas encaisser avant le décollage');
+
+    await sleepMs(2_300); // compte à rebours + première image de vol
+    const flying = interaction.sent.find((p) => /gain possible/.test(descriptionOf(p)));
+    if (!flying) continue; // explosée à ×1,00 : on recommence
+    const cash = buttonIds(flying).find((id) => id.startsWith('ccr:cash'));
+    assert.ok(cash, 'le bouton Encaisser doit apparaître une fois la fusée partie');
+
+    const before = await balance(USER);
+    await handleLiveButton(follow(interaction, { __customId: cash }));
+    await sleepMs(300);
+    const final = last(interaction);
+    if (/Explosion/.test(descriptionOf(final))) continue; // explosée juste avant le clic
+    assert.match(descriptionOf(final), /Encaissé à ×\d/);
+    assert.ok(attachmentOf(final), 'le résultat doit être illustré');
+    assert.ok((await balance(USER)) > before, 'encaisser en vol rapporte des jetons');
+    return;
+  }
+  throw new Error('aucune fusée n’a volé en 30 essais');
+});
+
+await check('crash : l’encaissement automatique tombe pile au bon multiplicateur', async () => {
+  const { autoChance } = await import(new URL('live.js', ROOT));
+  assert.ok(Math.abs(autoChance(2) - 0.485) < 1e-9, 'à ×2, 48,5 % de chances de réussite');
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await grant(USER, 100_000);
+    const interaction = mock({});
+    const before = await balance(USER);
+    await startCrash(interaction, 1_000, { auto: 1.1 });
+    await sleepMs(3_000); // ×1,1 est atteint ~0,6 s après le décollage
+    const final = last(interaction);
+    if (/Explosion/.test(descriptionOf(final))) continue; // explosée avant ×1,1 (8 % du temps)
+    assert.match(descriptionOf(final), /Encaissé à ×1\.10/, 'l’encaissement auto doit se faire à ×1,10 exactement');
+    assert.equal((await balance(USER)) - before, 100, 'gain exact : 1 000 × 1,1 − 1 000');
+    return;
+  }
+  throw new Error('aucune fusée n’a atteint ×1,1 en 40 essais');
+});
+
+await check('duel depuis le hall : on choisit son adversaire dans un menu', async () => {
+  await grant(USER, 100_000);
+  const table = mock({});
+  await openTable(table, 'duel');
+  const picker = last(table).components[0].components[0];
+  assert.equal(picker.data.type ?? picker.toJSON().type, 5, 'un menu de choix de membre doit être proposé');
+  const panelId = picker.data.custom_id.split(':')[2];
+
+  const choose = follow(table, { __customId: `ctb:who:${panelId}`, __values: [FOE] });
+  choose.users = { first: () => user(FOE) };
+  choose.isUserSelectMenu = () => true;
+  choose.isStringSelectMenu = () => false;
+  await handleTableComponent(choose);
+  assert.match(JSON.stringify(last(table).embeds[0].data.fields), new RegExp(FOE), 'l’adversaire choisi doit apparaître');
+
+  const play = buttonIds(last(table)).find((id) => id.startsWith('ctb:play'));
+  const launch = follow(table, { __customId: play });
+  await handleTableComponent(launch);
+  const challenge = last(table);
+  assert.match(challenge.content ?? '', new RegExp(`<@${FOE}>`), 'le défi doit mentionner l’adversaire');
+  assert.ok(buttonIds(challenge).some((id) => id.startsWith('cdu:accept')), 'l’adversaire doit pouvoir accepter');
+  // On refuse pour rendre la mise.
+  const refuse = mock({ __customId: buttonIds(challenge).find((id) => id.startsWith('cdu:refuse')) }, FOE);
+  refuse.sent = table.sent;
+  await handleLiveButton(refuse);
+});
+
+await check('seule /casino lance les jeux', () => {
+  const names = casinhoCommands.map((c) => c.name);
+  for (const game of ['blackjack', 'roulette', 'machine', 'des', 'pileouface', 'rougenoir', 'mines', 'crash', 'plusoumoins', 'duel']) {
+    assert.ok(!names.includes(game), `la commande /${game} devrait avoir disparu`);
+  }
+  assert.ok(names.includes('casino'));
 });
 
 await check('duel : refus = mise rendue', async () => {
@@ -438,7 +525,22 @@ await check('les animations existent et restent légères', async () => {
 await check('aide et table des gains se construisent', async () => {
   const help = mock({});
   await wallet.showHelp(help);
-  assert.ok(last(help).embeds[0].data.fields.length >= 4);
+  const guide = last(help).embeds.map((e) => e.data ?? e);
+  assert.ok(guide.length >= 3, 'le guide : accueil, jeux, commandes');
+  assert.match(guide[0].description, /\/casino/, 'le guide doit présenter /casino');
+  // Limites de Discord : 1 024 caractères par champ, 4 096 par description,
+  // et 6 000 au total pour tous les embeds d'un même message.
+  let total = 0;
+  for (const embed of guide) {
+    total += (embed.title ?? '').length + (embed.description ?? '').length + (embed.footer?.text ?? '').length;
+    assert.ok((embed.description ?? '').length <= 4096);
+    for (const field of embed.fields ?? []) {
+      assert.ok(field.value.length <= 1024, `champ trop long : ${field.name}`);
+      total += field.name.length + field.value.length;
+    }
+  }
+  assert.ok(total <= 6000, `le guide dépasse la limite de Discord : ${total} caractères`);
+  console.log(`   guide : ${guide.length} embeds, ${total} caractères sur 6 000`);
   const pay = mock({});
   await wallet.showPaytable(pay);
   const fields = last(pay).embeds[0].data.fields;

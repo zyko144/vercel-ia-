@@ -265,6 +265,137 @@ export function hiloScene({ previous, current, streak, multiplier, bet, result }
   return renderScene('blackjack', overlay);
 }
 
+// --------------------------------------------------------------------- Crash
+/** La fusée, pointée vers la droite, centrée sur (0, 0). */
+const ROCKET = `
+  <path d="M-30 0 L-58 -11 L-50 0 L-58 11 Z" fill="#ff8a2a" opacity="0.95"/>
+  <path d="M-30 0 L-46 -6 L-41 0 L-46 6 Z" fill="#ffe27a"/>
+  <path d="M-30 -11 L14 -11 Q36 -11 44 0 Q36 11 14 11 L-30 11 Z" fill="#f7f2fb" stroke="#c9bfd6" stroke-width="1.5"/>
+  <circle cx="12" cy="0" r="6" fill="#5fd0ff" stroke="#2a8fc0" stroke-width="2"/>
+  <path d="M-20 -11 L-34 -24 L-8 -11 Z" fill="${PINK}"/>
+  <path d="M-20 11 L-34 24 L-8 11 Z" fill="${PINK}"/>`;
+
+/** Une explosion : éclat orange, cœur jaune, fumée. */
+function explosion(x, y, size = 60) {
+  const spikes = 14;
+  const star = (outer, inner) => Array.from({ length: spikes * 2 }, (_, i) => {
+    const r = i % 2 ? inner : outer * (0.8 + ((i * 37) % 7) / 20);
+    const a = (Math.PI * i) / spikes;
+    return `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+  return `
+    <circle cx="${x - size * 0.5}" cy="${y - size * 0.3}" r="${size * 0.45}" fill="#3a2a35" opacity="0.6"/>
+    <circle cx="${x + size * 0.45}" cy="${y - size * 0.4}" r="${size * 0.38}" fill="#3a2a35" opacity="0.5"/>
+    <polygon points="${star(size, size * 0.55)}" fill="#ff5a2a"/>
+    <polygon points="${star(size * 0.7, size * 0.38)}" fill="#ffb03a"/>
+    <circle cx="${x}" cy="${y}" r="${size * 0.28}" fill="#fff3b0"/>`;
+}
+
+const CRASH_SPEED = 6_000; // m(t) = e^(t / CRASH_SPEED), le même que le jeu
+const crashTime = (m) => CRASH_SPEED * Math.log(Math.max(1, m));
+
+/**
+ * Le vol de la fusée : la courbe du multiplicateur jusqu'à maintenant, la fusée au
+ * bout, et selon l'état l'explosion ou le point d'encaissement.
+ *
+ * @param {{ state: 'decollage'|'vol'|'crash'|'encaisse', multiplier: number, point?: number,
+ *           cashedAt?: number, auto?: number|null, bet: number }} flight
+ */
+export function crashScene({ state, multiplier, point = null, cashedAt = null, auto = null, bet }) {
+  const left = 90;
+  const right = 900;
+  const bottom = 470;
+  const top = 120;
+  // Jusqu'où va la courbe affichée : le moment présent, ou l'explosion une fois révélée.
+  const shownTo = state === 'crash' || state === 'encaisse' ? point : multiplier;
+  const maxM = Math.max(2, shownTo * 1.18, auto ? auto * 1.08 : 0);
+  const tMax = Math.max(5_000, crashTime(shownTo) * 1.12);
+  const X = (t) => left + (t / tMax) * (right - left);
+  const Y = (m) => bottom - ((m - 1) / (maxM - 1)) * (bottom - top);
+
+  /** Les points de la courbe entre deux multiplicateurs. */
+  const curve = (upTo, from = 1) => {
+    const start = crashTime(from);
+    const end = crashTime(upTo);
+    return Array.from({ length: 48 }, (_, i) => {
+      const t = start + ((end - start) * i) / 47;
+      return `${X(t).toFixed(1)},${Y(Math.exp(t / CRASH_SPEED)).toFixed(1)}`;
+    });
+  };
+
+  const crashed = state === 'crash';
+  const cashed = state === 'encaisse';
+  const lineColor = crashed ? LOSE : PINK;
+
+  let overlay = `<rect width="${WIDTH}" height="${HEIGHT}" fill="rgba(8,2,10,0.45)"/>` + vignette(0.55);
+
+  // Graduations : quelques multiplicateurs ronds.
+  const steps = [1.5, 2, 3, 5, 10, 20, 50, 100].filter((m) => m < maxM);
+  overlay += steps.map((m) => `
+    <line x1="${left}" y1="${Y(m)}" x2="${right}" y2="${Y(m)}" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-dasharray="6 8"/>
+    <text x="${left - 14}" y="${Y(m) + 6}" font-family="${SANS}" font-weight="700" font-size="17" fill="rgba(255,230,245,0.7)" text-anchor="end">×${m}</text>`).join('');
+  overlay += `<line x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>`;
+
+  // Encaissement automatique demandé : une ligne verte à ce niveau.
+  if (auto && auto < maxM) {
+    overlay += `
+      <line x1="${left}" y1="${Y(auto)}" x2="${right}" y2="${Y(auto)}" stroke="${WIN}" stroke-width="2.5" stroke-dasharray="12 8" opacity="0.85"/>
+      <text x="${right}" y="${Y(auto) - 10}" font-family="${SANS}" font-weight="700" font-size="17" fill="${WIN}" text-anchor="end">AUTO ×${auto}</text>`;
+  }
+
+  // La courbe, avec la zone remplie dessous. Après un encaissement, la suite du vol
+  // (jusqu'à l'explosion) est montrée en pointillés : on voit ce qu'on a laissé.
+  if (state !== 'decollage') {
+    const flown = curve(cashed ? cashedAt : shownTo);
+    const [endX, endY] = flown.at(-1).split(',').map(Number);
+    overlay += `
+      <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${lineColor}" stop-opacity="0.45"/><stop offset="1" stop-color="${lineColor}" stop-opacity="0.02"/>
+      </linearGradient>
+      <filter id="neon"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      <polygon points="${left},${bottom} ${flown.join(' ')} ${endX},${bottom}" fill="url(#area)"/>
+      <polyline points="${flown.join(' ')}" fill="none" stroke="${lineColor}" stroke-width="6" stroke-linecap="round" filter="url(#neon)"/>`;
+    if (cashed) {
+      overlay += `<polyline points="${curve(point, cashedAt).join(' ')}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="3" stroke-dasharray="8 8"/>`;
+    }
+  }
+
+  // La fusée (ou ce qu'il en reste).
+  const rocketM = state === 'decollage' ? 1 : cashed ? point : shownTo;
+  const tR = crashTime(rocketM);
+  const rx = X(tR);
+  const ry = Y(rocketM);
+  // Orientation : la pente de la courbe à cet endroit, en pixels.
+  const slope = ((bottom - top) / (maxM - 1)) * (rocketM / CRASH_SPEED) / ((right - left) / tMax);
+  const angle = state === 'decollage' ? -65 : -(Math.atan(slope) * 180) / Math.PI;
+  overlay += crashed || cashed
+    ? explosion(rx, ry, crashed ? 58 : 34)
+    : `<g transform="translate(${rx.toFixed(1)} ${ry.toFixed(1)}) rotate(${angle.toFixed(1)}) scale(1.3)">${ROCKET}</g>`;
+
+  if (cashed) {
+    const cx = X(crashTime(cashedAt));
+    const cy = Y(cashedAt);
+    overlay += `
+      <circle cx="${cx}" cy="${cy}" r="13" fill="${WIN}" stroke="#fff" stroke-width="3"/>
+      <path d="M${cx - 6} ${cy} l4 5 l8 -10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
+  }
+
+  // Le multiplicateur, en très gros : c'est lui qu'on regarde.
+  const shown = cashed ? cashedAt : crashed ? point : multiplier;
+  const color = crashed ? LOSE : cashed ? WIN : multiplier >= 5 ? '#ffd24a' : multiplier >= 2 ? '#ff9ad2' : '#ffffff';
+  overlay += `
+    <text x="${left + 4}" y="92" font-family="${SERIF}" font-weight="700" font-size="76" fill="${color}"
+          stroke="rgba(0,0,0,0.55)" stroke-width="4" paint-order="stroke">×${shown.toFixed(2)}</text>
+    <text x="${left + 8}" y="${bottom + 44}" font-family="${SANS}" font-weight="700" font-size="21" fill="#ffd9ee">
+      Mise ${Math.round(bet).toLocaleString('fr-FR')} → ${Math.round(bet * shown).toLocaleString('fr-FR')} jetons</text>`;
+
+  if (state === 'decollage') overlay += banner('DÉCOLLAGE', { glow: PINK, y: 300, sub: 'Encaisse avant que la fusée n’explose' });
+  // En haut à droite : la courbe et le point d'encaissement restent visibles.
+  if (crashed) overlay += banner('EXPLOSION', { glow: LOSE, x: 640, y: 92, size: 40, sub: `mise perdue · -${Math.round(bet).toLocaleString('fr-FR')} jetons` });
+  if (cashed) overlay += banner('ENCAISSÉ', { glow: WIN, x: 640, y: 92, size: 40, sub: `+${Math.round(bet * cashedAt - bet).toLocaleString('fr-FR')} jetons · explosion à ×${point.toFixed(2)}` });
+  return renderScene('crash', overlay);
+}
+
 /** L'image du résultat d'un jeu instantané, d'après ce que resolveInstant a tiré. */
 export function resultImage(scene) {
   const result = scene.outcome;

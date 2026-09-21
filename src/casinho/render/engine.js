@@ -103,19 +103,19 @@ export function badge(x, y, text, { color = '#ffffff', bg = 'rgba(12,4,10,0.72)'
 }
 
 /** Panneau de résultat au centre : « BLACKJACK ! », « GAGNÉ »… avec le gain en dessous. */
-export function banner(text, { color = '#ffffff', glow = '#ff3fa6', y = HEIGHT / 2, sub = null } = {}) {
-  const width = Math.max(380, text.length * 38 + 90, (sub?.length ?? 0) * 13 + 80);
+export function banner(text, { color = '#ffffff', glow = '#ff3fa6', y = HEIGHT / 2, x = WIDTH / 2, sub = null, size = 48 } = {}) {
+  const width = Math.max(380, text.length * size * 0.8 + 90, (sub?.length ?? 0) * 13 + 80);
   const height = sub ? 118 : 90;
   const top = y - 50;
   return `
     <defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter></defs>
-    <rect x="${WIDTH / 2 - width / 2}" y="${top}" width="${width}" height="${height}" rx="22" fill="rgba(10,3,8,0.78)"
+    <rect x="${x - width / 2}" y="${top}" width="${width}" height="${height}" rx="22" fill="rgba(10,3,8,0.78)"
           stroke="${glow}" stroke-width="2.5"/>
-    <text x="${WIDTH / 2}" y="${y}" font-family="${SERIF}" font-weight="700" font-size="48" fill="${color}"
+    <text x="${x}" y="${y}" font-family="${SERIF}" font-weight="700" font-size="${size}" fill="${color}"
           text-anchor="middle" dominant-baseline="middle" letter-spacing="3" filter="url(#glow)">${esc(text)}</text>
-    ${sub ? `<text x="${WIDTH / 2}" y="${y + 44}" font-family="${SANS}" font-weight="700" font-size="21" fill="#ffd9ee"
+    ${sub ? `<text x="${x}" y="${y + 44}" font-family="${SANS}" font-weight="700" font-size="21" fill="#ffd9ee"
           text-anchor="middle" dominant-baseline="middle">${esc(sub)}</text>` : ''}`;
 }
 

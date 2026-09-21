@@ -2,7 +2,7 @@
 // Chacun garde un état en mémoire le temps de la partie ; rien n'est écrit en base
 // avant le règlement, et une partie oubliée se règle toute seule après son délai.
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
-import { hiloScene } from './render/scenes.js';
+import { crashScene, hiloScene } from './render/scenes.js';
 import { highValue, shoe, show } from './cards.js';
 import { chips, rand, refund, settle, stake } from './economy.js';
 import { replayRow } from './table.js';
@@ -172,61 +172,136 @@ async function handleMines(interaction) {
 // ------------------------------------------------------------------ Crash
 // Le multiplicateur grimpe jusqu'à un point de rupture tiré au départ :
 // 0,97 / (1 - u), la loi habituelle de ce jeu. Encaisser avant, c'est gagné.
-const CRASH_SPEED = 6000;
+// Quel que soit l'encaissement automatique choisi (×A), on gagne avec une
+// probabilité 0,97 / A : le TRJ reste 97 %.
+const CRASH_SPEED = 6000; // m(t) = e^(t / CRASH_SPEED)
 const CRASH_CAP = 100;
-const crashAt = (start) => Math.exp((Date.now() - start) / CRASH_SPEED);
+const LAUNCH_MS = 1_800; // compte à rebours avant le décollage
+const TICK_MS = 1_800; // une image de vol toutes les 1,8 s : Discord limite les modifications
+const flightTime = (m) => CRASH_SPEED * Math.log(Math.max(1, m));
+const multiplierAt = (round) => Math.exp(Math.max(0, Date.now() - round.start) / CRASH_SPEED);
 
-export async function startCrash(interaction, bet, { viaUpdate = false } = {}) {
+/** Encaissements automatiques proposés à la table, avec leur chance de réussite. */
+export const AUTO_CASHOUTS = [1.5, 2, 3, 5, 10];
+export const autoChance = (target) => EDGE / target;
+
+/**
+ * Toutes les modifications du message passent par l'interaction d'origine, dans
+ * l'ordre : une image de vol partie en retard ne peut plus écraser l'explosion.
+ */
+function push(round, payload) {
+  round.queue = (round.queue ?? Promise.resolve()).then(() => round.origin.editReply(payload)).catch(() => {});
+  return round.queue;
+}
+
+function crashButtons(round, { launched }) {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`ccr:cash:${round.id}`)
+        .setLabel(launched ? 'Encaisser' : 'Décollage…')
+        .setEmoji(launched ? '💰' : '🚀')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(!launched),
+    ),
+  ];
+}
+
+/** Une étape du vol : l'image rendue et le texte qui l'accompagne. */
+async function crashView(round, state, { multiplier = 1, cashedAt = null, net = null, balance = null, components = null } = {}) {
+  round.frame = (round.frame ?? 0) + 1;
+  const name = `crash-${round.id}-${round.frame}.jpg`;
+  const revealed = state === 'crash' || state === 'encaisse';
+  const image = await crashScene({ state, multiplier, point: revealed ? round.point : null, cashedAt, auto: round.auto, bet: round.bet }).catch((err) => {
+    console.warn('[casinho] rendu crash :', err.message);
+    return null;
+  });
+
+  const autoLine = round.auto ? `Encaissement auto à **×${round.auto}**` : 'Encaissement **manuel** : appuie avant l’explosion';
+  const text = {
+    decollage: `🚀 **Décollage imminent…**\nMise ${chips(round.bet)} · ${autoLine}`,
+    vol: `**×${multiplier.toFixed(2)}** · gain possible **${chips(round.bet * multiplier)}**\n${autoLine}`,
+    crash: `💥 **Explosion à ×${round.point.toFixed(2)}**\nMise perdue : ${chips(round.bet)}`,
+    encaisse: `💰 **Encaissé à ×${(cashedAt ?? 1).toFixed(2)}** — la fusée a explosé à ×${round.point.toFixed(2)}.`,
+  }[state];
+
+  const embed = new EmbedBuilder()
+    .setColor(state === 'crash' ? 0xd2536a : state === 'encaisse' ? 0x49c78a : COLOR)
+    .setTitle('🚀 Crash')
+    .setDescription(text)
+    .setFooter({ text: `Plafond ×${CRASH_CAP} · TRJ 97 %` });
+  if (image) embed.setImage(`attachment://${name}`);
+  if (net !== null) {
+    embed.addFields({ name: 'Bilan', value: `${net > 0 ? '+' : ''}${chips(net)}`, inline: true }, { name: 'Solde', value: chips(balance), inline: true });
+  }
+  return {
+    embeds: [embed],
+    files: image ? [new AttachmentBuilder(image, { name })] : [],
+    attachments: [],
+    components: components ?? (revealed ? [] : crashButtons(round, { launched: state === 'vol' })),
+  };
+}
+
+export async function startCrash(interaction, bet, { viaUpdate = false, auto = null } = {}) {
   const taken = await stake(interaction.user.id, bet);
   if (taken === null) return refuse(interaction, bet);
 
   const u = rand(1_000_000) / 1_000_000;
   const point = Math.min(CRASH_CAP, Math.max(1, Math.floor((EDGE / (1 - u)) * 100) / 100));
-  const round = { id: newId(), kind: 'crash', userId: interaction.user.id, bet, point, start: Date.now(), done: false };
+  const round = {
+    id: newId(), kind: 'crash', userId: interaction.user.id, bet, point,
+    auto: auto && auto > 1 ? auto : null, origin: interaction, start: null, done: false,
+  };
   rounds.set(round.id, round);
 
-  const body = (multiplier) =>
-    new EmbedBuilder()
-      .setColor(COLOR)
-      .setTitle('🚀 Crash')
-      .setDescription(`**×${multiplier.toFixed(2)}**\nMise ${chips(round.bet)} · gain actuel ${chips(round.bet * multiplier)}`)
-      .setFooter({ text: `Encaisse avant l’explosion · plafond ×${CRASH_CAP}` });
-
-  const cashButton = (disabled = false) => [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`ccr:cash:${round.id}`).setLabel('Encaisser').setEmoji('💰').setStyle(ButtonStyle.Success).setDisabled(disabled),
-    ),
-  ];
-
-  await open(interaction, { embeds: [body(1)], components: cashButton(), files: [] }, viaUpdate);
-  round.render = body;
-
-  // Une modification toutes les deux secondes : au-delà, Discord limite les éditions.
-  round.ticker = setInterval(() => {
-    if (round.done) return;
-    const now = crashAt(round.start);
-    if (now >= round.point) {
-      explode(interaction, round).catch(() => {});
-      return;
-    }
-    interaction.editReply({ embeds: [body(now)], components: cashButton() }).catch(() => {});
-  }, 2000).unref();
-  round.timer = setTimeout(() => explode(interaction, round).catch(() => {}), 120_000).unref();
+  await open(interaction, await crashView(round, 'decollage'), viaUpdate);
+  round.launch = setTimeout(() => launch(round), LAUNCH_MS).unref();
+  round.timer = setTimeout(() => explode(round).catch(() => {}), 150_000).unref(); // garde-fou
 }
 
-async function explode(interaction, round) {
+function launch(round) {
+  if (round.done) return;
+  round.start = Date.now();
+  // L'explosion tombe à l'instant exact où le multiplicateur atteint le point tiré,
+  // pas au prochain rafraîchissement de l'image.
+  round.boom = setTimeout(() => explode(round).catch(() => {}), flightTime(round.point)).unref();
+  if (round.auto && round.auto < round.point) {
+    round.autoTimer = setTimeout(() => cashOut(round, round.auto).catch(() => {}), flightTime(round.auto)).unref();
+  }
+
+  const tick = async () => {
+    if (round.done) return;
+    const multiplier = multiplierAt(round);
+    if (multiplier >= round.point) return;
+    const payload = await crashView(round, 'vol', { multiplier });
+    if (round.done) return; // l'explosion est passée pendant le rendu
+    await push(round, payload);
+    if (!round.done) round.ticker = setTimeout(tick, TICK_MS).unref();
+  };
+  tick();
+}
+
+async function explode(round) {
+  if (round.done) return;
   close(round);
+  clearTimeout(round.launch);
+  clearTimeout(round.boom);
+  clearTimeout(round.autoTimer);
+  clearTimeout(round.ticker);
   const { balance, net } = await settle(round.userId, 0, round.bet);
-  await interaction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(0xd2536a)
-        .setTitle('🚀 Crash')
-        .setDescription(`💥 **Explosion à ×${round.point.toFixed(2)}**\nMise perdue : ${chips(round.bet)}`)
-        .addFields({ name: 'Bilan', value: chips(net), inline: true }, { name: 'Solde', value: chips(balance), inline: true }),
-    ],
-    components: replayRow(round.userId, 'crash', round.bet),
-  });
+  await push(round, await crashView(round, 'crash', { multiplier: round.point, net, balance, components: replayRow(round.userId, 'crash', round.bet) }));
+}
+
+async function cashOut(round, multiplier) {
+  if (round.done) return;
+  close(round);
+  clearTimeout(round.launch);
+  clearTimeout(round.boom);
+  clearTimeout(round.autoTimer);
+  clearTimeout(round.ticker);
+  const payout = Math.round(round.bet * multiplier);
+  const { balance, net } = await settle(round.userId, payout, round.bet);
+  await push(round, await crashView(round, 'encaisse', { multiplier, cashedAt: multiplier, net, balance, components: replayRow(round.userId, 'crash', round.bet) }));
 }
 
 async function handleCrash(interaction) {
@@ -234,25 +309,16 @@ async function handleCrash(interaction) {
   if (!claimed) return;
   const { round } = claimed;
   if (interaction.user.id !== round.userId) {
-    return interaction.reply({ content: 'Ce n’est pas ta partie — lance la tienne avec `/crash`.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'Ce n’est pas ta fusée — lance la tienne depuis `/casino`.', flags: MessageFlags.Ephemeral });
   }
-  // Le multiplicateur est recalculé à l'instant du clic, pas repris du dernier affichage.
-  const now = crashAt(round.start);
-  if (now >= round.point) return explode(interaction, round);
+  if (!round.start) return interaction.reply({ content: '🚀 La fusée n’a pas encore décollé !', flags: MessageFlags.Ephemeral });
 
-  close(round);
-  const payout = Math.round(round.bet * now);
-  const { balance, net } = await settle(round.userId, payout, round.bet);
-  return interaction.update({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(0x49c78a)
-        .setTitle('🚀 Crash')
-        .setDescription(`💰 Encaissé à **×${now.toFixed(2)}** — l’explosion était prévue à ×${round.point.toFixed(2)}.`)
-        .addFields({ name: 'Bilan', value: `+${chips(net)}`, inline: true }, { name: 'Solde', value: chips(balance), inline: true }),
-    ],
-    components: replayRow(round.userId, 'crash', round.bet),
-  });
+  // On répond au bouton tout de suite ; l'image suit par le message d'origine.
+  await interaction.deferUpdate();
+  // Le multiplicateur est calculé à l'instant du clic, pas repris de la dernière image.
+  const now = multiplierAt(round);
+  if (now >= round.point) return explode(round);
+  return cashOut(round, Math.floor(now * 100) / 100);
 }
 
 // ----------------------------------------------------------- Plus ou moins

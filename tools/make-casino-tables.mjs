@@ -30,6 +30,7 @@ export const TABLES = {
   blackjack: `cinematic photo of an empty casino blackjack table seen from the player's seat, a professional croupier in a black vest and white shirt standing behind the table, looking at the camera with a slight smile, hands resting on the table edge, the felt table fills the lower half of the image, ${LOOK}`,
   des: `cinematic photo of a casino craps table, a smiling croupier in a black vest and white shirt standing behind the table holding a wooden stick, the burgundy felt table fills the lower third of the image, ${LOOK}`,
   machine: `cinematic photo of a row of luxury casino slot machines glowing with pink and magenta neon, one machine in the center in sharp focus with a large screen, polished chrome and dark wood, no people, ${LOOK}`,
+  crash: `synthwave futuristic city skyline at night seen from far away, an immense pink and violet starry sky filling the upper two thirds of the image, a glowing rocket launch tower on the far left, neon reflections, cinematic wide shot, highly detailed, no people, no text, 35mm film photo`,
   roulette: `cinematic photo of a luxury casino roulette table, a professional croupier in a black vest and white shirt standing behind a polished wooden roulette wheel, the betting layout fills the lower half of the image, ${LOOK}`,
 };
 

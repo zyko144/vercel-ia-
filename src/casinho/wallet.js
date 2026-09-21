@@ -2,6 +2,7 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
 import { blackjackRules } from './blackjack.js';
+import { guideEmbeds } from './guide.js';
 import { DICE_BETS, diceRtp, ROULETTE_BETS, rouletteRtp, slotPaytable, slotRtp } from './games.js';
 import { MINES_TOTAL, minesMultiplier } from './live.js';
 import { balance, chips, daily, grant, isAdmin, leaderboard, reset, rescue, stats, transfer, waitLabel } from './economy.js';
@@ -138,62 +139,9 @@ export async function adminChips(interaction) {
   return interaction.reply(ephemeral(`${action === 'retirer' ? 'Retiré' : 'Ajouté'} ${chips(amount)} — ${target.username} a maintenant ${chips(after)}.`));
 }
 
+/** /casino-aide : le même guide que le message épinglé du salon des jeux. */
 export async function showHelp(interaction) {
-  const site = config.casinho.siteUrl ? `\n\n🌐 Le casino en ligne : ${config.casinho.siteUrl}` : '';
-  return interaction.reply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLOR)
-        .setTitle('🎰 Bienvenue au Casinho')
-        .setDescription(
-          [
-            'Tape **`/casino`** et choisis ta table — ou lance directement le jeu qui te tente.',
-            'Tout se passe ensuite dans l’embed : la mise avec les boutons, le pari avec le menu, puis **Jouer**.',
-            '',
-            `Tout se joue en **jetons fictifs**. Ils ne s’achètent pas, ne se retirent pas, et ne valent rien en dehors du serveur.${site}`,
-          ].join('\n'),
-        )
-        .addFields(
-          {
-            name: '💰 Banque',
-            value: [
-              '`/solde` — combien il te reste',
-              '`/quotidien` — tes jetons du jour (+ bonus de série)',
-              '`/secours` — un coup de pouce quand tu es à sec',
-              '`/donner` — envoyer des jetons à quelqu’un',
-              '`/classement` · `/stats` — qui mène la danse',
-            ].join('\n'),
-          },
-          {
-            name: '🎰 Ouvrir le casino',
-            value: '`/casino` — le hall : choisis ta table dans le menu, tout se joue ensuite dans l’embed.',
-          },
-          {
-            name: '🃏 Jeux de table',
-            value: [
-              '`/blackjack` — contre le croupier, avec doubler et séparer',
-              '`/roulette` — européenne, un seul zéro',
-              '`/rougenoir` — une carte, une couleur',
-            ].join('\n'),
-          },
-          {
-            name: '🎲 Jeux rapides',
-            value: ['`/machine` — trois rouleaux', '`/des` — le total de deux dés', '`/pileouface` — une pièce, deux issues'].join('\n'),
-          },
-          {
-            name: '🚀 Jeux à encaissement',
-            value: [
-              '`/mines` — ouvre des cases, encaisse avant la bombe',
-              '`/crash` — le multiplicateur grimpe, encaisse à temps',
-              '`/plusoumoins` — la carte suivante, plus haute ou plus basse',
-              '`/duel` — joueur contre joueur, sans avantage de la maison',
-            ].join('\n'),
-          },
-          { name: '📈 Les chances', value: 'Tout est calculé, rien n’est inventé : `/casino-gains` donne les probabilités exactes de chaque jeu.' },
-        )
-        .setFooter({ text: 'Aucune option à retenir : la mise se règle avec les boutons. Joue pour le plaisir.' }),
-    ],
-  });
+  return interaction.reply({ embeds: guideEmbeds() });
 }
 
 export async function showPaytable(interaction) {

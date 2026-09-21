@@ -12,18 +12,22 @@ import {
   StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
+  UserSelectMenuBuilder,
 } from 'discord.js';
 import path from 'node:path';
 import { config } from '../config.js';
 import { balance, chips } from './economy.js';
 import { DICE_BETS, ROULETTE_BETS, diceRtp, evenRtp, resolveInstant, rouletteRtp, slotRtp } from './games.js';
 import { startBlackjack } from './blackjack.js';
-import { minesMultiplier, startCrash, startHiLo, startMines } from './live.js';
+import { AUTO_CASHOUTS, autoChance, minesMultiplier, startCrash, startDuel, startHiLo, startMines } from './live.js';
+import { claimDaily, showLeaderboard } from './wallet.js';
 import { CALL, animationFor } from './render/animations.js';
 import { resultImage } from './render/scenes.js';
 
 const COLOR = 0xff3fa6;
-const PRESETS = [10, 50, 100, 500, 1000];
+// Mises rapides à l'échelle du million quotidien.
+const PRESETS = [100, 1_000, 10_000, 100_000, 1_000_000];
+const short = (n) => (n >= 1_000_000 ? `${n / 1_000_000}M` : n >= 1_000 ? `${n / 1_000}k` : String(n));
 const LIFETIME_MS = 15 * 60_000;
 
 const panels = new Map();
@@ -31,7 +35,8 @@ const lastBet = new Map(); // dernière mise de chaque joueur, pour « Rejouer �
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 export const isTableComponent = (interaction) =>
-  (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) && interaction.customId.startsWith('ctb:');
+  (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isUserSelectMenu() || interaction.isModalSubmit()) &&
+  interaction.customId.startsWith('ctb:');
 
 // --------------------------------------------------------------- Les tables
 const TABLES = {
@@ -149,9 +154,36 @@ const TABLES = {
     title: '🚀 Crash',
     art: 'crash',
     kind: 'live',
-    blurb: 'Le multiplicateur grimpe. Encaisse avant l’explosion.',
-    info: 'Plafond ×100 · TRJ 97 %',
-    start: (interaction, panel) => startCrash(interaction, panel.bet, { viaUpdate: true }),
+    blurb: 'La fusée décolle et le multiplicateur grimpe. Encaisse avant qu’elle explose — ou laisse l’encaissement automatique le faire pour toi.',
+    info: (panel) =>
+      panel.option.auto === 'manuel'
+        ? 'Plafond ×100 · TRJ 97 %'
+        : `Auto ×${panel.option.auto} : réussit ${Math.round(autoChance(Number(panel.option.auto)) * 100)} % du temps · TRJ 97 %`,
+    option: {
+      id: 'auto',
+      placeholder: 'Encaissement automatique ?',
+      value: 'manuel',
+      // Calculé à l'affichage : live.js et table.js s'importent mutuellement.
+      choices: () => [
+        { value: 'manuel', label: 'Encaissement manuel', description: 'Tu appuies sur « Encaisser » quand tu veux' },
+        ...AUTO_CASHOUTS.map((target) => ({
+          value: String(target),
+          label: `Auto à ×${target}`,
+          description: `Encaisse tout seul à ×${target} · réussit ${Math.round(autoChance(target) * 100)} % du temps`,
+        })),
+      ],
+    },
+    label: (panel) => (panel.option.auto === 'manuel' ? 'Encaissement manuel' : `Auto à ×${panel.option.auto}`),
+    start: (interaction, panel) =>
+      startCrash(interaction, panel.bet, { viaUpdate: true, auto: panel.option.auto === 'manuel' ? null : Number(panel.option.auto) }),
+  },
+  duel: {
+    title: '⚔️ Duel',
+    art: 'piece',
+    kind: 'duel',
+    blurb: 'Défie un membre à pile ou face : le gagnant prend les deux mises.',
+    info: 'Joueur contre joueur · aucun avantage de la maison',
+    label: (panel) => (panel.opponent ? `contre <@${panel.opponent}>` : 'choisis ton adversaire'),
   },
   plusoumoins: {
     title: '🔼 Plus ou moins',
@@ -197,6 +229,11 @@ async function panelPayload(panel, { withFiles = false, note = null } = {}) {
   if (art) embed.setImage(art.url);
 
   const rows = [];
+  if (table.kind === 'duel') {
+    const picker = new UserSelectMenuBuilder().setCustomId(`ctb:who:${panel.id}`).setPlaceholder('Choisis ton adversaire').setMinValues(1).setMaxValues(1);
+    if (panel.opponent) picker.setDefaultUsers(panel.opponent);
+    rows.push(new ActionRowBuilder().addComponents(picker));
+  }
   if (table.option) {
     const choices = typeof table.option.choices === 'function' ? table.option.choices() : table.option.choices;
     rows.push(
@@ -219,7 +256,7 @@ async function panelPayload(panel, { withFiles = false, note = null } = {}) {
       PRESETS.map((amount) =>
         new ButtonBuilder()
           .setCustomId(`ctb:set${amount}:${panel.id}`)
-          .setLabel(String(amount))
+          .setLabel(short(amount))
           .setStyle(panel.bet === amount ? ButtonStyle.Primary : ButtonStyle.Secondary),
       ),
     ),
@@ -259,7 +296,7 @@ export async function openTable(interaction, gameId, { bet = null, viaUpdate = f
     id: newId(),
     userId: interaction.user.id,
     gameId,
-    bet: bet ?? lastBet.get(interaction.user.id) ?? 100,
+    bet: bet ?? lastBet.get(interaction.user.id) ?? 1_000,
     option: {},
   };
   if (table.option) panel.option[table.option.id] = table.option.value;
@@ -302,6 +339,10 @@ export async function openLobby(interaction) {
             })),
           ),
       ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('ctb:daily:hall').setLabel('Jetons du jour').setEmoji('🎁').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('ctb:top:hall').setLabel('Classement').setEmoji('🏆').setStyle(ButtonStyle.Secondary),
+      ),
     ],
   });
 }
@@ -310,15 +351,17 @@ export async function openLobby(interaction) {
 export async function handleTableComponent(interaction) {
   const [, action, panelId] = interaction.customId.split(':');
 
-  // Le hall : pas encore de table, on en ouvre une.
+  // Le hall : pas encore de table, on en ouvre une (ou on passe à la banque).
   if (action === 'pick') return openTable(interaction, interaction.values[0], { viaUpdate: true });
+  if (action === 'daily') return claimDaily(interaction);
+  if (action === 'top') return showLeaderboard(interaction);
 
   const panel = panels.get(panelId);
   if (!panel) {
-    return interaction.reply({ content: 'Cette table est fermée. Relance la commande du jeu.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'Cette table est fermée. Relance `/casino`.', flags: MessageFlags.Ephemeral });
   }
   if (interaction.user.id !== panel.userId) {
-    return interaction.reply({ content: 'Cette table est à quelqu’un d’autre — ouvre la tienne avec la commande du jeu.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'Cette table est à quelqu’un d’autre — ouvre la tienne avec `/casino`.', flags: MessageFlags.Ephemeral });
   }
 
   clearTimeout(panel.timer);
@@ -356,6 +399,15 @@ export async function handleTableComponent(interaction) {
           ),
       );
     }
+    return interaction.update(await panelPayload(panel));
+  }
+
+  if (action === 'who') {
+    const opponent = interaction.users?.first();
+    if (!opponent || opponent.bot || opponent.id === panel.userId) {
+      return interaction.reply({ content: 'Choisis un autre membre (pas un bot, pas toi).', flags: MessageFlags.Ephemeral });
+    }
+    panel.opponent = opponent.id;
     return interaction.update(await panelPayload(panel));
   }
 
@@ -399,6 +451,14 @@ async function play(interaction, panel) {
       content: `Il te faut ${chips(panel.bet)} et tu as ${chips(available)}. Baisse la mise, ou passe par \`/quotidien\` ou \`/secours\`.`,
       flags: MessageFlags.Ephemeral,
     });
+  }
+
+  if (table.kind === 'duel') {
+    if (!panel.opponent) return interaction.reply({ content: 'Choisis d’abord ton adversaire dans le menu.', flags: MessageFlags.Ephemeral });
+    const opponent = await interaction.client.users.fetch(panel.opponent).catch(() => null);
+    if (!opponent) return interaction.reply({ content: 'Ce membre est introuvable.', flags: MessageFlags.Ephemeral });
+    // reply() crée un nouveau message : c'est ce qui notifie l'adversaire (une modification ne le ferait pas).
+    return startDuel(interaction, { opponent, bet: panel.bet });
   }
 
   // Les jeux qui durent (blackjack, mines, crash, plus ou moins) prennent la main

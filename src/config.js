@@ -230,12 +230,12 @@ export const config = {
     // Lien du site, affiché dans /casino-aide s'il est rempli
     siteUrl: str('CASINHO_SITE_URL'),
     startingBalance: int('CASINHO_START', 1_000),
-    dailyReward: int('CASINHO_DAILY', 500),
-    dailyStreakBonus: int('CASINHO_DAILY_STREAK', 100),
+    dailyReward: int('CASINHO_DAILY', 1_000_000),
+    dailyStreakBonus: int('CASINHO_DAILY_STREAK', 100_000),
     // Filet de sécurité pour un joueur à sec, une fois par heure
     rescueThreshold: int('CASINHO_RESCUE_UNDER', 100),
     rescueAmount: int('CASINHO_RESCUE', 250),
-    maxBet: int('CASINHO_MAX_BET', 100_000),
+    maxBet: int('CASINHO_MAX_BET', 1_000_000),
     // Qui peut donner / retirer des jetons (le chef est toujours inclus)
     admins: list('CASINHO_ADMINS'),
   },
