@@ -98,9 +98,45 @@ export function blackjackScene(table, { reveal = false, result = null } = {}) {
   return renderScene('blackjack', overlay);
 }
 
+// ------------------------------------------------------ Blackjack à plusieurs
+/**
+ * La table à plusieurs : la main du croupier au centre, et jusqu'à cinq joueurs
+ * alignés en bas, chacun avec son nom et son total. Le joueur dont c'est le tour
+ * est souligné en rose ; à la fin, chaque total prend la couleur de son résultat.
+ *
+ * @param {{ dealer: object[], seats: { name: string, cards: object[], bet: number, outcome?: 'win'|'lose'|'push'|'blackjack' }[], turn: number }} table
+ */
+export function blackjackMultiScene(table, { reveal = false, result = null } = {}) {
+  const dealerValue = handValue(reveal ? table.dealer : [table.dealer[0]]);
+  let overlay = vignette(0.45) + tableShade(120, 0.95);
+
+  overlay += handTitle(WIDTH / 2, 176, 'CROUPIER', reveal ? (dealerValue.bust ? `${dealerValue.total} SAUTÉ` : dealerValue.total) : `${dealerValue.total} + ?`, {
+    color: reveal && dealerValue.bust ? LOSE : '#ffffff',
+    small: true,
+  });
+  overlay += hand(table.dealer, WIDTH / 2, 202, { hidden: reveal ? [] : [1], scale: 0.95, spread: 56, maxWidth: 360 });
+
+  const count = table.seats.length;
+  const column = WIDTH / count;
+  table.seats.forEach((seat, index) => {
+    const cx = column * index + column / 2;
+    const { total, soft, bust } = handValue(seat.cards);
+    const active = !reveal && index === table.turn;
+    const tone = seat.outcome === 'win' || seat.outcome === 'blackjack' ? WIN : seat.outcome === 'lose' ? LOSE : seat.outcome === 'push' ? '#ffd98a' : null;
+    const value = seat.outcome === 'blackjack' ? 'BJ !' : bust ? `${total} ✗` : soft && total < 21 ? `${total - 10}/${total}` : String(total);
+    overlay += hand(seat.cards, cx, 372, { glow: active ? PINK : null, scale: count > 3 ? 0.66 : 0.78, spread: 48, maxWidth: column - 24 });
+    const max = count > 3 ? 8 : 11;
+    const name = seat.name.length > max ? `${seat.name.slice(0, max - 1)}…` : seat.name;
+    overlay += handTitle(cx, 510, name, value, { color: tone ?? (bust ? LOSE : '#ffffff'), accent: active ? PINK : tone, small: true });
+  });
+
+  overlay += outcomeBanner(result, 92);
+  return renderScene('blackjack', overlay);
+}
+
 // ---------------------------------------------------------------- Roulette
 /** La roue arrêtée sur le numéro tiré, et le détail du pari. */
-export function rouletteScene({ pocket, betLabel, bet, result }) {
+export function rouletteScene({ pocket, betLabel, bet, result, summary = null }) {
   const color = pocketColor(pocket);
   const traits = pocket === 0
     ? 'ZÉRO'
@@ -112,8 +148,8 @@ export function rouletteScene({ pocket, betLabel, bet, result }) {
     <circle cx="700" cy="318" r="74" fill="${color}" stroke="#e6c47a" stroke-width="5"/>
     <text x="700" y="320" font-family="${SERIF}" font-weight="700" font-size="70" fill="#fff" text-anchor="middle" dominant-baseline="middle">${pocket}</text>
     <text x="700" y="422" font-family="${SANS}" font-weight="700" font-size="18" fill="#ffd9ee" text-anchor="middle" letter-spacing="2">${traits}</text>`;
-  overlay += badge(700, 470, `TON PARI · ${betLabel.toUpperCase()}`, { size: 16 });
-  overlay += chipStack(880, 505, bet);
+  overlay += badge(700, 470, summary ?? `TON PARI · ${betLabel.toUpperCase()}`, { size: 16 });
+  if (bet) overlay += chipStack(880, 505, bet);
   overlay += outcomeBanner(result, 120);
   return renderScene('roulette', overlay);
 }
@@ -301,7 +337,7 @@ const crashTime = (m) => CRASH_SPEED * Math.log(Math.max(1, m));
  * @param {{ state: 'decollage'|'vol'|'crash'|'encaisse', multiplier: number, point?: number,
  *           cashedAt?: number, auto?: number|null, bet: number }} flight
  */
-export function crashScene({ state, multiplier, point = null, cashedAt = null, auto = null, bet }) {
+export function crashScene({ state, multiplier, point = null, cashedAt = null, auto = null, bet, cashouts = [], players = null }) {
   const left = 90;
   const right = 900;
   const bottom = 470;
@@ -380,6 +416,16 @@ export function crashScene({ state, multiplier, point = null, cashedAt = null, a
       <path d="M${cx - 6} ${cy} l4 5 l8 -10" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
   }
 
+  // À plusieurs : chaque encaissement est un point vert sur la courbe, avec le nom du joueur.
+  for (const { m, name } of cashouts) {
+    if (m > shownTo) continue;
+    const px = X(crashTime(m));
+    const py = Y(m);
+    overlay += `<circle cx="${px}" cy="${py}" r="9" fill="${WIN}" stroke="#fff" stroke-width="2.5"/>
+      <text x="${px}" y="${py - 16}" font-family="${SANS}" font-weight="700" font-size="15" fill="#eafff2" text-anchor="middle"
+            stroke="rgba(0,0,0,0.7)" stroke-width="3" paint-order="stroke">${esc(name.slice(0, 10))} ×${m.toFixed(2)}</text>`;
+  }
+
   // Le multiplicateur, en très gros : c'est lui qu'on regarde.
   const shown = cashed ? cashedAt : crashed ? point : multiplier;
   const color = crashed ? LOSE : cashed ? WIN : multiplier >= 5 ? '#ffd24a' : multiplier >= 2 ? '#ff9ad2' : '#ffffff';
@@ -387,11 +433,11 @@ export function crashScene({ state, multiplier, point = null, cashedAt = null, a
     <text x="${left + 4}" y="92" font-family="${SERIF}" font-weight="700" font-size="76" fill="${color}"
           stroke="rgba(0,0,0,0.55)" stroke-width="4" paint-order="stroke">×${shown.toFixed(2)}</text>
     <text x="${left + 8}" y="${bottom + 44}" font-family="${SANS}" font-weight="700" font-size="21" fill="#ffd9ee">
-      Mise ${Math.round(bet).toLocaleString('fr-FR')} → ${Math.round(bet * shown).toLocaleString('fr-FR')} jetons</text>`;
+      ${players ? esc(players) : `Mise ${Math.round(bet).toLocaleString('fr-FR')} → ${Math.round(bet * shown).toLocaleString('fr-FR')} jetons`}</text>`;
 
   if (state === 'decollage') overlay += banner('DÉCOLLAGE', { glow: PINK, y: 300, sub: 'Encaisse avant que la fusée n’explose' });
   // En haut à droite : la courbe et le point d'encaissement restent visibles.
-  if (crashed) overlay += banner('EXPLOSION', { glow: LOSE, x: 640, y: 92, size: 40, sub: `mise perdue · -${Math.round(bet).toLocaleString('fr-FR')} jetons` });
+  if (crashed) overlay += banner('EXPLOSION', { glow: LOSE, x: 640, y: 92, size: 40, sub: players ?? `mise perdue · -${Math.round(bet).toLocaleString('fr-FR')} jetons` });
   if (cashed) overlay += banner('ENCAISSÉ', { glow: WIN, x: 640, y: 92, size: 40, sub: `+${Math.round(bet * cashedAt - bet).toLocaleString('fr-FR')} jetons · explosion à ×${point.toFixed(2)}` });
   return renderScene('crash', overlay);
 }

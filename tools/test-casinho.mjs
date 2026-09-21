@@ -319,7 +319,9 @@ await check('le hall /casino propose toutes les tables', async () => {
   const hall = mock({});
   await openLobby(hall);
   const menu = last(hall).components[0].components[0].toJSON();
-  assert.equal(menu.options.length, TABLE_GAMES.length);
+  // Les tables en solo, plus les trois tables à plusieurs.
+  assert.equal(menu.options.length, TABLE_GAMES.length + 3);
+  assert.ok(menu.options.some((o) => o.value === 'multi-blackjack'), 'le blackjack à plusieurs doit être proposé');
   const pick = follow(hall, { __customId: 'ctb:pick:hall', __values: ['blackjack'] });
   await handleTableComponent(pick);
   assert.match(last(hall).embeds[0].data.title, /Blackjack/);
@@ -469,6 +471,128 @@ await check('duel depuis le hall : on choisit son adversaire dans un menu', asyn
   const refuse = mock({ __customId: buttonIds(challenge).find((id) => id.startsWith('cdu:refuse')) }, FOE);
   refuse.sent = table.sent;
   await handleLiveButton(refuse);
+});
+
+// ------------------------------------------------------------ À plusieurs
+const { handleMultiComponent } = await import(new URL('multi.js', ROOT));
+const { ROULETTE_BETS } = await import(new URL('games.js', ROOT));
+
+/** Un clic d'un autre joueur sur le même message public. */
+const as = (source, who, options) => {
+  const next = mock(options, who);
+  next.sent = source.sent;
+  return next;
+};
+const PLAYERS = ['JOUEUR-A', 'JOUEUR-B', 'JOUEUR-C'];
+
+/** Ouvre une table à plusieurs depuis le hall et renvoie l'interaction d'origine. */
+async function openMulti(game) {
+  const hall = mock({});
+  await openLobby(hall);
+  const pick = follow(hall, { __customId: 'ctb:pick:hall', __values: [`multi-${game}`] });
+  await handleTableComponent(pick);
+  const table = last(hall);
+  const tableId = buttonIds(table).find((id) => id.startsWith('cmp:go:')).split(':')[2];
+  return { hall: pick, tableId };
+}
+
+await check('à plusieurs : roulette, un seul numéro et chacun payé selon son pari', async () => {
+  for (const who of PLAYERS) {
+    await reset(who);
+    await grant(who, 1_000_000 - (await balance(who)));
+  }
+  const { hall, tableId } = await openMulti('roulette');
+  // A mise 10k sur rouge (par défaut), B 1k sur noir, C 100k sur la 1re douzaine.
+  await handleMultiComponent(as(hall, 'JOUEUR-A', { __customId: `cmp:bet10000:${tableId}` }));
+  await handleMultiComponent(as(hall, 'JOUEUR-B', { __customId: `cmp:bet1000:${tableId}` }));
+  await handleMultiComponent(as(hall, 'JOUEUR-B', { __customId: `cmp:opt:${tableId}`, __values: ['noir'] }));
+  await handleMultiComponent(as(hall, 'JOUEUR-C', { __customId: `cmp:bet100000:${tableId}` }));
+  await handleMultiComponent(as(hall, 'JOUEUR-C', { __customId: `cmp:opt:${tableId}`, __values: ['douzaine1'] }));
+
+  const lobby = last(hall).embeds[0].data.fields[0];
+  assert.match(lobby.name, /Joueurs \(3\/10\)/, 'les trois joueurs doivent apparaître');
+  assert.match(lobby.value, /JOUEUR-B.*Noir/, 'le pari de chacun doit être affiché');
+
+  // Un joueur qui n'est pas l'hôte ne peut pas lancer.
+  const intruder = as(hall, 'JOUEUR-B', { __customId: `cmp:go:${tableId}` });
+  await handleMultiComponent(intruder);
+  assert.match(intruder.sent.at(-1).content ?? '', /Seul/);
+
+  await handleMultiComponent(as(hall, USER, { __customId: `cmp:go:${tableId}` }));
+  const final = hall.sent.filter((p) => /s’arrête sur/.test(descriptionOf(p))).at(-1);
+  assert.ok(final, 'le résultat de la table doit être publié');
+  const pocket = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(final))[1]);
+
+  // Chaque joueur a été payé selon SON pari, sur le MÊME numéro.
+  const expected = { 'JOUEUR-A': ['rouge', 10_000], 'JOUEUR-B': ['noir', 1_000], 'JOUEUR-C': ['douzaine1', 100_000] };
+  for (const [who, [type, bet]] of Object.entries(expected)) {
+    const rule = ROULETTE_BETS[type];
+    const net = rule.wins(pocket) ? bet * (rule.pays - 1) : -bet;
+    assert.equal((await balance(who)) - 1_000_000, net, `${who} : paiement faux sur le ${pocket}`);
+  }
+  assert.ok(buttonIds(final).some((id) => id.startsWith('cmp:again')), 'on doit pouvoir rouvrir une table');
+  console.log(`   la bille tombe sur le ${pocket} : A ${ROULETTE_BETS.rouge.wins(pocket) ? 'gagne' : 'perd'}, B ${ROULETTE_BETS.noir.wins(pocket) ? 'gagne' : 'perd'}, C ${ROULETTE_BETS.douzaine1.wins(pocket) ? 'gagne' : 'perd'}`);
+});
+
+await check('à plusieurs : crash, une seule fusée, chacun encaisse pour lui', async () => {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    for (const who of PLAYERS.slice(0, 2)) {
+      await reset(who);
+      await grant(who, 1_000_000 - (await balance(who)));
+    }
+    const { hall, tableId } = await openMulti('crash');
+    await handleMultiComponent(as(hall, 'JOUEUR-A', { __customId: `cmp:bet10000:${tableId}` }));
+    await handleMultiComponent(as(hall, 'JOUEUR-A', { __customId: `cmp:opt:${tableId}`, __values: ['1.5'] }));
+    await handleMultiComponent(as(hall, 'JOUEUR-B', { __customId: `cmp:bet1000:${tableId}` }));
+    await handleMultiComponent(as(hall, USER, { __customId: `cmp:go:${tableId}` }));
+
+    await sleepMs(2_500); // décollage, puis ~0,7 s de vol
+    const click = as(hall, 'JOUEUR-B', { __customId: `cmp:cash:${tableId}` });
+    await handleMultiComponent(click);
+    const answer = click.sent.at(-1).content ?? '';
+    if (!/Encaissé/.test(answer)) continue; // fusée déjà explosée : on recommence
+
+    await sleepMs(3_500); // laisse A atteindre ×1,5 (ou exploser avant)
+    const outB = (await balance('JOUEUR-B')) - 1_000_000;
+    assert.ok(outB > 0, 'B a encaissé en vol : il doit gagner');
+    const outA = (await balance('JOUEUR-A')) - 1_000_000;
+    assert.ok(outA === 5_000 || outA === -10_000, `A : soit encaissé pile à ×1,5 (+5 000), soit explosé (-10 000), pas ${outA}`);
+    console.log(`   B encaisse en vol (${outB > 0 ? '+' : ''}${outB}), A ${outA > 0 ? 'encaisse automatiquement à ×1,5' : 'saute avec la fusée'}`);
+    return;
+  }
+  throw new Error('aucune fusée n’a volé en 30 essais');
+});
+
+await check('à plusieurs : blackjack, chacun joue sa main à son tour', async () => {
+  for (const who of PLAYERS) {
+    await reset(who);
+    await grant(who, 1_000_000 - (await balance(who)));
+  }
+  const { hall, tableId } = await openMulti('blackjack');
+  for (const who of PLAYERS) await handleMultiComponent(as(hall, who, { __customId: `cmp:bet1000:${tableId}` }));
+  await handleMultiComponent(as(hall, USER, { __customId: `cmp:go:${tableId}` }));
+
+  let turns = 0;
+  for (let guard = 0; guard < 20; guard++) {
+    await sleepMs(50);
+    const current = hall.sent.filter((p) => p.embeds?.length).at(-1);
+    if (buttonIds(current).some((id) => id.startsWith('cmp:again'))) break;
+    const who = /C’est à \*\*(.+?)\*\*/.exec(descriptionOf(current))?.[1];
+    if (!who) continue;
+    // Un autre joueur ne peut pas jouer à sa place.
+    const other = PLAYERS.find((p) => p !== who);
+    const wrong = as(hall, other, { __customId: `cmp:stand:${tableId}` });
+    await handleMultiComponent(wrong);
+    assert.match(wrong.sent.at(-1).content ?? '', /Patience|tour/, 'seul le joueur dont c’est le tour peut jouer');
+    await handleMultiComponent(as(hall, who, { __customId: `cmp:stand:${tableId}` }));
+    turns += 1;
+  }
+  await sleepMs(4_000); // le croupier joue carte par carte
+  const final = hall.sent.filter((p) => buttonIds(p).some((id) => id.startsWith('cmp:again'))).at(-1);
+  assert.ok(final, 'la table doit se terminer');
+  for (const who of PLAYERS) assert.match(descriptionOf(final), new RegExp(who), `${who} doit avoir son résultat`);
+  assert.ok(attachmentOf(final), 'la table finale doit être illustrée');
+  console.log(`   ${turns} tour(s) joué(s), puis le croupier : ${descriptionOf(final).split('\n').filter((l) => /JOUEUR/.test(l)).map((l) => l.slice(0, 2)).join(' ')}`);
 });
 
 await check('seule /casino lance les jeux', () => {

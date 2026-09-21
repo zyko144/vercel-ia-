@@ -23,6 +23,8 @@ export function guideEmbeds() {
         '3️⃣ Choisis ton pari dans le menu si le jeu en a un, puis appuie sur **▶️ Jouer**.',
         '4️⃣ À la fin, **🔁 Rejouer** relance avec la même mise.',
         '',
+        '👥 **À plusieurs** : dans le même menu, choisis une table « à plusieurs » (roulette, crash, blackjack). Elle s’ouvre pour tout le salon : chacun clique sur sa mise, et un seul tirage vaut pour tout le monde.',
+        '',
         `🎁 Chaque jour : **${n(daily)} jetons** avec \`/quotidien\` (ou le bouton du hall), et un bonus si tu reviens plusieurs jours de suite.`,
         '',
         `Les jetons sont **fictifs** : ils ne s’achètent pas, ne se retirent pas et ne valent rien en dehors du serveur.${site}`,
@@ -52,6 +54,15 @@ export function guideEmbeds() {
       { name: '💣 Mines', value: '20 cases, des bombes cachées. Chaque case sûre fait monter le gain ; encaisse quand tu veux.', inline: true },
       { name: '🔼 Plus ou moins', value: 'La carte suivante sera-t-elle plus haute ou plus basse ? Les gains s’enchaînent.', inline: true },
       { name: '⚔️ Duel', value: 'Défie un membre à pile ou face : choisis-le dans le menu, le gagnant prend les deux mises. Aucun prélèvement.' },
+      {
+        name: '👥 Tables à plusieurs',
+        value: [
+          '**Roulette** — une seule bille, chacun son pari.',
+          '**Crash** — une seule fusée, chacun encaisse quand il veut (ou en automatique).',
+          '**Blackjack** — jusqu’à 5 joueurs contre le même croupier, chacun joue sa main à son tour.',
+          'Clique sur ta mise pour t’asseoir. Départ quand l’hôte lance, ou tout seul au bout de 30 s. Les mises ne sont prélevées qu’au départ.',
+        ].join('\n'),
+      },
     );
 
   const commands = new EmbedBuilder()

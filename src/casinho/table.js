@@ -21,6 +21,7 @@ import { DICE_BETS, ROULETTE_BETS, diceRtp, evenRtp, resolveInstant, rouletteRtp
 import { startBlackjack } from './blackjack.js';
 import { AUTO_CASHOUTS, autoChance, minesMultiplier, startCrash, startDuel, startHiLo, startMines } from './live.js';
 import { claimDaily, showLeaderboard } from './wallet.js';
+import { MULTI_GAMES, openMultiTable } from './multi.js';
 import { CALL, animationFor } from './render/animations.js';
 import { resultImage } from './render/scenes.js';
 
@@ -316,6 +317,7 @@ export async function openLobby(interaction) {
       [
         'Choisis une table dans le menu. Tout se règle ensuite dans l’embed :',
         'la mise avec les boutons, le pari avec le menu, puis **Jouer**.',
+        '👥 Les tables **à plusieurs** s’ouvrent ici même : tout le salon peut miser sur le même tirage.',
         '',
         `Solde : **${chips(await balance(interaction.user.id))}**`,
         '',
@@ -332,11 +334,11 @@ export async function openLobby(interaction) {
           .setCustomId('ctb:pick:hall')
           .setPlaceholder('Choisis ta table')
           .addOptions(
-            TABLE_GAMES.map((id) => ({
-              value: id,
-              label: TABLES[id].title,
-              description: TABLES[id].blurb.slice(0, 100),
-            })),
+            [
+              ...TABLE_GAMES.map((id) => ({ value: id, label: TABLES[id].title, description: TABLES[id].blurb.slice(0, 100) })),
+              // Les tables à plusieurs : tout le salon mise sur le même tirage.
+              ...Object.entries(MULTI_GAMES).map(([id, game]) => ({ value: `multi-${id}`, label: `👥 ${game.title}`, description: game.blurb.slice(0, 100) })),
+            ],
           ),
       ),
       new ActionRowBuilder().addComponents(
@@ -352,7 +354,11 @@ export async function handleTableComponent(interaction) {
   const [, action, panelId] = interaction.customId.split(':');
 
   // Le hall : pas encore de table, on en ouvre une (ou on passe à la banque).
-  if (action === 'pick') return openTable(interaction, interaction.values[0], { viaUpdate: true });
+  if (action === 'pick') {
+    const choice = interaction.values[0];
+    if (choice.startsWith('multi-')) return openMultiTable(interaction, choice.slice('multi-'.length));
+    return openTable(interaction, choice, { viaUpdate: true });
+  }
   if (action === 'daily') return claimDaily(interaction);
   if (action === 'top') return showLeaderboard(interaction);
 
