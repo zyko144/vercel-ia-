@@ -6,6 +6,8 @@
  *   npm run test:casino
  */
 import assert from 'node:assert/strict';
+import http from 'node:http';
+import { MessageFlags } from 'discord.js';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -15,7 +17,9 @@ const { grant, balance, chips, rand, reset } = await import(new URL('economy.js'
 const { startBlackjack, handleBlackjackButton } = await import(new URL('blackjack.js', ROOT));
 const { resolveInstant, slotRtp, rouletteRtp, diceRtp, evenRtp, slotSpin, diceRoll, coinToss, cardColour } =
   await import(new URL('games.js', ROOT));
-const { handleRoulette, payoutFor, spotRule, winningSpots } = await import(new URL('roulette.js', ROOT));
+const { act, view, timing, onRoundEnd, resetRooms, payoutFor, spotRule, winningSpots } = await import(new URL('roulette.js', ROOT));
+const { createSession, readSession, personalLink, handleRouletteWeb } = await import(new URL('roulette-web.js', ROOT));
+const { handleRouletteButton } = await import(new URL('roulette-discord.js', ROOT));
 const { startMines, startCrash, startHiLo, startDuel, handleLiveButton, minesMultiplier } = await import(new URL('live.js', ROOT));
 const { openTable, openLobby, handleTableComponent, TABLE_GAMES } = await import(new URL('table.js', ROOT));
 const wallet = await import(new URL('wallet.js', ROOT));
@@ -181,6 +185,7 @@ await check('blackjack : doubler clôt la main', async () => {
 const attachmentOf = (payload) => payload?.files?.[0];
 const imageUrlOf = (payload) => (payload?.embeds?.[0]?.data ?? payload?.embeds?.[0])?.image?.url ?? '';
 const descriptionOf = (payload) => (payload?.embeds?.[0]?.data ?? payload?.embeds?.[0])?.description ?? '';
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await check('blackjack : chaque coup montre la table en image', async () => {
   const table = await openHand(100);
@@ -330,35 +335,18 @@ await check('choisir son pari dans le menu met la table à jour', async () => {
   assert.match(field.value, /Exactement 7/);
 });
 
-// ------------------------------------------------------- Roulette à tapis
-/** Tous les identifiants (menus et boutons) d'un message. */
-const componentIds = (payload) =>
-  (payload?.components ?? []).flatMap((row) => (row.components ?? []).map((c) => c.data?.custom_id ?? c.toJSON?.().custom_id)).filter(Boolean);
-const fieldOf = (payload, name) => (payload?.embeds?.[0]?.data?.fields ?? []).find((f) => f.name === name)?.value ?? '';
-
-/** Ouvre la roulette depuis le hall (seul ou à plusieurs) et renvoie le fil et l'identifiant de la table. */
-async function openTapis(choice) {
-  const hall = mock({});
-  await openLobby(hall);
-  await handleTableComponent(follow(hall, { __customId: 'ctb:pick:hall', __values: [choice] }));
-  const id = componentIds(last(hall)).find((cid) => cid.startsWith('crl:chip:')).split(':')[2];
-  return { hall, id };
-}
-/** Un clic sur le tapis, par `who`, sur le même message. */
-const tap = (hall, who, options) => {
-  const next = mock(options, who);
-  next.sent = hall.sent;
-  return handleRoulette(next).then(() => next);
+// ------------------------------------------------ Roulette : la table cliquable
+const ROOM = '100000000000000042';
+const who = (id, name = id) => ({ id, name });
+const A = who('900000000000000011', 'Alice');
+const B = who('900000000000000012', 'Bruno');
+/** Remet un joueur à un million pile. */
+const millionFor = async (id) => {
+  await reset(id);
+  await grant(id, 1_000_000 - (await balance(id)));
 };
-/** Ce que doit rendre un tapis sur ce numéro, calculé à la main, case par case. */
-const expectedPayout = (bets, pocket) => {
-  let payout = 0;
-  for (const [spot, stake] of bets) {
-    const rule = spotRule(spot);
-    if (rule.wins(pocket)) payout += stake * rule.pays;
-  }
-  return payout;
-};
+const mineIn = (state) => state.players.find((p) => p.me);
+const betOf = (state, spot) => (mineIn(state).bets.find(([key]) => key === spot)?.[1] ?? []);
 
 await check('roulette : chaque case paie 36/37, du rouge au numéro plein', () => {
   const spots = ['rouge', 'noir', 'pair', 'impair', 'manque', 'passe', 'douzaine1', 'douzaine2', 'douzaine3', 'colonne1', 'colonne2', 'colonne3'];
@@ -368,133 +356,227 @@ await check('roulette : chaque case paie 36/37, du rouge au numéro plein', () =
     for (let pocket = 0; pocket <= 36; pocket++) back += payoutFor([[spot, [1]]], pocket);
     assert.equal(back, 36, `${spot} : doit rendre 36 sur 37 numéros (TRJ 97,3 %)`);
   }
-  // Les cases qui s'allument sur le 17 : rouge… non, le 17 est noir.
   assert.deepEqual([...winningSpots(17)].sort(), ['colonne2', 'douzaine2', 'impair', 'manque', 'noir', 'plein-17'].sort());
-  assert.equal(spotRule('constructor'), null, 'une case inconnue ne doit rien payer');
-  assert.equal(spotRule('plein-37'), null);
+  for (const junk of ['constructor', 'plein-37', 'plein-07', 'plein-', 'plein', 42, null]) assert.equal(spotRule(junk), null, `case inconnue : ${junk}`);
 });
 
-await check('roulette : des jetons de 20, 50, 100… posés où on veut, puis payés case par case', async () => {
-  await reset(USER);
-  await grant(USER, 1_000_000 - (await balance(USER)));
-  const { hall, id } = await openTapis('roulette');
-  let board = last(hall);
-  assert.ok(attachmentOf(board)?.name?.endsWith('.jpg'), 'le tapis doit être dessiné');
-  const chipMenu = board.components[0].components[0].toJSON();
-  const values = chipMenu.options.map((o) => Number(o.value));
-  for (const value of [10, 20, 50, 100, 500, 1_000, 1_000_000]) assert.ok(values.includes(value), `jeton de ${value} manquant`);
-  assert.equal(board.components.length, 5, 'jeton, chances, deux menus de numéros, boutons');
+await check('table cliquable : des jetons de 20, 50, 100… posés, empilés, retirés', async () => {
+  resetRooms();
+  await millionFor(A.id);
+  assert.equal((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 20 })).ok, true);
+  await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 20 }); // empilé
+  await act(ROOM, A, { action: 'poser', spot: 'plein-17', value: 50 });
+  await act(ROOM, A, { action: 'poser', spot: 'douzaine3', value: 100 });
+  await act(ROOM, A, { action: 'poser', spot: 'plein-36', value: 500 });
+  let state = await view(ROOM, A);
+  assert.deepEqual(betOf(state, 'rouge'), [20, 20], 'deux jetons de 20 empilés sur rouge');
+  assert.equal(state.me.onTable, 690);
+  assert.equal(state.me.balance, 1_000_000, 'rien n’est prélevé avant le lancement');
 
-  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['20'] });
-  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
-  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] }); // deux jetons de 20 empilés
-  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['50'] });
-  await tap(hall, USER, { __customId: `crl:put1:${id}`, __values: ['plein-17'] });
-  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['100'] });
-  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['douzaine3'] });
-  await tap(hall, USER, { __customId: `crl:put2:${id}`, __values: ['plein-36'] });
-  await tap(hall, USER, { __customId: `crl:undo:${id}` }); // retire le 100 posé sur le 36
+  await act(ROOM, A, { action: 'annuler' }); // le dernier : 500 sur le 36
+  await act(ROOM, A, { action: 'retirer', spot: 'rouge' }); // un jeton de 20 sur rouge (clic droit)
+  state = await view(ROOM, A);
+  assert.deepEqual(betOf(state, 'rouge'), [20]);
+  assert.deepEqual(betOf(state, 'plein-36'), [], '« Annuler » retire le dernier jeton posé');
+  assert.equal(state.me.onTable, 170);
 
-  board = last(hall);
-  const text = descriptionOf(board);
-  assert.match(text, /Rouge\*\* — 🪙 40/, 'deux jetons de 20 sur rouge');
-  assert.match(text, /n° 17\*\* — 🪙 50/);
-  assert.match(text, /3e douzaine.*— 🪙 100/);
-  assert.doesNotMatch(text, /n° 36/, '« retirer le dernier » enlève le jeton du 36');
-  assert.equal(fieldOf(board, 'Mise totale'), chips(190));
-  assert.match(fieldOf(board, 'Jeton en main'), /100/);
-  assert.equal(await balance(USER), 1_000_000, 'rien n’est prélevé avant le lancement');
+  await act(ROOM, A, { action: 'doubler' });
+  assert.equal((await view(ROOM, A)).me.onTable, 340, '×2 double tous les jetons');
+  await act(ROOM, A, { action: 'effacer' });
+  assert.equal((await view(ROOM, A)).me.onTable, 0);
 
-  const bets = [['rouge', 40], ['plein-17', 50], ['douzaine3', 100]];
-  await tap(hall, USER, { __customId: `crl:go:${id}` });
-  const results = () => hall.sent.filter((p) => /s’arrête sur/.test(descriptionOf(p)));
-  const first = results().at(-1);
-  assert.ok(first, 'le résultat doit être publié');
-  const pocket = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(first))[1]);
-  const spin = hall.sent.at(hall.sent.indexOf(first) - 1);
-  assert.match(imageUrlOf(spin), new RegExp(`roulette[/-]${pocket}\\.gif$`), 'la roue doit s’arrêter sur le numéro tiré');
-  assert.ok(attachmentOf(first)?.name?.endsWith('.jpg'), 'le tapis final doit être joint');
-  assert.equal((await balance(USER)) - 1_000_000, expectedPayout(bets, pocket) - 190, `paiement faux sur le ${pocket}`);
-  assert.ok(componentIds(first).some((cid) => cid.startsWith('crl:replay')), 'on doit pouvoir rejouer');
-
-  // « Rejouer » remet exactement les mêmes jetons.
-  const before = await balance(USER);
-  await tap(hall, USER, { __customId: `crl:replay:${id}` });
-  const second = results().at(-1);
-  assert.notEqual(second, first, 'un deuxième tirage doit avoir lieu');
-  const pocket2 = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(second))[1]);
-  assert.equal((await balance(USER)) - before, expectedPayout(bets, pocket2) - 190, `rejouer : paiement faux sur le ${pocket2}`);
-  console.log(`   jetons 20+20 rouge, 50 sur le 17, 100 sur la 3e douzaine : bille sur le ${pocket} puis le ${pocket2}`);
+  // Les refus : jeton ou case inventés, solde, maximum par case.
+  assert.match((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 7 })).error, /Jeton inconnu/);
+  assert.match((await act(ROOM, A, { action: 'poser', spot: 'bleu', value: 20 })).error, /Case inconnue/);
+  assert.match((await act('pas-un-salon', A, { action: 'poser', spot: 'rouge', value: 20 })).error, /Table inconnue/);
+  await act(ROOM, A, { action: 'poser', spot: 'noir', value: 1_000_000 });
+  assert.match((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 10 })).error, /Il te reste 0/, 'le solde est déjà sur le tapis');
+  await grant(A.id, 5_000_000);
+  assert.match((await act(ROOM, A, { action: 'poser', spot: 'noir', value: 1_000_000 })).error, /maximum par case/);
+  resetRooms();
 });
 
-await check('roulette : les refus (solde, maximum par case, table d’un autre)', async () => {
-  await reset(USER); // 1 000 jetons
-  const { hall, id } = await openTapis('roulette');
-  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['5000'] });
-  const tooMuch = await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
-  assert.match(tooMuch.sent.at(-1).content ?? '', /Il te faut/, 'un jeton plus gros que le solde est refusé');
+await check('table cliquable : à deux, chacun ses jetons, une seule bille, payés au jeton près', async () => {
+  resetRooms();
+  const saved = { ...timing };
+  Object.assign(timing, { lastCall: 400, spin: 80, results: 150 });
+  const ends = [];
+  const stop = onRoundEnd((summary) => ends.push(summary));
+  try {
+    await millionFor(A.id);
+    await millionFor(B.id);
+    const betsA = [['rouge', [1_000, 1_000]], ['plein-0', [100]], ['colonne1', [50, 20]]];
+    const betsB = [['noir', [20, 20, 20]], ['douzaine1', [10_000]]];
+    for (const [spot, values] of betsA) for (const value of values) await act(ROOM, A, { action: 'poser', spot, value });
+    for (const [spot, values] of betsB) for (const value of values) await act(ROOM, B, { action: 'poser', spot, value });
 
-  const stranger = await tap(hall, FOE, { __customId: `crl:put:${id}`, __values: ['noir'] });
-  assert.match(stranger.sent.at(-1).content ?? '', /quelqu’un d’autre/);
+    // Chacun voit les jetons de l'autre, dans sa couleur.
+    const seenByB = await view(ROOM, B);
+    const alice = seenByB.players.find((p) => p.name === 'Alice');
+    assert.ok(alice && !alice.me && alice.total === 2_170, 'B voit les jetons d’Alice');
+    assert.notEqual(alice.color, mineIn(seenByB).color, 'chacun sa couleur');
 
-  await grant(USER, 5_000_000);
-  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['1000000'] });
-  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
-  const cap = await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
-  assert.match(cap.sent.at(-1).content ?? '', /maximum par case/);
-  await tap(hall, USER, { __customId: `crl:clear:${id}` });
-  assert.match(descriptionOf(last(hall)), /Aucun jeton/, '« Tout retirer » vide le tapis');
-  await tap(hall, USER, { __customId: `crl:close:${id}` });
-});
+    // A lance : dernier appel pour B. B lance : la bille part tout de suite.
+    await act(ROOM, A, { action: 'lancer' });
+    assert.ok((await view(ROOM, A)).closesAt, 'le premier « Lancer » ouvre le dernier appel');
+    assert.equal((await act(ROOM, A, { action: 'poser', spot: 'rouge', value: 10 })).ok, true, 'on peut encore miser pendant le dernier appel');
+    await act(ROOM, A, { action: 'retirer', spot: 'rouge' });
+    await act(ROOM, A, { action: 'lancer' });
+    await act(ROOM, B, { action: 'lancer' });
+    const spinning = await view(ROOM, A);
+    assert.equal(spinning.phase, 'tirage', 'tout le monde a lancé : la bille part');
+    const pocket = spinning.spin.pocket;
+    assert.match((await act(ROOM, B, { action: 'poser', spot: 'rouge', value: 10 })).error, /Rien ne va plus/);
 
-await check('roulette à plusieurs : chacun pose ses jetons de son côté, une seule bille', async () => {
-  const players = ['JOUEUR-A', 'JOUEUR-B', 'JOUEUR-C'];
-  for (const who of players) {
-    await reset(who);
-    await grant(who, 1_000_000 - (await balance(who)));
+    await sleepMs(120);
+    const after = await view(ROOM, A);
+    assert.equal(after.phase, 'resultats');
+    assert.ok(after.spin.winning.includes(`plein-${pocket}`));
+    for (const [player, bets] of [[A, betsA], [B, betsB]]) {
+      const total = bets.reduce((sum, [, values]) => sum + values.reduce((a, v) => a + v, 0), 0);
+      assert.equal((await balance(player.id)) - 1_000_000, payoutFor(bets, pocket) - total, `${player.name} : paiement faux sur le ${pocket}`);
+    }
+    assert.equal(ends.length, 1, 'la fin du tour est annoncée une fois');
+    assert.equal(ends[0].results.length, 2);
+
+    // Tour suivant : tapis vide, et « Remettre » rejoue ses jetons.
+    await sleepMs(200);
+    const next = await view(ROOM, A);
+    assert.equal(next.phase, 'mises');
+    assert.equal(next.me.onTable, 0);
+    assert.equal(next.me.canRebet, true);
+    await act(ROOM, A, { action: 'remettre' });
+    assert.equal((await view(ROOM, A)).me.onTable, 2_170, '« Remettre » repose les mêmes jetons');
+    assert.deepEqual(next.history, [pocket]);
+    console.log(`   la bille tombe sur le ${pocket} : Alice ${payoutFor(betsA, pocket) - 2_170 >= 0 ? '+' : ''}${payoutFor(betsA, pocket) - 2_170}, Bruno ${payoutFor(betsB, pocket) - 10_060 >= 0 ? '+' : ''}${payoutFor(betsB, pocket) - 10_060}`);
+  } finally {
+    stop();
+    Object.assign(timing, saved);
+    resetRooms();
   }
-  const { hall, id } = await openTapis('multi-roulette');
-  // A : 10k sur rouge + 1k sur le zéro · B : trois jetons de 20 sur noir · C : 100k sur la 1re douzaine
-  await tap(hall, 'JOUEUR-A', { __customId: `crl:chip:${id}`, __values: ['10000'] });
-  await tap(hall, 'JOUEUR-A', { __customId: `crl:put:${id}`, __values: ['rouge'] });
-  await tap(hall, 'JOUEUR-A', { __customId: `crl:chip:${id}`, __values: ['1000'] });
-  await tap(hall, 'JOUEUR-A', { __customId: `crl:put1:${id}`, __values: ['plein-0'] });
-  await tap(hall, 'JOUEUR-B', { __customId: `crl:chip:${id}`, __values: ['20'] });
-  for (let i = 0; i < 3; i++) await tap(hall, 'JOUEUR-B', { __customId: `crl:put:${id}`, __values: ['noir'] });
-  await tap(hall, 'JOUEUR-C', { __customId: `crl:chip:${id}`, __values: ['100000'] });
-  await tap(hall, 'JOUEUR-C', { __customId: `crl:put:${id}`, __values: ['douzaine1'] });
+});
 
-  const board = last(hall);
-  const seats = board.embeds[0].data.fields[0];
-  assert.match(seats.name, /Joueurs \(3\/10\)/);
-  assert.match(seats.value, /JOUEUR-A.*Rouge 10\s000.*n° 0 1\s000/, 'les jetons de A');
-  assert.match(seats.value, /JOUEUR-B.*Noir 60/, 'les trois jetons de 20 de B');
-  assert.ok(attachmentOf(board)?.name?.endsWith('.jpg'), 'le tapis commun doit être dessiné');
-
-  const intruder = await tap(hall, 'JOUEUR-B', { __customId: `crl:go:${id}` });
-  assert.match(intruder.sent.at(-1).content ?? '', /Seul/, 'seul l’hôte lance');
-  await tap(hall, USER, { __customId: `crl:go:${id}` });
-
-  const final = hall.sent.filter((p) => /s’arrête sur/.test(descriptionOf(p))).at(-1);
-  assert.ok(final, 'le résultat doit être publié');
-  const pocket = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(final))[1]);
-  const expected = {
-    'JOUEUR-A': [[['rouge', 10_000], ['plein-0', 1_000]], 11_000],
-    'JOUEUR-B': [[['noir', 60]], 60],
-    'JOUEUR-C': [[['douzaine1', 100_000]], 100_000],
-  };
-  for (const [who, [bets, total]] of Object.entries(expected)) {
-    assert.equal((await balance(who)) - 1_000_000, expectedPayout(bets, pocket) - total, `${who} : paiement faux sur le ${pocket}`);
-    assert.match(descriptionOf(final), new RegExp(who), `${who} doit avoir sa ligne`);
+await check('table cliquable : le dernier appel fait partir la bille sans attendre les retardataires', async () => {
+  resetRooms();
+  const saved = { ...timing };
+  Object.assign(timing, { lastCall: 80, spin: 40, results: 40 });
+  try {
+    await millionFor(A.id);
+    await millionFor(B.id);
+    await act(ROOM, A, { action: 'poser', spot: 'pair', value: 100 });
+    await act(ROOM, B, { action: 'poser', spot: 'impair', value: 100 });
+    await act(ROOM, A, { action: 'lancer' });
+    await sleepMs(120);
+    const state = await view(ROOM, B);
+    assert.notEqual(state.phase, 'mises', 'la bille est partie à la fin du dernier appel');
+    assert.equal((await balance(B.id)) - 1_000_000, payoutFor([['impair', [100]]], state.spin.pocket) - 100, 'les jetons de B ont joué aussi');
+  } finally {
+    Object.assign(timing, saved);
+    resetRooms();
   }
+});
 
-  // Nouveau tour : même table, et chacun peut remettre ses jetons d'un clic.
-  await tap(hall, 'JOUEUR-B', { __customId: `crl:again:${id}` });
-  assert.ok(componentIds(last(hall)).some((cid) => cid.startsWith('crl:rebet')), '« Remettre ma mise » après un premier tour');
-  await tap(hall, 'JOUEUR-A', { __customId: `crl:rebet:${id}` });
-  assert.match(last(hall).embeds[0].data.fields[0].value, /JOUEUR-A.*Rouge 10\s000.*n° 0 1\s000/, 'A retrouve ses jetons');
-  await tap(hall, 'JOUEUR-B', { __customId: `crl:cancel:${id}` }); // B a ouvert ce tour : il peut fermer
-  console.log(`   la bille tombe sur le ${pocket} : ${players.map((who) => who.slice(-1)).join(', ')} payés chacun selon leurs jetons`);
+await check('table cliquable : sessions signées, pages et API', async () => {
+  const token = createSession(A);
+  assert.deepEqual(readSession(token), { id: A.id, name: 'Alice' });
+  assert.equal(readSession(`${token.slice(0, -2)}xx`), null, 'une session retouchée est refusée');
+  assert.equal(readSession(createSession(A, -1)), null, 'une session expirée est refusée');
+  const forged = `${Buffer.from(JSON.stringify({ u: B.id, n: 'Bruno', e: Date.now() + 1e6 })).toString('base64url')}.${token.split('.')[1]}`;
+  assert.equal(readSession(forged), null, 'impossible de se faire passer pour un autre');
+  assert.match(personalLink(A, ROOM), new RegExp(`/roulette/\\?room=${ROOM}#s=`), 'la session du lien est après le #, jamais envoyée au serveur');
+
+  resetRooms();
+  await millionFor(A.id);
+  const server = http.createServer(async (req, res) => {
+    if (!(await handleRouletteWeb(req, res, new URL(req.url, 'http://localhost')))) {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  await new Promise((resolve) => server.listen(0, resolve));
+  const base = `http://localhost:${server.address().port}`;
+  try {
+    for (const page of ['/roulette/', '/?instance_id=1&frame_id=2&platform=desktop', '/.proxy/roulette/']) {
+      const response = await fetch(base + page);
+      assert.equal(response.status, 200, `${page} doit servir la table`);
+      assert.match(await response.text(), /<svg id="board"/);
+    }
+    for (const file of ['app.js', 'style.css', 'sdk.js', 'fonts/noto.ttf', 'fond.jpg']) {
+      assert.equal((await fetch(`${base}/roulette/${file}`)).status, 200, `${file} manquant`);
+    }
+    assert.equal((await fetch(`${base}/roulette/../src/config.js`)).status, 404);
+    assert.equal((await fetch(`${base}/roulette/api/state?room=${ROOM}`)).status, 401, 'sans session, rien');
+    const config = await (await fetch(`${base}/roulette/api/config`)).json();
+    assert.ok('clientId' in config && !('clientSecret' in config), 'le secret ne sort jamais');
+
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const placed = await fetch(`${base}/roulette/api/action`, { method: 'POST', headers, body: JSON.stringify({ room: ROOM, action: 'poser', spot: 'plein-7', value: 50 }) });
+    assert.equal(placed.status, 200);
+    const state = await (await fetch(`${base}/roulette/api/state?room=${ROOM}`, { headers })).json();
+    assert.deepEqual(betOf(state, 'plein-7'), [50]);
+    assert.equal(state.me.name, 'Alice');
+    const refused = await fetch(`${base}/roulette/api/action`, { method: 'POST', headers, body: JSON.stringify({ room: ROOM, action: 'poser', spot: 'plein-7', value: 3 }) });
+    assert.equal(refused.status, 409);
+    assert.match((await refused.json()).error, /Jeton inconnu/);
+  } finally {
+    server.close();
+    resetRooms();
+  }
+});
+
+await check('roulette dans Discord : le hall ouvre la table, « Ouvrir » lance l’Activité ou donne un lien', async () => {
+  const hall = mock({});
+  await openLobby(hall);
+  const pick = follow(hall, { __customId: 'ctb:pick:hall', __values: ['roulette'] });
+  pick.channelId = ROOM;
+  pick.message = { edit: async (payload) => hall.sent.push({ edited: true, ...payload }) };
+  await handleTableComponent(pick);
+  const table = last(hall);
+  assert.match(table.embeds[0].data.title, /Roulette/);
+  assert.ok(attachmentOf(table)?.name?.endsWith('.jpg'), 'l’affiche de la table est jointe');
+  assert.deepEqual(buttonIds(table), ['crl:ouvrir', 'crl:lien']);
+
+  // Activité activée : Discord ouvre la table, rien d'autre à répondre.
+  const launch = follow(hall, { __customId: 'crl:ouvrir' });
+  launch.channelId = ROOM;
+  let launched = false;
+  launch.launchActivity = async () => { launched = true; };
+  await handleRouletteButton(launch);
+  assert.ok(launched, 'l’Activité doit être lancée');
+
+  // Pas encore activée : le joueur reçoit son lien, en privé.
+  const fallback = mock({ __customId: 'crl:ouvrir' }, A.id); // un vrai identifiant Discord (des chiffres)
+  fallback.sent = hall.sent;
+  fallback.channelId = ROOM;
+  fallback.launchActivity = async () => { throw new Error('Activité désactivée'); };
+  await handleRouletteButton(fallback);
+  const reply = last(hall);
+  assert.equal(reply.flags, MessageFlags.Ephemeral, 'le lien personnel reste privé');
+  const url = reply.components[0].components[0].data.url;
+  assert.match(url, new RegExp(`/roulette/\\?room=${ROOM}#s=`));
+  assert.deepEqual(readSession(url.split('#s=')[1]), { id: A.id, name: A.id }, 'le lien connecte le bon joueur');
+
+  // Fin d'un tour : le message du salon montre le tapis et les gains.
+  resetRooms();
+  const saved = { ...timing };
+  Object.assign(timing, { lastCall: 50, spin: 30, results: 30 });
+  try {
+    await millionFor(USER);
+    await act(ROOM, { id: USER, name: USER }, { action: 'poser', spot: 'rouge', value: 1_000 });
+    await act(ROOM, { id: USER, name: USER }, { action: 'lancer' });
+    // Le tapis du tour se dessine après la roue : on lui laisse le temps.
+    let edited = null;
+    for (let i = 0; i < 40 && !edited; i++) {
+      await sleepMs(50);
+      edited = hall.sent.filter((p) => p.edited).at(-1);
+    }
+    assert.ok(edited, 'le message du salon doit être mis à jour');
+    assert.match(edited.embeds[0].data.description, /tombée sur/);
+    assert.ok(edited.files?.[0]?.name?.endsWith('.jpg'), 'avec le tapis du tour');
+  } finally {
+    Object.assign(timing, saved);
+    resetRooms();
+  }
 });
 
 await check('jouer depuis la table : animation, résultat, puis « Rejouer »', async () => {
@@ -524,7 +606,7 @@ await check('le hall /casino propose toutes les tables', async () => {
   await openLobby(hall);
   const menu = last(hall).components[0].components[0].toJSON();
   // Les tables en solo, plus les trois tables à plusieurs.
-  assert.equal(menu.options.length, TABLE_GAMES.length + 3);
+  assert.equal(menu.options.length, TABLE_GAMES.length + 2);
   assert.ok(menu.options.some((o) => o.value === 'multi-blackjack'), 'le blackjack à plusieurs doit être proposé');
   const pick = follow(hall, { __customId: 'ctb:pick:hall', __values: ['blackjack'] });
   await handleTableComponent(pick);
@@ -598,7 +680,6 @@ await check('plus ou moins : un tour puis encaissement', async () => {
   assert.ok(last(interaction).embeds?.length);
 });
 
-const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await check('crash : décollage, vol en images, puis encaissement manuel', async () => {
   // Une fusée qui ne part pas trop vite : on relance jusqu'à en avoir une qui vole au moins ×1,5.
@@ -763,7 +844,7 @@ await check('le bouton du guide épinglé ouvre le casino', async () => {
   const click = mock({ __customId: open });
   await handleTableComponent(click);
   const hall = last(click);
-  assert.ok(hall.components[0].components[0].toJSON().options.length >= 13, 'un hall complet doit s’ouvrir');
+  assert.ok(hall.components[0].components[0].toJSON().options.length >= 12, 'un hall complet doit s’ouvrir');
   const gift = mock({ __customId: daily });
   await handleTableComponent(gift);
   assert.ok(last(gift).embeds?.length || /déjà récupéré/.test(last(gift).content ?? ''), 'le bouton jetons du jour doit répondre');

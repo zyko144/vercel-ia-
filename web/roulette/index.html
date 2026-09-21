@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Casinho · Roulette</title>
+  <link rel="stylesheet" href="/roulette/style.css">
+  <script type="module" src="/roulette/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="bar">
+      <div class="brand">Casinho <span>Roulette</span></div>
+      <div class="history" id="history" title="Derniers numéros sortis"></div>
+      <div class="wallet">
+        <div><small>Disponible</small><strong id="balance">—</strong></div>
+        <div><small>Sur le tapis</small><strong id="ontable">0</strong></div>
+      </div>
+    </header>
+    <div class="status" id="status">Connexion à la table…</div>
+    <div class="hint" id="hint">Choisis un jeton en bas, puis clique sur le tapis pour le poser · clic droit (ou appui long) pour le retirer</div>
+    <main class="stage">
+      <div class="board-wrap"><svg id="board" xmlns="http://www.w3.org/2000/svg" role="grid" aria-label="Tapis de roulette"></svg></div>
+      <aside class="players" id="players"></aside>
+    </main>
+    <footer class="controls">
+      <div class="rack" id="rack" role="radiogroup" aria-label="Jetons"></div>
+      <div class="actions">
+        <button id="undo" type="button">↩ Annuler</button>
+        <button id="clear" type="button">Effacer</button>
+        <button id="double" type="button">×2</button>
+        <button id="rebet" type="button">Remettre</button>
+        <button id="spin" type="button" class="primary">Lancer</button>
+      </div>
+    </footer>
+  </div>
+  <div class="overlay" id="overlay" hidden>
+    <svg id="wheel" viewBox="-110 -110 220 220" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="result" id="result"></div>
+  </div>
+  <div class="toast" id="toast" role="alert" hidden></div>
+</body>
+</html>

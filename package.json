@@ -10,7 +10,8 @@
     "dev": "node --watch src/index.js",
     "check": "node --check src/index.js",
     "test:casino": "node tools/test-casinho.mjs",
-    "test:jeux": "node tools/test-jeux.mjs"
+    "test:jeux": "node tools/test-jeux.mjs",
+    "build:roulette": "node tools/build-roulette-sdk.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -28,5 +29,9 @@
   },
   "optionalDependencies": {
     "@discordjs/opus": "^0.10.0"
+  },
+  "devDependencies": {
+    "@discord/embedded-app-sdk": "^2.5.0",
+    "esbuild": "^0.28.2"
   }
 }

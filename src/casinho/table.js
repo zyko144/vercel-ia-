@@ -19,7 +19,7 @@ import { startBlackjack } from './blackjack.js';
 import { AUTO_CASHOUTS, autoChance, minesMultiplier, startCrash, startDuel, startHiLo, startMines } from './live.js';
 import { claimDaily, showLeaderboard } from './wallet.js';
 import { MULTI_GAMES, openMultiTable } from './multi.js';
-import { ROULETTE_MULTI, openRoulette } from './roulette.js';
+import { openRouletteHall } from './roulette-discord.js';
 import { CALL, animationFor } from './render/animations.js';
 import { resultImage } from './render/scenes.js';
 
@@ -46,11 +46,11 @@ const TABLES = {
     info: 'Croupier sur 17 · blackjack payé 3:2 · TRJ ≈ 99,5 %',
     start: (interaction, panel) => startBlackjack(interaction, panel.bet, { viaUpdate: true }),
   },
-  // La roulette a son propre tapis (roulette.js) : on y pose des jetons, pas une mise.
+  // La roulette a sa propre table, cliquable (roulette-discord.js, roulette-web.js).
   roulette: {
     title: '🎡 Roulette',
     kind: 'tapis',
-    blurb: 'Pose tes jetons (10, 20, 50, 100… jusqu’au million) où tu veux sur le tapis.',
+    blurb: 'Clique sur le tapis pour poser tes jetons. Tout le salon joue à la même table.',
   },
   machine: {
     title: '🎰 Machine à sous',
@@ -274,7 +274,7 @@ function afterRoundComponents(panel) {
 export async function openTable(interaction, gameId, { bet = null, viaUpdate = false } = {}) {
   const table = TABLES[gameId];
   if (!table) return interaction.reply({ content: 'Jeu inconnu.', flags: MessageFlags.Ephemeral });
-  if (table.kind === 'tapis') return openRoulette(interaction, { solo: true });
+  if (table.kind === 'tapis') return openRouletteHall(interaction);
 
   const panel = {
     id: newId(),
@@ -320,7 +320,6 @@ export async function openLobby(interaction) {
             [
               ...TABLE_GAMES.map((id) => ({ value: id, label: TABLES[id].title, description: TABLES[id].blurb.slice(0, 100) })),
               // Les tables à plusieurs : tout le salon mise sur le même tirage.
-              { value: 'multi-roulette', label: `👥 ${ROULETTE_MULTI.title}`, description: ROULETTE_MULTI.blurb },
               ...Object.entries(MULTI_GAMES).map(([id, game]) => ({ value: `multi-${id}`, label: `👥 ${game.title}`, description: game.blurb.slice(0, 100) })),
             ],
           ),
@@ -340,7 +339,6 @@ export async function handleTableComponent(interaction) {
   // Le hall : pas encore de table, on en ouvre une (ou on passe à la banque).
   if (action === 'pick') {
     const choice = interaction.values[0];
-    if (choice === 'multi-roulette') return openRoulette(interaction, { solo: false });
     if (choice.startsWith('multi-')) return openMultiTable(interaction, choice.slice('multi-'.length));
     return openTable(interaction, choice, { viaUpdate: true });
   }

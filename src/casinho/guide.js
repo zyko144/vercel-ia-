@@ -23,9 +23,9 @@ export function guideEmbeds() {
         '3️⃣ Choisis ton pari dans le menu si le jeu en a un, puis appuie sur **▶️ Jouer**.',
         '4️⃣ À la fin, **🔁 Rejouer** relance avec la même mise.',
         '',
-        '🎡 À la **roulette**, pas de mise unique : tu prends des **jetons** (10, 20, 50, 100… jusqu’au million) et tu les poses sur le tapis, autant que tu veux, où tu veux.',
+        '🎡 La **roulette** s’ouvre sur une vraie table : tu choisis un **jeton** (10, 20, 50, 100… jusqu’au million) et tu **cliques sur le tapis** pour le poser. Tout le salon joue à la même table.',
         '',
-        '👥 **À plusieurs** : dans le même menu, choisis une table « à plusieurs » (roulette, crash, blackjack). Elle s’ouvre pour tout le salon : chacun mise de son côté, et un seul tirage vaut pour tout le monde.',
+        '👥 **À plusieurs** : dans le même menu, choisis une table « à plusieurs » (crash, blackjack). Elle s’ouvre pour tout le salon : chacun mise de son côté, et un seul tirage vaut pour tout le monde.',
         '',
         `🎁 Chaque jour : **${n(daily)} jetons** avec \`/quotidien\` (ou le bouton du hall), et un bonus si tu reviens plusieurs jours de suite.`,
         '',
@@ -43,7 +43,7 @@ export function guideEmbeds() {
       },
       {
         name: '🎡 Roulette',
-        value: 'Roulette européenne, un seul zéro, avec un vrai tapis. Choisis ton jeton, pose-le : rouge, noir, pair, impair, 1-18, 19-36 (×2), douzaines et colonnes (×3), numéros (×36). Empile, mets-en partout : chaque case est payée à part.',
+        value: 'Roulette européenne, un seul zéro, sur une table où l’on clique (dans Discord ou dans le navigateur). Choisis ton jeton, clique sur le tapis : rouge, noir, pair, impair, 1-18, 19-36 (×2), douzaines et colonnes (×3), numéros (×36). Tout le salon à la même table, chacun sa couleur.',
       },
       { name: '🎰 Machine à sous', value: `Trois rouleaux. Trois 7 paient ×200, trois 💎 ×80. Redistribution ${(slotRtp() * 100).toFixed(1)} %.` },
       { name: '🎲 Dés', value: 'Deux dés : plus de 7 ou moins de 7 (×2,32), exactement 7 (×5,75).', inline: true },
@@ -59,10 +59,9 @@ export function guideEmbeds() {
       {
         name: '👥 Tables à plusieurs',
         value: [
-          '**Roulette** — un seul tapis : chacun pose ses jetons de son côté, avec sa couleur. Une seule bille.',
           '**Crash** — une seule fusée, chacun encaisse quand il veut (ou en automatique).',
           '**Blackjack** — jusqu’à 5 joueurs contre le même croupier, chacun joue sa main à son tour.',
-          'Mise (ou pose un jeton) pour t’asseoir. Départ quand l’hôte lance, ou tout seul au bout de 30 s (45 s à la roulette). Rien n’est prélevé avant le départ.',
+          'Mise (ou pose un jeton) pour t’asseoir. Départ quand l’hôte lance, ou tout seul au bout de 30 s. Rien n’est prélevé avant le départ.',
         ].join('\n'),
       },
     );

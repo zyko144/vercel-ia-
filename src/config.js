@@ -59,6 +59,24 @@ function findCasinhoToken() {
 }
 const casinhoToken = findCasinhoToken();
 
+// Table de roulette cliquable (Activité Discord) : son secret OAuth2 se colle dans
+// Render, sous le nom qu'on veut du moment qu'il contient « casinho » et « secret ».
+function findCasinhoSecret() {
+  for (const [name, value] of Object.entries(process.env)) {
+    if (/casinho/i.test(name) && /secret/i.test(name) && (value ?? '').trim()) return value.trim();
+  }
+  return '';
+}
+/** L'identifiant de l'application : c'est la première partie du token, en base 64. */
+function appIdFromToken(token) {
+  try {
+    const id = Buffer.from(token.split('.')[0], 'base64').toString('utf8');
+    return /^\d{15,25}$/.test(id) ? id : '';
+  } catch {
+    return '';
+  }
+}
+
 function findVoiceToken() {
   for (const name of ['VOICE_BOT_TOKEN', 'DISCORD_VOICE_TOKEN']) if (str(name)) return { token: str(name), source: name };
   if (discordTokens[1]) return { token: discordTokens[1], source: 'DISCORD_TOKEN (2e token)' };
@@ -238,5 +256,8 @@ export const config = {
     maxBet: int('CASINHO_MAX_BET', 1_000_000),
     // Qui peut donner / retirer des jetons (le chef est toujours inclus)
     admins: list('CASINHO_ADMINS'),
+    // Activité Discord (table de roulette cliquable) : identifiant public et secret OAuth2
+    clientId: str('CASINHO_CLIENT_ID') || appIdFromToken(casinhoToken.token),
+    clientSecret: findCasinhoSecret(),
   },
 };
