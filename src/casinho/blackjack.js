@@ -1,7 +1,8 @@
 // Blackjack : sabot de 6 paquets, croupier qui reste sur 17, blackjack payé 3:2.
 // Doubler et séparer sont disponibles ; l'assurance ne l'est pas (elle est toujours
 // défavorable au joueur, autant ne pas la proposer).
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
+import { blackjackScene } from './render/scenes.js';
 import { canSplit, draw, handValue, HIDDEN, isBlackjack, shoe, showHand } from './cards.js';
 import { chips, settle, stake } from './economy.js';
 import { replayRow } from './table.js';
@@ -56,7 +57,11 @@ function handLine(entry, { active = false, index = 0, many = false } = {}) {
   return `**${title}** · mise ${chips(entry.bet)}\n${showHand(entry.cards)} — ${score}${marks.length ? ` · ${marks.join(' · ')}` : ''}`;
 }
 
-function embed(table, { reveal = false, footer = null, result = null } = {}) {
+/**
+ * La table telle qu'elle est : l'image rendue, et le détail en texte.
+ * `note` raconte ce que fait le croupier ; `outcome` affiche le verdict sur l'image.
+ */
+async function view(table, { reveal = false, note = null, result = null, outcome = null, components = [] } = {}) {
   const dealerLine = reveal
     ? `${showHand(table.dealer)} — ${handValue(table.dealer).total}${handValue(table.dealer).bust ? ' · **sauté**' : ''}`
     : `${showHand([table.dealer[0]])} ${HIDDEN} — ${handValue([table.dealer[0]]).total} + ?`;
@@ -66,20 +71,29 @@ function embed(table, { reveal = false, footer = null, result = null } = {}) {
     .map((entry, index) => handLine(entry, { active: index === table.active && !table.finished, index, many }))
     .join('\n\n');
 
+  table.renders = (table.renders ?? 0) + 1;
+  const name = `blackjack-${table.id}-${table.renders}.jpg`;
+  const image = await blackjackScene(table, { reveal, result: outcome });
+
   const built = new EmbedBuilder()
-    .setColor(COLOR)
+    .setColor(outcome ? (outcome.tone === 'win' ? 0x49c78a : outcome.tone === 'lose' ? 0xd2536a : COLOR) : COLOR)
     .setTitle('♠️ Blackjack')
-    .setDescription(`**Croupier**\n${dealerLine}\n\n${body}`)
-    .setFooter({ text: footer ?? (table.finished ? 'Partie terminée' : 'Le croupier reste sur 17 · blackjack payé 3:2') });
-
+    .setDescription([note ? `*${note}*` : null, `**Croupier** · ${dealerLine}`, body].filter(Boolean).join('\n\n'))
+    .setImage(`attachment://${name}`)
+    .setFooter({ text: table.finished ? 'Partie terminée' : 'Le croupier reste sur 17 · blackjack payé 3:2' });
   if (result) built.addFields({ name: 'Résultat', value: result });
-  return built;
+
+  // attachments: [] remplace l'image précédente au lieu de l'empiler.
+  return { embeds: [built], files: [new AttachmentBuilder(image, { name })], attachments: [], components };
 }
 
-/** Le croupier tire tant qu'il est sous 17 — y compris sur un 17 souple ? Non : il reste. */
-function playDealer(table) {
-  while (handValue(table.dealer).total < 17) table.dealer.push(draw(table.deck));
+/** Répond au bouton la première fois, puis modifie le même message. */
+async function send(interaction, payload) {
+  if (interaction.deferred || interaction.replied) return interaction.editReply(payload);
+  return interaction.update(payload);
 }
+
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function outcomeOf(entry, dealer) {
   if (handValue(entry.cards).bust) return { payout: 0, label: 'perdue (main sautée)' };
@@ -104,7 +118,24 @@ async function finish(interaction, table) {
   tables.delete(table.id);
 
   const allBust = table.hands.every((entry) => handValue(entry.cards).bust);
-  if (!allBust) playDealer(table);
+  const naturals = table.dealer.length === 2 && (isBlackjack(table.dealer) || table.hands.every((entry) => entry.blackjack && !entry.fromSplit));
+  if (!allBust && !naturals) {
+    // Le croupier retourne sa carte cachée…
+    await send(interaction, await view(table, { reveal: true, note: 'Le croupier retourne sa carte…' }));
+    // …puis tire tant qu'il est sous 17, une carte à la fois.
+    while (handValue(table.dealer).total < 17) {
+      await pause(1_100);
+      const drawn = draw(table.deck);
+      table.dealer.push(drawn);
+      const now = handValue(table.dealer);
+      await send(interaction, await view(table, {
+        reveal: true,
+        note: `Le croupier tire ${showHand([drawn])} — ${now.bust ? `${now.total}, il saute !` : now.total}`,
+      }));
+    }
+    await pause(900);
+  }
+  // Blackjack d'entrée (d'un côté ou de l'autre) : le croupier ne tire pas.
 
   const lines = [];
   let total = 0;
@@ -120,19 +151,26 @@ async function finish(interaction, table) {
   const sign = net > 0 ? '+' : '';
   lines.push(`\n**Bilan : ${sign}${chips(net)}** · solde : ${chips(balance)}`);
 
-  const payload = {
-    embeds: [embed(table, { reveal: true, result: lines.join('\n') })],
-    components: replayRow(table.userId, 'blackjack', table.baseBet),
+  // Le verdict affiché sur la table.
+  const natural = table.hands.some((entry) => entry.blackjack && !entry.fromSplit) && net > 0;
+  const outcome = {
+    tone: net > 0 ? 'win' : net < 0 ? 'lose' : 'push',
+    title: natural ? 'BLACKJACK !' : net > 0 ? 'GAGNÉ' : net < 0 ? (allBust ? 'SAUTÉ' : 'PERDU') : 'ÉGALITÉ',
+    sub: `${sign}${Math.round(net).toLocaleString('fr-FR')} jetons · solde ${Math.round(balance).toLocaleString('fr-FR')}`,
   };
-  if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
-  else await interaction.update(payload);
+  await send(interaction, await view(table, {
+    reveal: true,
+    result: lines.join('\n'),
+    outcome,
+    components: replayRow(table.userId, 'blackjack', table.baseBet),
+  }));
 }
 
 async function advance(interaction, table) {
   // Passe à la main suivante, ou conclut si tout est joué.
   while (table.active < table.hands.length && table.hands[table.active].done) table.active += 1;
   if (table.active >= table.hands.length) return finish(interaction, table);
-  await interaction.update({ embeds: [embed(table)], components: buttons(table) });
+  await send(interaction, await view(table, { components: buttons(table) }));
 }
 
 const open = (interaction, payload, viaUpdate) => (viaUpdate ? interaction.update(payload) : interaction.reply(payload));
@@ -168,7 +206,8 @@ export async function startBlackjack(interaction, bet, { viaUpdate = false } = {
 
   // Blackjack immédiat (ou blackjack du croupier) : la main se règle sans interaction.
   if (isBlackjack(player) || isBlackjack(dealer)) {
-    await open(interaction, { embeds: [embed(table)], components: [], files: [] }, viaUpdate);
+    await open(interaction, await view(table, { note: 'Distribution…' }), viaUpdate);
+    await pause(1_000);
     table.hands[0].done = true;
     return finish(interaction, table);
   }
@@ -180,7 +219,7 @@ export async function startBlackjack(interaction, bet, { viaUpdate = false } = {
     finish(interaction, live).catch(() => {});
   }, TIMEOUT_MS).unref();
 
-  return open(interaction, { embeds: [embed(table)], components: buttons(table), files: [] }, viaUpdate);
+  return open(interaction, await view(table, { note: 'Le croupier distribue. À toi de jouer.', components: buttons(table) }), viaUpdate);
 }
 
 export async function handleBlackjackButton(interaction) {

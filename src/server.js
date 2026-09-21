@@ -67,13 +67,15 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       return res.end(file);
     }
 
-    // Animations du casino et cartes de rôle des jeux.
-    const assetDir = Object.entries(PUBLIC_ASSETS).find(([prefix]) => url.pathname.startsWith(prefix))?.[1];
-    if (assetDir) {
-      const name = path.basename(url.pathname);
-      if (!/^[a-z-]+\.gif$/.test(name)) return send(res, 404, 'introuvable');
+    // Animations du casino (dont roulette/17.gif, des/3-4.gif…) et cartes de rôle des jeux.
+    const asset = Object.entries(PUBLIC_ASSETS).find(([prefix]) => url.pathname.startsWith(prefix));
+    if (asset) {
+      const [prefix, assetDir] = asset;
+      const relative = url.pathname.slice(prefix.length);
+      // Un nom, ou « dossier/nom » : rien qui permette de remonter hors du dossier.
+      if (!/^(?:[a-z]+\/)?[a-z0-9-]+\.gif$/.test(relative)) return send(res, 404, 'introuvable');
       try {
-        const gif = await readFile(path.join(assetDir, name));
+        const gif = await readFile(path.join(assetDir, relative));
         res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': gif.length, 'Cache-Control': 'public, max-age=604800' });
         return res.end(gif);
       } catch {

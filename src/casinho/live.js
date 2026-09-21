@@ -1,7 +1,8 @@
 // Jeux à plusieurs manches : mines, crash, plus ou moins, duel.
 // Chacun garde un état en mémoire le temps de la partie ; rien n'est écrit en base
 // avant le règlement, et une partie oubliée se règle toute seule après son délai.
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
+import { hiloScene } from './render/scenes.js';
 import { highValue, shoe, show } from './cards.js';
 import { chips, rand, refund, settle, stake } from './economy.js';
 import { replayRow } from './table.js';
@@ -309,6 +310,19 @@ function hiloEmbed(round, { note = null } = {}) {
     .setFooter({ text: 'Encaisse quand tu veux · partie réglée automatiquement après 3 min' });
 }
 
+/** L'embed accompagné de l'image : la carte précédente, la nouvelle, la série. */
+async function hiloView(round, embed, { previous = null, result = null, components = [] } = {}) {
+  round.renders = (round.renders ?? 0) + 1;
+  const name = `plusoumoins-${round.id}-${round.renders}.jpg`;
+  const image = await hiloScene({ previous, current: round.shown ?? round.card, streak: round.streak, multiplier: round.multiplier, bet: round.bet, result })
+    .catch((err) => {
+      console.warn('[casinho] rendu plus ou moins :', err.message);
+      return null;
+    });
+  if (image) embed.setImage(`attachment://${name}`);
+  return { embeds: [embed], files: image ? [new AttachmentBuilder(image, { name })] : [], attachments: [], components };
+}
+
 export async function startHiLo(interaction, bet, { viaUpdate = false } = {}) {
   const taken = await stake(interaction.user.id, bet);
   if (taken === null) return refuse(interaction, bet);
@@ -317,7 +331,7 @@ export async function startHiLo(interaction, bet, { viaUpdate = false } = {}) {
   const round = { id: newId(), kind: 'hilo', userId: interaction.user.id, bet, deck, card: deck.pop(), multiplier: 1, streak: 0, done: false };
   rounds.set(round.id, round);
   round.timer = setTimeout(() => cashHiLo(interaction, round, true).catch(() => {}), 180_000).unref();
-  return open(interaction, { embeds: [hiloEmbed(round)], components: hiloComponents(round), files: [] }, viaUpdate);
+  return open(interaction, await hiloView(round, hiloEmbed(round, { note: 'Le croupier retourne la première carte.' }), { components: hiloComponents(round) }), viaUpdate);
 }
 
 async function cashHiLo(interaction, round, auto = false) {
@@ -326,7 +340,11 @@ async function cashHiLo(interaction, round, auto = false) {
   const { balance, net } = await settle(round.userId, payout, round.bet);
   const embed = hiloEmbed(round, { note: auto ? '⏳ Temps écoulé : encaissement automatique.' : `💰 Encaissé après ${round.streak} bonne(s) réponse(s) !` })
     .addFields({ name: 'Bilan', value: `${net > 0 ? '+' : ''}${chips(net)}`, inline: true }, { name: 'Solde', value: chips(balance), inline: true });
-  const payload = { embeds: [embed], components: replayRow(round.userId, 'plusoumoins', round.bet) };
+  const sign = net > 0 ? '+' : '';
+  const payload = await hiloView(round, embed, {
+    result: { tone: net > 0 ? 'win' : 'push', title: 'ENCAISSÉ', sub: `${sign}${Math.round(net).toLocaleString('fr-FR')} jetons · série de ${round.streak}` },
+    components: replayRow(round.userId, 'plusoumoins', round.bet),
+  });
   if (auto || interaction.replied || interaction.deferred) await interaction.editReply(payload);
   else await interaction.update(payload);
 }
@@ -354,24 +372,26 @@ async function handleHiLo(interaction) {
     const lost = round.card;
     close(round);
     const { balance, net } = await settle(round.userId, 0, round.bet);
-    return interaction.update({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0xd2536a)
-          .setTitle('🔼 Plus ou moins')
-          .setDescription(
-            `${show(lost)} → ${show(next)}\n${after === before ? 'Égalité : perdu.' : 'Mauvaise réponse.'}\nSérie : ${round.streak} · mise perdue ${chips(round.bet)}`,
-          )
-          .addFields({ name: 'Bilan', value: chips(net), inline: true }, { name: 'Solde', value: chips(balance), inline: true }),
-      ],
+    const embed = new EmbedBuilder()
+      .setColor(0xd2536a)
+      .setTitle('🔼 Plus ou moins')
+      .setDescription(
+        `${show(lost)} → ${show(next)}\n${after === before ? 'Égalité : perdu.' : 'Mauvaise réponse.'}\nSérie : ${round.streak} · mise perdue ${chips(round.bet)}`,
+      )
+      .addFields({ name: 'Bilan', value: chips(net), inline: true }, { name: 'Solde', value: chips(balance), inline: true });
+    round.shown = next;
+    return interaction.update(await hiloView(round, embed, {
+      previous: lost,
+      result: { tone: 'lose', title: after === before ? 'ÉGALITÉ : PERDU' : 'PERDU', sub: `série de ${round.streak} · -${Math.round(round.bet).toLocaleString('fr-FR')} jetons` },
       components: replayRow(round.userId, 'plusoumoins', round.bet),
-    });
+    }));
   }
 
+  const previous = round.card;
   round.multiplier *= (EDGE * 51) / winners;
   round.streak += 1;
   round.card = next;
-  return interaction.update({ embeds: [hiloEmbed(round, { note: `✅ ${show(next)} — bien vu !` })], components: hiloComponents(round) });
+  return interaction.update(await hiloView(round, hiloEmbed(round, { note: `✅ ${show(next)} — bien vu !` }), { previous, components: hiloComponents(round) }));
 }
 
 // ------------------------------------------------------------------- Duel

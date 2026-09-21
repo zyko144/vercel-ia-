@@ -19,6 +19,8 @@ import { balance, chips } from './economy.js';
 import { DICE_BETS, ROULETTE_BETS, diceRtp, evenRtp, resolveInstant, rouletteRtp, slotRtp } from './games.js';
 import { startBlackjack } from './blackjack.js';
 import { minesMultiplier, startCrash, startHiLo, startMines } from './live.js';
+import { CALL, animationFor } from './render/animations.js';
+import { resultImage } from './render/scenes.js';
 
 const COLOR = 0xff3fa6;
 const PRESETS = [10, 50, 100, 500, 1000];
@@ -403,24 +405,43 @@ async function play(interaction, panel) {
   // sur le message : la table réapparaît à la fin, avec « Rejouer ».
   if (table.kind === 'live') return table.start(interaction, panel);
 
-  // Les jeux instantanés : on montre d'abord l'animation, puis le résultat.
+  // Les jeux instantanés : le tirage est fait tout de suite (comme n'importe quel
+  // générateur de hasard), puis on joue l'animation de ce résultat-là.
+  const result = await resolveInstant(panel.gameId, panel.userId, panel.bet, panel.option);
+  if (!result.ok) {
+    return interaction.reply({ content: `Il te faut ${chips(panel.bet)} pour cette mise.`, flags: MessageFlags.Ephemeral });
+  }
+
+  const animation = animationFor(result.scene) ?? { ...artwork(panel.gameId), durationMs: 1_600 };
   await interaction.update({
     embeds: [
       new EmbedBuilder()
         .setColor(COLOR)
         .setTitle(table.title)
-        .setDescription(`Mise ${chips(panel.bet)}${table.label ? ` sur **${table.label(panel)}**` : ''}\n\n*C’est parti…*`)
-        .setImage(artwork(panel.gameId).url),
+        .setDescription(`Mise ${chips(panel.bet)}${table.label ? ` sur **${table.label(panel)}**` : ''}\n\n${CALL[result.scene.kind] ?? '*C’est parti…*'}`)
+        .setImage(animation.url),
     ],
     components: [],
+    files: animation.files ?? [],
+    attachments: [],
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 1600));
-  const result = await resolveInstant(panel.gameId, panel.userId, panel.bet, panel.option);
-  if (!result.ok) {
-    return interaction.editReply(await panelPayload(panel, { note: '❌ Mise refusée : solde insuffisant.' }));
-  }
-  return interaction.editReply({ embeds: [result.embed], components: afterRoundComponents(panel), files: [] });
+  // L'image du résultat se dessine pendant que l'animation tourne.
+  const [image] = await Promise.all([
+    resultImage(result.scene).catch((err) => {
+      console.warn('[casinho] rendu :', err.message);
+      return null;
+    }),
+    new Promise((resolve) => setTimeout(resolve, animation.durationMs)),
+  ]);
+  const name = `resultat-${panel.id}-${Date.now().toString(36)}.jpg`;
+  if (image) result.embed.setImage(`attachment://${name}`);
+  return interaction.editReply({
+    embeds: [result.embed],
+    files: image ? [new AttachmentBuilder(image, { name })] : [],
+    attachments: [],
+    components: afterRoundComponents(panel),
+  });
 }
 
 /** Bouton « Rejouer » posé par les jeux qui durent, une fois la manche finie. */

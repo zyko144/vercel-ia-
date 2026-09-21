@@ -175,6 +175,55 @@ await check('blackjack : doubler clôt la main', async () => {
   assert.ok(!buttonIds(last(table)).some((id) => id.startsWith('cbj:')), 'doubler termine la main');
 });
 
+// ------------------------------------------------------------ Les images
+const attachmentOf = (payload) => payload?.files?.[0];
+const imageUrlOf = (payload) => (payload?.embeds?.[0]?.data ?? payload?.embeds?.[0])?.image?.url ?? '';
+
+await check('blackjack : chaque coup montre la table en image', async () => {
+  const table = await openHand(100);
+  const first = last(table);
+  assert.ok(attachmentOf(first), 'la table doit être jointe en image');
+  const name = attachmentOf(first).name;
+  assert.match(name, /\.jpg$/);
+  assert.equal(imageUrlOf(first), `attachment://${name}`, 'l’embed doit afficher cette image');
+  assert.deepEqual(first.attachments, [], 'l’image précédente doit être remplacée, pas empilée');
+
+  const before = table.sent.length;
+  await closeHand(table);
+  const steps = table.sent.slice(before);
+  // Le croupier retourne sa carte, puis tire éventuellement : au moins une étape avant le verdict.
+  assert.ok(steps.length >= 2, 'le croupier doit jouer sous les yeux du joueur');
+  assert.match(JSON.stringify(steps[0]), /retourne sa carte|BLACKJACK|SAUT/i);
+  const final = steps.at(-1);
+  assert.ok(attachmentOf(final), 'le verdict doit être affiché sur la table');
+  assert.notEqual(attachmentOf(final).name, name, 'chaque image a son propre nom');
+});
+
+await check('jeux instantanés : l’animation montre le vrai résultat, puis la scène finale', async () => {
+  const { animationFor } = await import(new URL('render/animations.js', ROOT));
+  // Chaque issue possible a son animation : la roue ne s'arrête jamais sur un autre numéro.
+  // En ligne l'URL est « …/casino/roulette/17.gif », en local la pièce jointe « roulette-17.gif ».
+  for (let n = 0; n <= 36; n++) assert.match(animationFor({ kind: 'roulette', pocket: n }).url, new RegExp(`roulette[/-]${n}\\.gif$`));
+  for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) assert.match(animationFor({ kind: 'des', a, b }).url, new RegExp(`des[/-]${a}-${b}\\.gif$`));
+  for (const side of ['pile', 'face']) assert.match(animationFor({ kind: 'piece', side }).url, new RegExp(`piece[/-]${side}\\.gif$`));
+  for (const suit of ['♠', '♥', '♦', '♣']) {
+    for (const rank of ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']) {
+      assert.match(animationFor({ kind: 'carte', card: { rank, suit } }).url, /cartes[/-][0-9ajqk]+[shdc]\.gif$/, `pas d’animation pour ${rank}${suit}`);
+    }
+  }
+
+  await grant(USER, 50_000);
+  const table = mock({});
+  await openTable(table, 'roulette');
+  const play = buttonIds(last(table)).find((id) => id.startsWith('ctb:play'));
+  await handleTableComponent(follow(table, { __customId: play }));
+  const [spin, final] = table.sent.slice(-2);
+  const pocket = Number(/\*\*(\d+)\*\*/.exec(JSON.stringify(final.embeds[0].data.description ?? final.embeds[0].description))?.[1]);
+  assert.ok(Number.isInteger(pocket), 'le résultat doit citer le numéro');
+  assert.match(imageUrlOf(spin), new RegExp(`roulette[/-]${pocket}\\.gif$`), 'l’animation doit finir sur le numéro tiré');
+  assert.ok(attachmentOf(final)?.name?.endsWith('.jpg'), 'la scène finale doit être jointe');
+});
+
 // ------------------------------------------------------------ La table
 await check('chaque jeu ouvre sa table avec mise, boutons et animation', async () => {
   await grant(USER, 100_000);

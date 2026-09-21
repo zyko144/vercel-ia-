@@ -160,6 +160,7 @@ export async function resolveInstant(gameId, userId, bet, option = {}) {
   let title = '';
   let lines = [];
   let footer = '';
+  let scene = null; // ce que montrera l'image du résultat
 
   if (gameId === 'roulette') {
     const rule = ROULETTE_BETS[option.type];
@@ -172,12 +173,14 @@ export async function resolveInstant(gameId, userId, bet, option = {}) {
       spin.won ? `Gagné : ${rule.pays}× la mise` : 'Perdu.',
     ];
     footer = `TRJ ${(rouletteRtp(option.type) * 100).toFixed(1)} % · roulette européenne, un seul zéro`;
+    scene = { kind: 'roulette', pocket: spin.pocket, betLabel: option.type === 'plein' ? `${option.number}` : rule.label };
   } else if (gameId === 'machine') {
     const spin = slotSpin();
     multiplier = spin.multiplier;
     title = '🎰 Machine à sous';
     lines = [`\`\`\`\n${spin.reels.join(' | ')}\n\`\`\``, `${spin.label}${multiplier ? ` → **×${multiplier}**` : ''}`];
     footer = `TRJ ${(slotRtp() * 100).toFixed(1)} % · /casino-gains pour la table complète`;
+    scene = { kind: 'machine', reels: spin.reels, label: spin.label, multiplier };
   } else if (gameId === 'des') {
     const rule = DICE_BETS[option.type];
     const roll = diceRoll(option.type);
@@ -185,18 +188,21 @@ export async function resolveInstant(gameId, userId, bet, option = {}) {
     title = '🎲 Dés';
     lines = [`${FACES[roll.a - 1]} ${FACES[roll.b - 1]} → total **${roll.total}**`, `Pari : **${rule.label}**`, roll.won ? 'Gagné !' : 'Perdu.'];
     footer = `${rule.ways} combinaisons sur 36 · TRJ ${(diceRtp(option.type) * 100).toFixed(1)} %`;
+    scene = { kind: 'des', a: roll.a, b: roll.b, betLabel: rule.label };
   } else if (gameId === 'pileouface') {
     const toss = coinToss(option.side);
     multiplier = toss.multiplier;
     title = '🪙 Pile ou face';
     lines = [`La pièce tombe sur **${toss.result}**.`, `Ton choix : **${option.side}**`, toss.won ? 'Gagné !' : 'Perdu.'];
     footer = `Gain ×${EVEN_PAYS} · TRJ ${(evenRtp() * 100).toFixed(1)} %`;
+    scene = { kind: 'piece', side: toss.result, choice: option.side };
   } else if (gameId === 'rougenoir') {
     const deal = cardColour(option.colour);
     multiplier = deal.multiplier;
     title = '🃏 Rouge ou noir';
     lines = [`Carte tirée : \`${deal.card.rank}${deal.card.suit}\` → **${deal.result}**`, `Ton choix : **${option.colour}**`, deal.won ? 'Gagné !' : 'Perdu.'];
     footer = `26 cartes sur 52 · gain ×${EVEN_PAYS} · TRJ ${(evenRtp() * 100).toFixed(1)} %`;
+    scene = { kind: 'carte', card: deal.card, choice: option.colour };
   } else {
     // Jeu inconnu : la mise est rendue plutôt que gardée.
     await settle(userId, bet, bet);
@@ -206,5 +212,11 @@ export async function resolveInstant(gameId, userId, bet, option = {}) {
   const payout = Math.round(bet * multiplier);
   const { balance, net } = await settle(userId, payout, bet);
   lines.push(`Mise ${chips(bet)}${payout ? ` · rendu ${chips(payout)}` : ''}`);
-  return { ok: true, embed: resultEmbed({ title, lines, net, balance, footer }), won: multiplier > 0 };
+  const sign = net > 0 ? '+' : '';
+  const outcome = {
+    tone: net > 0 ? 'win' : net < 0 ? 'lose' : 'push',
+    title: net > 0 ? (multiplier >= 30 ? `JACKPOT ×${multiplier}` : 'GAGNÉ') : net < 0 ? 'PERDU' : 'ÉGALITÉ',
+    sub: `${sign}${Math.round(net).toLocaleString('fr-FR')} jetons · solde ${Math.round(balance).toLocaleString('fr-FR')}`,
+  };
+  return { ok: true, embed: resultEmbed({ title, lines, net, balance, footer }), won: multiplier > 0, scene: { ...scene, bet, outcome } };
 }
