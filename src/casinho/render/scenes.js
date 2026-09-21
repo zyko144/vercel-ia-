@@ -4,7 +4,6 @@
 import { handValue } from '../cards.js';
 import { card, hand } from './cards.js';
 import { HEIGHT, SANS, SERIF, WIDTH, badge, banner, chipStack, esc, renderScene, vignette } from './engine.js';
-import { angleFor, pocketColor, wheel } from './wheel.js';
 
 const PINK = '#ff3fa6';
 const WIN = '#49e08c';
@@ -132,26 +131,6 @@ export function blackjackMultiScene(table, { reveal = false, result = null } = {
 
   overlay += outcomeBanner(result, 92);
   return renderScene('blackjack', overlay);
-}
-
-// ---------------------------------------------------------------- Roulette
-/** La roue arrêtée sur le numéro tiré, et le détail du pari. */
-export function rouletteScene({ pocket, betLabel, bet, result, summary = null }) {
-  const color = pocketColor(pocket);
-  const traits = pocket === 0
-    ? 'ZÉRO'
-    : [color === '#c21f43' ? 'ROUGE' : 'NOIR', pocket % 2 ? 'IMPAIR' : 'PAIR', pocket <= 18 ? 'MANQUE' : 'PASSE'].join(' · ');
-
-  let overlay = vignette(0.5) + tableShade(150, 0.92);
-  overlay += wheel({ cx: 205, cy: 372, r: 138, rotation: angleFor(pocket), ball: 0 });
-  overlay += `
-    <circle cx="700" cy="318" r="74" fill="${color}" stroke="#e6c47a" stroke-width="5"/>
-    <text x="700" y="320" font-family="${SERIF}" font-weight="700" font-size="70" fill="#fff" text-anchor="middle" dominant-baseline="middle">${pocket}</text>
-    <text x="700" y="422" font-family="${SANS}" font-weight="700" font-size="18" fill="#ffd9ee" text-anchor="middle" letter-spacing="2">${traits}</text>`;
-  overlay += badge(700, 470, summary ?? `TON PARI · ${betLabel.toUpperCase()}`, { size: 16 });
-  if (bet) overlay += chipStack(880, 505, bet);
-  overlay += outcomeBanner(result, 120);
-  return renderScene('roulette', overlay);
 }
 
 // ------------------------------------------------------------- Machine à sous
@@ -445,7 +424,6 @@ export function crashScene({ state, multiplier, point = null, cashedAt = null, a
 /** L'image du résultat d'un jeu instantané, d'après ce que resolveInstant a tiré. */
 export function resultImage(scene) {
   const result = scene.outcome;
-  if (scene.kind === 'roulette') return rouletteScene({ pocket: scene.pocket, betLabel: scene.betLabel, bet: scene.bet, result });
   if (scene.kind === 'machine') return slotScene({ reels: scene.reels, bet: scene.bet, result });
   if (scene.kind === 'des') return diceScene({ a: scene.a, b: scene.b, betLabel: scene.betLabel, bet: scene.bet, result });
   if (scene.kind === 'piece') return coinScene({ side: scene.side, choice: scene.choice, bet: scene.bet, result });

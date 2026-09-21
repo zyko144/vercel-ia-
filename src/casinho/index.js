@@ -7,6 +7,7 @@ import { casinhoCommands } from './commands.js';
 import { handleBlackjackButton, isBlackjackButton } from './blackjack.js';
 import { handleLiveButton, isLiveButton } from './live.js';
 import { handleMultiComponent, isMultiComponent } from './multi.js';
+import { handleRoulette, isRouletteComponent } from './roulette.js';
 import { handleTableComponent, isTableComponent, openLobby } from './table.js';
 import { adminChips, claimDaily, claimRescue, givePlayer, showBalance, showHelp, showLeaderboard, showPaytable, showStats } from './wallet.js';
 
@@ -30,6 +31,7 @@ const HANDLERS = {
 
 async function onInteraction(interaction) {
   try {
+    if (isRouletteComponent(interaction)) return await handleRoulette(interaction);
     if (isMultiComponent(interaction)) return await handleMultiComponent(interaction);
     if (isTableComponent(interaction)) return await handleTableComponent(interaction);
     if (isBlackjackButton(interaction)) return await handleBlackjackButton(interaction);

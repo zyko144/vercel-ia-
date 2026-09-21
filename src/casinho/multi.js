@@ -1,4 +1,4 @@
-// Tables à plusieurs : roulette, crash et blackjack.
+// Tables à plusieurs : crash et blackjack (la roulette a son tapis, dans roulette.js).
 // Le hall /casino est un message public : la table s'y ouvre devant tout le salon.
 // Chacun choisit sa mise avec les boutons (et son pari dans le menu), puis un seul
 // tirage vaut pour tout le monde, et chacun est payé selon son propre pari.
@@ -12,18 +12,13 @@ import {
   ButtonStyle,
   EmbedBuilder,
   MessageFlags,
-  ModalBuilder,
   StringSelectMenuBuilder,
-  TextInputBuilder,
-  TextInputStyle,
 } from 'discord.js';
 import path from 'node:path';
 import { config } from '../config.js';
 import { draw, handValue, isBlackjack, shoe, showHand } from './cards.js';
 import { balance, chips, rand, settle, stake } from './economy.js';
-import { ROULETTE_BETS, pocketLabel } from './games.js';
-import { animationFor } from './render/animations.js';
-import { blackjackMultiScene, crashScene, rouletteScene } from './render/scenes.js';
+import { blackjackMultiScene, crashScene } from './render/scenes.js';
 
 const COLOR = 0xff3fa6;
 const PRESETS = [100, 1_000, 10_000, 100_000, 1_000_000];
@@ -38,24 +33,12 @@ const nameOf = (interaction) => interaction.member?.displayName ?? interaction.u
 const tables = new Map();
 
 export const isMultiComponent = (interaction) =>
-  (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) && interaction.customId.startsWith('cmp:');
+  (interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('cmp:');
 
 // ------------------------------------------------------------------ Les jeux
 const CRASH_AUTOS = [1.5, 2, 3, 5, 10];
 
 export const MULTI_GAMES = {
-  roulette: {
-    title: '🎡 Roulette à plusieurs',
-    art: 'roulette.gif',
-    max: 10,
-    blurb: 'Une seule bille pour toute la table. Chacun choisit son pari et sa mise.',
-    option: {
-      placeholder: 'Ton pari (rouge par défaut)',
-      value: 'rouge',
-      choices: () => Object.entries(ROULETTE_BETS).map(([value, rule]) => ({ value, label: `${rule.label} — ×${rule.pays}` })),
-      label: (option) => (option.value === 'plein' ? `n° ${option.number ?? '?'}` : ROULETTE_BETS[option.value].label),
-    },
-  },
   crash: {
     title: '🚀 Crash à plusieurs',
     art: 'crash.gif',
@@ -195,27 +178,6 @@ async function onBetting(interaction, table, action) {
     const seat = seatFor(table, interaction);
     const value = interaction.values[0];
     seat.option = { value };
-    if (table.game === 'roulette' && value === 'plein') {
-      return interaction.showModal(
-        new ModalBuilder()
-          .setCustomId(`cmp:plein:${table.id}`)
-          .setTitle('Numéro plein')
-          .addComponents(
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('numero').setLabel('Ton numéro (0 à 36)').setStyle(TextInputStyle.Short).setMinLength(1).setMaxLength(2).setRequired(true),
-            ),
-          ),
-      );
-    }
-    return interaction.update(bettingView(table));
-  }
-
-  if (action === 'plein') {
-    const number = Number(interaction.fields.getTextInputValue('numero'));
-    if (!Number.isInteger(number) || number < 0 || number > 36) {
-      return interaction.reply({ content: 'Il faut un nombre entier entre 0 et 36.', flags: MessageFlags.Ephemeral });
-    }
-    seatFor(table, interaction).option = { value: 'plein', number };
     return interaction.update(bettingView(table));
   }
 
@@ -249,7 +211,6 @@ async function launch(table) {
   // Chaque mise est prélevée maintenant ; qui n'a plus de quoi payer est écarté.
   const dropped = [];
   for (const seat of [...table.seats.values()]) {
-    if (table.game === 'roulette' && seat.option.value === 'plein' && !Number.isInteger(seat.option.number)) seat.option = { value: 'rouge' };
     if ((await stake(seat.userId, seat.bet)) === null) {
       table.seats.delete(seat.userId);
       dropped.push(seat.name);
@@ -268,7 +229,6 @@ async function launch(table) {
     });
   }
 
-  if (table.game === 'roulette') return playRoulette(table);
   if (table.game === 'crash') return playCrash(table);
   return playBlackjack(table);
 }
@@ -281,47 +241,6 @@ const againRow = (game) => [
 
 const resultLine = (seat, detail = '') =>
   `${seat.net > 0 ? '✅' : seat.net < 0 ? '❌' : '➖'} **${seat.name}** ${seat.net > 0 ? '+' : ''}${chips(seat.net)}${detail ? ` · ${detail}` : ''}`;
-
-// ------------------------------------------------------------------ Roulette
-async function playRoulette(table) {
-  const pocket = rand(37);
-  const seats = [...table.seats.values()];
-  const animation = animationFor({ kind: 'roulette', pocket });
-  await push(table, {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLOR)
-        .setTitle(MULTI_GAMES.roulette.title)
-        .setDescription(`Faites vos jeux… **Rien ne va plus !**\n${seats.length} joueur${seats.length > 1 ? 's' : ''} à la table.`)
-        .setImage(animation.url),
-    ],
-    components: [],
-    files: animation.files,
-    attachments: [],
-  });
-
-  for (const seat of seats) {
-    const rule = ROULETTE_BETS[seat.option.value];
-    const won = seat.option.value === 'plein' ? pocket === seat.option.number : rule.wins(pocket);
-    const { net } = await settle(seat.userId, won ? seat.bet * rule.pays : 0, seat.bet);
-    seat.net = net;
-  }
-  const winners = seats.filter((seat) => seat.net > 0).length;
-
-  const [buffer] = await Promise.all([
-    rouletteScene({ pocket, betLabel: '', bet: 0, summary: `${seats.length} JOUEUR${seats.length > 1 ? 'S' : ''} · ${winners} GAGNANT${winners > 1 ? 'S' : ''}` }).catch(() => null),
-    pause(animation.durationMs),
-  ]);
-  const picture = image(buffer, `roulette-${table.id}.jpg`);
-  tables.delete(table.id);
-  const embed = new EmbedBuilder()
-    .setColor(winners ? 0x49c78a : 0xd2536a)
-    .setTitle(MULTI_GAMES.roulette.title)
-    .setDescription([`La bille s’arrête sur ${pocketLabel(pocket)}.`, '', ...seats.map((seat) => resultLine(seat, MULTI_GAMES.roulette.option.label(seat.option)))].join('\n'))
-    .setFooter({ text: table.dropped.length ? `Écarté(s) faute de jetons : ${table.dropped.join(', ')}` : 'Roulette européenne · TRJ 97,3 %' });
-  if (picture.url) embed.setImage(picture.url);
-  return push(table, { embeds: [embed], components: againRow('roulette'), files: picture.files, attachments: [] });
-}
 
 // --------------------------------------------------------------------- Crash
 const CRASH_SPEED = 6_000;

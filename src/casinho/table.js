@@ -8,20 +8,18 @@ import {
   ButtonStyle,
   EmbedBuilder,
   MessageFlags,
-  ModalBuilder,
   StringSelectMenuBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   UserSelectMenuBuilder,
 } from 'discord.js';
 import path from 'node:path';
 import { config } from '../config.js';
 import { balance, chips } from './economy.js';
-import { DICE_BETS, ROULETTE_BETS, diceRtp, evenRtp, resolveInstant, rouletteRtp, slotRtp } from './games.js';
+import { DICE_BETS, diceRtp, evenRtp, resolveInstant, slotRtp } from './games.js';
 import { startBlackjack } from './blackjack.js';
 import { AUTO_CASHOUTS, autoChance, minesMultiplier, startCrash, startDuel, startHiLo, startMines } from './live.js';
 import { claimDaily, showLeaderboard } from './wallet.js';
 import { MULTI_GAMES, openMultiTable } from './multi.js';
+import { ROULETTE_MULTI, openRoulette } from './roulette.js';
 import { CALL, animationFor } from './render/animations.js';
 import { resultImage } from './render/scenes.js';
 
@@ -36,8 +34,7 @@ const lastBet = new Map(); // dernière mise de chaque joueur, pour « Rejouer �
 const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 export const isTableComponent = (interaction) =>
-  (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isUserSelectMenu() || interaction.isModalSubmit()) &&
-  interaction.customId.startsWith('ctb:');
+  (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isUserSelectMenu()) && interaction.customId.startsWith('ctb:');
 
 // --------------------------------------------------------------- Les tables
 const TABLES = {
@@ -49,26 +46,11 @@ const TABLES = {
     info: 'Croupier sur 17 · blackjack payé 3:2 · TRJ ≈ 99,5 %',
     start: (interaction, panel) => startBlackjack(interaction, panel.bet, { viaUpdate: true }),
   },
+  // La roulette a son propre tapis (roulette.js) : on y pose des jetons, pas une mise.
   roulette: {
     title: '🎡 Roulette',
-    art: 'roulette',
-    kind: 'instant',
-    blurb: 'Roulette européenne, 37 cases et un seul zéro.',
-    info: () => `TRJ 97,3 % sur tous les paris`,
-    option: {
-      id: 'type',
-      placeholder: 'Choisis ton pari',
-      value: 'rouge',
-      choices: Object.entries(ROULETTE_BETS).map(([value, rule]) => ({
-        value,
-        label: `${rule.label} — ×${rule.pays}`,
-        description: value === 'plein' ? 'Un numéro précis : te demande lequel' : `${rule.count} numéros sur 37`,
-      })),
-    },
-    label: (panel) =>
-      panel.option.type === 'plein'
-        ? `Numéro plein ${panel.option.number ?? '—'} (×36)`
-        : `${ROULETTE_BETS[panel.option.type].label} (×${ROULETTE_BETS[panel.option.type].pays})`,
+    kind: 'tapis',
+    blurb: 'Pose tes jetons (10, 20, 50, 100… jusqu’au million) où tu veux sur le tapis.',
   },
   machine: {
     title: '🎰 Machine à sous',
@@ -292,6 +274,7 @@ function afterRoundComponents(panel) {
 export async function openTable(interaction, gameId, { bet = null, viaUpdate = false } = {}) {
   const table = TABLES[gameId];
   if (!table) return interaction.reply({ content: 'Jeu inconnu.', flags: MessageFlags.Ephemeral });
+  if (table.kind === 'tapis') return openRoulette(interaction, { solo: true });
 
   const panel = {
     id: newId(),
@@ -337,6 +320,7 @@ export async function openLobby(interaction) {
             [
               ...TABLE_GAMES.map((id) => ({ value: id, label: TABLES[id].title, description: TABLES[id].blurb.slice(0, 100) })),
               // Les tables à plusieurs : tout le salon mise sur le même tirage.
+              { value: 'multi-roulette', label: `👥 ${ROULETTE_MULTI.title}`, description: ROULETTE_MULTI.blurb },
               ...Object.entries(MULTI_GAMES).map(([id, game]) => ({ value: `multi-${id}`, label: `👥 ${game.title}`, description: game.blurb.slice(0, 100) })),
             ],
           ),
@@ -356,6 +340,7 @@ export async function handleTableComponent(interaction) {
   // Le hall : pas encore de table, on en ouvre une (ou on passe à la banque).
   if (action === 'pick') {
     const choice = interaction.values[0];
+    if (choice === 'multi-roulette') return openRoulette(interaction, { solo: false });
     if (choice.startsWith('multi-')) return openMultiTable(interaction, choice.slice('multi-'.length));
     return openTable(interaction, choice, { viaUpdate: true });
   }
@@ -376,37 +361,9 @@ export async function handleTableComponent(interaction) {
   panel.timer = setTimeout(() => panels.delete(panel.id), LIFETIME_MS).unref();
   const table = TABLES[panel.gameId];
 
-  // ---- Numéro plein : on demande le chiffre dans une petite fenêtre
-  if (interaction.isModalSubmit()) {
-    const raw = Number(interaction.fields.getTextInputValue('numero'));
-    if (!Number.isInteger(raw) || raw < 0 || raw > 36) {
-      return interaction.reply({ content: 'Il faut un nombre entier entre 0 et 36.', flags: MessageFlags.Ephemeral });
-    }
-    panel.option.number = raw;
-    return interaction.update(await panelPayload(panel));
-  }
-
   if (action === 'opt') {
     const value = interaction.values[0];
     panel.option[table.option.id] = value;
-    if (panel.gameId === 'roulette' && value === 'plein') {
-      return interaction.showModal(
-        new ModalBuilder()
-          .setCustomId(`ctb:plein:${panel.id}`)
-          .setTitle('Numéro plein')
-          .addComponents(
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder()
-                .setCustomId('numero')
-                .setLabel('Ton numéro (0 à 36)')
-                .setStyle(TextInputStyle.Short)
-                .setMinLength(1)
-                .setMaxLength(2)
-                .setRequired(true),
-            ),
-          ),
-      );
-    }
     return interaction.update(await panelPayload(panel));
   }
 
@@ -448,10 +405,6 @@ export async function handleTableComponent(interaction) {
 async function play(interaction, panel) {
   const table = TABLES[panel.gameId];
   lastBet.set(panel.userId, panel.bet);
-
-  if (panel.gameId === 'roulette' && panel.option.type === 'plein' && !Number.isInteger(panel.option.number)) {
-    return interaction.reply({ content: 'Choisis d’abord ton numéro dans le menu « Numéro plein ».', flags: MessageFlags.Ephemeral });
-  }
 
   const available = await balance(panel.userId);
   if (panel.bet > available) {

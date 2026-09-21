@@ -37,14 +37,6 @@ export const rouletteRtp = (key) => (ROULETTE_BETS[key].count * ROULETTE_BETS[ke
 export const pocketLabel = (n) => (n === 0 ? '🟢 **0**' : `${RED_NUMBERS.has(n) ? '🔴' : '⚫'} **${n}**`);
 export const isRed = (n) => RED_NUMBERS.has(n);
 
-/** Un tour de roulette, sans affichage : la case tirée et le multiplicateur obtenu. */
-export function rouletteSpin(type, number) {
-  const rule = ROULETTE_BETS[type];
-  const pocket = rand(POCKETS);
-  const won = type === 'plein' ? pocket === number : rule.wins(pocket);
-  return { pocket, won, multiplier: won ? rule.pays : 0 };
-}
-
 // ------------------------------------------------------------ Machine à sous
 // Trois rouleaux identiques. La bande détermine les probabilités : elles ne sont
 // pas décidées à la main, elles découlent du nombre de symboles.
@@ -162,19 +154,7 @@ export async function resolveInstant(gameId, userId, bet, option = {}) {
   let footer = '';
   let scene = null; // ce que montrera l'image du résultat
 
-  if (gameId === 'roulette') {
-    const rule = ROULETTE_BETS[option.type];
-    const spin = rouletteSpin(option.type, option.number);
-    multiplier = spin.multiplier;
-    title = '🎡 Roulette';
-    lines = [
-      `La bille s’arrête sur ${pocketLabel(spin.pocket)}.`,
-      `Pari : **${option.type === 'plein' ? `${rule.label} ${option.number}` : rule.label}**`,
-      spin.won ? `Gagné : ${rule.pays}× la mise` : 'Perdu.',
-    ];
-    footer = `TRJ ${(rouletteRtp(option.type) * 100).toFixed(1)} % · roulette européenne, un seul zéro`;
-    scene = { kind: 'roulette', pocket: spin.pocket, betLabel: option.type === 'plein' ? `${option.number}` : rule.label };
-  } else if (gameId === 'machine') {
+  if (gameId === 'machine') {
     const spin = slotSpin();
     multiplier = spin.multiplier;
     title = '🎰 Machine à sous';

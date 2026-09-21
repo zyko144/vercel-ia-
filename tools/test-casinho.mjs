@@ -11,10 +11,11 @@ import path from 'node:path';
 
 const ROOT = new URL('../src/casinho/', import.meta.url);
 const { handValue, isBlackjack, canSplit, shoe } = await import(new URL('cards.js', ROOT));
-const { grant, balance, chips, reset } = await import(new URL('economy.js', ROOT));
+const { grant, balance, chips, rand, reset } = await import(new URL('economy.js', ROOT));
 const { startBlackjack, handleBlackjackButton } = await import(new URL('blackjack.js', ROOT));
-const { resolveInstant, slotRtp, rouletteRtp, diceRtp, evenRtp, slotSpin, rouletteSpin, diceRoll, coinToss, cardColour } =
+const { resolveInstant, slotRtp, rouletteRtp, diceRtp, evenRtp, slotSpin, diceRoll, coinToss, cardColour } =
   await import(new URL('games.js', ROOT));
+const { handleRoulette, payoutFor, spotRule, winningSpots } = await import(new URL('roulette.js', ROOT));
 const { startMines, startCrash, startHiLo, startDuel, handleLiveButton, minesMultiplier } = await import(new URL('live.js', ROOT));
 const { openTable, openLobby, handleTableComponent, TABLE_GAMES } = await import(new URL('table.js', ROOT));
 const wallet = await import(new URL('wallet.js', ROOT));
@@ -179,6 +180,7 @@ await check('blackjack : doubler clôt la main', async () => {
 // ------------------------------------------------------------ Les images
 const attachmentOf = (payload) => payload?.files?.[0];
 const imageUrlOf = (payload) => (payload?.embeds?.[0]?.data ?? payload?.embeds?.[0])?.image?.url ?? '';
+const descriptionOf = (payload) => (payload?.embeds?.[0]?.data ?? payload?.embeds?.[0])?.description ?? '';
 
 await check('blackjack : chaque coup montre la table en image', async () => {
   const table = await openHand(100);
@@ -215,13 +217,14 @@ await check('jeux instantanés : l’animation montre le vrai résultat, puis la
 
   await grant(USER, 50_000);
   const table = mock({});
-  await openTable(table, 'roulette');
+  await openTable(table, 'des');
   const play = buttonIds(last(table)).find((id) => id.startsWith('ctb:play'));
   await handleTableComponent(follow(table, { __customId: play }));
   const [spin, final] = table.sent.slice(-2);
-  const pocket = Number(/\*\*(\d+)\*\*/.exec(JSON.stringify(final.embeds[0].data.description ?? final.embeds[0].description))?.[1]);
-  assert.ok(Number.isInteger(pocket), 'le résultat doit citer le numéro');
-  assert.match(imageUrlOf(spin), new RegExp(`roulette[/-]${pocket}\\.gif$`), 'l’animation doit finir sur le numéro tiré');
+  const [, a, b] = /des[/-](\d)-(\d)\.gif$/.exec(imageUrlOf(spin)) ?? [];
+  assert.ok(a && b, 'l’animation doit être celle des faces tirées');
+  const total = Number(/total \*\*(\d+)\*\*/.exec(JSON.stringify(final.embeds[0].data.description ?? final.embeds[0].description))?.[1]);
+  assert.equal(total, Number(a) + Number(b), 'l’animation doit montrer les dés du résultat');
   assert.ok(attachmentOf(final)?.name?.endsWith('.jpg'), 'la scène finale doit être jointe');
 });
 
@@ -229,6 +232,7 @@ await check('jeux instantanés : l’animation montre le vrai résultat, puis la
 await check('chaque jeu ouvre sa table avec mise, boutons et animation', async () => {
   await grant(USER, 100_000);
   for (const gameId of TABLE_GAMES) {
+    if (gameId === 'roulette') continue; // le tapis : testé plus bas
     const interaction = mock({});
     await openTable(interaction, gameId);
     const payload = last(interaction);
@@ -326,18 +330,171 @@ await check('choisir son pari dans le menu met la table à jour', async () => {
   assert.match(field.value, /Exactement 7/);
 });
 
-await check('roulette : « numéro plein » demande le numéro dans une fenêtre', async () => {
-  const table = mock({});
-  await openTable(table, 'roulette');
-  const select = last(table).components[0].components[0].data.custom_id;
-  const pick = follow(table, { __customId: select, __values: ['plein'] });
-  await handleTableComponent(pick);
-  assert.equal(pick.modals.length, 1, 'une fenêtre doit s’ouvrir');
+// ------------------------------------------------------- Roulette à tapis
+/** Tous les identifiants (menus et boutons) d'un message. */
+const componentIds = (payload) =>
+  (payload?.components ?? []).flatMap((row) => (row.components ?? []).map((c) => c.data?.custom_id ?? c.toJSON?.().custom_id)).filter(Boolean);
+const fieldOf = (payload, name) => (payload?.embeds?.[0]?.data?.fields ?? []).find((f) => f.name === name)?.value ?? '';
 
-  const panelId = select.split(':')[2];
-  await handleTableComponent(follow(table, { __customId: `ctb:plein:${panelId}`, __modal: true, __input: '17' }));
-  const field = last(table).embeds[0].data.fields.find((f) => f.name === 'Ton pari');
-  assert.match(field.value, /17/);
+/** Ouvre la roulette depuis le hall (seul ou à plusieurs) et renvoie le fil et l'identifiant de la table. */
+async function openTapis(choice) {
+  const hall = mock({});
+  await openLobby(hall);
+  await handleTableComponent(follow(hall, { __customId: 'ctb:pick:hall', __values: [choice] }));
+  const id = componentIds(last(hall)).find((cid) => cid.startsWith('crl:chip:')).split(':')[2];
+  return { hall, id };
+}
+/** Un clic sur le tapis, par `who`, sur le même message. */
+const tap = (hall, who, options) => {
+  const next = mock(options, who);
+  next.sent = hall.sent;
+  return handleRoulette(next).then(() => next);
+};
+/** Ce que doit rendre un tapis sur ce numéro, calculé à la main, case par case. */
+const expectedPayout = (bets, pocket) => {
+  let payout = 0;
+  for (const [spot, stake] of bets) {
+    const rule = spotRule(spot);
+    if (rule.wins(pocket)) payout += stake * rule.pays;
+  }
+  return payout;
+};
+
+await check('roulette : chaque case paie 36/37, du rouge au numéro plein', () => {
+  const spots = ['rouge', 'noir', 'pair', 'impair', 'manque', 'passe', 'douzaine1', 'douzaine2', 'douzaine3', 'colonne1', 'colonne2', 'colonne3'];
+  for (let n = 0; n <= 36; n++) spots.push(`plein-${n}`);
+  for (const spot of spots) {
+    let back = 0;
+    for (let pocket = 0; pocket <= 36; pocket++) back += payoutFor([[spot, [1]]], pocket);
+    assert.equal(back, 36, `${spot} : doit rendre 36 sur 37 numéros (TRJ 97,3 %)`);
+  }
+  // Les cases qui s'allument sur le 17 : rouge… non, le 17 est noir.
+  assert.deepEqual([...winningSpots(17)].sort(), ['colonne2', 'douzaine2', 'impair', 'manque', 'noir', 'plein-17'].sort());
+  assert.equal(spotRule('constructor'), null, 'une case inconnue ne doit rien payer');
+  assert.equal(spotRule('plein-37'), null);
+});
+
+await check('roulette : des jetons de 20, 50, 100… posés où on veut, puis payés case par case', async () => {
+  await reset(USER);
+  await grant(USER, 1_000_000 - (await balance(USER)));
+  const { hall, id } = await openTapis('roulette');
+  let board = last(hall);
+  assert.ok(attachmentOf(board)?.name?.endsWith('.jpg'), 'le tapis doit être dessiné');
+  const chipMenu = board.components[0].components[0].toJSON();
+  const values = chipMenu.options.map((o) => Number(o.value));
+  for (const value of [10, 20, 50, 100, 500, 1_000, 1_000_000]) assert.ok(values.includes(value), `jeton de ${value} manquant`);
+  assert.equal(board.components.length, 5, 'jeton, chances, deux menus de numéros, boutons');
+
+  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['20'] });
+  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
+  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] }); // deux jetons de 20 empilés
+  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['50'] });
+  await tap(hall, USER, { __customId: `crl:put1:${id}`, __values: ['plein-17'] });
+  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['100'] });
+  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['douzaine3'] });
+  await tap(hall, USER, { __customId: `crl:put2:${id}`, __values: ['plein-36'] });
+  await tap(hall, USER, { __customId: `crl:undo:${id}` }); // retire le 100 posé sur le 36
+
+  board = last(hall);
+  const text = descriptionOf(board);
+  assert.match(text, /Rouge\*\* — 🪙 40/, 'deux jetons de 20 sur rouge');
+  assert.match(text, /n° 17\*\* — 🪙 50/);
+  assert.match(text, /3e douzaine.*— 🪙 100/);
+  assert.doesNotMatch(text, /n° 36/, '« retirer le dernier » enlève le jeton du 36');
+  assert.equal(fieldOf(board, 'Mise totale'), chips(190));
+  assert.match(fieldOf(board, 'Jeton en main'), /100/);
+  assert.equal(await balance(USER), 1_000_000, 'rien n’est prélevé avant le lancement');
+
+  const bets = [['rouge', 40], ['plein-17', 50], ['douzaine3', 100]];
+  await tap(hall, USER, { __customId: `crl:go:${id}` });
+  const results = () => hall.sent.filter((p) => /s’arrête sur/.test(descriptionOf(p)));
+  const first = results().at(-1);
+  assert.ok(first, 'le résultat doit être publié');
+  const pocket = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(first))[1]);
+  const spin = hall.sent.at(hall.sent.indexOf(first) - 1);
+  assert.match(imageUrlOf(spin), new RegExp(`roulette[/-]${pocket}\\.gif$`), 'la roue doit s’arrêter sur le numéro tiré');
+  assert.ok(attachmentOf(first)?.name?.endsWith('.jpg'), 'le tapis final doit être joint');
+  assert.equal((await balance(USER)) - 1_000_000, expectedPayout(bets, pocket) - 190, `paiement faux sur le ${pocket}`);
+  assert.ok(componentIds(first).some((cid) => cid.startsWith('crl:replay')), 'on doit pouvoir rejouer');
+
+  // « Rejouer » remet exactement les mêmes jetons.
+  const before = await balance(USER);
+  await tap(hall, USER, { __customId: `crl:replay:${id}` });
+  const second = results().at(-1);
+  assert.notEqual(second, first, 'un deuxième tirage doit avoir lieu');
+  const pocket2 = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(second))[1]);
+  assert.equal((await balance(USER)) - before, expectedPayout(bets, pocket2) - 190, `rejouer : paiement faux sur le ${pocket2}`);
+  console.log(`   jetons 20+20 rouge, 50 sur le 17, 100 sur la 3e douzaine : bille sur le ${pocket} puis le ${pocket2}`);
+});
+
+await check('roulette : les refus (solde, maximum par case, table d’un autre)', async () => {
+  await reset(USER); // 1 000 jetons
+  const { hall, id } = await openTapis('roulette');
+  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['5000'] });
+  const tooMuch = await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
+  assert.match(tooMuch.sent.at(-1).content ?? '', /Il te faut/, 'un jeton plus gros que le solde est refusé');
+
+  const stranger = await tap(hall, FOE, { __customId: `crl:put:${id}`, __values: ['noir'] });
+  assert.match(stranger.sent.at(-1).content ?? '', /quelqu’un d’autre/);
+
+  await grant(USER, 5_000_000);
+  await tap(hall, USER, { __customId: `crl:chip:${id}`, __values: ['1000000'] });
+  await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
+  const cap = await tap(hall, USER, { __customId: `crl:put:${id}`, __values: ['rouge'] });
+  assert.match(cap.sent.at(-1).content ?? '', /maximum par case/);
+  await tap(hall, USER, { __customId: `crl:clear:${id}` });
+  assert.match(descriptionOf(last(hall)), /Aucun jeton/, '« Tout retirer » vide le tapis');
+  await tap(hall, USER, { __customId: `crl:close:${id}` });
+});
+
+await check('roulette à plusieurs : chacun pose ses jetons de son côté, une seule bille', async () => {
+  const players = ['JOUEUR-A', 'JOUEUR-B', 'JOUEUR-C'];
+  for (const who of players) {
+    await reset(who);
+    await grant(who, 1_000_000 - (await balance(who)));
+  }
+  const { hall, id } = await openTapis('multi-roulette');
+  // A : 10k sur rouge + 1k sur le zéro · B : trois jetons de 20 sur noir · C : 100k sur la 1re douzaine
+  await tap(hall, 'JOUEUR-A', { __customId: `crl:chip:${id}`, __values: ['10000'] });
+  await tap(hall, 'JOUEUR-A', { __customId: `crl:put:${id}`, __values: ['rouge'] });
+  await tap(hall, 'JOUEUR-A', { __customId: `crl:chip:${id}`, __values: ['1000'] });
+  await tap(hall, 'JOUEUR-A', { __customId: `crl:put1:${id}`, __values: ['plein-0'] });
+  await tap(hall, 'JOUEUR-B', { __customId: `crl:chip:${id}`, __values: ['20'] });
+  for (let i = 0; i < 3; i++) await tap(hall, 'JOUEUR-B', { __customId: `crl:put:${id}`, __values: ['noir'] });
+  await tap(hall, 'JOUEUR-C', { __customId: `crl:chip:${id}`, __values: ['100000'] });
+  await tap(hall, 'JOUEUR-C', { __customId: `crl:put:${id}`, __values: ['douzaine1'] });
+
+  const board = last(hall);
+  const seats = board.embeds[0].data.fields[0];
+  assert.match(seats.name, /Joueurs \(3\/10\)/);
+  assert.match(seats.value, /JOUEUR-A.*Rouge 10\s000.*n° 0 1\s000/, 'les jetons de A');
+  assert.match(seats.value, /JOUEUR-B.*Noir 60/, 'les trois jetons de 20 de B');
+  assert.ok(attachmentOf(board)?.name?.endsWith('.jpg'), 'le tapis commun doit être dessiné');
+
+  const intruder = await tap(hall, 'JOUEUR-B', { __customId: `crl:go:${id}` });
+  assert.match(intruder.sent.at(-1).content ?? '', /Seul/, 'seul l’hôte lance');
+  await tap(hall, USER, { __customId: `crl:go:${id}` });
+
+  const final = hall.sent.filter((p) => /s’arrête sur/.test(descriptionOf(p))).at(-1);
+  assert.ok(final, 'le résultat doit être publié');
+  const pocket = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(final))[1]);
+  const expected = {
+    'JOUEUR-A': [[['rouge', 10_000], ['plein-0', 1_000]], 11_000],
+    'JOUEUR-B': [[['noir', 60]], 60],
+    'JOUEUR-C': [[['douzaine1', 100_000]], 100_000],
+  };
+  for (const [who, [bets, total]] of Object.entries(expected)) {
+    assert.equal((await balance(who)) - 1_000_000, expectedPayout(bets, pocket) - total, `${who} : paiement faux sur le ${pocket}`);
+    assert.match(descriptionOf(final), new RegExp(who), `${who} doit avoir sa ligne`);
+  }
+
+  // Nouveau tour : même table, et chacun peut remettre ses jetons d'un clic.
+  await tap(hall, 'JOUEUR-B', { __customId: `crl:again:${id}` });
+  assert.ok(componentIds(last(hall)).some((cid) => cid.startsWith('crl:rebet')), '« Remettre ma mise » après un premier tour');
+  await tap(hall, 'JOUEUR-A', { __customId: `crl:rebet:${id}` });
+  assert.match(last(hall).embeds[0].data.fields[0].value, /JOUEUR-A.*Rouge 10\s000.*n° 0 1\s000/, 'A retrouve ses jetons');
+  await tap(hall, 'JOUEUR-B', { __customId: `crl:cancel:${id}` }); // B a ouvert ce tour : il peut fermer
+  console.log(`   la bille tombe sur le ${pocket} : ${players.map((who) => who.slice(-1)).join(', ')} payés chacun selon leurs jetons`);
 });
 
 await check('jouer depuis la table : animation, résultat, puis « Rejouer »', async () => {
@@ -378,8 +535,6 @@ await check('le hall /casino propose toutes les tables', async () => {
 await check('les jeux instantanés rendent un résultat cohérent', async () => {
   await grant(USER, 50_000);
   const cases = [
-    ['roulette', { type: 'rouge' }],
-    ['roulette', { type: 'plein', number: 17 }],
     ['machine', {}],
     ['des', { type: 'sept' }],
     ['pileouface', { side: 'face' }],
@@ -444,7 +599,6 @@ await check('plus ou moins : un tour puis encaissement', async () => {
 });
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const descriptionOf = (payload) => (payload?.embeds?.[0]?.data ?? payload?.embeds?.[0])?.description ?? '';
 
 await check('crash : décollage, vol en images, puis encaissement manuel', async () => {
   // Une fusée qui ne part pas trop vite : on relance jusqu'à en avoir une qui vole au moins ×1,5.
@@ -522,7 +676,6 @@ await check('duel depuis le hall : on choisit son adversaire dans un menu', asyn
 
 // ------------------------------------------------------------ À plusieurs
 const { handleMultiComponent } = await import(new URL('multi.js', ROOT));
-const { ROULETTE_BETS } = await import(new URL('games.js', ROOT));
 
 /** Un clic d'un autre joueur sur le même message public. */
 const as = (source, who, options) => {
@@ -542,44 +695,6 @@ async function openMulti(game) {
   const tableId = buttonIds(table).find((id) => id.startsWith('cmp:go:')).split(':')[2];
   return { hall: pick, tableId };
 }
-
-await check('à plusieurs : roulette, un seul numéro et chacun payé selon son pari', async () => {
-  for (const who of PLAYERS) {
-    await reset(who);
-    await grant(who, 1_000_000 - (await balance(who)));
-  }
-  const { hall, tableId } = await openMulti('roulette');
-  // A mise 10k sur rouge (par défaut), B 1k sur noir, C 100k sur la 1re douzaine.
-  await handleMultiComponent(as(hall, 'JOUEUR-A', { __customId: `cmp:bet10000:${tableId}` }));
-  await handleMultiComponent(as(hall, 'JOUEUR-B', { __customId: `cmp:bet1000:${tableId}` }));
-  await handleMultiComponent(as(hall, 'JOUEUR-B', { __customId: `cmp:opt:${tableId}`, __values: ['noir'] }));
-  await handleMultiComponent(as(hall, 'JOUEUR-C', { __customId: `cmp:bet100000:${tableId}` }));
-  await handleMultiComponent(as(hall, 'JOUEUR-C', { __customId: `cmp:opt:${tableId}`, __values: ['douzaine1'] }));
-
-  const lobby = last(hall).embeds[0].data.fields[0];
-  assert.match(lobby.name, /Joueurs \(3\/10\)/, 'les trois joueurs doivent apparaître');
-  assert.match(lobby.value, /JOUEUR-B.*Noir/, 'le pari de chacun doit être affiché');
-
-  // Un joueur qui n'est pas l'hôte ne peut pas lancer.
-  const intruder = as(hall, 'JOUEUR-B', { __customId: `cmp:go:${tableId}` });
-  await handleMultiComponent(intruder);
-  assert.match(intruder.sent.at(-1).content ?? '', /Seul/);
-
-  await handleMultiComponent(as(hall, USER, { __customId: `cmp:go:${tableId}` }));
-  const final = hall.sent.filter((p) => /s’arrête sur/.test(descriptionOf(p))).at(-1);
-  assert.ok(final, 'le résultat de la table doit être publié');
-  const pocket = Number(/\*\*(\d+)\*\*/.exec(descriptionOf(final))[1]);
-
-  // Chaque joueur a été payé selon SON pari, sur le MÊME numéro.
-  const expected = { 'JOUEUR-A': ['rouge', 10_000], 'JOUEUR-B': ['noir', 1_000], 'JOUEUR-C': ['douzaine1', 100_000] };
-  for (const [who, [type, bet]] of Object.entries(expected)) {
-    const rule = ROULETTE_BETS[type];
-    const net = rule.wins(pocket) ? bet * (rule.pays - 1) : -bet;
-    assert.equal((await balance(who)) - 1_000_000, net, `${who} : paiement faux sur le ${pocket}`);
-  }
-  assert.ok(buttonIds(final).some((id) => id.startsWith('cmp:again')), 'on doit pouvoir rouvrir une table');
-  console.log(`   la bille tombe sur le ${pocket} : A ${ROULETTE_BETS.rouge.wins(pocket) ? 'gagne' : 'perd'}, B ${ROULETTE_BETS.noir.wins(pocket) ? 'gagne' : 'perd'}, C ${ROULETTE_BETS.douzaine1.wins(pocket) ? 'gagne' : 'perd'}`);
-});
 
 await check('à plusieurs : crash, une seule fusée, chacun encaisse pour lui', async () => {
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -761,9 +876,11 @@ await check('TRJ observé = TRJ annoncé (500 000 manches par jeu)', () => {
   };
 
   measure('machine à sous', slotRtp(), () => slotSpin().multiplier);
-  measure('roulette rouge', rouletteRtp('rouge'), () => rouletteSpin('rouge').multiplier);
-  measure('roulette douzaine', rouletteRtp('douzaine1'), () => rouletteSpin('douzaine1').multiplier);
-  measure('roulette plein 17', rouletteRtp('plein'), () => rouletteSpin('plein', 17).multiplier);
+  measure('roulette rouge', rouletteRtp('rouge'), () => payoutFor([['rouge', [1]]], rand(37)));
+  measure('roulette douzaine', rouletteRtp('douzaine1'), () => payoutFor([['douzaine1', [1]]], rand(37)));
+  measure('roulette plein 17', rouletteRtp('plein'), () => payoutFor([['plein-17', [1]]], rand(37)));
+  const tapis = [['rouge', [20, 20]], ['plein-17', [50]], ['douzaine3', [100]], ['colonne1', [500]], ['plein-0', [10]]];
+  measure('roulette tapis mélangé', 36 / 37, () => payoutFor(tapis, rand(37)) / 700);
   measure('dés plus de 7', diceRtp('plus'), () => diceRoll('plus').multiplier);
   measure('pile ou face', evenRtp(), () => coinToss('pile').multiplier);
   measure('rouge ou noir', evenRtp(), () => cardColour('rouge').multiplier);
