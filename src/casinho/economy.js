@@ -94,20 +94,45 @@ export async function refund(userId, amount) {
   return grant(userId, amount);
 }
 
-export async function daily(userId) {
+// Les jetons « du jour » suivent le calendrier de Paris : ils reviennent à minuit,
+// pas 24 h pile après le dernier clic.
+const TIME_ZONE = 'Europe/Paris';
+const dayFormat = new Intl.DateTimeFormat('fr-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+const clockFormat = new Intl.DateTimeFormat('fr-FR', { timeZone: TIME_ZONE, hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' });
+export const dayOf = (timestamp) => dayFormat.format(timestamp); // « 2026-09-21 »
+
+/** Temps restant avant minuit, heure de Paris. */
+export function untilMidnight(now = Date.now()) {
+  const parts = Object.fromEntries(clockFormat.formatToParts(now).map((part) => [part.type, Number(part.value)]));
+  const elapsed = ((parts.hour * 60 + parts.minute) * 60 + parts.second) * 1000;
+  return Math.max(60_000, DAY_MS - elapsed);
+}
+
+export async function daily(userId, now = Date.now()) {
   const all = await bank();
   all[userId] ??= blank();
   const me = all[userId];
-  const now = Date.now();
-  const since = now - (me.daily || 0);
-  if (since < DAY_MS) return { ok: false, wait: DAY_MS - since };
+  const reward = config.casinho.dailyReward;
+  const today = dayOf(now);
+  const lastDay = me.daily ? dayOf(me.daily) : null;
 
-  // Série de connexions : elle repart de zéro après 48 h sans passage.
-  me.streak = since < 2 * DAY_MS ? (me.streak || 0) + 1 : 1;
+  // Déjà pris aujourd'hui, au montant actuel : rendez-vous à minuit.
+  // Si le cadeau a augmenté depuis (de 500 à un million, par exemple), on peut
+  // prendre le nouveau tout de suite : l'ancien, plus petit, ne doit pas le bloquer.
+  if (lastDay === today && (me.dailyReward ?? 0) >= reward) {
+    return { ok: false, wait: untilMidnight(now), claimedAt: me.daily, claimed: me.dailyAmount ?? null };
+  }
+
+  // Série : +1 si le dernier passage date d'hier, inchangée si c'était aujourd'hui.
+  if (lastDay === today) me.streak = Math.max(1, me.streak || 0);
+  else me.streak = lastDay === dayOf(now - DAY_MS) ? (me.streak || 0) + 1 : 1;
+
   const bonus = Math.min(7, me.streak) * config.casinho.dailyStreakBonus;
-  const amount = config.casinho.dailyReward + bonus;
+  const amount = reward + bonus;
   me.chips += amount;
   me.daily = now;
+  me.dailyReward = reward;
+  me.dailyAmount = amount;
   save(KEY, all);
   return { ok: true, amount, streak: me.streak, balance: me.chips };
 }

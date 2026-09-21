@@ -29,7 +29,18 @@ export async function showBalance(interaction) {
 
 export async function claimDaily(interaction) {
   const result = await daily(interaction.user.id);
-  if (!result.ok) return interaction.reply(ephemeral(`⏳ Reviens dans **${waitLabel(result.wait)}** pour tes jetons du jour.`));
+  if (!result.ok) {
+    // On dit quand et combien : « il faut attendre » sans explication, on n'y croit pas.
+    const at = result.claimedAt
+      ? new Date(result.claimedAt).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })
+      : null;
+    return interaction.reply(
+      ephemeral(
+        `⏳ Tu as déjà récupéré tes jetons du jour${at ? ` à **${at}**` : ''}${result.claimed ? ` (${chips(result.claimed)})` : ''}.\n` +
+          `Les prochains arrivent à minuit (heure de Paris), dans **${waitLabel(result.wait)}**.`,
+      ),
+    );
+  }
   return interaction.reply({
     embeds: [
       new EmbedBuilder()
@@ -42,7 +53,7 @@ export async function claimDaily(interaction) {
             `Nouveau solde : ${chips(result.balance)}`,
           ].join('\n'),
         )
-        .setFooter({ text: 'La série repart de zéro après 48 h sans passage.' }),
+        .setFooter({ text: 'Nouveaux jetons chaque jour à minuit (heure de Paris) · reviens chaque jour pour garder ta série' }),
     ],
   });
 }

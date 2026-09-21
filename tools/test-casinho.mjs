@@ -270,6 +270,53 @@ await check('le cadeau quotidien donne un million de jetons', async () => {
   assert.ok((await balance(USER)) - before >= 1_000_000, 'le quotidien doit rapporter au moins un million');
 });
 
+await check('jetons du jour : l’ancien cadeau de 500 ne bloque pas le million', async () => {
+  const { daily, account } = await import(new URL('economy.js', ROOT));
+  // Le cas signalé : un compte qui a pris l'ancien cadeau (500 jetons) il y a 12 h,
+  // avant que le montant passe à un million. L'ancien enregistrement n'avait pas de montant.
+  const now = Date.parse('2026-09-21T10:40:00Z'); // 12 h 40 à Paris
+  await reset('ANCIEN');
+  const me = await account('ANCIEN');
+  me.daily = now - 12 * 60 * 60 * 1000;
+  me.streak = 1;
+  const result = await daily('ANCIEN', now);
+  assert.equal(result.ok, true, 'le million doit être récupérable tout de suite');
+  assert.ok(result.amount >= 1_000_000);
+});
+
+await check('jetons du jour : une fois par jour, retour à minuit (heure de Paris)', async () => {
+  const { daily } = await import(new URL('economy.js', ROOT));
+  await reset('CALENDRIER');
+  // Récupérés à 23 h 50 à Paris…
+  const evening = Date.parse('2026-09-21T21:50:00Z');
+  assert.equal((await daily('CALENDRIER', evening)).ok, true);
+  // …refusés deux minutes plus tard, avec l'heure et le montant, et minuit dans 8 min.
+  const again = await daily('CALENDRIER', evening + 2 * 60_000);
+  assert.equal(again.ok, false);
+  assert.equal(again.claimedAt, evening);
+  assert.ok(again.claimed >= 1_000_000, 'le refus doit dire combien on a déjà eu');
+  assert.ok(again.wait <= 8 * 60_000 + 1_000 && again.wait >= 7 * 60_000, `minuit dans ~8 min, pas ${Math.round(again.wait / 60_000)} min`);
+  // …et de nouveau disponibles à 0 h 10, sans attendre 24 h. La série continue.
+  const night = await daily('CALENDRIER', Date.parse('2026-09-21T22:10:00Z'));
+  assert.equal(night.ok, true, 'un nouveau jour commence à minuit');
+  assert.equal(night.streak, 2, 'deux jours de suite : la série passe à 2');
+  // Un jour sauté : la série repart à 1.
+  const later = await daily('CALENDRIER', Date.parse('2026-09-24T10:00:00Z'));
+  assert.equal(later.streak, 1);
+});
+
+await check('jetons du jour : le refus explique quand et combien', async () => {
+  await reset(USER);
+  await wallet.claimDaily(mock({}));
+  const second = mock({});
+  await wallet.claimDaily(second);
+  const text = last(second).content ?? '';
+  assert.match(text, /déjà récupéré tes jetons du jour à \*\*\d{2}:\d{2}\*\*/, 'l’heure de la récupération doit être donnée');
+  // Le montant reçu (un million, plus l'éventuel bonus de série).
+  assert.match(text, /\(🪙 1[\s ]\d{3}[\s ]\d{3}\)/, 'le montant déjà reçu doit être donné');
+  assert.match(text, /minuit/);
+});
+
 await check('choisir son pari dans le menu met la table à jour', async () => {
   const table = mock({});
   await openTable(table, 'des');
@@ -604,7 +651,7 @@ await check('le bouton du guide épinglé ouvre le casino', async () => {
   assert.ok(hall.components[0].components[0].toJSON().options.length >= 13, 'un hall complet doit s’ouvrir');
   const gift = mock({ __customId: daily });
   await handleTableComponent(gift);
-  assert.ok(last(gift).embeds?.length || /Reviens/.test(last(gift).content ?? ''), 'le bouton jetons du jour doit répondre');
+  assert.ok(last(gift).embeds?.length || /déjà récupéré/.test(last(gift).content ?? ''), 'le bouton jetons du jour doit répondre');
 });
 
 await check('seule /casino lance les jeux', () => {
