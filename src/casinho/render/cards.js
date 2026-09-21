@@ -42,16 +42,20 @@ export function card(c, x, y, { tilt = 0, glow = null } = {}) {
   const color = isRed(c.suit) ? RED : INK;
   const cx = x + CARD_W / 2;
   const cy = y + CARD_H / 2;
+  // Dans Discord l'image est réduite : la valeur s'écrit en grand au centre de chaque
+  // carte, et pas seulement dans les coins, sinon on ne la lit pas.
   const center = ['J', 'Q', 'K'].includes(c.rank)
     ? faceArt(c, x, y)
-    : c.rank === 'A'
-      ? suit(c.suit, cx, cy, 58, color)
-      : suit(c.suit, cx, cy, 44, color);
+    : `
+    <text x="${cx}" y="${cy - 8}" font-family="${SANS}" font-weight="700" font-size="${c.rank === '10' ? 42 : 50}" fill="${color}"
+          text-anchor="middle" dominant-baseline="middle">${esc(c.rank)}</text>
+    ${suit(c.suit, cx, cy + 30, 26, color)}`;
 
   // Le coin haut-gauche ; celui du bas est le même, retourné autour du centre de la carte.
+  // C'est lui qu'on voit quand les cartes se chevauchent : il est gros exprès.
   const corner = `
-    <text x="${x + 9}" y="${y + 23}" font-family="${SANS}" font-weight="700" font-size="${c.rank === '10' ? 18 : 21}" fill="${color}">${esc(c.rank)}</text>
-    ${suit(c.suit, x + 17, y + 38, 15, color)}`;
+    <text x="${x + 7}" y="${y + 26}" font-family="${SANS}" font-weight="700" font-size="${c.rank === '10' ? 21 : 26}" fill="${color}">${esc(c.rank)}</text>
+    ${suit(c.suit, x + 17, y + 42, 17, color)}`;
 
   return `
   <g transform="rotate(${tilt} ${cx} ${cy})">
@@ -88,7 +92,9 @@ export function cardBack(x, y, { tilt = 0 } = {}) {
  * Une main posée en éventail, centrée sur `cx`. Les cartes se chevauchent assez
  * pour que 6 ou 7 cartes tiennent sur la table.
  */
-export function hand(cards, cx, y, { hidden = [], glow = null, spread = 58, scale = 1 } = {}) {
+export function hand(cards, cx, y, { hidden = [], glow = null, spread = 58, scale = 1, maxWidth = null } = {}) {
+  // Beaucoup de cartes : on les resserre pour tenir dans la place donnée.
+  if (maxWidth && cards.length > 1) spread = Math.min(spread, (maxWidth / scale - CARD_W) / (cards.length - 1));
   const width = CARD_W + spread * (cards.length - 1);
   const left = cx - width / 2;
   const body = cards
@@ -104,4 +110,7 @@ export function hand(cards, cx, y, { hidden = [], glow = null, spread = 58, scal
 }
 
 /** Largeur occupée par une main, pour placer ce qui l'entoure. */
-export const handWidth = (count, { spread = 58, scale = 1 } = {}) => (CARD_W + spread * Math.max(0, count - 1)) * scale;
+export function handWidth(count, { spread = 58, scale = 1, maxWidth = null } = {}) {
+  if (maxWidth && count > 1) spread = Math.min(spread, (maxWidth / scale - CARD_W) / (count - 1));
+  return (CARD_W + spread * Math.max(0, count - 1)) * scale;
+}

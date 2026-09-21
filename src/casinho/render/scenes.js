@@ -2,7 +2,7 @@
 // vraiment (les cartes de la main, le numéro tiré, les rouleaux arrêtés…).
 // Mise en page « table en direct » : le croupier en haut, le jeu posé sur le bas assombri.
 import { handValue } from '../cards.js';
-import { CARD_H, card, hand, handWidth } from './cards.js';
+import { card, hand } from './cards.js';
 import { HEIGHT, SANS, SERIF, WIDTH, badge, banner, chipStack, esc, renderScene, vignette } from './engine.js';
 import { angleFor, pocketColor, wheel } from './wheel.js';
 
@@ -28,7 +28,27 @@ function outcomeBanner(result, y = 150) {
 }
 
 // ---------------------------------------------------------------- Blackjack
-const BJ_SCALE = 0.8;
+// Dans Discord l'image s'affiche à environ 400 px de large : les deux mains sont
+// posées côte à côte (croupier à gauche, joueur à droite) pour pouvoir les montrer
+// en grand, avec le total écrit en gros au-dessus de chacune.
+const BJ_SCALE = 1.4;
+const BJ_SPLIT_SCALE = 1.05;
+const BJ_SPREAD = 64;
+const COLUMN = 420; // largeur disponible pour une main
+
+/** Grande étiquette au-dessus d'une main : le nom, et le total en gros. */
+function handTitle(cx, y, name, total, { color = '#ffffff', accent = null, small = false } = {}) {
+  const size = small ? 22 : 30;
+  const text = `${name}  ${total}`;
+  const width = Math.round(text.length * size * 0.6 + 40);
+  return `
+    <rect x="${cx - width / 2}" y="${y - size}" width="${width}" height="${size * 1.75}" rx="${size * 0.875}"
+          fill="rgba(12,4,10,0.8)" stroke="${accent ?? 'rgba(255,255,255,0.25)'}" stroke-width="${accent ? 3 : 1.5}"/>
+    <text x="${cx}" y="${y + size * 0.1}" font-family="${SANS}" font-weight="700" font-size="${size}" fill="${color}"
+          text-anchor="middle" dominant-baseline="middle" letter-spacing="1">
+      <tspan font-size="${Math.round(size * 0.62)}" fill="#e6b8d2">${esc(name)}</tspan>  ${esc(String(total))}
+    </text>`;
+}
 
 /**
  * La table de blackjack telle qu'elle est : main du croupier (carte cachée tant
@@ -36,34 +56,45 @@ const BJ_SCALE = 0.8;
  */
 export function blackjackScene(table, { reveal = false, result = null } = {}) {
   const dealerCards = table.dealer;
-  const dealerTotal = reveal ? handValue(dealerCards).total : handValue([dealerCards[0]]).total;
-  const dealerY = 238;
-  const dealerW = handWidth(dealerCards.length, { scale: BJ_SCALE });
+  const dealerValue = handValue(reveal ? dealerCards : [dealerCards[0]]);
+  const cardsTop = 262;
+  const dealerX = 250;
+  const playerX = 710;
 
-  let overlay = vignette(0.45) + tableShade(185);
-  overlay += hand(dealerCards, WIDTH / 2, dealerY, { hidden: reveal ? [] : [1], scale: BJ_SCALE });
-  overlay += badge(WIDTH / 2 - dealerW / 2 - 18, dealerY + 52, `CROUPIER · ${dealerTotal}${reveal ? '' : ' + ?'}`, { anchor: 'end', size: 17 });
+  let overlay = vignette(0.45) + tableShade(140, 0.94);
 
-  // Une ou deux mains (après séparation), la main en cours soulignée en rose.
+  // Le croupier, à gauche.
+  overlay += handTitle(dealerX, 222, 'CROUPIER', reveal ? (dealerValue.bust ? `${dealerValue.total} SAUTÉ` : dealerValue.total) : `${dealerValue.total} + ?`, {
+    color: reveal && dealerValue.bust ? LOSE : '#ffffff',
+  });
+  overlay += hand(dealerCards, dealerX, cardsTop, { hidden: reveal ? [] : [1], scale: BJ_SCALE, spread: BJ_SPREAD, maxWidth: COLUMN });
+
+  // Le joueur, à droite : une main, ou deux après séparation (la main en cours en rose).
   const many = table.hands.length > 1;
-  const centers = many ? [WIDTH / 2 - 190, WIDTH / 2 + 190] : [WIDTH / 2];
-  const playerY = 384;
+  const centers = many ? [playerX - 118, playerX + 118] : [playerX];
+  const scale = many ? BJ_SPLIT_SCALE : BJ_SCALE;
   table.hands.forEach((entry, index) => {
     const cx = centers[index];
     const { total, soft, bust } = handValue(entry.cards);
     const active = !table.finished && index === table.active;
-    const width = handWidth(entry.cards.length, { scale: BJ_SCALE });
-    overlay += hand(entry.cards, cx, playerY, { glow: active ? PINK : null, scale: BJ_SCALE });
-    const label = `${many ? `MAIN ${index + 1}` : 'TOI'} · ${bust ? `${total} SAUTÉ` : soft ? `${total} SOUPLE` : total}`;
-    const tag = many
-      ? badge(cx, playerY + CARD_H * BJ_SCALE + 30, label, { size: 15, accent: active ? PINK : null, color: bust ? LOSE : '#fff' })
-      : badge(cx - width / 2 - 18, playerY + 52, label, { anchor: 'end', size: 17, accent: PINK, color: bust ? LOSE : '#fff' });
-    overlay += tag;
+    // Main souple (un as compté 11) : les deux valeurs, comme sur les tables en ligne (« 7/17 »).
+    const value = bust ? `${total} SAUTÉ` : soft && total < 21 ? `${total - 10}/${total}` : total;
+    overlay += handTitle(cx, 222, many ? `MAIN ${index + 1}` : 'TOI', value, {
+      color: bust ? LOSE : '#ffffff',
+      accent: active || !many ? PINK : null,
+      small: many,
+    });
+    overlay += hand(entry.cards, cx, cardsTop + (many ? 14 : 0), {
+      glow: active ? PINK : null,
+      scale,
+      spread: many ? 44 : BJ_SPREAD,
+      maxWidth: many ? 220 : COLUMN,
+    });
   });
 
   const totalBet = table.hands.reduce((sum, entry) => sum + entry.bet, 0);
-  overlay += chipStack(880, 470, totalBet);
-  overlay += outcomeBanner(result, 150);
+  overlay += chipStack(WIDTH / 2, 505, totalBet);
+  overlay += outcomeBanner(result, 105);
   return renderScene('blackjack', overlay);
 }
 
