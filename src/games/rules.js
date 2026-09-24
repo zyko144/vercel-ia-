@@ -40,11 +40,12 @@ export const RULES = {
     fields: (c) => [
       ['🚀 Lancer', `\`/jeu-loupgarou\` puis tout le monde appuie sur **Rejoindre** (4 à 16 joueurs). La partie se joue dans un fil de <#${c.mini}>.`],
       ['🔊 Narrateur', `Rejoignez <#${c.iaVocal}> pour entendre le narrateur (si l'IA vocale est libre).`],
-      ['🎭 Rôles', '🐺 **Loups-garous** : chaque nuit, ils choisissent une victime.\n🔮 **Voyante** : chaque nuit, elle voit le rôle d\'un joueur.\n🧪 **Sorcière** (6 joueurs et +) : une potion de vie, une potion de mort, une fois chacune.\n🏹 **Chasseur** (8 et +) : en mourant, il tire sur quelqu\'un.\n🧑‍🌾 **Villageois** : pas de pouvoir, mais un vote.'],
+      ['🎭 Rôles', '🐺 **Loups-garous** : chaque nuit, ils choisissent une victime.\n🔮 **Voyante** : chaque nuit, elle voit le rôle d\'un joueur (ses visions restent dans **Voir mon rôle**).\n🧪 **Sorcière** (6 joueurs et +) : une potion de vie, une potion de mort, une fois chacune (les deux la même nuit si elle veut).\n🏹 **Chasseur** (8 et +) : en mourant, il tire sur quelqu\'un.\n🧑‍🌾 **Villageois** : pas de pouvoir, mais un vote.'],
       ['🌙 La nuit', 'Bouton **Agir cette nuit** : les loups choisissent leur victime, la voyante regarde un rôle, puis la sorcière décide. Tout est privé, personne ne voit vos actions.'],
       ['☀️ Le jour', 'Les morts sont annoncés avec leur rôle. Débat (90 s, ou l\'hôte lance le vote plus tôt), puis vote : le plus désigné est éliminé. Égalité = personne.'],
       ['🏆 Victoire', '**Village** : tous les loups sont morts.\n**Loups** : ils sont aussi nombreux que les villageois.'],
       ['🤫 Règle d\'or', 'Les morts ne parlent plus et ne donnent aucun indice !'],
+      ['🧪 Tester seul', 'Bouton **Tester avec des bots** dans la salle d\'attente : 5 bots complètent le village, débattent, votent et utilisent leurs pouvoirs.'],
     ],
   },
   histoire: {
@@ -108,10 +109,11 @@ export const RULES = {
     intro: 'Tout le monde reçoit le même mot secret… sauf l\'imposteur, qui a un mot proche **et ne sait pas qu\'il est l\'imposteur**.',
     fields: (c) => [
       ['🚀 Lancer', `\`/jeu-imposteur\` avec l'option \`theme\` (Rap FR, Bouffe, Jeux vidéo, Animés, Foot, Lieux ou Tout), puis **Rejoindre** (3 à 10 joueurs). La partie se joue dans un fil de <#${c.mini}>.`],
-      ['👁️ Ton mot', 'Bouton **Voir mon mot** : toi seul le vois. Exemple : les civils ont « Pizza », l\'imposteur a « Burger ».'],
+      ['👁️ Ton mot', 'Il arrive en **message privé** avec sa carte (ou bouton **Voir mon mot**). Exemple : les civils ont « Pizza », l\'imposteur a « Burger ». Tout le monde reçoit la même carte : **personne ne sait qui est l\'imposteur, pas même lui**.'],
       ['🗣️ Les indices', 'Chacun son tour, écris **un indice de 1 à 5 mots** sur ton mot, sans le dire (45 s par joueur). Trop précis, l\'imposteur devine ; trop vague, on te soupçonne !'],
-      ['🗳️ Le vote', 'Après le tour d\'indices, votez avec le menu. Le plus désigné est éliminé (égalité : personne, on refait un tour).'],
-      ['🏆 Victoire', '**Civils** : ils éliminent l\'imposteur… sauf s\'il devine leur mot dans les 25 secondes (dernière chance).\n**Imposteur** : il survit jusqu\'à ce qu\'il ne reste que deux joueurs.'],
+      ['🗳️ Le vote', 'Après le tour d\'indices, votez avec le menu. Le plus désigné est éliminé (égalité : personne, on refait un tour). On annonce s\'il était l\'imposteur, jamais le mot des civils.'],
+      ['🏆 Victoire', '**Civils** : ils éliminent l\'imposteur… sauf s\'il devine leur mot dans les 25 secondes (dernière chance).\n**Imposteur** : il survit jusqu\'à ce qu\'il ne reste que deux joueurs, ou pendant 6 tours.'],
+      ['🧪 Tester seul', 'Bouton **Tester avec des bots** dans la salle d\'attente : 3 bots complètent la table et jouent vraiment (indices, votes).'],
     ],
   },
   fantasy: {

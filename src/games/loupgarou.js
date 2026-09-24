@@ -4,7 +4,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelec
 import { borrowVoiceAi, createNarrator, voiceAiChannelId, voiceAiFree } from '../voice-ai/assistant.js';
 import { botName, botPause, botsPlay, humans, isBot, pickFrom, who } from './bots.js';
 import { missingDmNotice, sendRoleCards } from './roles.js';
-import { PRIVATE, gameChannel, gameThread, mentions, openLobby, pick, rulesLink, shortId, shuffle, sleep } from './common.js';
+import { PRIVATE, gameChannel, gameThread, mentions, openLobby, pick, resolveNames, rulesLink, shortId, shuffle, sleep } from './common.js';
 
 const ROLE_LOOK_MS = 10_000; // le temps de lire son MP avant la première nuit
 const NIGHT_MS = 50_000;
@@ -16,11 +16,36 @@ const HUNTER_MS = 30_000;
 const games = new Map(); // id -> partie
 
 export const ROLES = {
-  loup: { name: 'Loup-garou', emoji: '🐺', team: 'loups', desc: 'Chaque nuit, avec les autres loups, tu choisis une victime. Le jour, fais-toi passer pour un villageois.' },
-  voyante: { name: 'Voyante', emoji: '🔮', team: 'village', desc: "Chaque nuit, tu découvres le vrai rôle d'un joueur. Aide le village sans te faire griller." },
-  sorciere: { name: 'Sorcière', emoji: '🧪', team: 'village', desc: "Tu as une potion de vie (sauver la victime des loups) et une potion de mort (tuer quelqu'un). Une seule fois chacune." },
-  chasseur: { name: 'Chasseur', emoji: '🏹', team: 'village', desc: "Si tu meurs, tu tires une dernière balle sur le joueur de ton choix." },
-  villageois: { name: 'Villageois', emoji: '🧑‍🌾', team: 'village', desc: 'Pas de pouvoir, mais ton vote compte : trouve les loups.' },
+  loup: {
+    name: 'Loup-garou', emoji: '🐺', team: 'loups',
+    desc: 'Chaque nuit, avec les autres loups, tu choisis une victime. Le jour, fais-toi passer pour un villageois.',
+    howto: 'La nuit, bouton **Agir cette nuit** dans le fil : choisis ta victime. Tu vois le choix des autres loups, mettez-vous d’accord.',
+  },
+  voyante: {
+    name: 'Voyante', emoji: '🔮', team: 'village',
+    desc: "Chaque nuit, tu découvres le vrai rôle d'un joueur. Aide le village sans te faire griller.",
+    howto: 'La nuit, **Agir cette nuit** : choisis un joueur, son rôle s’affiche. **Voir mon rôle** garde toutes tes visions.',
+  },
+  sorciere: {
+    name: 'Sorcière', emoji: '🧪', team: 'village',
+    desc: "Une potion de vie (sauver la victime des loups) et une potion de mort (tuer quelqu'un). Une seule fois chacune, et tu peux utiliser les deux la même nuit.",
+    howto: 'Quand la sorcière se réveille, **Agir cette nuit** : tu vois qui les loups ont attaqué, puis tu sauves et/ou tu empoisonnes.',
+  },
+  chasseur: {
+    name: 'Chasseur', emoji: '🏹', team: 'village',
+    desc: 'Si tu meurs, de nuit comme de jour, tu tires une dernière flèche sur le joueur de ton choix.',
+    howto: 'À ta mort, un menu apparaît dans le fil : tu as 30 secondes pour choisir ta cible.',
+  },
+  villageois: {
+    name: 'Villageois', emoji: '🧑‍🌾', team: 'village',
+    desc: 'Pas de pouvoir, mais ton vote compte : trouve les loups.',
+    howto: 'La nuit, tu dors. Le jour, écoute, accuse, et vote pour éliminer un suspect.',
+  },
+};
+
+const GOALS = {
+  loups: 'Éliminer les villageois jusqu’à être **aussi nombreux qu’eux**.',
+  village: 'Trouver et éliminer **tous les loups-garous**.',
 };
 
 /** La carte animée de chaque rôle (assets/jeux). */
@@ -41,6 +66,14 @@ const DAWN_SAFE = [
   'Le jour se lève… et miracle, personne n\'est mort cette nuit !',
   'Le village se réveille au complet. Les loups ont raté leur coup.',
 ];
+// Ce que disent les bots pendant le débat (parties de test) : {x} est leur suspect.
+const BOT_TALK = [
+  'Moi je dis {x}, beaucoup trop calme.',
+  'J’ai un mauvais pressentiment sur {x}…',
+  '{x} a voté bizarre, non ?',
+  'Je suis simple villageois, je vous jure. Par contre {x}…',
+  'On devrait regarder {x} de plus près.',
+];
 
 /** Rôles selon le nombre de joueurs. */
 function dealRoles(players) {
@@ -55,7 +88,9 @@ function dealRoles(players) {
   return new Map(players.map((id, i) => [id, shuffled[i]]));
 }
 
-const nameOf = (game, id) => (isBot(id) ? botName(id) : game.guild.members.cache.get(id)?.displayName ?? game.guild.client.users.cache.get(id)?.username ?? 'Joueur');
+const nameOf = (game, id) => game.names?.get(id) ?? (isBot(id) ? botName(id) : game.guild?.members?.cache?.get(id)?.displayName ?? 'Joueur');
+/** Nom lu par le narrateur : sans l'emoji des bots. */
+const spoken = (game, id) => nameOf(game, id).replace(/^🤖\s*/, '');
 const alive = (game) => game.players.filter((id) => game.alive.has(id));
 const aliveWith = (game, role) => alive(game).filter((id) => game.roles.get(id) === role);
 const roleLabel = (role) => `${ROLES[role].emoji} ${ROLES[role].name}`;
@@ -82,6 +117,22 @@ async function tell(game, embed, { voice = null, ping = false } = {}) {
     allowedMentions: ping ? { users: humans(alive(game)) } : { parse: [] },
   }).catch(() => {});
   if (voice && game.narrator) await game.narrator.say(voice);
+}
+
+/** Le vote qui mène en ce moment (pour les bots qui suivent la foule). */
+function leading(votes, exclude = []) {
+  const counts = new Map();
+  for (const target of votes.values()) if (!exclude.includes(target)) counts.set(target, (counts.get(target) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
+/** Ce qu'une voyante a appris : les loups qu'elle a démasqués et les innocents. */
+function knowledge(game, seer) {
+  const visions = (game.visions.get(seer) ?? []).filter((v) => game.alive.has(v.target));
+  return {
+    wolves: visions.filter((v) => v.role === 'loup').map((v) => v.target),
+    innocents: visions.filter((v) => v.role !== 'loup').map((v) => v.target),
+  };
 }
 
 /** /jeu-loupgarou */
@@ -112,10 +163,11 @@ export async function startWerewolf(interaction) {
     id: shortId(), guild: interaction.guild, hostId: interaction.user.id,
     players: lobby.players, roles: dealRoles(lobby.players), alive: new Set(lobby.players),
     potions: { life: true, death: true }, day: 0, phase: 'setup', votes: new Map(), wolfVotes: new Map(),
-    seen: new Set(), witch: null, stopped: false, release: null, narrator: null, test: lobby.test,
+    seen: new Set(), visions: new Map(), witch: null, stopped: false, release: null, narrator: null, test: lobby.test,
   };
   games.set(game.id, game);
   game.thread = await gameThread(lobby.message, '🐺 Loup-garou');
+  game.names = await resolveNames(interaction.guild, game.players);
   console.log(`[loup-garou] partie ${game.id} : ${[...game.roles.entries()].map(([id, role]) => `${nameOf(game, id)}=${role}`).join(', ')}`);
 
   if (lobby.withVoice && voiceAiFree().ok) {
@@ -133,19 +185,23 @@ export async function startWerewolf(interaction) {
   // Tous les rôles partent en même temps, avant même l'annonce dans le fil.
   const { failed } = await sendRoleCards(interaction.client, humans(game.players).map((userId) => {
     const role = game.roles.get(userId);
+    const info = ROLES[role];
     const allies = role === 'loup' ? aliveWith(game, 'loup').filter((id) => id !== userId) : [];
     return {
       userId,
       card: ROLE_CARDS[role] ?? 'villageois',
       color: ROLE_COLORS[role] ?? 0x2c2f33,
-      title: `${ROLES[role].emoji} Tu es ${ROLES[role].name}`,
-      lines: [
-        ROLES[role].desc,
-        allies.length ? `🐺 Tes complices : ${mentions(allies)}` : null,
-        role === 'loup' && !allies.length ? '🐺 Tu es le seul loup : personne pour couvrir tes erreurs.' : null,
-        `Partie : <#${game.thread.id}>`,
-      ],
-      footer: role === 'loup' ? 'Le jour, fais-toi passer pour un villageois.' : 'Garde ton rôle pour toi 🤫',
+      author: `🐺 LOUP-GAROU · ${game.players.length} joueurs`,
+      title: `${info.emoji} Tu es ${info.name}`,
+      description: `*${info.desc}*`,
+      fields: [
+        ['🎯 Ton objectif', GOALS[info.team]],
+        ['🕹️ Comment jouer', info.howto],
+        role === 'loup' ? ['🐺 Ta meute', allies.length ? `Tes complices : ${mentions(allies)}` : 'Tu es le seul loup : personne pour couvrir tes erreurs.'] : null,
+        ['🏘️ Dans ce village', composition],
+      ].filter(Boolean),
+      link: game.thread.url,
+      footer: role === 'loup' ? 'Le jour, fais-toi passer pour un villageois 🤫' : 'Garde ton rôle pour toi 🤫',
     };
   }));
 
@@ -173,7 +229,7 @@ async function play(game) {
     const deaths = await night(game);
     if (game.stopped) return;
     await dawn(game, deaths);
-    if (await checkWin(game)) return;
+    if (game.stopped || await checkWin(game)) return;
     await dayVote(game);
     if (game.stopped || await checkWin(game)) return;
   }
@@ -193,6 +249,14 @@ function waitPhase(game, ms, done) {
   });
 }
 
+/** Ce que la voyante voit : gardé pour qu'elle puisse le relire (et pour les bots). */
+function see(game, seer, target) {
+  game.seen.add(seer);
+  const list = game.visions.get(seer) ?? [];
+  list.push({ night: game.day, target, role: game.roles.get(target) });
+  game.visions.set(seer, list);
+}
+
 async function night(game) {
   game.phase = 'wolves';
   game.wolfVotes = new Map();
@@ -210,10 +274,17 @@ async function night(game) {
   botsPlay(alive(game), () => !game.stopped && game.phase === 'wolves' && game.day === day, (bot) => {
     const role = game.roles.get(bot);
     if (role === 'loup') {
-      const target = pickFrom(alive(game), aliveWith(game, 'loup'));
+      // Les loups bots suivent le choix de la meute quand il y en a déjà un.
+      const pack = leading(game.wolfVotes);
+      const target = pack && Math.random() < 0.75 ? pack : pickFrom(alive(game), aliveWith(game, 'loup'));
       if (target) game.wolfVotes.set(bot, target);
     }
-    if (role === 'voyante') game.seen.add(bot);
+    if (role === 'voyante' && !game.seen.has(bot)) {
+      const already = (game.visions.get(bot) ?? []).map((v) => v.target);
+      const target = pickFrom(alive(game), [bot, ...already]) ?? pickFrom(alive(game), [bot]);
+      if (target) see(game, bot, target);
+      else game.seen.add(bot);
+    }
   });
   await waitPhase(game, NIGHT_MS, () => wolves.every((id) => game.wolfVotes.has(id)) && (!seer || game.seen.has(seer)));
   if (game.stopped) return [];
@@ -233,9 +304,16 @@ async function night(game) {
     await game.thread.send({ content: `🧪 La sorcière se réveille… (fin <t:${Math.ceil((Date.now() + WITCH_MS) / 1000)}:R>)` }).catch(() => {});
     if (game.narrator) await game.narrator.say('La sorcière se réveille. Va-t-elle utiliser ses potions ?');
     botsPlay([witch], () => !game.stopped && game.phase === 'witch' && !game.witch.done, () => {
-      if (game.potions.life && game.witch.victim && Math.random() < 0.4) {
+      if (game.potions.life && game.witch.victim && Math.random() < 0.5) {
         game.potions.life = false;
         game.witch.saved = true;
+      }
+      if (game.potions.death && Math.random() < 0.15) {
+        const target = pickFrom(alive(game), [witch, game.witch.saved ? null : game.witch.victim]);
+        if (target) {
+          game.potions.death = false;
+          game.witch.poisoned = target;
+        }
       }
       game.witch.done = true;
     });
@@ -247,30 +325,45 @@ async function night(game) {
   return [...new Set([saved ? null : victim, poisoned].filter(Boolean))];
 }
 
-async function kill(game, id, how) {
-  if (!game.alive.has(id)) return [];
+/** Retire un joueur de la partie et dit qui il était. */
+function die(game, id, how) {
   game.alive.delete(id);
-  const role = game.roles.get(id);
-  const lines = [`💀 ${who(id)} ${how}. C'était ${roleLabel(role)}.`];
-  if (role === 'chasseur') {
-    const shot = await hunterShot(game, id);
-    if (shot) lines.push(...await kill(game, shot, 'reçoit la dernière balle du chasseur'));
+  return `💀 ${who(id)} ${how}. C'était ${roleLabel(game.roles.get(id))}.`;
+}
+
+/**
+ * Les chasseurs morts tirent leur dernière flèche, après l'annonce de leur mort
+ * (avant, le menu du chasseur apparaissait avant même qu'on sache qui était mort).
+ */
+async function hunters(game, dead) {
+  for (const hunter of dead) {
+    if (game.stopped || game.roles.get(hunter) !== 'chasseur') continue;
+    const target = await hunterShot(game, hunter);
+    if (game.stopped) return;
+    if (!target) {
+      await tell(game, new EmbedBuilder().setColor(0x95a5a6).setTitle('🏹 Le chasseur n’a pas tiré').setDescription(`${who(hunter)} emporte sa flèche dans la tombe.`));
+      continue;
+    }
+    const line = die(game, target, 'reçoit la dernière flèche du chasseur');
+    await tell(game, new EmbedBuilder().setColor(0xffb02f).setTitle('🏹 La dernière flèche').setDescription(line),
+      { voice: `Le chasseur tire sa dernière flèche sur ${spoken(game, target)}. C'était ${ROLES[game.roles.get(target)].name}.` });
+    await hunters(game, [target]);
   }
-  return lines;
 }
 
 async function hunterShot(game, hunter) {
   game.phase = 'hunter';
   game.hunter = { id: hunter, target: null };
   await game.thread.send({
-    content: `🏹 ${who(hunter)}, tu es mort mais tu as une dernière balle : choisis ta cible (fin <t:${Math.ceil((Date.now() + HUNTER_MS) / 1000)}:R>).`,
+    content: `🏹 ${who(hunter)}, tu es mort mais il te reste une flèche : choisis ta cible (fin <t:${Math.ceil((Date.now() + HUNTER_MS) / 1000)}:R>).`,
     components: isBot(hunter) ? [] : [targetMenu(game, 'hunt', 'Sur qui tu tires ?', [hunter])],
     allowedMentions: { users: humans([hunter]) },
   }).catch(() => {});
   if (isBot(hunter)) {
     await botPause();
-    game.hunter.target = pickFrom(alive(game), [hunter]);
-    if (game.hunter.target) await game.thread.send({ content: `🏹 ${botName(hunter)} tire sur ${who(game.hunter.target)} !`, allowedMentions: { parse: [] } }).catch(() => {});
+    // Un chasseur bot tire sur le suspect du dernier vote s'il est encore en vie.
+    const suspect = leading(game.votes, [hunter]);
+    game.hunter.target = suspect && game.alive.has(suspect) ? suspect : pickFrom(alive(game), [hunter]);
   }
   await waitPhase(game, HUNTER_MS, () => Boolean(game.hunter.target));
   const target = game.hunter.target;
@@ -279,14 +372,47 @@ async function hunterShot(game, hunter) {
 }
 
 async function dawn(game, deaths) {
-  const lines = [];
-  for (const id of deaths) lines.push(...await kill(game, id, 'a été retrouvé mort'));
+  const lines = deaths.map((id) => die(game, id, 'a été retrouvé mort'));
   const intro = deaths.length ? pick(DAWN_DEATH) : pick(DAWN_SAFE);
-  const spoken = deaths.length
-    ? `${intro} ${deaths.map((id) => `${nameOf(game, id)} est mort cette nuit. C'était ${ROLES[game.roles.get(id)].name}.`).join(' ')}`
+  const voice = deaths.length
+    ? `${intro} ${deaths.map((id) => `${spoken(game, id)} est mort cette nuit. C'était ${ROLES[game.roles.get(id)].name}.`).join(' ')}`
     : intro;
   await tell(game, new EmbedBuilder().setColor(0xf1c40f).setAuthor({ name: `☀️ JOUR ${game.day}` }).setTitle(intro)
-    .setDescription(lines.join('\n') || 'Tout le monde est vivant.'), { voice: spoken });
+    .setDescription(lines.join('\n') || 'Tout le monde est vivant.'), { voice });
+  await hunters(game, deaths);
+}
+
+/** Pendant le débat, chaque bot lance une accusation (parties de test seulement). */
+function botsTalk(game) {
+  const day = game.day;
+  botsPlay(alive(game), () => !game.stopped && game.phase === 'discussion' && game.day === day, (bot) => {
+    const role = game.roles.get(bot);
+    let suspect;
+    if (role === 'voyante') suspect = knowledge(game, bot).wolves[0];
+    if (!suspect) suspect = pickFrom(alive(game), role === 'loup' ? aliveWith(game, 'loup') : [bot]);
+    if (!suspect) return;
+    const line = role === 'voyante' && knowledge(game, bot).wolves.includes(suspect)
+      ? `Faites-moi confiance : ${nameOf(game, suspect)} est un loup. Je le sais.`
+      : pick(BOT_TALK).replace('{x}', nameOf(game, suspect));
+    game.thread.send({ content: `${botName(bot)} : « ${line} »`, allowedMentions: { parse: [] } }).catch(() => {});
+  });
+}
+
+/** Le vote d'un bot : les loups protègent la meute, la voyante utilise ses visions, les autres suivent la foule. */
+function botVote(game, bot) {
+  const role = game.roles.get(bot);
+  const wolves = aliveWith(game, 'loup');
+  if (role === 'loup') {
+    const crowd = leading(game.votes, [...wolves, bot]);
+    return crowd && Math.random() < 0.7 ? crowd : pickFrom(alive(game), [bot, ...wolves]);
+  }
+  if (role === 'voyante') {
+    const { wolves: known, innocents } = knowledge(game, bot);
+    if (known.length) return known[0];
+    return pickFrom(alive(game), [bot, ...innocents]) ?? pickFrom(alive(game), [bot]);
+  }
+  const crowd = leading(game.votes, [bot]);
+  return crowd && Math.random() < 0.5 ? crowd : pickFrom(alive(game), [bot]);
 }
 
 async function dayVote(game) {
@@ -301,6 +427,7 @@ async function dayVote(game) {
       new ButtonBuilder().setCustomId(`g:lg:${game.id}:skip`).setLabel('Voter maintenant').setEmoji('🗳️').setStyle(ButtonStyle.Primary),
     )],
   }).catch(() => {});
+  botsTalk(game);
   await waitPhase(game, discussMs, () => false);
   if (game.stopped) return;
 
@@ -313,9 +440,7 @@ async function dayVote(game) {
   }).catch(() => null);
   const day = game.day;
   botsPlay(alive(game), () => !game.stopped && game.phase === 'vote' && game.day === day, (bot) => {
-    // Un loup bot ne vote jamais contre un autre loup.
-    const spared = game.roles.get(bot) === 'loup' ? aliveWith(game, 'loup') : [bot];
-    const target = pickFrom(alive(game), [bot, ...spared]);
+    const target = botVote(game, bot);
     if (target) game.votes.set(bot, target);
   });
   await waitPhase(game, VOTE_MS, () => alive(game).every((id) => game.votes.has(id)));
@@ -331,9 +456,10 @@ async function dayVote(game) {
     return;
   }
   const [out] = sorted[0];
-  const lines = await kill(game, out, 'est éliminé par le village');
-  await tell(game, new EmbedBuilder().setColor(0xed4245).setTitle(`🔥 ${nameOf(game, out)} est éliminé`).setDescription(`${lines.join('\n')}\n-# Votes : ${detail}`),
-    { voice: `Le village a tranché : ${nameOf(game, out)} est éliminé. C'était ${ROLES[game.roles.get(out)].name}.` });
+  const line = die(game, out, 'est éliminé par le village');
+  await tell(game, new EmbedBuilder().setColor(0xed4245).setTitle(`🔥 ${nameOf(game, out)} est éliminé`).setDescription(`${line}\n-# Votes : ${detail}`),
+    { voice: `Le village a tranché : ${spoken(game, out)} est éliminé. C'était ${ROLES[game.roles.get(out)].name}.` });
+  await hunters(game, [out]);
 }
 
 async function checkWin(game) {
@@ -359,10 +485,26 @@ async function finish(game, winners, reason) {
   const title = winners === 'loups' ? '🐺 Les loups-garous ont gagné !' : winners === 'village' ? '🎉 Le village a gagné !' : '⏹️ Partie arrêtée';
   const roles = game.players.map((id) => `${game.alive.has(id) ? '❤️' : '💀'} ${who(id)} · ${roleLabel(game.roles.get(id))}`).join('\n');
   await tell(game, new EmbedBuilder().setColor(winners === 'loups' ? 0xed4245 : 0x57f287).setAuthor({ name: '🐺 LOUP-GAROU' }).setTitle(title)
-    .setDescription(`${reason ? `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.\n\n` : ''}${roles}`),
+    .setDescription(`${reason ? `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.\n\n` : ''}${roles}\n-# ${game.day} nuit${game.day > 1 ? 's' : ''}`),
   { voice: winners ? `${title.replace(/^\S+\s/, '')} ${reason}.` : null });
   game.narrator?.close();
   await game.release?.().catch(() => {});
+}
+
+/** Le panneau de la sorcière, selon les potions qui lui restent. */
+function witchPanel(game, witch) {
+  const buttons = [];
+  if (game.potions.life && game.witch.victim && !game.witch.saved) {
+    buttons.push(new ButtonBuilder().setCustomId(`g:lg:${game.id}:save`).setLabel(`Sauver ${nameOf(game, game.witch.victim)}`.slice(0, 80)).setEmoji('💚').setStyle(ButtonStyle.Success));
+  }
+  buttons.push(new ButtonBuilder().setCustomId(`g:lg:${game.id}:pass`).setLabel(game.witch.saved ? 'Terminer' : 'Ne rien faire').setStyle(ButtonStyle.Secondary));
+  const rows = [new ActionRowBuilder().addComponents(buttons)];
+  const poisonable = alive(game).filter((id) => id !== witch && !(id === game.witch.victim && !game.witch.saved));
+  if (game.potions.death && poisonable.length) rows.push(targetMenu(game, 'poison', '☠️ Empoisonner quelqu\'un…', alive(game).filter((id) => !poisonable.includes(id))));
+  const attacked = game.witch.victim
+    ? `🧪 Les loups ont attaqué **${nameOf(game, game.witch.victim)}** cette nuit.${game.witch.saved ? ' 💚 Tu l’as sauvé.' : ''}`
+    : '🧪 Les loups n\'ont attaqué personne cette nuit.';
+  return { content: `${attacked}\nPotions : vie ${game.potions.life ? '✅' : '❌'} · mort ${game.potions.death ? '✅' : '❌'}`, components: rows };
 }
 
 export async function handleWerewolfComponent(interaction) {
@@ -387,12 +529,14 @@ export async function handleWerewolfComponent(interaction) {
 
   if (action === 'role') {
     const wolves = role === 'loup' ? game.players.filter((p) => game.roles.get(p) === 'loup' && p !== userId) : [];
+    const visions = game.visions.get(userId) ?? [];
     return interaction.reply({
       content: [
         `🎭 Tu es **${roleLabel(role)}**${game.alive.has(userId) ? '' : ' (mort 💀)'}`,
         ROLES[role].desc,
         wolves.length ? `🐺 Tes complices : ${mentions(wolves)}` : null,
         role === 'sorciere' ? `Potions : vie ${game.potions.life ? '✅' : '❌'} · mort ${game.potions.death ? '✅' : '❌'}` : null,
+        visions.length ? `🔮 Tes visions :\n${visions.map((v) => `• Nuit ${v.night} : **${nameOf(game, v.target)}** est ${roleLabel(v.role)}${game.alive.has(v.target) ? '' : ' 💀'}`).join('\n')}` : null,
       ].filter(Boolean).join('\n'),
       ...PRIVATE,
     });
@@ -402,7 +546,7 @@ export async function handleWerewolfComponent(interaction) {
     if (game.hunter?.id !== userId) return interaction.reply({ content: 'Seul le chasseur peut tirer.', ...PRIVATE });
     const target = interaction.values[0];
     game.hunter.target = target;
-    return interaction.update({ content: `🏹 ${who(userId)} tire sur ${who(target)} !`, components: [], allowedMentions: { parse: [] } });
+    return interaction.update({ content: `🏹 ${who(userId)} vise ${who(target)}…`, components: [], allowedMentions: { parse: [] } });
   }
   if (!game.alive.has(userId)) return interaction.reply({ content: 'Les morts ne jouent plus 💀 (mais restent muets !)', ...PRIVATE });
 
@@ -412,20 +556,11 @@ export async function handleWerewolfComponent(interaction) {
       return interaction.reply({ content: `🐺 Choisis ta victime.${others ? `\nVotes des autres loups : ${others}` : ''}`, components: [targetMenu(game, 'wolf', 'Qui dévorer ?', aliveWith(game, 'loup'))], ...PRIVATE });
     }
     if (game.phase === 'wolves' && role === 'voyante') {
-      if (game.seen.has(userId)) return interaction.reply({ content: '🔮 Tu as déjà regardé cette nuit.', ...PRIVATE });
+      if (game.seen.has(userId)) return interaction.reply({ content: '🔮 Tu as déjà regardé cette nuit. (**Voir mon rôle** garde tes visions.)', ...PRIVATE });
       return interaction.reply({ content: '🔮 De qui veux-tu voir le rôle ?', components: [targetMenu(game, 'seer', 'Regarder qui ?', [userId])], ...PRIVATE });
     }
     if (game.phase === 'witch' && role === 'sorciere' && game.witch && !game.witch.done) {
-      const buttons = [];
-      if (game.potions.life && game.witch.victim) buttons.push(new ButtonBuilder().setCustomId(`g:lg:${game.id}:save`).setLabel(`Sauver ${nameOf(game, game.witch.victim)}`.slice(0, 80)).setEmoji('💚').setStyle(ButtonStyle.Success));
-      buttons.push(new ButtonBuilder().setCustomId(`g:lg:${game.id}:pass`).setLabel('Ne rien faire').setStyle(ButtonStyle.Secondary));
-      const rows = [new ActionRowBuilder().addComponents(buttons)];
-      if (game.potions.death) rows.push(targetMenu(game, 'poison', '☠️ Empoisonner quelqu\'un…', [userId]));
-      return interaction.reply({
-        content: game.witch.victim ? `🧪 Les loups ont attaqué **${nameOf(game, game.witch.victim)}** cette nuit.` : '🧪 Les loups n\'ont attaqué personne cette nuit.',
-        components: rows,
-        ...PRIVATE,
-      });
+      return interaction.reply({ ...witchPanel(game, userId), ...PRIVATE });
     }
     return interaction.reply({ content: game.phase === 'wolves' || game.phase === 'witch' ? '😴 Tu dors, rien à faire cette nuit.' : '☀️ C\'est le jour, pas le moment !', ...PRIVATE });
   }
@@ -436,19 +571,28 @@ export async function handleWerewolfComponent(interaction) {
     return interaction.update({ content: `🐺 Tu veux dévorer **${nameOf(game, target)}**. (Les autres loups voient ton choix.)`, components: [] });
   }
   if (action === 'seer' && game.phase === 'wolves' && role === 'voyante' && !game.seen.has(userId)) {
-    game.seen.add(userId);
-    return interaction.update({ content: `🔮 **${nameOf(game, target)}** est **${roleLabel(game.roles.get(target))}**.`, components: [] });
+    see(game, userId, target);
+    return interaction.update({ content: `🔮 **${nameOf(game, target)}** est **${roleLabel(game.roles.get(target))}**.\n-# Retrouve tes visions avec **Voir mon rôle**.`, components: [] });
   }
   if (game.phase === 'witch' && role === 'sorciere' && game.witch && !game.witch.done) {
-    if (action === 'save' && game.potions.life) {
+    // La sorcière peut sauver puis empoisonner la même nuit : sauver ne ferme pas son panneau.
+    if (action === 'save' && game.potions.life && game.witch.victim) {
       game.potions.life = false;
       game.witch.saved = true;
-    } else if (action === 'poison' && game.potions.death && target) {
+      if (game.potions.death) return interaction.update(witchPanel(game, userId));
+      game.witch.done = true;
+      return interaction.update({ content: '💚 Potion de vie utilisée. Tu te rendors.', components: [] });
+    }
+    if (action === 'poison' && game.potions.death && target) {
       game.potions.death = false;
       game.witch.poisoned = target;
+      game.witch.done = true;
+      return interaction.update({ content: `☠️ **${nameOf(game, target)}** a bu ta potion de mort.${game.witch.saved ? ' 💚 Et tu as sauvé la victime des loups.' : ''}`, components: [] });
     }
-    game.witch.done = true;
-    return interaction.update({ content: action === 'save' ? '💚 Potion de vie utilisée.' : action === 'poison' ? `☠️ **${nameOf(game, target)}** a bu ta potion de mort.` : '🌙 Tu te rendors.', components: [] });
+    if (action === 'pass') {
+      game.witch.done = true;
+      return interaction.update({ content: game.witch.saved ? '💚 Potion de vie utilisée. Tu te rendors.' : '🌙 Tu te rendors.', components: [] });
+    }
   }
   if (action === 'vote' && game.phase === 'vote') {
     if (target === userId) return interaction.reply({ content: 'Voter contre toi-même ? Non 😅', ...PRIVATE });
