@@ -4,6 +4,7 @@
 import { ActivityType } from 'discord.js';
 import { config } from '../config.js';
 import { load, save } from '../storage.js';
+import { applyVoiceGuard } from '../features/voiceGuard.js';
 
 const KEY = 'dashboard-settings';
 
@@ -102,6 +103,14 @@ export const SETTINGS = {
     check: (v) => (Array.isArray(v) && v.length <= 200 && v.every((id) => typeof id === 'string' && /^\d{15,21}$/.test(id)) && !v.includes(config.ownerId)
       ? null : 'Des identifiants Discord (15 à 21 chiffres), 200 maximum, et pas celui du chef.'),
   },
+  voiceGuard: {
+    label: 'Surveillance vocale', group: 'Comportement', type: 'bool',
+    help: 'Le bot écoute son salon vocal : une vraie insulte envers le chef ou le bot = avertissement, dès la 2e = exclusion d’1 min et sortie du vocal. Le chef n’est jamais écouté.',
+    get: () => config.voiceGuard.enabled,
+    set: (v) => { config.voiceGuard.enabled = v; },
+    check: (v) => (typeof v === 'boolean' ? null : 'Oui ou non.'),
+    apply: (client) => client?.guilds && applyVoiceGuard(client),
+  },
   paused: {
     label: 'IA en pause', group: 'Maintenance', type: 'bool', danger: true,
     help: 'L’IA ne répond plus aux messages ni aux commandes : elle affiche le message de pause. Les jeux et la musique continuent.',
@@ -168,4 +177,5 @@ export async function loadSettings(client) {
     if (setting && !setting.check(value)) setting.set(value);
   }
   SETTINGS.botStatus.apply(client);
+  if (saved.voiceGuard === false) SETTINGS.voiceGuard.apply(client);
 }

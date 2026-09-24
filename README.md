@@ -233,6 +233,28 @@ répond. Le PC passe devant (pratique pour tester), Render attend et reprend tou
 fermeture du PC. Sans Supabase, les deux copies répondent au même clic et l'une affiche
 « Unknown interaction » : coupe Render avant de lancer `demarrer.bat`. (`npm run test:instance`)
 
+## 10. La surveillance vocale 🎙️
+
+Le bot écoute son salon vocal (il n'est plus en sourdine) et repère les **vraies insultes envers le chef
+(Noam) ou envers le bot (Vercel)** :
+
+| Fois | Ce qui se passe |
+|---|---|
+| 1re | **Avertissement** : carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal + MP |
+| 2e et suivantes | **Exclusion d'1 minute**, **sortie du vocal**, avertissement de plus, carte « SANCTION » (néon rouge) |
+
+Les avertissements s'additionnent avec ceux des insultes écrites. Le chef n'est jamais écouté ni sanctionné,
+et le chef reçoit en MP ce qui a été entendu.
+
+- Seuls les moments où quelqu'un parle sont envoyés à Gemini, regroupés par personne (une demande pour ~20 s
+  de parole), avec un plafond par heure (`VOICE_GUARD_MAX_PER_HOUR`, 200 par défaut). L'audio n'est pas gardé.
+- Pour éviter les erreurs : Gemini doit confirmer l'insulte, un vrai mot d'insulte doit être dans ce qui a été
+  dit, et la cible doit être sûre (nommée, ou le chef présent dans le vocal). Un juron (« putain ») ne compte pas.
+- Pendant la musique via Lavalink, c'est le serveur audio qui tient le vocal : la surveillance est en pause.
+- Couper : `VOICE_GUARD=false`, ou tableau de bord › IA › Réglages › Surveillance vocale.
+- Préviens tes membres que le vocal est modéré automatiquement.
+- Les cartes se refont avec `node tools/make-sanction-gifs.mjs`. Tests : `npm run test:voiceguard`.
+
 ---
 
 ## Fonctionnalités

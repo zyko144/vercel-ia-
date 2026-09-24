@@ -24,6 +24,7 @@ import {
 import { actionRoutes } from './actions.js';
 import { aiMetrics, loadMetrics, redact } from './metrics.js';
 import { instance } from '../features/instance.js';
+import { voiceGuardStats } from '../features/voiceGuard.js';
 import { currentSettings, loadSettings, updateSettings } from './settings.js';
 
 const WEB = path.resolve('web/dashboard');
@@ -155,7 +156,8 @@ export function createDashboard(client) {
       games: runningGames().length,
       voiceAi: { enabled: voiceAi.enabled, voice: voiceAi.voice, busy: Boolean(voiceAi.session) },
       services: {
-        gemini: Boolean(config.geminiKey), storage: storageBackend, instance: instance.where, casino: Boolean(config.casinho.token),
+        gemini: Boolean(config.geminiKey), storage: storageBackend, instance: instance.where,
+        voiceGuard: { enabled: config.voiceGuard.enabled, ...voiceGuardStats }, casino: Boolean(config.casinho.token),
         voiceAi: Boolean(config.voiceAi.token), site: config.site.url || null, publicUrl: config.publicUrl || null,
       },
       alerts,

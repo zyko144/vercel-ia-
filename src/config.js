@@ -171,6 +171,12 @@ export const config = {
   // Salon où arrivent les signalements (vide = MP au chef)
   staffChannelId: str('STAFF_CHANNEL_ID'),
 
+  // Surveillance vocale : le bot écoute son vocal et sanctionne les insultes envers le chef ou lui-même
+  voiceGuard: {
+    enabled: bool('VOICE_GUARD', true),
+    maxPerHour: int('VOICE_GUARD_MAX_PER_HOUR', 200), // demandes Gemini par heure au maximum
+  },
+
   limits: {
     // Les modèles d'image ne sont pas dans l'offre gratuite de Gemini
     imagesEnabled: bool('IMAGES_ENABLED', false),

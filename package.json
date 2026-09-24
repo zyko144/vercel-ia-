@@ -13,7 +13,8 @@
     "test:jeux": "node tools/test-jeux.mjs",
     "build:salle": "node tools/build-salle-sdk.mjs",
     "test:dashboard": "node tools/test-dashboard.mjs",
-    "test:instance": "node tools/test-instance.mjs"
+    "test:instance": "node tools/test-instance.mjs",
+    "test:voiceguard": "node tools/test-voiceguard.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

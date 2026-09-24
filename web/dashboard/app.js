@@ -189,7 +189,7 @@
   const PHASES = { setup: 'Préparation', wolves: 'Nuit · les loups', witch: 'Nuit · la sorcière', dawn: 'Aube', discussion: 'Débat', vote: 'Vote', hunter: 'Le chasseur tire' };
   const TAGS = {
     conversation: 'Conversations', commandes: 'Commandes', outils: 'Outils', 'clic droit': 'Clic droit',
-    tâches: 'Jeux et modération', images: 'Images', test: 'Tests d’ici', autre: 'Autre',
+    tâches: 'Jeux et modération', vocal: 'Surveillance vocale', images: 'Images', test: 'Tests d’ici', autre: 'Autre',
   };
   const ETAT_ALERTE = { critique: 'critique', attention: 'attention', info: 'info' };
 
@@ -215,6 +215,7 @@
           ['Musique', d.music.nodes ? `${d.music.nodesOnline}/${d.music.nodes} serveurs audio en ligne` : 'Lecteur local', d.music.nodes && !d.music.nodesOnline ? 'warn' : 'ok'],
           ['IA vocale', d.voiceAi.enabled ? (d.voiceAi.busy ? 'En conversation' : `Prête · ${d.voiceAi.voice}`) : 'Pas de token', d.voiceAi.enabled ? 'ok' : ''],
           ['Casino', d.services.casino ? 'Casinho en ligne' : 'Pas de token', d.services.casino ? 'ok' : ''],
+          ['Surveillance vocale', d.services.voiceGuard.enabled ? `Active · ${d.services.voiceGuard.checks} écoute(s), ${d.services.voiceGuard.insults} insulte(s)` : 'Coupée', d.services.voiceGuard.enabled ? 'ok' : ''],
           ['Stockage', d.services.storage, d.services.storage === 'Supabase' ? 'ok' : 'warn'],
         ];
         append(zone, [

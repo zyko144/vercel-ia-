@@ -16,6 +16,7 @@ import { attachLiveServer, serveLive, setLiveClient } from './features/livestrea
 import { startSpotifyWatch } from './features/spotify.js';
 import { startBattleLoop, startFantasyLoop } from './games/index.js';
 import { startVoiceKeeper } from './features/voice.js';
+import { startVoiceGuard } from './features/voiceGuard.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
 import { lavalink } from './music/lavalink.js';
@@ -58,6 +59,7 @@ client.once(Events.ClientReady, async (c) => {
 
   putSiteInBio(c, { tag: 'bot' });
   lavalink.init(c);
+  startVoiceGuard(c);
   startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
   startReminderLoop(c);

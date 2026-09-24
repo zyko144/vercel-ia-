@@ -183,13 +183,14 @@ async function connect(guild) {
   try {
     if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
       // Déplacement : on garde la même connexion, donc la musique reste branchée dessus
-      connection.rejoin({ channelId: target.id, selfDeaf: true, selfMute: false });
+      connection.rejoin({ channelId: target.id, selfDeaf: !config.voiceGuard.enabled, selfMute: false });
     } else {
       connection = joinVoiceChannel({
         channelId: target.id,
         guildId: guild.id,
         adapterCreator: guild.voiceAdapterCreator,
-        selfDeaf: true,
+        // Pas en sourdine quand la surveillance vocale est active (sinon le bot n'entend rien)
+        selfDeaf: !config.voiceGuard.enabled,
         selfMute: false,
       });
     }
