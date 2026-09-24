@@ -168,33 +168,19 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 
 ## 8. Le site vitrine 🌐
 
-Une page pour présenter et vendre le bot, racontée comme un conte : `site/index.html`.
-Le bot la sert lui-même à son adresse principale (`https://vercel-ia.onrender.com/`), avec ses
-images (`site/cartes/`, `site/images/`). `/health` ne change pas.
+`site/index.html`, servi par le bot lui-même à son adresse principale (`https://vercel-ia.onrender.com/`).
+Une seule page, sans bibliothèque, peu d'animations au défilement :
 
-- **L'histoire** : un prologue où la nuit tombe sur un village au fil du défilement (72 images
-  rendues dans Blender), puis un chapitre par fonction : l'IA, la musique Spotify, le loup-garou,
-  l'imposteur, le casino, la modération, les autres jeux, et l'épilogue avec les offres.
-- **De vrais messages Discord** reconstitués (salle d'attente, carte en MP, nuit, vote, panneau
-  musique, partage Spotify, signalement) qui apparaissent un par un pendant le défilement (GSAP ScrollTrigger).
-- **Sons** fabriqués en direct (Web Audio, aucun fichier) : page qui tourne, hurlement, grillons,
-  cloche du matin… Le visiteur les active avec le bouton **Son**.
-- **Nom, prix, contact** : tout est dans le bloc `CONFIG`, en haut du script de la page
-  (`name`, `orderUrl`, `discordHandle`, `plans`, `plansNote`). Les prix sont des exemples, mets les tiens.
-- Sans les bibliothèques (CDN bloqué) ou avec « réduire les animations », la page reste entière et lisible.
+- **Accueil** : cartes 3D qui penchent sous la souris, entourées d'un néon animé, une par catégorie
+  (IA, Jeux, Musique et vocal, Sécurité, Tickets et serveur, Niveaux et boutique, Premium).
+- **Une page par catégorie** (`#ia`, `#jeux`, `#musique`, `#securite`, `#serveur`, `#niveaux`) : les avantages,
+  des exemples de messages Discord avec **le nom et la photo du bot** (lus sur `/api/statut`), les bannières des
+  panneaux, les cartes de rôle, la carte de bienvenue et la carte de profil.
+- **Offres** (`#offres`) : les 3 offres, le paiement PayPal (identifiant du serveur → `/payer`) et le parrainage.
+- Autres pages du bot : `/statut` (page de statut publique), `/api/statut` (JSON), `/payer`, `/merci`.
+- Refaire les images d'exemple (carte de bienvenue, carte de profil) : `node tools/make-site-exemples.mjs`.
 - **Bio du bot** : au démarrage, le lien du site est ajouté dans la bio (« À propos de moi ») du bot
   et de Casinho. `SITE_URL` pour un autre lien, `SITE_IN_BIO=false` pour ne pas toucher à la bio.
-
-**Refaire les images** :
-
-```bash
-pip install bpy                                  # Blender en module Python (Python 3.11)
-python tools/blender/village.py --mode seq  --out rendus/seq
-python tools/blender/village.py --mode loup --out rendus
-python tools/blender/village.py --mode aube --out rendus
-node tools/make-site-images.mjs rendus           # -> site/images/*.webp
-node tools/make-jeux-gifs.mjs --site             # cartes de rôle -> site/cartes/*.webp
-```
 
 ---
 
@@ -307,7 +293,39 @@ pour un rôle) → **Construire**. Tests : `npm run test:tickets`.
   offre, nombre de jours (0 = retirer).
 - Le logo est gardé par le bot et servi sur `/logo/<id>.png` (il faut que le bot soit en ligne sur Render).
 - Tableau de bord › **Sanctions et offres** : l'offre de chaque serveur et l'historique de toutes les sanctions
-  (effaçables). Tests : `npm run test:premium`.
+  (effaçables), et les paiements PayPal reçus. Tests : `npm run test:premium`, `npm run test:payments`.
+
+### Paiement PayPal automatique
+
+- `PAYPAL_EMAIL` = l'adresse du compte PayPal qui reçoit l'argent. Rempli : bouton PayPal classique, PayPal prévient
+  le bot (`/paypal/ipn`), le bot vérifie le paiement auprès de PayPal (bon compte, bon montant, en euros, jamais deux
+  fois), puis **active l'offre 31 jours tout seul** et envoie un MP au propriétaire et au chef.
+- Vide : lien `paypal.me/steamapp` (`PAYPAL_ME`), et le chef active à la main.
+- Dans Discord : `/serveur` › Offre du serveur › **Payer Veilleur / Payer Gardien** (lien déjà rempli).
+
+### Parrainage
+
+`/serveur` › Parrainage : le code du serveur (`VERCEL-XXXXXX`) et ses stats. Un nouveau serveur entre le code de celui
+qui l'a invité ; à son premier paiement, **le parrain gagne 1 mois offert**.
+
+---
+
+## 13. Communauté, sécurité, niveaux 🧩
+
+Tout se règle par serveur dans le tableau de bord › **Mon serveur** (onglets Sécurité, Niveaux, Boutique, Accueil,
+Vocal, IA), ou dans Discord avec les panneaux.
+
+- **Sécurité** : anti-raid, vérification à l'arrivée, filtre de liens, anti-spam, anti-arnaque, journal, casier
+  (`/sanction` › Casier, Note), contestation d'une sanction (ticket privé).
+- **Niveaux** : XP messages + vocal, carte de profil néon, classement, récompense du jour et série, boutique,
+  rôle personnalisé (nom + couleur choisis par le membre, validés par le staff), membre de la semaine.
+- **Vocal** : vocaux temporaires, radio 24 h/24, conseil en MP pour les micros saturés.
+- **IA** : mémoire des membres, traduction automatique, FAQ apprise, note de punchline.
+- **Jeux** : Undercover, Petit Bac, Action ou vérité, Pendu musical, Quiz du serveur.
+- **Serveur** : carte de bienvenue, suggestions votées, sauvegarde et restauration (`/pannel` › Serveur).
+
+⚠️ **Portail Discord › Bot › Privileged Gateway Intents** : active **Server Members Intent** (anti-raid,
+vérification, bienvenue, journal des rôles) et **Message Content Intent**.
 
 ---
 

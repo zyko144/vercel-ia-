@@ -2,1900 +2,664 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>AI Vercel · Le conte du serveur</title>
-<meta name="description" content="Il était une fois un serveur Discord qui s'endormait. Puis un gardien arriva : une IA qui répond, la musique Spotify en vocal, le loup-garou raconté à voix haute, un casino à jetons et une garde de nuit.">
-<meta property="og:title" content="AI Vercel · Le conte du serveur">
-<meta property="og:description" content="Le bot Discord qui réveille ton serveur : IA, musique Spotify, loup-garou, casino à jetons, modération.">
-<meta property="og:image" content="images/loup-lune.webp">
-<meta name="theme-color" content="#070a1a">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Vercel · le bot Discord qui fait vivre ton serveur</title>
+<meta name="description" content="IA qui se souvient de chaque membre, jeux de soirée, musique, sécurité, tickets, niveaux et boutique. Tout se règle avec 6 commandes à panneaux.">
+<meta name="theme-color" content="#07060d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Noto+Sans:wght@400;500;600;700&display=swap">
-<link rel="preload" as="image" href="images/nuit/01.webp">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* =====================================================================
-   Un conte de nuit : le site reste sombre (c'est la nuit du village),
-   puis le jour se lève à l'épilogue.
-   ===================================================================== */
+@property --a { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 :root {
   color-scheme: dark;
-  --nuit: #070a1a;
-  --nuit-2: #0c1230;
-  --nuit-3: #141c46;
-  --lune: #eef0f8;
-  --brume: #9ba6c9;
-  --bougie: #f2c46d;
-  --bougie-2: #ffe2a3;
-  --braise: #e56b3f;
-  --sang: #c23a2f;
-  --parchemin: #ecdcb8;
-  --parchemin-2: #dcc79a;
-  --encre: #2b1d10;
-  --spotify: #1db954;
-  /* Discord */
-  --dc-bg: #313338;
-  --dc-bg-2: #2b2d31;
-  --dc-bg-3: #1e1f22;
-  --dc-input: #383a40;
-  --dc-text: #dbdee1;
-  --dc-head: #f2f3f5;
-  --dc-mute: #949ba4;
-  --dc-blurple: #5865f2;
-  --dc-green: #248046;
-  --dc-red: #da373c;
-  --dc-grey: #4e5058;
-  --dc-link: #00a8fc;
-
-  --titre: "IM Fell English SC", "IM Fell English", Garamond, "Times New Roman", serif;
-  --conte: "IM Fell English", "EB Garamond", Garamond, serif;
-  --texte: "EB Garamond", Garamond, "Times New Roman", serif;
-  --lettrine: "Cinzel Decorative", "IM Fell English SC", serif;
-  --ui: "Noto Sans", "gg sans", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --gutter: clamp(16px, 4.5vw, 56px);
+  --bg: #07060d; --panel: #110d1b; --panel2: #171126; --line: #2a2140;
+  --text: #ece8ff; --mute: #a49fbf; --faint: #6f6a89;
+  --cyan: #5ff0ff; --pink: #ff5fd2; --green: #3dff9a; --gold: #ffc94d; --violet: #a58bff; --red: #ff4d6d;
+  --discord: #313338; --discord2: #2b2d31; --blurple: #5865f2;
+  --r: 22px;
+  --display: 'Space Grotesk', system-ui, sans-serif;
+  --body: 'Inter', system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
-html { background: var(--nuit); }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
 body {
-  margin: 0;
-  background: var(--nuit);
-  color: var(--lune);
-  font: 400 20px/1.6 var(--texte);
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  background: var(--bg); color: var(--text); font: 16px/1.55 var(--body);
+  min-height: 100vh; overflow-x: hidden;
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, #ff5fd21a, transparent 60%),
+    radial-gradient(900px 600px at 95% 0%, #5ff0ff17, transparent 60%),
+    linear-gradient(#ffffff05 1px, transparent 1px), linear-gradient(90deg, #ffffff05 1px, transparent 1px);
+  background-size: auto, auto, 40px 40px, 40px 40px;
 }
-img { max-width: 100%; display: block; }
 a { color: inherit; }
-p { margin: 0; }
-h1, h2, h3 { margin: 0; font-weight: 400; text-wrap: balance; }
-:focus-visible { outline: 2px solid var(--bougie); outline-offset: 3px; border-radius: 4px; }
-.wrap { width: 100%; max-width: 1240px; margin-inline: auto; padding-inline: var(--gutter); }
+img { max-width: 100%; display: block; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.1; margin: 0; letter-spacing: -.01em; }
+.wrap { width: min(1180px, 100% - 32px); margin-inline: auto; }
 
-/* ciel étoilé, derrière tout */
-#ciel { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+/* ---------- Barre du haut ---------- */
+header.top { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); background: #07060dcc; border-bottom: 1px solid #ffffff0d; }
+header.top .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--display); font-weight: 700; font-size: 18px; }
+.brand img { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--cyan), 0 0 16px #5ff0ff88; }
+nav.links { display: flex; gap: 4px; margin-left: auto; }
+nav.links a { text-decoration: none; color: var(--mute); padding: 8px 12px; border-radius: 10px; font-weight: 500; font-size: 15px; }
+nav.links a:hover, nav.links a[aria-current="page"] { color: var(--text); background: #ffffff0d; }
+.btn { display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; text-decoration: none; font: 600 15px var(--body); padding: 11px 18px; border-radius: 999px; color: #0a0612; background: linear-gradient(90deg, var(--cyan), var(--pink)); box-shadow: 0 0 24px #5ff0ff44; transition: transform .15s, box-shadow .15s; white-space: nowrap; }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 0 34px #ff5fd266; }
+.btn.ghost { background: #ffffff0d; color: var(--text); box-shadow: inset 0 0 0 1px #ffffff1f; }
+.btn.ghost:hover { background: #ffffff17; }
+.btn.small { padding: 8px 14px; font-size: 14px; }
+@media (max-width: 760px) { nav.links a.opt { display: none; } }
+@media (max-width: 520px) { nav.links { display: none; } header.top .btn { margin-left: auto; } }
 
-/* ============================ barre du haut ============================ */
-.barre {
-  position: fixed; inset: 0 0 auto 0; z-index: 60;
-  padding-top: env(safe-area-inset-top, 0px);
-  transition: background 0.4s, box-shadow 0.4s;
-}
-.barre.pleine { background: rgba(7, 10, 26, 0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 1px 0 rgba(242, 196, 109, 0.14); }
-.barre .wrap { display: flex; align-items: center; gap: 18px; height: 64px; }
-.blason { display: flex; align-items: center; gap: 12px; text-decoration: none; white-space: nowrap; font: 400 24px/1 var(--titre); letter-spacing: 0.03em; }
-.blason svg { width: 34px; height: 34px; flex: none; }
-.chapitre-actuel { margin-left: auto; font: italic 400 17px/1 var(--conte); color: var(--brume); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.chapitre-actuel b { font-style: normal; color: var(--bougie); font-weight: 400; font-family: var(--titre); margin-right: 8px; }
-.son {
-  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; flex: none;
-  border-radius: 999px; border: 1px solid rgba(238, 240, 248, 0.2); background: transparent; color: var(--brume);
-  font: 500 14px/1 var(--ui); cursor: pointer; transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-.son svg { width: 18px; height: 18px; }
-.son[aria-pressed="true"] { color: var(--bougie-2); border-color: rgba(242, 196, 109, 0.55); background: rgba(242, 196, 109, 0.08); }
-.son .on { display: none; }
-.son[aria-pressed="true"] .on { display: inline; }
-.son[aria-pressed="true"] .off { display: none; }
-.bouton {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  padding: 14px 24px; border-radius: 999px; border: 0; cursor: pointer; text-decoration: none; white-space: nowrap;
-  background: var(--bougie); color: #24170a; font: 600 16px/1 var(--ui);
-  box-shadow: 0 0 0 1px rgba(255, 226, 163, 0.5) inset, 0 12px 34px -12px rgba(242, 196, 109, 0.8);
-  transition: transform 0.25s cubic-bezier(.2,.8,.2,1), background 0.25s;
-}
-.bouton:hover { transform: translateY(-2px); background: var(--bougie-2); }
-.bouton.discret { background: transparent; color: var(--lune); box-shadow: inset 0 0 0 1px rgba(238, 240, 248, 0.25); }
-.bouton.discret:hover { background: rgba(238, 240, 248, 0.07); }
-.barre .bouton { padding: 10px 18px; font-size: 15px; flex: none; }
-.fil { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: linear-gradient(90deg, var(--braise), var(--bougie)); transform-origin: left; transform: scaleX(0); }
-@media (max-width: 860px) { .chapitre-actuel { display: none; } .son { margin-left: auto; } .son .txt { display: none; } .blason span { font-size: 20px; } }
-@media (max-width: 480px) { .barre .bouton { padding: 10px 14px; font-size: 14px; } .barre .bouton .long { display: none; } }
+/* ---------- Vues ---------- */
+main { padding: 28px 0 60px; }
+.view { display: none; }
+.view.on { display: block; animation: enter .45s cubic-bezier(.2, .8, .2, 1); }
+@keyframes enter { from { opacity: 0; transform: translateY(10px); } }
 
-/* ============================ prologue : la nuit tombe ============================ */
-.prologue { position: relative; min-height: 100vh; overflow: hidden; background: #140c1e url("images/nuit/72.webp") center / cover no-repeat; }
-.prologue canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
-.prologue .voile { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(4, 6, 16, 0.75)), linear-gradient(transparent 60%, var(--nuit)); }
-.recit { position: relative; z-index: 2; display: grid; gap: 28px; padding-block: 120px 80px; }
-.recit .temps { max-width: 22em; font: italic 400 clamp(28px, 4.2vw, 52px)/1.2 var(--conte); text-shadow: 0 2px 30px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0,0,0,.6); }
-.recit .temps small { display: block; font: 400 14px/1 var(--ui); letter-spacing: 0.3em; text-transform: uppercase; color: var(--bougie); margin-bottom: 18px; font-style: normal; }
-.titre-final { display: grid; gap: 18px; }
-.titre-final h1 { font: 400 clamp(64px, 12vw, 168px)/0.9 var(--titre); letter-spacing: 0.01em; text-shadow: 0 6px 60px rgba(0, 0, 0, 0.9); }
-.titre-final p { font: italic 400 clamp(20px, 2.2vw, 26px)/1.4 var(--conte); color: #e3e6f3; max-width: 30em; text-shadow: 0 2px 20px #000; }
-.titre-final .actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
-.defiler { display: none; }
-/* Version animée : tout se superpose, la scène est épinglée pendant le défilement. */
-.anime .prologue { height: 100vh; background-image: url("images/nuit/01.webp"); }
-.anime .prologue canvas { display: block; }
-.anime .recit { position: absolute; inset: 0; padding: 0; display: block; }
-.anime .recit .temps, .anime .titre-final { position: absolute; left: var(--gutter); right: var(--gutter); top: 50%; transform: translateY(-50%); }
-.anime .recit .temps { opacity: 0; }
-.anime .recit .temps:first-child { opacity: 1; }
-.anime .titre-final { opacity: 0; visibility: hidden; }
-.anime .defiler { display: flex; position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 3; flex-direction: column; align-items: center; gap: 10px; font: 400 13px/1 var(--ui); letter-spacing: 0.24em; text-transform: uppercase; color: var(--brume); }
-.defiler i { width: 1px; height: 46px; background: linear-gradient(var(--bougie), transparent); animation: goutte 1.8s ease-in-out infinite; transform-origin: top; }
-@keyframes goutte { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
+/* ---------- Accueil ---------- */
+.hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; padding: 8px 0 30px; }
+.hero h1 { font-size: clamp(32px, 4.4vw, 52px); }
+.hero h1 .glow { background: linear-gradient(90deg, var(--cyan), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px #5ff0ff55); }
+.hero p.lead { color: var(--mute); font-size: 18px; max-width: 540px; margin: 16px 0 22px; }
+.hero .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+.live { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: #ffffff0a; border: 1px solid #ffffff14; color: var(--mute); font-size: 14px; }
+.chip b { color: var(--text); font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.dot.on { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 26px; } }
 
-/* ============================ éléments de conte ============================ */
-.chapitre { position: relative; padding-block: clamp(90px, 13vw, 170px); }
-/* les animations (sceau, jetons, fonds agrandis) ne doivent jamais élargir la page */
-.chapitre, .aube, .sommaire { overflow-x: clip; }
-.entete { display: grid; gap: 16px; max-width: 820px; }
-.numero { font: 400 15px/1 var(--ui); letter-spacing: 0.34em; text-transform: uppercase; color: var(--bougie); }
-.entete h2 { font: 400 clamp(46px, 7.2vw, 96px)/0.98 var(--titre); letter-spacing: 0.005em; }
-.entete h2 .l { display: inline-block; }
-.ornement { width: min(340px, 70%); height: 26px; color: var(--bougie); margin-top: 6px; }
-.ornement path { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
-.ornement circle { fill: currentColor; }
-.conte { max-width: 34em; font-size: clamp(19px, 1.5vw, 22px); color: #d9ddee; }
-.conte::first-letter { float: left; font: 700 3.6em/0.8 var(--lettrine); color: var(--bougie); padding: 0.08em 0.12em 0 0; text-shadow: 0 0 24px rgba(242, 196, 109, 0.35); }
-.en-clair { display: grid; gap: 14px; padding: 22px 24px; border-radius: 14px; background: rgba(12, 18, 48, 0.72); border: 1px solid rgba(242, 196, 109, 0.22); max-width: 34em; backdrop-filter: blur(6px); }
-.en-clair h3 { font: 600 13px/1 var(--ui); letter-spacing: 0.24em; text-transform: uppercase; color: var(--bougie); }
-.en-clair > p { font: 500 18px/1.5 var(--ui); color: var(--lune); }
-.etapes { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: e; }
-.etapes li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; font: 400 16px/1.5 var(--ui); color: #c6cbe0; counter-increment: e; }
-.etapes li::before { content: counter(e); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(242, 196, 109, 0.14); color: var(--bougie-2); font: 700 13px/1 var(--ui); }
-.cmd { font: 500 0.92em/1 var(--ui); color: #c9cdfb; background: rgba(88, 101, 242, 0.3); padding: 0.1em 0.35em; border-radius: 4px; white-space: nowrap; }
-.deux { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
-.cote { display: grid; gap: 28px; align-content: start; }
-@media (max-width: 960px) { .deux { grid-template-columns: 1fr; } }
+.section-title { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 8px 0 18px; }
+.section-title h2 { font-size: 26px; }
+.section-title p { color: var(--mute); margin: 6px 0 0; }
 
-/* ============================ maquettes Discord ============================ */
-.dc { font: 400 16px/1.375 var(--ui); color: var(--dc-text); background: var(--dc-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 50px 100px -40px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.06); text-align: left; }
-.dc-fenetre { display: grid; grid-template-columns: 60px 188px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 600px; }
-.dc-serveurs { background: var(--dc-bg-3); display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 12px; }
-.dc-serveurs i { width: 42px; height: 42px; border-radius: 50%; background: var(--dc-bg); display: grid; place-items: center; font: 700 15px/1 var(--ui); color: var(--dc-head); font-style: normal; }
-.dc-serveurs i.on { border-radius: 16px; background: linear-gradient(135deg, #3b2c6b, #c23a2f); }
-.dc-serveurs hr { width: 32px; border: 0; border-top: 2px solid #35363c; margin: 2px 0; }
-.dc-salons { background: var(--dc-bg-2); padding: 0 8px; overflow: hidden; }
-.dc-salons header { height: 48px; display: flex; align-items: center; font-weight: 600; color: var(--dc-head); box-shadow: 0 1px 0 rgba(0,0,0,.25); margin: 0 -8px 12px; padding-left: 16px; }
-.dc-cat { font: 600 12px/1 var(--ui); letter-spacing: 0.02em; text-transform: uppercase; color: var(--dc-mute); padding: 16px 8px 6px; }
-.dc-salon { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; color: var(--dc-mute); font-weight: 500; white-space: nowrap; overflow: hidden; }
-.dc-salon.on { background: #404249; color: var(--dc-head); }
-.dc-salon svg { width: 20px; height: 20px; flex: none; opacity: 0.8; }
-.dc-salon.sub { padding-left: 30px; font-size: 15px; }
-.dc-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.dc-top { height: 48px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 600; color: var(--dc-head); box-shadow: 0 1px 0 rgba(0,0,0,.25); white-space: nowrap; overflow: hidden; }
-.dc-top svg { width: 22px; height: 22px; color: var(--dc-mute); flex: none; }
-.dc-top small { font-weight: 400; color: var(--dc-mute); font-size: 14px; border-left: 1px solid #3f4147; padding-left: 10px; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; }
-.dc-fil { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; padding: 16px 0 8px; min-height: 0; }
-/* comme dans Discord : les messages gardent leur taille, les plus anciens sortent par le haut */
-.dc-fil > * { flex-shrink: 0; }
-.dc-saisie { margin: 0 16px 20px; height: 44px; flex: none; border-radius: 8px; background: var(--dc-input); display: flex; align-items: center; gap: 12px; padding: 0 16px; color: #6d6f78; white-space: nowrap; overflow: hidden; }
-.dc-saisie span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.dc-saisie .plus { width: 24px; height: 24px; border-radius: 50%; background: #b5bac1; color: var(--dc-input); display: grid; place-items: center; font: 700 18px/1 var(--ui); flex: none; }
-.dc-msg { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; padding: 4px 48px 4px 16px; margin-top: 14px; }
-.dc-msg.suite { margin-top: 2px; }
-.dc-msg.suite .dc-av { visibility: hidden; height: 0; }
-.dc-av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 600 16px/1 var(--ui); color: #fff; overflow: hidden; }
-.dc-av.bot { background: radial-gradient(circle at 35% 30%, #fff6d8, #f2c46d 30%, #3b2c6b 72%); }
-.dc-tete { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; }
-.dc-nom { font-weight: 500; color: var(--dc-head); }
-.dc-app { font: 600 10px/1 var(--ui); background: var(--dc-blurple); color: #fff; padding: 3px 5px 2px; border-radius: 4px; align-self: center; letter-spacing: 0.02em; }
-.dc-heure { font-size: 12px; color: var(--dc-mute); }
-.dc-texte { color: var(--dc-text); overflow-wrap: anywhere; }
-.dc-petit { font-size: 13px; color: var(--dc-mute); }
-.dc-mention { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; border-radius: 3px; padding: 0 2px; font-weight: 500; }
-.dc-ts { background: rgba(255, 255, 255, 0.06); border-radius: 3px; padding: 0 2px; }
-.dc-embed { margin-top: 6px; max-width: 520px; background: var(--dc-bg-2); border-radius: 4px; border-left: 4px solid var(--c, #1e1f22); padding: 8px 16px 16px 12px; display: grid; gap: 8px; }
-.dc-embed .auteur { font-size: 14px; font-weight: 600; color: var(--dc-head); display: flex; align-items: center; gap: 8px; }
-.dc-embed .auteur i { width: 24px; height: 24px; border-radius: 50%; flex: none; }
-.dc-embed .titre { font-weight: 600; color: var(--dc-head); }
-.dc-embed .titre.lien { color: var(--dc-link); }
-.dc-embed .desc { font-size: 14px; line-height: 1.4; white-space: pre-line; }
-.dc-embed .champs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; font-size: 14px; white-space: pre-line; }
-.dc-embed .champs .large { grid-column: 1 / -1; }
-.dc-embed .champs b { display: block; font-weight: 600; color: var(--dc-head); margin-bottom: 2px; }
-.dc-embed .pied { font-size: 12px; color: #b5bac1; }
-.dc-embed .avec-vignette { display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 16px; }
-.dc-embed .vignette { width: 80px; height: 80px; border-radius: 4px; }
-.dc-embed code { font: 400 13px/1 Consolas, "DejaVu Sans Mono", monospace; background: var(--dc-bg-3); border-radius: 4px; padding: 2px 4px; }
-.dc-lignes { display: grid; gap: 8px; margin-top: 8px; }
-.dc-ligne { display: flex; flex-wrap: wrap; gap: 8px; }
-.dc-bt { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 8px; background: var(--dc-grey); color: #fff; font: 500 14px/1 var(--ui); white-space: nowrap; }
-.dc-bt.p { background: var(--dc-blurple); } .dc-bt.v { background: var(--dc-green); } .dc-bt.r { background: var(--dc-red); }
-.dc-bt.lien::after { content: "↗"; font-size: 12px; opacity: 0.8; }
-.dc-select { display: flex; align-items: center; justify-content: space-between; max-width: 400px; height: 40px; padding: 0 12px; border-radius: 8px; background: var(--dc-bg-3); color: var(--dc-mute); font-size: 15px; }
-.dc-select::after { content: ""; width: 8px; height: 8px; border-right: 2px solid #b5bac1; border-bottom: 2px solid #b5bac1; transform: rotate(45deg) translateY(-3px); }
-.dc-options { max-width: 400px; background: var(--dc-bg-3); border-radius: 0 0 8px 8px; margin-top: -4px; padding: 4px 0; font-size: 15px; }
-.dc-options div { padding: 8px 12px; color: var(--dc-text); }
-.dc-options div.on { background: #35373c; color: var(--dc-head); }
-.dc-ephemere { font-size: 12px; color: var(--dc-mute); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
-.dc-ephemere a { color: var(--dc-link); }
-.dc-systeme { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; padding: 2px 48px 2px 16px; margin-top: 14px; color: var(--dc-mute); font-size: 15px; }
-.dc-systeme svg { width: 18px; height: 18px; justify-self: end; margin-top: 2px; color: var(--dc-mute); }
-.dc-systeme b { color: var(--dc-head); font-weight: 500; }
-.dc-fil-carte { display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 14px; border-radius: 8px; background: var(--dc-bg-2); color: var(--dc-head); font-weight: 600; }
-.dc-fil-carte small { color: var(--dc-mute); font-weight: 400; }
-.dc-piece { margin-top: 6px; width: 220px; max-width: 100%; border-radius: 8px; background: repeating-linear-gradient(0deg, transparent 0 22px, rgba(0,0,0,.08) 22px 23px), #f7f3e9; color: #334; font: 400 13px/1.45 var(--texte); padding: 12px; box-shadow: 0 1px 0 rgba(0,0,0,.2); transform: rotate(-1.5deg); }
-.dc-piece b { display: block; font: 600 13px/1.3 var(--ui); margin-bottom: 4px; }
-@media (max-width: 1100px) { .dc-fenetre { grid-template-columns: minmax(0, 1fr); } .dc-serveurs, .dc-salons { display: none; } }
-@media (max-width: 560px) {
-  .dc-fenetre { height: 560px; }
-  .dc-msg, .dc-systeme { padding-right: 12px; gap: 12px; grid-template-columns: 34px minmax(0, 1fr); padding-left: 12px; }
-  .dc-av { width: 34px; height: 34px; font-size: 14px; }
-  .dc-embed .champs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
+/* ---------- Carte néon 3D ---------- */
+.neon { --c1: var(--cyan); --c2: var(--pink); --rx: 0deg; --ry: 0deg; position: relative; padding: 2px; border-radius: var(--r); isolation: isolate; transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)); transform-style: preserve-3d; transition: transform .25s ease-out; }
+.neon::before, .neon::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; background: conic-gradient(from var(--a), var(--c1), transparent 22%, var(--c2) 50%, transparent 72%, var(--c1)); animation: spin 5s linear infinite; }
+.neon::after { filter: blur(18px); opacity: .35; transition: opacity .25s; }
+.neon:hover::after, .neon:focus-visible::after { opacity: .8; }
+.neon > .in { position: relative; height: 100%; border-radius: calc(var(--r) - 2px); background: linear-gradient(160deg, var(--panel2), var(--panel) 60%); overflow: hidden; }
+@keyframes spin { to { --a: 360deg; } }
 
-/* ---------- scènes épinglées : texte à gauche, Discord à droite ---------- */
-.scene { position: relative; }
-.scene .plateau { display: grid; grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr); gap: clamp(28px, 4vw, 64px); align-items: center; min-height: 100vh; padding-block: 90px 40px; }
-.legendes { position: relative; display: grid; gap: 40px; }
-.legende { display: grid; gap: 14px; align-content: center; }
-.legendes.empile { gap: 0; }
-.legendes.empile .legende { grid-area: 1 / 1; }
-.legende .n { font: 400 14px/1 var(--ui); letter-spacing: 0.3em; text-transform: uppercase; color: var(--bougie); }
-.legende h3 { font: 400 clamp(34px, 4vw, 54px)/1.02 var(--titre); }
-.legende p { font: italic 400 clamp(19px, 1.5vw, 22px)/1.5 var(--conte); color: #d5d9ea; max-width: 24em; }
-.legende .clair { font: 400 16px/1.55 var(--ui); font-style: normal; color: #b9c0da; }
-.points { display: none; gap: 8px; margin-top: 18px; }
-.legendes.empile .points { display: flex; grid-area: 2 / 1; }
-.points i { width: 26px; height: 3px; border-radius: 2px; background: rgba(238, 240, 248, 0.18); }
-.points i.on { background: var(--bougie); }
-@media (max-width: 960px) {
-  .scene .plateau { grid-template-columns: 1fr; min-height: 0; padding-block: 40px; }
-  .anime .scene .plateau { min-height: 100vh; grid-template-rows: auto minmax(0, 1fr); align-content: start; padding-block: 80px 16px; gap: 16px; }
-  .anime .scene .legende { gap: 8px; }
-  .anime .scene .legende h3 { font-size: 28px; }
-  .anime .scene .legende p { font-size: 17px; }
-  .anime .scene .legende .clair, .anime .scene .legende .n { display: none; }
-  .anime .scene .points { margin-top: 10px; }
-  .anime .scene .dc-fenetre { height: calc(100vh - 280px); min-height: 340px; }
-}
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; }
+a.cat { text-decoration: none; color: inherit; display: block; outline: none; }
+a.cat .in { padding: 20px; display: flex; flex-direction: column; gap: 12px; min-height: 250px; }
+a.cat .shine { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 0%), #ffffff14, transparent 45%); opacity: 0; transition: opacity .25s; }
+a.cat:hover .shine { opacity: 1; }
+a.cat .ico { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; font-size: 28px; background: color-mix(in srgb, var(--c1) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c1) 40%, transparent), 0 0 20px color-mix(in srgb, var(--c1) 30%, transparent); transform: translateZ(40px); }
+a.cat h3 { font-size: 21px; transform: translateZ(30px); }
+a.cat p { margin: 0; color: var(--mute); font-size: 15px; flex: 1; transform: translateZ(20px); }
+a.cat .thumb { height: 64px; border-radius: 12px; background-size: cover; background-position: center; opacity: .85; box-shadow: inset 0 0 0 1px #ffffff14; }
+a.cat .go { font-weight: 600; font-size: 14px; color: var(--c1); display: flex; align-items: center; gap: 6px; }
+a.cat .go span { transition: transform .2s; }
+a.cat:hover .go span { transform: translateX(4px); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #ffffff0b; color: var(--mute); border: 1px solid #ffffff12; }
 
-/* ============================ chapitre I : l'IA ============================ */
-.menu-contexte { position: relative; width: 250px; background: #111214; border-radius: 8px; padding: 6px; font: 500 14px/1 var(--ui); color: #dbdee1; box-shadow: 0 16px 40px -10px #000; }
-.menu-contexte div { padding: 9px 8px; border-radius: 4px; display: flex; justify-content: space-between; }
-.menu-contexte div.on { background: var(--dc-blurple); color: #fff; }
-.menu-contexte hr { border: 0; border-top: 1px solid #2b2d31; margin: 4px; }
-.menu-contexte .sous { position: absolute; left: calc(100% + 6px); top: 118px; width: 230px; display: block; background: #111214; border-radius: 8px; padding: 6px; box-shadow: 0 16px 40px -10px #000; }
-.outils { display: flex; flex-wrap: wrap; gap: 36px 60px; align-items: flex-start; margin-top: 70px; }
-.outils .menu-zone { padding-right: 240px; }
-.outils ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; max-width: 30em; }
-.outils li { display: grid; grid-template-columns: 30px 1fr; gap: 12px; font: 400 16px/1.5 var(--ui); color: #c6cbe0; }
-.outils li b { color: var(--lune); font-weight: 600; }
-.outils li svg { width: 26px; height: 26px; color: var(--bougie); }
-@media (max-width: 700px) { .outils .menu-zone { padding-right: 0; } .menu-contexte .sous { position: static; width: auto; margin-top: 6px; } }
+.strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 34px; }
+.strip .item { padding: 18px; border-radius: 18px; background: #ffffff06; border: 1px solid #ffffff10; }
+.strip .item b { display: block; font-family: var(--display); font-size: 17px; margin-bottom: 4px; }
+.strip .item span { color: var(--mute); font-size: 14.5px; }
+@media (max-width: 760px) { .strip { grid-template-columns: 1fr; } }
 
-/* ============================ chapitre II : Spotify ============================ */
-.spotify-scene .plateau { grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.38fr); }
-.accord { display: grid; grid-template-columns: 210px 56px minmax(0, 1fr); align-items: center; }
-.telephone { width: 210px; aspect-ratio: 9 / 19; border-radius: 34px; background: #121212; padding: 14px; border: 6px solid #1b1b1d; box-shadow: 0 40px 80px -30px #000, 0 0 0 1px #2a2a2e; display: flex; flex-direction: column; gap: 11px; font-family: var(--ui); color: #fff; position: relative; }
-.telephone .haut { display: flex; justify-content: space-between; font-size: 9px; letter-spacing: 0.04em; color: #b3b3b3; padding: 4px 4px 0; }
-.telephone .pochette { aspect-ratio: 1; border-radius: 8px; background: conic-gradient(from 210deg at 60% 40%, #3b2c6b, #c23a2f, #f2c46d, #3b2c6b); position: relative; overflow: hidden; box-shadow: 0 20px 40px -10px rgba(0,0,0,.8); }
-.telephone .pochette::before { content: ""; position: absolute; width: 38%; aspect-ratio: 1; border-radius: 50%; right: 14%; top: 12%; background: radial-gradient(circle at 40% 40%, #fff8e4, #f2c46d 60%, transparent 62%); }
-.telephone .pochette::after { content: ""; position: absolute; inset: auto 0 0 0; height: 40%; background: #0c0c18; clip-path: polygon(0 60%, 12% 30%, 22% 55%, 34% 20%, 46% 50%, 58% 25%, 70% 55%, 82% 30%, 100% 50%, 100% 100%, 0 100%); }
-.telephone .titre { font-size: 16px; font-weight: 700; line-height: 1.2; }
-.telephone .artiste { font-size: 12px; color: #b3b3b3; }
-.telephone .barre-sp { height: 4px; border-radius: 2px; background: #4d4d4d; position: relative; }
-.telephone .barre-sp i { position: absolute; inset: 0 auto 0 0; width: 38%; background: #fff; border-radius: 2px; }
-.telephone .barre-sp i::after { content: ""; position: absolute; right: -6px; top: -4px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
-.telephone .temps { display: flex; justify-content: space-between; font-size: 10px; color: #b3b3b3; font-variant-numeric: tabular-nums; }
-.telephone .commandes { display: flex; justify-content: space-between; align-items: center; padding: 0 6px; }
-.telephone .commandes svg { width: 22px; height: 22px; fill: #fff; }
-.telephone .lecture { width: 48px; height: 48px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
-.telephone .lecture svg { fill: #000; width: 20px; height: 20px; }
-.telephone .appareil { margin-top: auto; font-size: 11px; color: var(--spotify); display: flex; align-items: center; gap: 6px; }
-.telephone .logo-sp { position: absolute; top: 40px; right: 24px; width: 26px; height: 26px; }
-.liaison { width: 56px; height: 120px; overflow: visible; }
-.liaison path { fill: none; stroke: var(--spotify); stroke-width: 2; stroke-dasharray: 5 7; }
-.liaison circle { fill: var(--spotify); }
-.pile { display: grid; gap: 14px; min-width: 0; }
-.pile .dc { padding: 14px 16px 16px 0; }
-.pile .dc .dc-msg { margin-top: 0; }
-.paroles { display: grid; gap: 2px; font-size: 14px; }
-.paroles span { color: #6d6f78; transition: color 0.25s; }
-.paroles span.on { color: var(--dc-head); font-weight: 600; }
-.paroles span.dit { color: #a3a6ad; }
-@media (max-width: 1180px) { .accord { grid-template-columns: 1fr; justify-items: center; gap: 10px; } .liaison { transform: rotate(90deg); height: 70px; } .pile { width: 100%; } }
-@media (max-width: 960px) {
-  .spotify-scene .plateau { grid-template-columns: 1fr; }
-  .anime .spotify-scene .telephone, .anime .spotify-scene .liaison { display: none; }
-  .spotify-scene .telephone { width: 210px; }
-}
+/* ---------- Page d'une catégorie ---------- */
+.back { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); text-decoration: none; font-weight: 500; margin-bottom: 18px; }
+.back:hover { color: var(--text); }
+.cat-head { display: grid; grid-template-columns: 1fr 420px; gap: 32px; align-items: center; margin-bottom: 34px; }
+.cat-head .big { font-size: 44px; line-height: 1; margin-bottom: 12px; }
+.cat-head h1 { font-size: clamp(30px, 4.4vw, 46px); }
+.cat-head h1 em { font-style: normal; color: var(--c1); text-shadow: 0 0 22px color-mix(in srgb, var(--c1) 60%, transparent); }
+.cat-head p { color: var(--mute); font-size: 17.5px; margin: 14px 0 20px; max-width: 560px; }
+.cat-head .banner .in { padding: 10px; }
+.cat-head .banner img { border-radius: 14px; width: 100%; aspect-ratio: 480 / 150; object-fit: cover; }
+.cat-head .banner .cap { font-size: 13px; color: var(--faint); padding: 8px 6px 2px; }
+@media (max-width: 900px) { .cat-head { grid-template-columns: 1fr; } }
 
-/* ============================ chapitre III : le loup-garou ============================ */
-.loups { background: #050713; }
-.loups .fond { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.loups .fond img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; opacity: 0.38; transform-origin: 50% 35%; }
-.loups .fond::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(5,7,19,.95) 0%, rgba(5,7,19,.55) 45%, rgba(5,7,19,.75) 100%), linear-gradient(var(--nuit), transparent 16%, transparent 84%, var(--nuit)); }
-.voix { display: inline-flex; align-items: center; gap: 10px; font: 500 14px/1 var(--ui) !important; font-style: normal !important; color: var(--bougie-2) !important; margin-top: 6px; }
-.voix span { display: inline-flex; gap: 3px; align-items: center; height: 18px; }
-.voix span i { width: 3px; height: 30%; background: currentColor; border-radius: 2px; animation: parle 1s ease-in-out infinite; }
-.voix span i:nth-child(2) { animation-delay: -0.2s; } .voix span i:nth-child(3) { animation-delay: -0.5s; } .voix span i:nth-child(4) { animation-delay: -0.7s; } .voix span i:nth-child(5) { animation-delay: -0.35s; }
-@keyframes parle { 0%, 100% { height: 25%; } 50% { height: 100%; } }
-/* Les cartes se retournent en 2D (on écrase l'image, on change d'image, on la rouvre) :
-   ça marche dans tous les navigateurs, et sans animation la face du rôle est affichée. */
-.carte-img { display: block; width: 100%; aspect-ratio: 448 / 272; object-fit: cover; border-radius: 6px; background: #0b0810; }
-.dc-embed .carte-img { margin-top: 6px; }
+.perks { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; margin-bottom: 40px; }
+.perk { padding: 18px; border-radius: 18px; background: linear-gradient(160deg, #ffffff0a, #ffffff04); border: 1px solid #ffffff12; position: relative; overflow: hidden; }
+.perk::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--c1); box-shadow: 0 0 12px var(--c1); }
+.perk .e { font-size: 22px; }
+.perk b { display: block; font-family: var(--display); font-size: 17px; margin: 6px 0 4px; }
+.perk span { color: var(--mute); font-size: 14.5px; }
 
-/* l'éventail des rôles */
-.eventail { position: relative; height: clamp(300px, 34vw, 440px); margin-top: 70px; }
-.eventail .carte { position: absolute; left: 50%; top: 14%; width: clamp(200px, 25vw, 320px); margin-left: calc(clamp(200px, 25vw, 320px) / -2); }
-.eventail .carte .carte-img { border-radius: 10px; box-shadow: 0 30px 50px -20px #000; }
-.legende-roles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
-.legende-roles div { font: 400 15px/1.45 var(--ui); color: #b9c0da; }
-.legende-roles b { display: block; font: 400 22px/1.1 var(--titre); color: var(--lune); margin-bottom: 4px; }
-@media (max-width: 860px) {
-  .legende-roles { grid-template-columns: 1fr 1fr; }
-  .eventail { height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .eventail .carte { position: relative; left: auto; top: auto; width: auto; margin: 0; transform: none !important; }
-}
+.examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 22px; margin-bottom: 36px; }
+.ex .in { padding: 0; display: flex; flex-direction: column; }
+.ex .dc { flex: 1; }
+.ex .ex-title { padding: 12px 16px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--c1); border-bottom: 1px solid #ffffff0f; display: flex; align-items: center; gap: 8px; }
+@media (max-width: 420px) { .examples { grid-template-columns: 1fr; } }
 
-/* ============================ chapitre IV : l'imposteur ============================ */
-.table-mots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 56px; margin-bottom: 40px; }
-.mot { position: relative; aspect-ratio: 3 / 4; }
-.mot .faces { position: absolute; inset: 0; }
-.mot .dos, .mot .recto { position: absolute; inset: 0; border-radius: 14px; display: grid; place-items: center; text-align: center; padding: 16px; }
-.mot.retourne .dos, .mot:not(.retourne) .recto { visibility: hidden; }
-.mot .dos { background: radial-gradient(circle at 50% 40%, #2a1440, #0d0616); border: 1px solid rgba(192, 139, 255, 0.4); box-shadow: inset 0 0 0 6px #0d0616, inset 0 0 0 7px rgba(242, 196, 109, 0.45); font: 700 64px/1 var(--lettrine); color: rgba(242, 196, 109, 0.6); }
-.mot .recto { background: linear-gradient(170deg, var(--parchemin), var(--parchemin-2)); color: var(--encre); box-shadow: inset 0 0 0 6px var(--parchemin), inset 0 0 0 7px rgba(43, 29, 16, 0.35), 0 30px 50px -24px #000; transition: box-shadow 0.5s; }
-.mot .recto small { position: absolute; top: 18px; left: 0; right: 0; font: 600 11px/1 var(--ui); letter-spacing: 0.24em; text-transform: uppercase; opacity: 0.6; }
-.mot .recto strong { font: 400 clamp(30px, 3.4vw, 46px)/1 var(--titre); }
-.mot .recto em { position: absolute; bottom: 18px; left: 0; right: 0; font: italic 400 16px/1.2 var(--conte); opacity: 0.75; }
-.mot.intrus.demasque .recto { box-shadow: inset 0 0 0 6px var(--parchemin), inset 0 0 0 8px var(--sang), 0 0 0 3px var(--sang), 0 0 50px rgba(194, 58, 47, 0.6), 0 30px 50px -24px #000; }
-.mot .joueur { position: absolute; bottom: -34px; left: 0; right: 0; text-align: center; font: 500 15px/1 var(--ui); color: var(--brume); }
-.mot.intrus.demasque .joueur { color: #ff9a8f; }
-@media (max-width: 700px) { .table-mots { grid-template-columns: 1fr 1fr; row-gap: 56px; } }
+.cmds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 36px; }
+.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; padding: 7px 12px; border-radius: 10px; background: #0d0a16; border: 1px solid color-mix(in srgb, var(--c1) 35%, transparent); color: var(--text); }
+.cmd b { color: var(--c1); font-weight: 600; }
+.next { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 20px; border-radius: 18px; background: #ffffff06; border: 1px solid #ffffff10; }
+.next p { margin: 0; color: var(--mute); }
 
-/* ============================ chapitre V : la taverne ============================ */
-.taverne .deux { align-items: start; }
-.roue-zone { position: relative; display: grid; place-items: center; }
-.roue { width: min(460px, 100%); aspect-ratio: 1; filter: drop-shadow(0 40px 50px rgba(0, 0, 0, 0.7)); }
-.roue-zone .pointe { position: absolute; top: 1%; left: 50%; transform: translateX(-50%); width: 0; height: 0; border: 12px solid transparent; border-top: 22px solid var(--bougie-2); filter: drop-shadow(0 2px 3px #000); }
-.jetons { position: absolute; inset: 0; pointer-events: none; }
-.jetons span { position: absolute; width: 54px; height: 54px; border-radius: 50%; border: 7px dashed rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 5px var(--c), 0 10px 18px -6px #000; background: var(--c); }
-.trj { display: grid; gap: 2px; margin-top: 10px; }
-.trj .l { display: grid; grid-template-columns: 130px minmax(0, 1fr) 70px; gap: 14px; align-items: center; padding: 11px 0; border-bottom: 1px solid rgba(238, 240, 248, 0.08); font: 500 16px/1 var(--ui); }
-.trj .v { text-align: right; font: 400 28px/1 var(--titre); color: var(--bougie-2); font-variant-numeric: tabular-nums; }
-.trj .b { height: 8px; border-radius: 4px; background: rgba(238, 240, 248, 0.07); position: relative; overflow: hidden; }
-.trj .b i { position: absolute; inset: 0 auto 0 0; width: var(--w); background: linear-gradient(90deg, rgba(242, 196, 109, 0.35), var(--bougie)); border-radius: 4px; transform-origin: left; }
-.trj .axe { display: grid; grid-template-columns: 130px minmax(0, 1fr) 70px; gap: 14px; font: 400 12px/1 var(--ui); color: var(--brume); padding-top: 8px; }
-.trj .axe span:nth-child(2) { display: flex; justify-content: space-between; }
-.avertissement { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px; border-radius: 12px; background: rgba(194, 58, 47, 0.1); border: 1px solid rgba(194, 58, 47, 0.35); font: 400 15px/1.5 var(--ui); color: #f3cfc9; max-width: 34em; }
-@media (max-width: 600px) { .trj .l, .trj .axe { grid-template-columns: 100px minmax(0, 1fr) 56px; } }
+/* ---------- Faux Discord ---------- */
+.dc { background: var(--discord); padding: 14px 16px 16px; font-size: 15px; color: #dbdee1; display: flex; flex-direction: column; gap: 14px; }
+.dc .msg { display: grid; grid-template-columns: 40px 1fr; gap: 12px; }
+.dc .pp { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #444; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 17px; }
+.dc .who { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #f2f3f5; line-height: 1.3; }
+.dc .who time { color: #949ba4; font-size: 12px; font-weight: 400; }
+.dc .badge { background: var(--blurple); color: #fff; font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; }
+.dc .txt { margin-top: 2px; white-space: pre-line; }
+.dc .txt b { color: #fff; }
+.dc .mention { color: #c9cdfb; background: #5865f24d; border-radius: 3px; padding: 0 2px; }
+.dc .embed { margin-top: 6px; background: var(--discord2); border-left: 4px solid var(--ec, var(--cyan)); border-radius: 4px; padding: 10px 14px 12px; max-width: 440px; }
+.dc .embed .et { font-weight: 700; color: #fff; margin-bottom: 4px; }
+.dc .embed .ed { font-size: 14px; white-space: pre-line; }
+.dc .embed .ef { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 8px; }
+.dc .embed .ef div { font-size: 13.5px; }
+.dc .embed .ef b { display: block; color: #fff; font-size: 13px; }
+.dc .embed img { border-radius: 6px; margin-top: 10px; width: 100%; }
+.dc .embed .foot { font-size: 12px; color: #949ba4; margin-top: 8px; }
+.dc .attach { margin-top: 6px; border-radius: 8px; max-width: 440px; width: 100%; }
+.dc .attach.card { max-width: 300px; }
+.dc .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dc .b { font-size: 14px; font-weight: 500; padding: 6px 14px; border-radius: 4px; background: #4e5058; color: #fff; }
+.dc .b.g { background: #248046; } .dc .b.r { background: #da373c; } .dc .b.p { background: var(--blurple); }
+.dc .eph { font-size: 12px; color: #949ba4; margin-top: 4px; }
 
-/* ============================ chapitre VI : la garde ============================ */
-.garde .dc { max-width: 620px; padding: 14px 0 18px; position: relative; overflow: visible; }
-.sceau { position: absolute; right: -24px; top: -30px; width: 150px; height: 150px; pointer-events: none; transform: rotate(-12deg); }
-.sceau svg { width: 100%; height: 100%; }
-.anime .sceau { opacity: 0; }
-.tribunal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 70px; }
-.tribunal article { padding: 24px; border-radius: 16px; background: rgba(12, 18, 48, 0.6); border: 1px solid rgba(238, 240, 248, 0.08); display: grid; gap: 10px; align-content: start; }
-.tribunal h3 { font: 400 28px/1.05 var(--titre); }
-.tribunal p { font: 400 16px/1.55 var(--ui); color: #b9c0da; }
-@media (max-width: 860px) { .tribunal { grid-template-columns: 1fr; } .sceau { right: -6px; width: 110px; height: 110px; } }
+/* ---------- Offres ---------- */
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin: 10px 0 34px; }
+.plan .in { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.plan h3 { font-size: 22px; display: flex; align-items: center; gap: 10px; }
+.plan .price { font-family: var(--display); font-size: 38px; font-weight: 700; }
+.plan .price small { font-size: 15px; color: var(--mute); font-weight: 500; }
+.plan ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; flex: 1; align-content: start; }
+.plan li { display: flex; gap: 10px; color: #d6d1ee; font-size: 15px; }
+.plan li::before { content: "✓"; color: var(--c1); font-weight: 700; }
+.plan li.no { color: var(--faint); }
+.plan li.no::before { content: "–"; color: var(--faint); }
+.plan .pop { position: absolute; top: 14px; right: 14px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--c1); color: #0a0612; }
+@media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
+.pay { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; }
+.pay .box { padding: 22px; border-radius: 20px; background: #ffffff06; border: 1px solid #ffffff12; }
+.pay h3 { font-size: 20px; margin-bottom: 8px; }
+.pay p { color: var(--mute); margin: 0 0 14px; font-size: 15px; }
+.form { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
+.form input, .form select { font: 15px var(--body); color: var(--text); background: #0d0a16; border: 1px solid #ffffff22; border-radius: 12px; padding: 11px 14px; min-width: 0; }
+.form input:focus, .form select:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.form .err { grid-column: 1 / -1; color: var(--red); font-size: 14px; min-height: 1em; }
+.hint { font-size: 13.5px; color: var(--faint); }
+@media (max-width: 900px) { .pay { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .form { grid-template-columns: 1fr; } }
 
-/* ============================ les veillées : les autres jeux ============================ */
-.veillees { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; margin-top: 56px; }
-.veillee { position: relative; padding: 22px 22px 20px; border-radius: 16px; background: linear-gradient(165deg, rgba(20, 28, 70, 0.8), rgba(12, 18, 48, 0.6)); border: 1px solid rgba(242, 196, 109, 0.14); display: grid; gap: 10px; align-content: start; transition: border-color 0.35s; transform-style: preserve-3d; }
-.veillee:hover { border-color: rgba(242, 196, 109, 0.5); }
-.veillee .sym { font-size: 30px; line-height: 1; }
-.veillee h3 { font: 400 26px/1.05 var(--titre); }
-.veillee p { font: 400 15px/1.5 var(--ui); color: #b9c0da; }
-.veillee .cmd { justify-self: start; font-size: 13px; }
+footer { border-top: 1px solid #ffffff0d; padding: 24px 0 40px; color: var(--faint); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
+footer a { color: var(--mute); text-decoration: none; margin-left: 14px; }
+footer a:hover { color: var(--text); }
 
-/* ============================ épilogue : le jour se lève ============================ */
-.aube { position: relative; color: var(--encre); background: linear-gradient(#070a1a, #3a2a4d 7%, #b86a5c 14%, #efc49b 21%, var(--parchemin) 28%); }
-.aube .ciel-aube { position: relative; height: clamp(360px, 60vw, 720px); overflow: hidden; }
-.aube .ciel-aube img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 60%; }
-.aube .ciel-aube::after { content: ""; position: absolute; inset: 0; background: linear-gradient(#070a1a 0%, transparent 30%, transparent 70%, #efc49b 100%); }
-.aube .ciel-aube .phrase { position: absolute; left: var(--gutter); right: var(--gutter); bottom: 22%; z-index: 2; color: #fff; font: italic 400 clamp(30px, 5vw, 64px)/1.1 var(--conte); text-shadow: 0 2px 30px rgba(60, 20, 30, 0.8); max-width: 16em; }
-.aube .entete h2 { color: var(--encre); }
-.aube .numero, .aube .ornement { color: #8a4b22; }
-.pacte { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-top: 56px; align-items: stretch; }
-.parchemin { position: relative; display: flex; flex-direction: column; gap: 18px; padding: 44px 28px 32px; background: radial-gradient(120% 80% at 50% 0%, rgba(255, 255, 255, 0.35), transparent 60%), linear-gradient(175deg, #f4e7c8, #e2cd9f); color: var(--encre); border-radius: 6px; box-shadow: 0 30px 60px -30px rgba(60, 30, 10, 0.6), inset 0 0 40px rgba(120, 80, 30, 0.25); transform-origin: top; }
-.parchemin::before, .parchemin::after { content: ""; position: absolute; left: -8px; right: -8px; height: 18px; border-radius: 10px; background: linear-gradient(#c9a86a, #8b6a33 60%, #6b4f22); box-shadow: 0 4px 8px -2px rgba(60, 30, 10, 0.5); }
-.parchemin::before { top: -8px; }
-.parchemin::after { bottom: -8px; }
-.parchemin.choisi { background: radial-gradient(120% 80% at 50% 0%, rgba(255, 255, 255, 0.4), transparent 60%), linear-gradient(175deg, #f8e6bb, #e7c98a); }
-.parchemin .ruban { position: absolute; top: 22px; right: -12px; background: var(--sang); color: #fff; font: 600 12px/1 var(--ui); letter-spacing: 0.14em; text-transform: uppercase; padding: 8px 12px; border-radius: 3px 0 0 3px; box-shadow: 0 6px 12px -4px rgba(0,0,0,.4); }
-.parchemin h3 { font: 400 38px/1 var(--titre); }
-.parchemin .pour { font: italic 400 18px/1.3 var(--conte); color: #5c4228; margin-top: -8px; }
-.prix { display: flex; align-items: baseline; gap: 8px; }
-.prix b { font: 400 60px/1 var(--titre); font-variant-numeric: tabular-nums; }
-.prix span { font: 500 15px/1 var(--ui); color: #5c4228; }
-.parchemin ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; flex: 1; align-content: start; }
-.parchemin li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; font: 400 16px/1.45 var(--ui); color: #3a2a18; }
-.parchemin li svg { width: 18px; height: 18px; margin-top: 3px; color: #8a4b22; }
-.parchemin li.non { color: #8f7a5c; }
-.parchemin li.non svg { color: #b39c78; }
-.parchemin .bouton { background: var(--encre); color: var(--parchemin); box-shadow: none; }
-.parchemin .bouton:hover { background: #4a3218; }
-.parchemin .bouton.discret { background: transparent; color: var(--encre); box-shadow: inset 0 0 0 1px rgba(43, 29, 16, 0.4); }
-.note-pacte { margin-top: 26px; font: 400 15px/1.5 var(--ui); color: #5c4228; }
-.essai { margin-top: 44px; display: grid; grid-template-columns: auto 1fr auto; gap: 18px 26px; align-items: center; padding: 26px 30px; border-radius: 10px; background: linear-gradient(120deg, rgba(43, 29, 16, 0.92), rgba(74, 50, 24, 0.92)); color: var(--parchemin); box-shadow: 0 24px 50px -28px rgba(40, 20, 5, 0.8); }
-.essai .cadeau { font-size: 44px; line-height: 1; }
-.essai h3 { font: 400 30px/1.1 var(--titre); }
-.essai ol { margin: 8px 0 0; padding-left: 20px; font: 400 15px/1.55 var(--ui); color: #e8d9b6; }
-.essai code { font: 500 14px/1 ui-monospace, monospace; background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px; }
-.essai .bouton { background: var(--parchemin); color: var(--encre); white-space: nowrap; }
-@media (max-width: 760px) { .essai { grid-template-columns: 1fr; text-align: left; } .essai .cadeau { display: none; } }
-@media (max-width: 960px) { .pacte { grid-template-columns: 1fr; max-width: 520px; row-gap: 40px; } }
-
-.questions { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(32px, 6vw, 80px); }
-.questions details { border-bottom: 1px solid rgba(43, 29, 16, 0.2); }
-.questions summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 20px; padding: 20px 0; font: 500 21px/1.35 var(--texte); color: var(--encre); }
-.questions summary::-webkit-details-marker { display: none; }
-.questions summary::after { content: "+"; font: 400 30px/1 var(--texte); color: #8a4b22; transition: transform 0.3s; }
-.questions details[open] summary::after { transform: rotate(45deg); }
-.questions details p { padding: 0 0 20px; font: 400 17px/1.6 var(--ui); color: #4a3620; max-width: 40em; }
-@media (max-width: 900px) { .questions { grid-template-columns: 1fr; } }
-
-.fin { padding-block: clamp(80px, 12vw, 150px); }
-.fin h2 { font: 400 clamp(56px, 10vw, 150px)/0.92 var(--titre); color: var(--encre); }
-.fin h2 em { font-style: normal; color: var(--sang); }
-.fin .ligne { display: flex; flex-wrap: wrap; gap: 24px 40px; justify-content: space-between; align-items: center; margin-top: 40px; }
-.fin p { font: italic 400 22px/1.45 var(--conte); color: #4a3620; max-width: 26em; }
-.fin .bouton { background: var(--encre); color: var(--parchemin); box-shadow: none; font-size: 17px; padding: 17px 28px; }
-.contact { display: inline-flex !important; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; font: 500 16px/1 var(--ui) !important; color: #5c4228 !important; font-style: normal !important; }
-.contact code { font: 600 16px/1 var(--ui); color: var(--encre); background: rgba(43, 29, 16, 0.08); padding: 6px 8px; border-radius: 6px; }
-.contact button { font: 500 13px/1 var(--ui); padding: 7px 11px; border-radius: 999px; border: 1px solid rgba(43, 29, 16, 0.3); background: transparent; color: var(--encre); cursor: pointer; }
-footer { background: var(--parchemin); color: #6b5234; border-top: 1px solid rgba(43, 29, 16, 0.15); padding-block: 26px calc(26px + env(safe-area-inset-bottom, 0px)); font: 400 14px/1.5 var(--ui); }
-footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: space-between; }
-
-/* ============================ sommaire ============================ */
-.sommaire { padding-block: clamp(80px, 11vw, 140px) 20px; }
-.sommaire ol { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 4px; max-width: 900px; }
-.sommaire li a { display: grid; grid-template-columns: 70px auto minmax(20px, 1fr) auto; align-items: baseline; gap: 14px; padding: 14px 4px; text-decoration: none; border-bottom: 1px solid rgba(238, 240, 248, 0.07); transition: background 0.3s, padding 0.3s; border-radius: 6px; }
-.sommaire li a:hover { background: rgba(242, 196, 109, 0.06); padding-left: 14px; }
-.sommaire .rom { font: 400 24px/1 var(--titre); color: var(--bougie); }
-.sommaire .t { font: 400 clamp(24px, 3vw, 36px)/1.1 var(--titre); }
-.sommaire .pts { border-bottom: 2px dotted rgba(238, 240, 248, 0.22); transform: translateY(-6px); }
-.sommaire .quoi { font: 400 15px/1.3 var(--ui); color: var(--brume); text-align: right; }
-.choix { display: grid; gap: 14px; margin-top: 50px; }
-.choix p { font: italic 400 22px/1.4 var(--conte); color: #d5d9ea; }
-.choix .dc-ligne { gap: 10px; }
-.choix .dc-bt { height: 40px; padding: 0 16px; font-size: 15px; text-decoration: none; cursor: pointer; transition: filter 0.2s, transform 0.2s; }
-.choix .dc-bt:hover { filter: brightness(1.15); transform: translateY(-1px); }
-@media (max-width: 700px) { .sommaire li a { grid-template-columns: 44px 1fr; } .sommaire .pts { display: none; } .sommaire .quoi { grid-column: 2; text-align: left; } }
-
-/* Mouvement réduit : tout reste visible et immobile. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
+  .neon::before, .neon::after, .dot.on { animation: none; }
+  .neon { transform: none !important; }
+  .view.on { animation: none; }
 }
 </style>
 </head>
 <body>
-<canvas id="ciel" aria-hidden="true"></canvas>
-
-<header class="barre" id="barre">
+<header class="top">
   <div class="wrap">
-    <a class="blason" href="#prologue" aria-label="Retour au début">
-      <svg viewBox="0 0 40 40" aria-hidden="true">
-        <defs><radialGradient id="lune-g" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff6d8"/><stop offset="1" stop-color="#e9b95c"/></radialGradient></defs>
-        <circle cx="20" cy="20" r="18" fill="none" stroke="#f2c46d" stroke-width="1.2" opacity=".6"/>
-        <circle cx="20" cy="17" r="9" fill="url(#lune-g)"/>
-        <path d="M6 33 L12 25 L15 28 L19 21 L23 27 L27 23 L34 33 Z" fill="#070a1a" stroke="#f2c46d" stroke-width="1" stroke-linejoin="round"/>
-      </svg>
-      <span class="nom-bot">AI Vercel</span>
-    </a>
-    <p class="chapitre-actuel" id="chapitre-actuel" aria-live="polite"><b>Prologue</b>La nuit tombe sur le serveur</p>
-    <button class="son" id="son" type="button" aria-pressed="false" aria-label="Activer le son">
-      <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
-      <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
-      <span class="txt">Son</span>
-    </button>
-    <a class="bouton" href="#pacte" data-son="clic">Inviter<span class="long"> le gardien</span></a>
+    <a class="brand" href="#"><img class="bot-pp" alt="" width="34" height="34"><span class="bot-name">AI Vercel</span></a>
+    <nav class="links" aria-label="Menu">
+      <a href="#" data-nav="accueil">Fonctionnalités</a>
+      <a href="#offres" data-nav="offres">Offres</a>
+      <a class="opt" href="/statut">Statut</a>
+      <a class="opt" href="/dashboard">Tableau de bord</a>
+    </nav>
+    <a class="btn small invite" href="#">Ajouter le bot</a>
   </div>
-  <i class="fil" id="fil" aria-hidden="true"></i>
 </header>
 
-<main>
-
-<!-- ============================ PROLOGUE ============================ -->
-<section class="prologue" id="prologue" data-chapitre="Prologue|La nuit tombe sur le serveur">
-  <canvas id="nuit" aria-hidden="true"></canvas>
-  <div class="voile" aria-hidden="true"></div>
-  <div class="wrap recit" id="recit">
-    <p class="temps"><small>Prologue</small>Il était une fois un serveur Discord…</p>
-    <p class="temps">…où les salons s’endormaient avant même la tombée de la nuit.</p>
-    <p class="temps">Un soir, un gardien arriva au village.</p>
-    <p class="temps">Il répondait à toutes les questions, faisait entendre la musique de chacun, et menait les jeux jusqu’au bout de la nuit.</p>
-    <div class="titre-final">
-      <h1><span class="nom-bot">AI Vercel</span></h1>
-      <p>Le bot Discord qui réveille ton serveur : une IA, la musique Spotify, le loup-garou raconté à voix haute, un casino à jetons et une garde de nuit.</p>
-      <div class="actions">
-        <a class="bouton" href="#sommaire" data-son="page">Lire l’histoire</a>
-        <a class="bouton discret" href="#pacte" data-son="clic">Voir les offres</a>
-      </div>
-    </div>
-  </div>
-  <p class="defiler" aria-hidden="true">Fais défiler<i></i></p>
-</section>
-
-<!-- ============================ SOMMAIRE ============================ -->
-<section class="sommaire" id="sommaire" data-chapitre="Sommaire|Les chapitres de l’histoire">
-  <div class="wrap">
-    <div class="entete">
-      <p class="numero">Table des chapitres</p>
-      <h2 class="decoupe">Ce que fait le gardien</h2>
-      <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-    </div>
-    <ol>
-      <li><a href="#ia" data-son="page"><span class="rom">I</span><span class="t">Le gardien qui répond à tout</span><span class="pts"></span><span class="quoi">L’IA</span></a></li>
-      <li><a href="#musique" data-son="page"><span class="rom">II</span><span class="t">La musique du village</span><span class="pts"></span><span class="quoi">Spotify en vocal</span></a></li>
-      <li><a href="#loups" data-son="page"><span class="rom">III</span><span class="t">La nuit des loups</span><span class="pts"></span><span class="quoi">Loup-garou</span></a></li>
-      <li><a href="#intrus" data-son="page"><span class="rom">IV</span><span class="t">Le mot de trop</span><span class="pts"></span><span class="quoi">Imposteur</span></a></li>
-      <li><a href="#taverne" data-son="page"><span class="rom">V</span><span class="t">La taverne</span><span class="pts"></span><span class="quoi">Casino à jetons</span></a></li>
-      <li><a href="#garde" data-son="page"><span class="rom">VI</span><span class="t">La garde de nuit</span><span class="pts"></span><span class="quoi">Modération</span></a></li>
-      <li><a href="#pacte" data-son="page"><span class="rom">✦</span><span class="t">Et le jour se leva</span><span class="pts"></span><span class="quoi">Les offres</span></a></li>
-    </ol>
-    <div class="choix">
-      <p>Comme dans <span class="cmd">/jeux › Histoire</span>, c’est toi qui choisis la suite :</p>
-      <div class="dc-ligne">
-        <a class="dc-bt p" href="#loups" data-son="page">🐺 Jouer au loup-garou</a>
-        <a class="dc-bt" href="#musique" data-son="page">🎧 Écouter la musique</a>
-        <a class="dc-bt" href="#taverne" data-son="page">🎰 Entrer dans la taverne</a>
-        <a class="dc-bt v" href="#pacte" data-son="page">📜 Voir les offres</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ I · L'IA ============================ -->
-<section class="chapitre" id="ia" data-chapitre="Chapitre I|Le gardien qui répond à tout">
-  <div class="wrap">
-    <div class="entete">
-      <p class="numero">Chapitre I</p>
-      <h2 class="decoupe">Le gardien qui répond à tout</h2>
-      <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-    </div>
-  </div>
-  <div class="scene" data-scene="ia">
-    <div class="wrap plateau">
-      <div class="legendes">
-        <div class="legende">
-          <p class="n">1 · On lui parle</p>
-          <h3>Une question, dans le salon IA</h3>
-          <p>La veille d’un contrôle, Lina écrit au gardien comme elle écrirait à un ami.</p>
-          <p class="clair">Tout le monde peut l’utiliser. Dans le salon IA, il répond à chaque message ; ailleurs, il suffit de le mentionner.</p>
-        </div>
-        <div class="legende">
-          <p class="n">2 · Un fil rien qu’à elle</p>
-          <h3>La conversation devient privée</h3>
-          <p>Le gardien emmène la discussion dans un fil que seuls Lina et le staff peuvent lire.</p>
-          <p class="clair">Il garde la conversation en mémoire : on enchaîne les questions sans tout répéter.</p>
-        </div>
-        <div class="legende">
-          <p class="n">3 · Il explique</p>
-          <h3>Simplement, avec des exemples</h3>
-          <p>Sans jargon, avec une image qui reste en tête.</p>
-          <p class="clair">Du niveau « j’ai dix ans » au niveau expert avec <span class="cmd">/explique</span>. Aide au code avec <span class="cmd">/code</span>.</p>
-        </div>
-        <div class="legende">
-          <p class="n">4 · Il lit aussi</p>
-          <h3>Photos, PDF, liens</h3>
-          <p>Lina envoie la photo de son exercice. Le gardien la lit et lui montre comment faire.</p>
-          <p class="clair">Il lit les images, les PDF, les fichiers et les pages web qu’on lui envoie.</p>
-        </div>
-        <div class="points" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
-      </div>
-
-      <div class="dc dc-fenetre" aria-label="Exemple : une conversation avec l’IA sur Discord">
-        <nav class="dc-serveurs" aria-hidden="true"><i class="on">🌙</i><hr><i>JV</i><i>RP</i><i>+</i></nav>
-        <div class="dc-salons" aria-hidden="true">
-          <header>Ton serveur</header>
-          <div class="dc-cat">⌄ Vercel</div>
-          <div class="dc-salon on"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3 8.6 21h2l1.4-18zM16 3l-1.4 18h2L18 3zM4 8v2h17V8zM3 14v2h17v-2z"/></svg>│・𝐈𝐀</div>
-          <div class="dc-salon sub">🔒 IA · Lina</div>
-          <div class="dc-salon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3 8.6 21h2l1.4-18zM16 3l-1.4 18h2L18 3zM4 8v2h17V8zM3 14v2h17v-2z"/></svg>│・musique</div>
-          <div class="dc-salon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>│・𝐃𝐢𝐜𝐭𝐚𝐭𝐮𝐫𝐞</div>
-          <div class="dc-cat">⌄ Jeux</div>
-          <div class="dc-salon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3 8.6 21h2l1.4-18zM16 3l-1.4 18h2L18 3zM4 8v2h17V8zM3 14v2h17v-2z"/></svg>│・mini-jeux</div>
-          <div class="dc-salon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3 8.6 21h2l1.4-18zM16 3l-1.4 18h2L18 3zM4 8v2h17V8zM3 14v2h17v-2z"/></svg>│・blindtest</div>
-        </div>
-        <div class="dc-main">
-          <div class="dc-top"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3 8.6 21h2l1.4-18zM16 3l-1.4 18h2L18 3zM4 8v2h17V8zM3 14v2h17v-2z"/></svg><span id="ia-salon">│・𝐈𝐀</span><small>Pose ta question, le gardien répond</small></div>
-          <div class="dc-fil">
-            <div class="dc-msg" data-etape="0">
-              <div class="dc-av" style="background:#c2410c">L</div>
-              <div><div class="dc-tete"><span class="dc-nom" style="color:#f0a36b">Lina</span><span class="dc-heure">Aujourd’hui à 21:04</span></div>
-                <div class="dc-texte">yo tu peux m’expliquer les fractions stp j’ai un contrôle demain 😭</div></div>
-            </div>
-            <div class="dc-systeme" data-etape="1">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h11M4 12h8M4 17h11M19 5v14"/></svg>
-              <div><b class="nom-bot">AI Vercel</b> a créé un fil : <b>🔒 IA · Lina</b>. Seuls Lina et le staff le voient.
-                <div class="dc-fil-carte">🔒 IA · Lina <small>1 message · à l’instant</small></div></div>
-            </div>
-            <div class="dc-msg" data-etape="2">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 21:04</span></div>
-                <div class="dc-texte" id="ia-reponse" data-texte="Imagine une pizza coupée en 8 parts 🍕 Si tu en manges 3, tu as mangé 3/8 de la pizza. Le chiffre du bas dit en combien de parts on a coupé, celui du haut combien tu en prends. Plus le chiffre du bas est grand, plus les parts sont petites : 1/8 de pizza, c’est moins que 1/4.">Imagine une pizza coupée en 8 parts 🍕 Si tu en manges 3, tu as mangé 3/8 de la pizza. Le chiffre du bas dit en combien de parts on a coupé, celui du haut combien tu en prends. Plus le chiffre du bas est grand, plus les parts sont petites : 1/8 de pizza, c’est moins que 1/4.</div></div>
-            </div>
-            <div class="dc-msg" data-etape="3">
-              <div class="dc-av" style="background:#c2410c">L</div>
-              <div><div class="dc-tete"><span class="dc-nom" style="color:#f0a36b">Lina</span><span class="dc-heure">Aujourd’hui à 21:06</span></div>
-                <div class="dc-texte">et ça c’est pareil ?</div>
-                <div class="dc-piece" aria-label="Photo d’un exercice"><b>Exercice 3</b>Range dans l’ordre : 2/3 ; 3/4 ; 5/8. Justifie ta réponse.</div></div>
-            </div>
-            <div class="dc-msg suite" data-etape="3">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-texte">Oui ! Sur ta photo, l’exercice 3 compare 2/3, 3/4 et 5/8. Astuce : mets-les tous sur 24 parts. 2/3 = 16/24, 3/4 = 18/24, 5/8 = 15/24. Donc 5/8 &lt; 2/3 &lt; 3/4 ✅</div></div>
-            </div>
-          </div>
-          <div class="dc-saisie"><span class="plus">+</span><span>Envoyer un message dans 🔒 IA · Lina</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="wrap">
-    <div class="outils">
-      <div class="menu-zone">
-        <div class="menu-contexte" aria-label="Clic droit sur un message">
-          <div>Ajouter une réaction <span>›</span></div>
-          <div>Répondre</div>
-          <div>Copier le texte</div>
-          <hr>
-          <div class="on">Applications <span>›</span></div>
-          <div class="sous">
-            <div class="on">Expliquer ce message</div>
-            <div>Traduire en français</div>
-            <div>Signaler au staff</div>
-          </div>
-        </div>
-      </div>
-      <ul>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4M21 9V5a2 2 0 0 0-2-2h-4M3 15v4a2 2 0 0 0 2 2h4M15 21h4a2 2 0 0 0 2-2v-4"/><path d="M8 12h8"/></svg><span><b>Clic droit sur n’importe quel message</b> : l’expliquer, le traduire ou le signaler.</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/></svg><span><b>Résumer un salon</b> où il s’est passé trop de choses : <span class="cmd">/resume-salon</span>.</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg><span><b>L’IA vocale</b> : parle-lui dans le vocal, elle te répond à voix haute. <span class="cmd">/ia › IA vocale</span></span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg><span><b>Rappels et sondages</b> : <span class="cmd">/serveur › Rappel</span>, <span class="cmd">/serveur › Sondage</span>.</span></li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ II · SPOTIFY ============================ -->
-<section class="chapitre" id="musique" data-chapitre="Chapitre II|La musique du village">
-  <div class="wrap">
-    <div class="entete">
-      <p class="numero">Chapitre II</p>
-      <h2 class="decoupe">La musique du village</h2>
-      <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-    </div>
-  </div>
-  <div class="scene spotify-scene" data-scene="spotify">
-    <div class="wrap plateau">
-      <div class="legendes">
-        <div class="legende">
-          <p class="n">1 · Sur Spotify</p>
-          <h3>Lina écoute son son</h3>
-          <p>Comme chaque soir, Lina a lancé Spotify sur son téléphone.</p>
-          <p class="clair">Rien à installer : le bot voit ce qu’elle écoute grâce à son statut Discord.</p>
-        </div>
-        <div class="legende">
-          <p class="n">2 · Tout le serveur le voit</p>
-          <h3>Le partage en direct</h3>
-          <p>Dans le salon musique, un message montre le son, l’artiste et où elle en est. Il se met à jour tout seul.</p>
-          <p class="clair">À activer pour soi avec <span class="cmd">/musique › Partager mon Spotify</span>.</p>
-        </div>
-        <div class="legende">
-          <p class="n">3 · Et dans le vocal</p>
-          <h3>Le même son, au même moment</h3>
-          <p>Ses amis dans le vocal entendent exactement ce qu’elle écoute, calé à la seconde près.</p>
-          <p class="clair">Si Lina passe au son suivant, le bot suit.</p>
-        </div>
-        <div class="legende">
-          <p class="n">4 · Un lien suffit</p>
-          <h3>Colle un lien Spotify</h3>
-          <p>Un son, un album ou une playlist entière : <span class="cmd">/musique</span> › Jouer un son, et le lien. Le panneau de contrôle apparaît.</p>
-          <p class="clair">Marche aussi avec Apple Music, YouTube, SoundCloud et Deezer. Effets 8D, slowed + reverb, nightcore, karaoké.</p>
-        </div>
-        <div class="legende">
-          <p class="n">5 · Les paroles</p>
-          <h3>La ligne chantée s’allume</h3>
-          <p>Bouton 🎤 Paroles : les paroles défilent en rythme, comme dans l’appli Spotify.</p>
-          <p class="clair">Décalées ? Deux boutons les recalent par demi-seconde.</p>
-        </div>
-        <div class="points" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i></div>
-      </div>
-
-      <div class="accord">
-        <div class="telephone" aria-label="Spotify sur le téléphone de Lina">
-          <div class="haut"><span>21:12</span><span>DEPUIS TA PLAYLIST</span></div>
-          <svg class="logo-sp" viewBox="0 0 24 24" role="img" aria-label="Spotify"><circle cx="12" cy="12" r="12" fill="#1db954"/><path d="M6.5 9.3c3.7-1.1 7.9-.8 11 1M7.2 12.4c3-.9 6.4-.6 9 .9M7.8 15.3c2.4-.6 5-.4 7 .8" stroke="#000" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
-          <div class="pochette" aria-hidden="true"></div>
-          <div><div class="titre">Minuit sur le périph</div><div class="artiste">Nova · Nuit blanche</div></div>
-          <div class="barre-sp"><i id="sp-barre"></i></div>
-          <div class="temps"><span id="sp-t">1:12</span><span>3:08</span></div>
-          <div class="commandes" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
-            <span class="lecture"><svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg></span>
-            <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
-          </div>
-          <div class="appareil">● Partagé sur Discord</div>
-        </div>
-        <svg class="liaison" viewBox="0 0 70 120" aria-hidden="true"><path id="liaison" d="M2 60 C 24 10, 46 110, 68 60"/><circle id="pulse" r="4" cx="2" cy="60"/></svg>
-        <div class="pile">
-          <div class="dc" id="sp-partage" aria-label="Le partage Spotify dans Discord">
-            <div class="dc-msg">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 21:12</span></div>
-                <div class="dc-embed" style="--c:#1db954">
-                  <div class="avec-vignette">
-                    <div style="display:grid;gap:8px;min-width:0">
-                      <div class="auteur"><i style="background:#c2410c"></i>Lina écoute sur Spotify</div>
-                      <div class="titre lien">Minuit sur le périph</div>
-                      <div class="desc">🎤 <b>Nova</b>
-💿 Nuit blanche
-<code id="sp-code">───────🟢──────────</code> <span id="sp-code-t">1:12 / 3:08</span><span id="sp-suit">
-
-🔊 Le bot joue la même chose dans <span class="dc-mention">🔊│・𝐃𝐢𝐜𝐭𝐚𝐭𝐮𝐫𝐞</span></span></div>
-                    </div>
-                    <div class="vignette" style="background:conic-gradient(from 210deg at 60% 40%, #3b2c6b, #c23a2f, #f2c46d, #3b2c6b)"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="dc" id="sp-panneau" aria-label="Le panneau de musique dans Discord">
-            <div class="dc-msg">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 21:14</span></div>
-                <div class="dc-petit">↳ <span class="dc-mention">@Lina</span> a utilisé <span class="cmd">/musique</span> › Jouer un son <span style="color:#00a8fc">open.spotify.com/track/…</span></div>
-                <div class="dc-embed" style="--c:#1db954">
-                  <div class="auteur">🎶 En cours de lecture</div>
-                  <div class="titre lien">Minuit sur le périph</div>
-                  <div class="desc"><b>Nova</b>
-
-<span id="pl-barre">▬▬▬▬▬🔘──────────</span>
-<code id="pl-t">1:12 / 3:08</code> · fin <span class="dc-ts">dans 2 minutes</span></div>
-                  <div class="paroles" id="paroles" aria-label="Paroles synchronisées">
-                    <span>On roule tard, la ville est en veille</span>
-                    <span>Le son qui monte, personne sommeille</span>
-                    <span>Refrain qui tourne en boucle dans la tête</span>
-                    <span>Le serveur vit, ce soir c’est la fête</span>
-                  </div>
-                  <div class="pied">Spotify · Ensuite : Dernier métro — Kiko</div>
-                </div>
-                <div class="dc-lignes" aria-hidden="true">
-                  <div class="dc-ligne"><span class="dc-bt">⏮️</span><span class="dc-bt p">⏸️</span><span class="dc-bt">⏭️</span><span class="dc-bt r">⏹️</span><span class="dc-bt">🔀</span></div>
-                  <div class="dc-ligne"><span class="dc-bt">🔉</span><span class="dc-bt">🔊</span><span class="dc-bt">🔁</span><span class="dc-bt">🎧 8D</span><span class="dc-bt">📜 File</span></div>
-                  <div class="dc-select">🎛️ Effets audio : Slowed + reverb</div>
-                  <div class="dc-ligne"><span class="dc-bt v">🎤 Paroles</span><span class="dc-bt">➕ Ajouter</span><span class="dc-bt">❤️ Favoris</span><span class="dc-bt">♾️ Autoplay</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ III · LE LOUP-GAROU ============================ -->
-<section class="chapitre loups" id="loups" data-chapitre="Chapitre III|La nuit des loups">
-  <div class="fond" aria-hidden="true"><img src="images/loup-lune.webp" alt="" id="loup-fond"></div>
-  <div class="wrap" style="position:relative">
-    <div class="entete">
-      <p class="numero">Chapitre III</p>
-      <h2 class="decoupe">La nuit des loups</h2>
-      <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-      <p class="conte">Quand le soleil se couche, le gardien devient meneur de jeu. Il distribue les rôles en secret, réveille les loups, compte les votes, et raconte toute la partie à voix haute dans le vocal. Vous n’avez plus qu’à jouer.</p>
-    </div>
-  </div>
-  <div class="scene" data-scene="loups">
-    <div class="wrap plateau">
-      <div class="legendes">
-        <div class="legende">
-          <p class="n">1 · On se rassemble</p>
-          <h3>La salle d’attente</h3>
-          <p>Lina tape <span class="cmd">/jeux › Loup-garou</span>. Chacun clique sur « Rejoindre ». Pas assez de monde ? Des bots complètent la table.</p>
-        </div>
-        <div class="legende">
-          <p class="n">2 · En secret</p>
-          <h3>Ton rôle arrive en message privé</h3>
-          <p>La carte se retourne. Tu sais qui tu es, ce que tu dois faire, et qui sont tes complices si tu es un loup.</p>
-        </div>
-        <div class="legende">
-          <p class="n">3 · La nuit tombe</p>
-          <h3>Le village s’endort</h3>
-          <p>Le narrateur le dit à voix haute. Les loups, la voyante et la sorcière agissent en secret, avec un bouton.</p>
-          <p class="voix"><span aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Le narrateur parle dans le vocal</p>
-        </div>
-        <div class="legende">
-          <p class="n">4 · Les loups chassent</p>
-          <h3>« Qui dévorer ? »</h3>
-          <p>Seuls les loups voient ce menu. Ils voient aussi le choix des autres loups, pour se mettre d’accord.</p>
-        </div>
-        <div class="legende">
-          <p class="n">5 · L’aube</p>
-          <h3>Un cri déchire le silence</h3>
-          <p>Au matin, le gardien annonce qui est mort cette nuit, et quel était son rôle.</p>
-        </div>
-        <div class="legende">
-          <p class="n">6 · Le village vote</p>
-          <h3>Qui est le loup ?</h3>
-          <p>On débat en vocal, puis on vote avec un menu. Le plus désigné est éliminé.</p>
-        </div>
-        <div class="legende">
-          <p class="n">7 · La fin</p>
-          <h3>Le village a gagné</h3>
-          <p>Tous les rôles sont révélés. On relance une partie ?</p>
-        </div>
-        <div class="points" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      </div>
-
-      <div class="dc dc-fenetre" aria-label="Exemple : une partie de loup-garou sur Discord">
-        <nav class="dc-serveurs" aria-hidden="true"><i class="on">🌙</i><hr><i>JV</i><i>RP</i><i>+</i></nav>
-        <div class="dc-salons" aria-hidden="true">
-          <header>Ton serveur</header>
-          <div class="dc-cat">⌄ Jeux</div>
-          <div class="dc-salon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3 8.6 21h2l1.4-18zM16 3l-1.4 18h2L18 3zM4 8v2h17V8zM3 14v2h17v-2z"/></svg>│・mini-jeux</div>
-          <div class="dc-salon sub on" id="lg-fil-salon">🐺 Loup-garou</div>
-          <div class="dc-salon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3 8.6 21h2l1.4-18zM16 3l-1.4 18h2L18 3zM4 8v2h17V8zM3 14v2h17v-2z"/></svg>│・loup-garou</div>
-          <div class="dc-cat">⌄ Messages privés</div>
-          <div class="dc-salon" id="lg-mp-salon">@ <span class="nom-bot">AI Vercel</span></div>
-        </div>
-        <div class="dc-main">
-          <div class="dc-top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h11M4 12h8M4 17h11M19 5v14"/></svg><span id="lg-titre">🐺 Loup-garou</span><small>Fil de la partie</small></div>
-          <div class="dc-fil">
-            <div class="dc-msg" data-etape="0">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 22:00</span></div>
-                <div class="dc-embed" style="--c:#2c2f33">
-                  <div class="auteur">🐺 LOUP-GAROU</div>
-                  <div class="titre">On cherche des joueurs (6/16)</div>
-                  <div class="desc">Le bot est le meneur : il distribue les rôles en secret, gère les nuits et les votes.
-🔊 <b>Avec la voix</b> : le narrateur raconte la partie dans <span class="dc-mention">🔊│・𝐈𝐀-𝐕𝐎𝐂𝐀𝐋</span>.
-
-👥 <b>Joueurs</b> : <span class="dc-mention">@Lina</span>, <span class="dc-mention">@Sam</span>, <span class="dc-mention">@Hugo</span>, <span class="dc-mention">@Kiko</span>, <span class="dc-mention">@Nova</span>, <span class="dc-mention">@Rio</span>
-Départ automatique <span class="dc-ts">dans 2 minutes</span>, ou quand <span class="dc-mention">@Lina</span> appuie sur <b>Lancer</b>.</div>
-                </div>
-                <div class="dc-lignes"><div class="dc-ligne"><span class="dc-bt v">✋ Rejoindre</span><span class="dc-bt">Quitter</span><span class="dc-bt p">▶️ Lancer</span><span class="dc-bt r">Annuler</span></div>
-                  <div class="dc-ligne"><span class="dc-bt v">🔊 Voix : activée</span><span class="dc-bt">🧪 Tester avec des bots</span></div></div>
-              </div>
-            </div>
-            <div class="dc-msg" data-etape="1">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">message privé</span></div>
-                <div class="dc-embed" style="--c:#ed4245">
-                  <div class="auteur">🐺 LOUP-GAROU · 6 joueurs</div>
-                  <div class="titre">🐺 Tu es Loup-garou</div>
-                  <div class="desc"><i>Chaque nuit, avec les autres loups, tu choisis une victime. Le jour, fais-toi passer pour un villageois.</i></div>
-                  <div class="champs"><div class="large"><b>🎯 Ton objectif</b>Éliminer les villageois jusqu’à être aussi nombreux qu’eux.</div><div class="large"><b>🐺 Ta meute</b>Tu es le seul loup : personne pour couvrir tes erreurs.</div></div>
-                  <img class="carte-img" id="lg-carte" src="cartes/loup.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Loup-garou" width="448" height="272">
-                  <div class="pied">Le jour, fais-toi passer pour un villageois 🤫</div>
-                </div>
-                <div class="dc-lignes"><div class="dc-ligne"><span class="dc-bt lien">🎲 Aller à la partie</span></div></div>
-              </div>
-            </div>
-            <div class="dc-msg" data-etape="2">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 22:03</span></div>
-                <div class="dc-embed" style="--c:#1e1f4b">
-                  <div class="auteur">🌙 NUIT 1</div>
-                  <div class="titre">Le village s’endort…</div>
-                  <div class="desc">Une brume épaisse recouvre les rues. Les portes se ferment, les bougies s’éteignent. Les loups sortent chasser.
-
-🐺 Loups, 🔮 Voyante : appuyez sur <b>Agir cette nuit</b> (fin <span class="dc-ts">dans 50 secondes</span>).
-Les autres, dormez bien 😴</div>
-                </div>
-                <div class="dc-lignes"><div class="dc-ligne"><span class="dc-bt">🎭 Voir mon rôle</span><span class="dc-bt p">🌙 Agir cette nuit</span><span class="dc-bt r">Arrêter</span></div></div>
-              </div>
-            </div>
-            <div class="dc-msg" data-etape="3">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 22:03</span></div>
-                <div class="dc-texte">🐺 Choisis ta victime.</div>
-                <div class="dc-lignes"><div class="dc-select">Qui dévorer ?</div>
-                  <div class="dc-options"><div>Sam</div><div class="on">Hugo</div><div>Kiko</div></div></div>
-                <p class="dc-ephemere">👁 Seul toi peux voir ce message · <a>Ignorer</a></p>
-              </div>
-            </div>
-            <div class="dc-msg" data-etape="4">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 22:04</span></div>
-                <div class="dc-embed" style="--c:#f1c40f">
-                  <div class="auteur">☀️ JOUR 1</div>
-                  <div class="titre">Le jour se lève, et un cri déchire le silence.</div>
-                  <div class="desc">💀 <span class="dc-mention">@Hugo</span> a été retrouvé mort. C’était 🔮 Voyante.</div>
-                </div>
-              </div>
-            </div>
-            <div class="dc-msg" data-etape="5">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 22:06</span></div>
-                <div class="dc-embed" style="--c:#ed4245">
-                  <div class="titre">🔥 Nova est éliminé</div>
-                  <div class="desc">💀 <span class="dc-mention">@Nova</span> est éliminé par le village. C’était 🐺 Loup-garou.
-<span class="dc-petit">Votes : @Nova : 4 · @Sam : 1</span></div>
-                </div>
-              </div>
-            </div>
-            <div class="dc-msg" data-etape="6">
-              <div class="dc-av bot" aria-hidden="true"></div>
-              <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 22:06</span></div>
-                <div class="dc-embed" style="--c:#57f287">
-                  <div class="auteur">🐺 LOUP-GAROU</div>
-                  <div class="titre">🎉 Le village a gagné !</div>
-                  <div class="desc">Tous les loups sont morts.
-
-❤️ <span class="dc-mention">@Lina</span> · 🧪 Sorcière
-❤️ <span class="dc-mention">@Sam</span> · 🧑‍🌾 Villageois
-💀 <span class="dc-mention">@Hugo</span> · 🔮 Voyante
-💀 <span class="dc-mention">@Nova</span> · 🐺 Loup-garou
-<span class="dc-petit">1 nuit</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="dc-saisie"><span class="plus">+</span><span>Envoyer un message dans 🐺 Loup-garou</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="wrap" style="position:relative">
-    <div class="eventail" id="eventail" aria-label="Les cartes de rôle">
-      <div class="carte"><img class="carte-img" src="cartes/villageois.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Villageois" width="448" height="272"></div>
-      <div class="carte"><img class="carte-img" src="cartes/chasseur.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Chasseur" width="448" height="272"></div>
-      <div class="carte"><img class="carte-img" src="cartes/loup.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Loup-garou" width="448" height="272"></div>
-      <div class="carte"><img class="carte-img" src="cartes/voyante.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Voyante" width="448" height="272"></div>
-      <div class="carte"><img class="carte-img" src="cartes/sorciere.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Sorcière" width="448" height="272"></div>
-    </div>
-    <div class="legende-roles">
-      <div><b>Villageois</b>Pas de pouvoir, mais un vote. Trouve les loups.</div>
-      <div><b>Chasseur</b>S’il meurt, il tire une dernière flèche. Dès 8 joueurs.</div>
-      <div><b>Loup-garou</b>Chaque nuit, une victime. Le jour, il ment.</div>
-      <div><b>Voyante</b>Chaque nuit, elle découvre le rôle de quelqu’un.</div>
-      <div><b>Sorcière</b>Une potion de vie, une de mort. Dès 6 joueurs.</div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ IV · L'IMPOSTEUR ============================ -->
-<section class="chapitre" id="intrus" data-chapitre="Chapitre IV|Le mot de trop">
-  <div class="wrap">
-    <div class="deux">
-      <div class="entete">
-        <p class="numero">Chapitre IV</p>
-        <h2 class="decoupe">Le mot de trop</h2>
-        <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-        <p class="conte">Au village, quatre amis reçoivent chacun un mot secret. Trois ont le même. Le quatrième a un mot proche, et personne ne le prévient : l’intrus ne sait pas qu’il est l’intrus.</p>
-      </div>
-      <div class="en-clair">
-        <h3>En clair</h3>
-        <p>Chacun donne un indice sur son mot, sans le dire. Puis on vote pour démasquer celui dont le mot n’est pas le même.</p>
-        <ol class="etapes">
-          <li><span>Lance <span class="cmd">/jeux › L’imposteur</span> et choisis un thème : rap FR, bouffe, jeux vidéo, animés, foot…</span></li>
-          <li><span>Ton mot arrive en message privé. Un indice de 1 à 5 mots chacun son tour.</span></li>
-          <li><span>On vote. Démasqué, l’intrus peut encore gagner s’il devine le mot des autres.</span></li>
-        </ol>
-      </div>
-    </div>
-    <div class="table-mots" id="table-mots">
-      <div class="mot retourne"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« ça se partage »</em></div></div><span class="joueur">Lina</span></div>
-      <div class="mot retourne"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« Italie »</em></div></div><span class="joueur">Sam</span></div>
-      <div class="mot retourne intrus"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Burger</strong><em>« avec des frites »</em></div></div><span class="joueur">Kiko, l’intrus</span></div>
-      <div class="mot retourne"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« le four »</em></div></div><span class="joueur">Rio</span></div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ V · LA TAVERNE ============================ -->
-<section class="chapitre taverne" id="taverne" data-chapitre="Chapitre V|La taverne">
-  <div class="wrap">
-    <div class="deux">
-      <div class="cote">
-        <div class="entete">
-          <p class="numero">Chapitre V</p>
-          <h2 class="decoupe">La taverne</h2>
-          <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-        </div>
-        <p class="conte">Au fond du village, une taverne ne ferme jamais. Son tenancier, Casinho, est un deuxième bot : on y joue avec des jetons, on mise avec des boutons, et chaque table dit franchement ce qu’elle rend.</p>
-        <div class="en-clair">
-          <h3>En clair</h3>
-          <p>Un casino de jetons fictifs dans ton serveur. Tape <span class="cmd">/casino</span>, choisis une table, joue dans le message.</p>
-          <ol class="etapes">
-            <li><span>Blackjack complet, roulette européenne sur tapis, crash, mines, machine à sous, dés, duel entre joueurs.</span></li>
-            <li><span>Des jetons offerts chaque jour avec <span class="cmd">/quotidien</span>, et un classement du serveur.</span></li>
-          </ol>
-        </div>
-        <div class="avertissement"><span aria-hidden="true">⚠</span><span>Les jetons sont <b>fictifs</b> : ils ne s’achètent pas, ne se retirent pas et ne valent rien en dehors du serveur.</span></div>
-      </div>
-      <div class="cote">
-        <div class="roue-zone">
-          <svg class="roue" id="roue" viewBox="-100 -100 200 200" role="img" aria-label="Roulette européenne, 37 cases"></svg>
-          <div class="pointe" aria-hidden="true"></div>
-          <div class="jetons" aria-hidden="true">
-            <span style="--c:#c23a2f;left:4%;top:70%"></span>
-            <span style="--c:#1f7a4a;left:80%;top:8%"></span>
-            <span style="--c:#3b2c6b;left:86%;top:74%"></span>
-          </div>
-        </div>
-        <div>
-          <p class="numero" style="margin-bottom:10px;letter-spacing:.18em">Ce que rend chaque table, sur 100 jetons misés</p>
-          <div class="trj" id="trj">
-            <div class="l"><span>Duel</span><span class="b"><i style="--w:100%"></i></span><span class="v" data-compte="100" data-dec="0">100</span></div>
-            <div class="l"><span>Blackjack</span><span class="b"><i style="--w:95%"></i></span><span class="v" data-compte="99.5" data-dec="1">99,5</span></div>
-            <div class="l"><span>Pile ou face</span><span class="b"><i style="--w:75%"></i></span><span class="v" data-compte="97.5" data-dec="1">97,5</span></div>
-            <div class="l"><span>Roulette</span><span class="b"><i style="--w:73%"></i></span><span class="v" data-compte="97.3" data-dec="1">97,3</span></div>
-            <div class="l"><span>Crash, mines</span><span class="b"><i style="--w:70%"></i></span><span class="v" data-compte="97" data-dec="0">97</span></div>
-            <div class="l"><span>Machine à sous</span><span class="b"><i style="--w:56%"></i></span><span class="v" data-compte="95.6" data-dec="1">95,6</span></div>
-            <div class="axe" aria-hidden="true"><span></span><span><span>90</span><span>95</span><span>100</span></span><span></span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ VI · LA GARDE ============================ -->
-<section class="chapitre garde" id="garde" data-chapitre="Chapitre VI|La garde de nuit">
-  <div class="wrap">
-    <div class="deux">
-      <div class="cote">
-        <div class="entete">
-          <p class="numero">Chapitre VI</p>
-          <h2 class="decoupe">La garde de nuit</h2>
-          <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-        </div>
-        <p class="conte">Quand le staff dort, le gardien veille. Si quelqu’un dépasse les bornes, un clic droit suffit : il lit le message, regarde ce qui s’est dit juste avant, et prévient le staff avec son avis.</p>
-        <div class="en-clair">
-          <h3>En clair</h3>
-          <p>Clic droit sur un message › Applications › <b>Signaler au staff</b>. L’IA analyse et le staff agit en un bouton.</p>
-          <ol class="etapes">
-            <li><span>Elle fait la différence entre une vanne entre potes et une vraie attaque.</span></li>
-            <li><span>Toute la modération classique : <span class="cmd">/sanction</span> : avertir, rendre muet, bannir, verrouiller, mode lent, et les tickets avec <span class="cmd">/pannel</span>.</span></li>
-            <li><span>Personne ne peut faire @everyone avec le bot, et le chef est prévenu en cas de souci.</span></li>
-          </ol>
-        </div>
-      </div>
-      <div class="cote">
-        <div class="dc" id="signalement" aria-label="Un signalement analysé par l’IA">
-          <div class="sceau" id="sceau" aria-hidden="true">
-            <svg viewBox="0 0 150 150"><defs><radialGradient id="cire" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#e2574a"/><stop offset="1" stop-color="#7d1d16"/></radialGradient></defs>
-              <path d="M75 8 C92 4 104 18 118 22 C134 27 144 42 141 58 C139 72 148 86 140 100 C132 116 116 120 104 132 C92 143 72 146 58 140 C42 134 26 130 16 114 C6 98 12 82 9 66 C6 48 16 34 30 26 C44 18 58 12 75 8 Z" fill="url(#cire)"/>
-              <circle cx="75" cy="75" r="44" fill="none" stroke="#f4b0a6" stroke-opacity=".45" stroke-width="2"/>
-              <text x="75" y="72" text-anchor="middle" font-family="IM Fell English SC, serif" font-size="24" fill="#fde2dc">Traité</text>
-              <text x="75" y="94" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="11" fill="#f4b0a6" letter-spacing="2">MUTE 1H</text>
-            </svg>
-          </div>
-          <div class="dc-msg">
-            <div class="dc-av bot" aria-hidden="true"></div>
-            <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 02:17</span></div>
-              <div class="dc-embed" style="--c:#ed4245">
-                <div class="auteur"><i style="background:#57606f"></i>🚨 Signalement · 🔴 Grave</div>
-                <div class="desc" style="border-left:4px solid #4e5058;padding-left:10px">t’es vraiment nul, personne veut de toi ici, dégage du serveur</div>
-                <div class="champs">
-                  <div><b>Auteur</b><span class="dc-mention">@Troll</span></div>
-                  <div><b>Signalé par</b><span class="dc-mention">@Sam</span></div>
-                  <div><b>Salon</b><span class="dc-mention">#│・général</span></div>
-                  <div class="large"><b>🤖 Analyse IA</b><strong>Harcèlement</strong> · gravité 4/5
-Attaque directe et répétée contre un membre, sans contexte de plaisanterie.</div>
-                  <div class="large"><b>👉 Conseil</b>Mute temporaire et avertissement.</div>
-                </div>
-                <div class="pied">Ton serveur · Aujourd’hui à 02:17</div>
-              </div>
-              <div class="dc-lignes"><div class="dc-ligne"><span class="dc-bt r">🗑️ Supprimer le message</span><span class="dc-bt" id="bt-mute">🔇 Mute 1h</span><span class="dc-bt">✅ Rien à faire</span></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="tribunal">
-      <article><h3>Le tribunal des sons</h3><p>Chaque semaine, chaque membre dépose un son. L’IA repère les faux et les reposts, deux juges tranchent. <span class="cmd">/tribunal</span></p></article>
-      <article><h3>La battle</h3><p>Deux sons validés s’affrontent. Tout le serveur vote pendant 24 heures, le gagnant devient Champion du Tribunal.</p></article>
-      <article><h3>Les rendez-vous</h3><p>Rappels, sondages à boutons et quiz sur n’importe quel sujet, pour que le serveur ne s’endorme jamais.</p></article>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ LES VEILLÉES ============================ -->
-<section class="chapitre" id="veillees" data-chapitre="Les veillées|Tous les autres jeux" style="padding-top:0">
-  <div class="wrap">
-    <div class="entete">
-      <p class="numero">Les veillées</p>
-      <h2 class="decoupe">Et au coin du feu…</h2>
-      <p class="conte">Le loup-garou n’est qu’une des histoires du soir. Voici les autres jeux que le gardien anime tout seul, du blind test au freestyle.</p>
-    </div>
-    <div class="veillees">
-      <article class="veillee"><span class="sym" aria-hidden="true">🎧</span><h3>Blind test</h3><p>Le bot passe des extraits en vocal, le premier qui trouve marque. Titre 2 pts, artiste 1 pt.</p><span class="cmd">/jeux › Blind test</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🎙️</span><h3>Suite des paroles</h3><p>Le son se coupe juste avant une phrase. Écris la suite avant les autres.</p><span class="cmd">/jeux › Suite des paroles</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">📅</span><h3>Devine l’année</h3><p>Un son passe : en quelle année est-il sorti ? Le plus proche marque aussi.</p><span class="cmd">/jeux › Devine l’année</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🎤</span><h3>Freestyle battle</h3><p>Deux rappeurs, une instru, un jury IA qui note les rimes, le flow et les punchlines.</p><span class="cmd">/jeux › Freestyle</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">📖</span><h3>Histoire</h3><p>L’IA raconte une aventure dont vous êtes les héros, et c’est vous qui décidez de la suite.</p><span class="cmd">/jeux › Histoire</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🧩</span><h3>Rébus en emojis</h3><p>Un film, un animé ou un son de rap FR en emojis. Le premier qui trouve gagne.</p><span class="cmd">/jeux › Rébus</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">📊</span><h3>Plus ou moins</h3><p>Qui a le plus de fans sur Deezer ? Enchaîne les bonnes réponses.</p><span class="cmd">/jeux › Plus ou moins</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🏆</span><h3>Fantasy Rap FR</h3><p>Ton équipe de 5 rappeurs, des points chaque lundi avec les vrais chiffres Deezer.</p><span class="cmd">/jeux › Fantasy Rap</span></article>
-    </div>
-  </div>
-</section>
-
-<!-- ============================ ÉPILOGUE ============================ -->
-<section class="aube" id="pacte" data-chapitre="Épilogue|Et le jour se leva">
-  <div class="ciel-aube">
-    <img src="images/aube.webp" alt="Le village au lever du soleil" id="aube-img" loading="lazy">
-    <p class="phrase">Et le jour se leva sur un serveur qui ne dormait plus.</p>
-  </div>
-  <div class="wrap">
-    <div class="entete">
-      <p class="numero">Épilogue · Les offres</p>
-      <h2 class="decoupe">Écris la suite avec nous</h2>
-      <svg class="ornement" viewBox="0 0 340 26" aria-hidden="true"><path d="M2 13 H140 M200 13 H338 M140 13 C152 2 164 2 170 13 C176 24 188 24 200 13"/><circle cx="170" cy="13" r="3"/></svg>
-    </div>
-    <div class="pacte" id="offres"></div>
-    <p class="note-pacte" id="note-pacte"></p>
-    <div class="essai" id="essai">
-      <span class="cadeau" aria-hidden="true">🎁</span>
+<main class="wrap">
+  <!-- Accueil -->
+  <section class="view" id="v-accueil">
+    <div class="hero">
       <div>
-        <h3>7 jours de Gardien, offerts</h3>
-        <ol>
-          <li>Invite <span class="nom-bot">AI Vercel</span> sur ton serveur.</li>
-          <li>Tape <code>/serveur</code>, choisis <b>Offre du serveur</b>, puis <b>Essai gratuit 7 jours</b>.</li>
-          <li>Tout est débloqué tout de suite : IA vocale illimitée, couleurs de ton serveur, rapport de la semaine, surveillance vocale.</li>
-        </ol>
+        <h1>Le bot qui fait <span class="glow">vivre</span> ton serveur Discord.</h1>
+        <p class="lead">Une IA qui se souvient de chaque membre, des soirées jeux, de la musique, une vraie sécurité et des niveaux. Tout se règle avec 6 commandes à panneaux.</p>
+        <div class="ctas">
+          <a class="btn invite" href="#">Ajouter <span class="bot-name">AI Vercel</span></a>
+          <a class="btn ghost" href="#offres">Voir les offres · essai 7 jours</a>
+        </div>
+        <div class="live">
+          <span class="chip"><span class="dot" id="st-dot"></span><span id="st-txt">Connexion…</span></span>
+          <span class="chip" id="st-srv" hidden></span>
+          <span class="chip" id="st-mem" hidden></span>
+        </div>
       </div>
-      <a class="bouton" id="essai-lien" href="#" target="_blank" rel="noopener" data-son="cloche">Commencer l’essai</a>
-    </div>
-  </div>
-
-  <div class="wrap" style="margin-top:110px">
-    <div class="questions" id="questions">
-      <div class="entete">
-        <p class="numero">Questions</p>
-        <h2 class="decoupe" style="font-size:clamp(40px,5.5vw,72px)">Avant de te lancer</h2>
-      </div>
-      <div>
-        <details><summary>Comment je l’ajoute à mon serveur ?</summary><p>Tu choisis une offre, on t’envoie le lien d’invitation, puis on règle le bot pour tes salons : salon IA, salon de jeux, vocal. Quelques minutes, sans rien coder.</p></details>
-        <details><summary>Est-ce que je dois laisser mon PC allumé ?</summary><p>Non. Le bot est hébergé en ligne et reste connecté jour et nuit, y compris dans le vocal.</p></details>
-        <details><summary>Le partage Spotify, il faut un compte Premium ?</summary><p>Non. Le bot lit ce que tu écoutes grâce à ton statut Discord (« Écoute Spotify »). Il suffit d’avoir relié Spotify à ton compte Discord.</p></details>
-        <details><summary>Le casino, c’est de l’argent réel ?</summary><p>Jamais. Les jetons sont fictifs : on ne peut ni les acheter ni les retirer. C’est un jeu entre membres.</p></details>
-        <details><summary>L’IA comprend le français d’internet ?</summary><p>Oui : l’argot, les fautes, les abréviations. Elle lit aussi les images, les PDF et les liens.</p></details>
-        <details><summary>Je peux mettre les couleurs de mon serveur ?</summary><p>Oui, dès le Veilleur : ton logo, ta couleur et ton nom sur les panneaux, tickets, annonces et rapports. Avec le Sur mesure, le bot prend aussi ton nom et ton avatar.</p></details>
-        <details><summary>Comment marche l’essai gratuit ?</summary><p>Une fois le bot invité, tape <code>/serveur</code> › Offre du serveur › Essai gratuit 7 jours. Tout le Gardien est débloqué pendant 7 jours, une fois par serveur, sans carte bancaire.</p></details>
+      <div class="neon" style="--c1: var(--cyan); --c2: var(--pink)">
+        <div class="in" id="hero-demo"></div>
       </div>
     </div>
-  </div>
 
-  <div class="wrap fin" id="contact">
-    <h2 class="decoupe">Invite le <em>gardien.</em></h2>
-    <div class="ligne">
-      <div>
-        <p>Écris-nous sur Discord : on l’installe avec toi, et tu testes tout avant de payer.</p>
-        <p class="contact">Discord : <code id="pseudo">ton-pseudo</code> <button type="button" id="copier" data-son="clic">Copier</button></p>
-      </div>
-      <a class="bouton" id="commander" href="#" target="_blank" rel="noopener" data-son="cloche">Commander sur Discord</a>
+    <div class="section-title">
+      <div><h2>Choisis ce qui t’intéresse</h2><p>Clique sur une carte pour voir ce que ça t’apporte, avec des exemples.</p></div>
     </div>
-  </div>
-</section>
+    <div class="cats" id="cats"></div>
 
+    <div class="strip">
+      <div class="item"><b>6 commandes, c’est tout</b><span>/ia, /jeux, /musique, /serveur, /sanction, /pannel : chacune ouvre un panneau avec des boutons.</span></div>
+      <div class="item"><b>Réglé en 2 minutes</b><span>Le tableau de bord range tout par catégorie : sécurité, niveaux, boutique, accueil, vocal, IA.</span></div>
+      <div class="item"><b>Gratuit pour commencer</b><span>Tout le principal est gratuit. Les offres ajoutent plus d’IA vocale et des options de staff.</span></div>
+    </div>
+  </section>
+
+  <!-- Une catégorie (remplie par le script) -->
+  <section class="view" id="v-cat"></section>
+
+  <!-- Offres -->
+  <section class="view" id="v-offres">
+    <a class="back" href="#">← Toutes les fonctionnalités</a>
+    <div class="section-title" style="margin-top:0">
+      <div><h2 style="font-size:clamp(28px,4vw,40px)">Des offres simples, sans engagement</h2><p>Chaque offre dure 31 jours et s’active toute seule après le paiement PayPal. Essai gratuit de 7 jours : <b>/serveur</b> › Offre du serveur.</p></div>
+    </div>
+    <div class="plans" id="plans"></div>
+    <div class="pay">
+      <div class="box" id="payer">
+        <h3>Payer avec PayPal</h3>
+        <p>Colle l’identifiant de ton serveur, choisis l’offre : tu es envoyé sur PayPal, puis l’offre s’active sur ton serveur.</p>
+        <form class="form" id="pay-form" novalidate>
+          <input id="pay-id" inputmode="numeric" autocomplete="off" placeholder="Identifiant du serveur" aria-label="Identifiant du serveur">
+          <select id="pay-plan" aria-label="Offre"><option value="veilleur">🌙 Veilleur · 4,99 €</option><option value="gardien">🛡️ Gardien · 9,99 €</option></select>
+          <button class="btn" type="submit">Payer</button>
+          <div class="err" id="pay-err" role="alert"></div>
+        </form>
+        <p class="hint">Identifiant du serveur : clic droit sur le serveur › Copier l’identifiant du serveur (active le mode développeur dans Paramètres › Avancés). Plus simple : <b>/serveur</b> › Offre du serveur › Payer, le lien est déjà rempli.</p>
+      </div>
+      <div class="box">
+        <h3>🤝 Parrainage</h3>
+        <p>Chaque serveur a un code (<b>/serveur</b> › Parrainage). Donne-le à un serveur que tu invites : il l’entre au même endroit, et à son premier paiement, <b>tu gagnes 1 mois offert</b>.</p>
+        <div class="dc" style="border-radius:14px">
+          <div class="msg"><img class="pp bot-pp" alt=""><div><div class="who"><span class="bot-name">AI Vercel</span><span class="badge">✔ APP</span></div>
+            <div class="embed" style="--ec: var(--green)"><div class="et">🤝 Parrainage</div><div class="ed">Ton code : <b>VERCEL-7F3A2C</b>
+Serveurs parrainés : <b>3</b> · abonnés : <b>1</b></div></div>
+            <div class="eph">👁 Seul toi peux voir ce message</div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer>
   <div class="wrap">
-    <span>© <span id="annee">2026</span> <span class="nom-bot">AI Vercel</span>. Bot indépendant, non affilié à Discord ni à Spotify.</span>
-    <span>Le village a été modélisé et rendu dans Blender.</span>
+    <span>© <span id="year"></span> <span class="bot-name">AI Vercel</span> · fait pour les serveurs francophones</span>
+    <span><a href="/statut">Statut</a><a href="/dashboard">Tableau de bord</a><a href="#offres">Offres</a></span>
   </div>
 </footer>
 
 <script>
-/* =====================================================================
-   RÉGLAGES : c'est ici que tu changes le nom, les prix et le contact.
-   ===================================================================== */
-const CONFIG = {
-  name: 'AI Vercel',
-  // Lien vers ton serveur Discord ou ton profil (bouton « Commander »).
-  orderUrl: 'https://discord.com',
-  // Lien d'invitation du bot (bouton « Commencer l'essai »). L'identifiant est celui de l'application du bot.
-  inviteUrl: 'https://discord.com/oauth2/authorize?client_id=1549507270193193071&scope=bot%20applications.commands&permissions=8',
-  // Ton pseudo Discord, affiché avec un bouton « Copier ».
-  discordHandle: 'ton-pseudo',
-  plans: [
+(function () {
+  'use strict';
+  var INVITE = 'https://discord.com/oauth2/authorize?client_id=1549507270193193071&scope=bot%20applications.commands&permissions=8';
+  var FALLBACK_PP = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ff0ff"/><stop offset="1" stop-color="#ff5fd2"/></linearGradient></defs><rect width="64" height="64" fill="#110d1b"/><path d="M16 18h8l8 22 8-22h8L36 48h-8z" fill="url(#g)"/></svg>');
+  var bot = { nom: 'AI Vercel', avatar: FALLBACK_PP };
+
+  // ---------------- Contenu ----------------
+  // Messages d'exemple : { u: 'Nom', c: 'couleur', t: 'texte' } pour un membre, { bot: true, ... } pour le bot.
+  var CATS = [
     {
-      name: 'Veilleur', for: 'Pour un petit serveur entre potes', price: '4,99', unit: '€ / mois',
-      features: ['L’IA dans un salon, fils privés', 'Musique : Spotify, liens, playlists, effets', 'Modération, tickets et construction de salons', '600 min d’IA vocale par mois, voix au choix', 'Embeds aux couleurs de ton serveur', 'Rapport de la semaine en MP'],
-      missing: ['Surveillance vocale Gardien'],
+      id: 'ia', titre: 'Intelligence artificielle', mot: 'IA', emoji: '🧠', c1: '#5ff0ff', c2: '#a58bff', gif: '/panneaux/ia.gif',
+      court: 'Une IA qui parle comme un membre, se souvient de chacun et répond même en vocal.',
+      tags: ['Mémoire', 'Vocal', 'Traduction', 'FAQ'],
+      accroche: 'Mentionne-le, parle-lui en vocal : il répond avec le ton du serveur, se souvient de ce que chacun lui a dit et apprend les réponses de ton staff.',
+      avantages: [
+        ['💬', 'Discute partout', 'Mentionne le bot dans n’importe quel salon : réponses naturelles, en français, sans phrases de robot.'],
+        ['🧠', 'Se souvient de chaque membre', 'Jeux, artistes, pseudos… il retient et s’en sert plus tard. Chacun peut tout effacer d’un bouton.'],
+        ['🎙️', 'IA vocale et narrateur', 'Il rejoint le vocal, écoute et répond à voix haute. Voix au choix avec les offres.'],
+        ['🌍', 'Traduction automatique', 'Dans les salons que tu choisis, chaque message est traduit dans la langue voulue.'],
+        ['❓', 'FAQ qui apprend seule', 'Le staff répond une fois à une question ; ensuite l’IA répond à sa place.'],
+        ['🎤', 'Note de punchline', 'Une rime, une note sur 10 : rimes, jeu de mots, originalité et impact.'],
+      ],
+      exemples: [
+        { titre: 'Il se souvient', msgs: [
+          { u: 'Lina', c: '#ff5fd2', t: '@bot tu te rappelles à quoi je joue ?' },
+          { bot: true, t: 'Évidemment 😏 Valorant, sous le pseudo **LinaV**. Toujours bloquée en Platine ou ça y est ?' },
+        ] },
+        { titre: 'FAQ apprise', msgs: [
+          { u: 'Sami', c: '#ffc94d', t: 'comment on a le rôle VIP ?' },
+          { bot: true, embed: { c: '#5ff0ff', t: '❓ Déjà répondu par le staff', d: 'Il faut être **niveau 10**, ou l’acheter dans la boutique (/serveur › Boutique).' } },
+        ] },
+        { titre: 'Note de punchline', msgs: [
+          { bot: true, embed: { c: '#a58bff', t: '🎤 8,5 / 10', d: '« J’ai la dalle comme un bus sans chauffeur »\nPropre, ça claque.', f: [['Rimes', '9'], ['Jeu de mots', '8'], ['Originalité', '7'], ['Impact', '9']] } },
+        ] },
+      ],
+      cmds: [['/ia', 'discuter, vocal, voix'], ['/ia', 'Mémoire'], ['/jeux', 'Punchline']],
     },
     {
-      name: 'Gardien', for: 'Tout le conte, pour un serveur vivant', price: '9,99', unit: '€ / mois', best: true,
-      features: ['Tout le Veilleur', 'IA vocale illimitée', 'Surveillance vocale : staff protégé, mots interdits', 'Les 20 jeux, loup-garou avec narrateur', 'La taverne Casinho, 10 tables', 'Partage Spotify en direct dans le vocal'],
+      id: 'jeux', titre: 'Jeux de soirée', mot: 'Jeux', emoji: '🎲', c1: '#ff5fd2', c2: '#ffc94d', gif: '/panneaux/jeux.gif', thumb: '/cartes/loup.webp',
+      court: 'Loup-garou avec cartes de rôle, Undercover, Petit Bac, quiz, casino…',
+      tags: ['Loup-garou', 'Undercover', 'Petit Bac', 'Quiz'],
+      accroche: 'Tout se joue dans Discord, sans site à côté : le bot distribue les rôles en MP, anime la partie et compte les points.',
+      avantages: [
+        ['🐺', 'Loup-garou', 'Cartes de rôle illustrées en MP, nuits et votes animés, narrateur vocal.'],
+        ['🕵️', 'Imposteur et Undercover', 'Un mot secret pour tous, un autre pour l’intrus. À vous de le démasquer.'],
+        ['📝', 'Petit Bac', 'Une lettre, des catégories, l’IA vérifie les réponses et compte les points.'],
+        ['🔥', 'Action ou vérité', 'Des défis adaptés au serveur, tirés au sort à chaque tour.'],
+        ['🎵', 'Pendu musical et blind test', 'Devine le titre ou l’artiste avant les autres.'],
+        ['🏆', 'Quiz du serveur', 'Des questions sur ton propre serveur : qui a le plus parlé, qui est arrivé en premier…'],
+      ],
+      exemples: [
+        { titre: 'Ta carte de rôle en MP', msgs: [
+          { bot: true, t: '🌙 La nuit tombe sur le village. Voici ton rôle, garde-le secret :', img: '/cartes/voyante.webp', card: true },
+        ] },
+        { titre: 'Undercover', msgs: [
+          { bot: true, embed: { c: '#ff5fd2', t: '🕵️ Undercover · manche 2', d: 'Chacun donne un indice sur son mot, puis on vote.\nIl reste **5 joueurs**, dont **1 intrus**.' }, btns: [['Voir mon mot', 'p'], ['Voter', 'g']] },
+        ] },
+        { titre: 'Petit Bac', msgs: [
+          { bot: true, embed: { c: '#ffc94d', t: '📝 Petit Bac · lettre M', d: 'Pays · Animal · Métier · Marque\n⏳ 60 secondes, écris tes réponses !', f: [['Lina', '+30'], ['Sami', '+20'], ['Noé', '+10']] } },
+        ] },
+      ],
+      cmds: [['/jeux', 'tous les jeux'], ['/jeux', 'Undercover'], ['/jeux', 'Quiz du serveur']],
+      extra: ['/cartes/loup.webp', '/cartes/sorciere.webp', '/cartes/chasseur.webp'],
     },
     {
-      name: 'Sur mesure', for: 'Ton gardien, à ton nom', price: 'Devis', unit: '',
-      features: ['Tout le Gardien', 'Nom, avatar et couleurs à toi', 'Fonctions créées pour ton serveur', 'Aide prioritaire'],
+      id: 'musique', titre: 'Musique et vocal', mot: 'Musique', emoji: '🎧', c1: '#3dff9a', c2: '#5ff0ff', gif: '/panneaux/musique.gif',
+      court: 'Musique en qualité, paroles en direct, radio 24 h/24 et vocaux temporaires.',
+      tags: ['Paroles', 'Radio 24/24', 'Vocaux temporaires'],
+      accroche: 'Un titre ou un lien Spotify, YouTube, Apple Music : c’est parti. Et le vocal se range tout seul.',
+      avantages: [
+        ['▶️', 'Lecteur complet', 'File d’attente, filtres, playlists du serveur, tout avec des boutons.'],
+        ['🎤', 'Paroles en direct', 'Les paroles défilent en même temps que la musique.'],
+        ['📻', 'Radio 24 h/24', 'Un salon qui joue en continu, avec le titre en cours affiché.'],
+        ['➕', 'Vocaux temporaires', 'Rejoins « Créer un salon » : ton vocal apparaît, et disparaît quand il est vide.'],
+        ['🔊', 'Micros saturés', 'Le bot repère un micro qui crache et envoie un conseil en MP.'],
+      ],
+      exemples: [
+        { titre: 'En ce moment', msgs: [
+          { u: 'Noé', c: '#3dff9a', t: '/musique › Jouer · « Jul — Tchikita »' },
+          { bot: true, embed: { c: '#3dff9a', t: '🎧 En ce moment', d: '**Tchikita** · Jul\n▰▰▰▰▰▱▱▱▱▱ 1:42 / 3:28', foot: 'Demandé par Noé · 3 titres à suivre' }, btns: [['⏯', ''], ['⏭', ''], ['🔀', ''], ['🎤 Paroles', 'p']] },
+        ] },
+        { titre: 'Vocal temporaire', msgs: [
+          { bot: true, embed: { c: '#5ff0ff', t: '➕ Ton salon est prêt', d: 'Tu es chef de **🎮 Salon de Lina**.\nRenomme-le, limite les places ou verrouille-le.' }, btns: [['Renommer', ''], ['Limiter', ''], ['🔒 Verrouiller', 'r']] },
+        ] },
+      ],
+      cmds: [['/musique', 'jouer, file, radio']],
     },
-  ],
-  plansNote: 'Essai gratuit de 7 jours, puis premier mois remboursé si le bot ne te convient pas. Prix TTC, sans engagement.',
-};
-</script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
-
-<script>
-(() => {
-'use strict';
-const $ = (s, root = document) => root.querySelector(s);
-const $$ = (s, root = document) => [...root.querySelectorAll(s)];
-const reduit = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const memoire = {
-  lire(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  ecrire(k, v) { try { localStorage.setItem(k, v); } catch { /* navigation privée */ } },
-};
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-/* ============================ réglages appliqués ============================ */
-if (CONFIG.name) $$('.nom-bot').forEach((el) => { el.textContent = CONFIG.name; });
-$('#annee').textContent = new Date().getFullYear();
-$('#pseudo').textContent = CONFIG.discordHandle;
-$('#commander').href = CONFIG.orderUrl;
-$('#essai-lien').href = CONFIG.inviteUrl || CONFIG.orderUrl;
-$('#note-pacte').textContent = CONFIG.plansNote ?? '';
-const oui = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
-const non = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>';
-$('#offres').innerHTML = CONFIG.plans.map((p) => `
-  <article class="parchemin${p.best ? ' choisi' : ''}">
-    ${p.best ? '<span class="ruban">Le plus choisi</span>' : ''}
-    <h3>${esc(p.name)}</h3>
-    <p class="pour">${esc(p.for)}</p>
-    <div class="prix"><b>${esc(p.price)}</b><span>${esc(p.unit)}</span></div>
-    <ul>${p.features.map((f) => `<li>${oui}<span>${esc(f)}</span></li>`).join('')}${(p.missing ?? []).map((f) => `<li class="non">${non}<span>${esc(f)}</span></li>`).join('')}</ul>
-    <a class="bouton${p.best ? '' : ' discret'}" href="${esc(CONFIG.orderUrl)}" target="_blank" rel="noopener" data-son="cloche">Choisir ${esc(p.name)}</a>
-  </article>`).join('');
-
-/* ============================ les sons ============================ */
-// Tout est fabriqué en direct avec Web Audio : aucun fichier, aucune licence.
-const Son = (() => {
-  let ctx = null;
-  let sortie = null;
-  let bruit = null;
-  let actif = false;
-  let grillons = null;
-  function init() {
-    if (ctx) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    ctx = new AC();
-    sortie = ctx.createGain();
-    sortie.gain.value = 0.6;
-    const comp = ctx.createDynamicsCompressor();
-    sortie.connect(comp);
-    comp.connect(ctx.destination);
-    bruit = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-    const d = bruit.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  }
-  function note(freq, { type = 'sine', dur = 0.15, vol = 0.15, at = 0, vers = 0, pan = 0 } = {}) {
-    const t = ctx.currentTime + at;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t);
-    if (vers) o.frequency.exponentialRampToValueAtTime(vers, t + dur);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g);
-    if (ctx.createStereoPanner && pan) {
-      const p = ctx.createStereoPanner();
-      p.pan.value = pan;
-      g.connect(p);
-      p.connect(sortie);
-    } else g.connect(sortie);
-    o.start(t);
-    o.stop(t + dur + 0.05);
-  }
-  function souffle({ dur = 0.3, vol = 0.2, de = 500, a = 2500, q = 1, type = 'bandpass', at = 0 } = {}) {
-    const t = ctx.currentTime + at;
-    const s = ctx.createBufferSource();
-    s.buffer = bruit;
-    const f = ctx.createBiquadFilter();
-    f.type = type;
-    f.Q.value = q;
-    f.frequency.setValueAtTime(de, t);
-    f.frequency.exponentialRampToValueAtTime(a, t + dur);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.3);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f);
-    f.connect(g);
-    g.connect(sortie);
-    s.start(t, Math.random());
-    s.stop(t + dur + 0.05);
-  }
-  // Le hurlement : une scie filtrée comme une voix, qui monte, tient, puis retombe, avec un écho.
-  function hurlement() {
-    const t = ctx.currentTime;
-    const o = ctx.createOscillator();
-    const o2 = ctx.createOscillator();
-    o.type = 'sawtooth';
-    o2.type = 'sine';
-    const vib = ctx.createOscillator();
-    const vibG = ctx.createGain();
-    vib.frequency.value = 5.5;
-    vibG.gain.value = 7;
-    vib.connect(vibG);
-    vibG.connect(o.frequency);
-    vibG.connect(o2.frequency);
-    for (const osc of [o, o2]) {
-      osc.frequency.setValueAtTime(300, t);
-      osc.frequency.exponentialRampToValueAtTime(560, t + 0.7);
-      osc.frequency.setValueAtTime(560, t + 1.6);
-      osc.frequency.exponentialRampToValueAtTime(380, t + 2.6);
-    }
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass';
-    f.frequency.value = 900;
-    f.Q.value = 3;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.09, t + 0.4);
-    g.gain.setValueAtTime(0.08, t + 1.9);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.8);
-    const g2 = ctx.createGain();
-    g2.gain.value = 0.5;
-    o.connect(f);
-    f.connect(g);
-    o2.connect(g2);
-    g2.connect(g);
-    const echo = ctx.createDelay();
-    echo.delayTime.value = 0.32;
-    const retour = ctx.createGain();
-    retour.gain.value = 0.35;
-    g.connect(sortie);
-    g.connect(echo);
-    echo.connect(retour);
-    retour.connect(sortie);
-    retour.connect(echo);
-    [o, o2, vib].forEach((x) => { x.start(t); x.stop(t + 3); });
-  }
-  const sons = {
-    tic: () => note(2300, { dur: 0.03, vol: 0.03 }),
-    clic: () => note(640, { type: 'triangle', dur: 0.09, vol: 0.1, vers: 320 }),
-    page: () => { souffle({ dur: 0.42, vol: 0.12, de: 400, a: 2600, q: 0.7 }); note(120, { dur: 0.12, vol: 0.05, at: 0.3, vers: 80 }); },
-    message: () => { note(988, { dur: 0.07, vol: 0.06 }); note(1318, { dur: 0.12, vol: 0.05, at: 0.06 }); },
-    carte: () => { souffle({ dur: 0.22, vol: 0.2, de: 700, a: 3800, q: 0.9 }); note(170, { dur: 0.1, vol: 0.06, at: 0.16, vers: 120 }); },
-    hurlement: () => hurlement(),
-    cloche: () => [523.25, 1046.5 * 1.002, 1567.98 * 0.998].forEach((f, i) => note(f, { dur: 2.2 - i * 0.5, vol: 0.06 / (i + 1) })),
-    jeton: () => { souffle({ dur: 0.05, vol: 0.22, de: 3000, a: 5200, q: 6 }); souffle({ dur: 0.05, vol: 0.15, de: 3300, a: 5400, q: 6, at: 0.07 }); },
-    bille: () => souffle({ dur: 0.025, vol: 0.1, de: 2600, a: 3400, q: 7 }),
-    sceau: () => { note(90, { dur: 0.22, vol: 0.2, vers: 55 }); souffle({ dur: 0.12, vol: 0.18, de: 900, a: 300, type: 'lowpass', q: 0.5 }); },
-    spotify: () => [659.25, 830.61, 987.77].forEach((f, i) => note(f, { dur: 0.3, vol: 0.05, at: i * 0.09 })),
-  };
-  // Les grillons de la nuit, très bas, tant qu'on est dans la nuit.
-  function chant() {
-    if (!actif || !grillons) return;
-    const pan = Math.random() * 1.6 - 0.8;
-    for (let i = 0; i < 3; i++) note(4400 + Math.random() * 400, { dur: 0.025, vol: 0.012, at: i * 0.05, pan });
-    grillons = setTimeout(chant, 500 + Math.random() * 1400);
-  }
-  return {
-    get actif() { return actif; },
-    regler(v) {
-      actif = v;
-      if (v) { init(); ctx?.resume(); }
+    {
+      id: 'securite', titre: 'Modération et sécurité', mot: 'Sécurité', emoji: '🛡️', c1: '#ff4d6d', c2: '#ffc94d', gif: '/panneaux/sanction.gif',
+      court: 'Anti-raid, vérification, anti-arnaque, casier, surveillance vocale.',
+      tags: ['Anti-raid', 'Vérification', 'Casier', 'Journal'],
+      accroche: 'Le serveur se protège tout seul, et le staff garde la main : chaque sanction est expliquée, notée au casier et peut être contestée.',
+      avantages: [
+        ['🚨', 'Anti-raid', 'Trop d’arrivées d’un coup : les invitations sont coupées et la vérification monte au maximum pendant 10 minutes.'],
+        ['✅', 'Vérification à l’arrivée', 'Un petit calcul pour prouver qu’on n’est pas un robot.'],
+        ['🔗', 'Liens, spam, arnaques', 'Liens interdits, messages en rafale et faux « Nitro gratuit » sont supprimés.'],
+        ['📒', 'Casier et journal', 'Avertissements, notes du staff, messages supprimés, arrivées et départs : tout est gardé.'],
+        ['⚖️', 'Contestation', 'Le membre sanctionné peut contester : un ticket privé s’ouvre avec le staff.'],
+        ['🎙️', 'Surveillance vocale', 'Insultes en vocal : avertissement, puis exclusion au 3e. Gardien : staff protégé et mots interdits.'],
+      ],
+      exemples: [
+        { titre: 'Sanction expliquée', msgs: [
+          { bot: true, t: '<@Karim>', embed: { c: '#ff4d6d', t: '⚠️ Avertissement 2 / 3', d: 'Raison : insulte envers un membre du staff.\nAu 3e avertissement : exclusion temporaire.', img: '/sanction/avertissement.gif' }, btns: [['Contester', '']] },
+        ] },
+        { titre: 'Journal du staff', msgs: [
+          { bot: true, embed: { c: '#ffc94d', t: '🚨 Raid détecté', d: '12 arrivées en 20 secondes.\nInvitations coupées, vérification au maximum pendant 10 min.', foot: 'Journal · #logs' } },
+        ] },
+      ],
+      cmds: [['/sanction', 'avertir, exclure, casier, note']],
     },
-    jouer(nom) {
-      if (!actif || !ctx || !sons[nom]) return;
-      try { sons[nom](); } catch { /* le son est un bonus */ }
+    {
+      id: 'serveur', titre: 'Tickets et gestion du serveur', mot: 'Tickets', emoji: '🎫', c1: '#a58bff', c2: '#5ff0ff', gif: '/panneaux/ticket.gif', thumb: '/images/bienvenue.webp',
+      court: 'Tickets, salons construits en un clic, carte de bienvenue, suggestions, sauvegarde.',
+      tags: ['Tickets', 'Bienvenue', 'Suggestions', 'Sauvegarde'],
+      accroche: 'Tout ce qu’un staff fait à la main, en un clic : ouvrir un ticket, construire des salons, accueillir, sauvegarder.',
+      avantages: [
+        ['🎫', 'Tickets', 'Un bouton, un salon privé avec le staff, un compte rendu à la fermeture.'],
+        ['🏗️', 'Construction de salons', 'Choisis un modèle, le bot crée catégories, salons et permissions.'],
+        ['👋', 'Carte de bienvenue', 'Une carte néon avec la photo et le numéro du nouveau membre.'],
+        ['💡', 'Suggestions votées', 'Chaque idée devient un vote 👍 / 👎, le staff l’accepte ou la refuse et l’auteur est prévenu.'],
+        ['💾', 'Sauvegarde du serveur', 'Rôles, salons et permissions sauvegardés ; la restauration recrée ce qui manque sans rien supprimer.'],
+        ['⚙️', 'Tableau de bord', 'Tous les réglages rangés par catégorie, depuis ton navigateur.'],
+      ],
+      exemples: [
+        { titre: 'Carte de bienvenue', msgs: [
+          { bot: true, t: 'Bienvenue <@Lina> sur **Les Veilleurs** ! 🎉', img: '/images/bienvenue.webp' },
+        ] },
+        { titre: 'Suggestion', msgs: [
+          { bot: true, embed: { c: '#3dff9a', t: '💡 Suggestion de Lina', d: 'Ajouter un salon pour partager nos mèmes.', f: [['Statut', '✅ Acceptée'], ['Votes', '👍 24 · 👎 2']] } },
+        ] },
+        { titre: 'Ticket', msgs: [
+          { bot: true, embed: { c: '#a58bff', t: '🎫 Besoin d’aide ?', d: 'Clique sur le bouton : un salon privé s’ouvre avec le staff.', img: '/panneaux/ticket.gif' }, btns: [['Ouvrir un ticket', 'p']] },
+        ] },
+      ],
+      cmds: [['/pannel', 'ticket, build, annonce, bienvenue, sauvegarde']],
     },
-    nuit(on) {
-      if (on && !grillons) { grillons = 1; chant(); }
-      if (!on && grillons) { clearTimeout(grillons); grillons = null; }
+    {
+      id: 'niveaux', titre: 'Niveaux et boutique', mot: 'Niveaux', emoji: '⚡', c1: '#ffc94d', c2: '#ff5fd2', gif: '/panneaux/serveur.gif', thumb: '/images/profil.webp',
+      court: 'XP, carte de profil néon, récompense du jour, boutique et rôle personnalisé.',
+      tags: ['XP', 'Carte de profil', 'Boutique', 'Membre de la semaine'],
+      accroche: 'Chaque message et chaque minute en vocal rapportent de l’XP. Les membres reviennent chaque jour pour leur série.',
+      avantages: [
+        ['📈', 'XP et niveaux', 'Messages et vocal rapportent de l’XP, avec des rôles donnés à certains niveaux.'],
+        ['🪪', 'Carte de profil néon', 'Rang, niveau, barre d’XP et badges, dans une vraie image.'],
+        ['🎁', 'Récompense du jour', 'Des jetons chaque jour, plus si la série continue.'],
+        ['🛍️', 'Boutique', 'Des rôles et avantages à acheter avec les jetons.'],
+        ['🎨', 'Rôle personnalisé', 'Le membre choisit le nom et la couleur, le staff accepte ou refuse.'],
+        ['🌟', 'Membre de la semaine', 'Chaque lundi, le membre le plus actif est mis en avant.'],
+      ],
+      exemples: [
+        { titre: 'Carte de profil', msgs: [
+          { u: 'Lina', c: '#ff5fd2', t: '/serveur › Mon profil' },
+          { bot: true, img: '/images/profil.webp' },
+        ] },
+        { titre: 'Rôle personnalisé', msgs: [
+          { bot: true, embed: { c: '#ff5fd2', t: '🎨 Demande de rôle personnalisé', d: '**Lina** voudrait le rôle **Reine de la nuit**, couleur rose néon.\nPayé : 5 000 jetons (remboursés si refusé).' }, btns: [['Accepter', 'g'], ['Refuser', 'r']] },
+        ] },
+        { titre: 'Récompense du jour', msgs: [
+          { bot: true, embed: { c: '#ffc94d', t: '🎁 Récompense du jour', d: '+ **350 jetons**\n🔥 Série de **12 jours** · reviens demain pour +50.' } },
+        ] },
+      ],
+      cmds: [['/serveur', 'profil, classement, récompense, boutique']],
     },
-  };
-})();
-
-const btnSon = $('#son');
-let dansLaNuit = true;
-function regler(v, annoncer = true) {
-  Son.regler(v);
-  btnSon.setAttribute('aria-pressed', String(v));
-  btnSon.setAttribute('aria-label', v ? 'Couper le son' : 'Activer le son');
-  memoire.ecrire('son', v ? '1' : '0');
-  Son.nuit(v && dansLaNuit);
-  if (v && annoncer) Son.jouer('cloche');
-}
-btnSon.addEventListener('click', () => regler(!Son.actif));
-// Le navigateur n'autorise le son qu'après un geste : on le réactive au premier clic si le visiteur l'avait allumé.
-if (memoire.lire('son') === '1') {
-  addEventListener('pointerdown', function reveil(e) {
-    if (e.target.closest('#son')) return;
-    regler(true, false);
-    removeEventListener('pointerdown', reveil);
-  });
-}
-document.addEventListener('click', (e) => { const el = e.target.closest('[data-son]'); if (el) Son.jouer(el.dataset.son); });
-document.addEventListener('pointerover', (e) => {
-  const el = e.target.closest('a, button, summary, .veillee');
-  if (el && !el.contains(e.relatedTarget)) Son.jouer('tic');
-});
-$$('.questions details').forEach((d) => d.addEventListener('toggle', () => Son.jouer(d.open ? 'page' : 'tic')));
-
-$('#copier').addEventListener('click', async (e) => {
-  const b = e.currentTarget;
-  try {
-    await navigator.clipboard.writeText(CONFIG.discordHandle);
-    b.textContent = 'Copié';
-  } catch {
-    const r = document.createRange();
-    r.selectNodeContents($('#pseudo'));
-    getSelection().removeAllRanges();
-    getSelection().addRange(r);
-    b.textContent = 'Sélectionné';
-  }
-  setTimeout(() => { b.textContent = 'Copier'; }, 1600);
-});
-
-/* ============================ le ciel étoilé ============================ */
-(function ciel() {
-  const c = $('#ciel');
-  const g = c.getContext('2d');
-  let etoiles = [];
-  let lucioles = [];
-  function taille() {
-    const dpr = Math.min(2, devicePixelRatio || 1);
-    c.width = innerWidth * dpr;
-    c.height = innerHeight * dpr;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    etoiles = Array.from({ length: Math.round(innerWidth * innerHeight / 5200) }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: Math.random() * 1.2 + 0.2, p: Math.random() * 6 }));
-    lucioles = Array.from({ length: 14 }, () => ({ x: Math.random() * innerWidth, y: innerHeight * (0.4 + Math.random() * 0.6), p: Math.random() * 6, v: 0.2 + Math.random() * 0.4 }));
-  }
-  addEventListener('resize', taille);
-  taille();
-  let t = 0;
-  (function dessin() {
-    t += 0.016;
-    g.clearRect(0, 0, innerWidth, innerHeight);
-    g.fillStyle = '#dfe6ff';
-    for (const e of etoiles) {
-      g.globalAlpha = 0.35 + 0.35 * Math.sin(t * 1.3 + e.p);
-      g.beginPath(); g.arc(e.x, e.y, e.r, 0, Math.PI * 2); g.fill();
-    }
-    g.globalAlpha = 1;
-    for (const l of lucioles) {
-      const x = l.x + Math.sin(t * l.v + l.p) * 40;
-      const y = l.y + Math.cos(t * l.v * 1.3 + l.p) * 24;
-      const a = 0.4 + 0.4 * Math.sin(t * 2 + l.p);
-      const grad = g.createRadialGradient(x, y, 0, x, y, 9);
-      grad.addColorStop(0, `rgba(255, 214, 120, ${a.toFixed(2)})`);
-      grad.addColorStop(1, 'rgba(255, 214, 120, 0)');
-      g.fillStyle = grad;
-      g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.fill();
-    }
-    if (!reduit) requestAnimationFrame(dessin);
-  })();
-})();
-
-/* ============================ la roulette ============================ */
-const ORDRE = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
-const ROUGES = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
-(function roue() {
-  const pas = 360 / ORDRE.length;
-  const pt = (r, deg) => { const a = (deg - 90) * Math.PI / 180; return [r * Math.cos(a), r * Math.sin(a)]; };
-  let s = '<defs><radialGradient id="bois"><stop offset="0" stop-color="#4a2f16"/><stop offset="1" stop-color="#1e1208"/></radialGradient><linearGradient id="laiton" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe2a3"/><stop offset="1" stop-color="#8a5f1f"/></linearGradient></defs>';
-  s += '<circle r="99" fill="url(#laiton)"/><circle r="94" fill="#170e06"/><g id="plateau-roue">';
-  ORDRE.forEach((n, i) => {
-    const a0 = i * pas - pas / 2;
-    const a1 = a0 + pas;
-    const [x0, y0] = pt(91, a0); const [x1, y1] = pt(91, a1); const [x2, y2] = pt(62, a1); const [x3, y3] = pt(62, a0);
-    const coul = n === 0 ? '#1f7a4a' : ROUGES.has(n) ? '#b3302a' : '#141020';
-    s += `<path d="M${x0.toFixed(2)} ${y0.toFixed(2)} A91 91 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${y2.toFixed(2)} A62 62 0 0 0 ${x3.toFixed(2)} ${y3.toFixed(2)} Z" fill="${coul}" stroke="#d9a441" stroke-width="0.5"/>`;
-    const [tx, ty] = pt(80, i * pas);
-    s += `<text x="${tx.toFixed(2)}" y="${ty.toFixed(2)}" fill="#fff" font-family="Noto Sans, sans-serif" font-weight="600" font-size="6.4" text-anchor="middle" dominant-baseline="central" transform="rotate(${(i * pas).toFixed(2)} ${tx.toFixed(2)} ${ty.toFixed(2)})">${n}</text>`;
-  });
-  s += '<circle r="62" fill="url(#bois)" stroke="#d9a441"/>';
-  for (let i = 0; i < 8; i++) { const [x, y] = pt(46, i * 45); s += `<line x2="${x.toFixed(2)}" y2="${y.toFixed(2)}" stroke="#d9a441" stroke-width="2.4" stroke-linecap="round"/>`; }
-  s += '<circle r="12" fill="url(#laiton)"/></g><circle id="bille" r="3.8" fill="#fff" cx="0" cy="-71"/>';
-  $('#roue').innerHTML = s;
-})();
-
-/* ============================ l'ouverture : la séquence Blender ============================ */
-const NUIT = 72;
-const images = new Array(NUIT + 1);
-const source = (i) => `images/nuit/${String(i).padStart(2, '0')}.webp`;
-const toile = $('#nuit');
-const pinceau = toile.getContext('2d');
-let imageVoulue = 1;
-let cadrage = 0.5;
-function charger(i) {
-  if (images[i]) return;
-  const img = new Image();
-  img.decoding = 'async';
-  img.onload = () => { if (Math.abs(i - imageVoulue) < 4) dessiner(imageVoulue); };
-  img.src = source(i);
-  images[i] = img;
-}
-function dessiner(i) {
-  // l'image chargée la plus proche, pour ne jamais afficher un trou
-  let img = null;
-  for (let d = 0; d < NUIT && !img; d++) {
-    for (const j of [i - d, i + d]) if (!img && images[j]?.complete && images[j].naturalWidth) img = images[j];
-  }
-  if (!img || !toile.width) return;
-  const cw = toile.width;
-  const ch = toile.height;
-  const k = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
-  const w = img.naturalWidth * k;
-  const h = img.naturalHeight * k;
-  pinceau.drawImage(img, (cw - w) * cadrage, (ch - h) * 0.5, w, h);
-}
-function ajuster() {
-  const dpr = Math.min(2, devicePixelRatio || 1);
-  toile.width = toile.clientWidth * dpr;
-  toile.height = toile.clientHeight * dpr;
-  dessiner(imageVoulue);
-}
-
-/* ============================ la réponse de l'IA qui s'écrit ============================ */
-const reponse = $('#ia-reponse');
-const texteIA = reponse.dataset.texte;
-function ecrire(p) { reponse.textContent = texteIA.slice(0, Math.round(texteIA.length * p)) || '…'; }
-
-/* ============================ Spotify : tout avance ensemble ============================ */
-const DUREE = 188;
-const DEBUT = 72;
-const minutes = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-const lignesParoles = $$('#paroles span');
-function spotify(p) {
-  const s = DEBUT + (DUREE - DEBUT - 20) * p;
-  const r = s / DUREE;
-  $('#sp-barre').style.width = `${(r * 100).toFixed(1)}%`;
-  $('#sp-t').textContent = minutes(s);
-  // les barres des vrais messages du bot, caractère par caractère
-  const fait = Math.min(18, Math.round(r * 18));
-  $('#sp-code').textContent = `${'─'.repeat(fait)}🟢${'─'.repeat(18 - fait)}`;
-  $('#sp-code-t').textContent = `${minutes(s)} / ${minutes(DUREE)}`;
-  const idx = Math.min(15, Math.round(r * 15));
-  $('#pl-barre').textContent = Array.from({ length: 16 }, (_, i) => (i < idx ? '▬' : i === idx ? '🔘' : '─')).join('');
-  $('#pl-t').textContent = `${minutes(s)} / ${minutes(DUREE)}`;
-  const ligne = Math.min(lignesParoles.length - 1, Math.max(0, Math.floor((p - 0.8) / 0.2 * lignesParoles.length)));
-  lignesParoles.forEach((l, i) => { l.classList.toggle('on', i === ligne); l.classList.toggle('dit', i < ligne); });
-}
-
-/* ============================ cartes qui se retournent ============================ */
-// p de 0 à 1 : la carte s'écrase (dos), change de face à la moitié, puis se rouvre (face).
-// Uniquement des transformations 2D : aucun navigateur ne peut « perdre » l'image.
-function retourner(el, p, { dos, face } = {}) {
-  const montreFace = p >= 0.5;
-  if (el.tagName === 'IMG') {
-    const voulu = montreFace ? face : dos;
-    if (voulu && el.getAttribute('src') !== voulu) el.setAttribute('src', voulu);
-  } else el.classList.toggle('retourne', montreFace);
-  el.style.transform = `scaleX(${Math.max(0.02, Math.abs(Math.cos(p * Math.PI))).toFixed(3)})`;
-}
-function preparerCarte(img) {
-  const face = img.getAttribute('src');
-  const dos = img.dataset.dos;
-  // on précharge la face pour que l'échange soit instantané
-  new Image().src = face;
-  return { dos, face };
-}
-
-/* ============================ barre du haut ============================ */
-const barre = $('#barre');
-addEventListener('scroll', () => barre.classList.toggle('pleine', scrollY > 40), { passive: true });
-function chapitre(el) {
-  const [n, t] = el.dataset.chapitre.split('|');
-  $('#chapitre-actuel').innerHTML = `<b>${esc(n)}</b>${esc(t)}`;
-}
-
-/* ============================ animations au défilement ============================ */
-const avecGsap = window.gsap && window.ScrollTrigger;
-function compter(el) {
-  const cible = parseFloat(el.dataset.compte);
-  const dec = Number(el.dataset.dec ?? 0);
-  const f = (v) => v.toFixed(dec).replace('.', ',');
-  if (reduit || !avecGsap) { el.textContent = f(cible); return; }
-  const o = { v: cible * 0.9 };
-  gsap.to(o, { v: cible, duration: 1.4, ease: 'power3.out', onUpdate: () => { el.textContent = f(o.v); }, onComplete: () => Son.jouer('jeton') });
-}
-
-if (!avecGsap || reduit) {
-  // Sans animation, tout est déjà lisible : les messages, les cartes retournées, l'image finale du village.
-  spotify(0.9);
-  $$('[data-compte]').forEach(compter);
-  $$('.mot.intrus').forEach((m) => m.classList.add('demasque'));
-} else {
-  document.documentElement.classList.add('anime');
-  gsap.registerPlugin(ScrollTrigger);
-  $$('.legendes').forEach((l) => l.classList.add('empile'));
-
-  // Défilement fluide, synchronisé avec ScrollTrigger.
-  let lenis = null;
-  if (window.Lenis) {
-    lenis = new Lenis({ lerp: 0.09, smoothWheel: true });
-    lenis.on('scroll', ScrollTrigger.update);
-    gsap.ticker.add((t) => lenis.raf(t * 1000));
-    gsap.ticker.lagSmoothing(0);
-  }
-  $$('a[href^="#"]').forEach((a) => a.addEventListener('click', (e) => {
-    const cible = a.getAttribute('href');
-    if (cible.length < 2 || !$(cible)) return;
-    e.preventDefault();
-    if (lenis) lenis.scrollTo(cible, { duration: 1.6 });
-    else $(cible).scrollIntoView({ behavior: 'smooth' });
-  }));
-
-  // Fil de lecture en haut de page.
-  gsap.to('#fil', { scaleX: 1, ease: 'none', scrollTrigger: { start: 0, end: 'max', scrub: 0.3 } });
-
-  // ---------- Prologue : la nuit tombe au fil du défilement ----------
-  charger(1);
-  for (let i = 7; i <= NUIT; i += 6) charger(i);
-  charger(NUIT);
-  addEventListener('load', () => { for (let i = 1; i <= NUIT; i++) charger(i); });
-  ajuster();
-  addEventListener('resize', ajuster);
-  const temps = $$('#recit .temps');
-  gsap.timeline({
-    scrollTrigger: {
-      trigger: '#prologue', start: 'top top', end: '+=380%', pin: true, scrub: 0.4,
-      onUpdate: (self) => {
-        const i = 1 + Math.round(self.progress * (NUIT - 1));
-        // Sur téléphone, la « caméra » glisse vers le loup à mesure que la nuit tombe.
-        cadrage = innerWidth < innerHeight ? 0.5 + 0.34 * self.progress : 0.5;
-        if (i !== imageVoulue) {
-          imageVoulue = i;
-          charger(i);
-          dessiner(i);
-          if (i === NUIT - 2 && self.direction > 0) Son.jouer('hurlement');
-        }
-      },
+    {
+      id: 'premium', titre: 'Offres premium', mot: 'Premium', emoji: '⭐', c1: '#ffc94d', c2: '#5ff0ff', gif: '/panneaux/serveur.gif', go: 'offres',
+      court: 'Plus d’IA vocale, voix au choix, cartes à tes couleurs, rapport de la semaine.',
+      tags: ['Essai 7 jours', 'PayPal', 'Parrainage'],
     },
-  })
-    .to(temps[0], { opacity: 0, y: -30, filter: 'blur(6px)', duration: 1 }, 1)
-    .fromTo(temps[1], { opacity: 0, y: 30, filter: 'blur(6px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1 }, 1.4)
-    .to(temps[1], { opacity: 0, y: -30, filter: 'blur(6px)', duration: 1 }, 3)
-    .fromTo(temps[2], { opacity: 0, y: 30, filter: 'blur(6px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1 }, 3.4)
-    .to(temps[2], { opacity: 0, y: -30, filter: 'blur(6px)', duration: 1 }, 5)
-    .fromTo(temps[3], { opacity: 0, y: 30, filter: 'blur(6px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1 }, 5.4)
-    .to(temps[3], { opacity: 0, y: -30, filter: 'blur(6px)', duration: 1 }, 7)
-    .fromTo('.titre-final', { autoAlpha: 0, y: 40 }, { autoAlpha: 1, y: 0, duration: 1.2 }, 7.6)
-    .to('.defiler', { opacity: 0, duration: 0.5 }, 0.3)
-    .to({}, { duration: 1.2 });
+  ];
 
-  // ---------- Les scènes épinglées façon Discord ----------
-  // Chaque étape fait apparaître son message ; les plus anciens montent et sortent par le haut.
-  function scene(nom, { pas = 90, avant = null, pendant = null } = {}) {
-    const bloc = $(`[data-scene="${nom}"]`);
-    const legendes = $$('.legende', bloc);
-    const points = $$('.points i', bloc);
-    const messages = $$('[data-etape]', bloc);
-    const etapes = legendes.length;
-    let courant = 0;
-    messages.forEach((m) => { if (Number(m.dataset.etape) > 0) gsap.set(m, { height: 0, opacity: 0, marginTop: 0, overflow: 'hidden' }); });
-    legendes.forEach((l, i) => gsap.set(l, { autoAlpha: i === 0 ? 1 : 0 }));
-    const tl = gsap.timeline({
-      defaults: { ease: 'power2.out' },
-      scrollTrigger: {
-        trigger: bloc, start: 'top top', end: `+=${etapes * pas}%`, pin: true, scrub: 0.6,
-        onUpdate: (self) => {
-          const e = Math.min(etapes - 1, Math.floor(self.progress * etapes * 0.999));
-          if (e !== courant) {
-            courant = e;
-            points.forEach((p, i) => p.classList.toggle('on', i <= e));
-            if (self.direction > 0) Son.jouer(nom === 'spotify' ? 'spotify' : 'message');
-            avant?.(e, self);
-          }
-          pendant?.(self.progress);
-        },
-      },
-    });
-    for (let e = 1; e < etapes; e++) {
-      tl.to(legendes[e - 1], { autoAlpha: 0, y: -24, duration: 0.3 }, e - 0.35)
-        .fromTo(legendes[e], { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.3 }, e - 0.05);
-      messages.filter((m) => Number(m.dataset.etape) === e).forEach((m) => {
-        tl.to(m, { height: 'auto', opacity: 1, marginTop: m.classList.contains('suite') ? 2 : 14, duration: 0.35 }, e - 0.1);
-      });
-    }
-    tl.to({}, { duration: 0.6 }, etapes - 0.4);
-    return tl;
+  var PLANS = [
+    { id: 'gratuit', nom: 'Gratuit', emoji: '🌱', prix: '0 €', c1: '#3dff9a', c2: '#5ff0ff', inclus: ['Toutes les fonctions de base', 'IA vocale : 60 min / mois', 'Jeux, musique, sécurité, tickets, niveaux'], non: ['Choix de la voix', 'Cartes aux couleurs du serveur', 'Rapport de la semaine', 'Surveillance vocale Gardien'] },
+    { id: 'veilleur', nom: 'Veilleur', emoji: '🌙', prix: '4,99 €', c1: '#a58bff', c2: '#5ff0ff', pop: 'Le plus pris', inclus: ['Tout le gratuit', 'IA vocale : 600 min / mois', 'Choix de la voix de l’IA', 'Cartes et embeds aux couleurs du serveur', 'Rapport de la semaine en MP'], non: ['Surveillance vocale Gardien'] },
+    { id: 'gardien', nom: 'Gardien', emoji: '🛡️', prix: '9,99 €', c1: '#ffc94d', c2: '#ff4d6d', inclus: ['Tout Veilleur', 'IA vocale illimitée', 'Surveillance vocale Gardien', 'Staff protégé et mots interdits en vocal'], non: [] },
+  ];
+
+  // ---------------- Outils ----------------
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function fmt(s) {
+    return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+      .replace(/&lt;@(\w+)&gt;/g, '<span class="mention">@$1</span>')
+      .replace(/@bot/g, '<span class="mention">@<span class="bot-name">' + esc(bot.nom) + '</span></span>');
   }
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  var HOURS = ['21:04', '21:05', '21:07', '21:12', '22:31'];
 
-  // I · L'IA : la réponse s'écrit au rythme du défilement.
-  ecrire(0);
-  scene('ia', {
-    pendant: (p) => ecrire(Math.max(0, Math.min(1, (p * 4 - 2) / 0.85))),
-    avant: (e) => { $('#ia-salon').textContent = e >= 1 ? '🔒 IA · Lina' : '│・𝐈𝐀'; },
-  });
-
-  // II · Spotify : le téléphone, le partage et le panneau avancent ensemble.
-  const panneau = $('#sp-panneau');
-  const partage = $('#sp-partage');
-  const suit = $('#sp-suit');
-  const etroit = () => innerWidth < 960;
-  gsap.set(panneau, { autoAlpha: 0, y: 40, display: 'none' });
-  gsap.set(suit, { opacity: 0 });
-  spotify(0);
-  scene('spotify', {
-    pendant: (p) => spotify(p),
-    avant: (e) => {
-      gsap.to(suit, { opacity: e >= 2 ? 1 : 0, duration: 0.4 });
-      if (e >= 3) {
-        gsap.set(panneau, { display: 'block' });
-        gsap.to(panneau, { autoAlpha: 1, y: 0, duration: 0.5 });
-        if (etroit()) gsap.set(partage, { display: 'none' });
+  function discord(msgs) {
+    return '<div class="dc">' + msgs.map(function (m, i) {
+      var time = '<time>Aujourd’hui à ' + HOURS[i % HOURS.length] + '</time>';
+      var head, pp;
+      if (m.bot) {
+        pp = '<img class="pp bot-pp" alt="" src="' + esc(bot.avatar) + '">';
+        head = '<div class="who"><span class="bot-name">' + esc(bot.nom) + '</span><span class="badge">✔ APP</span>' + time + '</div>';
       } else {
-        gsap.set(panneau, { display: 'none', autoAlpha: 0, y: 40 });
-        gsap.set(partage, { display: 'block' });
+        pp = '<div class="pp" style="background:' + esc(m.c) + '">' + esc(m.u[0]) + '</div>';
+        head = '<div class="who" style="color:' + esc(m.c) + '">' + esc(m.u) + time + '</div>';
       }
-    },
-  });
-  // l'impulsion qui voyage du téléphone vers Discord
-  const chemin = $('#liaison');
-  const long = chemin.getTotalLength();
-  const impulsion = { p: 0 };
-  gsap.to(impulsion, { p: 1, duration: 1.4, repeat: -1, ease: 'none', onUpdate: () => {
-    const pt = chemin.getPointAtLength(impulsion.p * long);
-    $('#pulse').setAttribute('cx', pt.x.toFixed(1));
-    $('#pulse').setAttribute('cy', pt.y.toFixed(1));
-  } });
-  gsap.to(chemin, { strokeDashoffset: -24, duration: 1, repeat: -1, ease: 'none' });
-
-  // III · Le loup-garou : la carte se retourne, la nuit tombe sur le fond.
-  const carteLG = $('#lg-carte');
-  const facesLG = preparerCarte(carteLG);
-  retourner(carteLG, 0, facesLG);
-  scene('loups', {
-    avant: (e) => {
-      $('#lg-titre').textContent = e === 1 ? `@ ${CONFIG.name} · message privé` : '🐺 Loup-garou';
-      $('#lg-mp-salon').classList.toggle('on', e === 1);
-      $('#lg-fil-salon').classList.toggle('on', e !== 1);
-      if (e === 1) {
-        const f = { p: 0 };
-        retourner(carteLG, 0, facesLG);
-        gsap.to(f, { p: 1, duration: 1.1, delay: 0.35, ease: 'power3.inOut', onStart: () => Son.jouer('carte'), onUpdate: () => retourner(carteLG, f.p, facesLG) });
+      var body = '';
+      if (m.t) body += '<div class="txt">' + fmt(m.t) + '</div>';
+      if (m.img) body += '<img class="attach' + (m.card ? ' card' : '') + '" loading="lazy" alt="" src="' + esc(m.img) + '">';
+      if (m.embed) {
+        var e = m.embed;
+        body += '<div class="embed" style="--ec:' + esc(e.c) + '">' + (e.t ? '<div class="et">' + fmt(e.t) + '</div>' : '') +
+          (e.d ? '<div class="ed">' + fmt(e.d) + '</div>' : '') +
+          (e.f ? '<div class="ef">' + e.f.map(function (x) { return '<div><b>' + fmt(x[0]) + '</b>' + fmt(x[1]) + '</div>'; }).join('') + '</div>' : '') +
+          (e.img ? '<img loading="lazy" alt="" src="' + esc(e.img) + '">' : '') +
+          (e.foot ? '<div class="foot">' + fmt(e.foot) + '</div>' : '') + '</div>';
       }
-      if (e === 2) Son.jouer('hurlement');
-      gsap.to('#loup-fond', { opacity: e >= 2 && e <= 3 ? 0.62 : e === 4 ? 0.22 : 0.38, filter: e === 4 ? 'sepia(0.6) hue-rotate(-20deg) brightness(1.4)' : 'sepia(0) hue-rotate(0deg) brightness(1)', duration: 0.8 });
-    },
-  });
-  gsap.fromTo('#loup-fond', { scale: 1.15, yPercent: -4 }, { scale: 1, yPercent: 4, ease: 'none', scrollTrigger: { trigger: '#loups', start: 'top bottom', end: 'bottom top', scrub: true } });
+      if (m.btns) body += '<div class="row">' + m.btns.map(function (b) { return '<span class="b ' + b[1] + '">' + esc(b[0]) + '</span>'; }).join('') + '</div>';
+      return '<div class="msg">' + pp + '<div>' + head + body + '</div></div>';
+    }).join('') + '</div>';
+  }
 
-  // Tout ce qui suit est créé après les sections épinglées : ScrollTrigger calcule les
-  // positions dans l'ordre de création, et doit déjà connaître la place prise par les épingles.
-  // Chapitre en cours affiché en haut ; une page se tourne en entrant dans un chapitre.
-  $$('[data-chapitre]').forEach((sec) => ScrollTrigger.create({
-    trigger: sec, start: 'top 45%', end: 'bottom 45%',
-    onToggle: (self) => { if (self.isActive) { chapitre(sec); if (sec.id !== 'prologue') Son.jouer('page'); } },
-  }));
-  // La nuit dure jusqu'à l'épilogue : grillons, puis cloche du matin.
-  ScrollTrigger.create({
-    trigger: '#pacte', start: 'top 60%',
-    onEnter: () => { dansLaNuit = false; Son.nuit(false); Son.jouer('cloche'); gsap.to('#ciel', { opacity: 0, duration: 1.2 }); },
-    onLeaveBack: () => { dansLaNuit = true; Son.nuit(Son.actif); gsap.to('#ciel', { opacity: 1, duration: 1.2 }); },
+  function neon(c1, c2, inner, cls, tag, attrs) {
+    tag = tag || 'div';
+    return '<' + tag + ' class="neon ' + (cls || '') + '" style="--c1:' + c1 + ';--c2:' + c2 + '"' + (attrs || '') + '><div class="in">' + inner + '</div></' + tag + '>';
+  }
+
+  // ---------------- Accueil ----------------
+  function renderHome() {
+    $('#cats').innerHTML = CATS.map(function (c) {
+      var href = '#' + (c.go || c.id);
+      var thumb = c.thumb || c.gif;
+      return neon(c.c1, c.c2,
+        '<div class="shine"></div><div class="ico">' + c.emoji + '</div><h3>' + esc(c.titre) + '</h3><p>' + esc(c.court) + '</p>' +
+        '<div class="thumb" style="background-image:url(\'' + thumb + '\')"></div>' +
+        '<div class="tags">' + c.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>' +
+        '<div class="go">Découvrir <span>→</span></div>',
+        'cat tilt', 'a', ' href="' + href + '" aria-label="' + esc(c.titre) + '"');
+    }).join('');
+    $('#hero-demo').innerHTML = discord([
+      { u: 'Lina', c: '#ff5fd2', t: '@bot on fait quoi ce soir ?' },
+      { bot: true, t: 'Loup-garou à 21 h ? Il manque 2 joueurs, je lance les inscriptions 🐺', embed: { c: '#ff5fd2', t: '🐺 Loup-garou · inscriptions', d: '**6 / 8** joueurs · départ dans 5 min', img: '/panneaux/jeux.gif' }, btns: [['Rejoindre', 'g'], ['Voir les rôles', '']] },
+    ]);
+  }
+
+  // ---------------- Page d'une catégorie ----------------
+  function renderCat(c) {
+    var i = CATS.indexOf(c);
+    var next = CATS[(i + 1) % CATS.length];
+    var extra = c.extra ? '<div style="display:flex;gap:10px;margin-top:10px">' + c.extra.map(function (src) { return '<img loading="lazy" alt="" src="' + src + '" style="width:31%;border-radius:10px">'; }).join('') + '</div>' : '';
+    var v = $('#v-cat');
+    v.style.setProperty('--c1', c.c1);
+    v.innerHTML =
+      '<a class="back" href="#">← Toutes les fonctionnalités</a>' +
+      '<div class="cat-head" style="--c1:' + c.c1 + '">' +
+        '<div><div class="big">' + c.emoji + '</div><h1></h1>' +
+        '<p>' + esc(c.accroche) + '</p><div class="ctas" style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn invite" href="' + INVITE + '" target="_blank" rel="noopener">Ajouter le bot</a><a class="btn ghost" href="#offres">Offres</a></div></div>' +
+        neon(c.c1, c.c2, '<img alt="Bannière du panneau ' + esc(c.mot) + '" src="' + c.gif + '">' + extra + '<div class="cap">La bannière animée du panneau, telle qu’elle apparaît dans Discord.</div>', 'banner tilt') +
+      '</div>' +
+      '<div class="section-title"><div><h2>Ce que ça t’apporte</h2></div></div>' +
+      '<div class="perks" style="--c1:' + c.c1 + '">' + c.avantages.map(function (a) { return '<div class="perk"><div class="e">' + a[0] + '</div><b>' + esc(a[1]) + '</b><span>' + esc(a[2]) + '</span></div>'; }).join('') + '</div>' +
+      '<div class="section-title"><div><h2>Exemples dans Discord</h2><p>Voilà ce que voient tes membres.</p></div></div>' +
+      '<div class="examples">' + c.exemples.map(function (ex) { return neon(c.c1, c.c2, '<div class="ex-title">' + esc(ex.titre) + '</div>' + discord(ex.msgs), 'ex'); }).join('') + '</div>' +
+      '<div class="section-title"><div><h2>Les commandes</h2></div></div>' +
+      '<div class="cmds" style="--c1:' + c.c1 + '">' + c.cmds.map(function (x) { return '<span class="cmd"><b>' + esc(x[0]) + '</b> › ' + esc(x[1]) + '</span>'; }).join('') + '</div>' +
+      '<div class="next"><p>Suivant : <b>' + next.emoji + ' ' + esc(next.titre) + '</b></p><a class="btn ghost" href="#' + (next.go || next.id) + '">Voir →</a></div>';
+    fixTitle(v, c);
+    paintBot(v);
+    bindTilt(v);
+  }
+  // Titre avec son premier mot en couleur néon.
+  function fixTitle(v, c) {
+    var h = $('h1', v);
+    h.innerHTML = esc(c.titre).replace(new RegExp('(' + c.titre.split(' ')[0] + ')'), '<em>$1</em>');
+  }
+
+  // ---------------- Offres ----------------
+  function renderPlans() {
+    $('#plans').innerHTML = PLANS.map(function (p) {
+      return neon(p.c1, p.c2,
+        (p.pop ? '<span class="pop">' + esc(p.pop) + '</span>' : '') +
+        '<h3>' + p.emoji + ' ' + esc(p.nom) + '</h3><div class="price">' + p.prix + ' <small>' + (p.id === 'gratuit' ? 'pour toujours' : '/ 31 jours') + '</small></div>' +
+        '<ul>' + p.inclus.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + p.non.map(function (x) { return '<li class="no">' + esc(x) + '</li>'; }).join('') + '</ul>' +
+        (p.id === 'gratuit'
+          ? '<a class="btn ghost invite" href="' + INVITE + '" target="_blank" rel="noopener">Ajouter le bot</a>'
+          : '<a class="btn" href="#payer" data-plan="' + p.id + '">Prendre ' + esc(p.nom) + '</a>'),
+        'plan tilt');
+    }).join('');
+    bindTilt($('#plans'));
+  }
+
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('[data-plan]');
+    if (!a) return;
+    e.preventDefault();
+    $('#pay-plan').value = a.getAttribute('data-plan');
+    $('#payer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('#pay-id').focus({ preventScroll: true });
+  });
+  $('#pay-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var id = $('#pay-id').value.replace(/\D/g, '');
+    if (!/^\d{15,21}$/.test(id)) { $('#pay-err').textContent = 'Il faut l’identifiant du serveur : un nombre de 17 à 20 chiffres.'; return; }
+    $('#pay-err').textContent = '';
+    location.href = '/payer?serveur=' + id + '&offre=' + encodeURIComponent($('#pay-plan').value);
   });
 
-  // ---------- Titres : chaque lettre sort de la brume ----------
-  $$('.decoupe').forEach((h) => {
-    const marcher = (noeud) => [...noeud.childNodes].forEach((n) => {
-      if (n.nodeType === 3) {
-        const frag = document.createDocumentFragment();
-        n.textContent.split(/(\s+)/).forEach((mot) => {
-          if (!mot) return;
-          if (/^\s+$/.test(mot)) { frag.append(mot); return; }
-          const w = document.createElement('span');
-          w.style.display = 'inline-block';
-          w.style.whiteSpace = 'nowrap';
-          [...mot].forEach((ch) => { const s = document.createElement('span'); s.className = 'l'; s.style.display = 'inline-block'; s.textContent = ch; w.append(s); });
-          frag.append(w);
-        });
-        n.replaceWith(frag);
-      } else if (n.nodeType === 1) marcher(n);
+  // ---------------- Cartes 3D ----------------
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function bindTilt(root) {
+    if (still) return;
+    root.querySelectorAll('.tilt').forEach(function (el) {
+      if (el.dataset.tilt) return;
+      el.dataset.tilt = '1';
+      el.addEventListener('pointermove', function (e) {
+        if (e.pointerType !== 'mouse') return;
+        var r = el.getBoundingClientRect();
+        var x = (e.clientX - r.left) / r.width;
+        var y = (e.clientY - r.top) / r.height;
+        el.style.setProperty('--ry', ((x - 0.5) * 12).toFixed(2) + 'deg');
+        el.style.setProperty('--rx', ((0.5 - y) * 10).toFixed(2) + 'deg');
+        el.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
+        el.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+      });
+      el.addEventListener('pointerleave', function () {
+        el.style.setProperty('--rx', '0deg');
+        el.style.setProperty('--ry', '0deg');
+      });
     });
-    marcher(h);
-    gsap.from($$('.l', h), {
-      opacity: 0, filter: 'blur(10px)', y: 18, duration: 1.1, ease: 'power3.out', stagger: 0.035,
-      scrollTrigger: { trigger: h, start: 'top 85%' },
+  }
+
+  // ---------------- Navigation ----------------
+  function route() {
+    var h = decodeURIComponent(location.hash.slice(1));
+    if (h === 'pacte') h = 'offres';
+    var cat = CATS.find(function (c) { return c.id === h && !c.go; });
+    var view = h === 'offres' || h === 'payer' ? 'offres' : cat ? 'cat' : 'accueil';
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('on', v.id === 'v-' + view); });
+    document.querySelectorAll('[data-nav]').forEach(function (a) {
+      if (a.getAttribute('data-nav') === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
-  });
-  // Les ornements se dessinent à la plume.
-  $$('.ornement').forEach((o) => {
-    const traits = $$('path', o);
-    traits.forEach((p) => { const l = p.getTotalLength(); gsap.set(p, { strokeDasharray: l, strokeDashoffset: l }); });
-    gsap.to(traits, { strokeDashoffset: 0, duration: 1.6, ease: 'power2.inOut', scrollTrigger: { trigger: o, start: 'top 88%' } });
-    gsap.from($$('circle', o), { scale: 0, transformOrigin: '50% 50%', duration: 0.6, delay: 0.8, scrollTrigger: { trigger: o, start: 'top 88%' } });
-  });
-  gsap.utils.toArray('.conte, .en-clair, .avertissement, .outils li, .menu-contexte, .tribunal article, .questions details, .fin .ligne, .choix, .note-pacte, .legende-roles div').forEach((el) => {
-    gsap.from(el, { y: 36, opacity: 0, duration: 1, ease: 'power3.out', scrollTrigger: { trigger: el, start: 'top 92%' } });
-  });
-  gsap.from('.sommaire li', { x: -40, opacity: 0, duration: 0.8, ease: 'power3.out', stagger: 0.08, scrollTrigger: { trigger: '.sommaire ol', start: 'top 80%' } });
+    if (cat) renderCat(cat);
+    document.title = (cat ? cat.titre + ' · ' : view === 'offres' ? 'Offres · ' : '') + bot.nom;
+    if (h === 'payer') setTimeout(function () { $('#payer').scrollIntoView({ block: 'center' }); }, 50);
+    else window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', route);
 
-  // L'éventail des rôles : les cartes s'ouvrent puis se retournent une à une.
-  const mm = gsap.matchMedia();
-  mm.add('(min-width: 861px)', () => {
-    const cartes = $$('#eventail .carte');
-    const tl = gsap.timeline({ scrollTrigger: { trigger: '#eventail', start: 'top 85%', end: 'bottom 40%', scrub: 0.8 } });
-    const toutes = cartes.map((c, i) => {
-      const k = i - (cartes.length - 1) / 2;
-      const img = $('img', c);
-      const faces = preparerCarte(img);
-      const f = { p: 0 };
-      retourner(img, 0, faces);
-      tl.fromTo(c, { xPercent: 0, yPercent: 20, rotate: 0 }, { xPercent: k * 62, yPercent: Math.abs(k) * 9, rotate: k * 8, duration: 1, ease: 'power2.out' }, 0);
-      tl.to(f, { p: 1, duration: 0.6, ease: 'power2.inOut', onStart: () => Son.jouer('carte'), onUpdate: () => retourner(img, f.p, faces) }, 0.8 + i * 0.22);
-      return { img, faces };
-    });
-    // en repassant sur téléphone : chaque carte montre sa face, à plat
-    return () => toutes.forEach(({ img, faces }) => { retourner(img, 1, faces); img.style.transform = ''; });
-  });
+  // ---------------- Nom, photo et état du bot ----------------
+  function paintBot(root) {
+    (root || document).querySelectorAll('.bot-pp').forEach(function (img) { img.src = bot.avatar; });
+    (root || document).querySelectorAll('.bot-name').forEach(function (s) { s.textContent = bot.nom; });
+  }
+  function status() {
+    fetch('/api/statut', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+      if (!s) throw new Error('pas de statut');
+      bot.nom = s.nom || bot.nom;
+      if (s.avatar) bot.avatar = s.avatar;
+      paintBot();
+      $('#st-dot').classList.toggle('on', !!s.enLigne);
+      $('#st-txt').innerHTML = s.enLigne ? '<b>En ligne</b>' + (s.latenceMs != null ? ' · ' + s.latenceMs + ' ms' : '') : 'Hors ligne';
+      if (s.serveurs) { $('#st-srv').hidden = false; $('#st-srv').innerHTML = '<b>' + s.serveurs.toLocaleString('fr-FR') + '</b> serveurs'; }
+      if (s.membres) { $('#st-mem').hidden = false; $('#st-mem').innerHTML = '<b>' + s.membres.toLocaleString('fr-FR') + '</b> membres'; }
+    }).catch(function () { $('#st-txt').textContent = 'Statut indisponible'; });
+  }
 
-  // IV · L'imposteur : les mots se retournent, puis l'intrus est démasqué.
-  const tlMots = gsap.timeline({ scrollTrigger: { trigger: '#table-mots', start: 'top 80%', end: 'bottom 45%', scrub: 0.7 } });
-  $$('#table-mots .mot').forEach((m, i) => {
-    const f = { p: 0 };
-    retourner(m, 0);
-    tlMots.to(f, { p: 1, duration: 1, ease: 'power2.inOut', onStart: () => Son.jouer('carte'), onUpdate: () => retourner(m, f.p) }, i * 0.45);
-  });
-  ScrollTrigger.create({
-    trigger: '#table-mots', start: 'bottom 60%',
-    onEnter: () => { $('.mot.intrus').classList.add('demasque'); Son.jouer('hurlement'); },
-    onLeaveBack: () => $('.mot.intrus').classList.remove('demasque'),
-  });
-
-  // V · La taverne : la roue tourne avec le défilement, la bille court en sens inverse.
-  const plateau = $('#plateau-roue');
-  const bille = $('#bille');
-  let dernierePoche = 0;
-  ScrollTrigger.create({
-    trigger: '#taverne', start: 'top bottom', end: 'bottom top', scrub: 0.5,
-    onUpdate: (self) => {
-      const tour = self.progress * 900;
-      plateau.setAttribute('transform', `rotate(${tour.toFixed(2)})`);
-      const a = (-self.progress * 1500 - 90) * Math.PI / 180;
-      const r = 84 - 14 * Math.min(1, self.progress * 1.6);
-      bille.setAttribute('cx', (r * Math.cos(a)).toFixed(2));
-      bille.setAttribute('cy', (r * Math.sin(a)).toFixed(2));
-      const poche = Math.floor(tour / (360 / 37));
-      if (poche !== dernierePoche) { dernierePoche = poche; Son.jouer('bille'); }
-    },
-  });
-  gsap.utils.toArray('.jetons span').forEach((j, i) => {
-    gsap.fromTo(j, { y: -140 - i * 40, rotate: -40, opacity: 0 }, { y: 0, rotate: 0, opacity: 1, ease: 'bounce.out', duration: 1, delay: i * 0.15, scrollTrigger: { trigger: '.roue-zone', start: 'top 70%', toggleActions: 'play none none reverse' }, onComplete: () => Son.jouer('jeton') });
-  });
-  gsap.from('#trj .b i', { scaleX: 0, duration: 1.2, ease: 'power3.out', stagger: 0.08, scrollTrigger: { trigger: '#trj', start: 'top 80%' } });
-  $$('[data-compte]').forEach((el) => ScrollTrigger.create({ trigger: el, start: 'top 90%', once: true, onEnter: () => compter(el) }));
-
-  // VI · La garde : le signalement arrive, puis le sceau « Traité » s'abat.
-  gsap.from('#signalement', { x: 60, opacity: 0, rotate: 2, duration: 1, ease: 'power3.out', scrollTrigger: { trigger: '#signalement', start: 'top 80%' } });
-  gsap.timeline({ scrollTrigger: { trigger: '#signalement', start: 'top 40%', toggleActions: 'play none none reverse' } })
-    .to('#bt-mute', { backgroundColor: '#5865f2', duration: 0.2 })
-    .fromTo('#sceau', { opacity: 0, scale: 2.4, rotate: -40 }, { opacity: 1, scale: 1, rotate: -12, duration: 0.45, ease: 'power4.in', onComplete: () => Son.jouer('sceau') })
-    .to('#signalement', { x: 6, duration: 0.05, yoyo: true, repeat: 3 }, '-=0.02');
-
-  // Les veillées : les cartes se posent sur la table une à une, et penchent sous la souris.
-  gsap.from('.veillee', { y: 60, rotate: () => gsap.utils.random(-6, 6), opacity: 0, duration: 0.9, ease: 'back.out(1.4)', stagger: 0.08, scrollTrigger: { trigger: '.veillees', start: 'top 82%' } });
-  $$('.veillee').forEach((v) => {
-    v.addEventListener('pointermove', (e) => {
-      const r = v.getBoundingClientRect();
-      gsap.to(v, { rotateY: ((e.clientX - r.left) / r.width - 0.5) * 14, rotateX: -((e.clientY - r.top) / r.height - 0.5) * 14, transformPerspective: 700, duration: 0.4 });
-    });
-    v.addEventListener('pointerleave', () => gsap.to(v, { rotateY: 0, rotateX: 0, duration: 0.6 }));
-  });
-
-  // Épilogue : le soleil se lève, les parchemins se déroulent.
-  gsap.fromTo('#aube-img', { scale: 1.2, yPercent: 8 }, { scale: 1, yPercent: -4, ease: 'none', scrollTrigger: { trigger: '.ciel-aube', start: 'top bottom', end: 'bottom top', scrub: true } });
-  gsap.from('.ciel-aube .phrase', { y: 60, opacity: 0, filter: 'blur(8px)', duration: 1.4, ease: 'power3.out', scrollTrigger: { trigger: '.ciel-aube', start: 'top 40%' } });
-  gsap.from('.parchemin', { scaleY: 0.05, opacity: 0, duration: 1.1, ease: 'power3.out', stagger: 0.18, scrollTrigger: { trigger: '#offres', start: 'top 80%', onEnter: () => Son.jouer('page') } });
-
-  addEventListener('load', () => ScrollTrigger.refresh());
-}
-})();
+  document.querySelectorAll('.invite').forEach(function (a) { a.href = INVITE; a.target = '_blank'; a.rel = 'noopener'; });
+  $('#year').textContent = new Date().getFullYear();
+  renderHome();
+  renderPlans();
+  paintBot();
+  bindTilt(document);
+  route();
+  status();
+  setInterval(status, 60000);
+}());
 </script>
 </body>
 </html>
