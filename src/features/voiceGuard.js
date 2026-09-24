@@ -11,29 +11,31 @@
 // Le chef n'est jamais écouté ni sanctionné. Rien n'est gardé : l'audio est jeté après la vérification.
 import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import { EndBehaviorType, getVoiceConnection } from '@discordjs/voice';
-import prism from 'prism-media';
 import { chat } from '../ai/gemini.js';
 import { config } from '../config.js';
 import { dmOwner } from './escalation.js';
 import { addInsultWarning, findInsults } from './protectOwner.js';
 import { onVoiceReady } from './voice.js';
 import { truncate } from '../utils/discord.js';
+import { opusToOgg } from '../utils/ogg.js';
 
-const RATE = 16_000; // 16 kHz mono : bien assez pour la voix
-const BYTES_PER_SEC = RATE * 2;
+// La voix n'est jamais décodée : les paquets Opus de Discord (20 ms chacun) sont mis tels quels dans un
+// fichier Ogg pour Gemini. Décoder en JavaScript (opusscript) bloquait le bot sur le petit processeur de Render,
+// au point de répondre trop tard aux commandes (« Unknown interaction »).
+const PACKETS_PER_SEC = 50;
+const SILENT_PACKET = 3; // taille d'un paquet de silence Discord (F8 FF FE)
 const SILENCE_MS = 1000; // fin d'une phrase
 const MAX_PHRASE_S = 12;
 const MIN_PHRASE_S = 0.6;
 const GROUP_WAIT_MS = 2500; // attente d'une phrase suivante avant d'envoyer le paquet
 const MAX_GROUP_S = 20;
-const MIN_LEVEL = 200; // volume moyen minimal (souffle, bruit de fond : ignorés)
 const USER_GAP_MS = 4000; // au moins 4 s entre deux vérifications d'une même personne
 const TIMEOUT_MS = 60_000;
 const GIFS = { avertissement: 'assets/sanction/avertissement.gif', sanction: 'assets/sanction/sanction.gif' };
 
 const attached = new WeakSet();
 const recording = new Set(); // guild:user en cours d'enregistrement
-const groups = new Map(); // guild:user -> { chunks, bytes, timer, channelId }
+const groups = new Map(); // guild:user -> { packets, timer, channelId }
 const lastCheck = new Map(); // user -> date
 // Façons dont Gemini peut écrire « Noam » en transcrivant
 const NOAM_SPELLINGS = ['noam', 'noham', 'nohm', 'noame', 'nohame', 'noan', 'naom'];
@@ -83,69 +85,36 @@ async function listen(client, guild, connection, userId) {
   recording.add(key);
 
   const opus = connection.receiver.subscribe(userId, { end: { behavior: EndBehaviorType.AfterSilence, duration: SILENCE_MS } });
-  const decoder = new prism.opus.Decoder({ rate: RATE, channels: 1, frameSize: 320 });
-  const chunks = [];
-  let bytes = 0;
+  const packets = [];
   opus.on('error', () => {});
-  decoder.on('error', () => {});
   const ended = new Promise((resolve) => {
     opus.once('end', resolve);
     opus.once('close', resolve);
   });
-  decoder.on('data', (pcm) => {
-    chunks.push(pcm);
-    bytes += pcm.length;
-    if (bytes >= MAX_PHRASE_S * BYTES_PER_SEC) opus.destroy(); // phrase trop longue : on coupe ici
+  opus.on('data', (packet) => {
+    if (packet.length > SILENT_PACKET) packets.push(packet);
+    if (packets.length >= MAX_PHRASE_S * PACKETS_PER_SEC) opus.destroy(); // phrase trop longue : on coupe ici
   });
-  opus.pipe(decoder);
   await ended;
-  await new Promise((resolve) => setTimeout(resolve, 60)); // les derniers morceaux décodés
   recording.delete(key);
-  decoder.destroy();
-  if (bytes < MIN_PHRASE_S * BYTES_PER_SEC) return;
-  queue(client, guild, userId, connection.joinConfig.channelId, Buffer.concat(chunks));
+  if (packets.length < MIN_PHRASE_S * PACKETS_PER_SEC) return;
+  queue(client, guild, userId, connection.joinConfig.channelId, packets);
 }
 
 /** Regroupe les phrases d'une personne pour n'envoyer qu'une demande à Gemini. */
-function queue(client, guild, userId, channelId, pcm) {
+function queue(client, guild, userId, channelId, packets) {
   const key = `${guild.id}:${userId}`;
-  const group = groups.get(key) ?? { chunks: [], bytes: 0, timer: null, channelId };
-  group.chunks.push(pcm);
-  group.bytes += pcm.length;
+  const group = groups.get(key) ?? { packets: [], timer: null, channelId };
+  group.packets.push(...packets);
   group.channelId = channelId;
   clearTimeout(group.timer);
   groups.set(key, group);
   const flush = () => {
     groups.delete(key);
-    check(client, guild, userId, group.channelId, Buffer.concat(group.chunks)).catch((err) => console.warn('[surveillance vocale] vérification :', err.message));
+    check(client, guild, userId, group.channelId, group.packets).catch((err) => console.warn('[surveillance vocale] vérification :', err.message));
   };
-  if (group.bytes >= MAX_GROUP_S * BYTES_PER_SEC) flush();
+  if (group.packets.length >= MAX_GROUP_S * PACKETS_PER_SEC) flush();
   else group.timer = setTimeout(flush, GROUP_WAIT_MS);
-}
-
-/** Volume moyen d'un morceau (PCM 16 bits). */
-function level(pcm) {
-  let sum = 0;
-  const n = Math.floor(pcm.length / 2);
-  for (let i = 0; i < n; i += 4) sum += Math.abs(pcm.readInt16LE(i * 2));
-  return n ? sum / (n / 4) : 0;
-}
-
-function wav(pcm) {
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write('WAVEfmt ', 8);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20); // PCM
-  header.writeUInt16LE(1, 22); // mono
-  header.writeUInt32LE(RATE, 24);
-  header.writeUInt32LE(BYTES_PER_SEC, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
 }
 
 /** Plafond de demandes par heure (réglable) : au-delà, on laisse passer jusqu'à l'heure suivante. */
@@ -174,11 +143,7 @@ const SCHEMA = {
   required: ['transcription', 'insulte', 'cible', 'mot', 'raison'],
 };
 
-async function check(client, guild, userId, channelId, pcm) {
-  if (level(pcm) < MIN_LEVEL) {
-    voiceGuardStats.skipped++;
-    return;
-  }
+async function check(client, guild, userId, channelId, packets) {
   if (!allowed(userId)) {
     voiceGuardStats.skipped++;
     if (hour.count >= config.voiceGuard.maxPerHour) console.warn(`[surveillance vocale] plafond de ${config.voiceGuard.maxPerHour} écoutes par heure atteint`);
@@ -206,7 +171,7 @@ Autres personnes présentes : ${others.join(', ') || 'personne'}.
    Ne compte PAS : une phrase sans ces noms, une insulte envers quelqu'un d'autre, un juron sans cible (« putain », « merde »), se rabaisser soi-même, citer ou chanter des paroles, parler d'un jeu, ou quand on ne sait pas qui est visé.
 3. cible : « chef » (Noam), « bot » (Vercel) ou « aucune ».
 4. mot : l'insulte exacte (vide sinon). 5. raison : une phrase courte.` },
-      { type: 'audio', mime_type: 'audio/wav', data: wav(pcm).toString('base64') },
+      { type: 'audio', mime_type: 'audio/ogg', data: opusToOgg(packets).toString('base64') },
     ],
     web: false,
     thinking: 'low',
@@ -295,4 +260,4 @@ async function punish(client, guild, member, channel, verdict) {
 }
 
 // Pour le banc d'essai (tools/test-voiceguard.mjs)
-export const _test = { wav, level, check, queue };
+export const _test = { check, queue };
