@@ -275,3 +275,9 @@ input[hidden] { display: none; }
 .field.plain { border-top: 0; padding: 0; }
 .row .what .person, .row .what .person span { color: var(--text); font-size: 14px; font-weight: 600; }
 .row .what .person + span { margin-top: 2px; }
+
+/* Onglets (Mon serveur) */
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.tab { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); padding: 8px 14px; border-radius: 999px; font-weight: 600; cursor: pointer; }
+.tab:hover { border-color: var(--accent); }
+.tab.on { background: var(--accent-soft); border-color: var(--accent); }

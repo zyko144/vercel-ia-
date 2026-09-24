@@ -321,6 +321,17 @@ await check('rappels, jetons du casino et liste noire de l’IA', async () => {
   assert.equal(pausedAnswer(STRANGER), null);
 });
 
+await check('réglages du serveur : lus par catégorie, vérifiés, enregistrés', async () => {
+  const r = await request(`/dashboard/api/serveur/reglages?serveur=${GUILD}`);
+  assert.ok(r.json.sections.securite && r.json.settings.some((x) => x.key === 'antiRaid.enabled'));
+  const bad = await post('/dashboard/api/serveur/reglages', { guildId: GUILD, changes: { 'antiRaid.joins': 999, 'inconnu': 1 } });
+  assert.equal(bad.status, 400);
+  const good = await post('/dashboard/api/serveur/reglages', { guildId: GUILD, changes: { 'antiRaid.joins': 12, 'levels.roles': ['5 = 777777777777777777'] } });
+  assert.deepEqual(good.json.changed.sort(), ['antiRaid.joins', 'levels.roles']);
+  const { cfg } = await import('../src/features/guildConfig.js');
+  assert.equal(cfg(GUILD, 'antiRaid.joins'), 12);
+});
+
 await check('historique des sanctions : listé, puis une sanction effacée', async () => {
   const { addInsultWarning } = await import('../src/features/protectOwner.js');
   await addInsultWarning(GUILD, STRANGER, { reason: 'Insulte en vocal envers Noam (« fdp »)', kind: 'insulte-vocal' });

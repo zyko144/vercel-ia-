@@ -332,6 +332,102 @@
       },
     },
 
+    monserveur: {
+      titre: 'Mon serveur',
+      intro: 'Tout ce qui se règle par serveur : sécurité, niveaux, boutique, bienvenue, vocal et IA. Choisis une catégorie, modifie, enregistre.',
+      etat: { section: 'securite' },
+      async rendre(zone) {
+        const g = await serveurs(true);
+        if (!g.guilds.length) return append(zone, aucunServeur());
+        const etat = VUES.monserveur.etat;
+        const serveur = selectServeur(g.guilds, localStore('serveur'));
+        const guild = () => g.guilds.find((x) => x.id === serveur.value);
+        const d = await api.get(`serveur/reglages?${new URLSearchParams({ serveur: serveur.value })}`);
+        serveur.addEventListener('change', () => { localStore('serveur', serveur.value); rafraichir(); });
+        const onglets = h('div', { class: 'tabs', role: 'tablist' }, Object.entries(d.sections).map(([key, sec]) => {
+          const b = h('button', { class: `tab${key === etat.section ? ' on' : ''}`, type: 'button', role: 'tab', 'aria-selected': key === etat.section ? 'true' : 'false', text: `${sec.emoji} ${sec.label}` });
+          b.addEventListener('click', () => { etat.section = key; rafraichir(); });
+          return b;
+        }));
+        const sec = d.sections[etat.section];
+        const reglages = d.settings.filter((r) => r.section === etat.section);
+        const initial = Object.fromEntries(reglages.map((r) => [r.key, r.value]));
+        const valeurs = { ...initial };
+        const erreurs = {};
+        const pareil = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+        const barre = h('div', { class: 'savebar', hidden: true });
+        const compte = h('span');
+        const annuler = h('button', { class: 'btn small', type: 'button', text: 'Annuler' });
+        const enregistrer = h('button', { class: 'btn small primary', type: 'button', text: 'Enregistrer' });
+        append(barre, compte, h('div', { class: 'actions' }, annuler, enregistrer));
+        const blocs = {};
+        const maj = () => {
+          const n = Object.keys(valeurs).filter((k) => !pareil(valeurs[k], initial[k])).length;
+          barre.hidden = !n;
+          compte.textContent = `${n} changement(s) non enregistré(s)`;
+          for (const [k, b] of Object.entries(blocs)) b.classList.toggle('changed', !pareil(valeurs[k], initial[k]));
+        };
+        const liste = (items, vide) => [h('option', { value: '', text: vide }), ...items.map((x) => h('option', { value: x.id, text: x.label }))];
+        const form = h('div', {});
+        for (const r of reglages) {
+          const id = `cfg-${r.key.replace(/\W/g, '-')}`;
+          let input;
+          const gd = guild();
+          if (r.type === 'bool') {
+            const box = h('input', { type: 'checkbox', id, checked: Boolean(r.value) });
+            box.addEventListener('change', () => { valeurs[r.key] = box.checked; maj(); });
+            input = h('span', { class: 'switch' }, box, h('i'));
+          } else if (['channel', 'voice', 'category', 'role'].includes(r.type)) {
+            const items = r.type === 'channel' ? gd.channels.map((c) => ({ id: c.id, label: `# ${c.name}${c.category ? ` · ${c.category}` : ''}` }))
+              : r.type === 'voice' ? gd.voices.map((c) => ({ id: c.id, label: `🔊 ${c.name}` }))
+                : r.type === 'category' ? (gd.categories ?? []).map((c) => ({ id: c.id, label: `📁 ${c.name}` }))
+                  : gd.roles.map((x) => ({ id: x.id, label: `@${x.name}` }));
+            input = h('select', { id }, liste(items, '— aucun —'));
+            input.value = r.value ?? '';
+            input.addEventListener('change', () => { valeurs[r.key] = input.value || null; maj(); });
+          } else if (r.type === 'choice') {
+            input = h('select', { id }, r.options.map((o) => h('option', { value: o, text: o })));
+            input.value = r.value ?? r.options[0];
+            input.addEventListener('change', () => { valeurs[r.key] = input.value; maj(); });
+          } else if (r.type === 'int') {
+            input = h('input', { type: 'number', id, min: r.min, max: r.max, step: 1, value: r.value ?? '', inputmode: 'numeric' });
+            input.addEventListener('input', () => { valeurs[r.key] = input.value === '' ? null : Number(input.value); maj(); });
+          } else if (r.type === 'list') {
+            input = h('textarea', { id, rows: 4, spellcheck: 'false' });
+            input.value = (r.value ?? []).join('\n');
+            input.addEventListener('input', () => { valeurs[r.key] = input.value.split('\n').map((x) => x.trim()).filter(Boolean); maj(); });
+          } else {
+            input = h('input', { type: 'text', id, value: r.value ?? '', maxlength: r.max ?? 300 });
+            input.addEventListener('input', () => { valeurs[r.key] = input.value; maj(); });
+          }
+          const erreur = h('p', { class: 'error', hidden: true });
+          erreurs[r.key] = erreur;
+          const bloc = h('div', { class: 'field' },
+            h('div', { class: 'top' }, h('label', { for: id, text: r.label }), r.type === 'bool' ? input : null),
+            r.type === 'bool' ? null : input,
+            r.help ? h('p', { class: 'help', text: r.help }) : null, erreur);
+          blocs[r.key] = bloc;
+          form.append(bloc);
+        }
+        annuler.addEventListener('click', () => rafraichir());
+        enregistrer.addEventListener('click', () => action(enregistrer, async () => {
+          for (const e of Object.values(erreurs)) e.hidden = true;
+          const changes = Object.fromEntries(Object.keys(valeurs).filter((k) => !pareil(valeurs[k], initial[k])).map((k) => [k, valeurs[k]]));
+          try {
+            const r = await api.post('serveur/reglages', { guildId: serveur.value, changes });
+            toast(r.changed.length ? `Enregistré (${r.changed.length}).` : 'Rien à changer.');
+            rafraichir();
+          } catch (err) {
+            for (const [k, m] of Object.entries(err.data?.errors ?? {})) if (erreurs[k]) { erreurs[k].textContent = m; erreurs[k].hidden = false; }
+            throw err;
+          }
+        }));
+        append(zone, h('div', { class: 'stack' },
+          card(null, h('div', { class: 'grid cols-2' }, champ('Serveur', serveur)), onglets),
+          card(`${sec.emoji} ${sec.label}`, h('p', { class: 'sub', text: sec.intro }), form, barre)));
+      },
+    },
+
     sanctions: {
       titre: 'Sanctions et offres',
       intro: 'Tous les avertissements (écrits, vocaux et donnés par le staff), et l’offre de chaque serveur. Tu peux effacer une sanction donnée par erreur.',
@@ -351,7 +447,7 @@
                   if (!await confirmer({ titre: 'Effacer cette sanction ?', texte: `${x.user?.name ?? 'Ce membre'} aura un avertissement de moins.`, bouton: 'Effacer' })) return;
                   action(b, async () => { await api.post('sanctions/effacer', { guildId: x.guildId, userId: x.userId, at: x.at }); toast('Sanction effacée.'); rafraichir(); });
                 });
-                const [label, etat] = KINDS[x.kind] ?? ['Autre', ''];
+                const [label, etat] = KINDS[x.kind] ?? (x.kind?.startsWith('auto') ? ['Auto', 'warn'] : ['Autre', '']);
                 return h('tr', {}, h('td', { class: 'num', text: dateHeure(x.at) }), h('td', {}, personne(x.user)), h('td', {}, pill(label, etat)), h('td', { class: 'mute', text: x.reason ?? '—' }), h('td', { text: x.guild }), h('td', { class: 'right' }, b));
               }))))
             : vide('Aucune sanction', 'Les avertissements apparaîtront ici.')),

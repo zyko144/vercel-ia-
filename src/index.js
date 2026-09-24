@@ -18,6 +18,8 @@ import { startBattleLoop, startFantasyLoop } from './games/index.js';
 import { startVoiceKeeper } from './features/voice.js';
 import { startVoiceGuard } from './features/voiceGuard.js';
 import { loadServers } from './features/premium.js';
+import { loadGuildConfig } from './features/guildConfig.js';
+import { attachSecurityEvents } from './features/security.js';
 import { startWeeklyReports } from './features/weekly.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
@@ -37,7 +39,8 @@ const INTENTS = [
 const client = new Client({
   // L'intent « Présence » sert au partage Spotify ; il est retiré au démarrage s'il n'est pas activé dans le portail Discord
   intents: config.spotify.enabled ? [...INTENTS, GatewayIntentBits.GuildPresences] : INTENTS,
-  partials: [Partials.Channel],
+  // Message / membre partiels : le journal voit aussi les messages supprimés qui n'étaient plus en mémoire
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
   // Par défaut le bot ne ping personne (pas de @everyone même si l'IA l'écrit)
   allowedMentions: { parse: [], repliedUser: true },
 });
@@ -73,6 +76,8 @@ client.once(Events.ClientReady, async (c) => {
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);
 });
+
+attachSecurityEvents(client);
 
 client.on(Events.MessageCreate, (message) => {
   onMessage(client, message).catch((err) => console.error('[messageCreate]', err));
@@ -121,14 +126,14 @@ const httpServer = startHttpServer(() => ({
 // Le PC du chef envoie son son ici, en direct
 attachLiveServer(httpServer);
 
-/** L'intent « Présence » (statut Spotify) est-il activé dans le portail Discord ? */
-async function presenceAllowed() {
+/** Les intents « privilégiés » activés dans le portail Discord (Présence, Membres). */
+async function privilegedIntents() {
   try {
     const response = await fetch('https://discord.com/api/v10/applications/@me', { headers: { Authorization: `Bot ${config.discordToken}` } });
     const flags = BigInt((await response.json())?.flags ?? 0);
-    return Boolean(flags & ((1n << 12n) | (1n << 13n)));
+    return { presence: Boolean(flags & ((1n << 12n) | (1n << 13n))), members: Boolean(flags & ((1n << 14n) | (1n << 15n))) };
   } catch {
-    return false;
+    return { presence: false, members: false };
   }
 }
 
@@ -137,11 +142,18 @@ async function presenceAllowed() {
   await waitForTurn();
   // Offres premium des serveurs (plans, couleurs, voix) : chargées avant la première commande
   await loadServers().catch((err) => console.warn('[premium] chargement :', err.message));
-  if (config.spotify.enabled && !(await presenceAllowed())) {
+  await loadGuildConfig().catch((err) => console.warn('[réglages serveurs] chargement :', err.message));
+  // Intents selon le portail Discord : Présence (Spotify) et Membres (arrivées, anti-raid, bienvenue, journal des rôles)
+  const allowed = await privilegedIntents();
+  const intents = [...INTENTS, GatewayIntentBits.GuildModeration];
+  if (config.spotify.enabled && allowed.presence) intents.push(GatewayIntentBits.GuildPresences);
+  else if (config.spotify.enabled) {
     console.warn("⚠️ Partage Spotify désactivé : active « Presence Intent » dans le portail Discord (Developer Portal › Bot), puis redémarre.");
     config.spotify.enabled = false;
-    client.options.intents = new IntentsBitField(INTENTS);
   }
+  if (allowed.members) intents.push(GatewayIntentBits.GuildMembers);
+  else console.warn("⚠️ Anti-raid, vérification, bienvenue et journal des arrivées désactivés : active « Server Members Intent » dans le portail Discord (Developer Portal › Bot), puis redémarre.");
+  client.options.intents = new IntentsBitField(intents);
   await client.login(config.discordToken).catch((err) => {
     console.error('❌ Connexion à Discord impossible (token invalide ou intents pas activés ?) :', err.message);
     process.exit(1);

@@ -12,6 +12,7 @@ import { resolveQuery } from '../music/sources.js';
 import { instance } from '../features/instance.js';
 import { load, save, storageBackend } from '../storage.js';
 import { allServers, planOf } from '../features/premium.js';
+import { SECTIONS, guildSettings, setGuildSettings } from '../features/guildConfig.js';
 
 const MINUTE = 60_000;
 const ID = /^\d{15,21}$/;
@@ -106,6 +107,7 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
             id: c.id, name: c.name, category: category(c), people: c.members.filter((m) => !m.user.bot).size,
             home: c.id === homeChannel(g)?.id, bot: c.id === me?.voice?.channelId,
           })),
+          categories: sorted.filter((c) => c.type === ChannelType.GuildCategory).map((c) => ({ id: c.id, name: c.name })),
           roles: g.roles.cache.filter((r) => r.id !== g.id && !r.managed).sort((a, b) => b.position - a.position).map((r) => ({ id: r.id, name: r.name, color: r.hexColor })),
           perms: {
             moderate: Boolean(me?.permissions.has(P.ModerateMembers)), kick: Boolean(me?.permissions.has(P.KickMembers)),
@@ -317,6 +319,19 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
       }
       audit({ userId: session.userId, action: 'Casino', detail: `${who(client, userId).name} : ${detail}`, req });
       return json(res, 200, { ok: true, detail });
+    }),
+
+    // ---------- Réglages de chaque serveur (sécurité, niveaux, boutique…) ----------
+    'GET serveur/reglages': wrap(async (req, res, body, session, url) => {
+      const guild = guildOf(url.searchParams.get('serveur'));
+      return json(res, 200, { guildId: guild.id, sections: SECTIONS, settings: guildSettings(guild.id) });
+    }),
+    'POST serveur/reglages': wrap(async (req, res, body, session) => {
+      const guild = guildOf(body.guildId);
+      const result = setGuildSettings(guild.id, body.changes);
+      if (!result.ok) return json(res, 400, { error: 'Certains réglages sont refusés.', errors: result.errors });
+      if (result.changed.length) audit({ userId: session.userId, action: 'Réglages du serveur', detail: `${guild.name} · ${result.changed.join(', ').slice(0, 120)}`, req });
+      return json(res, 200, { ok: true, changed: result.changed });
     }),
 
     // ---------- Historique des sanctions (avertissements écrits, vocaux et manuels) ----------

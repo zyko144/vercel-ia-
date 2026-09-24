@@ -1,4 +1,5 @@
 // Commandes de base / modération. Toutes les réponses sont visibles seulement par la personne qui tape la commande.
+import { notifySanction } from '../features/security.js';
 import { countEvent } from '../features/weekly.js';
 import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from 'discord.js';
 import { load, save } from '../storage.js';
@@ -40,12 +41,8 @@ async function targetProblem(interaction, member, { capability, verb }) {
 
 /** Prévient le membre sanctionné en MP (si ses MP sont ouverts). */
 async function notifyMember(user, guild, title, reason, extra = []) {
-  const embed = new EmbedBuilder()
-    .setColor(0xed4245)
-    .setTitle(title)
-    .addFields({ name: 'Serveur', value: guild.name, inline: true }, { name: 'Raison', value: truncate(reason, 1000) }, ...extra)
-    .setTimestamp();
-  return user.send({ embeds: [embed] }).then(() => true).catch(() => false);
+  // Avec un bouton « Contester » si c'est activé sur le serveur
+  return notifySanction(user, guild, { title, reason, fields: extra });
 }
 
 async function warningsOf(guildId, userId) {

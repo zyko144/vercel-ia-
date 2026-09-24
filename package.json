@@ -17,7 +17,8 @@
     "test:voiceguard": "node tools/test-voiceguard.mjs",
     "test:panels": "node tools/test-panels.mjs",
     "test:tickets": "node tools/test-tickets.mjs",
-    "test:premium": "node tools/test-premium.mjs"
+    "test:premium": "node tools/test-premium.mjs",
+    "test:security": "node tools/test-security.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
