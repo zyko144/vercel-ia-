@@ -217,6 +217,7 @@ la page de connexion. Accès : le chef, plus les comptes listés dans `DASHBOARD
 | Musique | **Lancer un son** ou une playlist dans le vocal choisi, pause / passer / précédent / boucle / arrêter, **volume**, file d'attente (retirer, mélanger, vider), serveurs audio |
 | Rappels | Rappels en attente, en créer pour toi ou un membre, en supprimer |
 | Casino | Classement de Casinho, **donner / retirer des jetons**, remettre un compte à zéro |
+| Sanctions et offres | Historique de tous les avertissements (écrits, vocaux, staff), effaçables ; l'offre de chaque serveur |
 | Journaux | La console du bot en direct, filtrable, clés et tokens masqués |
 | Sécurité | Sessions ouvertes (les fermer), comptes autorisés, journal de toutes les actions |
 
@@ -236,14 +237,14 @@ Render est arrêté. Sans Supabase, les deux copies répondent au même clic et 
 
 ## 10. La surveillance vocale 🎙️
 
-Le bot écoute son salon vocal (il n'est plus en sourdine) et sanctionne les **vraies insultes qui nomment
-« Noam » ou « Vercel »** (« Noam t'es un fdp », « Vercel ferme ta gueule »). Sans l'un de ces noms dans la phrase,
-rien ne se passe, que Noam soit dans le vocal ou non.
+Le bot écoute son salon vocal et sanctionne les **vraies insultes contre Noam, seulement quand Noam est
+dans ce vocal et que son nom est dit** (« Noam t'es un fdp »). Personne d'autre n'est protégé. Quand Noam n'est
+pas dans le vocal, le bot n'écoute rien (rien n'est envoyé à Gemini).
 
 | Fois | Ce qui se passe |
 |---|---|
-| 1re | **Avertissement** : le membre est pingé, carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal **et dans #agora**, + MP |
-| 2e et suivantes | **Exclusion d'1 minute**, **sortie du vocal**, avertissement de plus, carte « SANCTION » (néon rouge) |
+| 1er et 2e | **Avertissement** : le membre est pingé, carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal **et dans #agora**, + MP |
+| 3e et suivants | **Exclusion d'1 minute**, **sortie du vocal**, avertissement de plus, carte « SANCTION » (néon rouge) |
 
 Les avertissements s'additionnent avec ceux des insultes écrites. Le chef n'est jamais écouté ni sanctionné,
 et le chef reçoit en MP ce qui a été entendu.
@@ -251,7 +252,7 @@ et le chef reçoit en MP ce qui a été entendu.
 - Seuls les moments où quelqu'un parle sont envoyés à Gemini, regroupés par personne (une demande pour ~20 s
   de parole), avec un plafond par heure (`VOICE_GUARD_MAX_PER_HOUR`, 200 par défaut). L'audio n'est pas gardé.
 - Pour éviter les erreurs : Gemini doit confirmer l'insulte, un vrai mot d'insulte doit être dans ce qui a été
-  dit, et « Noam » ou « Vercel » doit être prononcé. Un juron (« putain ») ne compte pas.
+  dit, Noam doit être nommé et présent. Un juron (« putain ») ne compte pas.
 - Salon d'annonce : le salon texte dont le nom contient « agora », ou `VOICE_GUARD_CHANNEL_ID`.
 - Ça n'a pas marché ? Tableau de bord › Vue d'ensemble › « Surveillance vocale : dernières écoutes » montre ce que le
   bot a entendu et pourquoi il a sanctionné ou non (aussi dans Journaux, filtre « surveillance »).
@@ -259,6 +260,54 @@ et le chef reçoit en MP ce qui a été entendu.
 - Couper : `VOICE_GUARD=false`, ou tableau de bord › IA › Réglages › Surveillance vocale.
 - Préviens tes membres que le vocal est modéré automatiquement.
 - Les cartes se refont avec `node tools/make-sanction-gifs.mjs`. Tests : `npm run test:voiceguard`.
+
+---
+
+## 11. Les 6 commandes (panneaux) 🧭
+
+Le bot n'a plus que **6 commandes** (+ `/admin` pour le chef et le clic droit sur un message). Chacune ouvre un
+**panneau** : bannière néon animée, menu d'actions, petite fenêtre à remplir (membres, salons, rôles, fichiers,
+choix). Les réponses arrivent dans un embed aux couleurs du panneau, avec son image animée.
+
+| Commande | Ce qu'il y a dedans |
+|---|---|
+| `/ia` | Question, explication, code, correction, traduction, résumé du salon, images, IA vocale |
+| `/jeux` | Loup-garou, imposteur, histoire, freestyle, quiz, rébus, blind test et « devine », Fantasy Rap, dés… |
+| `/musique` | Jouer, pause, file, volume, effets, paroles, karaoké, radio, playlists, Spotify |
+| `/serveur` | Infos, rôles, faire parler le bot, sondage, rappel, contacter le chef, aide, **premium** |
+| `/sanction` | Avertir, muet, expulser, bannir, débannir, avertissements, supprimer des messages, mode lent, verrouiller (modos) |
+| `/pannel` | **Tickets**, **annonce avec aperçu**, **construction de salons**, tickets ouverts (admins) |
+
+Les bannières se refont avec `node tools/make-panel-gifs.mjs`. Tests : `npm run test:panels`.
+
+### Tickets
+`/pannel` › Panneau de tickets : titre, message, image, texte du bouton, salon → **aperçu privé** (couleur,
+réglages : rôle du staff, catégorie, salon des archives, message d'accueil, 1 ticket par membre) → Publier.
+Chaque ticket est un salon privé numéroté (membre + staff) avec **Prendre en charge**, **Ajouter quelqu'un** et
+**Fermer** (la transcription part aux archives et en MP au membre, puis le salon est supprimé).
+
+### Construction de salons
+`/pannel` › Construire des salons : thème (communauté, gaming, RP, études, musique, staff, ou libre : l'IA
+invente), nom de la catégorie, nombre de salons écrits et vocaux → aperçu (« Autres noms », « Rendre privé »
+pour un rôle) → **Construire**. Tests : `npm run test:tickets`.
+
+## 12. Les offres premium ⭐
+
+| | Gratuit | Veilleur (4,99 €) | Gardien (9,99 €) |
+|---|---|---|---|
+| IA vocale | 60 min/mois | 600 min/mois | illimitée |
+| Voix de l'IA au choix | ❌ | ✅ | ✅ |
+| Embeds aux couleurs du serveur (logo, couleur, nom) | ❌ | ✅ | ✅ |
+| Rapport de la semaine en MP au propriétaire (dimanche 20 h) | ❌ | ✅ | ✅ |
+| Surveillance vocale Gardien (staff protégé, mots interdits) | ❌ | ❌ | ✅ |
+
+- **Essai gratuit de 7 jours du Gardien**, une fois par serveur : `/serveur` › Offre du serveur › Essai gratuit
+  (aussi expliqué sur le site, bouton « Commencer l'essai »).
+- **Activer une offre payée** (le chef, après paiement) : `/serveur` › Activer une offre : identifiant du serveur,
+  offre, nombre de jours (0 = retirer).
+- Le logo est gardé par le bot et servi sur `/logo/<id>.png` (il faut que le bot soit en ligne sur Render).
+- Tableau de bord › **Sanctions et offres** : l'offre de chaque serveur et l'historique de toutes les sanctions
+  (effaçables). Tests : `npm run test:premium`.
 
 ---
 

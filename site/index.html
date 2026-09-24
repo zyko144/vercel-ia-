@@ -423,6 +423,13 @@ h1, h2, h3 { margin: 0; font-weight: 400; text-wrap: balance; }
 .parchemin .bouton:hover { background: #4a3218; }
 .parchemin .bouton.discret { background: transparent; color: var(--encre); box-shadow: inset 0 0 0 1px rgba(43, 29, 16, 0.4); }
 .note-pacte { margin-top: 26px; font: 400 15px/1.5 var(--ui); color: #5c4228; }
+.essai { margin-top: 44px; display: grid; grid-template-columns: auto 1fr auto; gap: 18px 26px; align-items: center; padding: 26px 30px; border-radius: 10px; background: linear-gradient(120deg, rgba(43, 29, 16, 0.92), rgba(74, 50, 24, 0.92)); color: var(--parchemin); box-shadow: 0 24px 50px -28px rgba(40, 20, 5, 0.8); }
+.essai .cadeau { font-size: 44px; line-height: 1; }
+.essai h3 { font: 400 30px/1.1 var(--titre); }
+.essai ol { margin: 8px 0 0; padding-left: 20px; font: 400 15px/1.55 var(--ui); color: #e8d9b6; }
+.essai code { font: 500 14px/1 ui-monospace, monospace; background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px; }
+.essai .bouton { background: var(--parchemin); color: var(--encre); white-space: nowrap; }
+@media (max-width: 760px) { .essai { grid-template-columns: 1fr; text-align: left; } .essai .cadeau { display: none; } }
 @media (max-width: 960px) { .pacte { grid-template-columns: 1fr; max-width: 520px; row-gap: 40px; } }
 
 .questions { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(32px, 6vw, 80px); }
@@ -534,7 +541,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: 
       <li><a href="#pacte" data-son="page"><span class="rom">✦</span><span class="t">Et le jour se leva</span><span class="pts"></span><span class="quoi">Les offres</span></a></li>
     </ol>
     <div class="choix">
-      <p>Comme dans <span class="cmd">/jeu-histoire</span>, c’est toi qui choisis la suite :</p>
+      <p>Comme dans <span class="cmd">/jeux › Histoire</span>, c’est toi qui choisis la suite :</p>
       <div class="dc-ligne">
         <a class="dc-bt p" href="#loups" data-son="page">🐺 Jouer au loup-garou</a>
         <a class="dc-bt" href="#musique" data-son="page">🎧 Écouter la musique</a>
@@ -651,8 +658,8 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: 
       <ul>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4M21 9V5a2 2 0 0 0-2-2h-4M3 15v4a2 2 0 0 0 2 2h4M15 21h4a2 2 0 0 0 2-2v-4"/><path d="M8 12h8"/></svg><span><b>Clic droit sur n’importe quel message</b> : l’expliquer, le traduire ou le signaler.</span></li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/></svg><span><b>Résumer un salon</b> où il s’est passé trop de choses : <span class="cmd">/resume-salon</span>.</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg><span><b>L’IA vocale</b> : parle-lui dans le vocal, elle te répond à voix haute. <span class="cmd">/vocal</span></span></li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg><span><b>Rappels et sondages</b> : <span class="cmd">/rappel</span>, <span class="cmd">/sondage</span>.</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg><span><b>L’IA vocale</b> : parle-lui dans le vocal, elle te répond à voix haute. <span class="cmd">/ia › IA vocale</span></span></li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg><span><b>Rappels et sondages</b> : <span class="cmd">/serveur › Rappel</span>, <span class="cmd">/serveur › Sondage</span>.</span></li>
       </ul>
     </div>
   </div>
@@ -680,7 +687,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: 
           <p class="n">2 · Tout le serveur le voit</p>
           <h3>Le partage en direct</h3>
           <p>Dans le salon musique, un message montre le son, l’artiste et où elle en est. Il se met à jour tout seul.</p>
-          <p class="clair">À activer pour soi avec <span class="cmd">/spotify</span>.</p>
+          <p class="clair">À activer pour soi avec <span class="cmd">/musique › Partager mon Spotify</span>.</p>
         </div>
         <div class="legende">
           <p class="n">3 · Et dans le vocal</p>
@@ -691,7 +698,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: 
         <div class="legende">
           <p class="n">4 · Un lien suffit</p>
           <h3>Colle un lien Spotify</h3>
-          <p>Un son, un album ou une playlist entière : <span class="cmd">/play</span> et le lien. Le panneau de contrôle apparaît.</p>
+          <p>Un son, un album ou une playlist entière : <span class="cmd">/musique</span> › Jouer un son, et le lien. Le panneau de contrôle apparaît.</p>
           <p class="clair">Marche aussi avec Apple Music, YouTube, SoundCloud et Deezer. Effets 8D, slowed + reverb, nightcore, karaoké.</p>
         </div>
         <div class="legende">
@@ -745,7 +752,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: 
             <div class="dc-msg">
               <div class="dc-av bot" aria-hidden="true"></div>
               <div><div class="dc-tete"><span class="dc-nom nom-bot">AI Vercel</span><span class="dc-app">APP</span><span class="dc-heure">Aujourd’hui à 21:14</span></div>
-                <div class="dc-petit">↳ <span class="dc-mention">@Lina</span> a utilisé <span class="cmd">/play</span> <span style="color:#00a8fc">open.spotify.com/track/…</span></div>
+                <div class="dc-petit">↳ <span class="dc-mention">@Lina</span> a utilisé <span class="cmd">/musique</span> › Jouer un son <span style="color:#00a8fc">open.spotify.com/track/…</span></div>
                 <div class="dc-embed" style="--c:#1db954">
                   <div class="auteur">🎶 En cours de lecture</div>
                   <div class="titre lien">Minuit sur le périph</div>
@@ -793,7 +800,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 30px; justify-content: 
         <div class="legende">
           <p class="n">1 · On se rassemble</p>
           <h3>La salle d’attente</h3>
-          <p>Lina tape <span class="cmd">/jeu-loupgarou</span>. Chacun clique sur « Rejoindre ». Pas assez de monde ? Des bots complètent la table.</p>
+          <p>Lina tape <span class="cmd">/jeux › Loup-garou</span>. Chacun clique sur « Rejoindre ». Pas assez de monde ? Des bots complètent la table.</p>
         </div>
         <div class="legende">
           <p class="n">2 · En secret</p>
@@ -971,7 +978,7 @@ Les autres, dormez bien 😴</div>
         <h3>En clair</h3>
         <p>Chacun donne un indice sur son mot, sans le dire. Puis on vote pour démasquer celui dont le mot n’est pas le même.</p>
         <ol class="etapes">
-          <li><span>Lance <span class="cmd">/jeu-imposteur</span> et choisis un thème : rap FR, bouffe, jeux vidéo, animés, foot…</span></li>
+          <li><span>Lance <span class="cmd">/jeux › L’imposteur</span> et choisis un thème : rap FR, bouffe, jeux vidéo, animés, foot…</span></li>
           <li><span>Ton mot arrive en message privé. Un indice de 1 à 5 mots chacun son tour.</span></li>
           <li><span>On vote. Démasqué, l’intrus peut encore gagner s’il devine le mot des autres.</span></li>
         </ol>
@@ -1050,7 +1057,7 @@ Les autres, dormez bien 😴</div>
           <p>Clic droit sur un message › Applications › <b>Signaler au staff</b>. L’IA analyse et le staff agit en un bouton.</p>
           <ol class="etapes">
             <li><span>Elle fait la différence entre une vanne entre potes et une vraie attaque.</span></li>
-            <li><span>Toute la modération classique : <span class="cmd">/warn</span> <span class="cmd">/mute</span> <span class="cmd">/ban</span> <span class="cmd">/lock</span> <span class="cmd">/slowmode</span>.</span></li>
+            <li><span>Toute la modération classique : <span class="cmd">/sanction</span> : avertir, rendre muet, bannir, verrouiller, mode lent, et les tickets avec <span class="cmd">/pannel</span>.</span></li>
             <li><span>Personne ne peut faire @everyone avec le bot, et le chef est prévenu en cas de souci.</span></li>
           </ol>
         </div>
@@ -1104,14 +1111,14 @@ Attaque directe et répétée contre un membre, sans contexte de plaisanterie.</
       <p class="conte">Le loup-garou n’est qu’une des histoires du soir. Voici les autres jeux que le gardien anime tout seul, du blind test au freestyle.</p>
     </div>
     <div class="veillees">
-      <article class="veillee"><span class="sym" aria-hidden="true">🎧</span><h3>Blind test</h3><p>Le bot passe des extraits en vocal, le premier qui trouve marque. Titre 2 pts, artiste 1 pt.</p><span class="cmd">/jeu-blindtest</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🎙️</span><h3>Suite des paroles</h3><p>Le son se coupe juste avant une phrase. Écris la suite avant les autres.</p><span class="cmd">/jeu-paroles</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">📅</span><h3>Devine l’année</h3><p>Un son passe : en quelle année est-il sorti ? Le plus proche marque aussi.</p><span class="cmd">/jeu-annee</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🎤</span><h3>Freestyle battle</h3><p>Deux rappeurs, une instru, un jury IA qui note les rimes, le flow et les punchlines.</p><span class="cmd">/jeu-freestyle</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">📖</span><h3>Histoire</h3><p>L’IA raconte une aventure dont vous êtes les héros, et c’est vous qui décidez de la suite.</p><span class="cmd">/jeu-histoire</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🧩</span><h3>Rébus en emojis</h3><p>Un film, un animé ou un son de rap FR en emojis. Le premier qui trouve gagne.</p><span class="cmd">/jeu-rebus</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">📊</span><h3>Plus ou moins</h3><p>Qui a le plus de fans sur Deezer ? Enchaîne les bonnes réponses.</p><span class="cmd">/jeu-fans</span></article>
-      <article class="veillee"><span class="sym" aria-hidden="true">🏆</span><h3>Fantasy Rap FR</h3><p>Ton équipe de 5 rappeurs, des points chaque lundi avec les vrais chiffres Deezer.</p><span class="cmd">/jeu-fantasy</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">🎧</span><h3>Blind test</h3><p>Le bot passe des extraits en vocal, le premier qui trouve marque. Titre 2 pts, artiste 1 pt.</p><span class="cmd">/jeux › Blind test</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">🎙️</span><h3>Suite des paroles</h3><p>Le son se coupe juste avant une phrase. Écris la suite avant les autres.</p><span class="cmd">/jeux › Suite des paroles</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">📅</span><h3>Devine l’année</h3><p>Un son passe : en quelle année est-il sorti ? Le plus proche marque aussi.</p><span class="cmd">/jeux › Devine l’année</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">🎤</span><h3>Freestyle battle</h3><p>Deux rappeurs, une instru, un jury IA qui note les rimes, le flow et les punchlines.</p><span class="cmd">/jeux › Freestyle</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">📖</span><h3>Histoire</h3><p>L’IA raconte une aventure dont vous êtes les héros, et c’est vous qui décidez de la suite.</p><span class="cmd">/jeux › Histoire</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">🧩</span><h3>Rébus en emojis</h3><p>Un film, un animé ou un son de rap FR en emojis. Le premier qui trouve gagne.</p><span class="cmd">/jeux › Rébus</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">📊</span><h3>Plus ou moins</h3><p>Qui a le plus de fans sur Deezer ? Enchaîne les bonnes réponses.</p><span class="cmd">/jeux › Plus ou moins</span></article>
+      <article class="veillee"><span class="sym" aria-hidden="true">🏆</span><h3>Fantasy Rap FR</h3><p>Ton équipe de 5 rappeurs, des points chaque lundi avec les vrais chiffres Deezer.</p><span class="cmd">/jeux › Fantasy Rap</span></article>
     </div>
   </div>
 </section>
@@ -1130,6 +1137,18 @@ Attaque directe et répétée contre un membre, sans contexte de plaisanterie.</
     </div>
     <div class="pacte" id="offres"></div>
     <p class="note-pacte" id="note-pacte"></p>
+    <div class="essai" id="essai">
+      <span class="cadeau" aria-hidden="true">🎁</span>
+      <div>
+        <h3>7 jours de Gardien, offerts</h3>
+        <ol>
+          <li>Invite <span class="nom-bot">AI Vercel</span> sur ton serveur.</li>
+          <li>Tape <code>/serveur</code>, choisis <b>Offre du serveur</b>, puis <b>Essai gratuit 7 jours</b>.</li>
+          <li>Tout est débloqué tout de suite : IA vocale illimitée, couleurs de ton serveur, rapport de la semaine, surveillance vocale.</li>
+        </ol>
+      </div>
+      <a class="bouton" id="essai-lien" href="#" target="_blank" rel="noopener" data-son="cloche">Commencer l’essai</a>
+    </div>
   </div>
 
   <div class="wrap" style="margin-top:110px">
@@ -1144,7 +1163,8 @@ Attaque directe et répétée contre un membre, sans contexte de plaisanterie.</
         <details><summary>Le partage Spotify, il faut un compte Premium ?</summary><p>Non. Le bot lit ce que tu écoutes grâce à ton statut Discord (« Écoute Spotify »). Il suffit d’avoir relié Spotify à ton compte Discord.</p></details>
         <details><summary>Le casino, c’est de l’argent réel ?</summary><p>Jamais. Les jetons sont fictifs : on ne peut ni les acheter ni les retirer. C’est un jeu entre membres.</p></details>
         <details><summary>L’IA comprend le français d’internet ?</summary><p>Oui : l’argot, les fautes, les abréviations. Elle lit aussi les images, les PDF et les liens.</p></details>
-        <details><summary>Je peux changer son nom et sa photo ?</summary><p>Oui, avec l’offre Sur mesure : nom, avatar, couleurs, textes, et des fonctions pensées pour ton serveur.</p></details>
+        <details><summary>Je peux mettre les couleurs de mon serveur ?</summary><p>Oui, dès le Veilleur : ton logo, ta couleur et ton nom sur les panneaux, tickets, annonces et rapports. Avec le Sur mesure, le bot prend aussi ton nom et ton avatar.</p></details>
+        <details><summary>Comment marche l’essai gratuit ?</summary><p>Une fois le bot invité, tape <code>/serveur</code> › Offre du serveur › Essai gratuit 7 jours. Tout le Gardien est débloqué pendant 7 jours, une fois par serveur, sans carte bancaire.</p></details>
       </div>
     </div>
   </div>
@@ -1178,24 +1198,26 @@ const CONFIG = {
   name: 'AI Vercel',
   // Lien vers ton serveur Discord ou ton profil (bouton « Commander »).
   orderUrl: 'https://discord.com',
+  // Lien d'invitation du bot (bouton « Commencer l'essai »). L'identifiant est celui de l'application du bot.
+  inviteUrl: 'https://discord.com/oauth2/authorize?client_id=1549507270193193071&scope=bot%20applications.commands&permissions=8',
   // Ton pseudo Discord, affiché avec un bouton « Copier ».
   discordHandle: 'ton-pseudo',
   plans: [
     {
       name: 'Veilleur', for: 'Pour un petit serveur entre potes', price: '4,99', unit: '€ / mois',
-      features: ['L’IA dans un salon, fils privés', 'Musique : Spotify, liens, playlists, effets', 'Modération complète', 'Rappels et sondages'],
-      missing: ['Loup-garou et jeux à plusieurs', 'Casino à jetons'],
+      features: ['L’IA dans un salon, fils privés', 'Musique : Spotify, liens, playlists, effets', 'Modération, tickets et construction de salons', '600 min d’IA vocale par mois, voix au choix', 'Embeds aux couleurs de ton serveur', 'Rapport de la semaine en MP'],
+      missing: ['Surveillance vocale Gardien'],
     },
     {
       name: 'Gardien', for: 'Tout le conte, pour un serveur vivant', price: '9,99', unit: '€ / mois', best: true,
-      features: ['Tout le Veilleur', 'Partage Spotify en direct dans le vocal', 'Les 20 jeux, loup-garou avec narrateur', 'La taverne Casinho, 10 tables', 'IA vocale, tribunal des sons'],
+      features: ['Tout le Veilleur', 'IA vocale illimitée', 'Surveillance vocale : staff protégé, mots interdits', 'Les 20 jeux, loup-garou avec narrateur', 'La taverne Casinho, 10 tables', 'Partage Spotify en direct dans le vocal'],
     },
     {
       name: 'Sur mesure', for: 'Ton gardien, à ton nom', price: 'Devis', unit: '',
       features: ['Tout le Gardien', 'Nom, avatar et couleurs à toi', 'Fonctions créées pour ton serveur', 'Aide prioritaire'],
     },
   ],
-  plansNote: 'Premier mois remboursé si le bot ne te convient pas. Prix TTC, sans engagement.',
+  plansNote: 'Essai gratuit de 7 jours, puis premier mois remboursé si le bot ne te convient pas. Prix TTC, sans engagement.',
 };
 </script>
 
@@ -1220,6 +1242,7 @@ if (CONFIG.name) $$('.nom-bot').forEach((el) => { el.textContent = CONFIG.name; 
 $('#annee').textContent = new Date().getFullYear();
 $('#pseudo').textContent = CONFIG.discordHandle;
 $('#commander').href = CONFIG.orderUrl;
+$('#essai-lien').href = CONFIG.inviteUrl || CONFIG.orderUrl;
 $('#note-pacte').textContent = CONFIG.plansNote ?? '';
 const oui = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
 const non = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>';

@@ -14,7 +14,10 @@
     "build:salle": "node tools/build-salle-sdk.mjs",
     "test:dashboard": "node tools/test-dashboard.mjs",
     "test:instance": "node tools/test-instance.mjs",
-    "test:voiceguard": "node tools/test-voiceguard.mjs"
+    "test:voiceguard": "node tools/test-voiceguard.mjs",
+    "test:panels": "node tools/test-panels.mjs",
+    "test:tickets": "node tools/test-tickets.mjs",
+    "test:premium": "node tools/test-premium.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

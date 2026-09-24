@@ -332,6 +332,33 @@
       },
     },
 
+    sanctions: {
+      titre: 'Sanctions et offres',
+      intro: 'Tous les avertissements (écrits, vocaux et donnés par le staff), et l’offre de chaque serveur. Tu peux effacer une sanction donnée par erreur.',
+      auto: 30000,
+      async rendre(zone) {
+        const [d, p] = await Promise.all([api.get('sanctions'), api.get('premium')]);
+        const KINDS = { 'insulte-vocal': ['Vocal', 'bad'], 'insulte-protege': ['Écrit', 'warn'], 'insulte-chef': ['Écrit', 'warn'], manuel: ['Staff', 'info'] };
+        append(zone, [
+          card('Offre de chaque serveur', h('p', { class: 'sub', text: 'Pour activer une offre payée : dans Discord, /serveur › Activer une offre (chef).' }),
+            h('div', { class: 'rows' }, p.servers.map((x) => ligne(x.name, x.until ? `${x.trial ? 'Essai' : 'Payé'} jusqu’au ${dateHeure(x.until)}` : x.trialUsed ? 'Essai déjà utilisé' : 'Essai gratuit disponible', pill(`${x.emoji} ${x.plan}`, x.plan === 'Gratuit' ? '' : 'ok'))))),
+          card(`Historique des sanctions (${num(d.total)})`, d.sanctions.length
+            ? h('div', { class: 'table-wrap' }, h('table', {},
+              h('thead', {}, h('tr', {}, h('th', { text: 'Quand' }), h('th', { text: 'Membre' }), h('th', { text: 'Type' }), h('th', { text: 'Raison' }), h('th', { text: 'Serveur' }), h('th', { class: 'right', text: '' }))),
+              h('tbody', {}, d.sanctions.map((x) => {
+                const b = h('button', { class: 'btn small', type: 'button', text: 'Effacer' });
+                b.addEventListener('click', async () => {
+                  if (!await confirmer({ titre: 'Effacer cette sanction ?', texte: `${x.user?.name ?? 'Ce membre'} aura un avertissement de moins.`, bouton: 'Effacer' })) return;
+                  action(b, async () => { await api.post('sanctions/effacer', { guildId: x.guildId, userId: x.userId, at: x.at }); toast('Sanction effacée.'); rafraichir(); });
+                });
+                const [label, etat] = KINDS[x.kind] ?? ['Autre', ''];
+                return h('tr', {}, h('td', { class: 'num', text: dateHeure(x.at) }), h('td', {}, personne(x.user)), h('td', {}, pill(label, etat)), h('td', { class: 'mute', text: x.reason ?? '—' }), h('td', { text: x.guild }), h('td', { class: 'right' }, b));
+              }))))
+            : vide('Aucune sanction', 'Les avertissements apparaîtront ici.')),
+        ]);
+      },
+    },
+
     rappels: {
       titre: 'Rappels',
       intro: 'Les rappels en attente (créés avec /rappel ou d’ici). Le bot les envoie en MP, ou dans le salon choisi si les MP sont fermés.',

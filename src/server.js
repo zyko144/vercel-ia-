@@ -11,7 +11,7 @@ const KEEP_ALIVE_MS = 10 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // Images préparées à l'avance (tools/make-casino-gifs.mjs, tools/make-jeux-gifs.mjs).
 // Elles sont servies telles quelles : Discord les récupère une fois puis les garde en cache.
-const PUBLIC_ASSETS = { '/casino/': path.resolve('assets/casinho'), '/jeux/': path.resolve('assets/jeux') };
+const PUBLIC_ASSETS = { '/casino/': path.resolve('assets/casinho'), '/jeux/': path.resolve('assets/jeux'), '/panneaux/': path.resolve('assets/panneaux'), '/sanction/': path.resolve('assets/sanction') };
 // Le site vitrine (site/index.html) : servi à l'adresse principale du bot, avec les images des cartes.
 const SITE_DIR = path.resolve('site');
 const SITE_TYPES = { '.html': 'text/html; charset=utf-8', '.webp': 'image/webp' };
@@ -106,6 +106,16 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       } catch (err) {
         return send(res, 500, { error: err.message });
       }
+    }
+
+    // Logo d'un serveur premium (cartes personnalisées)
+    const logoMatch = url.pathname.match(/^\/logo\/(\d{15,21})\.png$/);
+    if (logoMatch && req.method === 'GET') {
+      const { logoPng } = await import('./features/premium.js');
+      const png = logoPng(logoMatch[1]);
+      if (!png) return send(res, 404, { error: 'pas de logo' });
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=86400' });
+      return res.end(png);
     }
 
     // Le site vitrine : la page, puis ses images (cartes/, images/ et images/nuit/, en .webp seulement).

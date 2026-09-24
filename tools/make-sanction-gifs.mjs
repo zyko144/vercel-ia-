@@ -31,11 +31,11 @@ const H = 315;
 const DESIGNS = {
   avertissement: {
     color: '#ffb020', glow: '#ff8a00', stamp: 'AVERTISSEMENT', size: 40,
-    line: '1er AVERTISSEMENT', footer: 'INSULTE DÉTECTÉE EN VOCAL · LA PROCHAINE, C’EST L’EXCLUSION',
+    line: 'AVERTISSEMENT VOCAL', footer: 'INSULTE DÉTECTÉE EN VOCAL · AU 3e : EXCLUSION',
   },
   sanction: {
     color: '#ff3355', glow: '#ff0033', stamp: 'SANCTION', size: 60,
-    line: 'EXCLU 1 MIN · HORS DU VOCAL', footer: 'RÉCIDIVE · INSULTE DÉTECTÉE EN VOCAL',
+    line: 'EXCLU 1 MIN · HORS DU VOCAL', footer: '3e AVERTISSEMENT · INSULTE DÉTECTÉE EN VOCAL',
   },
 };
 

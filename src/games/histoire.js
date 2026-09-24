@@ -158,7 +158,7 @@ async function end(game) {
   game.skip?.();
   games.delete(game.id);
   stopListening(game.thread?.id);
-  await game.thread?.send({ content: '📕 **Fin de l\'histoire.** Relancez `/jeu-histoire` pour une nouvelle aventure !' }).catch(() => {});
+  await game.thread?.send({ content: '📕 **Fin de l\'histoire.** Relancez **/jeux** › Histoire pour une nouvelle aventure !' }).catch(() => {});
   // On laisse le narrateur finir sa phrase avant de le libérer
   setTimeout(() => {
     game.narrator?.close();

@@ -17,6 +17,8 @@ import { startSpotifyWatch } from './features/spotify.js';
 import { startBattleLoop, startFantasyLoop } from './games/index.js';
 import { startVoiceKeeper } from './features/voice.js';
 import { startVoiceGuard } from './features/voiceGuard.js';
+import { loadServers } from './features/premium.js';
+import { startWeeklyReports } from './features/weekly.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
 import { lavalink } from './music/lavalink.js';
@@ -60,6 +62,7 @@ client.once(Events.ClientReady, async (c) => {
   putSiteInBio(c, { tag: 'bot' });
   lavalink.init(c);
   startVoiceGuard(c);
+  startWeeklyReports(c).catch((err) => console.warn('[rapport] démarrage :', err.message));
   startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
   startReminderLoop(c);
@@ -132,6 +135,8 @@ async function presenceAllowed() {
 (async () => {
   // Une seule copie du bot connectée à la fois (sinon chaque clic reçoit deux réponses)
   await waitForTurn();
+  // Offres premium des serveurs (plans, couleurs, voix) : chargées avant la première commande
+  await loadServers().catch((err) => console.warn('[premium] chargement :', err.message));
   if (config.spotify.enabled && !(await presenceAllowed())) {
     console.warn("⚠️ Partage Spotify désactivé : active « Presence Intent » dans le portail Discord (Developer Portal › Bot), puis redémarre.");
     config.spotify.enabled = false;

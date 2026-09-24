@@ -71,7 +71,7 @@ export async function fantasyTeam(interaction) {
 
   if (!values.length) {
     const team = data.teams[userId];
-    if (!team) return interaction.reply({ content: `🎤 T'as pas encore d'équipe : \`/jeu-fantasy equipe\` avec 5 rappeurs.\n${rulesLink('fantasy') ?? ''}`, ...PRIVATE });
+    if (!team) return interaction.reply({ content: `🎤 T'as pas encore d'équipe : **/jeux** › Fantasy Rap : mon équipe avec 5 rappeurs.\n${rulesLink('fantasy') ?? ''}`, ...PRIVATE });
     return interaction.reply({ embeds: [teamEmbed(interaction, data, userId)], ...PRIVATE });
   }
   if (!mercatoOpen(data, userId)) {
@@ -136,7 +136,7 @@ function rankingEmbed(data, title = null) {
     .setColor(0xf1c40f)
     .setAuthor({ name: `🎤 FANTASY RAP FR · ${monthLabel(data.season)}` })
     .setTitle(title ?? 'Classement de la saison')
-    .setDescription(ranking.join('\n') || 'Aucune équipe pour le moment : `/jeu-fantasy equipe` !')
+    .setDescription(ranking.join('\n') || 'Aucune équipe pour le moment : **/jeux** › Fantasy Rap : mon équipe !')
     .setFooter({ text: 'Points = progression des fans Deezer (×100 en %) + 15 par sortie de la semaine' });
 }
 
@@ -202,7 +202,7 @@ async function closeSeason(client) {
   const channel = await client.channels.fetch(config.games.miniGamesChannelId).catch(() => null);
   if (channel?.send && ranking.length) {
     await channel.send({
-      content: `👑 <@${ranking[0][0]}> est champion de la Fantasy Rap FR de ${monthLabel(data.season)} avec **${ranking[0][1]} pts** ! Le mercato est ouvert : \`/jeu-fantasy equipe\`.`,
+      content: `👑 <@${ranking[0][0]}> est champion de la Fantasy Rap FR de ${monthLabel(data.season)} avec **${ranking[0][1]} pts** ! Le mercato est ouvert : **/jeux** › Fantasy Rap : mon équipe.`,
       embeds: [rankingEmbed(data, `🏁 Fin de la saison ${monthLabel(data.season)}`)],
       allowedMentions: { users: [ranking[0][0]] },
     }).catch(() => {});

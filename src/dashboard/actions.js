@@ -10,7 +10,8 @@ import { blindTestActive } from '../music/blindtest.js';
 import { getOrCreatePlayer, getPlayer } from '../music/player.js';
 import { resolveQuery } from '../music/sources.js';
 import { instance } from '../features/instance.js';
-import { storageBackend } from '../storage.js';
+import { load, save, storageBackend } from '../storage.js';
+import { allServers, planOf } from '../features/premium.js';
 
 const MINUTE = 60_000;
 const ID = /^\d{15,21}$/;
@@ -316,6 +317,42 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
       }
       audit({ userId: session.userId, action: 'Casino', detail: `${who(client, userId).name} : ${detail}`, req });
       return json(res, 200, { ok: true, detail });
+    }),
+
+    // ---------- Historique des sanctions (avertissements écrits, vocaux et manuels) ----------
+    'GET sanctions': async (req, res) => {
+      const all = (await load('warnings', {}).catch(() => ({}))) ?? {};
+      const rows = [];
+      for (const [guildId, users] of Object.entries(all)) {
+        for (const [userId, list] of Object.entries(users ?? {})) {
+          for (const w of list ?? []) rows.push({ guildId, guild: client.guilds.cache.get(guildId)?.name ?? guildId, user: who(client, userId), userId, at: w.at, reason: w.reason, kind: w.kind ?? 'manuel', by: w.by ? who(client, w.by).name : null });
+        }
+      }
+      rows.sort((a, b) => b.at - a.at);
+      return json(res, 200, { sanctions: rows.slice(0, 300), total: rows.length });
+    },
+    'POST sanctions/effacer': wrap(async (req, res, body, session) => {
+      const guildId = String(body.guildId ?? '');
+      const userId = String(body.userId ?? '');
+      const at = Number(body.at);
+      if (!ID.test(guildId) || !ID.test(userId) || !Number.isFinite(at)) refuse('Sanction inconnue.');
+      const all = (await load('warnings', {}).catch(() => ({}))) ?? {};
+      const list = all[guildId]?.[userId] ?? [];
+      const index = list.findIndex((w) => w.at === at);
+      if (index < 0) refuse('Cette sanction n’existe plus.', 404);
+      const [removed] = list.splice(index, 1);
+      save('warnings', all);
+      audit({ userId: session.userId, action: 'Sanction effacée', detail: `${who(client, userId).name} · ${String(removed.reason ?? '').slice(0, 80)}`, req });
+      return json(res, 200, { ok: true });
+    }),
+
+    // ---------- Offres premium des serveurs ----------
+    'GET premium': async (req, res) => json(res, 200, {
+      servers: client.guilds.cache.map((g) => {
+        const plan = planOf(g.id);
+        const s = allServers()[g.id] ?? {};
+        return { id: g.id, name: g.name, plan: plan.label, emoji: plan.emoji, trial: plan.trial, until: plan.until, trialUsed: Boolean(s.trialUsed) };
+      }),
     }),
 
     // ---------- Le bot ----------

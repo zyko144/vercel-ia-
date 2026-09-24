@@ -58,7 +58,7 @@ export async function addToPlaylist(userId, name, tracks, { createIfMissing = fa
     playlist = { name: name.trim().slice(0, 50), tracks: [], createdAt: Date.now() };
     mine[keyOf(name)] = playlist;
   }
-  if (!playlist) return { error: `Tu as pas de playlist « ${name} ». Crée-la avec \`/playlist creer\`.` };
+  if (!playlist) return { error: `Tu as pas de playlist « ${name} ». Crée-la avec **/musique** › Créer une playlist.` };
 
   const room = MAX_TRACKS - playlist.tracks.length;
   if (room <= 0) return { error: `La playlist « ${playlist.name} » est pleine (${MAX_TRACKS} sons max).` };

@@ -19,6 +19,7 @@ import {
 import { EndSensitivity, GoogleGenAI, Modality, StartSensitivity, Type } from '@google/genai';
 import { ActivityType, Client, EmbedBuilder, Events, GatewayIntentBits } from 'discord.js';
 import prism from 'prism-media';
+import { addVoiceMinutes, planOf, voiceOf, voiceUsage } from '../features/premium.js';
 import { config } from '../config.js';
 import { blindTestActive } from '../music/blindtest.js';
 import { getOrCreatePlayer, getPlayer } from '../music/player.js';
@@ -281,6 +282,11 @@ export async function startVoiceSession({
   if (!channel || channel.guild.id !== guildId) return problem("🎙️ L'IA vocale trouve pas son salon.", { userId, guildId });
   if (!force && memberChannelId !== channel.id) return { error: `🎧 Rejoins <#${channel.id}> pour parler à l'IA vocale.` };
   if (state.busy) return { error: `🎙️ L'IA vocale est occupée (${state.busy}), réessaie après.` };
+  // Minutes d'IA vocale du mois, selon l'offre du serveur (le chef n'est jamais bloqué)
+  const usage = voiceUsage(guildId);
+  if (!state.session && usage.left <= 0 && userId !== config.ownerId) {
+    return { error: `🎙️ Ce serveur a utilisé ses **${usage.limit} minutes** d'IA vocale du mois (offre ${planOf(guildId).label}). Plus de minutes avec une offre premium : **/serveur** › Premium.` };
+  }
   if (state.session) {
     if (state.session.userId === userId && !listenAll) {
       await stopSession('arrêtée');
@@ -345,7 +351,8 @@ async function connectLive(session) {
     config: {
       responseModalities: [Modality.AUDIO],
       systemInstruction: session.persona ?? systemPrompt(session, session.artists),
-      speechConfig: { languageCode: 'fr-FR', voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceAi.voice } } },
+      // Voix choisie par le serveur (premium), sinon celle par défaut
+      speechConfig: { languageCode: 'fr-FR', voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceOf(session.guildId, config.voiceAi.voice) } } },
       // Français uniquement + noms de rappeurs et titres à bien reconnaître
       inputAudioTranscription: { languageCodes: ['fr-FR'], ...(session.vocabulary.length ? { customVocabulary: session.vocabulary } : {}) },
       outputAudioTranscription: {},
@@ -678,11 +685,12 @@ async function stopSession(reason) {
   stopSpeaking(session);
   duckMusic(session, false);
   if (conn && conn.state.status === VoiceConnectionStatus.Ready && !state.listening) conn.rejoin({ ...conn.joinConfig, selfDeaf: true, selfMute: false });
+  addVoiceMinutes(session.guildId, (Date.now() - session.startedAt) / 60_000);
   console.log(`[vocal] fin de ${session.title ?? 'la conversation'} (${reason})`);
   homeGuildChannel()?.send({
     content: session.title
       ? `🎙️ ${session.title} : fin (${reason}).`
-      : `🎙️ Conversation terminée (${reason}). Relance \`/vocal\` pour me reparler.`,
+      : `🎙️ Conversation terminée (${reason}). Relance **/ia** › Parler à l’IA en vocal pour me reparler.`,
     allowedMentions: { parse: [] },
   }).catch(() => {});
   try {

@@ -139,8 +139,8 @@ export async function startFans(interaction, theme = 'tout') {
 export async function handleFansButton(interaction) {
   const [, , id, action] = interaction.customId.split(':');
   const run = runs.get(id);
-  if (!run) return interaction.reply({ content: 'Cette partie est finie. Relance `/jeu-fans` !', ...PRIVATE });
-  if (interaction.user.id !== run.userId) return interaction.reply({ content: `C'est la partie de <@${run.userId}> : lance la tienne avec \`/jeu-fans\` 😉`, ...PRIVATE });
+  if (!run) return interaction.reply({ content: 'Cette partie est finie. Relance **/jeux** › Plus ou moins de fans !', ...PRIVATE });
+  if (interaction.user.id !== run.userId) return interaction.reply({ content: `C'est la partie de <@${run.userId}> : lance la tienne avec **/jeux** › Plus ou moins de fans 😉`, ...PRIVATE });
   if (run.busy) return interaction.deferUpdate();
   run.busy = true;
   try {

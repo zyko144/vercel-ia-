@@ -1,4 +1,5 @@
 // Commandes de base / modération. Toutes les réponses sont visibles seulement par la personne qui tape la commande.
+import { countEvent } from '../features/weekly.js';
 import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from 'discord.js';
 import { load, save } from '../storage.js';
 import { conversationKey, forget } from '../features/memory.js';
@@ -90,6 +91,7 @@ export const MODERATION_HANDLERS = {
     const reason = reasonOf(interaction);
     const notified = await notifyMember(member.user, interaction.guild, '👢 Expulsion du serveur', reason);
     await member.kick(auditReason(interaction, reason));
+    countEvent(interaction.guildId, 'sanctions');
     await interaction.reply(private_(`👢 Expulsion de **${member.user.username}** effectuée.\n-# Raison : ${reason}${notified ? ' · MP envoyé' : ''}`));
   },
 
@@ -110,6 +112,7 @@ export const MODERATION_HANDLERS = {
       reason: auditReason(interaction, reason),
       deleteMessageSeconds: Number(interaction.options.getString('messages') ?? 0),
     });
+    countEvent(interaction.guildId, 'sanctions');
     await interaction.reply(private_(`🔨 Bannissement de **${user.username}** effectué.\n-# Raison : ${reason}${notified ? ' · MP envoyé' : ''}`));
   },
 
@@ -141,6 +144,7 @@ export const MODERATION_HANDLERS = {
     const notified = await notifyMember(member.user, interaction.guild, '🔇 Exclusion temporaire', reason, [
       { name: "Jusqu'à", value: `<t:${until}:f> (<t:${until}:R>)` },
     ]);
+    countEvent(interaction.guildId, 'sanctions');
     await interaction.reply(private_(`🔇 Mute de **${member.user.username}** jusqu'à <t:${until}:f> (<t:${until}:R>).\n-# Raison : ${reason}${notified ? ' · MP envoyé' : ''}`));
   },
 
@@ -171,6 +175,7 @@ export const MODERATION_HANDLERS = {
     const notified = await notifyMember(member.user, interaction.guild, '⚠️ Avertissement', reason, [
       { name: 'Total', value: `${list.length} avertissement(s)` },
     ]);
+    countEvent(interaction.guildId, 'sanctions');
     await interaction.reply(private_(`⚠️ Avertissement donné à **${member.user.username}** (total : **${list.length}**).\n-# Raison : ${reason}${notified ? ' · MP envoyé' : ''}`));
   },
 
