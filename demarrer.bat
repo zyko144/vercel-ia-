@@ -5,7 +5,7 @@ chcp 65001 >nul
 title AI Vercel
 cd /d "%~dp0"
 
-where node >/dev/null 2>nul
+where node >nul 2>nul
 if errorlevel 1 (
   echo Node.js n est pas installe. Installe la version LTS sur https://nodejs.org puis relance ce fichier.
   start "" https://nodejs.org/fr/download
@@ -34,7 +34,8 @@ if not exist .env (
 )
 
 echo.
-echo ATTENTION : si le bot tourne aussi sur Render, coupe-le la-bas, sinon il repondra deux fois.
+echo Si le bot tourne aussi sur Render : avec Supabase, ce PC prend le relais tout seul
+echo et Render reprend 1 min apres la fermeture de cette fenetre. Sans Supabase, coupe Render.
 echo.
 echo Site vitrine     : http://localhost:3000/
 echo Tableau de bord  : tape /admin dashboard dans Discord pour recevoir ton lien

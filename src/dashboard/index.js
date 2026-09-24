@@ -21,7 +21,9 @@ import {
   allowAttempt, audit, auditLog, clientIp, closeAllSessions, closeSession, closeSessionById, consumeLoginToken,
   createLoginToken, currentSession, dashboardBaseUrl, isAllowed, isSecure, listSessions, loadAudit, openSession, sameOriginWrite,
 } from './auth.js';
+import { actionRoutes } from './actions.js';
 import { aiMetrics, loadMetrics, redact } from './metrics.js';
+import { instance } from '../features/instance.js';
 import { currentSettings, loadSettings, updateSettings } from './settings.js';
 
 const WEB = path.resolve('web/dashboard');
@@ -134,6 +136,7 @@ export function createDashboard(client) {
     if (config.models.webSearch && !webSearchAvailable()) alerts.push({ level: 'info', text: 'La recherche Google est refusée par le quota : l’IA répond sans, pendant une heure.' });
     if (storageBackend !== 'Supabase') alerts.push({ level: 'info', text: 'Sans Supabase, les réglages, rappels et playlists sont perdus à chaque redémarrage sur Render.' });
     if (nodes.length && !nodes.some((n) => n.connected)) alerts.push({ level: 'attention', text: 'Aucun serveur audio (Lavalink) n’est joignable : la musique passe par le lecteur local.' });
+    if (!instance.guarded) alerts.push({ level: 'attention', text: 'SUPABASE_SERVICE_KEY est vide : rien n’empêche le bot de tourner deux fois (Render + PC), ce qui donne des « Unknown interaction » sur les boutons.' });
     if (!config.publicUrl) alerts.push({ level: 'info', text: 'Adresse publique inconnue : les liens de connexion pointent vers localhost.' });
     return {
       bot: {
@@ -152,7 +155,7 @@ export function createDashboard(client) {
       games: runningGames().length,
       voiceAi: { enabled: voiceAi.enabled, voice: voiceAi.voice, busy: Boolean(voiceAi.session) },
       services: {
-        gemini: Boolean(config.geminiKey), storage: storageBackend, casino: Boolean(config.casinho.token),
+        gemini: Boolean(config.geminiKey), storage: storageBackend, instance: instance.where, casino: Boolean(config.casinho.token),
         voiceAi: Boolean(config.voiceAi.token), site: config.site.url || null, publicUrl: config.publicUrl || null,
       },
       alerts,
@@ -166,7 +169,9 @@ export function createDashboard(client) {
         guildId: p.guild.id, guild: p.guild.name,
         current: p.current ? { title: p.current.title, artist: p.current.artist ?? null, duration: p.current.duration ?? 0, source: p.current.source ?? null, live: Boolean(p.current.isLive) } : null,
         position: Math.round(p.position()), paused: Boolean(p.paused), queue: p.queue.length, filters: p.filters ?? [],
-        volume: p.volume ?? null, backend: p.backend?.name ?? null, node: p.backend?.node?.name ?? null,
+        volume: p.volume ?? null, backend: p.backend?.name ?? null, node: p.backend?.node?.name ?? null, loop: p.loop ?? 'off',
+        voice: p.botVoiceChannelId ? p.guild.channels.cache.get(p.botVoiceChannelId)?.name ?? null : null,
+        upcoming: p.queue.slice(0, 25).map((t) => ({ title: t.title, artist: t.artist ?? null, duration: t.duration ?? 0 })),
       })),
       nodes: lavalink.status(),
       events: (lavalink.logs ?? []).slice(-15).reverse().map((l) => ({ at: l.at, text: redact(l.text) })),
@@ -229,7 +234,7 @@ export function createDashboard(client) {
       const result = updateSettings(body.changes, client);
       if (!result.ok) return json(res, 400, { error: 'Certains réglages sont refusés.', errors: result.errors });
       for (const c of result.changed) {
-        const show = (v) => (typeof v === 'string' && v.length > 60 ? `${v.slice(0, 60)}…` : JSON.stringify(v));
+        const show = (v) => { const t = typeof v === 'string' ? v : JSON.stringify(v); return t.length > 60 ? `${t.slice(0, 60)}…` : t; };
         audit({ userId: session.userId, action: `Réglage modifié : ${c.key}`, detail: `${show(c.from)} → ${show(c.to)}`, req });
       }
       return json(res, 200, { ok: true, changed: result.changed.map((c) => c.key), settings: currentSettings() });
@@ -310,6 +315,8 @@ export function createDashboard(client) {
       return json(res, 200, { ok });
     },
   };
+
+  Object.assign(protectedRoutes, actionRoutes(client, { json, audit, allowAttempt, who }));
 
   /** Renvoie true si la requête concerne le tableau de bord (et y a répondu). */
   return async function handleDashboard(req, res, url) {

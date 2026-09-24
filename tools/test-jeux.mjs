@@ -16,6 +16,7 @@ globalThis.setTimeout = (fn, ms = 0, ...args) => realSetTimeout(fn, ms > 100 ? M
 globalThis.setTimeout.__patched = true;
 
 // ---- Pas d'appel à Gemini pendant les tests : la paire de mots vient du repli.
+process.env.DISCORD_TOKEN ||= ['T'.repeat(26), 'E'.repeat(6), 'S'.repeat(30)].join('.');
 process.env.GEMINI_API_KEY ||= 'test';
 // ---- Jamais les vraies données : pas de Supabase, stockage dans un dossier temporaire.
 process.env.SUPABASE_URL = '';

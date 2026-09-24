@@ -76,3 +76,17 @@ export function startReminderLoop(client) {
   };
   setInterval(() => tick().catch((err) => console.warn('[rappels]', err.message)), 15_000);
 }
+
+/** Tous les rappels en attente, du plus proche au plus lointain (tableau de bord). */
+export async function listReminders() {
+  return [...(await load(KEY, []))].sort((a, b) => a.at - b.at);
+}
+
+/** Supprime un rappel en attente. */
+export async function removeReminder(id) {
+  const reminders = await load(KEY, []);
+  const kept = reminders.filter((r) => r.id !== id);
+  if (kept.length === reminders.length) return false;
+  save(KEY, kept);
+  return true;
+}

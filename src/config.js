@@ -116,7 +116,8 @@ function parseNodes(raw) {
 
 export const config = {
   discordToken: discordTokens[0] ?? '',
-  geminiKey: str('GEMINI_API_KEY'),
+  // Tolère une clé collée avec autre chose derrière (« clé;token… ») : on garde la 1re partie qui n'est pas un token Discord
+  geminiKey: str('GEMINI_API_KEY').split(/[;,\s]+/).find((part) => part && !TOKEN_SHAPE.test(part)) ?? '',
 
   // IA vocale (2e bot qui écoute et répond à voix haute dans le vocal du bot)
   voiceAi: {
@@ -232,7 +233,7 @@ export const config = {
   publicUrl: str('RENDER_EXTERNAL_URL') || str('PUBLIC_URL'),
 
   // Réglages de l'IA pilotés depuis le tableau de bord (/dashboard)
-  ai: { paused: false, pauseMessage: '', extraInstructions: '' },
+  ai: { paused: false, pauseMessage: '', extraInstructions: '', blocked: [] },
 
   // Accès au tableau de bord : le chef, plus ces comptes (IDs Discord séparés par des virgules)
   dashboard: {

@@ -84,7 +84,23 @@ export const SETTINGS = {
     get: () => config.botStatus,
     set: (v) => { config.botStatus = v; },
     check: (v) => (typeof v === 'string' && v.trim().length >= 1 && v.length <= 128 ? null : 'Entre 1 et 128 caractères.'),
-    apply: (client) => client?.user?.setPresence({ activities: [{ name: 'custom', type: ActivityType.Custom, state: config.botStatus }], status: 'online' }),
+    apply: (client) => client?.user?.setPresence({ activities: [{ name: 'custom', type: ActivityType.Custom, state: config.botStatus }], status: config.botPresence ?? 'online' }),
+  },
+  presence: {
+    label: 'Pastille du bot', group: 'Comportement', options: ['online', 'idle', 'dnd', 'invisible'],
+    help: 'online = vert, idle = absent (lune), dnd = ne pas déranger (rouge), invisible = apparaît hors ligne (le bot marche quand même).',
+    get: () => config.botPresence ?? 'online',
+    set: (v) => { config.botPresence = v; },
+    check: (v) => (['online', 'idle', 'dnd', 'invisible'].includes(v) ? null : 'Choisis online, idle, dnd ou invisible.'),
+    apply: (client) => SETTINGS.botStatus.apply(client),
+  },
+  blocked: {
+    label: 'Personnes privées d’IA', group: 'Comportement', type: 'ids', max: 200,
+    help: 'Identifiants Discord, un par ligne. Ces personnes reçoivent « Tu n’as plus accès à l’IA » à la place d’une réponse. Les jeux et la musique restent ouverts.',
+    get: () => config.ai.blocked,
+    set: (v) => { config.ai.blocked = v; },
+    check: (v) => (Array.isArray(v) && v.length <= 200 && v.every((id) => typeof id === 'string' && /^\d{15,21}$/.test(id)) && !v.includes(config.ownerId)
+      ? null : 'Des identifiants Discord (15 à 21 chiffres), 200 maximum, et pas celui du chef.'),
   },
   paused: {
     label: 'IA en pause', group: 'Maintenance', type: 'bool', danger: true,
@@ -123,7 +139,8 @@ export function updateSettings(changes, client) {
   for (const [key, raw] of Object.entries(changes)) {
     const setting = SETTINGS[key];
     if (!setting) { errors[key] = 'Réglage inconnu.'; continue; }
-    const value = typeof raw === 'string' ? raw.trim() : raw;
+    let value = typeof raw === 'string' ? raw.trim() : raw;
+    if (setting.type === 'ids' && Array.isArray(value)) value = [...new Set(value.map((id) => String(id).trim()).filter(Boolean))];
     const problem = setting.check(value);
     if (problem) errors[key] = problem;
     else clean[key] = value;
@@ -133,7 +150,7 @@ export function updateSettings(changes, client) {
   for (const [key, value] of Object.entries(clean)) {
     const setting = SETTINGS[key];
     const from = setting.get();
-    if (from === value) continue;
+    if (JSON.stringify(from) === JSON.stringify(value)) continue;
     setting.set(value);
     setting.apply?.(client);
     changed.push({ key, from, to: value });

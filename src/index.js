@@ -8,6 +8,7 @@ import { commandDefinitions } from './commands/definitions.js';
 import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
 import { putSiteInBio } from './features/bio.js';
+import { instance, waitForTurn } from './features/instance.js';
 import { createDashboard } from './dashboard/index.js';
 import { reportProblem, setAlertClient } from './features/alerts.js';
 import { startReminderLoop } from './features/reminders.js';
@@ -107,7 +108,9 @@ process.once('SIGINT', () => shutdown('SIGINT'));
 
 const httpServer = startHttpServer(() => ({
   bot: client.user?.username,
-  discord: client.isReady() ? 'ready' : 'connecting',
+  discord: client.isReady() ? 'ready' : instance.waitingFor ? 'waiting' : 'connecting',
+  instance: instance.where,
+  ...(instance.waitingFor ? { waitingFor: instance.waitingFor } : {}),
   uptime: Math.round(process.uptime()),
 }), adminRoutes(client), testAudioFile, serveLive, createDashboard(client));
 // Le PC du chef envoie son son ici, en direct
@@ -125,6 +128,8 @@ async function presenceAllowed() {
 }
 
 (async () => {
+  // Une seule copie du bot connectée à la fois (sinon chaque clic reçoit deux réponses)
+  await waitForTurn();
   if (config.spotify.enabled && !(await presenceAllowed())) {
     console.warn("⚠️ Partage Spotify désactivé : active « Presence Intent » dans le portail Discord (Developer Portal › Bot), puis redémarre.");
     config.spotify.enabled = false;

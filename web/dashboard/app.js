@@ -234,11 +234,17 @@
               : vide('Aucun serveur', 'Le bot n’est encore sur aucun serveur.')),
             card('Le bot',
               h('div', { class: 'rows' },
+                ligne('Tourne sur', d.services.instance?.startsWith('PC') ? 'Ferme la fenêtre du PC et Render reprend tout seul (avec Supabase)' : 'Hébergé en ligne', h('span', { class: 'mono', text: d.services.instance ?? '—' })),
                 ligne('En ligne depuis', null, h('span', { class: 'num', text: duree(d.bot.uptime) })),
                 ligne('Mémoire utilisée', 'Render gratuit : 512 Mo au total', h('span', { class: 'num', text: `${d.bot.ramMb} Mo` })),
                 ligne('Réactivité', 'Retard moyen de la boucle Node.js', h('span', { class: 'num', text: `${d.bot.loopMs} ms` })),
                 ligne('Modèle de secours', 'Prend le relais si le principal sature', h('span', { class: 'mono', text: ai.fallback })),
-                ligne('Site', null, d.services.site ? h('a', { href: d.services.site, target: '_blank', rel: 'noopener noreferrer', text: 'Ouvrir' }) : h('span', { class: 'mute', text: 'pas d’adresse' }))))),
+                ligne('Site', null, d.services.site ? h('a', { href: d.services.site, target: '_blank', rel: 'noopener noreferrer', text: 'Ouvrir' }) : h('span', { class: 'mute', text: 'pas d’adresse' }))),
+              boutonRedemarrer(d))),
+          card('Raccourcis', h('div', { class: 'shortcuts' },
+            [['#envoyer', '✉️', 'Écrire en tant que le bot', 'Message, annonce ou sondage'], ['#moderation', '🛡️', 'Modérer un membre', 'Muet, expulsion, bannissement'], ['#musique', '🎵', 'Lancer de la musique', 'Un titre ou un lien'],
+              ['#rappels', '⏰', 'Programmer un rappel', 'Pour toi ou un membre'], ['#ia', '🧠', 'Régler l’IA', 'Modèle, consignes, pause'], ['#casino', '🪙', 'Donner des jetons', 'Casinho']].map(([href, emoji, titre, sous]) =>
+              h('a', { class: 'shortcut', href }, h('span', { class: 'emoji', 'aria-hidden': 'true', text: emoji }), h('b', { text: titre }), h('span', { text: sous }))))),
           card('Dernières actions sur le tableau de bord', d.recent.length
             ? h('div', { class: 'rows' }, d.recent.map((e) => ligne(e.action, `${e.user?.name ?? 'Système'} · ${ago(e.at)}${e.detail ? ` · ${e.detail}` : ''}`, null)))
             : vide('Rien pour l’instant', 'Les connexions et les modifications apparaîtront ici.')),
@@ -298,6 +304,49 @@
       },
     },
 
+    envoyer: {
+      titre: 'Écrire en tant que le bot',
+      intro: 'Poste un message, une annonce avec une belle carte, ou un sondage, dans n’importe quel salon. Personne n’est mentionné sauf si tu le choisis.',
+      async rendre(zone) {
+        const d = await serveurs(true);
+        if (!d.guilds.length) return append(zone, aucunServeur());
+        append(zone, h('div', { class: 'grid cols-2' }, carteMessage(d), h('div', { class: 'stack' }, carteSondage(d), carteAideEnvoi())));
+      },
+    },
+
+    moderation: {
+      titre: 'Modération',
+      intro: 'Cherche un membre puis rends-le muet, expulse-le ou bannis-le. Le chef est protégé, et tout est noté dans le journal de sécurité et dans le journal d’audit Discord.',
+      async rendre(zone) {
+        const d = await serveurs(true);
+        if (!d.guilds.length) return append(zone, aucunServeur());
+        append(zone, carteMembres(d), h('div', { class: 'grid cols-2' }, carteNettoyer(d), carteDroits(d)));
+      },
+    },
+
+    rappels: {
+      titre: 'Rappels',
+      intro: 'Les rappels en attente (créés avec /rappel ou d’ici). Le bot les envoie en MP, ou dans le salon choisi si les MP sont fermés.',
+      garder: true,
+      auto: 30000,
+      async rendre(zone) {
+        let liste = $('#rappels-liste', zone);
+        if (!liste) {
+          const d = await serveurs();
+          liste = h('div', { id: 'rappels-liste' });
+          append(zone, h('div', { class: 'stack' }, d.guilds.length ? carteNouveauRappel(d) : null, card('En attente', liste)));
+        }
+        const r = await api.get('rappels');
+        liste.replaceChildren(r.reminders.length
+          ? h('div', { class: 'rows' }, r.reminders.map((x) => {
+            const b = h('button', { class: 'btn small', type: 'button', text: 'Supprimer' });
+            b.addEventListener('click', () => action(b, async () => { await api.post('rappels/supprimer', { id: x.id }); toast('Rappel supprimé.'); rafraichir(); }));
+            return h('div', { class: 'row' }, h('div', { class: 'what' }, h('b', { text: x.text }), h('span', {}, personne(x.user), ` · ${dateHeure(x.at)} (${ago(x.at)})${x.channel ? ` · #${x.channel}` : ''}`)), b);
+          }))
+          : vide('Aucun rappel en attente', 'Crée-en un ci-dessus, ou avec /rappel dans Discord.'));
+      },
+    },
+
     jeux: {
       titre: 'Jeux en cours',
       intro: 'Les parties de loup-garou et d’imposteur en cours sur tes serveurs. Tu peux en arrêter une si elle est bloquée.',
@@ -327,50 +376,56 @@
 
     musique: {
       titre: 'Musique',
-      intro: 'Ce qui joue en vocal, et l’état des serveurs audio (Lavalink) qui lisent la musique.',
+      intro: 'Lance un son, gère la file et le volume, et surveille les serveurs audio (Lavalink) qui lisent la musique.',
       auto: 8000,
+      garder: true,
       async rendre(zone) {
+        let lecteursZone = $('#musique-lecteurs', zone);
+        if (!lecteursZone) {
+          const g = await serveurs();
+          lecteursZone = h('div', { id: 'musique-lecteurs' });
+          append(zone, h('div', { class: 'stack' }, g.guilds.length ? carteJouer(g) : null, lecteursZone, h('div', { id: 'musique-serveurs' })));
+        }
         const d = await api.get('musique');
         const lecteurs = d.players.filter((p) => p.current);
-        append(zone, [
-          lecteurs.length
-            ? h('div', { class: 'grid cols-2' }, lecteurs.map((p) => {
-              const barre = h('i');
-              barre.style.width = p.current.duration ? `${Math.min(100, (p.position / p.current.duration) * 100)}%` : '0%';
-              const bouton = (texte, act, danger) => {
-                const b = h('button', { class: `btn small${danger ? ' danger' : ''}`, type: 'button', text: texte });
-                b.addEventListener('click', () => action(b, async () => { await api.post('musique/action', { guildId: p.guildId, action: act }); rafraichir(); }));
-                return b;
-              };
-              return card(p.guild,
-                h('p', { class: 'sub', text: p.current.artist ? `${p.current.title} · ${p.current.artist}` : p.current.title }),
-                h('div', { class: 'progress' }, barre),
-                h('p', { class: 'sub num', text: `${minsec(p.position)} / ${p.current.live ? 'direct' : minsec(p.current.duration)} · ${p.queue} son(s) en attente${p.filters.length ? ` · effets : ${p.filters.join(', ')}` : ''}` }),
-                h('div', { class: 'actions' }, bouton(p.paused ? 'Reprendre' : 'Pause', 'pause'), bouton('Passer', 'passer'), bouton('Arrêter', 'arreter', true), pill(p.paused ? 'En pause' : 'En lecture', p.paused ? 'warn' : 'ok')));
-            }))
-            : card(null, vide('Rien ne joue en ce moment', 'Lance un son avec /play dans Discord.')),
-          h('div', { class: 'grid cols-2' },
-            card('Serveurs audio', d.nodes.length
-              ? h('div', { class: 'rows' }, d.nodes.map((n) => ligne(n.name, n.connected ? `v${n.version ?? '?'} · ${n.players} lecteur(s)${n.cpu !== null ? ` · CPU ${Math.round(n.cpu * 100)} %` : ''}` : 'Injoignable',
-                pill(!n.connected ? 'Hors ligne' : n.incompatible ? 'Refusé par Discord' : n.broken ? 'Problèmes de lecture' : 'En ligne', !n.connected || n.incompatible ? 'bad' : n.broken ? 'warn' : 'ok'))))
-              : vide('Aucun serveur audio', 'La musique passe par le lecteur local.')),
-            card('Derniers événements', d.events.length
-              ? h('div', { class: 'rows' }, d.events.map((e) => ligne(e.text, dateHeure(e.at), null)))
-              : vide('Rien à signaler', ''))),
-        ]);
+        // Ne pas redessiner sous la souris d'un réglage de volume en cours
+        if (!lecteursZone.contains(document.activeElement) || document.activeElement.type !== 'range') {
+          lecteursZone.replaceChildren(lecteurs.length
+            ? h('div', { class: 'grid cols-2' }, lecteurs.map(carteLecteur))
+            : card(null, vide('Rien ne joue en ce moment', 'Lance un son ci-dessus, avec /play, ou en écrivant un titre dans le salon jukebox.')));
+        }
+        $('#musique-serveurs', zone).replaceChildren(h('div', { class: 'grid cols-2' },
+          card('Serveurs audio', d.nodes.length
+            ? h('div', { class: 'rows' }, d.nodes.map((n) => ligne(n.name, n.connected ? `v${n.version ?? '?'} · ${n.players} lecteur(s)${n.cpu !== null ? ` · CPU ${Math.round(n.cpu * 100)} %` : ''}` : 'Injoignable',
+              pill(!n.connected ? 'Hors ligne' : n.incompatible ? 'Refusé par Discord' : n.broken ? 'Problèmes de lecture' : 'En ligne', !n.connected || n.incompatible ? 'bad' : n.broken ? 'warn' : 'ok'))))
+            : vide('Aucun serveur audio', 'La musique passe par le lecteur local.')),
+          card('Derniers événements', d.events.length
+            ? h('div', { class: 'rows' }, d.events.map((e) => ligne(e.text, dateHeure(e.at), null)))
+            : vide('Rien à signaler', ''))));
       },
     },
 
     casino: {
       titre: 'Casino',
-      intro: 'Les plus gros tas de jetons de Casinho. Les jetons sont fictifs : ils ne s’achètent pas et ne se retirent pas.',
+      intro: 'Le classement de Casinho, et les jetons à donner, retirer ou remettre à zéro. Les jetons sont fictifs : ils ne s’achètent pas et ne se retirent pas.',
+      garder: true,
       async rendre(zone) {
+        let classement = $('#casino-classement', zone);
+        if (!classement) {
+          classement = h('div', { id: 'casino-classement' });
+          append(zone, h('div', { class: 'grid cols-3-1' }, classement, carteJetons()));
+        }
         const d = await api.get('casino');
-        append(zone, card('Classement', !d.enabled ? h('p', { class: 'sub', text: 'Casinho n’a pas de token : le casino est éteint. Le classement ci-dessous vient des parties passées.' }) : null,
+        const gerer = (p) => {
+          const b = h('button', { class: 'btn small', type: 'button', text: 'Gérer' });
+          b.addEventListener('click', () => { const champ = $('#jetons-qui'); champ.value = p.id; champ.focus(); });
+          return b;
+        };
+        classement.replaceChildren(card('Classement', !d.enabled ? h('p', { class: 'sub', text: 'Casinho n’a pas de token : le casino est éteint. Le classement ci-dessous vient des parties passées.' }) : null,
           d.top.length
             ? h('div', { class: 'table-wrap' }, h('table', {},
-              h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Joueur' }), h('th', { class: 'right', text: 'Jetons' }))),
-              h('tbody', {}, d.top.map((p, i) => h('tr', {}, h('td', { class: 'num', text: i + 1 }), h('td', {}, personne(p)), h('td', { class: 'right num', text: num(p.chips) }))))))
+              h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Joueur' }), h('th', { class: 'right', text: 'Jetons' }), h('th', { class: 'right', text: '' }))),
+              h('tbody', {}, d.top.map((p, i) => h('tr', {}, h('td', { class: 'num', text: i + 1 }), h('td', {}, personne(p)), h('td', { class: 'right num', text: num(p.chips) }), h('td', { class: 'right' }, gerer(p)))))))
             : vide('Personne n’a encore joué', 'Le classement se remplit avec /casino.')));
       },
     },
@@ -458,6 +513,11 @@
           q('Réglages de l’IA', 'Changer de modèle, le niveau de réflexion, les limites anti-spam, ou ajouter des consignes (par exemple un événement du week-end). Tout s’applique immédiatement.', 'Après un changement de modèle, utilise « Tester l’IA » pour vérifier qu’il répond.'),
           q('Mettre l’IA en pause', 'Dans Réglages › Maintenance. Les membres reçoivent ton message de pause, toi tu peux continuer à tester. Les jeux et la musique continuent de marcher.'),
           q('Conversations', 'L’IA garde chaque conversation 45 minutes. Efface-la si quelqu’un veut repartir de zéro, ou si l’IA part dans une mauvaise direction.'),
+          q('Écrire en tant que le bot', 'Choisis un serveur et un salon, écris ton message, ajoute si tu veux une carte (titre, couleur, image) : l’aperçu montre le rendu. Personne n’est mentionné sauf si tu choisis un rôle, @here ou @everyone.', 'Le sondage utilise les vrais sondages Discord (2 à 10 réponses).'),
+          q('Modération', 'Cherche un membre par son pseudo (ou colle son identifiant pour un banni), mets une raison, puis Rendre muet, Expulser ou Bannir. Le chef ne peut jamais être sanctionné d’ici.', '« Ce que le bot peut faire » montre les permissions qui manquent au rôle du bot.'),
+          q('Musique, rappels, casino', 'Lance un titre ou un lien dans le vocal de ton choix, règle le volume, retire des sons de la file. Programme un rappel pour toi ou un membre. Donne ou retire des jetons de Casinho.'),
+          q('Priver quelqu’un d’IA', 'Dans IA › Réglages › « Personnes privées d’IA », colle un identifiant Discord par ligne. Les jeux et la musique restent ouverts pour eux.'),
+          q('Render et PC en même temps', 'Avec Supabase configuré, une seule copie du bot répond : le PC passe devant, Render reprend 1 minute après la fermeture du PC. Sans Supabase, les deux répondent et les boutons affichent « Unknown interaction ».'),
           q('Journaux', 'Utile quand quelque chose ne marche pas : filtre par mot (« lavalink », « gemini »…) ou affiche seulement les erreurs.'),
           q('Sécurité', 'Si tu as ouvert le tableau de bord sur un ordinateur qui n’est pas à toi, ferme la session depuis cette page.'),
           q('Les données', 'Les statistiques comptent les demandes, pas leur contenu. Rien de ce que les membres écrivent n’est affiché ou gardé ici.')));
@@ -469,6 +529,350 @@
     const nav = /Edg\//.test(agent) ? 'Edge' : /OPR\//.test(agent) ? 'Opera' : /Firefox\//.test(agent) ? 'Firefox' : /Chrome\//.test(agent) ? 'Chrome' : /Safari\//.test(agent) ? 'Safari' : 'Navigateur';
     const os = /Windows/.test(agent) ? 'Windows' : /Android/.test(agent) ? 'Android' : /iPhone|iPad/.test(agent) ? 'iPhone' : /Mac OS/.test(agent) ? 'Mac' : /Linux/.test(agent) ? 'Linux' : '';
     return os ? `${nav} · ${os}` : nav;
+  }
+
+  // ---------- formulaires d'action ----------
+  let serveursCache = null;
+  /** Serveurs, salons et rôles vus par le bot (gardés 1 minute). */
+  async function serveurs(force = false) {
+    if (!force && serveursCache && Date.now() - serveursCache.at < 60000) return serveursCache.data;
+    const data = await api.get('serveurs');
+    serveursCache = { at: Date.now(), data };
+    return data;
+  }
+  let uid = 0;
+  /** Un champ de formulaire : libellé, contrôle, aide. */
+  function champ(label, input, aide) {
+    const id = input.id || `champ-${++uid}`;
+    const cible = input.matches?.('input, select, textarea') ? input : $('input, select, textarea', input);
+    if (cible && !cible.id) cible.id = id;
+    return h('div', { class: 'field plain' }, h('label', { for: cible?.id ?? id, text: label }), input, aide ? h('p', { class: 'help', text: aide }) : null);
+  }
+  function selectServeur(guilds, valeur) {
+    const sel = h('select', {}, guilds.map((g) => h('option', { value: g.id, text: g.name })));
+    if (valeur && guilds.some((g) => g.id === valeur)) sel.value = valeur;
+    return sel;
+  }
+  /** Liste des salons d'un serveur, rangés par catégorie. */
+  function remplirSalons(sel, liste, { vide, filtre } = {}) {
+    const groupes = new Map();
+    for (const c of liste.filter(filtre ?? (() => true))) {
+      const g = c.category ?? 'Sans catégorie';
+      if (!groupes.has(g)) groupes.set(g, []);
+      groupes.get(g).push(c);
+    }
+    sel.replaceChildren();
+    append(sel,
+      vide ? h('option', { value: '', text: vide }) : null,
+      ...[...groupes].map(([nom, salons]) => h('optgroup', { label: nom }, salons.map((c) => h('option', { value: c.id, text: `${c.voice ? '🔊' : '#'} ${c.name}${c.bot ? ' (le bot y est)' : ''}${c.people ? ` · ${c.people} pers.` : ''}` })))),
+    );
+  }
+  /** Sélecteur serveur + salon relié : changer de serveur recharge les salons. */
+  function choixSalon(d, { voix = false, vide = null, onServeur } = {}) {
+    const serveur = selectServeur(d.guilds, localStore('serveur'));
+    const salon = h('select', {});
+    const maj = () => {
+      const g = d.guilds.find((x) => x.id === serveur.value);
+      localStore('serveur', serveur.value);
+      if (voix) remplirSalons(salon, (g?.voices ?? []).map((c) => ({ ...c, voice: true })), { vide });
+      else remplirSalons(salon, g?.channels ?? [], { vide, filtre: (c) => c.canSend });
+      onServeur?.(g);
+    };
+    serveur.addEventListener('change', maj);
+    maj();
+    return { serveur, salon, guild: () => d.guilds.find((x) => x.id === serveur.value) };
+  }
+  function localStore(cle, valeur) {
+    try {
+      if (valeur === undefined) return localStorage.getItem(`dashboard-${cle}`);
+      localStorage.setItem(`dashboard-${cle}`, valeur);
+    } catch { /* stockage bloqué */ }
+    return null;
+  }
+  const lienDiscord = (url, texte = 'Voir dans Discord') => h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', text: texte });
+  function succes(zone, texte, url) {
+    zone.replaceChildren(h('div', { class: 'alert ok' }, icon('ok'), h('span', {}, texte, url ? ' · ' : null, url ? lienDiscord(url) : null)));
+  }
+  function echec(zone, err) {
+    zone.replaceChildren(h('div', { class: 'alert critique' }, icon('alerte'), h('span', { text: err.message })));
+  }
+  /** Soumission d'un formulaire d'action : bouton bloqué pendant l'envoi, résultat affiché dessous. */
+  function soumettre(form, bouton, retour, fn) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      action(bouton, async () => {
+        try { await fn(); } catch (err) { echec(retour, err); }
+      });
+    });
+  }
+  const aucunServeur = () => card(null, vide('Le bot n’est sur aucun serveur', 'Invite-le d’abord sur ton serveur Discord.'));
+
+  // ---------- Écrire ----------
+  function carteMessage(d) {
+    const retour = h('div', { 'aria-live': 'polite' });
+    const ping = h('select', {});
+    const { serveur, salon } = choixSalon(d, {
+      onServeur: (g) => ping.replaceChildren(
+        h('option', { value: 'aucune', text: 'Personne (conseillé)' }), h('option', { value: 'here', text: '@here (les membres en ligne)' }), h('option', { value: 'everyone', text: '@everyone (tout le monde)' }),
+        ...(g?.roles ?? []).map((r) => h('option', { value: r.id, text: `@${r.name}` }))),
+    });
+    const texteMsg = h('textarea', { rows: 4, maxlength: 1800, placeholder: 'Salut tout le monde !' });
+    const avecCarte = h('input', { type: 'checkbox' });
+    const titre = h('input', { type: 'text', maxlength: 256, placeholder: '📣 Grande annonce' });
+    const corps = h('textarea', { rows: 5, maxlength: 4000, placeholder: 'Le **markdown** de Discord marche : gras, _italique_, listes, liens…' });
+    const couleur = h('input', { type: 'color', value: '#f2c46d', class: 'color' });
+    const image = h('input', { type: 'text', inputmode: 'url', maxlength: 500, placeholder: 'https://… (facultatif)' });
+    const bas = h('input', { type: 'text', maxlength: 200, placeholder: 'Facultatif' });
+    const blocCarte = h('div', { class: 'sub-form', hidden: true }, champ('Titre', titre), champ('Texte', corps), h('div', { class: 'grid cols-2' }, champ('Couleur', couleur), champ('Bas de carte', bas)), champ('Image', image, 'Une adresse d’image publique en https.'));
+    avecCarte.addEventListener('change', () => { blocCarte.hidden = !avecCarte.checked; apercu(); });
+
+    // Aperçu façon Discord (texte brut : le markdown sera mis en forme par Discord)
+    const apv = h('div', { class: 'dc-preview', 'aria-label': 'Aperçu' });
+    function apercu() {
+      const mention = ping.value === 'aucune' ? '' : ping.value === 'here' || ping.value === 'everyone' ? `@${ping.value} ` : `@${ping.selectedOptions[0]?.text.slice(1) ?? ''} `;
+      const embed = avecCarte.checked && (titre.value || corps.value || image.value) ? h('div', { class: 'dc-embed' }, titre.value ? h('b', { text: titre.value }) : null, corps.value ? h('p', { text: corps.value }) : null, image.value ? h('span', { class: 'mute', text: '🖼️ image' }) : null, bas.value ? h('small', { text: bas.value }) : null) : null;
+      if (embed) embed.style.borderLeftColor = couleur.value;
+      apv.replaceChildren();
+      append(apv, h('div', { class: 'dc-head' }, h('b', { class: 'bot-name', text: $('.brand .bot-name')?.textContent ?? 'Le bot' }), h('span', { class: 'dc-tag', text: 'APP' })),
+        texteMsg.value || mention ? h('p', {}, mention ? h('span', { class: 'dc-mention', text: mention }) : null, texteMsg.value) : null, embed,
+        !texteMsg.value && !embed ? h('p', { class: 'mute', text: 'L’aperçu de ton message apparaît ici.' }) : null);
+    }
+    for (const el of [texteMsg, titre, corps, couleur, image, bas]) el.addEventListener('input', apercu);
+    ping.addEventListener('change', apercu);
+    apercu();
+
+    const bouton = h('button', { class: 'btn primary', type: 'submit', text: 'Envoyer' });
+    const form = h('form', { class: 'stack', novalidate: true },
+      h('div', { class: 'grid cols-2' }, champ('Serveur', serveur), champ('Salon', salon)),
+      champ('Message', texteMsg),
+      champ('Mentionner', ping, '@everyone et @here font sonner tout le serveur : à garder pour les vraies annonces.'),
+      h('label', { class: 'actions' }, h('span', { class: 'switch' }, avecCarte, h('i')), 'Ajouter une carte (embed)'),
+      blocCarte, h('div', { class: 'field plain' }, h('b', { text: 'Aperçu' }), apv),
+      h('div', { class: 'actions' }, bouton), retour);
+    soumettre(form, bouton, retour, async () => {
+      if ((ping.value === 'everyone' || ping.value === 'here') && !await confirmer({ titre: `Mentionner @${ping.value} ?`, texte: 'Tout le monde recevra une notification.', bouton: 'Envoyer quand même' })) return;
+      const r = await api.post('envoyer', {
+        channelId: salon.value, content: texteMsg.value, ping: ping.value,
+        embed: avecCarte.checked ? { title: titre.value, description: corps.value, color: couleur.value, image: image.value, footer: bas.value } : null,
+      });
+      succes(retour, 'Message envoyé.', r.url);
+      texteMsg.value = '';
+      apercu();
+    });
+    return card('Message ou annonce', form);
+  }
+
+  function carteSondage(d) {
+    const retour = h('div', { 'aria-live': 'polite' });
+    const { serveur, salon } = choixSalon(d);
+    const question = h('input', { type: 'text', maxlength: 300, placeholder: 'On fait quoi samedi soir ?' });
+    const reponses = h('textarea', { rows: 4, placeholder: 'Loup-garou\nBlind test\nSoirée casino' });
+    const duree = h('select', {}, [[1, '1 heure'], [6, '6 heures'], [24, '1 jour'], [72, '3 jours'], [168, '1 semaine']].map(([v, t]) => h('option', { value: v, text: t })));
+    duree.value = '24';
+    const multiple = h('input', { type: 'checkbox' });
+    const bouton = h('button', { class: 'btn primary', type: 'submit', text: 'Publier le sondage' });
+    const form = h('form', { class: 'stack', novalidate: true },
+      h('div', { class: 'grid cols-2' }, champ('Serveur', serveur), champ('Salon', salon)),
+      champ('Question', question), champ('Réponses', reponses, 'Une par ligne, de 2 à 10 (55 caractères chacune).'),
+      h('div', { class: 'grid cols-2' }, champ('Durée', duree), h('label', { class: 'actions' }, h('span', { class: 'switch' }, multiple, h('i')), 'Plusieurs choix')),
+      h('div', { class: 'actions' }, bouton), retour);
+    soumettre(form, bouton, retour, async () => {
+      const r = await api.post('sondage', { channelId: salon.value, question: question.value, answers: reponses.value.split('\n'), hours: Number(duree.value), multiple: multiple.checked });
+      succes(retour, 'Sondage publié.', r.url);
+      question.value = '';
+      reponses.value = '';
+    });
+    return card('Sondage', form);
+  }
+
+  function carteAideEnvoi() {
+    return card('Bon à savoir', h('ul', { class: 'tips' },
+      h('li', { text: 'Seuls les salons où le bot a le droit d’écrire apparaissent.' }),
+      h('li', { text: 'Le markdown de Discord marche : **gras**, *italique*, > citation, liens.' }),
+      h('li', { text: 'Chaque envoi est noté dans Sécurité › Journal des actions, avec le salon.' }),
+      h('li', { text: 'Pour une annonce propre : coche « Ajouter une carte », mets un titre et une couleur.' })));
+  }
+
+  // ---------- Modération ----------
+  function carteMembres(d) {
+    const serveur = selectServeur(d.guilds, localStore('serveur'));
+    serveur.addEventListener('change', () => { localStore('serveur', serveur.value); chercher(); });
+    const recherche = h('input', { type: 'text', placeholder: 'Pseudo, nom ou identifiant Discord', autocomplete: 'off', spellcheck: 'false' });
+    const raison = h('input', { type: 'text', maxlength: 300, placeholder: 'Ex : spam dans #général' });
+    const resultats = h('div', { 'aria-live': 'polite' }, vide('Cherche un membre', 'Tape au moins 2 lettres de son pseudo, ou colle son identifiant pour un membre banni.'));
+    let attente;
+    let n = 0;
+    async function chercher() {
+      const q = recherche.value.trim();
+      if (q.length < 2) return;
+      const mon = ++n;
+      try {
+        const r = await api.get(`membres?${new URLSearchParams({ serveur: serveur.value, q })}`);
+        if (mon !== n) return;
+        resultats.replaceChildren(r.members.length ? h('div', { class: 'rows' }, r.members.map(ligneMembre)) : vide('Personne', 'Aucun membre ne correspond.'));
+      } catch (err) {
+        echec(resultats, err);
+      }
+    }
+    recherche.addEventListener('input', () => { clearTimeout(attente); attente = setTimeout(chercher, 350); });
+
+    function ligneMembre(m) {
+      const sanction = async (act, extra = {}) => {
+        if (['expulser', 'bannir'].includes(act) && !await confirmer({ titre: `${act === 'bannir' ? 'Bannir' : 'Expulser'} ${m.name} ?`, texte: `${act === 'bannir' ? 'Il ne pourra plus revenir tant qu’il n’est pas débanni.' : 'Il pourra revenir avec une invitation.'} Raison : ${raison.value || 'aucune'}`, bouton: act === 'bannir' ? 'Bannir' : 'Expulser' })) return;
+        const r = await api.post('moderation', { guildId: serveur.value, userId: m.id, action: act, reason: raison.value, ...extra });
+        toast(`${m.name} : ${r.detail}.`);
+        chercher();
+      };
+      const bouton = (texte, fn, cls = '') => {
+        const b = h('button', { class: `btn small ${cls}`, type: 'button', text: texte });
+        b.addEventListener('click', () => action(b, fn));
+        return b;
+      };
+      if (m.banned) return h('div', { class: 'row' }, h('div', { class: 'what' }, personne(m), h('span', { text: `Banni${m.reason ? ` · ${m.reason}` : ''}` })), bouton('Débannir', () => sanction('deban')));
+      const duree = h('select', { class: 'mini', 'aria-label': 'Durée' }, [[10, '10 min'], [60, '1 h'], [360, '6 h'], [1440, '1 jour'], [10080, '1 semaine']].map(([v, t]) => h('option', { value: v, text: t })));
+      const infos = [m.username !== m.name ? `@${m.username}` : null, m.topRole, m.bot ? 'bot' : null, m.mutedUntil ? `muet jusqu’à ${dateHeure(m.mutedUntil)}` : null].filter(Boolean).join(' · ');
+      return h('div', { class: 'row wrap' },
+        h('div', { class: 'what' }, personne(m), h('span', { text: infos || `arrivé ${ago(m.joinedAt)}` })),
+        m.owner ? pill('Le chef · protégé', 'ok') : h('div', { class: 'actions' },
+          m.mutedUntil ? bouton('Rendre la parole', () => sanction('demute')) : [duree, bouton('Rendre muet', () => sanction('mute', { minutes: Number(duree.value) }))],
+          bouton('Expulser', () => sanction('expulser'), 'danger'), bouton('Bannir', () => sanction('bannir'), 'danger')));
+    }
+    return card('Membres', h('div', { class: 'grid cols-2' }, champ('Serveur', serveur), champ('Raison (visible dans le journal d’audit Discord)', raison)), champ('Chercher', recherche), resultats);
+  }
+
+  function carteNettoyer(d) {
+    const retour = h('div', { 'aria-live': 'polite' });
+    const { serveur, salon } = choixSalon(d);
+    const nombre = h('input', { type: 'number', min: 1, max: 100, value: 10, inputmode: 'numeric' });
+    const bouton = h('button', { class: 'btn danger', type: 'submit', text: 'Supprimer' });
+    const form = h('form', { class: 'stack', novalidate: true }, h('div', { class: 'grid cols-2' }, champ('Serveur', serveur), champ('Salon', salon)), champ('Nombre de messages', nombre, 'Les plus récents, 100 au maximum. Discord ne permet pas de supprimer en masse ceux de plus de 14 jours.'), h('div', { class: 'actions' }, bouton), retour);
+    soumettre(form, bouton, retour, async () => {
+      if (!await confirmer({ titre: `Supprimer ${nombre.value} message(s) ?`, texte: `Les derniers messages de #${salon.selectedOptions[0]?.text.replace(/^# /, '') ?? ''} seront supprimés définitivement.`, bouton: 'Supprimer' })) return;
+      const r = await api.post('nettoyer', { channelId: salon.value, count: Number(nombre.value) });
+      succes(retour, `${r.count} message(s) supprimé(s).`);
+    });
+    return card('Nettoyer un salon', form);
+  }
+
+  function carteDroits(d) {
+    return card('Ce que le bot peut faire', h('div', { class: 'rows' }, d.guilds.map((g) => ligne(g.name, null, h('div', { class: 'actions' },
+      pill('Muet', g.perms.moderate ? 'ok' : 'bad'), pill('Expulser', g.perms.kick ? 'ok' : 'bad'), pill('Bannir', g.perms.ban ? 'ok' : 'bad'), pill('Messages', g.perms.manageMessages ? 'ok' : 'bad'))))),
+    h('p', { class: 'sub', text: 'En rouge : donne la permission au rôle du bot dans Discord (Paramètres du serveur › Rôles), et place ce rôle au-dessus des membres à modérer.' }));
+  }
+
+  // ---------- Rappels ----------
+  function carteNouveauRappel(d) {
+    const retour = h('div', { 'aria-live': 'polite' });
+    const { serveur, salon } = choixSalon(d);
+    const pour = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'Vide = pour toi, sinon un identifiant Discord', autocomplete: 'off' });
+    const texteR = h('input', { type: 'text', maxlength: 500, placeholder: 'Lancer la soirée loup-garou' });
+    const dans = h('select', {}, [[5, 'Dans 5 minutes'], [15, 'Dans 15 minutes'], [30, 'Dans 30 minutes'], [60, 'Dans 1 heure'], [180, 'Dans 3 heures'], [1440, 'Demain à la même heure'], [10080, 'Dans une semaine'], ['autre', 'Autre…']].map(([v, t]) => h('option', { value: v, text: t })));
+    const minutes = h('input', { type: 'number', min: 1, max: 86400, value: 90, hidden: true, 'aria-label': 'Minutes' });
+    dans.addEventListener('change', () => { minutes.hidden = dans.value !== 'autre'; });
+    const bouton = h('button', { class: 'btn primary', type: 'submit', text: 'Créer le rappel' });
+    const form = h('form', { class: 'stack', novalidate: true },
+      h('div', { class: 'grid cols-2' }, champ('Rappel', texteR), champ('Quand', h('div', { class: 'stack tight' }, dans, minutes))),
+      h('div', { class: 'grid cols-2' }, champ('Pour qui', pour), champ('Salon de secours', h('div', { class: 'stack tight' }, serveur, salon), 'Utilisé si la personne a fermé ses MP.')),
+      h('div', { class: 'actions' }, bouton), retour);
+    soumettre(form, bouton, retour, async () => {
+      const r = await api.post('rappels/creer', { channelId: salon.value, text: texteR.value, userId: pour.value.trim(), minutes: dans.value === 'autre' ? Number(minutes.value) : Number(dans.value) });
+      succes(retour, `Rappel prévu ${dateHeure(r.at)}.`);
+      texteR.value = '';
+      rafraichir({ silencieux: true });
+    });
+    return card('Nouveau rappel', form);
+  }
+
+  // ---------- Musique ----------
+  function carteJouer(d) {
+    const retour = h('div', { 'aria-live': 'polite' });
+    const { serveur, salon } = choixSalon(d, { voix: true, vide: 'Le salon habituel du bot' });
+    const recherche = h('input', { type: 'text', maxlength: 500, placeholder: 'Titre, artiste, ou lien Spotify / YouTube / Deezer / SoundCloud' });
+    const ensuite = h('input', { type: 'checkbox' });
+    const bouton = h('button', { class: 'btn primary', type: 'submit', text: 'Jouer' });
+    const form = h('form', { class: 'stack', novalidate: true },
+      h('div', { class: 'grid cols-2' }, champ('Serveur', serveur), champ('Salon vocal', salon)),
+      champ('Quoi', recherche, 'Un lien de playlist ajoute toute la playlist.'),
+      h('div', { class: 'actions' }, h('label', { class: 'actions' }, h('span', { class: 'switch' }, ensuite, h('i')), 'Jouer juste après le son en cours'), h('span', { class: 'spacer' }), bouton), retour);
+    soumettre(form, bouton, retour, async () => {
+      retour.replaceChildren(h('p', { class: 'sub', text: 'Je cherche…' }));
+      const r = await api.post('musique/jouer', { guildId: serveur.value, voiceId: salon.value, query: recherche.value, next: ensuite.checked });
+      succes(retour, `▶️ ${r.label} · dans 🔊 ${r.voice}`);
+      recherche.value = '';
+      rafraichir({ silencieux: true });
+    });
+    return card('Lancer de la musique', form);
+  }
+
+  function carteLecteur(p) {
+    const post = (chemin, corps) => api.post(chemin, { guildId: p.guildId, ...corps }).then((r) => { if (r.detail) toast(r.detail); rafraichir({ silencieux: true }); });
+    const bouton = (texte, fn, cls = '') => {
+      const b = h('button', { class: `btn small ${cls}`, type: 'button', text: texte });
+      b.addEventListener('click', () => action(b, fn));
+      return b;
+    };
+    const barre = h('i');
+    barre.style.width = p.current.duration ? `${Math.min(100, (p.position / p.current.duration) * 100)}%` : '0%';
+    const volume = h('input', { type: 'range', min: 0, max: 100, step: 5, value: p.volume ?? 100, 'aria-label': 'Volume', class: 'range' });
+    const volTexte = h('span', { class: 'num', text: `${p.volume ?? 100} %` });
+    volume.addEventListener('input', () => { volTexte.textContent = `${volume.value} %`; });
+    volume.addEventListener('change', () => action(volume, () => post('musique/file', { action: 'volume', volume: Number(volume.value) })));
+    const BOUCLE = { off: 'Boucle : non', track: 'Boucle : ce son', queue: 'Boucle : la file' };
+    return card(p.guild,
+      h('p', { class: 'sub', text: `${p.current.artist ? `${p.current.title} · ${p.current.artist}` : p.current.title}${p.voice ? ` · 🔊 ${p.voice}` : ''}` }),
+      h('div', { class: 'progress' }, barre),
+      h('p', { class: 'sub num', text: `${minsec(p.position)} / ${p.current.live ? 'direct' : minsec(p.current.duration)}${p.filters.length ? ` · effets : ${p.filters.join(', ')}` : ''}` }),
+      h('div', { class: 'actions' },
+        bouton('⏮', () => post('musique/file', { action: 'precedent' })),
+        bouton(p.paused ? '▶ Reprendre' : '⏸ Pause', () => post('musique/action', { action: 'pause' })),
+        bouton('⏭ Passer', () => post('musique/action', { action: 'passer' })),
+        bouton(BOUCLE[p.loop] ?? 'Boucle', () => post('musique/file', { action: 'boucle' })),
+        bouton('Arrêter', () => post('musique/action', { action: 'arreter' }), 'danger')),
+      h('div', { class: 'actions' }, h('span', { class: 'sub', text: 'Volume' }), volume, volTexte),
+      h('h3', { class: 'group-title', text: `À suivre (${p.queue})` }),
+      p.upcoming.length
+        ? h('div', { class: 'rows' }, p.upcoming.map((t, i) => ligne(`${i + 1}. ${t.title}`, [t.artist, t.duration ? minsec(t.duration) : null].filter(Boolean).join(' · '), bouton('Retirer', () => post('musique/file', { action: 'retirer', position: i + 1 })))),
+          p.queue > p.upcoming.length ? h('p', { class: 'sub', text: `… et ${p.queue - p.upcoming.length} de plus.` }) : null,
+          h('div', { class: 'actions' }, bouton('Mélanger', () => post('musique/file', { action: 'melanger' })), bouton('Vider la file', () => post('musique/file', { action: 'vider' }), 'danger')))
+        : h('p', { class: 'sub', text: 'La file est vide : le son en cours est le dernier.' }));
+  }
+
+  // ---------- Casino ----------
+  function carteJetons() {
+    const retour = h('div', { 'aria-live': 'polite' });
+    const qui = h('input', { type: 'text', id: 'jetons-qui', inputmode: 'numeric', placeholder: 'Identifiant Discord du joueur', autocomplete: 'off' });
+    const combien = h('input', { type: 'number', min: 1, max: 10000000, value: 1000, inputmode: 'numeric' });
+    const envoyer = async (signe) => {
+      const r = await api.post('casino/jetons', { userId: qui.value.trim(), amount: signe * Number(combien.value) });
+      succes(retour, r.detail);
+      rafraichir({ silencieux: true });
+    };
+    const donner = h('button', { class: 'btn primary', type: 'button', text: 'Donner' });
+    const retirer = h('button', { class: 'btn', type: 'button', text: 'Retirer' });
+    const remise = h('button', { class: 'btn danger', type: 'button', text: 'Remettre à zéro' });
+    const garde = (b, fn) => b.addEventListener('click', () => action(b, async () => { try { await fn(); } catch (err) { echec(retour, err); } }));
+    garde(donner, () => envoyer(1));
+    garde(retirer, () => envoyer(-1));
+    garde(remise, async () => {
+      if (!await confirmer({ titre: 'Remettre ce compte à zéro ?', texte: 'Jetons, série et statistiques repartent comme pour un nouveau joueur.', bouton: 'Remettre à zéro' })) return;
+      const r = await api.post('casino/jetons', { userId: qui.value.trim(), remise: true });
+      succes(retour, r.detail);
+      rafraichir({ silencieux: true });
+    });
+    return card('Gérer les jetons', h('div', { class: 'grid cols-2' }, champ('Joueur', qui, 'Clique sur « Gérer » dans le classement pour le remplir.'), champ('Jetons', combien)), h('div', { class: 'actions' }, donner, retirer, h('span', { class: 'spacer' }), remise), retour);
+  }
+
+  function boutonRedemarrer(d) {
+    const b = h('button', { class: 'btn small danger', type: 'button', text: 'Redémarrer le bot' });
+    b.addEventListener('click', async () => {
+      const pc = d.services.instance?.startsWith('PC');
+      if (!await confirmer({ titre: 'Redémarrer le bot ?', texte: pc ? 'Le bot tourne sur ton PC : il va s’arrêter, relance demarrer.bat ensuite.' : 'Il sera hors ligne environ une minute, le temps que Render le relance. Les parties en cours seront perdues.', bouton: 'Redémarrer' })) return;
+      action(b, async () => {
+        await api.post('bot/redemarrer');
+        toast('Redémarrage lancé. La page se reconnectera toute seule.');
+      });
+    });
+    return h('div', { class: 'actions' }, b);
   }
 
   // ---------- Tester l'IA ----------
@@ -510,12 +914,13 @@
     const enregistrer = h('button', { class: 'btn small primary', type: 'button', text: 'Enregistrer' });
     append(barre, compte, h('div', { class: 'actions' }, annuler, enregistrer));
 
-    const modifies = () => Object.keys(valeurs).filter((k) => valeurs[k] !== initial[k]);
+    const pareil = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const modifies = () => Object.keys(valeurs).filter((k) => !pareil(valeurs[k], initial[k]));
     function maj() {
       const liste = modifies();
       barre.hidden = !liste.length;
       compte.textContent = `${liste.length} changement(s) non enregistré(s)`;
-      for (const [key, champ] of Object.entries(champs)) champ.bloc.classList.toggle('changed', valeurs[key] !== initial[key]);
+      for (const [key, champ] of Object.entries(champs)) champ.bloc.classList.toggle('changed', !pareil(valeurs[key], initial[key]));
     }
 
     const groupes = [...new Set(reglages.map((r) => r.group))];
@@ -543,6 +948,10 @@
         } else if (r.type === 'int') {
           input = h('input', { type: 'number', id, min: r.min, max: r.max, step: 1, value: r.value, inputmode: 'numeric' });
           input.addEventListener('input', () => { valeurs[r.key] = input.value === '' ? null : Number(input.value); maj(); });
+        } else if (r.type === 'ids') {
+          input = h('textarea', { id, rows: 3, spellcheck: 'false', placeholder: 'Un identifiant Discord par ligne' });
+          input.value = (r.value ?? []).join('\n');
+          input.addEventListener('input', () => { valeurs[r.key] = input.value.split(/[\s,;]+/).filter(Boolean); maj(); });
         } else if (r.type === 'text' && (r.max ?? 0) > 200) {
           input = h('textarea', { id, rows: 4, maxlength: r.max });
           input.value = r.value ?? '';
@@ -603,7 +1012,7 @@
     if (!vue) return;
     const zone = $('#contenu');
     // Les journaux gardent leur barre d'outils ; les réglages en cours d'édition ne sont pas écrasés.
-    const garder = vueActive === 'journaux';
+    const garder = vueActive === 'journaux' || Boolean(vue.garder);
     if (silencieux && vueActive === 'ia') return;
     const cible = garder ? zone : h('div', { class: 'stack' });
     try {

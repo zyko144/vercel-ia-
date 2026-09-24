@@ -48,7 +48,44 @@ const client = {
   ws: { ping: 42 },
   guilds: { cache: new Collection() },
   users: { cache: users, fetch: async (id) => { if (!users.has(id)) throw new Error('inconnu'); return users.get(id); } },
+  channels: { cache: new Collection() },
 };
+
+// ---- faux serveur : un salon et deux membres (le chef et un inconnu)
+const GUILD = '444444444444444444';
+const CHANNEL = '555555555555555555';
+const sent = [];
+const sanctions = [];
+const yes = { has: () => true };
+const guild = {
+  id: GUILD, name: 'Serveur test', memberCount: 2, iconURL: () => null,
+  channels: { cache: new Collection() },
+  roles: { cache: new Collection([[GUILD, { id: GUILD, name: '@everyone', managed: false, position: 0, hexColor: '#000000' }]]) },
+  bans: { fetch: async () => { throw Object.assign(new Error('Unknown Ban'), { code: 10026 }); }, remove: async () => {} },
+};
+const makeMember = (id, name) => ({
+  id, displayName: name, user: { username: name.toLowerCase(), bot: false }, displayAvatarURL: () => null,
+  communicationDisabledUntilTimestamp: null, joinedTimestamp: Date.now(), roles: { highest: { id: GUILD, name: '@everyone' } },
+  moderatable: true, kickable: true, bannable: true,
+  timeout: async (ms, reason) => { sanctions.push({ id, action: 'mute', ms, reason }); },
+  kick: async (reason) => { sanctions.push({ id, action: 'kick', reason }); },
+  ban: async (opts) => { sanctions.push({ id, action: 'ban', ...opts }); },
+});
+const members = new Collection([[OWNER, makeMember(OWNER, 'Chef')], [STRANGER, makeMember(STRANGER, 'Inconnu')]]);
+guild.members = {
+  me: { permissions: yes, voice: { channelId: null, channel: null } }, cache: members,
+  fetch: async (id) => { if (!members.has(id)) throw Object.assign(new Error('Unknown Member'), { code: 10007 }); return members.get(id); },
+  search: async ({ query }) => members.filter((m) => m.displayName.toLowerCase().includes(query.toLowerCase())),
+};
+const channel = {
+  id: CHANNEL, name: 'general', type: 0, guild, parentId: null, rawPosition: 0, permissionsFor: () => yes,
+  send: async (payload) => { sent.push(payload); return { url: `https://discord.com/channels/${GUILD}/${CHANNEL}/1` }; },
+  bulkDelete: async (n) => new Collection(Array.from({ length: n }, (_, i) => [String(i), {}])),
+};
+guild.channels.cache.set(CHANNEL, channel);
+client.guilds.cache.set(GUILD, guild);
+client.channels.cache.set(CHANNEL, channel);
+client.user.id = '999999999999999999';
 
 const handler = createDashboard(client);
 const server = http.createServer(async (req, res) => {
@@ -223,6 +260,65 @@ await check('une demande trop grosse ou illisible est refusée proprement', asyn
   assert.equal(gros.status, 413);
   const illisible = await request('/dashboard/api/ia/reglages', { method: 'POST', body: '{pas du json', headers: { 'x-dashboard': '1' } });
   assert.equal(illisible.status, 400);
+});
+
+await check('écrire en tant que le bot : personne n’est mentionné par défaut, les entrées sont vérifiées', async () => {
+  const d = await request('/dashboard/api/serveurs');
+  assert.equal(d.json.guilds[0].channels[0].id, CHANNEL);
+  const r = await post('/dashboard/api/envoyer', { channelId: CHANNEL, content: 'Salut @everyone', embed: { title: 'Annonce', description: 'Samedi', color: '#ff0000' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(sent.at(-1).allowedMentions, { parse: [] }, 'aucune mention ne sonne sans le demander');
+  assert.equal(sent.at(-1).embeds.length, 1);
+  const ping = await post('/dashboard/api/envoyer', { channelId: CHANNEL, content: 'Réunion', ping: 'everyone' });
+  assert.equal(ping.status, 200);
+  assert.deepEqual(sent.at(-1).allowedMentions, { parse: ['everyone'] });
+  assert.equal((await post('/dashboard/api/envoyer', { channelId: '123456789012345678', content: 'x' })).status, 404, 'salon inconnu');
+  assert.equal((await post('/dashboard/api/envoyer', { channelId: CHANNEL, content: '' })).status, 400, 'message vide');
+  assert.equal((await post('/dashboard/api/envoyer', { channelId: CHANNEL, embed: { title: 'x', image: 'javascript:alert(1)' } })).status, 400, 'image hors https');
+  assert.equal((await post('/dashboard/api/envoyer', { channelId: CHANNEL, content: 'x', embed: { title: 'x', color: 'red;}' } })).status, 400, 'couleur invalide');
+  const sondage = await post('/dashboard/api/sondage', { channelId: CHANNEL, question: 'Soirée ?', answers: ['Oui', 'Non', ''], hours: 24 });
+  assert.equal(sondage.status, 200);
+  assert.equal(sent.at(-1).poll.answers.length, 2);
+  assert.equal((await post('/dashboard/api/sondage', { channelId: CHANNEL, question: 'Seul ?', answers: ['Oui'] })).status, 400);
+});
+
+await check('modération : le chef est protégé, les sanctions passent avec leur raison', async () => {
+  const r = await request(`/dashboard/api/membres?serveur=${GUILD}&q=inc`);
+  assert.equal(r.json.members[0].id, STRANGER);
+  const chef = await post('/dashboard/api/moderation', { guildId: GUILD, userId: OWNER, action: 'bannir' });
+  assert.equal(chef.status, 403);
+  assert.ok(!sanctions.some((x) => x.id === OWNER));
+  const muet = await post('/dashboard/api/moderation', { guildId: GUILD, userId: STRANGER, action: 'mute', minutes: 10, reason: 'spam' });
+  assert.equal(muet.status, 200);
+  assert.equal(sanctions.at(-1).ms, 600_000);
+  assert.match(sanctions.at(-1).reason, /spam · depuis le tableau de bord/);
+  assert.equal((await post('/dashboard/api/moderation', { guildId: GUILD, userId: STRANGER, action: 'mute', minutes: 0 })).status, 400);
+  assert.equal((await post('/dashboard/api/moderation', { guildId: GUILD, userId: STRANGER, action: 'detruire' })).status, 400);
+  const nettoyer = await post('/dashboard/api/nettoyer', { channelId: CHANNEL, count: 5 });
+  assert.equal(nettoyer.json.count, 5);
+  const secu = await request('/dashboard/api/securite');
+  assert.ok(secu.json.journal.some((e) => e.action === 'Modération' && /muet 10 min/.test(e.detail)), 'la sanction est au journal');
+});
+
+await check('rappels, jetons du casino et liste noire de l’IA', async () => {
+  const cree = await post('/dashboard/api/rappels/creer', { channelId: CHANNEL, text: 'Lancer la soirée', minutes: 30 });
+  assert.equal(cree.status, 200);
+  const liste = await request('/dashboard/api/rappels');
+  assert.equal(liste.json.reminders[0].text, 'Lancer la soirée');
+  assert.equal((await post('/dashboard/api/rappels/supprimer', { id: cree.json.id })).json.ok, true);
+  assert.equal((await request('/dashboard/api/rappels')).json.reminders.length, 0);
+
+  const jetons = await post('/dashboard/api/casino/jetons', { userId: STRANGER, amount: 500 });
+  assert.equal(jetons.status, 200);
+  assert.equal((await post('/dashboard/api/casino/jetons', { userId: STRANGER, amount: 1.5 })).status, 400);
+
+  const { pausedAnswer } = await import('../src/features/chat.js');
+  const bloque = await post('/dashboard/api/ia/reglages', { changes: { blocked: [STRANGER] } });
+  assert.equal(bloque.status, 200);
+  assert.match(JSON.stringify(pausedAnswer(STRANGER)), /plus accès à l'IA/);
+  assert.equal((await post('/dashboard/api/ia/reglages', { changes: { blocked: [OWNER] } })).status, 400, 'le chef ne peut pas être bloqué');
+  await post('/dashboard/api/ia/reglages', { changes: { blocked: [] } });
+  assert.equal(pausedAnswer(STRANGER), null);
 });
 
 await check('fermer les autres sessions, puis se déconnecter', async () => {

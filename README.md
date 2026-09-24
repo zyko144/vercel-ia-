@@ -209,11 +209,14 @@ la page de connexion. Accès : le chef, plus les comptes listés dans `DASHBOARD
 | Section | Ce qu'on y fait |
 |---|---|
 | Vue d'ensemble | Ce qui demande ton attention, réponses et erreurs du jour, temps de réponse, activité sur 24 h, état des services |
-| IA | Usages du jour, 14 derniers jours, dernières erreurs, **tester l'IA**, et les **réglages** (modèle, réflexion, recherche Google, images, anti-spam, consignes du serveur, statut du bot, **pause de l'IA**) |
+| IA | Usages du jour, 14 derniers jours, dernières erreurs, **tester l'IA**, et les **réglages** (modèle, réflexion, recherche Google, images, anti-spam, consignes du serveur, statut du bot, **pause de l'IA**, pastille du bot, **personnes privées d'IA**) |
+| Écrire | Poster un message, une **annonce avec carte** (titre, couleur, image, aperçu façon Discord) ou un **sondage** dans n'importe quel salon, en tant que le bot |
+| Modération | Chercher un membre, le **rendre muet**, l'**expulser**, le **bannir** / débannir (le chef est protégé), **nettoyer** un salon |
 | Conversations | Qui a une conversation en mémoire (jamais le contenu), effacer une conversation ou tout |
 | Jeux en cours | Parties de loup-garou et d'imposteur, arrêter une partie bloquée |
-| Musique | Ce qui joue, pause / passer / arrêter, état des serveurs audio |
-| Casino | Classement de Casinho |
+| Musique | **Lancer un son** ou une playlist dans le vocal choisi, pause / passer / précédent / boucle / arrêter, **volume**, file d'attente (retirer, mélanger, vider), serveurs audio |
+| Rappels | Rappels en attente, en créer pour toi ou un membre, en supprimer |
+| Casino | Classement de Casinho, **donner / retirer des jetons**, remettre un compte à zéro |
 | Journaux | La console du bot en direct, filtrable, clés et tokens masqués |
 | Sécurité | Sessions ouvertes (les fermer), comptes autorisés, journal de toutes les actions |
 
@@ -223,7 +226,12 @@ vérifiées (en-tête dédié + origine), tentatives limitées, en-têtes strict
 pas d'iframe), secrets jamais affichés, chaque modification notée au journal. Les réglages sont gardés
 dans le stockage du bot (Supabase conseillé, sinon ils sont perdus au redémarrage sur Render).
 
-Tests : `npm run test:dashboard` attaque les protections (16 vérifications, sans toucher à tes données).
+Tests : `npm run test:dashboard` attaque les protections et les actions (19 vérifications, sans toucher à tes données).
+
+**Render + PC en même temps** : avec Supabase (`SUPABASE_SERVICE_KEY` rempli), une seule copie du bot
+répond. Le PC passe devant (pratique pour tester), Render attend et reprend tout seul 1 minute après la
+fermeture du PC. Sans Supabase, les deux copies répondent au même clic et l'une affiche
+« Unknown interaction » : coupe Render avant de lancer `demarrer.bat`. (`npm run test:instance`)
 
 ---
 

@@ -71,6 +71,11 @@ export async function onInteraction(client, interaction) {
     const handler = SLASH_HANDLERS[interaction.commandName] ?? GAME_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
     if (handler) await handler(client, interaction);
   } catch (err) {
+    // Clic déjà traité (double clic, ou 2e copie du bot) ou arrivé trop tard : rien à montrer ni à signaler.
+    if (err?.code === 10062 || err?.code === 40060) {
+      console.warn(`[interaction] ${interaction.commandName ?? interaction.customId} : ${err.code === 10062 ? 'clic expiré' : 'déjà traité'} (une 2e copie du bot tourne ?)`);
+      return;
+    }
     console.error(`[interaction] ${interaction.commandName ?? interaction.customId}`, err.body ? errorDetail(err) : err);
     const payload = { content: `❌ ${err.body ? describeError(err) : "Ça a pas marché (permission manquante ou erreur Discord). Réessaie stp."}`, ...PRIVATE };
     if (interaction.deferred || interaction.replied) await interaction.followUp(payload).catch(() => {});

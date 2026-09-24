@@ -13,7 +13,10 @@ const PAUSE_TEXT = 'L’IA est en pause pour une maintenance, reviens un peu plu
  * Le chef, lui, peut toujours l'utiliser pour tester.
  */
 export function pausedAnswer(userId) {
-  if (!config.ai.paused || userId === config.ownerId) return null;
+  if (userId === config.ownerId) return null;
+  // Privé d'IA depuis le tableau de bord
+  if (config.ai.blocked.includes(userId)) return buildAnswerPayload({ text: "🔇 Tu n'as plus accès à l'IA sur ce serveur. Vois ça avec le staff." });
+  if (!config.ai.paused) return null;
   return buildAnswerPayload({ text: config.ai.pauseMessage || PAUSE_TEXT });
 }
 
