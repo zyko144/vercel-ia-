@@ -10,6 +10,7 @@ import { countMessage } from '../features/weekly.js';
 import { guardMessage } from '../features/security.js';
 import { xpForMessage } from '../features/levels.js';
 import { autoTranslate, faqMessage } from '../features/aiExtras.js';
+import { suggestionMessage } from '../features/community.js';
 import { conversationKey } from '../features/memory.js';
 import { getPrivateThread, privateThreadOwner } from '../features/privateThreads.js';
 import { handleSonMessage } from '../features/tribunal.js';
@@ -34,6 +35,7 @@ export async function onMessage(client, message) {
   // Salons traduits automatiquement, et FAQ apprise du salon d'aide
   if (message.inGuild()) autoTranslate(message).catch((err) => console.warn('[traduction]', err.message));
   if (message.inGuild() && await faqMessage(message).catch(() => false)) return;
+  if (message.inGuild() && await suggestionMessage(message).catch(() => false)) return;
   // Insultes envers le chef : vérifié sur tout le serveur, sans bloquer le reste
   if (message.inGuild()) protectOwner(client, message).catch((err) => console.warn('[protection]', err.message));
   // Jeux en cours (rébus, imposteur, histoire…) : les messages du salon sont des réponses

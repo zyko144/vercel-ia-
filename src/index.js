@@ -1,4 +1,5 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
+import { setPaymentsClient } from './features/payments.js';
 import { ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, Partials } from 'discord.js';
 import { adminRoutes, testAudioFile } from './admin.js';
 import { startCasinho } from './casinho/index.js';
@@ -49,6 +50,7 @@ const client = new Client({
 
 client.once(Events.ClientReady, async (c) => {
   setAlertClient(c);
+  setPaymentsClient(c);
   console.log(`✅ Connecté en tant que ${c.user.tag} sur ${c.guilds.cache.size} serveur(s)`);
   console.log(`🧠 Chat : ${config.models.chat} (réflexion ${config.models.thinkingLevel}) · 🎨 Images : ${config.limits.imagesEnabled ? config.models.image : 'désactivées'} · 💾 Stockage : ${storageBackend}`);
 

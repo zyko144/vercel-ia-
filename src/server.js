@@ -50,6 +50,20 @@ function readJson(req) {
   });
 }
 
+function readRaw(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) { reject(new Error('requête trop grosse')); req.destroy(); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
 const send = (res, status, body) => {
   const isText = typeof body === 'string';
   res.writeHead(status, { 'Content-Type': isText ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8' });
@@ -106,6 +120,25 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       } catch (err) {
         return send(res, 500, { error: err.message });
       }
+    }
+
+    // Paiement PayPal, statut public (voir features/payments.js)
+    if (['/payer', '/merci', '/statut', '/api/statut', '/paypal/ipn'].includes(url.pathname)) {
+      const pay = await import('./features/payments.js');
+      const html = (body) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(body); };
+      if (url.pathname === '/paypal/ipn' && req.method === 'POST') {
+        // PayPal veut une réponse 200 tout de suite ; la vérification se fait ensuite.
+        const raw = await readRaw(req).catch(() => '');
+        send(res, 200, 'OK');
+        pay.handleIpn(raw).then((r) => { if (!r.ok) console.warn('[paypal] refusé :', r.why); }).catch((err) => console.warn('[paypal]', err.message));
+        return undefined;
+      }
+      if (req.method !== 'GET') return send(res, 405, 'méthode refusée');
+      if (url.pathname === '/payer') return html(pay.paymentPage(url));
+      if (url.pathname === '/merci') return html(pay.thanksPage());
+      if (url.pathname === '/statut') return html(pay.statusPage());
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return send(res, 200, pay.statusJson());
     }
 
     // Logo d'un serveur premium (cartes personnalisées)

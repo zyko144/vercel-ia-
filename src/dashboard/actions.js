@@ -12,6 +12,7 @@ import { resolveQuery } from '../music/sources.js';
 import { instance } from '../features/instance.js';
 import { load, save, storageBackend } from '../storage.js';
 import { allServers, planOf } from '../features/premium.js';
+import { paymentHistory, paypalMode } from '../features/payments.js';
 import { SECTIONS, guildSettings, setGuildSettings } from '../features/guildConfig.js';
 
 const MINUTE = 60_000;
@@ -368,6 +369,8 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
         const s = allServers()[g.id] ?? {};
         return { id: g.id, name: g.name, plan: plan.label, emoji: plan.emoji, trial: plan.trial, until: plan.until, trialUsed: Boolean(s.trialUsed) };
       }),
+      paypal: paypalMode(),
+      payments: (await paymentHistory()).slice(0, 50).map((x) => ({ ...x, guild: client.guilds.cache.get(x.guildId)?.name ?? x.guildId, payer: undefined })),
     }),
 
     // ---------- Le bot ----------

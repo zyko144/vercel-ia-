@@ -438,6 +438,10 @@
         append(zone, [
           card('Offre de chaque serveur', h('p', { class: 'sub', text: 'Pour activer une offre payée : dans Discord, /serveur › Activer une offre (chef).' }),
             h('div', { class: 'rows' }, p.servers.map((x) => ligne(x.name, x.until ? `${x.trial ? 'Essai' : 'Payé'} jusqu’au ${dateHeure(x.until)}` : x.trialUsed ? 'Essai déjà utilisé' : 'Essai gratuit disponible', pill(`${x.emoji} ${x.plan}`, x.plan === 'Gratuit' ? '' : 'ok'))))),
+          card(`Paiements PayPal (${num(p.payments?.length ?? 0)})`, h('p', { class: 'sub', text: `Mode : ${p.paypal ?? '—'}. En automatique, l’offre s’active toute seule 31 jours après le paiement.` }),
+            p.payments?.length
+              ? h('div', { class: 'rows' }, p.payments.map((x) => ligne(`${x.amount} € · ${x.plan}`, `${x.guild} · ${dateHeure(x.at)}`, pill('Payé', 'ok'))))
+              : vide('Aucun paiement', 'Les paiements PayPal vérifiés apparaîtront ici.')),
           card(`Historique des sanctions (${num(d.total)})`, d.sanctions.length
             ? h('div', { class: 'table-wrap' }, h('table', {},
               h('thead', {}, h('tr', {}, h('th', { text: 'Quand' }), h('th', { text: 'Membre' }), h('th', { text: 'Type' }), h('th', { text: 'Raison' }), h('th', { text: 'Serveur' }), h('th', { class: 'right', text: '' }))),

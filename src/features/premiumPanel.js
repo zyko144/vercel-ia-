@@ -11,6 +11,7 @@ import {
   setPlan, setReportWanted, setVoice, startTrial, voiceUsage,
 } from './premium.js';
 import { buildReport } from './weekly.js';
+import { paymentLink, referralStats, useReferral } from './payments.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
 const siteUrl = () => (config.site.url ? `${config.site.url}/#pacte` : 'https://vercel-ia.onrender.com/#pacte');
@@ -42,6 +43,9 @@ function statusMessage(interaction) {
   if (plan.key === 'gratuit' && interaction.memberPermissions?.has(P.ManageGuild)) {
     buttons.push(new ButtonBuilder().setCustomId('pr:trial').setLabel(`Essai gratuit ${TRIAL_DAYS} jours`).setEmoji('🎁').setStyle(ButtonStyle.Success));
   }
+  for (const key of ['veilleur', 'gardien']) {
+    if (PLANS[key]) buttons.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(paymentLink(interaction.guildId, key)).setLabel(`Payer ${PLANS[key].label}`).setEmoji(PLANS[key].emoji));
+  }
   buttons.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(siteUrl()).setLabel('Voir les offres').setEmoji('🌐'));
   return { embeds: [embed], files, components: [new ActionRowBuilder().addComponents(buttons)] };
 }
@@ -53,6 +57,25 @@ const needs = (feature, label) => (interaction) => {
 
 addActions('serveur', 'Premium', [
   { id: 'premium', label: 'Offre du serveur (premium)', emoji: '⭐', desc: `Ce qui est inclus, essai gratuit ${TRIAL_DAYS} jours`, run: (client, interaction) => interaction.reply({ ...statusMessage(interaction), ...PRIVATE }) },
+  {
+    id: 'parrainage', label: 'Parrainage', emoji: '🤝', desc: 'Ton code, et 1 mois offert par serveur abonné',
+    fields: [f.text('code', 'Code d’un parrain (facultatif)', { max: 20, ph: 'VERCEL-XXXXXX' })],
+    run: async (client, interaction, values) => {
+      let note = '';
+      if (values.code) {
+        if (!interaction.memberPermissions?.has(P.ManageGuild)) return interaction.reply(fail('Seul le staff (Gérer le serveur) peut entrer un code de parrainage.'));
+        const r = await useReferral(interaction.guildId, values.code);
+        if (r.error) return interaction.reply(fail(r.error));
+        note = `✅ Parrain enregistré : **${r.sponsor.name}**. Il gagnera 1 mois offert quand ce serveur prendra une offre.\n\n`;
+      }
+      const s = await referralStats(interaction.guildId);
+      return interaction.reply({
+        embeds: [new EmbedBuilder().setColor(0x3dff9a).setTitle('🤝 Parrainage')
+          .setDescription(`${note}Ton code : **\`${s.code}\`**\nDonne-le aux serveurs que tu invites : ils l’entrent ici (**/serveur** › Parrainage). À leur premier paiement, **tu gagnes 1 mois offert**.\n\nServeurs parrainés : **${s.invited}** · abonnés : **${s.paid}**${s.by ? `\nParrainé par : \`${s.by}\`` : ''}`)],
+        ...PRIVATE,
+      });
+    },
+  },
   {
     id: 'couleurs', label: 'Cartes aux couleurs du serveur', emoji: '🎨', desc: 'Nom, couleur et logo sur les embeds', perm: P.ManageGuild,
     fields: [

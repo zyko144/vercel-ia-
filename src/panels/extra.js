@@ -11,6 +11,7 @@ import { addNote, casierEmbed, verificationPanel } from '../features/security.js
 import { claimDaily, leaderboardEmbed, profileCard, shopMessage } from '../features/levels.js';
 import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../features/aiExtras.js';
 import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUndercover } from '../games/soirees.js';
+import { backupsOf, createBackup, restoreConfirm, welcomeCard } from '../features/community.js';
 import { PANELS } from './catalog.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
@@ -133,4 +134,35 @@ addActions('jeux', 'Jeux de groupe', [
 ]);
 addActions('jeux', 'Jeux musicaux et petits jeux', [
   { id: 'pendu', label: 'Pendu musical', emoji: '🎵', desc: 'Le titre lettre par lettre, l’extrait en indice', run: (client, interaction) => startPendu(interaction) },
+]);
+
+// ===================== /pannel : bienvenue et sauvegardes =====================
+addActions('pannel', 'Serveur', [
+  {
+    id: 'bienvenue-test', label: 'Voir ma carte de bienvenue', emoji: '👋', desc: 'Aperçu de ce que reçoivent les nouveaux',
+    run: async (client, interaction) => {
+      await interaction.deferReply(PRIVATE);
+      return interaction.editReply({ content: 'Voici la carte que reçoit un nouveau membre (réglages : tableau de bord › Mon serveur › Bienvenue).', files: [await welcomeCard(interaction.member)] });
+    },
+  },
+  {
+    id: 'sauvegarder', label: 'Sauvegarder le serveur', emoji: '💾', desc: 'Rôles, salons et permissions (3 gardées)', perm: P.Administrator,
+    run: async (client, interaction) => {
+      await interaction.deferReply(PRIVATE);
+      const b = await createBackup(interaction.guild, interaction.user.id);
+      return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x3dff9a).setTitle('💾 Sauvegarde faite').setDescription(`${b.roles} rôles et ${b.channels} salons (avec leurs permissions). En cas de raid ou d’erreur : **Restaurer une sauvegarde**.`)] });
+    },
+  },
+  {
+    id: 'restaurer', label: 'Restaurer une sauvegarde', emoji: '♻️', desc: 'Recrée ce qui manque, ne supprime rien', perm: P.Administrator,
+    fields: async (interaction) => {
+      const list = await backupsOf(interaction.guildId);
+      return [f.choice('sauvegarde', 'Sauvegarde', list.length ? list.map((b) => ({ label: `${new Date(b.at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })} · ${b.roles} rôles, ${b.channels} salons`, value: b.id })) : [{ label: 'Aucune sauvegarde', value: 'aucune' }], { req: true })];
+    },
+    run: async (client, interaction, v) => {
+      const entry = (await backupsOf(interaction.guildId)).find((b) => b.id === v.sauvegarde);
+      if (!entry) return interaction.reply({ content: '❌ Aucune sauvegarde : fais d’abord **Sauvegarder le serveur**.', ...PRIVATE });
+      return interaction.reply({ ...restoreConfirm(entry), ...PRIVATE });
+    },
+  },
 ]);

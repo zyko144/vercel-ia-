@@ -10,6 +10,7 @@ import { truncate } from '../utils/discord.js';
 import { buildModal, field as f, readModal } from '../panels/ui.js';
 import { cfg } from './guildConfig.js';
 import { countEvent } from './weekly.js';
+import { welcome } from './community.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
 const MINUTE = 60_000;
@@ -301,6 +302,7 @@ export async function handleSecurityComponent(client, interaction) {
 export function attachSecurityEvents(client) {
   client.on('guildMemberAdd', (member) => {
     onMemberJoin(member).catch((err) => console.warn('[sécurité] arrivée :', err.message));
+    welcome(member).catch((err) => console.warn('[bienvenue]', err.message));
   });
   client.on('guildMemberRemove', (member) => {
     logEvent(member.guild, { color: 0x99aab5, title: '📤 Départ', description: `${member.user} (${member.user.username})`, thumbnail: member.user.displayAvatarURL({ size: 64 }) }).catch(() => {});
