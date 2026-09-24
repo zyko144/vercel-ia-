@@ -45,6 +45,14 @@ cp .env.example .env
 npm start
 ```
 
+**Sur Windows**, sans taper de commande : double-clique sur **`demarrer.bat`**. La première fois, il installe
+tout et ouvre le fichier `.env` à remplir (`DISCORD_TOKEN`, `GEMINI_API_KEY`) ; ensuite il lance le bot.
+Il faut [Node.js](https://nodejs.org) (version LTS) et, pour récupérer le projet, [Git](https://git-scm.com) :
+
+```bat
+git clone -b claude/optimistic-edison-vv3m97 https://github.com/zyko144/vercel-ia- "C:\Users\noamb\Documents\AI vercel"
+```
+
 ⚠️ Coupe le bot local avant de lancer celui de Render, sinon il répondra 2 fois.
 
 ---

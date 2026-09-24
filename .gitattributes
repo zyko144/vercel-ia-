@@ -1,0 +1,2 @@
+# Les scripts Windows gardent leurs fins de ligne Windows, sinon cmd.exe les lit mal
+*.bat text eol=crlf
