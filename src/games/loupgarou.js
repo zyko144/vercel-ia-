@@ -4,7 +4,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelec
 import { borrowVoiceAi, createNarrator, voiceAiChannelId, voiceAiFree } from '../voice-ai/assistant.js';
 import { botName, botPause, botsPlay, humans, isBot, pickFrom, who } from './bots.js';
 import { missingDmNotice, sendRoleCards } from './roles.js';
-import { PRIVATE, gameChannel, gameThread, mentions, openLobby, pick, resolveNames, rulesLink, shortId, shuffle, sleep } from './common.js';
+import { PRIVATE, gameChannel, gameThread, mentions, openLobby, pick, registerGame, resolveNames, rulesLink, shortId, shuffle, sleep, unregisterGame } from './common.js';
 
 const ROLE_LOOK_MS = 10_000; // le temps de lire son MP avant la première nuit
 const NIGHT_MS = 50_000;
@@ -166,6 +166,14 @@ export async function startWerewolf(interaction) {
     seen: new Set(), visions: new Map(), witch: null, stopped: false, release: null, narrator: null, test: lobby.test,
   };
   games.set(game.id, game);
+  registerGame({
+    id: game.id, kind: 'Loup-garou', emoji: '🐺',
+    info: () => ({
+      server: game.guild?.name ?? null, phase: game.phase, round: game.day, players: game.players.length,
+      alive: alive(game).length, test: game.test, voice: Boolean(game.narrator),
+    }),
+    stop: () => finish(game, null, 'partie arrêtée depuis le tableau de bord'),
+  });
   game.thread = await gameThread(lobby.message, '🐺 Loup-garou');
   game.names = await resolveNames(interaction.guild, game.players);
   console.log(`[loup-garou] partie ${game.id} : ${[...game.roles.entries()].map(([id, role]) => `${nameOf(game, id)}=${role}`).join(', ')}`);
@@ -482,6 +490,7 @@ async function finish(game, winners, reason) {
   game.stopped = true;
   game.skipWait?.();
   games.delete(game.id);
+  unregisterGame(game.id);
   const title = winners === 'loups' ? '🐺 Les loups-garous ont gagné !' : winners === 'village' ? '🎉 Le village a gagné !' : '⏹️ Partie arrêtée';
   const roles = game.players.map((id) => `${game.alive.has(id) ? '❤️' : '💀'} ${who(id)} · ${roleLabel(game.roles.get(id))}`).join('\n');
   await tell(game, new EmbedBuilder().setColor(winners === 'loups' ? 0xed4245 : 0x57f287).setAuthor({ name: '🐺 LOUP-GAROU' }).setTitle(title)

@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from './config.js';
 
-const DATA_DIR = path.resolve('data');
+// STORAGE_DIR : un autre dossier (les bancs d'essai s'en servent pour ne pas toucher aux vraies données)
+const DATA_DIR = path.resolve(process.env.STORAGE_DIR || 'data');
 const useSupabase = Boolean(config.supabase.url && config.supabase.key);
 const cache = new Map();
 const pendingWrites = new Map();

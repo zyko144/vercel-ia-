@@ -17,6 +17,10 @@ globalThis.setTimeout.__patched = true;
 
 // ---- Pas d'appel à Gemini pendant les tests : la paire de mots vient du repli.
 process.env.GEMINI_API_KEY ||= 'test';
+// ---- Jamais les vraies données : pas de Supabase, stockage dans un dossier temporaire.
+process.env.SUPABASE_URL = '';
+process.env.SUPABASE_SERVICE_KEY = '';
+process.env.STORAGE_DIR = (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'jeux-'));
 
 const ROOT = new URL('../src/games/', import.meta.url);
 const common = await import(new URL('common.js', ROOT));

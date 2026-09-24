@@ -28,3 +28,24 @@ export function forget(key) {
 export function memoryStats() {
   return conversations.size;
 }
+
+/**
+ * Les conversations en mémoire, pour le tableau de bord : qui, combien d'échanges, quand.
+ * Jamais le contenu des messages.
+ */
+export function listConversations() {
+  const now = Date.now();
+  const list = [];
+  for (const [key, convo] of conversations) {
+    if (now - convo.updatedAt > TTL_MS) continue;
+    list.push({ key, userId: key.startsWith('u:') ? key.slice(2) : null, exchanges: Math.ceil(convo.turns.length / 2), updatedAt: convo.updatedAt, expiresAt: convo.updatedAt + TTL_MS });
+  }
+  return list.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Efface toutes les conversations en mémoire. Renvoie combien il y en avait. */
+export function forgetAll() {
+  const count = conversations.size;
+  conversations.clear();
+  return count;
+}

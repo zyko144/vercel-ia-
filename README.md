@@ -190,6 +190,35 @@ node tools/make-jeux-gifs.mjs --site             # cartes de rôle -> site/carte
 
 ---
 
+## 9. Le tableau de bord de l'IA 📊
+
+Une page d'administration, servie par le bot sur **`/dashboard`** (ex : `https://vercel-ia.onrender.com/dashboard`).
+
+**Se connecter** : dans Discord, tape **`/admin dashboard`**. Le bot te répond (visible seulement par toi)
+avec un lien valable **une seule fois, pendant 10 minutes**. On peut aussi recevoir ce lien en MP depuis
+la page de connexion. Accès : le chef, plus les comptes listés dans `DASHBOARD_ADMINS`.
+
+| Section | Ce qu'on y fait |
+|---|---|
+| Vue d'ensemble | Ce qui demande ton attention, réponses et erreurs du jour, temps de réponse, activité sur 24 h, état des services |
+| IA | Usages du jour, 14 derniers jours, dernières erreurs, **tester l'IA**, et les **réglages** (modèle, réflexion, recherche Google, images, anti-spam, consignes du serveur, statut du bot, **pause de l'IA**) |
+| Conversations | Qui a une conversation en mémoire (jamais le contenu), effacer une conversation ou tout |
+| Jeux en cours | Parties de loup-garou et d'imposteur, arrêter une partie bloquée |
+| Musique | Ce qui joue, pause / passer / arrêter, état des serveurs audio |
+| Casino | Classement de Casinho |
+| Journaux | La console du bot en direct, filtrable, clés et tokens masqués |
+| Sécurité | Sessions ouvertes (les fermer), comptes autorisés, journal de toutes les actions |
+
+**Sécurité** : pas de mot de passe (lien à usage unique, jeton jamais envoyé dans l'adresse), cookie de
+session HttpOnly + SameSite strict (+ Secure en HTTPS), 2 h d'inactivité ou 12 h maximum, requêtes
+vérifiées (en-tête dédié + origine), tentatives limitées, en-têtes stricts (CSP sans script extérieur,
+pas d'iframe), secrets jamais affichés, chaque modification notée au journal. Les réglages sont gardés
+dans le stockage du bot (Supabase conseillé, sinon ils sont perdus au redémarrage sur Render).
+
+Tests : `npm run test:dashboard` attaque les protections (16 vérifications, sans toucher à tes données).
+
+---
+
 ## Fonctionnalités
 
 | Quoi | Comment |
@@ -210,6 +239,7 @@ node tools/make-jeux-gifs.mjs --site             # cartes de rôle -> site/carte
 | Effacer la mémoire | `/reset` |
 | Images (si activées) | `/image`, `/modifier-image` |
 | Stats / vocal / serveurs audio (chef) | `/admin stats`, `/admin voc`, `/admin musique` |
+| Tableau de bord (chef) | `/admin dashboard` |
 | Modération | `/clear nombre`, `/kick`, `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/warns`, `/slowmode`, `/lock`, `/unlock`, `/role`, `/say` |
 | Infos | `/userinfo`, `/serverinfo`, `/avatar`, `/ping` |
 | Jeux | `/jeu-blindtest`, `/jeu-films`, `/jeu-disney`, `/jeu-series`, `/jeu-animes`, `/jeu-jeuxvideo`, `/jeu-devine`, `/jeu-quiz`, `/jeu-pile-ou-face`, `/jeu-des` |

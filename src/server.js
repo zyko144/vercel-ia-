@@ -60,7 +60,7 @@ const send = (res, status, body) => {
  * @param {() => object} getStatus
  * @param {Record<string, (url: URL, body: object) => Promise<unknown>>} adminRoutes ex : { 'GET /admin/logs': fn }
  */
-export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null, liveRoute = null) {
+export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null, liveRoute = null, dashboard = null) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
 
@@ -70,6 +70,9 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': file.length });
       return res.end(file);
     }
+
+    // Tableau de bord de l'IA (/dashboard) : il gère lui-même sa sécurité (session, en-têtes).
+    if (dashboard && await dashboard(req, res, url)) return undefined;
 
     // Animations du casino (dont roulette/17.gif, des/3-4.gif…) et cartes de rôle des jeux.
     const asset = Object.entries(PUBLIC_ASSETS).find(([prefix]) => url.pathname.startsWith(prefix));

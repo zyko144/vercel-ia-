@@ -231,6 +231,14 @@ export const config = {
   port: int('PORT', 3000),
   publicUrl: str('RENDER_EXTERNAL_URL') || str('PUBLIC_URL'),
 
+  // Réglages de l'IA pilotés depuis le tableau de bord (/dashboard)
+  ai: { paused: false, pauseMessage: '', extraInstructions: '' },
+
+  // Accès au tableau de bord : le chef, plus ces comptes (IDs Discord séparés par des virgules)
+  dashboard: {
+    admins: list('DASHBOARD_ADMINS'),
+  },
+
   // Le site vitrine (site/index.html). Par défaut, celui que le bot sert lui-même.
   site: {
     url: (str('SITE_URL') || str('RENDER_EXTERNAL_URL') || str('PUBLIC_URL')).replace(/\/+$/, ''),

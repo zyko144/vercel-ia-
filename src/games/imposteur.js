@@ -5,7 +5,7 @@ import { chatJson } from '../ai/gemini.js';
 import { borrowVoiceAi, createNarrator, voiceAiChannelId, voiceAiFree } from '../voice-ai/assistant.js';
 import { botName, botPause, botsPlay, humans, isBot, pickFrom, who } from './bots.js';
 import { missingDmNotice, roleCard, sendRoleCards } from './roles.js';
-import { PRIVATE, gameChannel, gameThread, listenChannel, mentions, normalize, openLobby, pick, resolveNames, rulesLink, shortId, shuffle, sleep, stopListening, tokens } from './common.js';
+import { PRIVATE, gameChannel, gameThread, listenChannel, mentions, normalize, openLobby, pick, registerGame, resolveNames, rulesLink, shortId, shuffle, sleep, stopListening, tokens, unregisterGame } from './common.js';
 
 const CLUE_MS = 45_000;
 const VOTE_MS = 60_000;
@@ -124,6 +124,14 @@ export async function startImpostor(interaction, theme = 'tout') {
   game.thread = await gameThread(lobby.message, `🕵️ Imposteur · ${info.label}`);
   game.names = await resolveNames(game.thread.guild ?? interaction.guild, players);
   games.set(game.id, game);
+  registerGame({
+    id: game.id, kind: 'Imposteur', emoji: '🕵️',
+    info: () => ({
+      server: game.thread?.guild?.name ?? interaction.guild?.name ?? null, phase: `tour ${game.round}`, round: game.round,
+      players: game.players.length, alive: game.alive.length, test: game.test, voice: Boolean(game.narrator),
+    }),
+    stop: () => finish(game, null, 'partie arrêtée depuis le tableau de bord'),
+  });
   console.log(`[imposteur] partie ${game.id} : ${players.length} joueurs · « ${civil} » / « ${impostorWord} »`);
 
   if (lobby.withVoice && voiceAiFree().ok) {
@@ -367,6 +375,7 @@ async function finish(game, winners, reason) {
   game.skipClue?.();
   stopListening(game.thread?.id);
   games.delete(game.id);
+  unregisterGame(game.id);
   if (game.narrator) {
     await say(game, winners === 'imposteur' ? "L'imposteur s'en sort. Bien joué à lui." : 'Les civils ont démasqué leur imposteur. Partie terminée.');
     game.narrator.close();

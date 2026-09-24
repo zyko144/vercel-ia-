@@ -1,10 +1,11 @@
-import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
 import { handleBlindTestComponent, isBlindTestComponent } from '../music/blindtest.js';
 import { config } from '../config.js';
 import { chat, describeError, errorDetail } from '../ai/gemini.js';
 import { toolPrompt } from '../ai/persona.js';
 import { COMMANDS_ALLOWED_EVERYWHERE } from '../commands/definitions.js';
-import { askAI, channelLink } from '../features/chat.js';
+import { askAI, channelLink, pausedAnswer } from '../features/chat.js';
+import { isAllowed, loginLinkFor } from '../dashboard/auth.js';
 import { reportProblem } from '../features/alerts.js';
 import { dmOwner, whereLabel } from '../features/escalation.js';
 import { createImageMessage } from '../features/images.js';
@@ -101,6 +102,7 @@ function askContext(client, interaction) {
     channel: interaction.channel,
     link: channelLink(interaction.guildId, interaction.channelId),
     visibility: 'private',
+    tag: 'commandes',
   };
 }
 
@@ -113,10 +115,13 @@ async function fileContent(interaction, optionName) {
 
 async function simpleTool(client, interaction, { task, prompt }) {
   await interaction.deferReply(PRIVATE);
+  const paused = pausedAnswer(interaction.user.id);
+  if (paused) return interaction.editReply(paused);
   const { text } = await chat({
     system: toolPrompt(client.user.username, task),
     content: [{ type: 'text', text: prompt }],
     web: false,
+    tag: 'outils',
   });
   await interaction.editReply(buildAnswerPayload({ text: text || "J'ai rien pu en tirer, désolé." }));
 }
@@ -350,6 +355,16 @@ const SLASH_HANDLERS = {
   },
 
   async admin(client, interaction) {
+    // Le tableau de bord est ouvert au chef et aux comptes de DASHBOARD_ADMINS.
+    if (interaction.options.getSubcommand() === 'dashboard') {
+      if (!isAllowed(interaction.user.id)) return interaction.reply({ content: '🔒 Le tableau de bord est réservé au chef.', ...PRIVATE });
+      const url = loginLinkFor(interaction.user.id);
+      return interaction.reply({
+        content: '🔐 Ton lien de connexion au tableau de bord. Il marche **une seule fois**, pendant **10 minutes**. Ne le partage à personne.',
+        components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(url).setLabel('Ouvrir le tableau de bord').setEmoji('📊'))],
+        ...PRIVATE,
+      });
+    }
     if (!isOwner(interaction.user)) return interaction.reply({ content: '🔒 Commande réservée au chef.', ...PRIVATE });
 
     if (interaction.options.getSubcommand() === 'voc') {
@@ -407,12 +422,15 @@ async function handleContextMenu(client, interaction) {
     return interaction.reply({ content: 'Ce message est vide (ou je peux pas le lire).', ...PRIVATE });
   }
   await interaction.deferReply(PRIVATE);
+  const paused = pausedAnswer(interaction.user.id);
+  if (paused) return interaction.editReply(paused);
 
   if (interaction.commandName === 'Traduire en français') {
     const { text } = await chat({
       system: toolPrompt(client.user.username, 'Tu es un traducteur professionnel. Traduction naturelle et fidèle.'),
       content: [{ type: 'text', text: `Traduis en français (s'il est déjà en français, traduis en anglais). Donne uniquement la traduction.\n\n${targetText}` }],
       web: false,
+      tag: 'clic droit',
     });
     return interaction.editReply(buildAnswerPayload({ text: text || 'Rien à traduire.' }));
   }

@@ -70,6 +70,39 @@ export async function resolveNames(guild, ids) {
   return names;
 }
 
+// ===================== Parties en cours (pour le tableau de bord) =====================
+
+const running = new Map(); // id -> { kind, emoji, startedAt, info(), stop() }
+
+/**
+ * Déclare une partie en cours : le tableau de bord la liste et peut l'arrêter.
+ * @param {{ id: string, kind: string, emoji: string, info: () => object, stop: () => Promise<unknown> | unknown }} game
+ */
+export function registerGame({ id, kind, emoji, info, stop }) {
+  running.set(id, { id, kind, emoji, startedAt: Date.now(), info, stop });
+}
+
+export function unregisterGame(id) {
+  running.delete(id);
+}
+
+export function runningGames() {
+  return [...running.values()].map((g) => {
+    let details = {};
+    try { details = g.info() ?? {}; } catch { /* une partie qui se termine */ }
+    return { id: g.id, kind: g.kind, emoji: g.emoji, startedAt: g.startedAt, ...details };
+  });
+}
+
+/** Arrête une partie depuis le tableau de bord. */
+export async function stopRunningGame(id) {
+  const game = running.get(id);
+  if (!game) return false;
+  await game.stop();
+  running.delete(id);
+  return true;
+}
+
 // ===================== Réponses écrites =====================
 
 // salon -> fonction qui lit les messages d'une partie en cours (renvoie true si le message est pris)

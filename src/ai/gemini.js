@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { config } from '../config.js';
+import { recordAi } from '../dashboard/metrics.js';
 
 const ai = new GoogleGenAI({ apiKey: config.geminiKey });
 
@@ -116,8 +117,22 @@ function hostname(url) {
  * @param {boolean} [opts.web] active Google Search + lecture d'URL
  * @param {string} [opts.thinking] minimal | low | medium | high
  * @param {object} [opts.responseFormat]
+ * @param {string} [opts.tag] à quoi sert la demande (pour les statistiques du tableau de bord)
  */
-export async function chat({ history = [], content, system, web = true, thinking, exactThinking = false, responseFormat }) {
+export async function chat(opts) {
+  const started = Date.now();
+  const tag = opts.tag ?? 'autre';
+  try {
+    const { text, sources, model, fallback } = await chatOnce(opts);
+    recordAi({ tag, ms: Date.now() - started, ok: true, model, fallback });
+    return { text, sources };
+  } catch (err) {
+    recordAi({ tag, ms: Date.now() - started, ok: false, error: errorDetail(err) });
+    throw err;
+  }
+}
+
+async function chatOnce({ history = [], content, system, web = true, thinking, exactThinking = false, responseFormat }) {
   const tools = web ? webTools() : null;
   const base = {
     system_instruction: system,
@@ -130,6 +145,8 @@ export async function chat({ history = [], content, system, web = true, thinking
   const attempt = (model, input) => ai.interactions.create({ ...base, model, input });
 
   let interaction;
+  let model = config.models.chat;
+  let fallback = false;
   try {
     interaction = await attempt(config.models.chat, buildSteps(history, content));
   } catch (err) {
@@ -137,13 +154,15 @@ export async function chat({ history = [], content, system, web = true, thinking
       // Offre gratuite : la recherche Google peut avoir un quota à 0 -> on continue sans elle
       searchBlockedUntil = Date.now() + SEARCH_RETRY_MS;
       console.warn('[gemini] Recherche Google refusée (quota), on continue sans pendant 1 h');
-      return chat({ history, content, system, web, thinking, exactThinking, responseFormat });
+      return chatOnce({ history, content, system, web, thinking, exactThinking, responseFormat });
     }
     if (statusOf(err) === 400 && history.length && !isConfigError(err)) {
       interaction = await attempt(config.models.chat, buildFlatInput(history, content));
     } else if (isRetryable(err) && config.models.fallback && config.models.fallback !== config.models.chat) {
       console.warn(`[gemini] ${config.models.chat} indispo (${statusOf(err)}), bascule sur ${config.models.fallback}`);
       interaction = await attempt(config.models.fallback, buildFlatInput(history, content));
+      model = config.models.fallback;
+      fallback = true;
     } else {
       throw err;
     }
@@ -152,12 +171,15 @@ export async function chat({ history = [], content, system, web = true, thinking
   return {
     text: (interaction.output_text ?? '').trim(),
     sources: extractSources(interaction),
+    model,
+    fallback,
   };
 }
 
 /** exactThinking : utilise exactement ce niveau de réflexion (pour les petites tâches rapides). */
-export async function chatJson({ prompt, system, schema, thinking, exactThinking = false }) {
+export async function chatJson({ prompt, system, schema, thinking, exactThinking = false, tag = 'tâches' }) {
   const { text } = await chat({
+    tag,
     content: [{ type: 'text', text: prompt }],
     system,
     web: false,
@@ -177,7 +199,19 @@ export async function chatJson({ prompt, system, schema, thinking, exactThinking
  * @param {string} [opts.aspectRatio]
  * @param {boolean} [opts.pro] utilise Nano Banana Pro
  */
-export async function generateImage({ prompt, images = [], aspectRatio, pro = false }) {
+export async function generateImage(opts) {
+  const started = Date.now();
+  try {
+    const result = await generateImageOnce(opts);
+    recordAi({ tag: 'images', ms: Date.now() - started, ok: true, model: opts.pro ? config.models.imagePro : config.models.image });
+    return result;
+  } catch (err) {
+    recordAi({ tag: 'images', ms: Date.now() - started, ok: false, error: errorDetail(err) });
+    throw err;
+  }
+}
+
+async function generateImageOnce({ prompt, images = [], aspectRatio, pro = false }) {
   const input = images.length
     ? [{ type: 'text', text: prompt }, ...images.map((img) => ({ type: 'image', mime_type: img.mimeType, data: img.data }))]
     : prompt;
