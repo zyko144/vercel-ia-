@@ -51,7 +51,9 @@ const mkMember = (id, name) => ({
 });
 const members = new Collection([[OWNER, mkMember(OWNER, 'Noam')], [BAD, mkMember(BAD, 'Relou')]]);
 const voice = { id: 'v', name: 'Dictature', members, isTextBased: () => true, send: async (p) => { sent.push(p); } };
-const guild = { id: 'g', name: 'Serveur', channels: { cache: new Collection([['v', voice]]) }, members: { cache: members, fetch: async (id) => members.get(id) } };
+const agoraSent = [];
+const agora = { id: 'a', name: '│・𝐚𝐠𝐨𝐫𝐚', type: 0, isTextBased: () => true, send: async (p) => { agoraSent.push(p); } };
+const guild = { id: 'g', name: 'Serveur', channels: { cache: new Collection([['v', voice], ['a', agora]]) }, members: { cache: members, fetch: async (id) => members.get(id) } };
 const client = {
   user: { id: BOT, username: 'AI Vercel', toString: () => `<@${BOT}>` },
   users: { fetch: async () => ({ send: async () => {} }), cache: new Collection() },
@@ -97,6 +99,10 @@ await check('1re vraie insulte envers le chef : avertissement avec la carte anim
   assert.match(embed.author.name, /AVERTISSEMENT/);
   assert.equal(embed.image.url, 'attachment://avertissement.gif');
   assert.equal(sent[0].files[0].name, 'avertissement.gif');
+  assert.match(sent[0].content, new RegExp(`<@${BAD}>`), 'le membre est pingé');
+  assert.deepEqual(sent[0].allowedMentions, { users: [BAD] }, 'il reçoit la notif');
+  assert.equal(agoraSent.length, 1, 'la carte part aussi dans #agora');
+  assert.equal(agoraSent[0].files[0].name, 'avertissement.gif');
   assert.equal(sanctions.length, 0, 'pas encore d’exclusion');
   assert.equal(dms.length, 1, 'le membre est prévenu en MP');
 });
@@ -108,25 +114,37 @@ await check('le chef est dans le vocal mais n’est pas visé nommément : rien'
   assert.equal(sent.length, 1, 'être présent ne suffit pas à être la cible');
 });
 
-await check('2e insulte, le chef n’est même pas dans le vocal : exclu 1 min, sorti du vocal, carte SANCTION', async () => {
-  voice.members = new Collection([[BAD, members.get(BAD)]]);
-  verdict = { transcription: 'Noam c’est un fdp', insulte: true, cible: 'chef', mot: 'fdp', raison: 'insulte le chef en son absence' };
+await check('le chef vient de parler et on lui répond « ta gueule » : ça le vise (sans le nommer)', async () => {
+  _test.ownerSpoke.set('g', Date.now() - 3000);
+  verdict = { transcription: 'oh ta gueule toi', insulte: true, cible: 'chef', mot: 'ta gueule', raison: 'répond au chef' };
   await new Promise((r) => setTimeout(r, 4100));
   await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(sent.length, 2);
-  const embed = sent[1].embeds[0].toJSON();
+  _test.ownerSpoke.delete('g');
+});
+
+await check('encore une insulte, le chef n’est même pas dans le vocal : exclu 1 min, sorti du vocal, carte SANCTION', async () => {
+  voice.members = new Collection([[BAD, members.get(BAD)]]);
+  verdict = { transcription: 'Noham c’est un fdp', insulte: true, cible: 'chef', mot: 'fdp', raison: 'insulte le chef en son absence' };
+  await new Promise((r) => setTimeout(r, 4100));
+  await _test.check(client, guild, BAD, 'v', speech);
+  assert.equal(sent.length, 3);
+  const embed = sent[2].embeds[0].toJSON();
   assert.match(embed.author.name, /SANCTION/);
-  assert.equal(sent[1].files[0].name, 'sanction.gif');
-  assert.deepEqual(sanctions.map((x) => x.what).sort(), ['exclu', 'vocal']);
+  assert.equal(sent[2].files[0].name, 'sanction.gif');
+  assert.match(sent[2].content, /sanctionné/);
+  assert.equal(agoraSent.at(-1).files[0].name, 'sanction.gif');
+  assert.deepEqual(sanctions.slice(-2).map((x) => x.what).sort(), ['exclu', 'vocal']);
   assert.equal(sanctions.find((x) => x.what === 'exclu').ms, 60_000);
-  assert.equal(voiceGuardStats.insults, 2);
+  assert.equal(voiceGuardStats.insults, 3);
+  assert.ok(voiceGuardStats.recent.length >= 5, 'les dernières écoutes sont gardées pour le tableau de bord');
 });
 
 await check('une insulte envers le bot ne compte pas : seul le chef est protégé', async () => {
   verdict = { transcription: 'Vercel t’es un connard', insulte: true, cible: 'aucune', mot: 'connard', raison: 'vise le bot' };
   await new Promise((r) => setTimeout(r, 4100));
   await _test.check(client, guild, BAD, 'v', speech);
-  assert.equal(sent.length, 2);
+  assert.equal(sent.length, 3);
 });
 
 globalThis.fetch = realFetch;

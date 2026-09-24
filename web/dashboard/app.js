@@ -242,6 +242,13 @@
                 ligne('Modèle de secours', 'Prend le relais si le principal sature', h('span', { class: 'mono', text: ai.fallback })),
                 ligne('Site', null, d.services.site ? h('a', { href: d.services.site, target: '_blank', rel: 'noopener noreferrer', text: 'Ouvrir' }) : h('span', { class: 'mute', text: 'pas d’adresse' }))),
               boutonRedemarrer(d))),
+          card('Surveillance vocale : dernières écoutes',
+            h('p', { class: 'sub', text: d.services.voiceGuard.enabled
+              ? 'Ce que le bot a entendu dans son vocal et ce qu’il a décidé. Il n’entend que le salon vocal où il est, et rien pendant la musique jouée par Lavalink.'
+              : 'Coupée : active-la dans IA › Réglages › Surveillance vocale.' }),
+            d.services.voiceGuard.recent?.length
+              ? h('div', { class: 'rows' }, d.services.voiceGuard.recent.map((e) => ligne(`« ${e.heard || '…'} »`, `${e.who} · ${ago(e.at)}`, pill(e.decision, /^INSULTE/.test(e.decision) ? 'bad' : /^ignoré/.test(e.decision) ? 'warn' : ''))))
+              : vide('Rien entendu pour l’instant', 'Dès que quelqu’un parle dans le vocal du bot, ça apparaît ici.')),
           card('Raccourcis', h('div', { class: 'shortcuts' },
             [['#envoyer', '✉️', 'Écrire en tant que le bot', 'Message, annonce ou sondage'], ['#moderation', '🛡️', 'Modérer un membre', 'Muet, expulsion, bannissement'], ['#musique', '🎵', 'Lancer de la musique', 'Un titre ou un lien'],
               ['#rappels', '⏰', 'Programmer un rappel', 'Pour toi ou un membre'], ['#ia', '🧠', 'Régler l’IA', 'Modèle, consignes, pause'], ['#casino', '🪙', 'Donner des jetons', 'Casinho']].map(([href, emoji, titre, sous]) =>
