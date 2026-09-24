@@ -229,9 +229,10 @@ dans le stockage du bot (Supabase conseillé, sinon ils sont perdus au redémarr
 Tests : `npm run test:dashboard` attaque les protections et les actions (19 vérifications, sans toucher à tes données).
 
 **Render + PC en même temps** : avec Supabase (`SUPABASE_SERVICE_KEY` rempli), une seule copie du bot
-répond. Le PC passe devant (pratique pour tester), Render attend et reprend tout seul 1 minute après la
-fermeture du PC. Sans Supabase, les deux copies répondent au même clic et l'une affiche
-« Unknown interaction » : coupe Render avant de lancer `demarrer.bat`. (`npm run test:instance`)
+répond. **Render passe devant** : le bot et le tableau de bord tournent sur `https://vercel-ia.onrender.com`.
+Sur le PC, `demarrer.bat` ouvre le site en local (`http://localhost:3000/`) et ne prend le relais du bot que si
+Render est arrêté. Sans Supabase, les deux copies répondent au même clic et l'une affiche
+« Unknown interaction » : ne lance alors pas `demarrer.bat` quand Render tourne. (`npm run test:instance`)
 
 ## 10. La surveillance vocale 🎙️
 

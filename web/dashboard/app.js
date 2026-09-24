@@ -235,7 +235,7 @@
               : vide('Aucun serveur', 'Le bot n’est encore sur aucun serveur.')),
             card('Le bot',
               h('div', { class: 'rows' },
-                ligne('Tourne sur', d.services.instance?.startsWith('PC') ? 'Ferme la fenêtre du PC et Render reprend tout seul (avec Supabase)' : 'Hébergé en ligne', h('span', { class: 'mono', text: d.services.instance ?? '—' })),
+                ligne('Tourne sur', d.services.instance?.startsWith('PC') ? 'Render est sans doute arrêté : le PC a pris le relais' : 'vercel-ia.onrender.com', h('span', { class: 'mono', text: d.services.instance ?? '—' })),
                 ligne('En ligne depuis', null, h('span', { class: 'num', text: duree(d.bot.uptime) })),
                 ligne('Mémoire utilisée', 'Render gratuit : 512 Mo au total', h('span', { class: 'num', text: `${d.bot.ramMb} Mo` })),
                 ligne('Réactivité', 'Retard moyen de la boucle Node.js', h('span', { class: 'num', text: `${d.bot.loopMs} ms` })),
@@ -525,7 +525,7 @@
           q('Modération', 'Cherche un membre par son pseudo (ou colle son identifiant pour un banni), mets une raison, puis Rendre muet, Expulser ou Bannir. Le chef ne peut jamais être sanctionné d’ici.', '« Ce que le bot peut faire » montre les permissions qui manquent au rôle du bot.'),
           q('Musique, rappels, casino', 'Lance un titre ou un lien dans le vocal de ton choix, règle le volume, retire des sons de la file. Programme un rappel pour toi ou un membre. Donne ou retire des jetons de Casinho.'),
           q('Priver quelqu’un d’IA', 'Dans IA › Réglages › « Personnes privées d’IA », colle un identifiant Discord par ligne. Les jeux et la musique restent ouverts pour eux.'),
-          q('Render et PC en même temps', 'Avec Supabase configuré, une seule copie du bot répond : le PC passe devant, Render reprend 1 minute après la fermeture du PC. Sans Supabase, les deux répondent et les boutons affichent « Unknown interaction ».'),
+          q('Render et PC en même temps', 'Avec Supabase configuré, une seule copie du bot répond : Render passe devant (bot et tableau de bord en ligne), le PC ne sert que le site en local et ne prend le relais que si Render s’arrête. Sans Supabase, les deux répondent et les boutons affichent « Unknown interaction ».'),
           q('Journaux', 'Utile quand quelque chose ne marche pas : filtre par mot (« lavalink », « gemini »…) ou affiche seulement les erreurs.'),
           q('Sécurité', 'Si tu as ouvert le tableau de bord sur un ordinateur qui n’est pas à toi, ferme la session depuis cette page.'),
           q('Les données', 'Les statistiques comptent les demandes, pas leur contenu. Rien de ce que les membres écrivent n’est affiché ou gardé ici.')));

@@ -34,12 +34,15 @@ if not exist .env (
 )
 
 echo.
-echo Si le bot tourne aussi sur Render : avec Supabase, ce PC prend le relais tout seul
-echo et Render reprend 1 min apres la fermeture de cette fenetre. Sans Supabase, coupe Render.
+echo Le bot et le tableau de bord tournent sur Render : https://vercel-ia.onrender.com/dashboard
+echo Ce PC ouvre le site en local, et ne prend le relais du bot que si Render est arrete
+echo (il faut SUPABASE_SERVICE_KEY dans .env, sinon le bot repondrait deux fois).
 echo.
-echo Site vitrine     : http://localhost:3000/
-echo Tableau de bord  : tape /admin dashboard dans Discord pour recevoir ton lien
+echo Site vitrine     : http://localhost:3000/  (s ouvre tout seul dans le navigateur)
+echo Tableau de bord  : tape /admin dashboard dans Discord, le lien ouvre https://vercel-ia.onrender.com/dashboard
 echo Pour arreter le bot : ferme cette fenetre.
 echo.
+rem Ouvre le site en local 5 s apres le demarrage du serveur
+start "" /min cmd /c "timeout /t 5 /nobreak >nul & start "" http://localhost:3000/"
 call npm start
 pause
