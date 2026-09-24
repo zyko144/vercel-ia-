@@ -1,5 +1,5 @@
-// Surveillance vocale : le bot écoute son salon vocal et repère les vraies insultes envers le chef (Noam)
-// ou envers le bot lui-même (Vercel). 1re fois : avertissement. Dès la 2e : exclusion d'1 minute,
+// Surveillance vocale : le bot écoute son salon vocal et repère les vraies insultes envers le chef (Noam),
+// qu'il soit dans le vocal ou non : il faut qu'on parle de lui (son nom) ET qu'on l'insulte. 1re fois : avertissement. Dès la 2e : exclusion d'1 minute,
 // sortie du vocal et avertissement de plus. Chaque sanction s'affiche avec une carte animée (tampon néon).
 //
 // Comment ça marche, sans exploser le quota Gemini :
@@ -43,7 +43,7 @@ export const guardWantsAudio = () => config.voiceGuard.enabled;
 
 export function startVoiceGuard(client) {
   onVoiceReady((guild, connection) => attach(client, guild, connection));
-  if (config.voiceGuard.enabled) console.log('🎙️ Surveillance vocale active (insultes envers le chef ou le bot)');
+  if (config.voiceGuard.enabled) console.log('🎙️ Surveillance vocale active (insultes envers le chef)');
 }
 
 /** Change la sourdine du bot dans les vocaux où il est (quand on active / coupe la surveillance). */
@@ -157,7 +157,7 @@ const SCHEMA = {
   properties: {
     transcription: { type: 'string' },
     insulte: { type: 'boolean' },
-    cible: { type: 'string', enum: ['chef', 'bot', 'aucune'] },
+    cible: { type: 'string', enum: ['chef', 'aucune'] },
     mot: { type: 'string' },
     raison: { type: 'string' },
   },
@@ -173,25 +173,22 @@ async function check(client, guild, userId, channelId, pcm) {
   const speaker = guild.members.cache.get(userId) ?? await guild.members.fetch(userId).catch(() => null);
   const owner = guild.members.cache.get(config.ownerId) ?? await guild.members.fetch(config.ownerId).catch(() => null);
   const ownerNames = [...new Set(['Noam', ...namesOf(owner, owner?.user)])];
-  const botNames = [...new Set(['Vercel', 'AI Vercel', client.user.username])];
-  const ownerHere = Boolean(channel?.members?.has(config.ownerId));
   const others = channel?.members?.filter((m) => !m.user.bot && m.id !== userId).map((m) => m.displayName) ?? [];
 
   voiceGuardStats.checks++;
   voiceGuardStats.lastAt = Date.now();
   const { text } = await chat({
     tag: 'vocal',
-    system: 'Tu es le modérateur vocal d\'un serveur Discord français. Tu transcris fidèlement ce qui est dit (argot, verlan, abréviations comprises) puis tu juges s\'il y a une vraie insulte envers le chef ou envers le bot. Tu es strict sur la cible : dans le doute, ce n\'est pas une insulte envers eux.',
+    system: 'Tu es le modérateur vocal d\'un serveur Discord français. Tu transcris fidèlement ce qui est dit (argot, verlan, abréviations comprises) puis tu juges s\'il y a une vraie insulte envers le chef. Tu es strict sur la cible : dans le doute, ce n\'est pas une insulte envers lui.',
     content: [
       { type: 'text', text: `Extrait audio de ${speaker?.displayName ?? 'un membre'} dans le salon vocal « ${channel?.name ?? '?'} ».
-Le chef s'appelle : ${ownerNames.join(', ')}${ownerHere ? ' (il est dans ce vocal en ce moment)' : ' (il n\'est PAS dans ce vocal)'}.
-Le bot s'appelle : ${botNames.join(', ')}.
+Le chef s'appelle : ${ownerNames.join(', ')}. Qu'il soit dans le vocal ou non ne change rien : seule compte une insulte qui le vise, lui.
 Autres personnes présentes : ${others.join(', ') || 'personne'}.
 
 1. transcription : ce qui est dit, mot pour mot, en français.
-2. insulte : true seulement si la personne insulte VRAIMENT le chef ou le bot (fdp, ntm, connard, ta gueule, etc.), même pour rire.
-   Ne compte PAS : une insulte envers quelqu'un d'autre, un juron sans cible (« putain », « merde »), se rabaisser soi-même, citer ou chanter des paroles, parler d'un jeu, ou quand on ne sait pas qui est visé.
-3. cible : « chef », « bot » ou « aucune ».
+2. insulte : true seulement si la personne insulte VRAIMENT le chef (fdp, ntm, connard, etc.), en lui parlant ou en parlant de lui, même pour rire.
+   Ne compte PAS : une insulte envers quelqu'un d'autre (même si le chef est là), une insulte envers le bot, un juron sans cible (« putain », « merde »), se rabaisser soi-même, citer ou chanter des paroles, parler d'un jeu, ou quand on ne sait pas qui est visé.
+3. cible : « chef » ou « aucune ».
 4. mot : l'insulte exacte (vide sinon). 5. raison : une phrase courte.` },
       { type: 'audio', mime_type: 'audio/wav', data: wav(pcm).toString('base64') },
     ],
@@ -211,8 +208,11 @@ Autres personnes présentes : ${others.join(', ') || 'personne'}.
   }
   const said = simple(verdict.transcription);
   const named = (names) => names.some((n) => n.length >= 3 && said.includes(simple(n)));
-  if (verdict.cible === 'bot' && !named(botNames)) return;
-  if (verdict.cible === 'chef' && !ownerHere && !named(ownerNames)) return;
+  // Le chef doit être nommé : être présent dans le vocal ne suffit pas à faire de lui la cible
+  if (verdict.cible !== 'chef' || !named(ownerNames)) {
+    console.log(`[surveillance vocale] ignoré (le chef n'est pas visé nommément) : « ${truncate(verdict.transcription, 120)} »`);
+    return;
+  }
 
   voiceGuardStats.insults++;
   await punish(client, guild, speaker, channel, verdict);
@@ -220,10 +220,10 @@ Autres personnes présentes : ${others.join(', ') || 'personne'}.
 
 async function punish(client, guild, member, channel, verdict) {
   if (!member) return;
-  const target = verdict.cible === 'bot' ? 'le bot' : 'le chef';
+  const target = 'le chef';
   const word = truncate(verdict.mot || verdict.transcription, 60);
   const reason = `Insulte en vocal envers ${target} (« ${word} »)`;
-  const count = await addInsultWarning(guild.id, member.id, { reason, by: client.user.id, kind: 'insulte-vocal', target: verdict.cible === 'bot' ? client.user.id : config.ownerId, message: truncate(verdict.transcription, 300) });
+  const count = await addInsultWarning(guild.id, member.id, { reason, by: client.user.id, kind: 'insulte-vocal', target: config.ownerId, message: truncate(verdict.transcription, 300) });
   const severe = count >= 2;
 
   let timedOut = false;
@@ -245,7 +245,7 @@ async function punish(client, guild, member, channel, verdict) {
     .setDescription(`${member}, on n'insulte pas ${target} en vocal.`)
     .addFields(
       { name: 'Qui', value: `${member}`, inline: true },
-      { name: 'Envers', value: target === 'le bot' ? `${client.user}` : `<@${config.ownerId}>`, inline: true },
+      { name: 'Envers', value: `<@${config.ownerId}>`, inline: true },
       { name: 'Avertissements', value: `**${count}**`, inline: true },
       { name: 'Entendu', value: `||${word}||`, inline: true },
       { name: 'Sanction', value: sanction, inline: false },

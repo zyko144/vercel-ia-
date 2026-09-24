@@ -171,7 +171,7 @@ export const config = {
   // Salon où arrivent les signalements (vide = MP au chef)
   staffChannelId: str('STAFF_CHANNEL_ID'),
 
-  // Surveillance vocale : le bot écoute son vocal et sanctionne les insultes envers le chef ou lui-même
+  // Surveillance vocale : le bot écoute son vocal et sanctionne les insultes envers le chef
   voiceGuard: {
     enabled: bool('VOICE_GUARD', true),
     maxPerHour: int('VOICE_GUARD_MAX_PER_HOUR', 200), // demandes Gemini par heure au maximum
