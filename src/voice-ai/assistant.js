@@ -682,7 +682,7 @@ async function stopSession(reason) {
   homeGuildChannel()?.send({
     content: session.title
       ? `🎙️ ${session.title} : fin (${reason}).`
-      : `🎙️ Conversation terminée (${reason}). Relance \`/vocal\` pour me reparler.`,
+      : `🎙️ Conversation terminée (${reason}). Relance **/ia** › Parler à l’IA en vocal pour me reparler.`,
     allowedMentions: { parse: [] },
   }).catch(() => {});
   try {

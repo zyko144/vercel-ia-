@@ -50,7 +50,7 @@ function shuffled(list) {
 
 /** Pour contrôler la musique il faut être dans le même vocal que le bot (sauf admins / chef). */
 function controlProblem(interaction, player) {
-  if (!player?.current) return '🎵 Y a rien en cours de lecture. Lance un son avec `/play` !';
+  if (!player?.current) return '🎵 Y a rien en cours de lecture. Lance un son avec **/musique** › Jouer un son !';
   if (isDj(interaction)) return null;
   const userChannel = interaction.member?.voice?.channelId;
   if (!userChannel || userChannel !== player.botVoiceChannelId) {
@@ -76,7 +76,7 @@ function joinProblem(interaction) {
 }
 
 async function queueTracks(client, interaction, result, { next = false, shuffle = false, label = '' } = {}) {
-  if (blindTestActive(interaction.guildId)) return interaction.editReply('🎧 Un blind test est en cours ! Attends la fin (ou `/jeu-blindtest arreter:true`).');
+  if (blindTestActive(interaction.guildId)) return interaction.editReply('🎧 Un blind test est en cours ! Attends la fin (ou **/jeux** › Arrêter le jeu musical).');
   const { channel, error } = joinProblem(interaction);
   if (error) return interaction.editReply(error);
   if (!result.tracks.length) return interaction.editReply("😕 J'ai rien trouvé, essaie avec un autre nom ou un lien.");
@@ -218,7 +218,7 @@ async function saveTracks(interaction, userId, name, tracks, from = '', missing 
   const summary = added
     ? `✅ **${added} son(s)** ajouté(s)${from ? ` ${from}` : ''} à **${playlist.name}** (${playlist.tracks.length} au total).`
     : `Rien de nouveau à ajouter à **${playlist.name}** 👌`;
-  return interaction.editReply(`${summary}${details.length ? `\n-# ${details.join(' · ')}` : ''}\n-# Écoute-la avec \`/playlist lancer nom:${playlist.name}\``);
+  return interaction.editReply(`${summary}${details.length ? `\n-# ${details.join(' · ')}` : ''}\n-# Écoute-la avec **/musique** › Lancer une de mes playlists (« ${playlist.name} »)`);
 }
 
 /** Importe une playlist / un album entier dans une playlist perso. */
@@ -283,7 +283,7 @@ const COMMANDS = {
         const { error, playlist } = await playlists.createPlaylist(userId, interaction.options.getString('nom', true));
         if (error) return interaction.reply(say(`❌ ${error}`));
         if (!link) {
-          return interaction.reply(say(`✅ Playlist **${playlist.name}** créée ! Remplis-la vite avec \`/playlist importer\` (lien), \`/playlist ajouter-plusieurs\` (plein de sons d'un coup) ou le bouton ❤️.`));
+          return interaction.reply(say(`✅ Playlist **${playlist.name}** créée ! Remplis-la vite avec **/musique** › Importer dans une playlist (lien), Ajouter des sons (séparés par |) ou le bouton ❤️.`));
         }
         await interaction.deferReply(PRIVATE);
         return importLink(interaction, userId, playlist.name, link);
@@ -295,7 +295,7 @@ const COMMANDS = {
       case 'ajouter-plusieurs': {
         const name = interaction.options.getString('nom', true);
         if (!(await playlists.getPlaylist(userId, name))) {
-          return interaction.reply(say(`❌ Tu as pas de playlist « ${name} ». Crée-la avec \`/playlist creer\`.`));
+          return interaction.reply(say(`❌ Tu as pas de playlist « ${name} ». Crée-la avec **/musique** › Créer une playlist.`));
         }
         return interaction.showModal(new ModalBuilder()
           .setCustomId(`music:playlist-add:${name}`)
@@ -338,7 +338,7 @@ const COMMANDS = {
       }
       case 'voir': {
         const playlist = await playlists.getPlaylist(userId, interaction.options.getString('nom', true));
-        if (!playlist) return interaction.reply(say("❌ Cette playlist existe pas. Regarde tes playlists avec `/playlist liste`."));
+        if (!playlist) return interaction.reply(say("❌ Cette playlist existe pas. Regarde tes playlists avec **/musique** › Mes playlists."));
         const lines = playlist.tracks.map((t, i) => `\`${i + 1}.\` ${trackLine(t)}`);
         let description = '';
         for (const line of lines) {
@@ -366,7 +366,7 @@ const COMMANDS = {
       }
       case 'liste': {
         const mine = await playlists.listPlaylists(userId);
-        if (!mine.length) return interaction.reply(say('Tu as pas encore de playlist. Crée-en une avec `/playlist creer` ou clique sur ❤️ pendant un son !'));
+        if (!mine.length) return interaction.reply(say('Tu as pas encore de playlist. Crée-en une avec **/musique** › Créer une playlist ou clique sur ❤️ pendant un son !'));
         return interaction.reply(say(`📀 **Tes playlists :**\n${mine.map((p) => `• **${p.name}** · ${p.tracks.length} son(s)`).join('\n')}`));
       }
       case 'supprimer': {
@@ -385,7 +385,7 @@ const COMMANDS = {
     const decision = skipDecision(interaction, player);
     if (!decision.skip) {
       return interaction.reply({
-        content: `🗳️ Vote pour passer **${title}** : **${decision.votes}/${decision.needed}**. Les autres peuvent voter avec \`/skip\` ou le bouton ⏭️.`,
+        content: `🗳️ Vote pour passer **${title}** : **${decision.votes}/${decision.needed}**. Les autres peuvent voter avec le bouton ⏭️ ou **/musique** › Passer.`,
         allowedMentions: { parse: [] },
       });
     }
@@ -450,7 +450,7 @@ const COMMANDS = {
 
   async queue(client, interaction) {
     const player = getPlayer(interaction.guildId);
-    if (!player?.current && !player?.queue.length) return interaction.reply(say('📜 La file est vide. Ajoute des sons avec `/play` !'));
+    if (!player?.current && !player?.queue.length) return interaction.reply(say('📜 La file est vide. Ajoute des sons avec **/musique** › Jouer un son !'));
     return interaction.reply({ ...queuePayload(player), ...PRIVATE });
   },
 
@@ -558,7 +558,7 @@ const COMMANDS = {
     if (interaction.options.getBoolean('arreter')) {
       return interaction.reply(say(stopBlindTest(interaction.guildId) ? '⏹️ Blind test arrêté.' : "Y a pas de blind test en cours."));
     }
-    if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎧 Un blind test est déjà en cours ! (`/jeu-blindtest arreter:true` pour le couper)'));
+    if (blindTestActive(interaction.guildId)) return interaction.reply(say('🎧 Un blind test est déjà en cours ! (**/jeux** › Arrêter le jeu musical pour le couper)'));
 
     const theme = interaction.options.getString('theme');
     const custom = interaction.options.getString('theme_perso');
@@ -795,7 +795,7 @@ const MORE_COMMANDS = {
     const period = interaction.options.getString('periode') ?? 'month';
     const stats = await musicStats(interaction.guildId, { period, userId: member?.id ?? null });
     if (!stats?.tracks.length) {
-      return interaction.editReply(member ? `Aucune écoute pour ${member} sur cette période.` : "Aucune écoute enregistrée sur cette période. Lance des sons avec `/play` !");
+      return interaction.editReply(member ? `Aucune écoute pour ${member} sur cette période.` : "Aucune écoute enregistrée sur cette période. Lance des sons avec **/musique** › Jouer un son !");
     }
 
     const podium = ['🥇', '🥈', '🥉'];
@@ -821,7 +821,7 @@ const MORE_COMMANDS = {
     player.textChannelId = interaction.channelId;
     await player.connect(channel);
     if (!player.current) player.scheduleIdle();
-    return interaction.editReply(`🎧 Je suis dans <#${channel.id}>, balance un \`/play\` !`);
+    return interaction.editReply(`🎧 Je suis dans <#${channel.id}>, balance un **/musique** › Jouer un son !`);
   },
 };
 
@@ -887,7 +887,7 @@ export async function handleMusicComponent(client, interaction) {
   if (interaction.customId.startsWith('music:lyrics:')) {
     const offset = adjustLyrics(interaction.user.id, interaction.customId.split(':')[2]);
     if (offset === null) {
-      return interaction.reply(say('Ces paroles sont plus suivies en direct, relance `/lyrics` 😉'));
+      return interaction.reply(say('Ces paroles sont plus suivies en direct, relance **/musique** › Paroles 😉'));
     }
     return interaction.deferUpdate();
   }
@@ -908,7 +908,7 @@ export async function handleMusicComponent(client, interaction) {
     if (!player?.current) return interaction.reply(say('🎵 Y a rien en cours de lecture.'));
     const { error, added } = await playlists.addToPlaylist(interaction.user.id, playlists.FAVORITES, [player.current], { createIfMissing: true });
     return interaction.reply(say(error ? `❌ ${error}` : added
-      ? `❤️ ${trackLine(player.current)} ajouté à ta playlist **${playlists.FAVORITES}** (\`/playlist lancer nom:${playlists.FAVORITES}\`).`
+      ? `❤️ ${trackLine(player.current)} ajouté à ta playlist **${playlists.FAVORITES}** (**/musique** › Lancer une de mes playlists).`
       : `Ce son est déjà dans tes **${playlists.FAVORITES}** ❤️`));
   }
   if (action === 'add') {

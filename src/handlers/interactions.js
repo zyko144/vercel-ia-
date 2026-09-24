@@ -26,6 +26,9 @@ import { allPlayers } from '../music/player.js';
 import { GAME_HANDLERS, handleGameAutocomplete, handleGameComponent, isGameComponent } from '../games/index.js';
 import { MODERATION_HANDLERS } from './moderation.js';
 import { UTILITY_HANDLERS } from './utility.js';
+import { handlePanelComponent, isPanelCommand, isPanelComponent, openPanel } from '../panels/index.js';
+import { handleTicketComponent, isTicketComponent } from '../features/tickets.js';
+import { handleBuildComponent, isBuildComponent } from '../features/build.js';
 
 const EXPLAIN_LEVELS = {
   simple: "Explique comme à quelqu'un de 12 ans : mots simples, une analogie de la vie de tous les jours, pas de jargon.",
@@ -44,6 +47,9 @@ export async function onInteraction(client, interaction) {
       return await handleGameAutocomplete(interaction);
     }
     // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
+    if (isPanelComponent(interaction)) return await handlePanelComponent(client, interaction);
+    if (isTicketComponent(interaction)) return await handleTicketComponent(client, interaction);
+    if (isBuildComponent(interaction)) return await handleBuildComponent(client, interaction);
     if (isGameComponent(interaction)) return await handleGameComponent(client, interaction);
     if (isBlindTestComponent(interaction)) return await handleBlindTestComponent(client, interaction);
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
@@ -60,16 +66,9 @@ export async function onInteraction(client, interaction) {
       return;
     }
     if (!interaction.isChatInputCommand() && !interaction.isMessageContextMenuCommand()) return;
-
-    if (!COMMANDS_ALLOWED_EVERYWHERE.has(interaction.commandName) && !isAllowedChannel(interaction.channel, interaction.channelId)) {
-      return await interaction.reply({ content: `👉 Cette commande marche que dans ${allowedChannelsMention()}, viens me parler là-bas !`, ...PRIVATE });
-    }
-
-    if (interaction.commandName === 'Signaler au staff') return await handleReport(client, interaction);
-    if (interaction.isMessageContextMenuCommand()) return await handleContextMenu(client, interaction);
-    if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicCommand(client, interaction);
-    const handler = SLASH_HANDLERS[interaction.commandName] ?? GAME_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
-    if (handler) await handler(client, interaction);
+    // Les 6 commandes principales ouvrent un panneau
+    if (isPanelCommand(interaction)) return await openPanel(client, interaction);
+    return await runCommand(client, interaction);
   } catch (err) {
     // Clic déjà traité (double clic, ou 2e copie du bot) ou arrivé trop tard : rien à montrer ni à signaler.
     if (err?.code === 10062 || err?.code === 40060) {
@@ -89,6 +88,22 @@ export async function onInteraction(client, interaction) {
       shown: payload.content,
     }).catch(() => {});
   }
+}
+
+/**
+ * Exécute une commande par son nom (les anciennes commandes sont maintenant des actions des panneaux :
+ * le panneau passe ici une interaction qui se présente comme la commande d'origine).
+ */
+export async function runCommand(client, interaction) {
+  if (!COMMANDS_ALLOWED_EVERYWHERE.has(interaction.commandName) && !isAllowedChannel(interaction.channel, interaction.channelId)) {
+    return interaction.reply({ content: `👉 Ça marche que dans ${allowedChannelsMention()}, viens me parler là-bas !`, ...PRIVATE });
+  }
+  if (interaction.commandName === 'Signaler au staff') return handleReport(client, interaction);
+  if (interaction.isMessageContextMenuCommand()) return handleContextMenu(client, interaction);
+  if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return handleMusicCommand(client, interaction);
+  const handler = SLASH_HANDLERS[interaction.commandName] ?? GAME_HANDLERS[interaction.commandName] ?? MODERATION_HANDLERS[interaction.commandName] ?? UTILITY_HANDLERS[interaction.commandName];
+  if (handler) return handler(client, interaction);
+  return undefined;
 }
 
 function cooldownGuard(interaction, bucket, ms) {
@@ -318,7 +333,7 @@ const SLASH_HANDLERS = {
   async reset(client, interaction) {
     const cleared = forget(historyKeyFor(interaction));
     await interaction.reply({
-      content: cleared ? "🧹 Mémoire de l'IA effacée, on repart de zéro ! (`/clear` pour supprimer aussi ton fil privé)" : 'Y avait rien en mémoire tkt 👌',
+      content: cleared ? "🧹 Mémoire de l'IA effacée, on repart de zéro ! (**/ia** › Effacer ma conversation supprime aussi ton fil privé)" : 'Y avait rien en mémoire tkt 👌',
       ...PRIVATE,
     });
   },
@@ -326,31 +341,21 @@ const SLASH_HANDLERS = {
   async aide(client, interaction) {
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle(`🤖 ${client.user.username}, ton assistant IA`)
-      .setDescription(`Mes commandes marchent dans **tous les salons**, et tout le monde peut les utiliser.${config.aiChannelIds.length
+      .setTitle(`🤖 ${client.user.username} : 6 commandes, tout est dedans`)
+      .setDescription(`Chaque commande ouvre un **panneau** : choisis une action dans le menu, remplis la petite fenêtre, c'est fait.${config.aiChannelIds.length
         ? `\nDans ${config.aiChannelIds.map((id) => `<#${id}>`).join(', ')}, écris directement : ta question part dans **ton fil privé**.`
-        : ''}\nAilleurs, mentionne-moi (${client.user}). Les réponses aux commandes sont visibles **que par toi**.`)
+        : ''}\nAilleurs, mentionne-moi (${client.user}).`)
       .addFields(
-        { name: '💬 IA', value: '`/ask` question · `/explique` un sujet · `/code` aide en code · `/corriger` orthographe · `/traduire` traduction · `/resume-salon` résume le salon' },
-        ...(config.limits.imagesEnabled ? [{ name: '🎨 Images', value: '`/image` génère · `/modifier-image` retouche' }] : []),
-        { name: '🧰 Pratique', value: '`/rappel` rappel en MP · `/sondage` sondage public · `/contacter-chef` écrire au chef · `/clear` efface ta conv IA · `/reset` efface juste la mémoire' },
-        { name: '🛡️ Modération', value: '`/clear nombre` · `/kick` · `/ban` · `/unban` · `/mute` · `/unmute` · `/warn` · `/warns` · `/slowmode` · `/lock` · `/unlock` · `/role` · `/say`' },
-        { name: '🎶 Musique', value: '`/play` nom ou lien Spotify / YouTube / SoundCloud / Deezer (suggestions en tapant) · `/playlist` (importer un lien, plein de sons en une fois, playlist IA) · `/skip` · `/previous` · `/pause` · `/stop` · `/queue` · `/volume` · `/loop` · `/shuffle` · `/seek` · `/filter` (8D, bass boost, nightcore…) · `/autoplay` · `/lyrics` (paroles en direct) · `/radio` non-stop · `/karaoke` · `/topsons` · `/join` · `/leave`' },
-        {
-          name: '🎮 Jeux',
-          value: [
-            '`/jeu-blindtest` blind test musical · `/jeu-paroles` écris la suite des paroles · `/jeu-annee` devine l\'année · `/jeu-films` · `/jeu-disney` · `/jeu-series` · `/jeu-animes` · `/jeu-jeuxvideo` · `/jeu-devine` (tout mélangé : musique, son + image, image floutée, zoom)',
-            '`/jeu-freestyle` battle de freestyle notée par l\'IA · `/jeu-loupgarou` avec narrateur · `/jeu-histoire` aventure dont vous êtes les héros · `/jeu-imposteur` · `/jeu-rebus` rébus en emojis · `/jeu-fans` plus ou moins de fans · `/jeu-fantasy` ton équipe de rappeurs',
-            '`/jeu-quiz` · `/jeu-pile-ou-face` · `/jeu-des`',
-            config.games.rules?.freestyle ? `-# 📖 Les règles de chaque jeu sont dans la catégorie des règles (ex : <#${config.games.rules.freestyle}>)` : null,
-            config.games.devineChannelId ? `-# Parties dans <#${config.games.devineChannelId}>${config.music.blindtestChannelId ? ` et <#${config.music.blindtestChannelId}>` : ''} · mini-jeux dans <#${config.games.miniGamesChannelId}>` : null,
-          ].filter(Boolean).join('\n'),
-        },
-        { name: 'ℹ️ Infos & fun', value: '`/userinfo` · `/serverinfo` · `/avatar` · `/choisir` · `/ping`' },
-        { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français** / **Signaler au staff** (analysé par IA)' },
-        { name: '🆘 Besoin du chef ?', value: `\`/contacter-chef\`, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },
+        { name: '🧠 /ia', value: 'Questions, explications, code, correction, traduction, résumé du salon, images, IA vocale.' },
+        { name: '🎮 /jeux', value: 'Loup-garou, imposteur, histoire, freestyle, quiz, rébus, blind test et tous les « devine », Fantasy Rap, dés, pile ou face.' },
+        { name: '🎵 /musique', value: 'Jouer, pause, file d’attente, volume, effets, paroles, karaoké, radio, playlists, Spotify.' },
+        { name: '🧭 /serveur', value: 'Infos, rôles, faire parler le bot, sondages, rappels, contacter le chef, premium et essai gratuit.' },
+        { name: '🛡️ /sanction', value: 'Avertir, rendre muet, expulser, bannir, supprimer des messages, mode lent, verrouiller (modérateurs).' },
+        { name: '🧩 /pannel', value: 'Panneau de tickets et annonces avec aperçu, construction de salons en un clic (administrateurs).' },
+        { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français** / **Signaler au staff**' },
+        { name: '🆘 Besoin du chef ?', value: `**/serveur** › Contacter le chef, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },
       )
-      .setFooter({ text: 'Propulsé par Gemini · 📋 bouton « Copier le code » sous les réponses avec du code' });
+      .setFooter({ text: 'AI Vercel · chaque réponse arrive dans un embed, visible que par toi' });
     await interaction.reply({ embeds: [embed], ...PRIVATE });
   },
 

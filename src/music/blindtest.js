@@ -236,7 +236,7 @@ export async function handleBlindTestComponent(client, interaction) {
 
   const messageId = action === 'custommodal' ? extra : interaction.message?.id;
   const setup = setups.get(messageId);
-  if (!setup) return interaction.reply({ content: 'Ces réglages ont expiré, relance `/jeu-blindtest` ou `/jeu-devine`.', ...PRIVATE });
+  if (!setup) return interaction.reply({ content: 'Ces réglages ont expiré, relance `/jeux`.', ...PRIVATE });
   if (!canManage(interaction, setup.hostId)) {
     return interaction.reply({ content: `Seul <@${setup.hostId}> peut régler cette partie (lance ta propre partie après).`, ...PRIVATE });
   }

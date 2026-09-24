@@ -126,7 +126,7 @@ export function endedPayload(lastTrack) {
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setAuthor({ name: '⏹️ Lecture terminée' })
-    .setDescription(lastTrack ? `Dernier son : ${trackLine(lastTrack)}\n\nTape \`/play\` pour relancer la musique 🎶` : 'Tape `/play` pour relancer la musique 🎶');
+    .setDescription(lastTrack ? `Dernier son : ${trackLine(lastTrack)}\n\nTape **/musique** › Jouer un son pour relancer la musique 🎶` : 'Tape **/musique** › Jouer un son pour relancer la musique 🎶');
   if (lastTrack?.thumbnail) embed.setThumbnail(lastTrack.thumbnail);
   return { content: '', embeds: [embed], components: [] };
 }
@@ -145,7 +145,7 @@ export function queuePayload(player, page = 0) {
     .setTitle('📜 File d\'attente')
     .setDescription([
       player.current ? `**En cours :** ${trackLine(player.current)}\n` : '',
-      lines.length ? lines.join('\n') : '*La file est vide, ajoute des sons avec `/play`*',
+      lines.length ? lines.join('\n') : '*La file est vide, ajoute des sons avec **/musique** › Jouer un son*',
     ].join('\n'))
     .setFooter({ text: `Page ${current + 1}/${pages} · ${player.queue.length} son(s) · ${formatTime(total)} · Boucle : ${LOOP_LABELS[player.loop]}` });
 

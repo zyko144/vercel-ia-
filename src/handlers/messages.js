@@ -65,7 +65,7 @@ export async function onMessage(client, message) {
 
   if (!text && !message.attachments.size) {
     if (moveToPrivateThread) return;
-    return message.reply(`Yo ${message.author} 👋 pose-moi ta question direct, ou tape \`/aide\` pour voir tout ce que jsais faire.`);
+    return message.reply(`Yo ${message.author} 👋 pose-moi ta question direct, ou tape **/serveur** › Aide pour voir tout ce que jsais faire.`);
   }
 
   if (hitCooldown(message.author.id, 'chat', config.limits.chatCooldownMs)) {

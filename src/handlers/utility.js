@@ -59,7 +59,7 @@ export const UTILITY_HANDLERS = {
     });
     if (result.error) return reply(result.error);
     if (result.stopped) return reply('🎙️ Conversation arrêtée.');
-    return reply(`🎙️ Je t'écoute ! Parle normalement, je te réponds à voix haute.\n-# Je peux aussi gérer la musique (« mets du Jul », « pause », « passe »). Je m'arrête après ${config.voiceAi.idleSeconds} s sans parler, si tu dis « au revoir », ou avec \`/vocal arreter:true\`.`);
+    return reply(`🎙️ Je t'écoute ! Parle normalement, je te réponds à voix haute.\n-# Je peux aussi gérer la musique (« mets du Jul », « pause », « passe »). Je m'arrête après ${config.voiceAi.idleSeconds} s sans parler, si tu dis « au revoir », ou avec **/ia** › Arrêter la conversation vocale.`);
   },
 
   async userinfo(client, interaction) {

@@ -85,7 +85,7 @@ export async function handleBattleComponent(interaction) {
   if (action === 'pick') {
     if (!isJudge(interaction.user.id)) return interaction.reply({ content: '⚖️ Réservé aux juges.', ...PRIVATE });
     const songs = picks.get(id);
-    if (!songs) return interaction.update({ content: 'Sélection expirée, relance `/tribunal action:battle`.', components: [] });
+    if (!songs) return interaction.update({ content: 'Sélection expirée, relance **/serveur** › Tribunal des sons › Battle.', components: [] });
     picks.delete(id);
     const [first, second] = interaction.values.map((userId) => songs.find((s) => s.userId === userId));
     const message = await publish(interaction.guild, first, second);

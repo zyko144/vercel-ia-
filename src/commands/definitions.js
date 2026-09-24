@@ -309,7 +309,27 @@ const gameCommands = [
 ];
 export const GAME_COMMAND_NAMES = new Set(gameCommands.map((c) => c.name));
 
-export const commandDefinitions = [...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands, ...gameCommands];
+// ===== LES COMMANDES ENREGISTRÉES =====
+// Six commandes, chacune ouvre un panneau qui regroupe les anciennes (src/panels/catalog.js).
+// Les anciennes commandes ci-dessus ne sont plus enregistrées chez Discord : elles servent de modèle
+// aux actions des panneaux (mêmes options, mêmes réponses).
+const panelCommands = [
+  guildOnly(new SlashCommandBuilder().setName('sanction').setDescription('🛡️ Avertir, rendre muet, expulser, bannir, nettoyer un salon')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)),
+  guildOnly(new SlashCommandBuilder().setName('jeux').setDescription('🎮 Tous les jeux : loup-garou, imposteur, blind test, quiz…')),
+  guildOnly(new SlashCommandBuilder().setName('pannel').setDescription('🧩 Tickets, annonces avec aperçu, construction de salons')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)),
+  guildOnly(new SlashCommandBuilder().setName('musique').setDescription('🎵 Jouer, file d’attente, effets, playlists, radio')),
+  guildOnly(new SlashCommandBuilder().setName('serveur').setDescription('🧭 Infos, rôles, sondages, rappels, contacter le chef, premium')),
+  new SlashCommandBuilder().setName('ia').setDescription('🧠 Questions, images, code, traduction, IA vocale'),
+];
+const adminCommand = utilityCommands.find((c) => c.name === 'admin');
+const contextMenus = aiCommands.filter((c) => c instanceof ContextMenuCommandBuilder);
+
+export const commandDefinitions = [...panelCommands, adminCommand, ...contextMenus];
+
+/** Les anciennes commandes (maintenant des actions de panneau) : pour vérifier le catalogue. */
+export const LEGACY_COMMAND_NAMES = new Set([...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands, ...gameCommands].map((c) => c.name));
 
 // Commandes qui marchent partout (les autres seulement dans le salon IA)
 export const COMMANDS_ALLOWED_EVERYWHERE = new Set([

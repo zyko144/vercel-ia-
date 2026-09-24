@@ -45,7 +45,7 @@ export async function getPrivateThread(client, channel, user, member) {
   save(KEY, map);
 
   await thread.send({
-    content: `🔒 ${user}, voilà ton fil privé avec l'IA : ici, seuls toi et les admins du serveur pouvez voir tes questions et mes réponses.\n-# Écris directement ici pour continuer · \`/clear\` pour tout effacer.`,
+    content: `🔒 ${user}, voilà ton fil privé avec l'IA : ici, seuls toi et les admins du serveur pouvez voir tes questions et mes réponses.\n-# Écris directement ici pour continuer · **/ia** › Effacer ma conversation pour tout effacer.`,
     allowedMentions: { users: [user.id] },
   });
   return thread;
