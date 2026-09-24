@@ -121,7 +121,12 @@ function ensureInVoice() {
   // quand l'ancienne instance tient encore le vocal) : elle n'arrivera plus, on la refait.
   const stuck = alive && status !== VoiceConnectionStatus.Ready && Date.now() - (state.joinedAt ?? 0) > STUCK_AFTER_MS;
   if (alive && !stuck && existing.joinConfig.channelId === channel.id) return;
-  if (stuck) console.warn(`[vocal] connexion bloquée en « ${status} » depuis ${Math.round((Date.now() - state.joinedAt) / 1000)} s : on la relance`);
+  if (stuck) {
+    console.warn(`[vocal] connexion bloquée en « ${status} » depuis ${Math.round((Date.now() - state.joinedAt) / 1000)} s : on la relance`);
+    // Ça revient sans arrêt : presque toujours une 2e copie du bot (PC + Render) qui se dispute le vocal
+    state.stuckTimes = [...(state.stuckTimes ?? []).filter((t) => Date.now() - t < 10 * 60_000), Date.now()];
+    if (state.stuckTimes.length === 3) console.warn('[vocal] ⚠️ 3 blocages en 10 min : le bot tourne sûrement ailleurs en même temps (PC + Render). Ferme demarrer.bat ou mets SUPABASE_SERVICE_KEY dans Render.');
+  }
   existing?.destroy();
   state.joinedAt = Date.now();
 
