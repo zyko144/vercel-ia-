@@ -3,6 +3,7 @@
 // commun avec lui, à part le stockage (Supabase ou fichiers locaux).
 import { ActivityType, Client, Events, GatewayIntentBits, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
+import { putSiteInBio } from '../features/bio.js';
 import { casinhoCommands } from './commands.js';
 import { handleBlackjackButton, isBlackjackButton } from './blackjack.js';
 import { handleLiveButton, isLiveButton } from './live.js';
@@ -66,6 +67,7 @@ export async function startCasinho() {
       activities: [{ name: 'custom', type: ActivityType.Custom, state: config.casinho.status }],
       status: 'online',
     });
+    putSiteInBio(c, { url: config.site.url && `${config.site.url}/#taverne`, label: '🌐 Le site', tag: 'casinho' });
     try {
       const payload = casinhoCommands.map((command) => command.toJSON());
       // Enregistrement sur le serveur du casino : les commandes apparaissent tout de suite.

@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { commandDefinitions } from './commands/definitions.js';
 import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
+import { putSiteInBio } from './features/bio.js';
 import { reportProblem, setAlertClient } from './features/alerts.js';
 import { startReminderLoop } from './features/reminders.js';
 import { attachLiveServer, serveLive, setLiveClient } from './features/livestream.js';
@@ -53,6 +54,7 @@ client.once(Events.ClientReady, async (c) => {
     console.error('❌ Enregistrement des commandes impossible :', err);
   }
 
+  putSiteInBio(c, { tag: 'bot' });
   lavalink.init(c);
   startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));

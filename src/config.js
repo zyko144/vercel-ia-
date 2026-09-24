@@ -231,6 +231,13 @@ export const config = {
   port: int('PORT', 3000),
   publicUrl: str('RENDER_EXTERNAL_URL') || str('PUBLIC_URL'),
 
+  // Le site vitrine (site/index.html). Par défaut, celui que le bot sert lui-même.
+  site: {
+    url: (str('SITE_URL') || str('RENDER_EXTERNAL_URL') || str('PUBLIC_URL')).replace(/\/+$/, ''),
+    // Ajoute le lien du site dans la bio des bots au démarrage (SITE_IN_BIO=false pour ne pas y toucher)
+    bio: bool('SITE_IN_BIO', true),
+  },
+
   supabase: {
     url: str('SUPABASE_URL').replace(/\/+$/, ''),
     key: str('SUPABASE_SERVICE_KEY'),
