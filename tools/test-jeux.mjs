@@ -575,6 +575,40 @@ const { startRebus } = await import(new URL('rebus.js', ROOT));
 const { startFans } = await import(new URL('fans.js', ROOT));
 const { startStory } = await import(new URL('histoire.js', ROOT));
 
+await check('undercover : rôles en MP (dont Mister White), indices, votes, fin de partie', async () => {
+  const { startUndercover, handleSoireeComponent } = await import(new URL('soirees.js', ROOT));
+  const channel = makeChannel('mini-jeux');
+  const host = makeUser('Hôte');
+  const running = startUndercover(makeInteraction(host, channel)).catch((err) => console.error('   ⚠️ startUndercover :', err));
+  await sleep(30);
+  const lobby = await waitFor('salle d’attente', () => channel.sent.find((m) => textOf(m).includes('UNDERCOVER')));
+  const join = buttonsOf(lobby).find((b) => b.endsWith(':join'));
+  const players = [host, makeUser('Ana'), makeUser('Ben'), makeUser('Cid'), makeUser('Dia')];
+  for (const player of players.slice(1)) await handleLobbyButton(makeComponent(player, join, { channel }));
+  await handleLobbyButton(makeComponent(host, buttonsOf(lobby).find((b) => b.endsWith(':start')), { channel }));
+  const thread = await waitFor('fil de partie', () => channel.sent.map((m) => m.thread).find(Boolean));
+  await waitFor('MP envoyés', () => players.every((p) => p.dms.length));
+  const titles = players.map((p) => (p.dms.at(-1).embeds[0].data ?? p.dms.at(-1).embeds[0]).title);
+  assert.equal(titles.filter((t) => /Mister White/.test(t)).length, 1, 'un Mister White à 5 joueurs');
+  const words = new Set(players.map((p) => /^# (.+)$/m.exec((p.dms.at(-1).embeds[0].data ?? p.dms.at(-1).embeds[0]).description)?.[1]).filter((w) => w && w !== 'Aucun mot'));
+  assert.equal(words.size, 2, 'deux mots : civils et undercover');
+  // Chacun donne un indice quand c'est son tour, puis tout le monde vote pour le 1er joueur du vote
+  let answered = 0;
+  thread.hooks.push((message) => {
+    const turn = /👉 <@(\d+)>, ton indice/.exec(message.content)?.[1];
+    if (turn) realSetTimeout(() => { say(thread, directory.get(turn), 'truc connu'); answered++; }, 1);
+    const menu = buttonsOf(message).find((b) => b?.endsWith(':vote'));
+    if (menu) {
+      const target = message.components[0].components[0].data?.options?.[0]?.value ?? message.components[0].components[0].options?.[0]?.value;
+      realSetTimeout(() => players.forEach((p) => handleSoireeComponent(makeComponent(p, menu, { values: [target], channel: thread })).catch(() => {})), 1);
+    }
+  });
+  const end = await waitFor('fin de la partie', () => thread.sent.find((m) => /Mot des civils/.test(textOf(m))), 20_000);
+  assert.ok(answered >= 4, 'les indices ont été demandés à tour de rôle');
+  assert.match(textOf(end), /Mister White/);
+  await running;
+});
+
 await check('les autres jeux démarrent sans planter', async () => {
   // Sans clé Gemini valable, ces jeux ne peuvent pas fabriquer leur contenu : ce qu'on
   // vérifie ici, c'est qu'ils le disent proprement au lieu de planter en silence.

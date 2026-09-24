@@ -10,7 +10,8 @@
 //  - un plafond de demandes par heure, et les bouts trop courts ou trop silencieux sont ignorés ;
 //  - une insulte n'est retenue que si Gemini la confirme ET qu'un vrai mot d'insulte est dans la transcription.
 // Le chef n'est jamais écouté ni sanctionné. Rien n'est gardé : l'audio est jeté après la vérification.
-import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import { cfg } from './guildConfig.js';
 import { EndBehaviorType, getVoiceConnection } from '@discordjs/voice';
 import { chat } from '../ai/gemini.js';
 import { config } from '../config.js';
@@ -274,7 +275,7 @@ async function punish(client, guild, member, channel, verdict, { victimId, victi
   for (const place of new Set(places)) {
     await place.send({ content, embeds: [embed], files: [card()], allowedMentions: { users: [member.id] } }).catch((err) => console.warn(`[surveillance vocale] message dans #${place.name} :`, err.message));
   }
-  await member.send({ embeds: [EmbedBuilder.from(embed).setDescription(target ? `Sur **${guild.name}** : on n'insulte pas ${target} en vocal.` : `Sur **${guild.name}** : ce mot est interdit en vocal.`)], files: [card()] }).catch(() => {});
+  await member.send({ embeds: [EmbedBuilder.from(embed).setDescription(target ? `Sur **${guild.name}** : on n'insulte pas ${target} en vocal.` : `Sur **${guild.name}** : ce mot est interdit en vocal.`)], files: [card()], components: cfg(guild.id, 'appeals.enabled') ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`ap:open:${guild.id}`).setLabel('Contester').setEmoji('⚖️').setStyle(ButtonStyle.Secondary))] : [] }).catch(() => {});
   dmOwner(client, {
     title: `🎙️ ${severe ? 'Sanction' : 'Avertissement'} vocal : ${member.user.username}`,
     description: `${target ? `Envers ${target}` : 'Mot interdit'} · ${count} avertissement(s)\n> ${truncate(verdict.transcription, 500)}\n-# ${verdict.raison}`,

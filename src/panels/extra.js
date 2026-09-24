@@ -5,6 +5,13 @@ import { ANNOUNCE_FIELDS, TICKET_FIELDS, openTickets, startDraft } from '../feat
 import { BUILD_FIELDS, startBuild } from '../features/build.js';
 import { panelEmbed } from './ui.js';
 import '../features/premiumPanel.js'; // groupe « Premium » de /serveur
+import { ChannelType, EmbedBuilder, PermissionFlagsBits as P } from 'discord.js';
+import { field as f } from './ui.js';
+import { addNote, casierEmbed, verificationPanel } from '../features/security.js';
+import { claimDaily, leaderboardEmbed, profileCard, shopMessage } from '../features/levels.js';
+import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../features/aiExtras.js';
+import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUndercover } from '../games/soirees.js';
+import { backupsOf, createBackup, restoreConfirm, welcomeCard } from '../features/community.js';
 import { PANELS } from './catalog.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
@@ -26,6 +33,136 @@ addActions('pannel', 'Créer', [
         image: false, thumbnail: true,
       });
       return interaction.reply({ embeds: [embed], files, ...PRIVATE });
+    },
+  },
+]);
+
+// ===================== /sanction : casier et notes =====================
+addActions('sanction', 'Suivi des membres', [
+  {
+    id: 'casier', label: 'Casier d’un membre', emoji: '🗂️', desc: 'Sanctions, notes du staff, état', fields: [f.user('membre', 'Membre', { req: true })],
+    run: async (client, interaction, v) => interaction.reply({ embeds: [await casierEmbed(interaction.guild, v.membre.user)], ...PRIVATE }),
+  },
+  {
+    id: 'note', label: 'Ajouter une note', emoji: '🗒️', desc: 'Visible seulement par le staff, dans le casier', fields: [f.user('membre', 'Membre', { req: true }), f.para('note', 'Note', { req: true, max: 500 })],
+    run: async (client, interaction, v) => {
+      await addNote(interaction.guildId, v.membre.user.id, interaction.user.id, v.note);
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(`🗒️ Note ajoutée au casier de ${v.membre.user}.`)], ...PRIVATE });
+    },
+  },
+]);
+
+// ===================== /pannel : vérification =====================
+addActions('pannel', 'Créer', [
+  {
+    id: 'verification', label: 'Panneau de vérification', emoji: '🛡️', desc: 'Bouton « Je suis humain » + petit calcul', fields: [f.channel('salon', 'Salon où publier', { req: true, types: [ChannelType.GuildText] })],
+    run: async (client, interaction, v) => {
+      if (!v.salon.permissionsFor(interaction.guild.members.me)?.has([P.SendMessages, P.EmbedLinks])) return interaction.reply({ content: `❌ Je ne peux pas écrire dans ${v.salon}.`, ...PRIVATE });
+      await v.salon.send(verificationPanel(interaction.guild));
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x3dff9a).setDescription(`✅ Panneau publié dans ${v.salon}.
+-# Règle le rôle donné dans le tableau de bord › Mon serveur › Sécurité (ou il n’y aura rien à gagner).`)], ...PRIVATE });
+    },
+  },
+]);
+
+// ===================== /serveur : niveaux, récompense du jour, boutique =====================
+addActions('serveur', 'Niveaux et boutique', [
+  {
+    id: 'profil', label: 'Carte de profil', emoji: '🪪', desc: 'Niveau, rang, XP, jetons, badges', fields: [f.user('membre', 'Membre (vide = toi)')],
+    run: async (client, interaction, v) => {
+      await interaction.deferReply(PRIVATE);
+      const card = await profileCard(interaction.guild, v.membre?.user ?? interaction.user);
+      return interaction.editReply({ files: [card] });
+    },
+  },
+  { id: 'classement', label: 'Classement des niveaux', emoji: '📈', run: async (client, interaction) => interaction.reply({ embeds: [await leaderboardEmbed(interaction.guild)], ...PRIVATE }) },
+  {
+    id: 'daily', label: 'Récompense du jour', emoji: '🎁', desc: 'Des jetons chaque jour, plus si tu enchaînes',
+    run: async (client, interaction) => {
+      const r = await claimDaily(interaction.guildId, interaction.user.id);
+      const embed = new EmbedBuilder().setColor(r.ok ? 0x3dff9a : 0xffb020).setDescription(r.ok
+        ? `🎁 **+${r.amount.toLocaleString('fr-FR')} jetons** · série de **${r.streak} jour(s)** 🔥
+Solde : 🪙 ${r.balance.toLocaleString('fr-FR')}`
+        : '⏳ Déjà prise aujourd’hui : reviens après minuit pour garder ta série.');
+      return interaction.reply({ embeds: [embed], ...PRIVATE });
+    },
+  },
+  { id: 'boutique', label: 'Boutique', emoji: '🛒', desc: 'Rôles à acheter, rôle personnalisé', run: async (client, interaction) => interaction.reply({ ...(await shopMessage(interaction.guild, interaction.user.id)), ...PRIVATE }) },
+]);
+
+// ===================== IA : mémoire, punchline, FAQ =====================
+addActions('ia', 'Demander à l’IA', [
+  { id: 'memoire', label: 'Ce que l’IA sait de moi', emoji: '🧠', desc: 'Voir ou effacer ses souvenirs', run: async (client, interaction) => interaction.reply({ ...(await memoryMessage(interaction.user)), ...PRIVATE }) },
+]);
+addActions('jeux', 'Jeux de groupe', [
+  {
+    id: 'punchline', label: 'Noter une punchline', emoji: '🎤', desc: 'Le jury IA note sur 10', fields: [f.para('punchline', 'Ta punchline', { req: true, max: 800 }), f.bool('public', 'La montrer à tout le salon ?')],
+    run: async (client, interaction, v) => {
+      await interaction.deferReply(v.public ? {} : PRIVATE);
+      const embed = await ratePunchline(v.punchline, interaction.member?.displayName ?? interaction.user.username);
+      return interaction.editReply({ embeds: [embed] });
+    },
+  },
+]);
+addActions('pannel', 'FAQ du salon d’aide', [
+  {
+    id: 'faq-ajouter', label: 'Ajouter à la FAQ', emoji: '📚', desc: 'L’IA répondra toute seule à cette question', perm: P.ManageMessages,
+    fields: [f.text('question', 'Question', { req: true, max: 300 }), f.para('reponse', 'Réponse', { req: true, max: 1500 })],
+    run: async (client, interaction, v) => {
+      const n = await addFaq(interaction.guildId, v.question, v.reponse);
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5ff0ff).setDescription(`📚 Ajouté à la FAQ (${n} questions). Règle le salon d’aide dans le tableau de bord › Mon serveur › IA.`)], ...PRIVATE });
+    },
+  },
+  {
+    id: 'faq-voir', label: 'Voir / retirer de la FAQ', emoji: '🗂️', perm: P.ManageMessages, fields: [f.int('retirer', 'Numéro à retirer (vide = juste voir)', { min: 1, top: 60 })],
+    run: async (client, interaction, v) => {
+      if (v.retirer) await removeFaq(interaction.guildId, v.retirer - 1);
+      const list = await faqEntries(interaction.guildId);
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5ff0ff).setTitle(`📚 FAQ (${list.length})`)
+        .setDescription(list.length ? list.map((e, i) => `**${i + 1}.** ${e.q}
+-# ${e.a.slice(0, 120)}`).join('\n').slice(0, 4000) : 'Vide : ajoute des questions, ou réponds aux membres dans le salon d’aide (en « répondre ») pour que l’IA apprenne.')], ...PRIVATE });
+    },
+  },
+]);
+
+// ===================== /jeux : jeux de soirée =====================
+addActions('jeux', 'Jeux de groupe', [
+  { id: 'undercover', label: 'Undercover', emoji: '🕶️', desc: 'Undercovers + Mister White, 4 joueurs min', run: (client, interaction) => startUndercover(interaction) },
+  { id: 'petitbac', label: 'Petit Bac', emoji: '📝', desc: 'Une lettre, 5 catégories, l’IA vérifie', run: (client, interaction) => startPetitBac(interaction) },
+  { id: 'actionverite', label: 'Action ou vérité', emoji: '🎲', desc: 'Défis gentils, les autres valident', run: (client, interaction) => startActionVerite(interaction) },
+  { id: 'quizserveur', label: 'Quiz du serveur', emoji: '🧭', desc: 'Des questions sur le serveur et ses membres', run: (client, interaction) => startQuizServeur(interaction) },
+]);
+addActions('jeux', 'Jeux musicaux et petits jeux', [
+  { id: 'pendu', label: 'Pendu musical', emoji: '🎵', desc: 'Le titre lettre par lettre, l’extrait en indice', run: (client, interaction) => startPendu(interaction) },
+]);
+
+// ===================== /pannel : bienvenue et sauvegardes =====================
+addActions('pannel', 'Serveur', [
+  {
+    id: 'bienvenue-test', label: 'Voir ma carte de bienvenue', emoji: '👋', desc: 'Aperçu de ce que reçoivent les nouveaux',
+    run: async (client, interaction) => {
+      await interaction.deferReply(PRIVATE);
+      return interaction.editReply({ content: 'Voici la carte que reçoit un nouveau membre (réglages : tableau de bord › Mon serveur › Bienvenue).', files: [await welcomeCard(interaction.member)] });
+    },
+  },
+  {
+    id: 'sauvegarder', label: 'Sauvegarder le serveur', emoji: '💾', desc: 'Rôles, salons et permissions (3 gardées)', perm: P.Administrator,
+    run: async (client, interaction) => {
+      await interaction.deferReply(PRIVATE);
+      const b = await createBackup(interaction.guild, interaction.user.id);
+      return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x3dff9a).setTitle('💾 Sauvegarde faite').setDescription(`${b.roles} rôles et ${b.channels} salons (avec leurs permissions). En cas de raid ou d’erreur : **Restaurer une sauvegarde**.`)] });
+    },
+  },
+  {
+    id: 'restaurer', label: 'Restaurer une sauvegarde', emoji: '♻️', desc: 'Recrée ce qui manque, ne supprime rien', perm: P.Administrator,
+    fields: async (interaction) => {
+      const list = await backupsOf(interaction.guildId);
+      return [f.choice('sauvegarde', 'Sauvegarde', list.length ? list.map((b) => ({ label: `${new Date(b.at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })} · ${b.roles} rôles, ${b.channels} salons`, value: b.id })) : [{ label: 'Aucune sauvegarde', value: 'aucune' }], { req: true })];
+    },
+    run: async (client, interaction, v) => {
+      const entry = (await backupsOf(interaction.guildId)).find((b) => b.id === v.sauvegarde);
+      if (!entry) return interaction.reply({ content: '❌ Aucune sauvegarde : fais d’abord **Sauvegarder le serveur**.', ...PRIVATE });
+      return interaction.reply({ ...restoreConfirm(entry), ...PRIVATE });
     },
   },
 ]);

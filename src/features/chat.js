@@ -1,3 +1,4 @@
+import { factsPrompt, learnFacts } from './aiExtras.js';
 import { config } from '../config.js';
 import { chat } from '../ai/gemini.js';
 import { systemPrompt } from '../ai/persona.js';
@@ -39,6 +40,8 @@ export async function askAI({
   // Consignes données par le staff depuis le tableau de bord (événements du moment, règles du serveur…)
   if (config.ai.extraInstructions) system += `\n\nCONSIGNES DU SERVEUR (données par le staff)\n${config.ai.extraInstructions}`;
   if (instructions) system += `\n\nCONSIGNE POUR CETTE DEMANDE\n${instructions}`;
+  // Ce que l'IA a retenu sur ce membre (ses goûts, ses jeux…)
+  system += await factsPrompt(guild?.id, user.id, displayName(member, user)).catch(() => '');
 
   const { text: raw, sources } = await chat({
     history,
@@ -55,6 +58,7 @@ export async function askAI({
     : "J'ai pas réussi à formuler une réponse, reformule stp 🙏");
 
   if (historyKey) remember(historyKey, userText, answer);
+  learnFacts(guild?.id, user, prompt).catch(() => {});
 
   let mentionLine = '';
   let allowedUsers = [];

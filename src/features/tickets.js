@@ -359,6 +359,37 @@ async function handleTicket(client, interaction) {
   return undefined;
 }
 
+/**
+ * Ouvre un ticket sans panneau (contestation d'une sanction…) : salon privé membre + staff, mêmes boutons.
+ * @returns {Promise<import('discord.js').TextChannel>}
+ */
+export async function openCustomTicket(guild, user, { title, description, categoryId, staffRoleId, prefix = 'ticket' }) {
+  const g = await guildData(guild.id);
+  const me = guild.members.me;
+  let category = categoryId ? guild.channels.cache.get(categoryId) : null;
+  category ??= guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && /tickets?|appels?|contestations?/i.test(c.name))
+    ?? await guild.channels.create({ name: '⚖️ Contestations', type: ChannelType.GuildCategory });
+  g.counter += 1;
+  const number = String(g.counter).padStart(4, '0');
+  const overwrites = [
+    { id: guild.roles.everyone.id, type: OverwriteType.Role, deny: [P.ViewChannel] },
+    { id: user.id, type: OverwriteType.Member, allow: [P.ViewChannel, P.SendMessages, P.AttachFiles, P.ReadMessageHistory] },
+    { id: me.id, type: OverwriteType.Member, allow: [P.ViewChannel, P.SendMessages, P.ManageChannels, P.EmbedLinks, P.AttachFiles, P.ReadMessageHistory] },
+  ];
+  if (staffRoleId && guild.roles.cache.has(staffRoleId)) overwrites.push({ id: staffRoleId, type: OverwriteType.Role, allow: [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.ManageMessages] });
+  const channel = await guild.channels.create({ name: `${prefix}-${number}-${slug(user.username)}`, parent: category.id, permissionOverwrites: overwrites, type: ChannelType.GuildText });
+  g.open[channel.id] = { userId: user.id, number, panelId: null, openedAt: Date.now(), claimedBy: null };
+  persist();
+  countEvent(guild.id, 'tickets');
+  await channel.send({
+    content: `${user}${staffRoleId ? ` · <@&${staffRoleId}>` : ''}`,
+    embeds: [new EmbedBuilder().setColor(0xffc94d).setTitle(`${title} · n°${number}`).setDescription(cut(description, 4000)).setTimestamp()],
+    components: [ticketButtons()],
+    allowedMentions: { users: [user.id], roles: staffRoleId ? [staffRoleId] : [] },
+  });
+  return channel;
+}
+
 /** Tous les boutons, menus et fenêtres des tickets et des annonces. */
 export async function handleTicketComponent(client, interaction) {
   if (interaction.customId.startsWith('tkd:')) return handleDraft(client, interaction);

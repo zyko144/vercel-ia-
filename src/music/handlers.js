@@ -102,7 +102,7 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
 const stamp = (tracks, userId) => tracks.map((t) => ({ ...t, requestedBy: userId, streamUrl: null }));
 
 /** Sons d'une radio : un style demandé, sinon le top du moment. */
-async function radioTracks(style, userId) {
+export async function radioTracks(style, userId) {
   let tracks = [];
   if (style) {
     // Une playlist du style demandé donne des sons cohérents

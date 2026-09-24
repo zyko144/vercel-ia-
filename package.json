@@ -17,7 +17,13 @@
     "test:voiceguard": "node tools/test-voiceguard.mjs",
     "test:panels": "node tools/test-panels.mjs",
     "test:tickets": "node tools/test-tickets.mjs",
-    "test:premium": "node tools/test-premium.mjs"
+    "test:premium": "node tools/test-premium.mjs",
+    "test:security": "node tools/test-security.mjs",
+    "test:levels": "node tools/test-levels.mjs",
+    "test:voice-extras": "node tools/test-voice-extras.mjs",
+    "test:ai-extras": "node tools/test-ai-extras.mjs",
+    "test:soirees": "node tools/test-soirees.mjs",
+    "test:payments": "node tools/test-payments.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

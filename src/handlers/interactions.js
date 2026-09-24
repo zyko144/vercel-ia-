@@ -31,6 +31,10 @@ import { handleTicketComponent, isTicketComponent } from '../features/tickets.js
 import { handleBuildComponent, isBuildComponent } from '../features/build.js';
 import { countEvent } from '../features/weekly.js';
 import { handlePremiumComponent, isPremiumComponent } from '../features/premiumPanel.js';
+import { handleSecurityComponent, isSecurityComponent } from '../features/security.js';
+import { handleShopComponent, isShopComponent } from '../features/levels.js';
+import { handleMemoryComponent, isMemoryComponent } from '../features/aiExtras.js';
+import { handleBackupComponent, handleSuggestionComponent, isBackupComponent, isSuggestionComponent } from '../features/community.js';
 
 const EXPLAIN_LEVELS = {
   simple: "Explique comme à quelqu'un de 12 ans : mots simples, une analogie de la vie de tous les jours, pas de jargon.",
@@ -53,6 +57,11 @@ export async function onInteraction(client, interaction) {
     if (isTicketComponent(interaction)) return await handleTicketComponent(client, interaction);
     if (isBuildComponent(interaction)) return await handleBuildComponent(client, interaction);
     if (isPremiumComponent(interaction)) return await handlePremiumComponent(client, interaction);
+    if (isSecurityComponent(interaction)) return await handleSecurityComponent(client, interaction);
+    if (isShopComponent(interaction)) return await handleShopComponent(client, interaction);
+    if (isMemoryComponent(interaction)) return await handleMemoryComponent(client, interaction);
+    if (isSuggestionComponent(interaction)) return await handleSuggestionComponent(client, interaction);
+    if (isBackupComponent(interaction)) return await handleBackupComponent(client, interaction);
     if (isGameComponent(interaction)) return await handleGameComponent(client, interaction);
     if (isBlindTestComponent(interaction)) return await handleBlindTestComponent(client, interaction);
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
