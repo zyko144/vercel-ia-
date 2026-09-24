@@ -77,6 +77,21 @@ const JITTER_MAX_WAIT_MS = 650; // au-delà, on parle quand même (on garde la r
 const FRAME_BYTES = 3_840; // 20 ms de son Discord (48 kHz, stéréo)
 const FILLER = Buffer.alloc(FRAME_BYTES);
 
+/**
+ * Envoie du texte à une session Gemini Live pour qu'elle réponde à voix haute.
+ * Les modèles live récents n'écoutent le texte que par l'entrée « temps réel » : « client_content »
+ * ne sert plus qu'à charger un historique au départ, et y envoyer une phrase ne produisait aucun son
+ * (le narrateur restait muet). On garde l'ancienne voie en secours pour les anciens modèles.
+ */
+function sendText(live, text) {
+  try {
+    live.sendRealtimeInput({ text });
+  } catch (err) {
+    console.warn('[vocal] envoi du texte en temps réel refusé, ancienne méthode :', err.message);
+    live.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
+  }
+}
+
 // ===================== Bot vocal =====================
 
 /** Émet un court silence : sans ça, Discord n'envoie jamais la voix des autres au bot. */
@@ -306,7 +321,7 @@ export async function startVoiceSession({
   for (let i = 0; i < 5; i++) sendAudio(session, Buffer.alloc(SEND_CHUNK_BYTES));
   listen(session, conn);
   // Jeu : l'IA parle la première (elle lance l'histoire sans attendre qu'on lui parle)
-  if (kickoff) session.live?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: kickoff }] }], turnComplete: true });
+  if (kickoff && session.live) sendText(session.live, kickoff);
   console.log(`[vocal] ${title ?? 'conversation'} avec ${listenAll ? 'tout le salon' : userName} (${userId})`);
   return { started: true };
 }
@@ -834,7 +849,11 @@ export function createNarrator({ voice = 'Charon', style = 'Tu es un narrateur d
     });
     if (!session) return;
     await new Promise((resolve) => {
-      const guard = setTimeout(() => finish(), Math.min(90_000, 8_000 + text.length * 120));
+      const guard = setTimeout(() => {
+        // Rien entendu : on le dit dans les journaux (quota, modèle refusé…) au lieu de rester muet sans trace
+        if (!turn?.output && !turn?.buffered.length) console.warn(`[narrateur] aucun son reçu de Gemini pour « ${text.slice(0, 60)} » (modèle ${config.voiceAi.model})`);
+        finish();
+      }, Math.min(90_000, 8_000 + text.length * 120));
       const finish = () => {
         clearTimeout(guard);
         state.player.off(AudioPlayerStatus.Idle, onIdle);
@@ -847,7 +866,7 @@ export function createNarrator({ voice = 'Charon', style = 'Tu es un narrateur d
       turn = { output: null, buffered: [], last: 0, finish };
       state.player.on(AudioPlayerStatus.Idle, onIdle);
       try {
-        session.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
+        sendText(session, `Lis ce texte à voix haute : ${text}`);
       } catch (err) {
         console.warn('[narrateur] envoi :', err.message);
         live = null;
