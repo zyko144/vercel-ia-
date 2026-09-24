@@ -21,6 +21,7 @@ import { loadServers } from './features/premium.js';
 import { loadGuildConfig } from './features/guildConfig.js';
 import { attachSecurityEvents } from './features/security.js';
 import { startLevelLoops } from './features/levels.js';
+import { startVoiceExtras } from './features/voiceExtras.js';
 import { startWeeklyReports } from './features/weekly.js';
 import { ensureBinaries } from './music/binaries.js';
 import { handleMusicVoiceState } from './music/handlers.js';
@@ -67,6 +68,7 @@ client.once(Events.ClientReady, async (c) => {
   lavalink.init(c);
   startVoiceGuard(c);
   startLevelLoops(c);
+  startVoiceExtras(c);
   startWeeklyReports(c).catch((err) => console.warn('[rapport] démarrage :', err.message));
   startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
