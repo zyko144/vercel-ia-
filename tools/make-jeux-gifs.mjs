@@ -9,9 +9,12 @@
  * Les GIFs sont commités dans assets/jeux/ et envoyés en MP : rien n'est encodé
  * pendant une partie, le rôle part sans attente.
  *
- * Chaque carte arrive face cachée, se retourne, puis le dessin du rôle apparaît
- * avec ses particules (braises du loup, étoiles de la voyante…). Les dessins sont
- * faits à la main en SVG : les emojis, eux, sortaient en silhouettes noires.
+ * La carte montre son rôle dès la première image, puis vit en boucle : halo qui
+ * respire, particules (braises du loup, étoiles de la voyante…), reflet qui passe.
+ * Quand Discord n'anime pas les GIF (réglage « lire les GIF automatiquement »
+ * coupé, fenêtre pas au premier plan), il affiche la première image : elle doit
+ * donc être la face du rôle, jamais le dos. Les dessins sont faits à la main en
+ * SVG : les emojis, eux, sortaient en silhouettes noires.
  */
 import { execFile } from 'node:child_process';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
@@ -33,7 +36,7 @@ process.env.FONTCONFIG_FILE = fontsConf;
 const { default: sharp } = await import('sharp');
 
 const FPS = 15;
-const DURATION = 4.4; // secondes : dos 0,7 s · retournement 0,55 s · révélation
+const DURATION = 3.6; // secondes : une boucle, sans coupure visible
 const W = 480;
 const H = 300;
 const CARD = { x: 16, y: 14, w: W - 32, h: H - 28, r: 22 };
@@ -215,7 +218,7 @@ function particles(kind, c, t, seed, strength) {
   for (let i = 0; i < count; i++) {
     const x0 = CARD.x + 10 + r() * (CARD.w - 20);
     const y0 = CARD.y + r() * CARD.h;
-    const speed = 0.35 + r() * 0.65;
+    const speed = 1 + Math.floor(r() * 2); // 1 ou 2 tours par boucle : la boucle se referme sans saut
     const size = 1 + r() * 2.6;
     const ph = r();
     const life = (t * speed + ph) % 1; // 0 -> 1 puis recommence
@@ -302,19 +305,19 @@ function back(design, t) {
     ${frame(c, 0.6)}`;
 }
 
-function front(design, name, t, sinceReveal) {
+function front(design, name, t, sinceReveal, sweepP = 0) {
   const c = design.colors;
   const pop = easeOutBack(phase(sinceReveal, 0.05, 0.45));
   const nameIn = ease(phase(sinceReveal, 0.2, 0.45));
   const teamIn = ease(phase(sinceReveal, 0.1, 0.4));
   const tagIn = ease(phase(sinceReveal, 0.4, 0.5));
-  const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 1.2);
-  const sweepAt = phase(sinceReveal, 0.9, 0.8);
-  const sweep = -220 + sweepAt * 900;
+  const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+  const sweep = -220 + sweepP * 900;
   const bob = Math.sin(t * Math.PI * 2) * 2.5;
   const nameSize = Math.min(32, Math.floor(184 / (design.name.length * 0.8)));
   const lines = wrap(design.tagline, 27);
-  const ringSpin = (t * 40) % 360;
+  // l'anneau pointillé tourne d'exactement un motif (3 + 7) par boucle
+  const ringSpin = t * (10 * 360) / (2 * Math.PI * (MEDAL.r - 8));
 
   return `
     <rect x="${CARD.x}" y="${CARD.y}" width="${CARD.w}" height="${CARD.h}" rx="${CARD.r}" fill="url(#bg)"/>
@@ -344,33 +347,16 @@ function front(design, name, t, sinceReveal) {
     ${frame(c, 0.6 + pulse * 0.4)}`;
 }
 
-const BACK_END = 0.7;
-const FLIP_LEN = 0.55;
-
-/** Une image de l'animation, au temps `t` (secondes). */
+/** Une image de la boucle, au temps `seconds`. */
 function scene(name, design, seconds) {
   const c = design.colors;
-  const flip = ease(phase(seconds, BACK_END, FLIP_LEN)); // 0 -> 1
-  const angle = flip * Math.PI;
-  const sx = Math.max(0.02, Math.abs(Math.cos(angle)));
-  const lift = Math.sin(angle); // la carte « monte » pendant qu'elle tourne
-  const showFront = flip >= 0.5;
-  const sinceReveal = seconds - (BACK_END + FLIP_LEN / 2);
-  const cx = W / 2;
-  const cy = H / 2;
   const t = seconds / DURATION;
-  const face = showFront ? front(design, name, t, sinceReveal) : back(design, t);
-  // Un éclair de lumière quand la carte finit de se retourner.
-  const flash = showFront ? clamp(1 - sinceReveal / 0.35) * 0.55 : 0;
-
+  const face = front(design, name, t, 10, phase(t, 0.3, 0.32));
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   ${defs(c)}
   <rect width="${W}" height="${H}" fill="#07050b"/>
-  <ellipse cx="${cx}" cy="${H - 12}" rx="${(180 * sx).toFixed(1)}" ry="10" fill="#000" opacity="${(0.6 - lift * 0.3).toFixed(2)}" filter="url(#shadow)"/>
-  <g transform="translate(${cx} ${cy - lift * 8}) scale(${sx.toFixed(4)} ${(1 + lift * 0.06).toFixed(4)}) translate(${-cx} ${-cy})">
-    ${face}
-  </g>
-  ${flash > 0 ? `<rect width="${W}" height="${H}" fill="${c.light}" opacity="${flash.toFixed(2)}"/>` : ''}
+  <ellipse cx="${W / 2}" cy="${H - 12}" rx="180" ry="10" fill="#000" opacity="0.6" filter="url(#shadow)"/>
+  ${face}
 </svg>`;
 }
 
@@ -390,13 +376,13 @@ async function build(name, design, preview) {
   for (let i = 0; i < frames; i++) {
     await sharp(Buffer.from(scene(name, design, i / FPS))).png().toFile(path.join(dir, `${String(i).padStart(3, '0')}.png`));
   }
-  if (preview) await sharp(Buffer.from(scene(name, design, DURATION - 0.3))).png().toFile(path.join(process.env.APERCU_DIR ?? OUT, `apercu-${name}.png`));
+  if (preview) await sharp(Buffer.from(scene(name, design, 0))).png().toFile(path.join(process.env.APERCU_DIR ?? OUT, `apercu-${name}.png`));
   const input = path.join(dir, '%03d.png');
   const palette = path.join(dir, 'palette.png');
   const out = path.join(OUT, `${name}.gif`);
   await run(ffmpeg, ['-y', '-framerate', String(FPS), '-i', input, '-vf', 'palettegen=max_colors=96:stats_mode=full', palette]);
-  // -loop -1 : l'animation se joue une fois et s'arrête sur la carte retournée.
-  await run(ffmpeg, ['-y', '-framerate', String(FPS), '-i', input, '-i', palette, '-lavfi', 'paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', '-loop', '-1', out]);
+  // -loop 0 : en boucle. La première image est déjà la face du rôle.
+  await run(ffmpeg, ['-y', '-framerate', String(FPS), '-i', input, '-i', palette, '-lavfi', 'paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', '-loop', '0', out]);
   const { size } = await stat(out);
   console.log(`  ${name}.gif — ${(size / 1024).toFixed(0)} Ko`);
   return size;

@@ -8,7 +8,7 @@ import { config } from '../config.js';
 const DIR = path.resolve('assets/jeux');
 // À augmenter quand les cartes sont refaites : Discord garde les images en cache
 // par adresse, pendant des jours, et montrerait encore les anciennes.
-const CARD_VERSION = 2;
+const CARD_VERSION = 3;
 
 /**
  * La carte d'un rôle : par URL quand le bot est en ligne (Discord la met en cache,

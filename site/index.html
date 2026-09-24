@@ -323,38 +323,32 @@ h1, h2, h3 { margin: 0; font-weight: 400; text-wrap: balance; }
 .voix span i { width: 3px; height: 30%; background: currentColor; border-radius: 2px; animation: parle 1s ease-in-out infinite; }
 .voix span i:nth-child(2) { animation-delay: -0.2s; } .voix span i:nth-child(3) { animation-delay: -0.5s; } .voix span i:nth-child(4) { animation-delay: -0.7s; } .voix span i:nth-child(5) { animation-delay: -0.35s; }
 @keyframes parle { 0%, 100% { height: 25%; } 50% { height: 100%; } }
-/* la carte du MP qui se retourne (sans animation : déjà retournée) */
-.retourne { perspective: 1000px; margin-top: 6px; }
-.retourne .faces { position: relative; aspect-ratio: 448 / 272; transform-style: preserve-3d; transform: rotateY(180deg); }
-.anime .retourne .faces { transform: rotateY(0deg); }
-.retourne img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 6px; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-.retourne img.face { transform: rotateY(180deg); }
+/* Les cartes se retournent en 2D (on écrase l'image, on change d'image, on la rouvre) :
+   ça marche dans tous les navigateurs, et sans animation la face du rôle est affichée. */
+.carte-img { display: block; width: 100%; aspect-ratio: 448 / 272; object-fit: cover; border-radius: 6px; background: #0b0810; }
+.dc-embed .carte-img { margin-top: 6px; }
 
 /* l'éventail des rôles */
-.eventail { position: relative; height: clamp(300px, 34vw, 440px); margin-top: 70px; perspective: 1400px; }
-.eventail .carte { position: absolute; left: 50%; top: 14%; width: clamp(200px, 25vw, 320px); aspect-ratio: 448 / 272; margin-left: calc(clamp(200px, 25vw, 320px) / -2); transform-style: preserve-3d; transform: rotateY(180deg); }
-.anime .eventail .carte { transform: none; }
-.eventail .carte img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 10px; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 0 30px 50px -20px #000; }
-.eventail .carte img.face { transform: rotateY(180deg); }
+.eventail { position: relative; height: clamp(300px, 34vw, 440px); margin-top: 70px; }
+.eventail .carte { position: absolute; left: 50%; top: 14%; width: clamp(200px, 25vw, 320px); margin-left: calc(clamp(200px, 25vw, 320px) / -2); }
+.eventail .carte .carte-img { border-radius: 10px; box-shadow: 0 30px 50px -20px #000; }
 .legende-roles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
 .legende-roles div { font: 400 15px/1.45 var(--ui); color: #b9c0da; }
 .legende-roles b { display: block; font: 400 22px/1.1 var(--titre); color: var(--lune); margin-bottom: 4px; }
 @media (max-width: 860px) {
   .legende-roles { grid-template-columns: 1fr 1fr; }
-  .eventail { height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; perspective: none; }
-  .eventail .carte, .anime .eventail .carte { position: relative; left: auto; top: auto; width: auto; margin: 0; transform: none !important; }
-  .eventail .carte img.dos { display: none; }
-  .eventail .carte img.face { position: relative; transform: none; }
+  .eventail { height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .eventail .carte { position: relative; left: auto; top: auto; width: auto; margin: 0; transform: none !important; }
 }
 
 /* ============================ chapitre IV : l'imposteur ============================ */
 .table-mots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 56px; margin-bottom: 40px; }
-.mot { position: relative; aspect-ratio: 3 / 4; perspective: 900px; }
-.mot .faces { position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateY(180deg); }
-.anime .mot .faces { transform: none; }
-.mot .dos, .mot .recto { position: absolute; inset: 0; border-radius: 14px; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: grid; place-items: center; text-align: center; padding: 16px; }
+.mot { position: relative; aspect-ratio: 3 / 4; }
+.mot .faces { position: absolute; inset: 0; }
+.mot .dos, .mot .recto { position: absolute; inset: 0; border-radius: 14px; display: grid; place-items: center; text-align: center; padding: 16px; }
+.mot.retourne .dos, .mot:not(.retourne) .recto { visibility: hidden; }
 .mot .dos { background: radial-gradient(circle at 50% 40%, #2a1440, #0d0616); border: 1px solid rgba(192, 139, 255, 0.4); box-shadow: inset 0 0 0 6px #0d0616, inset 0 0 0 7px rgba(242, 196, 109, 0.45); font: 700 64px/1 var(--lettrine); color: rgba(242, 196, 109, 0.6); }
-.mot .recto { transform: rotateY(180deg); background: linear-gradient(170deg, var(--parchemin), var(--parchemin-2)); color: var(--encre); box-shadow: inset 0 0 0 6px var(--parchemin), inset 0 0 0 7px rgba(43, 29, 16, 0.35), 0 30px 50px -24px #000; transition: box-shadow 0.5s; }
+.mot .recto { background: linear-gradient(170deg, var(--parchemin), var(--parchemin-2)); color: var(--encre); box-shadow: inset 0 0 0 6px var(--parchemin), inset 0 0 0 7px rgba(43, 29, 16, 0.35), 0 30px 50px -24px #000; transition: box-shadow 0.5s; }
 .mot .recto small { position: absolute; top: 18px; left: 0; right: 0; font: 600 11px/1 var(--ui); letter-spacing: 0.24em; text-transform: uppercase; opacity: 0.6; }
 .mot .recto strong { font: 400 clamp(30px, 3.4vw, 46px)/1 var(--titre); }
 .mot .recto em { position: absolute; bottom: 18px; left: 0; right: 0; font: italic 400 16px/1.2 var(--conte); opacity: 0.75; }
@@ -873,7 +867,7 @@ Départ automatique <span class="dc-ts">dans 2 minutes</span>, ou quand <span cl
                   <div class="titre">🐺 Tu es Loup-garou</div>
                   <div class="desc"><i>Chaque nuit, avec les autres loups, tu choisis une victime. Le jour, fais-toi passer pour un villageois.</i></div>
                   <div class="champs"><div class="large"><b>🎯 Ton objectif</b>Éliminer les villageois jusqu’à être aussi nombreux qu’eux.</div><div class="large"><b>🐺 Ta meute</b>Tu es le seul loup : personne pour couvrir tes erreurs.</div></div>
-                  <div class="retourne"><div class="faces" id="lg-carte"><img class="dos" src="cartes/dos-loupgarou.webp" alt=""><img class="face" src="cartes/loup.webp" alt="Carte Loup-garou"></div></div>
+                  <img class="carte-img" id="lg-carte" src="cartes/loup.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Loup-garou" width="448" height="272">
                   <div class="pied">Le jour, fais-toi passer pour un villageois 🤫</div>
                 </div>
                 <div class="dc-lignes"><div class="dc-ligne"><span class="dc-bt lien">🎲 Aller à la partie</span></div></div>
@@ -947,11 +941,11 @@ Les autres, dormez bien 😴</div>
 
   <div class="wrap" style="position:relative">
     <div class="eventail" id="eventail" aria-label="Les cartes de rôle">
-      <div class="carte"><img class="dos" src="cartes/dos-loupgarou.webp" alt=""><img class="face" src="cartes/villageois.webp" alt="Villageois" loading="lazy"></div>
-      <div class="carte"><img class="dos" src="cartes/dos-loupgarou.webp" alt=""><img class="face" src="cartes/chasseur.webp" alt="Chasseur" loading="lazy"></div>
-      <div class="carte"><img class="dos" src="cartes/dos-loupgarou.webp" alt=""><img class="face" src="cartes/loup.webp" alt="Loup-garou" loading="lazy"></div>
-      <div class="carte"><img class="dos" src="cartes/dos-loupgarou.webp" alt=""><img class="face" src="cartes/voyante.webp" alt="Voyante" loading="lazy"></div>
-      <div class="carte"><img class="dos" src="cartes/dos-loupgarou.webp" alt=""><img class="face" src="cartes/sorciere.webp" alt="Sorcière" loading="lazy"></div>
+      <div class="carte"><img class="carte-img" src="cartes/villageois.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Villageois" width="448" height="272"></div>
+      <div class="carte"><img class="carte-img" src="cartes/chasseur.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Chasseur" width="448" height="272"></div>
+      <div class="carte"><img class="carte-img" src="cartes/loup.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Loup-garou" width="448" height="272"></div>
+      <div class="carte"><img class="carte-img" src="cartes/voyante.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Voyante" width="448" height="272"></div>
+      <div class="carte"><img class="carte-img" src="cartes/sorciere.webp" data-dos="cartes/dos-loupgarou.webp" alt="Carte de rôle : Sorcière" width="448" height="272"></div>
     </div>
     <div class="legende-roles">
       <div><b>Villageois</b>Pas de pouvoir, mais un vote. Trouve les loups.</div>
@@ -984,10 +978,10 @@ Les autres, dormez bien 😴</div>
       </div>
     </div>
     <div class="table-mots" id="table-mots">
-      <div class="mot"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« ça se partage »</em></div></div><span class="joueur">Lina</span></div>
-      <div class="mot"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« Italie »</em></div></div><span class="joueur">Sam</span></div>
-      <div class="mot intrus"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Burger</strong><em>« avec des frites »</em></div></div><span class="joueur">Kiko, l’intrus</span></div>
-      <div class="mot"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« le four »</em></div></div><span class="joueur">Rio</span></div>
+      <div class="mot retourne"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« ça se partage »</em></div></div><span class="joueur">Lina</span></div>
+      <div class="mot retourne"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« Italie »</em></div></div><span class="joueur">Sam</span></div>
+      <div class="mot retourne intrus"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Burger</strong><em>« avec des frites »</em></div></div><span class="joueur">Kiko, l’intrus</span></div>
+      <div class="mot retourne"><div class="faces"><div class="dos" aria-hidden="true">?</div><div class="recto"><small>Ton mot secret</small><strong>Pizza</strong><em>« le four »</em></div></div><span class="joueur">Rio</span></div>
     </div>
   </div>
 </section>
@@ -1550,6 +1544,25 @@ function spotify(p) {
   lignesParoles.forEach((l, i) => { l.classList.toggle('on', i === ligne); l.classList.toggle('dit', i < ligne); });
 }
 
+/* ============================ cartes qui se retournent ============================ */
+// p de 0 à 1 : la carte s'écrase (dos), change de face à la moitié, puis se rouvre (face).
+// Uniquement des transformations 2D : aucun navigateur ne peut « perdre » l'image.
+function retourner(el, p, { dos, face } = {}) {
+  const montreFace = p >= 0.5;
+  if (el.tagName === 'IMG') {
+    const voulu = montreFace ? face : dos;
+    if (voulu && el.getAttribute('src') !== voulu) el.setAttribute('src', voulu);
+  } else el.classList.toggle('retourne', montreFace);
+  el.style.transform = `scaleX(${Math.max(0.02, Math.abs(Math.cos(p * Math.PI))).toFixed(3)})`;
+}
+function preparerCarte(img) {
+  const face = img.getAttribute('src');
+  const dos = img.dataset.dos;
+  // on précharge la face pour que l'échange soit instantané
+  new Image().src = face;
+  return { dos, face };
+}
+
 /* ============================ barre du haut ============================ */
 const barre = $('#barre');
 addEventListener('scroll', () => barre.classList.toggle('pleine', scrollY > 40), { passive: true });
@@ -1713,12 +1726,18 @@ if (!avecGsap || reduit) {
 
   // III · Le loup-garou : la carte se retourne, la nuit tombe sur le fond.
   const carteLG = $('#lg-carte');
+  const facesLG = preparerCarte(carteLG);
+  retourner(carteLG, 0, facesLG);
   scene('loups', {
     avant: (e) => {
       $('#lg-titre').textContent = e === 1 ? `@ ${CONFIG.name} · message privé` : '🐺 Loup-garou';
       $('#lg-mp-salon').classList.toggle('on', e === 1);
       $('#lg-fil-salon').classList.toggle('on', e !== 1);
-      if (e === 1) gsap.fromTo(carteLG, { rotateY: 0 }, { rotateY: 180, duration: 1.1, delay: 0.35, ease: 'power3.inOut', onStart: () => Son.jouer('carte') });
+      if (e === 1) {
+        const f = { p: 0 };
+        retourner(carteLG, 0, facesLG);
+        gsap.to(f, { p: 1, duration: 1.1, delay: 0.35, ease: 'power3.inOut', onStart: () => Son.jouer('carte'), onUpdate: () => retourner(carteLG, f.p, facesLG) });
+      }
       if (e === 2) Son.jouer('hurlement');
       gsap.to('#loup-fond', { opacity: e >= 2 && e <= 3 ? 0.62 : e === 4 ? 0.22 : 0.38, filter: e === 4 ? 'sepia(0.6) hue-rotate(-20deg) brightness(1.4)' : 'sepia(0) hue-rotate(0deg) brightness(1)', duration: 0.8 });
     },
@@ -1779,16 +1798,27 @@ if (!avecGsap || reduit) {
   mm.add('(min-width: 861px)', () => {
     const cartes = $$('#eventail .carte');
     const tl = gsap.timeline({ scrollTrigger: { trigger: '#eventail', start: 'top 85%', end: 'bottom 40%', scrub: 0.8 } });
-    cartes.forEach((c, i) => {
+    const toutes = cartes.map((c, i) => {
       const k = i - (cartes.length - 1) / 2;
-      tl.fromTo(c, { xPercent: 0, yPercent: 20, rotateZ: 0, rotateY: 0 }, { xPercent: k * 62, yPercent: Math.abs(k) * 9, rotateZ: k * 8, duration: 1, ease: 'power2.out' }, 0);
-      tl.to(c, { rotateY: 180, duration: 0.6, ease: 'power2.inOut', onStart: () => Son.jouer('carte') }, 0.8 + i * 0.22);
+      const img = $('img', c);
+      const faces = preparerCarte(img);
+      const f = { p: 0 };
+      retourner(img, 0, faces);
+      tl.fromTo(c, { xPercent: 0, yPercent: 20, rotate: 0 }, { xPercent: k * 62, yPercent: Math.abs(k) * 9, rotate: k * 8, duration: 1, ease: 'power2.out' }, 0);
+      tl.to(f, { p: 1, duration: 0.6, ease: 'power2.inOut', onStart: () => Son.jouer('carte'), onUpdate: () => retourner(img, f.p, faces) }, 0.8 + i * 0.22);
+      return { img, faces };
     });
+    // en repassant sur téléphone : chaque carte montre sa face, à plat
+    return () => toutes.forEach(({ img, faces }) => { retourner(img, 1, faces); img.style.transform = ''; });
   });
 
   // IV · L'imposteur : les mots se retournent, puis l'intrus est démasqué.
   const tlMots = gsap.timeline({ scrollTrigger: { trigger: '#table-mots', start: 'top 80%', end: 'bottom 45%', scrub: 0.7 } });
-  $$('#table-mots .faces').forEach((m, i) => tlMots.to(m, { rotateY: 180, duration: 1, ease: 'power2.inOut', onStart: () => Son.jouer('carte') }, i * 0.45));
+  $$('#table-mots .mot').forEach((m, i) => {
+    const f = { p: 0 };
+    retourner(m, 0);
+    tlMots.to(f, { p: 1, duration: 1, ease: 'power2.inOut', onStart: () => Son.jouer('carte'), onUpdate: () => retourner(m, f.p) }, i * 0.45);
+  });
   ScrollTrigger.create({
     trigger: '#table-mots', start: 'bottom 60%',
     onEnter: () => { $('.mot.intrus').classList.add('demasque'); Son.jouer('hurlement'); },
