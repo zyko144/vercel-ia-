@@ -114,13 +114,19 @@ await check('le chef est dans le vocal mais n’est pas visé nommément : rien'
   assert.equal(sent.length, 1, 'être présent ne suffit pas à être la cible');
 });
 
-await check('le chef vient de parler et on lui répond « ta gueule » : ça le vise (sans le nommer)', async () => {
-  _test.ownerSpoke.set('g', Date.now() - 3000);
+await check('le chef vient de parler et on lui répond « ta gueule » sans le nommer : rien', async () => {
   verdict = { transcription: 'oh ta gueule toi', insulte: true, cible: 'chef', mot: 'ta gueule', raison: 'répond au chef' };
   await new Promise((r) => setTimeout(r, 4100));
   await _test.check(client, guild, BAD, 'v', speech);
+  assert.equal(sent.length, 1, 'sans « Noam » ni « Vercel », rien');
+});
+
+await check('« Vercel ferme ta gueule » : ça compte aussi, envers le bot', async () => {
+  verdict = { transcription: 'Vercel ferme ta gueule', insulte: true, cible: 'bot', mot: 'ferme ta gueule', raison: 'insulte le bot' };
+  await new Promise((r) => setTimeout(r, 4100));
+  await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(sent.length, 2);
-  _test.ownerSpoke.delete('g');
+  assert.match(sent[1].content, new RegExp(`<@${BOT}>`), 'la victime est le bot');
 });
 
 await check('encore une insulte, le chef n’est même pas dans le vocal : exclu 1 min, sorti du vocal, carte SANCTION', async () => {
@@ -140,8 +146,9 @@ await check('encore une insulte, le chef n’est même pas dans le vocal : exclu
   assert.ok(voiceGuardStats.recent.length >= 5, 'les dernières écoutes sont gardées pour le tableau de bord');
 });
 
-await check('une insulte envers le bot ne compte pas : seul le chef est protégé', async () => {
-  verdict = { transcription: 'Vercel t’es un connard', insulte: true, cible: 'aucune', mot: 'connard', raison: 'vise le bot' };
+await check('une insulte sans nom, même avec le chef dans le vocal : rien', async () => {
+  voice.members = new Collection([[OWNER, members.get(OWNER)], [BAD, members.get(BAD)]]);
+  verdict = { transcription: 't’es qu’un connard', insulte: true, cible: 'chef', mot: 'connard', raison: '?' };
   await new Promise((r) => setTimeout(r, 4100));
   await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(sent.length, 3);
