@@ -12,6 +12,9 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // Images préparées à l'avance (tools/make-casino-gifs.mjs, tools/make-jeux-gifs.mjs).
 // Elles sont servies telles quelles : Discord les récupère une fois puis les garde en cache.
 const PUBLIC_ASSETS = { '/casino/': path.resolve('assets/casinho'), '/jeux/': path.resolve('assets/jeux') };
+// Le site vitrine (site/index.html) : servi à l'adresse principale du bot, avec les images des cartes.
+const SITE_DIR = path.resolve('site');
+const SITE_TYPES = { '.html': 'text/html; charset=utf-8', '.webp': 'image/webp' };
 
 /** Clé d'admin : personne ne peut la deviner sans le token du bot. */
 export function adminKey() {
@@ -57,7 +60,7 @@ const send = (res, status, body) => {
  * @param {() => object} getStatus
  * @param {Record<string, (url: URL, body: object) => Promise<unknown>>} adminRoutes ex : { 'GET /admin/logs': fn }
  */
-export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null, liveRoute = null) {
+export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null, liveRoute = null, dashboard = null) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
 
@@ -67,6 +70,9 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': file.length });
       return res.end(file);
     }
+
+    // Tableau de bord de l'IA (/dashboard) : il gère lui-même sa sécurité (session, en-têtes).
+    if (dashboard && await dashboard(req, res, url)) return undefined;
 
     // Animations du casino (dont roulette/17.gif, des/3-4.gif…) et cartes de rôle des jeux.
     const asset = Object.entries(PUBLIC_ASSETS).find(([prefix]) => url.pathname.startsWith(prefix));
@@ -99,6 +105,18 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
         return send(res, 200, await route(url, body));
       } catch (err) {
         return send(res, 500, { error: err.message });
+      }
+    }
+
+    // Le site vitrine : la page, puis ses images (cartes/, images/ et images/nuit/, en .webp seulement).
+    const sitePath = url.pathname === '/' || url.pathname === '/site' ? 'index.html' : /^\/(?:cartes|images(?:\/nuit)?)\/[a-z0-9-]+\.webp$/.test(url.pathname) ? url.pathname.slice(1) : null;
+    if (sitePath && req.method === 'GET') {
+      try {
+        const file = await readFile(path.join(SITE_DIR, sitePath));
+        res.writeHead(200, { 'Content-Type': SITE_TYPES[path.extname(sitePath)], 'Content-Length': file.length, 'Cache-Control': sitePath.endsWith('.html') ? 'public, max-age=300' : 'public, max-age=604800' });
+        return res.end(file);
+      } catch {
+        // Pas de site déployé : on retombe sur la page d'état ci-dessous.
       }
     }
 

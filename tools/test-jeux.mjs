@@ -9,13 +9,19 @@ import assert from 'node:assert/strict';
 
 // ---- Minuteries accélérées d'un facteur 500 : 90 s d'attente deviennent 180 ms.
 // On garde les proportions pour que l'ordre des étapes reste le même qu'en vrai.
-const SPEED = 500;
+// Un test peut ralentir la cadence (SPEED plus petit) quand il doit cliquer pendant une phase.
+let SPEED = 500;
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn, ms = 0, ...args) => realSetTimeout(fn, ms > 100 ? Math.max(8, Math.round(ms / SPEED)) : ms, ...args);
 globalThis.setTimeout.__patched = true;
 
 // ---- Pas d'appel à Gemini pendant les tests : la paire de mots vient du repli.
+process.env.DISCORD_TOKEN ||= ['T'.repeat(26), 'E'.repeat(6), 'S'.repeat(30)].join('.');
 process.env.GEMINI_API_KEY ||= 'test';
+// ---- Jamais les vraies données : pas de Supabase, stockage dans un dossier temporaire.
+process.env.SUPABASE_URL = '';
+process.env.SUPABASE_SERVICE_KEY = '';
+process.env.STORAGE_DIR = (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'jeux-'));
 
 const ROOT = new URL('../src/games/', import.meta.url);
 const common = await import(new URL('common.js', ROOT));
@@ -226,24 +232,32 @@ await check('imposteur : la salle d’attente s’ouvre et accepte les joueurs',
   globalThis.__lastGame = { channel, thread, players, running };
 });
 
-await check('imposteur : chaque joueur reçoit son rôle en MP, avec une carte animée', async () => {
+await check('imposteur : chaque joueur reçoit son mot en MP, sans savoir s’il est l’imposteur', async () => {
   const { thread, players } = globalThis.__lastGame;
-  await waitFor('envoi des rôles en MP', () => players.every((p) => p.dms.length));
+  await waitFor('envoi des mots en MP', () => players.every((p) => p.dms.length));
 
-  const words = new Set();
-  let impostors = 0;
+  const counts = new Map();
+  const cards = new Set();
   for (const player of players) {
-    const embed = player.dms.at(-1)?.embeds?.[0];
+    const dm = player.dms.at(-1);
+    const embed = dm?.embeds?.[0];
     const data = embed?.data ?? embed;
     assert.ok(data, `${player.username} doit recevoir un MP`);
-    assert.match(data.title, /IMPOSTEUR|CIVIL/, 'le MP doit annoncer le rôle');
-    assert.match(data.description, /Ton mot secret/, 'le MP doit contenir le mot');
-    assert.match(data.image?.url ?? '', /\.gif$/, 'le MP doit porter une carte animée');
-    if (/IMPOSTEUR/.test(data.title)) impostors += 1;
-    words.add(/\*\*(.+?)\*\*/.exec(data.description)[1]);
+    assert.match(data.title, /mot secret/i, 'le MP doit annoncer le mot secret');
+    const word = /^# (.+)$/m.exec(data.description ?? '')?.[1];
+    assert.ok(word, 'le MP doit afficher le mot en grand');
+    counts.set(word, (counts.get(word) ?? 0) + 1);
+    assert.match(data.image?.url ?? '', /\.gif/, 'le MP doit porter une carte animée');
+    cards.add(data.image.url);
+    // Le rôle ne doit jamais être écrit : l'imposteur ne sait pas qu'il l'est.
+    const text = JSON.stringify(data);
+    assert.ok(!/Tu es l.IMPOSTEUR|Tu es un CIVIL/i.test(text), 'le MP ne doit pas révéler le rôle');
+    const link = dm.components?.[0]?.components?.[0];
+    assert.ok(!link || (link.data ?? link).style === 5, 'le bouton du MP doit être un lien vers la partie');
   }
-  assert.equal(impostors, 1, 'il ne doit y avoir qu’un seul imposteur');
-  assert.equal(words.size, 2, 'deux mots : celui des civils et celui de l’imposteur');
+  assert.equal(cards.size, 1, 'tout le monde reçoit la même carte (sinon le rôle se devine)');
+  assert.equal(counts.size, 2, 'deux mots : celui des civils et celui de l’imposteur');
+  assert.ok([...counts.values()].includes(1), 'un seul joueur a le mot différent');
 
   // Le bouton reste là pour ceux dont les MP sont fermés.
   const wordMessage = thread.sent.find((m) => buttonsOf(m).some((b) => b.endsWith(':word')));
@@ -251,6 +265,7 @@ await check('imposteur : chaque joueur reçoit son rôle en MP, avec une carte a
   const click = makeComponent(players[0], buttonsOf(wordMessage).find((b) => b.endsWith(':word')), { channel: thread });
   await handleImpostorComponent(click);
   assert.match(click.replies.at(-1)?.content ?? '', /mot secret/);
+  assert.ok(!/Tu es l'imposteur/i.test(click.replies.at(-1)?.content ?? ''), 'le bouton ne doit pas révéler le rôle non plus');
 });
 
 await check('imposteur : les indices sont acceptés et une manche se joue', async () => {
@@ -452,6 +467,10 @@ await check('imposteur en test : seul avec 3 bots, la partie va jusqu’au bout'
   const ending = await waitFor('fin de la partie de test', () => thread.sent.find((m) => /Victoire/.test(textOf(m))), 30_000);
   stop();
   assert.ok(!/bug/.test(textOf(ending)), `la partie ne doit pas finir sur un bug : ${textOf(ending)}`);
+  // Un civil éliminé ne doit pas trahir le mot des civils (l'imposteur gagnerait d'office).
+  for (const message of thread.sent.filter((m) => /est éliminé/.test(textOf(m)))) {
+    assert.ok(!/son mot/.test(textOf(message)), `le mot des civils a fuité : ${textOf(message)}`);
+  }
   assert.deepEqual(violations.slice(before), [], 'aucun message refusé par Discord');
   console.log(`   ${textOf(ending).replace(/\s+/g, ' ').slice(0, 100)}`);
 });
@@ -473,6 +492,79 @@ await check('loup-garou en test : seul avec 5 bots, la partie va jusqu’au bout
   assert.deepEqual(violations.slice(before), [], 'aucun message refusé par Discord');
   const nights = thread.sent.filter((m) => /NUIT \d/.test(textOf(m))).length;
   console.log(`   ton rôle : ${myRole} · ${nights} nuit(s) · ${textOf(ending).replace(/\s+/g, ' ').slice(0, 70)}`);
+});
+
+await check('loup-garou à 8 : la sorcière sauve ET empoisonne, le chasseur tire après l’annonce de sa mort', async () => {
+  SPEED = 50; // 50 s de nuit deviennent 1 s : le temps de cliquer
+  try {
+    const channel = makeChannel('mini-jeux-8');
+    const host = makeUser('Meneuse');
+    const players = [host, ...['J2', 'J3', 'J4', 'J5', 'J6', 'J7', 'J8'].map(makeUser)];
+    const interaction = makeInteraction(host, channel, {});
+    interaction.guild = channel.guild;
+    channel.guild.client = { users: { cache: new Map(players.map((p) => [p.id, p])) } };
+    for (const player of players) channel.guild.members.cache.set(player.id, { displayName: player.username, user: player });
+
+    startWerewolf(interaction).catch((err) => console.error('   ⚠️ startWerewolf :', err));
+    const lobby = await waitFor('salle d’attente', () => channel.sent.find((m) => textOf(m).includes('LOUP-GAROU')));
+    const join = buttonsOf(lobby).find((b) => b.endsWith(':join'));
+    for (const player of players.slice(1)) await handleLobbyButton(makeComponent(player, join, { channel }));
+    await handleLobbyButton(makeComponent(host, buttonsOf(lobby).find((b) => b.endsWith(':start')), { channel }));
+
+    const thread = await waitFor('fil de la partie', () => channel.sent.map((m) => m.thread).find(Boolean));
+    await waitFor('rôles en MP', () => players.every((p) => p.dms.length));
+    const roleOf = new Map(players.map((p) => {
+      const data = p.dms.at(-1).embeds[0].data ?? p.dms.at(-1).embeds[0];
+      assert.ok(data.fields?.length >= 3, 'le MP du rôle doit avoir ses rubriques (objectif, comment jouer…)');
+      return [p, Object.entries(ROLES).find(([, r]) => data.title.includes(r.name))[0]];
+    }));
+    const withRole = (role) => players.filter((p) => roleOf.get(p) === role);
+    const [witch] = withRole('sorciere');
+    const [hunter] = withRole('chasseur');
+    const [seer] = withRole('voyante');
+    const [victim, shot] = withRole('villageois');
+    assert.ok(witch && hunter && seer && victim && shot, 'à 8 joueurs il faut sorcière, chasseur, voyante et villageois');
+    assert.equal(withRole('loup').length, 2, 'deux loups à 8 joueurs');
+
+    await waitFor('première nuit', () => thread.sent.some((m) => /NUIT 1/.test(textOf(m))), 8_000);
+    const gid = buttonsOf(thread.sent.find((m) => buttonsOf(m).some((b) => b.endsWith(':act')))).find((b) => b.endsWith(':act')).split(':')[2];
+    const click = async (player, action, values = []) => {
+      const c = makeComponent(player, `g:lg:${gid}:${action}`, { values, channel: thread });
+      await handleWerewolfComponent(c);
+      return c.replies.at(-1);
+    };
+
+    for (const wolf of withRole('loup')) await click(wolf, 'wolf', [victim.id]);
+    const vision = await click(seer, 'seer', [withRole('loup')[0].id]);
+    assert.match(vision?.content ?? '', /Loup-garou/, 'la voyante doit voir le rôle');
+    const memory = await click(seer, 'role');
+    assert.match(memory?.content ?? '', /Tes visions[\s\S]*Loup-garou/, '« Voir mon rôle » doit garder les visions');
+
+    await waitFor('réveil de la sorcière', () => thread.sent.some((m) => /sorcière se réveille/.test(m.content ?? '')), 8_000);
+    const panel = await click(witch, 'act');
+    assert.match(JSON.stringify(panel), /:save/, 'la sorcière doit pouvoir sauver');
+    const afterSave = await click(witch, 'save');
+    assert.match(JSON.stringify(afterSave), /:poison/, 'après avoir sauvé, la potion de mort doit rester proposée');
+    const afterPoison = await click(witch, 'poison', [hunter.id]);
+    assert.match(afterPoison?.content ?? '', /potion de mort/);
+
+    const huntPrompt = await waitFor('flèche du chasseur', () => thread.sent.find((m) => /il te reste une flèche/.test(m.content ?? '')), 8_000);
+    const dawnIndex = thread.sent.findIndex((m) => /JOUR 1/.test(textOf(m)));
+    assert.ok(dawnIndex >= 0 && dawnIndex < thread.sent.indexOf(huntPrompt), 'la mort du chasseur est annoncée avant qu’il tire');
+    const dawnText = textOf(thread.sent[dawnIndex]);
+    assert.ok(dawnText.includes(`<@${hunter.id}>`), 'le chasseur empoisonné meurt');
+    assert.ok(!dawnText.includes(`<@${victim.id}>`), 'la victime sauvée par la sorcière survit');
+
+    await click(hunter, 'hunt', [shot.id]);
+    const arrow = await waitFor('dernière flèche', () => thread.sent.find((m) => /dernière flèche/i.test(textOf(m)) && textOf(m).includes(`<@${shot.id}>`)), 8_000);
+    console.log(`   ${textOf(arrow).replace(/\s+/g, ' ').slice(0, 100)}`);
+
+    const stopButton = `g:lg:${gid}:stop`;
+    await handleWerewolfComponent(makeComponent(host, stopButton, { channel: thread }));
+    await waitFor('fin de partie', () => thread.sent.some((m) => /arrêtée|gagné/i.test(textOf(m))), 6_000);
+  } finally {
+    SPEED = 500;
+  }
 });
 
 // ====================== Les autres mini-jeux ======================

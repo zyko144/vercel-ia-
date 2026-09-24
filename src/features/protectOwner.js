@@ -9,7 +9,8 @@ import { truncate } from '../utils/discord.js';
 
 const TIMEOUT_MS = 60_000;
 const WARN_KIND = 'insulte-protege';
-const WARN_KINDS = new Set([WARN_KIND, 'insulte-chef']);
+// Les insultes écrites et celles dites en vocal (voiceGuard.js) s'additionnent
+const WARN_KINDS = new Set([WARN_KIND, 'insulte-chef', 'insulte-vocal']);
 const CONVERSATION_MS = 3 * 60_000; // le chef a parlé il y a moins de 3 min dans le salon
 const HISTORY_SIZE = 40;
 
@@ -163,6 +164,16 @@ Réponds : insulte_la_personne, mot (l'insulte exacte, vide sinon), raison (une 
 }
 
 // ===== Sanction =====
+
+/** Note un avertissement pour insulte et renvoie combien la personne en a (écrit + vocal). */
+export async function addInsultWarning(guildId, userId, entry) {
+  const all = await load('warnings', {});
+  all[guildId] ??= {};
+  const list = (all[guildId][userId] ??= []);
+  list.push({ ...entry, at: Date.now() });
+  save('warnings', all);
+  return list.filter((w) => WARN_KINDS.has(w.kind)).length;
+}
 
 async function punish(client, message, target, word) {
   const label = labelOf(message.guild, target.id);

@@ -1,7 +1,7 @@
 // Outils partagés par les jeux : salle d'attente, réponses écrites dans un salon, petits utilitaires.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
-import { makeBots, who } from './bots.js';
+import { botName, isBot, makeBots, who } from './bots.js';
 
 export const PRIVATE = { flags: MessageFlags.Ephemeral };
 export const MEDALS = ['🥇', '🥈', '🥉'];
@@ -47,6 +47,60 @@ export async function gameChannel(interaction) {
 export async function gameThread(message, name) {
   if (!message?.startThread || message.channel?.type !== ChannelType.GuildText) return message?.channel ?? null;
   return message.startThread({ name: name.slice(0, 95), autoArchiveDuration: 60 }).catch(() => message.channel);
+}
+
+/**
+ * Les noms affichés des joueurs, récupérés une fois au début de la partie.
+ * Le cache des membres de Discord est souvent vide : sans ça, les menus de vote
+ * affichaient « Joueur » pour tout le monde.
+ */
+export async function resolveNames(guild, ids) {
+  const names = new Map();
+  const real = ids.filter((id) => !isBot(id));
+  if (guild?.members?.fetch && real.length) await guild.members.fetch({ user: real }).catch(() => null);
+  for (const id of ids) {
+    if (isBot(id)) {
+      names.set(id, botName(id));
+      continue;
+    }
+    const member = guild?.members?.cache?.get(id);
+    const user = member?.user ?? guild?.client?.users?.cache?.get(id);
+    names.set(id, member?.displayName ?? user?.globalName ?? user?.username ?? 'Joueur');
+  }
+  return names;
+}
+
+// ===================== Parties en cours (pour le tableau de bord) =====================
+
+const running = new Map(); // id -> { kind, emoji, startedAt, info(), stop() }
+
+/**
+ * Déclare une partie en cours : le tableau de bord la liste et peut l'arrêter.
+ * @param {{ id: string, kind: string, emoji: string, info: () => object, stop: () => Promise<unknown> | unknown }} game
+ */
+export function registerGame({ id, kind, emoji, info, stop }) {
+  running.set(id, { id, kind, emoji, startedAt: Date.now(), info, stop });
+}
+
+export function unregisterGame(id) {
+  running.delete(id);
+}
+
+export function runningGames() {
+  return [...running.values()].map((g) => {
+    let details = {};
+    try { details = g.info() ?? {}; } catch { /* une partie qui se termine */ }
+    return { id: g.id, kind: g.kind, emoji: g.emoji, startedAt: g.startedAt, ...details };
+  });
+}
+
+/** Arrête une partie depuis le tableau de bord. */
+export async function stopRunningGame(id) {
+  const game = running.get(id);
+  if (!game) return false;
+  await game.stop();
+  running.delete(id);
+  return true;
 }
 
 // ===================== Réponses écrites =====================

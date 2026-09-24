@@ -116,7 +116,8 @@ function parseNodes(raw) {
 
 export const config = {
   discordToken: discordTokens[0] ?? '',
-  geminiKey: str('GEMINI_API_KEY'),
+  // Tolère une clé collée avec autre chose derrière (« clé;token… ») : on garde la 1re partie qui n'est pas un token Discord
+  geminiKey: str('GEMINI_API_KEY').split(/[;,\s]+/).find((part) => part && !TOKEN_SHAPE.test(part)) ?? '',
 
   // IA vocale (2e bot qui écoute et répond à voix haute dans le vocal du bot)
   voiceAi: {
@@ -169,6 +170,12 @@ export const config = {
   jukeboxChannelIds: channels('JUKEBOX_CHANNEL_IDS', MUSIC_CHANNEL),
   // Salon où arrivent les signalements (vide = MP au chef)
   staffChannelId: str('STAFF_CHANNEL_ID'),
+
+  // Surveillance vocale : le bot écoute son vocal et sanctionne les insultes envers le chef ou lui-même
+  voiceGuard: {
+    enabled: bool('VOICE_GUARD', true),
+    maxPerHour: int('VOICE_GUARD_MAX_PER_HOUR', 200), // demandes Gemini par heure au maximum
+  },
 
   limits: {
     // Les modèles d'image ne sont pas dans l'offre gratuite de Gemini
@@ -230,6 +237,21 @@ export const config = {
 
   port: int('PORT', 3000),
   publicUrl: str('RENDER_EXTERNAL_URL') || str('PUBLIC_URL'),
+
+  // Réglages de l'IA pilotés depuis le tableau de bord (/dashboard)
+  ai: { paused: false, pauseMessage: '', extraInstructions: '', blocked: [] },
+
+  // Accès au tableau de bord : le chef, plus ces comptes (IDs Discord séparés par des virgules)
+  dashboard: {
+    admins: list('DASHBOARD_ADMINS'),
+  },
+
+  // Le site vitrine (site/index.html). Par défaut, celui que le bot sert lui-même.
+  site: {
+    url: (str('SITE_URL') || str('RENDER_EXTERNAL_URL') || str('PUBLIC_URL')).replace(/\/+$/, ''),
+    // Ajoute le lien du site dans la bio des bots au démarrage (SITE_IN_BIO=false pour ne pas y toucher)
+    bio: bool('SITE_IN_BIO', true),
+  },
 
   supabase: {
     url: str('SUPABASE_URL').replace(/\/+$/, ''),

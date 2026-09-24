@@ -45,6 +45,14 @@ cp .env.example .env
 npm start
 ```
 
+**Sur Windows**, sans taper de commande : double-clique sur **`demarrer.bat`**. La première fois, il installe
+tout et ouvre le fichier `.env` à remplir (`DISCORD_TOKEN`, `GEMINI_API_KEY`) ; ensuite il lance le bot.
+Il faut [Node.js](https://nodejs.org) (version LTS) et, pour récupérer le projet, [Git](https://git-scm.com) :
+
+```bat
+git clone -b claude/optimistic-edison-vv3m97 https://github.com/zyko144/vercel-ia- "C:\Users\noamb\Documents\AI vercel"
+```
+
 ⚠️ Coupe le bot local avant de lancer celui de Render, sinon il répondra 2 fois.
 
 ---
@@ -158,6 +166,97 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 
 ---
 
+## 8. Le site vitrine 🌐
+
+Une page pour présenter et vendre le bot, racontée comme un conte : `site/index.html`.
+Le bot la sert lui-même à son adresse principale (`https://vercel-ia.onrender.com/`), avec ses
+images (`site/cartes/`, `site/images/`). `/health` ne change pas.
+
+- **L'histoire** : un prologue où la nuit tombe sur un village au fil du défilement (72 images
+  rendues dans Blender), puis un chapitre par fonction : l'IA, la musique Spotify, le loup-garou,
+  l'imposteur, le casino, la modération, les autres jeux, et l'épilogue avec les offres.
+- **De vrais messages Discord** reconstitués (salle d'attente, carte en MP, nuit, vote, panneau
+  musique, partage Spotify, signalement) qui apparaissent un par un pendant le défilement (GSAP ScrollTrigger).
+- **Sons** fabriqués en direct (Web Audio, aucun fichier) : page qui tourne, hurlement, grillons,
+  cloche du matin… Le visiteur les active avec le bouton **Son**.
+- **Nom, prix, contact** : tout est dans le bloc `CONFIG`, en haut du script de la page
+  (`name`, `orderUrl`, `discordHandle`, `plans`, `plansNote`). Les prix sont des exemples, mets les tiens.
+- Sans les bibliothèques (CDN bloqué) ou avec « réduire les animations », la page reste entière et lisible.
+- **Bio du bot** : au démarrage, le lien du site est ajouté dans la bio (« À propos de moi ») du bot
+  et de Casinho. `SITE_URL` pour un autre lien, `SITE_IN_BIO=false` pour ne pas toucher à la bio.
+
+**Refaire les images** :
+
+```bash
+pip install bpy                                  # Blender en module Python (Python 3.11)
+python tools/blender/village.py --mode seq  --out rendus/seq
+python tools/blender/village.py --mode loup --out rendus
+python tools/blender/village.py --mode aube --out rendus
+node tools/make-site-images.mjs rendus           # -> site/images/*.webp
+node tools/make-jeux-gifs.mjs --site             # cartes de rôle -> site/cartes/*.webp
+```
+
+---
+
+## 9. Le tableau de bord de l'IA 📊
+
+Une page d'administration, servie par le bot sur **`/dashboard`** (ex : `https://vercel-ia.onrender.com/dashboard`).
+
+**Se connecter** : dans Discord, tape **`/admin dashboard`**. Le bot te répond (visible seulement par toi)
+avec un lien valable **une seule fois, pendant 10 minutes**. On peut aussi recevoir ce lien en MP depuis
+la page de connexion. Accès : le chef, plus les comptes listés dans `DASHBOARD_ADMINS`.
+
+| Section | Ce qu'on y fait |
+|---|---|
+| Vue d'ensemble | Ce qui demande ton attention, réponses et erreurs du jour, temps de réponse, activité sur 24 h, état des services |
+| IA | Usages du jour, 14 derniers jours, dernières erreurs, **tester l'IA**, et les **réglages** (modèle, réflexion, recherche Google, images, anti-spam, consignes du serveur, statut du bot, **pause de l'IA**, pastille du bot, **personnes privées d'IA**) |
+| Écrire | Poster un message, une **annonce avec carte** (titre, couleur, image, aperçu façon Discord) ou un **sondage** dans n'importe quel salon, en tant que le bot |
+| Modération | Chercher un membre, le **rendre muet**, l'**expulser**, le **bannir** / débannir (le chef est protégé), **nettoyer** un salon |
+| Conversations | Qui a une conversation en mémoire (jamais le contenu), effacer une conversation ou tout |
+| Jeux en cours | Parties de loup-garou et d'imposteur, arrêter une partie bloquée |
+| Musique | **Lancer un son** ou une playlist dans le vocal choisi, pause / passer / précédent / boucle / arrêter, **volume**, file d'attente (retirer, mélanger, vider), serveurs audio |
+| Rappels | Rappels en attente, en créer pour toi ou un membre, en supprimer |
+| Casino | Classement de Casinho, **donner / retirer des jetons**, remettre un compte à zéro |
+| Journaux | La console du bot en direct, filtrable, clés et tokens masqués |
+| Sécurité | Sessions ouvertes (les fermer), comptes autorisés, journal de toutes les actions |
+
+**Sécurité** : pas de mot de passe (lien à usage unique, jeton jamais envoyé dans l'adresse), cookie de
+session HttpOnly + SameSite strict (+ Secure en HTTPS), 2 h d'inactivité ou 12 h maximum, requêtes
+vérifiées (en-tête dédié + origine), tentatives limitées, en-têtes stricts (CSP sans script extérieur,
+pas d'iframe), secrets jamais affichés, chaque modification notée au journal. Les réglages sont gardés
+dans le stockage du bot (Supabase conseillé, sinon ils sont perdus au redémarrage sur Render).
+
+Tests : `npm run test:dashboard` attaque les protections et les actions (19 vérifications, sans toucher à tes données).
+
+**Render + PC en même temps** : avec Supabase (`SUPABASE_SERVICE_KEY` rempli), une seule copie du bot
+répond. Le PC passe devant (pratique pour tester), Render attend et reprend tout seul 1 minute après la
+fermeture du PC. Sans Supabase, les deux copies répondent au même clic et l'une affiche
+« Unknown interaction » : coupe Render avant de lancer `demarrer.bat`. (`npm run test:instance`)
+
+## 10. La surveillance vocale 🎙️
+
+Le bot écoute son salon vocal (il n'est plus en sourdine) et repère les **vraies insultes envers le chef
+(Noam) ou envers le bot (Vercel)** :
+
+| Fois | Ce qui se passe |
+|---|---|
+| 1re | **Avertissement** : carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal + MP |
+| 2e et suivantes | **Exclusion d'1 minute**, **sortie du vocal**, avertissement de plus, carte « SANCTION » (néon rouge) |
+
+Les avertissements s'additionnent avec ceux des insultes écrites. Le chef n'est jamais écouté ni sanctionné,
+et le chef reçoit en MP ce qui a été entendu.
+
+- Seuls les moments où quelqu'un parle sont envoyés à Gemini, regroupés par personne (une demande pour ~20 s
+  de parole), avec un plafond par heure (`VOICE_GUARD_MAX_PER_HOUR`, 200 par défaut). L'audio n'est pas gardé.
+- Pour éviter les erreurs : Gemini doit confirmer l'insulte, un vrai mot d'insulte doit être dans ce qui a été
+  dit, et la cible doit être sûre (nommée, ou le chef présent dans le vocal). Un juron (« putain ») ne compte pas.
+- Pendant la musique via Lavalink, c'est le serveur audio qui tient le vocal : la surveillance est en pause.
+- Couper : `VOICE_GUARD=false`, ou tableau de bord › IA › Réglages › Surveillance vocale.
+- Préviens tes membres que le vocal est modéré automatiquement.
+- Les cartes se refont avec `node tools/make-sanction-gifs.mjs`. Tests : `npm run test:voiceguard`.
+
+---
+
 ## Fonctionnalités
 
 | Quoi | Comment |
@@ -178,6 +277,7 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 | Effacer la mémoire | `/reset` |
 | Images (si activées) | `/image`, `/modifier-image` |
 | Stats / vocal / serveurs audio (chef) | `/admin stats`, `/admin voc`, `/admin musique` |
+| Tableau de bord (chef) | `/admin dashboard` |
 | Modération | `/clear nombre`, `/kick`, `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/warns`, `/slowmode`, `/lock`, `/unlock`, `/role`, `/say` |
 | Infos | `/userinfo`, `/serverinfo`, `/avatar`, `/ping` |
 | Jeux | `/jeu-blindtest`, `/jeu-films`, `/jeu-disney`, `/jeu-series`, `/jeu-animes`, `/jeu-jeuxvideo`, `/jeu-devine`, `/jeu-quiz`, `/jeu-pile-ou-face`, `/jeu-des` |

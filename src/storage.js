@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from './config.js';
 
-const DATA_DIR = path.resolve('data');
+// STORAGE_DIR : un autre dossier (les bancs d'essai s'en servent pour ne pas toucher aux vraies données)
+const DATA_DIR = path.resolve(process.env.STORAGE_DIR || 'data');
 const useSupabase = Boolean(config.supabase.url && config.supabase.key);
 const cache = new Map();
 const pendingWrites = new Map();
@@ -78,3 +79,17 @@ export function save(key, value) {
 }
 
 export const storageBackend = useSupabase ? 'Supabase' : 'fichiers locaux';
+
+/** Stockage partagé entre plusieurs machines (Supabase) : sinon, chaque copie du bot a ses propres fichiers. */
+export const sharedStorage = useSupabase;
+
+/** Lecture directe, sans cache (pour voir ce qu'une autre copie du bot vient d'écrire). */
+export async function readFresh(key) {
+  return readRemote(key);
+}
+
+/** Écriture immédiate, sans attendre le regroupement d'une seconde. */
+export async function writeNow(key, value) {
+  cache.set(key, value);
+  await writeRemote(key, value);
+}

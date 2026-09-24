@@ -6,6 +6,20 @@ import { getHistory, remember } from './memory.js';
 import { displayName } from '../utils/discord.js';
 import { buildAnswerPayload } from '../utils/reply.js';
 
+const PAUSE_TEXT = 'L’IA est en pause pour une maintenance, reviens un peu plus tard 🙏';
+
+/**
+ * Réponse à envoyer quand l'IA est en pause (réglée depuis le tableau de bord), sinon null.
+ * Le chef, lui, peut toujours l'utiliser pour tester.
+ */
+export function pausedAnswer(userId) {
+  if (userId === config.ownerId) return null;
+  // Privé d'IA depuis le tableau de bord
+  if (config.ai.blocked.includes(userId)) return buildAnswerPayload({ text: "🔇 Tu n'as plus accès à l'IA sur ce serveur. Vois ça avec le staff." });
+  if (!config.ai.paused) return null;
+  return buildAnswerPayload({ text: config.ai.pauseMessage || PAUSE_TEXT });
+}
+
 /**
  * Pose une question à Gemini et renvoie un message Discord prêt à envoyer (1 seul message).
  * Gère la mémoire, les sources et l'escalade vers le chef.
@@ -13,13 +27,17 @@ import { buildAnswerPayload } from '../utils/reply.js';
 export async function askAI({
   client, user, member, guild, channel, link,
   prompt, extraContent = [], notes = [],
-  historyKey = null, web = true, thinking, instructions = '', visibility = 'public',
+  historyKey = null, web = true, thinking, instructions = '', visibility = 'public', tag = 'conversation',
 }) {
   const who = `${displayName(member, user)}${user.id === config.ownerId ? ' (le chef)' : ''}`;
   const userText = `${who} : ${prompt || '(pas de texte)'}${notes.length ? ` ${notes.join(' ')}` : ''}`;
+  const paused = pausedAnswer(user.id);
+  if (paused) return paused;
   const history = historyKey ? getHistory(historyKey) : [];
 
   let system = systemPrompt({ botName: client.user.username, guildName: guild?.name });
+  // Consignes données par le staff depuis le tableau de bord (événements du moment, règles du serveur…)
+  if (config.ai.extraInstructions) system += `\n\nCONSIGNES DU SERVEUR (données par le staff)\n${config.ai.extraInstructions}`;
   if (instructions) system += `\n\nCONSIGNE POUR CETTE DEMANDE\n${instructions}`;
 
   const { text: raw, sources } = await chat({
@@ -28,6 +46,7 @@ export async function askAI({
     system,
     web,
     thinking,
+    tag,
   });
 
   const { escalate, text } = detectEscalation(raw);
