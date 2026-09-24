@@ -42,31 +42,57 @@ async function beat() {
   await writeNow(KEY, { id, startedAt, where, priority, at: Date.now() }).catch((err) => console.warn('[instance] bail :', err.message));
 }
 
+// Adresse du bot sur Render : le PC lui demande s'il tourne, même sans Supabase
+const PRIMARY_URL = (process.env.PRIMARY_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
+
+/** Sur le PC : le bot de Render est-il connecté à Discord ? (sa page /health répond « ready ») */
+async function renderOnline() {
+  if (process.env.RENDER) return false;
+  try {
+    const res = await fetch(`${PRIMARY_URL}/health`, { signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return false;
+    const health = await res.json();
+    return health.discord === 'ready' && (health.instance ?? 'Render') === 'Render';
+  } catch {
+    return false; // Render endormi, arrêté ou injoignable : le PC peut prendre le relais
+  }
+}
+
+/** Une copie prioritaire tourne-t-elle déjà ? Renvoie son nom, ou null. */
+async function ahead() {
+  if (instance.guarded) {
+    const lock = await readLock();
+    if (other(lock) && alive(lock) && outranks(lock)) return lock.where;
+  }
+  if (await renderOnline()) return 'Render';
+  return null;
+}
+
 /** À appeler avant de se connecter à Discord : attend son tour si une copie prioritaire tourne déjà. */
 export async function waitForTurn() {
-  if (!instance.guarded) {
-    console.log('ℹ️ Sans Supabase, rien n\'empêche une 2e copie du bot (Render + PC) : ne lance pas les deux en même temps.');
-    return;
-  }
+  if (!instance.guarded) console.log('ℹ️ Sans Supabase, la garde « une seule copie » se contente de demander à Render s\'il tourne (PRIMARY_URL).');
   let announced = false;
   for (;;) {
-    const lock = await readLock();
-    if (!(other(lock) && alive(lock) && outranks(lock))) break;
-    instance.waitingFor = lock.where;
-    if (!announced) console.log(`⏸️ Le bot tourne déjà sur ${lock.where} : cette copie attend qu'il s'arrête pour prendre le relais.`);
+    const first = await ahead();
+    if (!first) break;
+    instance.waitingFor = first;
+    if (!announced) console.log(`⏸️ Le bot tourne déjà sur ${first} : cette copie ne se connecte pas à Discord (site en local seulement) et prendra le relais s'il s'arrête.`);
     announced = true;
     await new Promise((resolve) => setTimeout(resolve, BEAT_MS));
   }
   instance.waitingFor = null;
-  await beat();
+  if (instance.guarded) await beat();
   console.log(`🔒 Copie active : ${instance.where}`);
   setInterval(async () => {
-    const lock = await readLock();
-    if (other(lock) && alive(lock) && outranks(lock)) {
-      console.log(`🔁 Le bot vient de démarrer sur ${lock.where} : cette copie s'arrête pour ne pas répondre en double.`);
+    const first = await ahead();
+    if (first) {
+      console.log(`🔁 Le bot tourne aussi sur ${first} : cette copie s'arrête pour ne pas répondre en double (ni se disputer le vocal).`);
       process.kill(process.pid, 'SIGTERM'); // arrêt propre ; Render la relancera, et elle attendra son tour
       return;
     }
-    await beat();
+    if (instance.guarded) await beat();
   }, BEAT_MS).unref();
 }
+
+// Pour le banc d'essai (tools/test-instance.mjs)
+export const _test = { ahead };
