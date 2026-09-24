@@ -175,6 +175,8 @@ export const config = {
   voiceGuard: {
     enabled: bool('VOICE_GUARD', true),
     maxPerHour: int('VOICE_GUARD_MAX_PER_HOUR', 200), // demandes Gemini par heure au maximum
+    // Salon texte où les sanctions sont aussi affichées (vide = le salon dont le nom contient « agora »)
+    channelId: str('VOICE_GUARD_CHANNEL_ID'),
   },
 
   limits: {

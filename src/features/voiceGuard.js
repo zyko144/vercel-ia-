@@ -1,5 +1,6 @@
 // Surveillance vocale : le bot écoute son salon vocal et repère les vraies insultes envers le chef (Noam),
-// qu'il soit dans le vocal ou non : il faut qu'on parle de lui (son nom) ET qu'on l'insulte. 1re fois : avertissement. Dès la 2e : exclusion d'1 minute,
+// qu'il soit dans le vocal ou non. La cible doit être sûre : son nom est dit, ou il est dans le vocal et
+// vient de parler (on lui répond). 1re fois : avertissement. Dès la 2e : exclusion d'1 minute,
 // sortie du vocal et avertissement de plus. Chaque sanction s'affiche avec une carte animée (tampon néon).
 //
 // Comment ça marche, sans exploser le quota Gemini :
@@ -26,7 +27,7 @@ const MAX_PHRASE_S = 12;
 const MIN_PHRASE_S = 0.6;
 const GROUP_WAIT_MS = 2500; // attente d'une phrase suivante avant d'envoyer le paquet
 const MAX_GROUP_S = 20;
-const MIN_LEVEL = 350; // volume moyen minimal (souffle, bruit de fond : ignorés)
+const MIN_LEVEL = 200; // volume moyen minimal (souffle, bruit de fond : ignorés)
 const USER_GAP_MS = 4000; // au moins 4 s entre deux vérifications d'une même personne
 const TIMEOUT_MS = 60_000;
 const GIFS = { avertissement: 'assets/sanction/avertissement.gif', sanction: 'assets/sanction/sanction.gif' };
@@ -35,8 +36,19 @@ const attached = new WeakSet();
 const recording = new Set(); // guild:user en cours d'enregistrement
 const groups = new Map(); // guild:user -> { chunks, bytes, timer, channelId }
 const lastCheck = new Map(); // user -> date
+const ownerSpoke = new Map(); // guild -> dernière fois que le chef a parlé dans le vocal du bot
+const CONVERSATION_MS = 30_000; // le chef a parlé il y a moins de 30 s : on peut lui répondre
+// Façons dont Gemini peut écrire « Noam » en transcrivant
+const NOAM_SPELLINGS = ['noam', 'noham', 'nohm', 'noame', 'nohame', 'noan', 'naom'];
 let hour = { start: 0, count: 0 };
-export const voiceGuardStats = { checks: 0, insults: 0, skipped: 0, lastAt: null };
+export const voiceGuardStats = { checks: 0, insults: 0, skipped: 0, lastAt: null, recent: [] };
+
+/** Garde les 15 dernières écoutes (pour comprendre depuis le tableau de bord pourquoi ça a marché ou pas). */
+function note(entry) {
+  voiceGuardStats.recent.unshift({ at: Date.now(), ...entry });
+  voiceGuardStats.recent.length = Math.min(voiceGuardStats.recent.length, 15);
+  console.log(`[surveillance vocale] ${entry.who} : « ${truncate(entry.heard ?? '', 140)} » → ${entry.decision}`);
+}
 
 /** Faut-il que le bot entende (et donc ne soit pas en sourdine) ? */
 export const guardWantsAudio = () => config.voiceGuard.enabled;
@@ -60,6 +72,7 @@ function attach(client, guild, connection) {
   if (attached.has(connection)) return;
   attached.add(connection);
   connection.receiver.speaking.on('start', (userId) => {
+    if (userId === config.ownerId) ownerSpoke.set(guild.id, Date.now());
     if (!config.voiceGuard.enabled) return;
     listen(client, guild, connection, userId).catch((err) => console.warn('[surveillance vocale]', err.message));
   });
@@ -165,8 +178,13 @@ const SCHEMA = {
 };
 
 async function check(client, guild, userId, channelId, pcm) {
-  if (level(pcm) < MIN_LEVEL || !allowed(userId)) {
+  if (level(pcm) < MIN_LEVEL) {
     voiceGuardStats.skipped++;
+    return;
+  }
+  if (!allowed(userId)) {
+    voiceGuardStats.skipped++;
+    if (hour.count >= config.voiceGuard.maxPerHour) console.warn(`[surveillance vocale] plafond de ${config.voiceGuard.maxPerHour} écoutes par heure atteint`);
     return;
   }
   const channel = guild.channels.cache.get(channelId);
@@ -174,6 +192,9 @@ async function check(client, guild, userId, channelId, pcm) {
   const owner = guild.members.cache.get(config.ownerId) ?? await guild.members.fetch(config.ownerId).catch(() => null);
   const ownerNames = [...new Set(['Noam', ...namesOf(owner, owner?.user)])];
   const others = channel?.members?.filter((m) => !m.user.bot && m.id !== userId).map((m) => m.displayName) ?? [];
+  const ownerHere = Boolean(channel?.members?.has(config.ownerId));
+  const spokeAgo = ownerSpoke.has(guild.id) ? Math.round((Date.now() - ownerSpoke.get(guild.id)) / 1000) : null;
+  const talking = ownerHere && spokeAgo !== null && spokeAgo * 1000 < CONVERSATION_MS;
 
   voiceGuardStats.checks++;
   voiceGuardStats.lastAt = Date.now();
@@ -182,7 +203,7 @@ async function check(client, guild, userId, channelId, pcm) {
     system: 'Tu es le modérateur vocal d\'un serveur Discord français. Tu transcris fidèlement ce qui est dit (argot, verlan, abréviations comprises) puis tu juges s\'il y a une vraie insulte envers le chef. Tu es strict sur la cible : dans le doute, ce n\'est pas une insulte envers lui.',
     content: [
       { type: 'text', text: `Extrait audio de ${speaker?.displayName ?? 'un membre'} dans le salon vocal « ${channel?.name ?? '?'} ».
-Le chef s'appelle : ${ownerNames.join(', ')}. Qu'il soit dans le vocal ou non ne change rien : seule compte une insulte qui le vise, lui.
+Le chef s'appelle : ${ownerNames.join(', ')}. ${ownerHere ? `Il est dans ce vocal${talking ? ` et vient de parler (il y a ${spokeAgo} s) : si la phrase lui répond ou s'adresse à « toi » sans nommer quelqu'un d'autre, elle le vise` : ''}.` : 'Il n\'est pas dans ce vocal : il faut qu\'on parle de lui.'}
 Autres personnes présentes : ${others.join(', ') || 'personne'}.
 
 1. transcription : ce qui est dit, mot pour mot, en français.
@@ -198,24 +219,30 @@ Autres personnes présentes : ${others.join(', ') || 'personne'}.
     responseFormat: { type: 'text', mime_type: 'application/json', schema: SCHEMA },
   });
   const verdict = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ''));
-  if (!verdict.insulte || verdict.cible === 'aucune') return;
+  const who = speaker?.displayName ?? userId;
+  if (!verdict.insulte || verdict.cible === 'aucune') return note({ who, heard: verdict.transcription, decision: 'pas d’insulte envers le chef' });
 
   // Garde-fous : un vrai mot d'insulte doit être dans ce qui a été dit, et la cible doit être plausible
   const { strong, contextual } = findInsults(verdict.transcription);
-  if (!strong.length && !contextual.length) {
-    console.log(`[surveillance vocale] ignoré (pas de mot d'insulte reconnu) : « ${truncate(verdict.transcription, 120)} »`);
-    return;
-  }
+  if (!strong.length && !contextual.length) return note({ who, heard: verdict.transcription, decision: 'ignoré : pas de vrai mot d’insulte' });
   const said = simple(verdict.transcription);
-  const named = (names) => names.some((n) => n.length >= 3 && said.includes(simple(n)));
-  // Le chef doit être nommé : être présent dans le vocal ne suffit pas à faire de lui la cible
-  if (verdict.cible !== 'chef' || !named(ownerNames)) {
-    console.log(`[surveillance vocale] ignoré (le chef n'est pas visé nommément) : « ${truncate(verdict.transcription, 120)} »`);
-    return;
-  }
+  const squashed = said.replace(/[^a-z0-9]/g, '');
+  const named = [...ownerNames.map(simple), ...NOAM_SPELLINGS].some((n) => n.length >= 3 && (said.includes(n) || squashed.includes(n.replace(/[^a-z0-9]/g, ''))));
+  // Cible sûre : le chef est nommé, ou il est dans le vocal et vient de parler (on lui répond).
+  // Être juste présent ne suffit pas : une insulte envers un autre membre ne compte pas.
+  if (!named && !talking) return note({ who, heard: verdict.transcription, decision: ownerHere ? 'ignoré : le chef n’a pas parlé juste avant et n’est pas nommé' : 'ignoré : le chef n’est pas nommé' });
+  note({ who, heard: verdict.transcription, decision: `INSULTE (« ${verdict.mot} »)` });
 
   voiceGuardStats.insults++;
   await punish(client, guild, speaker, channel, verdict);
+}
+
+/** Le salon où les sanctions sont aussi affichées : VOICE_GUARD_CHANNEL_ID, sinon le salon texte « agora ». */
+function announceChannel(guild) {
+  const byId = config.voiceGuard.channelId && guild.channels.cache.get(config.voiceGuard.channelId);
+  if (byId?.isTextBased?.()) return byId;
+  // NFKD ramène les lettres décorées (𝐀𝐠𝐨𝐫𝐚) à des lettres normales
+  return guild.channels.cache.find((c) => c.type === 0 && simple(c.name).replace(/[^a-z0-9]/g, '').includes('agora')) ?? null;
 }
 
 async function punish(client, guild, member, channel, verdict) {
@@ -254,9 +281,13 @@ async function punish(client, guild, member, channel, verdict) {
     .setFooter({ text: `Salon vocal : ${channel?.name ?? '?'}` })
     .setTimestamp();
 
-  // Dans le chat du salon vocal (tout le monde voit la sanction), sinon dans le salon du staff
-  const where = channel?.isTextBased?.() ? channel : config.staffChannelId ? guild.channels.cache.get(config.staffChannelId) : null;
-  await where?.send({ embeds: [embed], files: [card()], allowedMentions: { users: [member.id] } }).catch((err) => console.warn('[surveillance vocale] message :', err.message));
+  // Dans le chat du salon vocal ET dans #agora (ou le salon choisi), avec un ping pour que le membre ait la notif
+  const places = [channel?.isTextBased?.() ? channel : null, announceChannel(guild)].filter(Boolean);
+  if (!places.length && config.staffChannelId) places.push(guild.channels.cache.get(config.staffChannelId));
+  const content = severe ? `🚨 ${member} **sanctionné** pour avoir insulté <@${config.ownerId}> en vocal.` : `⚠️ ${member} **avertissement** pour avoir insulté <@${config.ownerId}> en vocal.`;
+  for (const place of new Set(places)) {
+    await place.send({ content, embeds: [embed], files: [card()], allowedMentions: { users: [member.id] } }).catch((err) => console.warn(`[surveillance vocale] message dans #${place.name} :`, err.message));
+  }
   await member.send({ embeds: [EmbedBuilder.from(embed).setDescription(`Sur **${guild.name}** : on n'insulte pas ${target} en vocal.`)], files: [card()] }).catch(() => {});
   dmOwner(client, {
     title: `🎙️ ${severe ? 'Sanction' : 'Avertissement'} vocal : ${member.user.username}`,
@@ -265,4 +296,4 @@ async function punish(client, guild, member, channel, verdict) {
 }
 
 // Pour le banc d'essai (tools/test-voiceguard.mjs)
-export const _test = { wav, level, check, queue };
+export const _test = { wav, level, check, queue, ownerSpoke };

@@ -236,12 +236,12 @@ fermeture du PC. Sans Supabase, les deux copies répondent au même clic et l'un
 ## 10. La surveillance vocale 🎙️
 
 Le bot écoute son salon vocal (il n'est plus en sourdine) et repère les **vraies insultes envers le chef
-(Noam)**, qu'il soit dans le vocal ou non. Il faut qu'on parle de lui (son nom ou son pseudo) **et** qu'on
-l'insulte : une insulte envers quelqu'un d'autre, même quand le chef est là, ne compte pas.
+(Noam)**, qu'il soit dans le vocal ou non. La cible doit être sûre : son nom (ou son pseudo) est dit, ou il est
+dans le vocal et vient de parler (on lui répond « ta gueule »). Une insulte envers un autre membre ne compte pas.
 
 | Fois | Ce qui se passe |
 |---|---|
-| 1re | **Avertissement** : carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal + MP |
+| 1re | **Avertissement** : le membre est pingé, carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal **et dans #agora**, + MP |
 | 2e et suivantes | **Exclusion d'1 minute**, **sortie du vocal**, avertissement de plus, carte « SANCTION » (néon rouge) |
 
 Les avertissements s'additionnent avec ceux des insultes écrites. Le chef n'est jamais écouté ni sanctionné,
@@ -250,7 +250,10 @@ et le chef reçoit en MP ce qui a été entendu.
 - Seuls les moments où quelqu'un parle sont envoyés à Gemini, regroupés par personne (une demande pour ~20 s
   de parole), avec un plafond par heure (`VOICE_GUARD_MAX_PER_HOUR`, 200 par défaut). L'audio n'est pas gardé.
 - Pour éviter les erreurs : Gemini doit confirmer l'insulte, un vrai mot d'insulte doit être dans ce qui a été
-  dit, et le chef doit être nommé. Un juron (« putain ») ou une insulte envers le bot ne comptent pas.
+  dit, et la cible doit être sûre (voir plus haut). Un juron (« putain ») ou une insulte envers le bot ne comptent pas.
+- Salon d'annonce : le salon texte dont le nom contient « agora », ou `VOICE_GUARD_CHANNEL_ID`.
+- Ça n'a pas marché ? Tableau de bord › Vue d'ensemble › « Surveillance vocale : dernières écoutes » montre ce que le
+  bot a entendu et pourquoi il a sanctionné ou non (aussi dans Journaux, filtre « surveillance »).
 - Pendant la musique via Lavalink, c'est le serveur audio qui tient le vocal : la surveillance est en pause.
 - Couper : `VOICE_GUARD=false`, ou tableau de bord › IA › Réglages › Surveillance vocale.
 - Préviens tes membres que le vocal est modéré automatiquement.
