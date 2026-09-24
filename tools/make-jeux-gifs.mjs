@@ -4,6 +4,7 @@
  *   node tools/make-jeux-gifs.mjs            (toutes les cartes)
  *   node tools/make-jeux-gifs.mjs loup       (une seule, pour retoucher)
  *   node tools/make-jeux-gifs.mjs --png      (+ un aperçu PNG de chaque carte)
+ *   node tools/make-jeux-gifs.mjs --site     (+ les cartes en image fixe HD pour le site, dans site/cartes/)
  *
  * Les GIFs sont commités dans assets/jeux/ et envoyés en MP : rien n'est encodé
  * pendant une partie, le rôle part sans attente.
@@ -373,6 +374,13 @@ function scene(name, design, seconds) {
 </svg>`;
 }
 
+/** Une face seule, sans le fond ni l'ombre, en double résolution : pour le site. */
+function still(name, design, face) {
+  const c = design.colors;
+  const body = face === 'back' ? back(design, 0.1) : front(design, name, 0.35, 5);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD.w * 2}" height="${CARD.h * 2}" viewBox="${CARD.x} ${CARD.y} ${CARD.w} ${CARD.h}">${defs(c)}${body}</svg>`;
+}
+
 // ============================== fabrication ==============================
 
 async function build(name, design, preview) {
@@ -402,5 +410,18 @@ console.log('Fabrication des cartes de rôle…');
 let total = 0;
 const list = Object.entries(CARDS).filter(([name]) => !only.length || only.includes(name));
 for (const [name, design] of list) total += await build(name, design, preview);
+if (args.includes('--site')) {
+  const SITE = path.resolve('site/cartes');
+  await mkdir(SITE, { recursive: true });
+  const backs = new Set();
+  for (const [name, design] of list) {
+    await sharp(Buffer.from(still(name, design, 'front'))).webp({ quality: 88 }).toFile(path.join(SITE, `${name}.webp`));
+    if (!backs.has(design.game)) {
+      backs.add(design.game);
+      await sharp(Buffer.from(still(name, design, 'back'))).webp({ quality: 88 }).toFile(path.join(SITE, `dos-${design.game}.webp`));
+    }
+  }
+  console.log(`Images du site : ${SITE}`);
+}
 await rm(TMP, { recursive: true, force: true });
 console.log(`Terminé : ${list.length} cartes, ${(total / 1024).toFixed(0)} Ko au total.`);

@@ -158,6 +158,22 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 
 ---
 
+## 8. Le site vitrine 🌐
+
+Une page pour présenter et vendre le bot : `site/index.html`. Le bot la sert lui-même à son
+adresse principale (`https://vercel-ia.onrender.com/`), avec les images des cartes
+(`site/cartes/`) et leurs animations (`/jeux/*.gif`). `/health` ne change pas.
+
+- **Nom, prix, contact** : tout est dans le bloc `CONFIG`, en haut du script de la page
+  (`name`, `orderUrl`, `discordHandle`, `plans`, `plansNote`). Les prix sont des exemples, mets les tiens.
+- Animations au défilement (GSAP + ScrollTrigger), scène 3D (Three.js) avec les vraies cartes
+  de rôle qu'on retourne d'un clic, défilement fluide (Lenis), et effets sonores fabriqués en
+  direct (Web Audio, aucun fichier) : le visiteur les active avec le bouton **Son**.
+- Si les bibliothèques ne chargent pas, la page reste entière et lisible, simplement sans animation.
+- Cartes refaites : `node tools/make-jeux-gifs.mjs --site` régénère aussi les images du site.
+
+---
+
 ## Fonctionnalités
 
 | Quoi | Comment |
