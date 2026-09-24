@@ -105,8 +105,8 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       }
     }
 
-    // Le site vitrine : la page, puis ses images de cartes (cartes/nom.webp, rien d'autre).
-    const sitePath = url.pathname === '/' || url.pathname === '/site' ? 'index.html' : /^\/cartes\/[a-z0-9-]+\.webp$/.test(url.pathname) ? url.pathname.slice(1) : null;
+    // Le site vitrine : la page, puis ses images (cartes/, images/ et images/nuit/, en .webp seulement).
+    const sitePath = url.pathname === '/' || url.pathname === '/site' ? 'index.html' : /^\/(?:cartes|images(?:\/nuit)?)\/[a-z0-9-]+\.webp$/.test(url.pathname) ? url.pathname.slice(1) : null;
     if (sitePath && req.method === 'GET') {
       try {
         const file = await readFile(path.join(SITE_DIR, sitePath));

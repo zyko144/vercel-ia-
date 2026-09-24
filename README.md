@@ -160,17 +160,33 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 
 ## 8. Le site vitrine 🌐
 
-Une page pour présenter et vendre le bot : `site/index.html`. Le bot la sert lui-même à son
-adresse principale (`https://vercel-ia.onrender.com/`), avec les images des cartes
-(`site/cartes/`) et leurs animations (`/jeux/*.gif`). `/health` ne change pas.
+Une page pour présenter et vendre le bot, racontée comme un conte : `site/index.html`.
+Le bot la sert lui-même à son adresse principale (`https://vercel-ia.onrender.com/`), avec ses
+images (`site/cartes/`, `site/images/`). `/health` ne change pas.
 
+- **L'histoire** : un prologue où la nuit tombe sur un village au fil du défilement (72 images
+  rendues dans Blender), puis un chapitre par fonction : l'IA, la musique Spotify, le loup-garou,
+  l'imposteur, le casino, la modération, les autres jeux, et l'épilogue avec les offres.
+- **De vrais messages Discord** reconstitués (salle d'attente, carte en MP, nuit, vote, panneau
+  musique, partage Spotify, signalement) qui apparaissent un par un pendant le défilement (GSAP ScrollTrigger).
+- **Sons** fabriqués en direct (Web Audio, aucun fichier) : page qui tourne, hurlement, grillons,
+  cloche du matin… Le visiteur les active avec le bouton **Son**.
 - **Nom, prix, contact** : tout est dans le bloc `CONFIG`, en haut du script de la page
   (`name`, `orderUrl`, `discordHandle`, `plans`, `plansNote`). Les prix sont des exemples, mets les tiens.
-- Animations au défilement (GSAP + ScrollTrigger), scène 3D (Three.js) avec les vraies cartes
-  de rôle qu'on retourne d'un clic, défilement fluide (Lenis), et effets sonores fabriqués en
-  direct (Web Audio, aucun fichier) : le visiteur les active avec le bouton **Son**.
-- Si les bibliothèques ne chargent pas, la page reste entière et lisible, simplement sans animation.
-- Cartes refaites : `node tools/make-jeux-gifs.mjs --site` régénère aussi les images du site.
+- Sans les bibliothèques (CDN bloqué) ou avec « réduire les animations », la page reste entière et lisible.
+- **Bio du bot** : au démarrage, le lien du site est ajouté dans la bio (« À propos de moi ») du bot
+  et de Casinho. `SITE_URL` pour un autre lien, `SITE_IN_BIO=false` pour ne pas toucher à la bio.
+
+**Refaire les images** :
+
+```bash
+pip install bpy                                  # Blender en module Python (Python 3.11)
+python tools/blender/village.py --mode seq  --out rendus/seq
+python tools/blender/village.py --mode loup --out rendus
+python tools/blender/village.py --mode aube --out rendus
+node tools/make-site-images.mjs rendus           # -> site/images/*.webp
+node tools/make-jeux-gifs.mjs --site             # cartes de rôle -> site/cartes/*.webp
+```
 
 ---
 
