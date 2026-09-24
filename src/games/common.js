@@ -39,7 +39,8 @@ export function ranking(scores, count = 10) {
 /** Salon où se jouent les jeux écrits (│・mini-jeux), sinon celui de la commande. */
 export async function gameChannel(interaction) {
   const id = config.games.miniGamesChannelId || interaction.channelId;
-  const channel = await interaction.client.channels.fetch(id).catch(() => null);
+  // Le cache d'abord : la réponse à la commande doit partir en moins de 3 s
+  const channel = interaction.client.channels.cache?.get(id) ?? await interaction.client.channels.fetch(id).catch(() => null);
   return channel?.isTextBased?.() ? channel : interaction.channel;
 }
 

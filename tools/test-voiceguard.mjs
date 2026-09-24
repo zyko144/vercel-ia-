@@ -60,18 +60,16 @@ const client = {
   isReady: () => true,
 };
 
-// 2 s de « voix » : un son assez fort pour passer le filtre de silence
-const speech = Buffer.alloc(16_000 * 2 * 2);
-for (let i = 0; i < speech.length / 2; i++) speech.writeInt16LE(Math.round(Math.sin(i / 8) * 6000), i * 2);
+// 2 s de « voix » : 100 paquets Opus de 20 ms, comme ceux que Discord envoie
+const speech = Array.from({ length: 100 }, (_, i) => Buffer.alloc(60, i));
+const { opusToOgg } = await import('../src/utils/ogg.js');
 const wait = () => new Promise((r) => setTimeout(r, 20));
 
-await check('le fichier audio envoyé est un vrai WAV 16 kHz mono', async () => {
-  const w = _test.wav(speech);
-  assert.equal(w.toString('ascii', 0, 4), 'RIFF');
-  assert.equal(w.readUInt32LE(24), 16_000);
-  assert.equal(w.readUInt16LE(22), 1);
-  assert.ok(_test.level(speech) > 350);
-  assert.ok(_test.level(Buffer.alloc(32_000)) < 1, 'le silence est reconnu');
+await check('la voix part en Ogg Opus, sans être décodée', async () => {
+  const ogg = opusToOgg(speech);
+  assert.equal(ogg.toString('ascii', 0, 4), 'OggS');
+  assert.ok(ogg.includes(Buffer.from('OpusHead')));
+  assert.ok(ogg.length > 100 * 60, 'tous les paquets sont dedans');
 });
 
 await check('un juron sans cible ne donne rien', async () => {
@@ -79,6 +77,7 @@ await check('un juron sans cible ne donne rien', async () => {
   await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(asked.length, 1, 'une seule demande à Gemini');
   assert.equal(asked[0].input.at(-1).content.at(-1).type, 'audio');
+  assert.equal(asked[0].input.at(-1).content.at(-1).mime_type, 'audio/ogg');
   assert.equal(sent.length, 0);
 });
 
