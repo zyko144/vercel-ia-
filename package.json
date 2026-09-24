@@ -18,7 +18,8 @@
     "test:panels": "node tools/test-panels.mjs",
     "test:tickets": "node tools/test-tickets.mjs",
     "test:premium": "node tools/test-premium.mjs",
-    "test:security": "node tools/test-security.mjs"
+    "test:security": "node tools/test-security.mjs",
+    "test:levels": "node tools/test-levels.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
