@@ -9,6 +9,7 @@ import { ChannelType, EmbedBuilder, PermissionFlagsBits as P } from 'discord.js'
 import { field as f } from './ui.js';
 import { addNote, casierEmbed, verificationPanel } from '../features/security.js';
 import { claimDaily, leaderboardEmbed, profileCard, shopMessage } from '../features/levels.js';
+import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../features/aiExtras.js';
 import { PANELS } from './catalog.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
@@ -85,4 +86,39 @@ Solde : 🪙 ${r.balance.toLocaleString('fr-FR')}`
     },
   },
   { id: 'boutique', label: 'Boutique', emoji: '🛒', desc: 'Rôles à acheter, rôle personnalisé', run: async (client, interaction) => interaction.reply({ ...(await shopMessage(interaction.guild, interaction.user.id)), ...PRIVATE }) },
+]);
+
+// ===================== IA : mémoire, punchline, FAQ =====================
+addActions('ia', 'Demander à l’IA', [
+  { id: 'memoire', label: 'Ce que l’IA sait de moi', emoji: '🧠', desc: 'Voir ou effacer ses souvenirs', run: async (client, interaction) => interaction.reply({ ...(await memoryMessage(interaction.user)), ...PRIVATE }) },
+]);
+addActions('jeux', 'Jeux de groupe', [
+  {
+    id: 'punchline', label: 'Noter une punchline', emoji: '🎤', desc: 'Le jury IA note sur 10', fields: [f.para('punchline', 'Ta punchline', { req: true, max: 800 }), f.bool('public', 'La montrer à tout le salon ?')],
+    run: async (client, interaction, v) => {
+      await interaction.deferReply(v.public ? {} : PRIVATE);
+      const embed = await ratePunchline(v.punchline, interaction.member?.displayName ?? interaction.user.username);
+      return interaction.editReply({ embeds: [embed] });
+    },
+  },
+]);
+addActions('pannel', 'FAQ du salon d’aide', [
+  {
+    id: 'faq-ajouter', label: 'Ajouter à la FAQ', emoji: '📚', desc: 'L’IA répondra toute seule à cette question', perm: P.ManageMessages,
+    fields: [f.text('question', 'Question', { req: true, max: 300 }), f.para('reponse', 'Réponse', { req: true, max: 1500 })],
+    run: async (client, interaction, v) => {
+      const n = await addFaq(interaction.guildId, v.question, v.reponse);
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5ff0ff).setDescription(`📚 Ajouté à la FAQ (${n} questions). Règle le salon d’aide dans le tableau de bord › Mon serveur › IA.`)], ...PRIVATE });
+    },
+  },
+  {
+    id: 'faq-voir', label: 'Voir / retirer de la FAQ', emoji: '🗂️', perm: P.ManageMessages, fields: [f.int('retirer', 'Numéro à retirer (vide = juste voir)', { min: 1, top: 60 })],
+    run: async (client, interaction, v) => {
+      if (v.retirer) await removeFaq(interaction.guildId, v.retirer - 1);
+      const list = await faqEntries(interaction.guildId);
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5ff0ff).setTitle(`📚 FAQ (${list.length})`)
+        .setDescription(list.length ? list.map((e, i) => `**${i + 1}.** ${e.q}
+-# ${e.a.slice(0, 120)}`).join('\n').slice(0, 4000) : 'Vide : ajoute des questions, ou réponds aux membres dans le salon d’aide (en « répondre ») pour que l’IA apprenne.')], ...PRIVATE });
+    },
+  },
 ]);

@@ -20,7 +20,8 @@
     "test:premium": "node tools/test-premium.mjs",
     "test:security": "node tools/test-security.mjs",
     "test:levels": "node tools/test-levels.mjs",
-    "test:voice-extras": "node tools/test-voice-extras.mjs"
+    "test:voice-extras": "node tools/test-voice-extras.mjs",
+    "test:ai-extras": "node tools/test-ai-extras.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
