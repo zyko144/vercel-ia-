@@ -106,51 +106,54 @@ await check('1re vraie insulte envers le chef : avertissement avec la carte anim
   assert.equal(dms.length, 1, 'le membre est prévenu en MP');
 });
 
-await check('le chef est dans le vocal mais n’est pas visé nommément : rien', async () => {
-  verdict = { transcription: 'ta gueule toi', insulte: true, cible: 'chef', mot: 'ta gueule', raison: 'le chef est là' };
-  await new Promise((r) => setTimeout(r, 4100));
+const next = () => new Promise((r) => setTimeout(r, 4100)); // écart minimal entre deux vérifications d'une personne
+
+await check('le chef est dans le vocal mais n’est pas nommé : rien', async () => {
+  verdict = { transcription: 't’es qu’un connard toi', insulte: true, cible: 'chef', mot: 'connard', raison: '?' };
+  await next();
   await _test.check(client, guild, BAD, 'v', speech);
-  assert.equal(sent.length, 1, 'être présent ne suffit pas à être la cible');
+  assert.equal(sent.length, 1);
 });
 
-await check('le chef vient de parler et on lui répond « ta gueule » sans le nommer : rien', async () => {
-  verdict = { transcription: 'oh ta gueule toi', insulte: true, cible: 'chef', mot: 'ta gueule', raison: 'répond au chef' };
-  await new Promise((r) => setTimeout(r, 4100));
+await check('« Vercel ferme ta gueule » : ne compte pas, seul Noam est protégé', async () => {
+  verdict = { transcription: 'Vercel ferme ta gueule', insulte: true, cible: 'aucune', mot: 'ferme ta gueule', raison: 'vise le bot' };
+  await next();
   await _test.check(client, guild, BAD, 'v', speech);
-  assert.equal(sent.length, 1, 'sans « Noam » ni « Vercel », rien');
+  assert.equal(sent.length, 1);
 });
 
-await check('« Vercel ferme ta gueule » : ça compte aussi, envers le bot', async () => {
-  verdict = { transcription: 'Vercel ferme ta gueule', insulte: true, cible: 'bot', mot: 'ferme ta gueule', raison: 'insulte le bot' };
-  await new Promise((r) => setTimeout(r, 4100));
+await check('Noam insulté mais PAS dans le vocal : rien, et rien n’est envoyé à Gemini', async () => {
+  voice.members = new Collection([[BAD, members.get(BAD)]]);
+  const before = asked.length;
+  verdict = { transcription: 'Noam c’est un fdp', insulte: true, cible: 'chef', mot: 'fdp', raison: '?' };
+  await next();
+  await _test.check(client, guild, BAD, 'v', speech);
+  assert.equal(sent.length, 1);
+  assert.equal(asked.length, before, 'pas de demande à Gemini');
+  voice.members = new Collection([[OWNER, members.get(OWNER)], [BAD, members.get(BAD)]]);
+});
+
+await check('2e insulte : encore un avertissement (pas d’exclusion)', async () => {
+  verdict = { transcription: 'Noham t’es un fdp', insulte: true, cible: 'chef', mot: 'fdp', raison: 'insulte le chef' };
+  await next();
   await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(sent.length, 2);
-  assert.match(sent[1].content, new RegExp(`<@${BOT}>`), 'la victime est le bot');
+  assert.match(sent[1].embeds[0].toJSON().author.name, /AVERTISSEMENT/);
+  assert.equal(sanctions.length, 0);
 });
 
-await check('encore une insulte, le chef n’est même pas dans le vocal : exclu 1 min, sorti du vocal, carte SANCTION', async () => {
-  voice.members = new Collection([[BAD, members.get(BAD)]]);
-  verdict = { transcription: 'Noham c’est un fdp', insulte: true, cible: 'chef', mot: 'fdp', raison: 'insulte le chef en son absence' };
-  await new Promise((r) => setTimeout(r, 4100));
+await check('3e insulte : exclu 1 min, sorti du vocal, carte SANCTION partout', async () => {
+  verdict = { transcription: 'ferme ta gueule Noam', insulte: true, cible: 'chef', mot: 'ferme ta gueule', raison: 'insulte le chef' };
+  await next();
   await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(sent.length, 3);
-  const embed = sent[2].embeds[0].toJSON();
-  assert.match(embed.author.name, /SANCTION/);
+  assert.match(sent[2].embeds[0].toJSON().author.name, /SANCTION/);
   assert.equal(sent[2].files[0].name, 'sanction.gif');
   assert.match(sent[2].content, /sanctionné/);
   assert.equal(agoraSent.at(-1).files[0].name, 'sanction.gif');
-  assert.deepEqual(sanctions.slice(-2).map((x) => x.what).sort(), ['exclu', 'vocal']);
+  assert.deepEqual(sanctions.map((x) => x.what).sort(), ['exclu', 'vocal']);
   assert.equal(sanctions.find((x) => x.what === 'exclu').ms, 60_000);
-  assert.equal(voiceGuardStats.insults, 3);
   assert.ok(voiceGuardStats.recent.length >= 5, 'les dernières écoutes sont gardées pour le tableau de bord');
-});
-
-await check('une insulte sans nom, même avec le chef dans le vocal : rien', async () => {
-  voice.members = new Collection([[OWNER, members.get(OWNER)], [BAD, members.get(BAD)]]);
-  verdict = { transcription: 't’es qu’un connard', insulte: true, cible: 'chef', mot: 'connard', raison: '?' };
-  await new Promise((r) => setTimeout(r, 4100));
-  await _test.check(client, guild, BAD, 'v', speech);
-  assert.equal(sent.length, 3);
 });
 
 globalThis.fetch = realFetch;

@@ -236,14 +236,14 @@ Render est arrêté. Sans Supabase, les deux copies répondent au même clic et 
 
 ## 10. La surveillance vocale 🎙️
 
-Le bot écoute son salon vocal (il n'est plus en sourdine) et sanctionne les **vraies insultes qui nomment
-« Noam » ou « Vercel »** (« Noam t'es un fdp », « Vercel ferme ta gueule »). Sans l'un de ces noms dans la phrase,
-rien ne se passe, que Noam soit dans le vocal ou non.
+Le bot écoute son salon vocal et sanctionne les **vraies insultes contre Noam, seulement quand Noam est
+dans ce vocal et que son nom est dit** (« Noam t'es un fdp »). Personne d'autre n'est protégé. Quand Noam n'est
+pas dans le vocal, le bot n'écoute rien (rien n'est envoyé à Gemini).
 
 | Fois | Ce qui se passe |
 |---|---|
-| 1re | **Avertissement** : le membre est pingé, carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal **et dans #agora**, + MP |
-| 2e et suivantes | **Exclusion d'1 minute**, **sortie du vocal**, avertissement de plus, carte « SANCTION » (néon rouge) |
+| 1er et 2e | **Avertissement** : le membre est pingé, carte animée « AVERTISSEMENT » (tampon néon ambre) dans le chat du vocal **et dans #agora**, + MP |
+| 3e et suivants | **Exclusion d'1 minute**, **sortie du vocal**, avertissement de plus, carte « SANCTION » (néon rouge) |
 
 Les avertissements s'additionnent avec ceux des insultes écrites. Le chef n'est jamais écouté ni sanctionné,
 et le chef reçoit en MP ce qui a été entendu.
@@ -251,7 +251,7 @@ et le chef reçoit en MP ce qui a été entendu.
 - Seuls les moments où quelqu'un parle sont envoyés à Gemini, regroupés par personne (une demande pour ~20 s
   de parole), avec un plafond par heure (`VOICE_GUARD_MAX_PER_HOUR`, 200 par défaut). L'audio n'est pas gardé.
 - Pour éviter les erreurs : Gemini doit confirmer l'insulte, un vrai mot d'insulte doit être dans ce qui a été
-  dit, et « Noam » ou « Vercel » doit être prononcé. Un juron (« putain ») ne compte pas.
+  dit, Noam doit être nommé et présent. Un juron (« putain ») ne compte pas.
 - Salon d'annonce : le salon texte dont le nom contient « agora », ou `VOICE_GUARD_CHANNEL_ID`.
 - Ça n'a pas marché ? Tableau de bord › Vue d'ensemble › « Surveillance vocale : dernières écoutes » montre ce que le
   bot a entendu et pourquoi il a sanctionné ou non (aussi dans Journaux, filtre « surveillance »).
