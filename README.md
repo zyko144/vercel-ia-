@@ -236,7 +236,8 @@ fermeture du PC. Sans Supabase, les deux copies répondent au même clic et l'un
 ## 10. La surveillance vocale 🎙️
 
 Le bot écoute son salon vocal (il n'est plus en sourdine) et repère les **vraies insultes envers le chef
-(Noam) ou envers le bot (Vercel)** :
+(Noam)**, qu'il soit dans le vocal ou non. Il faut qu'on parle de lui (son nom ou son pseudo) **et** qu'on
+l'insulte : une insulte envers quelqu'un d'autre, même quand le chef est là, ne compte pas.
 
 | Fois | Ce qui se passe |
 |---|---|
@@ -249,7 +250,7 @@ et le chef reçoit en MP ce qui a été entendu.
 - Seuls les moments où quelqu'un parle sont envoyés à Gemini, regroupés par personne (une demande pour ~20 s
   de parole), avec un plafond par heure (`VOICE_GUARD_MAX_PER_HOUR`, 200 par défaut). L'audio n'est pas gardé.
 - Pour éviter les erreurs : Gemini doit confirmer l'insulte, un vrai mot d'insulte doit être dans ce qui a été
-  dit, et la cible doit être sûre (nommée, ou le chef présent dans le vocal). Un juron (« putain ») ne compte pas.
+  dit, et le chef doit être nommé. Un juron (« putain ») ou une insulte envers le bot ne comptent pas.
 - Pendant la musique via Lavalink, c'est le serveur audio qui tient le vocal : la surveillance est en pause.
 - Couper : `VOICE_GUARD=false`, ou tableau de bord › IA › Réglages › Surveillance vocale.
 - Préviens tes membres que le vocal est modéré automatiquement.

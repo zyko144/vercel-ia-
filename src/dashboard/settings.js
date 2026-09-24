@@ -105,7 +105,7 @@ export const SETTINGS = {
   },
   voiceGuard: {
     label: 'Surveillance vocale', group: 'Comportement', type: 'bool',
-    help: 'Le bot écoute son salon vocal : une vraie insulte envers le chef ou le bot = avertissement, dès la 2e = exclusion d’1 min et sortie du vocal. Le chef n’est jamais écouté.',
+    help: 'Le bot écoute son salon vocal : une vraie insulte envers le chef (nommé, qu’il soit dans le vocal ou non) = avertissement, dès la 2e = exclusion d’1 min et sortie du vocal. Le chef n’est jamais écouté.',
     get: () => config.voiceGuard.enabled,
     set: (v) => { config.voiceGuard.enabled = v; },
     check: (v) => (typeof v === 'boolean' ? null : 'Oui ou non.'),

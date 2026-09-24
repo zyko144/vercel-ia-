@@ -101,8 +101,16 @@ await check('1re vraie insulte envers le chef : avertissement avec la carte anim
   assert.equal(dms.length, 1, 'le membre est prévenu en MP');
 });
 
-await check('2e insulte (envers le bot) : exclu 1 min, sorti du vocal, carte SANCTION', async () => {
-  verdict = { transcription: 'Vercel t’es un bot de merde, fdp', insulte: true, cible: 'bot', mot: 'fdp', raison: 'insulte le bot' };
+await check('le chef est dans le vocal mais n’est pas visé nommément : rien', async () => {
+  verdict = { transcription: 'ta gueule toi', insulte: true, cible: 'chef', mot: 'ta gueule', raison: 'le chef est là' };
+  await new Promise((r) => setTimeout(r, 4100));
+  await _test.check(client, guild, BAD, 'v', speech);
+  assert.equal(sent.length, 1, 'être présent ne suffit pas à être la cible');
+});
+
+await check('2e insulte, le chef n’est même pas dans le vocal : exclu 1 min, sorti du vocal, carte SANCTION', async () => {
+  voice.members = new Collection([[BAD, members.get(BAD)]]);
+  verdict = { transcription: 'Noam c’est un fdp', insulte: true, cible: 'chef', mot: 'fdp', raison: 'insulte le chef en son absence' };
   await new Promise((r) => setTimeout(r, 4100));
   await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(sent.length, 2);
@@ -114,8 +122,8 @@ await check('2e insulte (envers le bot) : exclu 1 min, sorti du vocal, carte SAN
   assert.equal(voiceGuardStats.insults, 2);
 });
 
-await check('insulte « envers le bot » sans jamais le nommer : ignorée (cible pas sûre)', async () => {
-  verdict = { transcription: 'ce bot de merde', insulte: true, cible: 'bot', mot: 'merde', raison: '?' };
+await check('une insulte envers le bot ne compte pas : seul le chef est protégé', async () => {
+  verdict = { transcription: 'Vercel t’es un connard', insulte: true, cible: 'aucune', mot: 'connard', raison: 'vise le bot' };
   await new Promise((r) => setTimeout(r, 4100));
   await _test.check(client, guild, BAD, 'v', speech);
   assert.equal(sent.length, 2);
