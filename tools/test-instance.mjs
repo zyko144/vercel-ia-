@@ -25,27 +25,28 @@ process.env.DISCORD_TOKEN = ['T'.repeat(26), 'E'.repeat(6), 'S'.repeat(30)].join
 process.env.GEMINI_API_KEY = 'essai';
 process.env.SUPABASE_URL = `http://127.0.0.1:${fake.address().port}`;
 process.env.SUPABASE_SERVICE_KEY = 'sb_secret_essai';
-process.env.RENDER = 'true'; // cette copie joue le rôle de Render
+// cette copie joue le rôle du PC (pas de variable RENDER)
+delete process.env.RENDER;
 
 const { instance, waitForTurn } = await import('../src/features/instance.js');
 assert.equal(instance.guarded, true);
-assert.equal(instance.where, 'Render');
+assert.match(instance.where, /^PC/);
 
-// Le bot tourne déjà sur un PC (prioritaire) : Render attend.
-rows.set('instance-lock', { id: 'pc', startedAt: Date.now() - 5000, where: 'PC (maison)', priority: 2, at: Date.now() });
+// Le bot tourne déjà sur Render (prioritaire) : le PC attend.
+rows.set('instance-lock', { id: 'render', startedAt: Date.now() - 5000, where: 'Render', priority: 2, at: Date.now() });
 let done = false;
 const turn = waitForTurn().then(() => { done = true; });
 await new Promise((r) => setTimeout(r, 800));
-assert.equal(done, false, 'Render attend tant que le PC tourne');
-assert.equal(instance.waitingFor, 'PC (maison)');
-console.log('✅ Render attend tant que le bot tourne sur le PC');
+assert.equal(done, false, 'le PC attend tant que Render tourne');
+assert.equal(instance.waitingFor, 'Render');
+console.log('✅ le PC attend tant que le bot tourne sur Render');
 
-// Le PC s'arrête : son bail n'est plus renouvelé, Render reprend au tour suivant.
+// Render s'arrête : son bail n'est plus renouvelé, le PC prend le relais au tour suivant.
 rows.set('instance-lock', { ...rows.get('instance-lock'), at: Date.now() - 120_000 });
 await turn;
-assert.equal(rows.get('instance-lock').id, instance.id, 'Render a pris le bail');
+assert.equal(rows.get('instance-lock').id, instance.id, 'le PC a pris le bail');
 assert.equal(instance.waitingFor, null);
-console.log('✅ Render reprend tout seul une fois le PC arrêté');
+console.log('✅ le PC prend le relais tout seul si Render s’arrête');
 
 fake.close();
 process.exit(0);

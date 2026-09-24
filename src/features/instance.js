@@ -2,8 +2,8 @@
 // Si le bot tourne sur Render ET sur un PC avec le même token, Discord envoie chaque clic aux deux :
 // l'une répond, l'autre échoue (« Unknown interaction ») et les rappels partent en double.
 // Chaque copie pose donc un « bail » dans Supabase et le renouvelle toutes les 15 s :
-//  - le PC passe devant Render (on lance le bot chez soi pour tester : c'est lui qui répond) ;
-//  - Render attend, puis reprend tout seul 1 min après la fermeture du PC ;
+//  - Render passe devant : c'est lui qui fait tourner le bot et le tableau de bord (vercel-ia.onrender.com) ;
+//  - le PC n'ouvre que le site sur localhost, et ne prend le relais du bot que si Render est arrêté ;
 //  - à priorité égale (nouvelle version sur Render), la plus récente gagne.
 // Sans Supabase, les copies ne peuvent pas se voir : pas de garde (un message le rappelle au démarrage).
 import crypto from 'node:crypto';
@@ -18,7 +18,7 @@ export const instance = {
   id: crypto.randomBytes(8).toString('hex'),
   startedAt: Date.now(),
   where: process.env.RENDER ? 'Render' : `PC (${os.hostname()})`,
-  priority: process.env.RENDER ? 1 : 2,
+  priority: process.env.RENDER ? 2 : 1,
   guarded: sharedStorage,
   waitingFor: null,
 };
