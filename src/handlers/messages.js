@@ -6,6 +6,7 @@ import { askAI } from '../features/chat.js';
 import { createImageMessage } from '../features/images.js';
 import { hitCooldown } from '../features/limits.js';
 import { protectOwner } from '../features/protectOwner.js';
+import { countMessage } from '../features/weekly.js';
 import { conversationKey } from '../features/memory.js';
 import { getPrivateThread, privateThreadOwner } from '../features/privateThreads.js';
 import { handleSonMessage } from '../features/tribunal.js';
@@ -22,6 +23,8 @@ const MAX_REUPLOAD_BYTES = 8 * 1024 * 1024;
 
 export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
+  // Rapport de la semaine : on compte (juste un nombre par membre et par salon)
+  if (message.inGuild()) countMessage(message);
   // Insultes envers le chef : vérifié sur tout le serveur, sans bloquer le reste
   if (message.inGuild()) protectOwner(client, message).catch((err) => console.warn('[protection]', err.message));
   // Jeux en cours (rébus, imposteur, histoire…) : les messages du salon sont des réponses

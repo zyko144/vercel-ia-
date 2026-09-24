@@ -4,6 +4,7 @@ import { addActions } from './catalog.js';
 import { ANNOUNCE_FIELDS, TICKET_FIELDS, openTickets, startDraft } from '../features/tickets.js';
 import { BUILD_FIELDS, startBuild } from '../features/build.js';
 import { panelEmbed } from './ui.js';
+import '../features/premiumPanel.js'; // groupe « Premium » de /serveur
 import { PANELS } from './catalog.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };

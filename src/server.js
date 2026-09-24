@@ -108,6 +108,16 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       }
     }
 
+    // Logo d'un serveur premium (cartes personnalisées)
+    const logoMatch = url.pathname.match(/^\/logo\/(\d{15,21})\.png$/);
+    if (logoMatch && req.method === 'GET') {
+      const { logoPng } = await import('./features/premium.js');
+      const png = logoPng(logoMatch[1]);
+      if (!png) return send(res, 404, { error: 'pas de logo' });
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=86400' });
+      return res.end(png);
+    }
+
     // Le site vitrine : la page, puis ses images (cartes/, images/ et images/nuit/, en .webp seulement).
     const sitePath = url.pathname === '/' || url.pathname === '/site' ? 'index.html' : /^\/(?:cartes|images(?:\/nuit)?)\/[a-z0-9-]+\.webp$/.test(url.pathname) ? url.pathname.slice(1) : null;
     if (sitePath && req.method === 'GET') {

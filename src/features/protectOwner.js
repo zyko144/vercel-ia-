@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { chatJson } from '../ai/gemini.js';
 import { load, save } from '../storage.js';
 import { truncate } from '../utils/discord.js';
+import { countEvent } from './weekly.js';
 
 const TIMEOUT_MS = 60_000;
 const WARN_KIND = 'insulte-protege';
@@ -172,6 +173,7 @@ export async function addInsultWarning(guildId, userId, entry) {
   const list = (all[guildId][userId] ??= []);
   list.push({ ...entry, at: Date.now() });
   save('warnings', all);
+  countEvent(guildId, 'sanctions');
   return list.filter((w) => WARN_KINDS.has(w.kind)).length;
 }
 

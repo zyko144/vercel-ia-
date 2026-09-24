@@ -321,6 +321,20 @@ await check('rappels, jetons du casino et liste noire de l’IA', async () => {
   assert.equal(pausedAnswer(STRANGER), null);
 });
 
+await check('historique des sanctions : listé, puis une sanction effacée', async () => {
+  const { addInsultWarning } = await import('../src/features/protectOwner.js');
+  await addInsultWarning(GUILD, STRANGER, { reason: 'Insulte en vocal envers Noam (« fdp »)', kind: 'insulte-vocal' });
+  const r = await request('/dashboard/api/sanctions');
+  const row = r.json.sanctions.find((x) => x.userId === STRANGER && x.kind === 'insulte-vocal');
+  assert.ok(row, 'la sanction vocale apparaît');
+  const del = await post('/dashboard/api/sanctions/effacer', { guildId: GUILD, userId: STRANGER, at: row.at });
+  assert.equal(del.json.ok, true);
+  const after = await request('/dashboard/api/sanctions');
+  assert.ok(!after.json.sanctions.some((x) => x.at === row.at && x.userId === STRANGER));
+  const premium = await request('/dashboard/api/premium');
+  assert.equal(premium.json.servers[0].plan, 'Gratuit');
+});
+
 await check('fermer les autres sessions, puis se déconnecter', async () => {
   const autre = await post('/dashboard/api/login', { jeton: createLoginToken(ADMIN) }, { withCookie: false, headers: { 'x-forwarded-for': '10.0.4.4' } });
   const autreCookie = autre.headers.get('set-cookie').split(';')[0];

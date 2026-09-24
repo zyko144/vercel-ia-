@@ -1,5 +1,6 @@
 // Lecteur de musique d'un serveur : file d'attente, boucle, autoplay, panneau.
 // La lecture elle-même passe par un "moteur" : Lavalink (serveur audio externe) ou le lecteur local.
+import { countEvent } from '../features/weekly.js';
 import { config } from '../config.js';
 import { dmOwner } from '../features/escalation.js';
 import { followedChannel, heldChannel, lockedChannel } from '../features/voice.js';
@@ -137,7 +138,10 @@ export class GuildPlayer {
       }
       if (token !== this.playToken || this.current !== track) return;
       this.failures = 0;
-      if (newTrack) await this.sendNewPanel();
+      if (newTrack) {
+        countEvent(this.guild.id, 'musique');
+        await this.sendNewPanel();
+      }
       else this.refreshPanel(true);
       this.preloadNext();
       // Sert au blind test : le chrono ne démarre qu'une fois le son vraiment lancé

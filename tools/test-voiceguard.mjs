@@ -156,6 +156,21 @@ await check('3e insulte : exclu 1 min, sorti du vocal, carte SANCTION partout', 
   assert.ok(voiceGuardStats.recent.length >= 5, 'les dernières écoutes sont gardées pour le tableau de bord');
 });
 
+await check('Gardien : un mot interdit compte même sans le chef (offre premium seulement)', async () => {
+  const premium = await import('../src/features/premium.js');
+  voice.members = new Collection([[BAD, members.get(BAD)]]);
+  verdict = { transcription: 'franchement c’est du caca boudin', insulte: false, cible: 'aucune', mot: '', raison: '-' };
+  premium.setGuardOptions('g', { protectedIds: [], words: ['caca boudin'] });
+  await next();
+  await _test.check(client, guild, BAD, 'v', speech);
+  assert.equal(sent.length, 3, 'offre gratuite : les options Gardien ne comptent pas');
+  premium.startTrial('g', OWNER);
+  await next();
+  await _test.check(client, guild, BAD, 'v', speech);
+  assert.equal(sent.length, 4);
+  assert.match(sent[3].content, /mot interdit/);
+});
+
 globalThis.fetch = realFetch;
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);

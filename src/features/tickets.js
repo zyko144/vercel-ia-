@@ -12,6 +12,7 @@ import {
 import { load, save } from '../storage.js';
 import { art, buildModal, field as f, readModal } from '../panels/ui.js';
 import { brandingOf } from './premium.js';
+import { countEvent } from './weekly.js';
 
 const KEY = 'tickets';
 const PRIVATE = { flags: MessageFlags.Ephemeral };
@@ -244,6 +245,7 @@ async function openTicket(client, interaction, panelId) {
     topic: `Ticket n°${number} de ${interaction.user.tag ?? interaction.user.username} · ouvert via le panneau « ${cut(panel.title, 60)} »`,
   });
   g.open[channel.id] = { userId: interaction.user.id, number, panelId, openedAt: Date.now(), claimedBy: null };
+  countEvent(guild.id, 'tickets');
   persist();
 
   const gif = art('panneaux', 'ticket');

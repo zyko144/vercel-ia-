@@ -29,6 +29,8 @@ import { UTILITY_HANDLERS } from './utility.js';
 import { handlePanelComponent, isPanelCommand, isPanelComponent, openPanel } from '../panels/index.js';
 import { handleTicketComponent, isTicketComponent } from '../features/tickets.js';
 import { handleBuildComponent, isBuildComponent } from '../features/build.js';
+import { countEvent } from '../features/weekly.js';
+import { handlePremiumComponent, isPremiumComponent } from '../features/premiumPanel.js';
 
 const EXPLAIN_LEVELS = {
   simple: "Explique comme à quelqu'un de 12 ans : mots simples, une analogie de la vie de tous les jours, pas de jargon.",
@@ -50,6 +52,7 @@ export async function onInteraction(client, interaction) {
     if (isPanelComponent(interaction)) return await handlePanelComponent(client, interaction);
     if (isTicketComponent(interaction)) return await handleTicketComponent(client, interaction);
     if (isBuildComponent(interaction)) return await handleBuildComponent(client, interaction);
+    if (isPremiumComponent(interaction)) return await handlePremiumComponent(client, interaction);
     if (isGameComponent(interaction)) return await handleGameComponent(client, interaction);
     if (isBlindTestComponent(interaction)) return await handleBlindTestComponent(client, interaction);
     if (isMusicComponent(interaction)) return await handleMusicComponent(client, interaction);
@@ -98,6 +101,7 @@ export async function runCommand(client, interaction) {
   if (!COMMANDS_ALLOWED_EVERYWHERE.has(interaction.commandName) && !isAllowedChannel(interaction.channel, interaction.channelId)) {
     return interaction.reply({ content: `👉 Ça marche que dans ${allowedChannelsMention()}, viens me parler là-bas !`, ...PRIVATE });
   }
+  if (interaction.commandName.startsWith('jeu-') && !interaction.options?.getBoolean?.('arreter')) countEvent(interaction.guildId, 'jeux');
   if (interaction.commandName === 'Signaler au staff') return handleReport(client, interaction);
   if (interaction.isMessageContextMenuCommand()) return handleContextMenu(client, interaction);
   if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return handleMusicCommand(client, interaction);

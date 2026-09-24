@@ -4,6 +4,7 @@
 // - Ce que chaque plan débloque : minutes d'IA vocale par mois, choix de la voix, cartes aux couleurs
 //   du serveur, rapport de la semaine, surveillance vocale étendue.
 // Tout est gardé dans le stockage du bot (Supabase conseillé).
+import { config } from '../config.js';
 import { load, save } from '../storage.js';
 
 const KEY = 'serveurs';
@@ -80,14 +81,33 @@ export function setPlan(guildId, plan, days) {
 export function brandingOf(guildId) {
   if (!guildId || !planOf(guildId).branding) return null;
   const b = servers[guildId]?.branding;
-  return b && (b.name || b.color || b.logo) ? b : null;
+  if (!b || !(b.name || b.color || b.logoData)) return null;
+  // Le logo est servi par le bot lui-même (les liens des fichiers Discord expirent)
+  const logo = b.logoData && config.publicUrl ? `${config.publicUrl}/logo/${guildId}.png?v=${b.logoVersion ?? 1}` : null;
+  return { name: b.name ?? null, color: b.color ?? null, logo };
 }
 
-export function setBranding(guildId, { name, color, logo }) {
+/** logoPng : image PNG déjà réduite (128 × 128), ou undefined pour garder l'ancienne. */
+export function setBranding(guildId, { name, color, logoPng }) {
   const s = entry(guildId);
-  s.branding = { name: name || null, color: color ?? null, logo: logo || null };
+  const old = s.branding ?? {};
+  s.branding = {
+    name: name ?? old.name ?? null,
+    color: color ?? old.color ?? null,
+    logoData: logoPng ? logoPng.toString('base64') : old.logoData ?? null,
+    logoVersion: logoPng ? (old.logoVersion ?? 0) + 1 : old.logoVersion ?? null,
+  };
   persist();
-  return s.branding;
+  return brandingOf(guildId) ?? s.branding;
+}
+export function clearBranding(guildId) {
+  delete entry(guildId).branding;
+  persist();
+}
+/** Le logo enregistré d'un serveur (pour la route /logo/<id>.png). */
+export function logoPng(guildId) {
+  const data = servers[guildId]?.branding?.logoData;
+  return data ? Buffer.from(data, 'base64') : null;
 }
 export const rawBranding = (guildId) => servers[guildId]?.branding ?? null;
 
