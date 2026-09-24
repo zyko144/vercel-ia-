@@ -10,6 +10,7 @@ import { field as f } from './ui.js';
 import { addNote, casierEmbed, verificationPanel } from '../features/security.js';
 import { claimDaily, leaderboardEmbed, profileCard, shopMessage } from '../features/levels.js';
 import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../features/aiExtras.js';
+import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUndercover } from '../games/soirees.js';
 import { PANELS } from './catalog.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
@@ -121,4 +122,15 @@ addActions('pannel', 'FAQ du salon d’aide', [
 -# ${e.a.slice(0, 120)}`).join('\n').slice(0, 4000) : 'Vide : ajoute des questions, ou réponds aux membres dans le salon d’aide (en « répondre ») pour que l’IA apprenne.')], ...PRIVATE });
     },
   },
+]);
+
+// ===================== /jeux : jeux de soirée =====================
+addActions('jeux', 'Jeux de groupe', [
+  { id: 'undercover', label: 'Undercover', emoji: '🕶️', desc: 'Undercovers + Mister White, 4 joueurs min', run: (client, interaction) => startUndercover(interaction) },
+  { id: 'petitbac', label: 'Petit Bac', emoji: '📝', desc: 'Une lettre, 5 catégories, l’IA vérifie', run: (client, interaction) => startPetitBac(interaction) },
+  { id: 'actionverite', label: 'Action ou vérité', emoji: '🎲', desc: 'Défis gentils, les autres valident', run: (client, interaction) => startActionVerite(interaction) },
+  { id: 'quizserveur', label: 'Quiz du serveur', emoji: '🧭', desc: 'Des questions sur le serveur et ses membres', run: (client, interaction) => startQuizServeur(interaction) },
+]);
+addActions('jeux', 'Jeux musicaux et petits jeux', [
+  { id: 'pendu', label: 'Pendu musical', emoji: '🎵', desc: 'Le titre lettre par lettre, l’extrait en indice', run: (client, interaction) => startPendu(interaction) },
 ]);

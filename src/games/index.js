@@ -8,6 +8,7 @@ import { handleStoryButton, startStory } from './histoire.js';
 import { handleImpostorComponent, startImpostor } from './imposteur.js';
 import { handleWerewolfComponent, startWerewolf } from './loupgarou.js';
 import { handleRebusButton, startRebus } from './rebus.js';
+import { handleSoireeComponent } from './soirees.js';
 
 export { routeGameMessage } from './common.js';
 export { startFantasyLoop } from './fantasy.js';
@@ -24,6 +25,7 @@ const COMPONENTS = {
   hist: handleStoryButton,
   fs: handleFreestyleButton,
   bat: handleBattleComponent,
+  ng: handleSoireeComponent,
 };
 
 export async function handleGameComponent(client, interaction) {
