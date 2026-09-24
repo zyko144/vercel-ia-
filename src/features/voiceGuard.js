@@ -1,6 +1,5 @@
-// Surveillance vocale : le bot écoute son salon vocal et repère les vraies insultes envers le chef (Noam),
-// qu'il soit dans le vocal ou non. La cible doit être sûre : son nom est dit, ou il est dans le vocal et
-// vient de parler (on lui répond). 1re fois : avertissement. Dès la 2e : exclusion d'1 minute,
+// Surveillance vocale : le bot écoute son salon vocal et repère les vraies insultes qui NOMMENT le chef
+// (« Noam ») ou le bot (« Vercel »). Sans l'un de ces noms dans la phrase, rien ne se passe. 1re fois : avertissement. Dès la 2e : exclusion d'1 minute,
 // sortie du vocal et avertissement de plus. Chaque sanction s'affiche avec une carte animée (tampon néon).
 //
 // Comment ça marche, sans exploser le quota Gemini :
@@ -36,10 +35,9 @@ const attached = new WeakSet();
 const recording = new Set(); // guild:user en cours d'enregistrement
 const groups = new Map(); // guild:user -> { chunks, bytes, timer, channelId }
 const lastCheck = new Map(); // user -> date
-const ownerSpoke = new Map(); // guild -> dernière fois que le chef a parlé dans le vocal du bot
-const CONVERSATION_MS = 30_000; // le chef a parlé il y a moins de 30 s : on peut lui répondre
 // Façons dont Gemini peut écrire « Noam » en transcrivant
 const NOAM_SPELLINGS = ['noam', 'noham', 'nohm', 'noame', 'nohame', 'noan', 'naom'];
+const VERCEL_SPELLINGS = ['vercel', 'versel', 'vercelle', 'verselle', 'vercell'];
 let hour = { start: 0, count: 0 };
 export const voiceGuardStats = { checks: 0, insults: 0, skipped: 0, lastAt: null, recent: [] };
 
@@ -55,7 +53,7 @@ export const guardWantsAudio = () => config.voiceGuard.enabled;
 
 export function startVoiceGuard(client) {
   onVoiceReady((guild, connection) => attach(client, guild, connection));
-  if (config.voiceGuard.enabled) console.log('🎙️ Surveillance vocale active (insultes envers le chef)');
+  if (config.voiceGuard.enabled) console.log('🎙️ Surveillance vocale active (insultes qui nomment Noam ou Vercel)');
 }
 
 /** Change la sourdine du bot dans les vocaux où il est (quand on active / coupe la surveillance). */
@@ -72,7 +70,6 @@ function attach(client, guild, connection) {
   if (attached.has(connection)) return;
   attached.add(connection);
   connection.receiver.speaking.on('start', (userId) => {
-    if (userId === config.ownerId) ownerSpoke.set(guild.id, Date.now());
     if (!config.voiceGuard.enabled) return;
     listen(client, guild, connection, userId).catch((err) => console.warn('[surveillance vocale]', err.message));
   });
@@ -170,7 +167,7 @@ const SCHEMA = {
   properties: {
     transcription: { type: 'string' },
     insulte: { type: 'boolean' },
-    cible: { type: 'string', enum: ['chef', 'aucune'] },
+    cible: { type: 'string', enum: ['chef', 'bot', 'aucune'] },
     mot: { type: 'string' },
     raison: { type: 'string' },
   },
@@ -192,24 +189,22 @@ async function check(client, guild, userId, channelId, pcm) {
   const owner = guild.members.cache.get(config.ownerId) ?? await guild.members.fetch(config.ownerId).catch(() => null);
   const ownerNames = [...new Set(['Noam', ...namesOf(owner, owner?.user)])];
   const others = channel?.members?.filter((m) => !m.user.bot && m.id !== userId).map((m) => m.displayName) ?? [];
-  const ownerHere = Boolean(channel?.members?.has(config.ownerId));
-  const spokeAgo = ownerSpoke.has(guild.id) ? Math.round((Date.now() - ownerSpoke.get(guild.id)) / 1000) : null;
-  const talking = ownerHere && spokeAgo !== null && spokeAgo * 1000 < CONVERSATION_MS;
 
   voiceGuardStats.checks++;
   voiceGuardStats.lastAt = Date.now();
   const { text } = await chat({
     tag: 'vocal',
-    system: 'Tu es le modérateur vocal d\'un serveur Discord français. Tu transcris fidèlement ce qui est dit (argot, verlan, abréviations comprises) puis tu juges s\'il y a une vraie insulte envers le chef. Tu es strict sur la cible : dans le doute, ce n\'est pas une insulte envers lui.',
+    system: 'Tu es le modérateur vocal d\'un serveur Discord français. Tu transcris fidèlement ce qui est dit (argot, verlan, abréviations comprises) puis tu juges s\'il y a une vraie insulte envers le chef (Noam) ou le bot (Vercel), nommés dans la phrase.',
     content: [
       { type: 'text', text: `Extrait audio de ${speaker?.displayName ?? 'un membre'} dans le salon vocal « ${channel?.name ?? '?'} ».
-Le chef s'appelle : ${ownerNames.join(', ')}. ${ownerHere ? `Il est dans ce vocal${talking ? ` et vient de parler (il y a ${spokeAgo} s) : si la phrase lui répond ou s'adresse à « toi » sans nommer quelqu'un d'autre, elle le vise` : ''}.` : 'Il n\'est pas dans ce vocal : il faut qu\'on parle de lui.'}
+Le chef s'appelle : ${ownerNames.join(', ')}. Le bot s'appelle : Vercel (ou AI Vercel).
+Seules comptent les phrases où l'on DIT « Noam » (ou un de ses pseudos) ou « Vercel ». Écris ces noms tels quels dans la transcription.
 Autres personnes présentes : ${others.join(', ') || 'personne'}.
 
 1. transcription : ce qui est dit, mot pour mot, en français.
-2. insulte : true seulement si la personne insulte VRAIMENT le chef (fdp, ntm, connard, etc.), en lui parlant ou en parlant de lui, même pour rire.
-   Ne compte PAS : une insulte envers quelqu'un d'autre (même si le chef est là), une insulte envers le bot, un juron sans cible (« putain », « merde »), se rabaisser soi-même, citer ou chanter des paroles, parler d'un jeu, ou quand on ne sait pas qui est visé.
-3. cible : « chef » ou « aucune ».
+2. insulte : true seulement si la personne insulte VRAIMENT Noam ou Vercel en les nommant (« Noam t'es un fdp », « Vercel ferme ta gueule »), même pour rire.
+   Ne compte PAS : une phrase sans ces noms, une insulte envers quelqu'un d'autre, un juron sans cible (« putain », « merde »), se rabaisser soi-même, citer ou chanter des paroles, parler d'un jeu, ou quand on ne sait pas qui est visé.
+3. cible : « chef » (Noam), « bot » (Vercel) ou « aucune ».
 4. mot : l'insulte exacte (vide sinon). 5. raison : une phrase courte.` },
       { type: 'audio', mime_type: 'audio/wav', data: wav(pcm).toString('base64') },
     ],
@@ -220,17 +215,19 @@ Autres personnes présentes : ${others.join(', ') || 'personne'}.
   });
   const verdict = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ''));
   const who = speaker?.displayName ?? userId;
-  if (!verdict.insulte || verdict.cible === 'aucune') return note({ who, heard: verdict.transcription, decision: 'pas d’insulte envers le chef' });
+  if (!verdict.insulte || verdict.cible === 'aucune') return note({ who, heard: verdict.transcription, decision: 'pas d’insulte envers Noam ou Vercel' });
 
   // Garde-fous : un vrai mot d'insulte doit être dans ce qui a été dit, et la cible doit être plausible
   const { strong, contextual } = findInsults(verdict.transcription);
   if (!strong.length && !contextual.length) return note({ who, heard: verdict.transcription, decision: 'ignoré : pas de vrai mot d’insulte' });
   const said = simple(verdict.transcription);
   const squashed = said.replace(/[^a-z0-9]/g, '');
-  const named = [...ownerNames.map(simple), ...NOAM_SPELLINGS].some((n) => n.length >= 3 && (said.includes(n) || squashed.includes(n.replace(/[^a-z0-9]/g, ''))));
-  // Cible sûre : le chef est nommé, ou il est dans le vocal et vient de parler (on lui répond).
-  // Être juste présent ne suffit pas : une insulte envers un autre membre ne compte pas.
-  if (!named && !talking) return note({ who, heard: verdict.transcription, decision: ownerHere ? 'ignoré : le chef n’a pas parlé juste avant et n’est pas nommé' : 'ignoré : le chef n’est pas nommé' });
+  const says = (names) => names.map(simple).some((n) => n.length >= 3 && (said.includes(n) || squashed.includes(n.replace(/[^a-z0-9]/g, ''))));
+  const namedChef = says([...ownerNames, ...NOAM_SPELLINGS]);
+  const namedBot = says(VERCEL_SPELLINGS);
+  // Uniquement quand « Noam » ou « Vercel » est dit : ni la présence du chef, ni le contexte ne suffisent
+  if (!namedChef && !namedBot) return note({ who, heard: verdict.transcription, decision: 'ignoré : ni « Noam » ni « Vercel » dit' });
+  verdict.cible = verdict.cible === 'bot' && namedBot ? 'bot' : namedChef ? 'chef' : 'bot';
   note({ who, heard: verdict.transcription, decision: `INSULTE (« ${verdict.mot} »)` });
 
   voiceGuardStats.insults++;
@@ -247,10 +244,11 @@ function announceChannel(guild) {
 
 async function punish(client, guild, member, channel, verdict) {
   if (!member) return;
-  const target = 'le chef';
+  const bot = verdict.cible === 'bot';
+  const target = bot ? 'Vercel' : 'Noam';
   const word = truncate(verdict.mot || verdict.transcription, 60);
   const reason = `Insulte en vocal envers ${target} (« ${word} »)`;
-  const count = await addInsultWarning(guild.id, member.id, { reason, by: client.user.id, kind: 'insulte-vocal', target: config.ownerId, message: truncate(verdict.transcription, 300) });
+  const count = await addInsultWarning(guild.id, member.id, { reason, by: client.user.id, kind: 'insulte-vocal', target: bot ? client.user.id : config.ownerId, message: truncate(verdict.transcription, 300) });
   const severe = count >= 2;
 
   let timedOut = false;
@@ -272,7 +270,7 @@ async function punish(client, guild, member, channel, verdict) {
     .setDescription(`${member}, on n'insulte pas ${target} en vocal.`)
     .addFields(
       { name: 'Qui', value: `${member}`, inline: true },
-      { name: 'Envers', value: `<@${config.ownerId}>`, inline: true },
+      { name: 'Envers', value: bot ? `${client.user}` : `<@${config.ownerId}>`, inline: true },
       { name: 'Avertissements', value: `**${count}**`, inline: true },
       { name: 'Entendu', value: `||${word}||`, inline: true },
       { name: 'Sanction', value: sanction, inline: false },
@@ -284,7 +282,8 @@ async function punish(client, guild, member, channel, verdict) {
   // Dans le chat du salon vocal ET dans #agora (ou le salon choisi), avec un ping pour que le membre ait la notif
   const places = [channel?.isTextBased?.() ? channel : null, announceChannel(guild)].filter(Boolean);
   if (!places.length && config.staffChannelId) places.push(guild.channels.cache.get(config.staffChannelId));
-  const content = severe ? `🚨 ${member} **sanctionné** pour avoir insulté <@${config.ownerId}> en vocal.` : `⚠️ ${member} **avertissement** pour avoir insulté <@${config.ownerId}> en vocal.`;
+  const victim = bot ? `${client.user}` : `<@${config.ownerId}>`;
+  const content = severe ? `🚨 ${member} **sanctionné** pour avoir insulté ${victim} en vocal.` : `⚠️ ${member} **avertissement** pour avoir insulté ${victim} en vocal.`;
   for (const place of new Set(places)) {
     await place.send({ content, embeds: [embed], files: [card()], allowedMentions: { users: [member.id] } }).catch((err) => console.warn(`[surveillance vocale] message dans #${place.name} :`, err.message));
   }
@@ -296,4 +295,4 @@ async function punish(client, guild, member, channel, verdict) {
 }
 
 // Pour le banc d'essai (tools/test-voiceguard.mjs)
-export const _test = { wav, level, check, queue, ownerSpoke };
+export const _test = { wav, level, check, queue };
