@@ -299,7 +299,15 @@ body { background:
 /* Chaque carte de fonctionnalité a sa couleur */
 .grid .card:nth-child(6n+1) { --c: var(--sea); } .grid .card:nth-child(6n+2) { --c: var(--emerald); } .grid .card:nth-child(6n+3) { --c: #ff5fa2; }
 .grid .card:nth-child(6n+4) { --c: var(--blood); } .grid .card:nth-child(6n+5) { --c: var(--amber); } .grid .card:nth-child(6n+6) { --c: var(--royal); }
-.grid .card { border-top: 3px solid var(--c); }
+/* Au survol, un néon de la couleur de la carte tourne autour du bord */
+@property --ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.grid .card { position: relative; }
+.grid .card::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 2px; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: conic-gradient(from var(--ang), transparent 0deg, transparent 250deg, var(--c) 320deg, #fff 350deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  filter: drop-shadow(0 0 6px var(--c)); }
+.grid .card:hover::after { opacity: 1; animation: neon 2.4s linear infinite; }
+@keyframes neon { to { --ang: 360deg; } }
 .grid .card .icon { background: color-mix(in srgb, var(--c) 22%, transparent); color: var(--c); box-shadow: 0 0 18px -4px var(--c); }
 .grid .card .list svg { color: var(--c); }
 .grid .card .details-link { background: var(--c); color: #0e0a06; }
