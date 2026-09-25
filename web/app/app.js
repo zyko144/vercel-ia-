@@ -644,5 +644,29 @@
     panel.append(content);
   }
 
+  // Un peu de vie : les éléments arrivent en cascade, les chiffres défilent jusqu'à leur valeur
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function animateIn(root) {
+    root.querySelectorAll('.tiles, .servers, .steps, .list, .plans, .side').forEach((group) => {
+      [...group.children].forEach((el, i) => el.style.setProperty('--i', String(i)));
+    });
+    if (still) return;
+    root.querySelectorAll('.stat b').forEach((el) => {
+      const m = el.textContent.match(/^(\d+(?:[\u202f\u00a0 ]\d{3})*)(.*)$/);
+      if (!m) return;
+      const target = Number(m[1].replace(/\D/g, ''));
+      if (!target) return;
+      const rest = m[2];
+      const t0 = performance.now();
+      const step = (t) => {
+        const k = Math.min(1, (t - t0) / 700);
+        el.textContent = `${Math.round(target * (1 - (1 - k) ** 3)).toLocaleString('fr-FR')}${rest}`;
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  new MutationObserver(() => animateIn(view())).observe(view(), { childList: true });
+
   start();
 }());
