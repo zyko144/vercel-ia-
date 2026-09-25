@@ -33,7 +33,7 @@ const member = { id: U, user, displayName: 'Lina', roles: { cache: new Collectio
 const channel = { id: 'c', isTextBased: () => true, send: async (p) => { sent.push(p); } };
 const guild = { id: G, name: 'Serveur', roles: { cache: roles }, channels: { cache: new Collection([['c', channel]]) }, members: { cache: new Collection([[U, member]]) } };
 setGuildSettings(G, { 'levels.roles': ['2 = 777777777777777777'] });
-const message = () => ({ inGuild: () => true, guildId: G, guild, member, author: { id: U, bot: false }, channel });
+const message = () => ({ inGuild: () => true, guildId: G, guild, member, author: { id: U, bot: false }, channel, content: 'un message normal' });
 
 await check('XP par message, 200 pièces par niveau, mention seulement tous les 5 niveaux, carte parchemin', async () => {
   const realNow = Date.now;
@@ -141,6 +141,83 @@ await check('don entre membres taxé à 5 %, rôle personnalisé payé en or et 
   await levels.handleShopComponent({ users: { fetch: async () => ({ send: async () => {} }) } }, base({ customId: buttons[0].custom_id, message: { embeds: [requests[0].embeds[0]] } }));
   assert.equal(created[0].name, '👑 Le Boss');
   assert.ok(member.roles.cache.has('r2'));
+});
+
+await check('titres, coffre tous les 10 niveaux, classement du mois, carte animée', async () => {
+  const m = levels._test.me(G, U);
+  assert.equal(levels.titleOf(0), 'Mousse');
+  assert.equal(levels.titleOf(12), 'Canonnier');
+  const p = economy._test.purse(G, U);
+  const chests = p.inv.coffre ?? 0;
+  // Juste avant le niveau 10
+  let xp = 0;
+  for (let n = 0; n < 10; n++) xp += levels.xpFor(n);
+  m.xp = xp - 5;
+  m.lastXp = 0;
+  sent.length = 0;
+  await levels.xpForMessage({ ...message(), content: 'un vrai message assez long' });
+  const up = sent.find((x) => /niveau 10\*\*/.test(x.content));
+  assert.ok(up, 'niveau 10 annoncé');
+  assert.match(up.content, /coffre au trésor/);
+  assert.match(up.content, /nouveau titre : \*\*Canonnier/);
+  assert.equal(up.files[0].name, 'palier.gif', 'grand palier animé');
+  assert.ok(up.files[0].attachment.subarray(0, 6).toString() === 'GIF89a');
+  if (process.env.APERCU_DIR) writeFileSync(path.join(process.env.APERCU_DIR, 'palier.gif'), up.files[0].attachment);
+  assert.equal(p.inv.coffre, chests + 1);
+  assert.ok(m.month.xp > 0);
+  const month = (await levels.leaderboardEmbed(guild, { month: true })).toJSON();
+  assert.match(month.title, /du mois/);
+  assert.match(month.description, new RegExp(U));
+});
+
+await check('messages courts : moins d’XP ; salons sans XP ; XP des réactions', async () => {
+  const m = levels._test.me(G, U);
+  const realRandom = Math.random;
+  Math.random = () => 0;
+  m.lastXp = 0; let before = m.xp;
+  await levels.xpForMessage({ ...message(), content: 'ok' });
+  const short = m.xp - before;
+  m.lastXp = 0; before = m.xp;
+  await levels.xpForMessage({ ...message(), content: 'un message bien plus long' });
+  const long = m.xp - before;
+  Math.random = realRandom;
+  assert.ok(short * 2 < long, `court ${short} < long ${long}`);
+  setGuildSettings(G, { 'levels.noXpChannels': ['<#c>', '123456789012345678'] });
+  // « c » n'est pas un identifiant : on règle le vrai salon
+  channel.id = '123456789012345678';
+  m.lastXp = 0; before = m.xp;
+  await levels.xpForMessage({ ...message(), content: 'dans le salon sans XP' });
+  assert.equal(m.xp, before, 'pas d’XP ici');
+  channel.id = 'c';
+  before = m.xp;
+  await levels.xpForReaction({ message: { guildId: G, guild, channel, author: { id: V } } }, user);
+  assert.equal(m.xp - before, 3 * economy.xpMultiplier(G, U));
+  before = m.xp;
+  await levels.xpForReaction({ message: { guildId: G, guild, channel, author: { id: V } } }, user);
+  assert.equal(m.xp, before, 'une fois par minute');
+});
+
+await check('prestige au niveau 50, comparaison, statistiques, thème de carte', async () => {
+  const m = levels._test.me(G, U);
+  assert.equal((await levels.prestige(G, U)).ok, false);
+  let xp = 0;
+  for (let n = 0; n < 50; n++) xp += levels.xpFor(n);
+  m.xp = xp;
+  const gold = await economy.goldOf(G, U);
+  const r = await levels.prestige(G, U);
+  assert.equal(r.ok, true);
+  assert.equal(r.prestige, 1);
+  assert.equal(m.xp, 0);
+  assert.equal(await economy.goldOf(G, U), gold + 5000);
+  const cmp = (await levels.compareEmbed(guild, user, { id: V, username: 'sami' })).toJSON();
+  assert.match(cmp.title, /Lina contre sami/);
+  assert.match(cmp.description, /Niveau/);
+  const st = (await levels.statsEmbed(guild, user)).toJSON();
+  assert.ok(st.fields.some((f) => /Prestige ⭐/.test(f.value)));
+  economy._test.purse(G, U).cardTheme = 'ocean';
+  const card = await levels.profileCard(guild, user);
+  if (process.env.APERCU_DIR) writeFileSync(path.join(process.env.APERCU_DIR, 'carte-ocean.png'), card.attachment);
+  assert.ok(card.attachment.length > 5000);
 });
 
 console.log(`\n${passed} vérifications passées.`);

@@ -8,7 +8,7 @@ import '../features/premiumPanel.js'; // groupe « Premium » de /serveur
 import { ChannelType, EmbedBuilder, PermissionFlagsBits as P } from 'discord.js';
 import { field as f } from './ui.js';
 import { addNote, casierEmbed, verificationPanel } from '../features/security.js';
-import { claimDaily, leaderboardEmbed, profileCard, shopMessage } from '../features/levels.js';
+import { PRESTIGE_LEVEL, claimDaily, compareEmbed, leaderboardEmbed, prestige, profileCard, shopMessage, statsEmbed } from '../features/levels.js';
 import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../features/aiExtras.js';
 import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUndercover } from '../games/soirees.js';
 import { backupsOf, createBackup, restoreConfirm, welcomeCard } from '../features/community.js';
@@ -77,7 +77,29 @@ addActions('serveur', 'Niveaux et boutique', [
       return interaction.editReply({ files: [card] });
     },
   },
-  { id: 'classement', label: 'Classement des niveaux', emoji: '📈', run: async (client, interaction) => interaction.reply({ embeds: [await leaderboardEmbed(interaction.guild)], ...PRIVATE }) },
+  {
+    id: 'classement', label: 'Classement des niveaux', emoji: '📈', desc: 'De toujours ou du mois (remis à zéro le 1er)',
+    fields: [f.choice('periode', 'Quel classement ?', [{ label: 'De toujours', value: 'tout' }, { label: 'Du mois', value: 'mois' }])],
+    run: async (client, interaction, v) => interaction.reply({ embeds: [await leaderboardEmbed(interaction.guild, { month: v.periode === 'mois' })], ...PRIVATE }),
+  },
+  {
+    id: 'stats', label: 'Mes statistiques', emoji: '📜', desc: 'Titre, progression, activité, trésor, badges', fields: [f.user('membre', 'Membre (vide = toi)')],
+    run: async (client, interaction, v) => interaction.reply({ embeds: [await statsEmbed(interaction.guild, v.membre?.user ?? interaction.user)], ...PRIVATE }),
+  },
+  {
+    id: 'comparer', label: 'Comparer deux profils', emoji: '⚔️', desc: 'Niveau, or, messages, vocal côte à côte', fields: [f.user('membre', 'Contre qui ?', { req: true }), f.bool('public', 'Le montrer au salon ?')],
+    run: async (client, interaction, v) => interaction.reply({ embeds: [await compareEmbed(interaction.guild, interaction.user, v.membre.user ?? v.membre)], ...(v.public ? {} : PRIVATE) }),
+  },
+  {
+    id: 'prestige', label: 'Prestige', emoji: '⭐', desc: `Au niveau ${PRESTIGE_LEVEL} : repartir de zéro avec une étoile et +10 % d’XP`,
+    fields: [f.bool('confirmer', 'Repartir du niveau 0 ?', { req: true })],
+    run: async (client, interaction, v) => {
+      if (!v.confirmer) return interaction.reply({ content: 'Rien n’a changé.', ...PRIVATE });
+      const r = await prestige(interaction.guildId, interaction.user.id);
+      if (!r.ok) return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xffb020).setDescription(`⭐ Le prestige s’ouvre au **niveau ${PRESTIGE_LEVEL}** (tu es niveau ${r.level}).`)], ...PRIVATE });
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xf2c14e).setTitle(`⭐ Prestige ${r.prestige} !`).setDescription(`${interaction.user} repart du niveau 0 avec **+🪙 ${r.gold.toLocaleString('fr-FR')}** et **+${r.bonus} % d’XP** pour toujours. L’étoile brille sur sa carte.`)] });
+    },
+  },
   {
     id: 'daily', label: 'Récompense du jour', emoji: '🎁', desc: 'Des pièces d’or chaque jour, plus si tu enchaînes',
     run: async (client, interaction) => {
