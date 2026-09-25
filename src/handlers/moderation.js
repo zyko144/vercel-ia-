@@ -173,7 +173,9 @@ export const MODERATION_HANDLERS = {
       { name: 'Total', value: `${list.length} avertissement(s)` },
     ]);
     countEvent(interaction.guildId, 'sanctions');
-    await interaction.reply(private_(`⚠️ Avertissement donné à **${member.user.username}** (total : **${list.length}**).\n-# Raison : ${reason}${notified ? ' · MP envoyé' : ''}`));
+    const { escalate } = await import('../features/moderation.js');
+    const step = await escalate(interaction.guild, member.id, list.length).catch(() => null);
+    await interaction.reply(private_(`⚠️ Avertissement donné à **${member.user.username}** (total : **${list.length}**).\n-# Raison : ${reason}${notified ? ' · MP envoyé' : ''}${step ? `\n📈 Sanction progressive appliquée : **${step.label}**` : ''}`));
   },
 
   async warns(client, interaction) {

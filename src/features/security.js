@@ -38,6 +38,9 @@ async function autoWarn(guild, userId, kind, reason) {
   (all[guild.id][userId] ??= []).push({ reason, by: guild.client.user.id, at: Date.now(), kind });
   save('warnings', all);
   countEvent(guild.id, 'sanctions');
+  const { countMod, escalate } = await import('./moderation.js');
+  countMod(guild.id, 'deleted').catch(() => {});
+  await escalate(guild, userId, all[guild.id][userId].length).catch(() => {});
 }
 
 /** MP au membre sanctionné, avec un bouton « Contester » (si c'est activé sur le serveur). */
@@ -63,6 +66,11 @@ async function punish(message, { kind, reason, timeoutMs = 0, notice }) {
     if (sent) setTimeout(() => sent.delete().catch(() => {}), 8_000);
   }
   if (timeoutMs) await notifySanction(author, guild, { title: `🔇 Rendu muet ${Math.round(timeoutMs / MINUTE)} min`, reason });
+  else {
+    // Pas de sanction lourde : on explique quand même pourquoi le message a disparu
+    const { explainDeletion } = await import('./assistant.js');
+    await explainDeletion(author, guild, { kind, reason, content: message.content });
+  }
   await logEvent(guild, { color: 0xff3355, title: `🛡️ ${reason}`, description: `${author} dans ${message.channel}\n>>> ${truncate(message.content || '(vide)', 900)}`, thumbnail: author.displayAvatarURL?.({ size: 64 }) });
 }
 
@@ -136,6 +144,12 @@ export async function guardMessage(message) {
     return true;
   }
   if (staff) return false;
+  const { bannedWord } = await import('./moderation.js');
+  const word = bannedWord(g, message.content);
+  if (word) {
+    await punish(message, { kind: 'auto-mot', reason: 'Mot interdit par les règles du serveur', notice: 'ce mot est interdit ici 🚫' });
+    return true;
+  }
   const link = badLink(g, message.content);
   if (link) {
     await punish(message, { kind: 'auto-lien', reason: `Lien interdit (${link})`, notice: `les liens de ce type ne sont pas autorisés ici (${link}).` });
@@ -160,6 +174,8 @@ export async function onMemberJoin(member) {
   const { guild } = member;
   const created = Math.round(member.user.createdTimestamp / 1000);
   await logEvent(guild, { color: 0x3dff9a, title: '📥 Arrivée', description: `${member} (${member.user.username})\nCompte créé <t:${created}:R>`, thumbnail: member.displayAvatarURL({ size: 64 }) });
+  const { checkNewMember } = await import('./moderation.js');
+  if (await checkNewMember(member).catch(() => false)) return;
   if (!cfg(guild.id, 'antiRaid.enabled')) return;
   const now = Date.now();
   const windowMs = cfg(guild.id, 'antiRaid.seconds') * 1000;

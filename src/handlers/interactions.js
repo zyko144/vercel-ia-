@@ -36,6 +36,9 @@ import { handleSecurityComponent, isSecurityComponent } from '../features/securi
 import { handleShopComponent, isShopComponent } from '../features/levels.js';
 import { handleTreasuryComponent, isTreasuryComponent } from '../features/treasury.js';
 import { handleArcadeComponent, isArcadeComponent } from '../arcade/discord.js';
+import { handleAssistantComponent, isAssistantComponent } from '../features/assistant.js';
+import { handleToolComponent, isToolComponent } from '../features/serverTools.js';
+import { handleVoicePlusComponent, isVoicePlusComponent } from '../features/voicePlus.js';
 import { handleMemoryComponent, isMemoryComponent } from '../features/aiExtras.js';
 import { handleBackupComponent, handleSuggestionComponent, isBackupComponent, isSuggestionComponent } from '../features/community.js';
 
@@ -65,6 +68,9 @@ export async function onInteraction(client, interaction) {
     if (isShopComponent(interaction)) return await handleShopComponent(client, interaction);
     if (isTreasuryComponent(interaction)) return await handleTreasuryComponent(client, interaction);
     if (isArcadeComponent(interaction)) return await handleArcadeComponent(client, interaction);
+    if (isAssistantComponent(interaction)) return await handleAssistantComponent(client, interaction);
+    if (isToolComponent(interaction)) return await handleToolComponent(client, interaction);
+    if (isVoicePlusComponent(interaction)) return await handleVoicePlusComponent(client, interaction);
     if (isMemoryComponent(interaction)) return await handleMemoryComponent(client, interaction);
     if (isSuggestionComponent(interaction)) return await handleSuggestionComponent(client, interaction);
     if (isBackupComponent(interaction)) return await handleBackupComponent(client, interaction);

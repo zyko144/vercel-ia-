@@ -14,6 +14,7 @@ import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUn
 import { backupsOf, createBackup, restoreConfirm, welcomeCard } from '../features/community.js';
 import { PANELS } from './catalog.js';
 import './games.js'; // groupes Duels, Taverne, Défis de /jeux
+import './more.js'; // IA, urgence, communauté, outils du staff, soirée vocale
 import { TREASURY_ACTIONS, questProgress } from '../features/treasury.js';
 import { installBotChannels, installEmbed } from '../features/botChannels.js';
 

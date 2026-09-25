@@ -1,5 +1,9 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
 import { setArcadeClient } from './arcade/server.js';
+import { startAssistant } from './features/assistant.js';
+import { startModeration } from './features/moderation.js';
+import { startServerTools } from './features/serverTools.js';
+import { startVoicePlus } from './features/voicePlus.js';
 import { startTreasury } from './features/treasury.js';
 import { autoInstallBotChannels } from './features/botChannels.js';
 import { setAppClient } from './dashboard/userApp.js';
@@ -78,6 +82,10 @@ client.once(Events.ClientReady, async (c) => {
   startVoiceGuard(c);
   startLevelLoops(c);
   startTreasury(c);
+  startAssistant(c);
+  startModeration(c);
+  startServerTools(c);
+  startVoicePlus(c);
   autoInstallBotChannels(c).catch((err) => console.warn('[salons] installation :', err.message));
   startVoiceExtras(c);
   startWeeklyReports(c).catch((err) => console.warn('[rapport] démarrage :', err.message));
