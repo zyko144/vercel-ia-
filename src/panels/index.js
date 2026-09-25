@@ -44,6 +44,11 @@ export function panelMessage(interaction, key) {
 
 export async function openPanel(client, interaction) {
   const key = PANEL_COMMANDS[interaction.commandName];
+  // /jeux ouvre directement l'arcade (Activité Discord)
+  if (key === 'jeux') {
+    const { openArcade } = await import('../arcade/discord.js');
+    return openArcade(interaction);
+  }
   const panel = PANELS[key];
   if (!allowed(interaction, panel.perm)) {
     return interaction.reply({ ...errorEmbed('Il te faut la permission de gérer ça sur le serveur.'), ...PRIVATE });

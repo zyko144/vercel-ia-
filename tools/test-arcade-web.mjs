@@ -14,6 +14,9 @@ process.env.GEMINI_API_KEY ||= 'essai';
 process.env.SUPABASE_URL = '';
 process.env.SUPABASE_SERVICE_KEY = '';
 process.env.STORAGE_DIR = mkdtempSync(path.join(os.tmpdir(), 'arcade-web-'));
+// Pas d'IA pendant le test : le quiz prend ses questions de secours
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, o) => (String(url).includes('generativelanguage') ? { ok: false, status: 500, json: async () => ({}), text: async () => 'non' } : realFetch(url, o));
 
 const arcade = await import('../src/arcade/server.js');
 const economy = await import('../src/features/economy.js');
@@ -154,6 +157,107 @@ await check('puissance 4 : jetons qui tombent, 4 en diagonale', async () => {
   const s = (await poll(A)).data;
   assert.equal(s.game.winner, B.id);
   assert.equal(s.game.line.length, 4);
+});
+
+await check('duel contre le bot (bataille navale) : ma flotte visible, pas celle du bot, le bot joue seul', async () => {
+  const room = arcade._test.rooms.get(ROOM);
+  room.game = null;
+  await act(A, { type: 'start', game: 'duel', duel: 'navale' });
+  let s = (await poll(A)).data;
+  assert.equal(s.game.kind, 'duel');
+  assert.equal(s.game.phase, 'wait');
+  await act(A, { type: 'bot' });
+  s = (await poll(A)).data;
+  assert.equal(s.game.phase, 'play');
+  assert.equal(s.game.mine.filter((c) => c === 'ship').length, 7, 'ma flotte');
+  assert.equal(s.game.target.filter((c) => c === 'ship').length, 0, 'flotte adverse cachée');
+  const g = room.game;
+  // La flotte du bot sur les 7 premières cases : touché = on rejoue, donc la partie se termine vite
+  g.d.state.fleets.bot = [0, 1, 2, 3, 4, 5, 6];
+  let guard = 0;
+  while (!g.d.over && guard++ < 120) {
+    if (g.d.turn === A.id) {
+      const free = g.d.state.shots[A.id].length;
+      const next = [...Array(25).keys()].find((i) => !g.d.state.shots[A.id].includes(i));
+      await act(A, { type: 'play', arg: next });
+      assert.ok(g.d.state.shots[A.id].length > free || g.d.over);
+    } else await new Promise((r) => setTimeout(r, 1000));
+  }
+  assert.equal(g.d.over, true, 'partie finie');
+});
+
+await check('quiz de groupe : questions, une réponse par joueur, fin et podium', async () => {
+  const room = arcade._test.rooms.get(ROOM);
+  room.game = null;
+  await act(A, { type: 'start', game: 'quiz' });
+  let s;
+  for (let k = 0; k < 20; k++) { await new Promise((r) => setTimeout(r, 300)); s = (await poll(A)).data; if (s.game.phase === 'question') break; }
+  assert.equal(s.game.phase, 'question');
+  assert.equal(s.game.choices.length, 4);
+  assert.equal(s.game.right, null, 'la réponse reste cachée pendant la question');
+  const q = room.game.questions[room.game.i];
+  await act(A, { type: 'answer', i: q.bonne });
+  await act(A, { type: 'answer', i: (q.bonne + 1) % 4 });
+  assert.equal(room.game.answers[A.id], q.bonne, 'une seule réponse');
+  room.game.questions = room.game.questions.slice(0, room.game.i + 1);
+  await act(B, { type: 'answer', i: (q.bonne + 1) % 4 });
+  for (let k = 0; k < 12 && room.game.kind !== 'fin'; k++) { room.game.endsAt = 0; await new Promise((r) => setTimeout(r, 1100)); }
+  assert.equal(room.game.kind, 'fin');
+  assert.equal(room.game.podium[0][0], A.id);
+});
+
+await check('pendu et devine le nombre : tout le salon joue ensemble', async () => {
+  const room = arcade._test.rooms.get(ROOM);
+  room.game = null;
+  await act(A, { type: 'start', game: 'pendu' });
+  const word = room.game.word;
+  for (const c of new Set(word.replace(/ /g, ''))) await act(c.charCodeAt(0) % 2 ? A : B, { type: 'letter', letter: c });
+  let s = (await poll(B)).data;
+  assert.equal(s.game.over, true);
+  assert.equal(s.game.word, word);
+  await act(A, { type: 'start', game: 'nombre' });
+  const secret = room.game.secret;
+  await act(B, { type: 'guess', n: secret === 500 ? 400 : 500 });
+  s = (await poll(A)).data;
+  assert.equal(s.game.secret, null, 'le nombre reste caché');
+  assert.equal(s.game.tries[0].hint, secret > 500 ? 'plus' : secret < 500 ? 'moins' : 'plus');
+  await act(A, { type: 'guess', n: secret });
+  assert.equal(room.game.winner, A.id);
+});
+
+await check('taverne en or (pile ou face, blackjack) et démineur, chacun sa partie', async () => {
+  economy._test.purse(G, A.id).gold = 5000;
+  economy._test.purse(G, B.id).gold = 5;
+  const realRandom = Math.random;
+  Math.random = () => 0.1;
+  assert.equal((await act(A, { type: 'solo', game: 'pile', bet: 1000, side: 'pile' })).status, 200);
+  Math.random = realRandom;
+  let s = (await poll(A)).data;
+  assert.equal(s.solo.game, 'pile');
+  assert.equal(s.gold, 5900);
+  assert.equal((await poll(B)).data.solo, null, 'Sami ne voit pas la partie de Lina');
+  assert.match((await act(B, { type: 'solo', game: 'pile', bet: 100, side: 'face' })).data.error, /Pas assez/);
+  await act(A, { type: 'solo', game: 'blackjack', action: 'new', bet: 100 });
+  s = (await poll(A)).data;
+  assert.equal(s.solo.game, 'blackjack');
+  if (!s.solo.done) {
+    assert.equal(s.solo.dealer[1], '?', 'carte cachée du capitaine');
+    await act(A, { type: 'solo', game: 'blackjack', action: 'stand' });
+    assert.equal((await poll(A)).data.solo.done, true);
+  }
+  await act(A, { type: 'solo', game: 'demineur', action: 'new', level: 'facile' });
+  await act(A, { type: 'solo', game: 'demineur', action: 'open', i: 27 });
+  s = (await poll(A)).data;
+  assert.equal(s.solo.game, 'demineur');
+  assert.ok(s.solo.cells[27] !== null && s.solo.cells[27] !== -1, 'la première case n’est jamais une mine');
+  assert.ok(s.solo.cells.filter((c) => c === -1).length === 0 || s.solo.over, 'les mines restent cachées');
+});
+
+await check('jeux du salon : lancés dans le salon Discord (refusé sans salon)', async () => {
+  const r = await act(A, { type: 'launch', id: 'loupgarou' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /salon/);
+  assert.equal((await act(A, { type: 'launch', id: 'inconnu' })).data.error, 'Jeu inconnu.');
 });
 
 await check('départ : un joueur silencieux quitte la salle', async () => {
