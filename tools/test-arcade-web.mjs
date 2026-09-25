@@ -253,11 +253,16 @@ await check('taverne en or (pile ou face, blackjack) et démineur, chacun sa par
   assert.ok(s.solo.cells.filter((c) => c === -1).length === 0 || s.solo.over, 'les mines restent cachées');
 });
 
-await check('jeux du salon : lancés dans le salon Discord (refusé sans salon)', async () => {
-  const r = await act(A, { type: 'launch', id: 'loupgarou' });
-  assert.equal(r.status, 400);
-  assert.match(r.data.error, /salon/);
-  assert.equal((await act(A, { type: 'launch', id: 'inconnu' })).data.error, 'Jeu inconnu.');
+await check('jeux de soirée : lancés et joués dans l’arcade (jeu inconnu refusé, l’hôte peut arrêter)', async () => {
+  assert.equal((await act(A, { type: 'start', game: 'party', party: 'inconnu' })).data.error, 'Jeu inconnu.');
+  await act(A, { type: 'lobby' });
+  assert.equal((await act(A, { type: 'start', game: 'party', party: 'chasse' })).status, 200);
+  const s = (await poll(B)).data;
+  assert.equal(s.game.kind, 'party');
+  assert.equal(s.game.game, 'chasse');
+  assert.ok(s.game.screen.title);
+  await act(A, { type: 'lobby' });
+  assert.equal((await poll(A)).data.game, null);
 });
 
 await check('départ : un joueur silencieux quitte la salle', async () => {

@@ -1,6 +1,7 @@
 // L'arcade d'AI Vercel : des jeux multijoueurs dans une Activité Discord (ou un lien personnel).
 // Une « salle » par salon Discord : tous ceux qui ouvrent l'arcade dans ce salon jouent ensemble.
-// Jeux : Dessine et devine (façon Pictionary), Morpion, Puissance 4.
+// Jeux : Dessine et devine (façon Pictionary), Morpion, Puissance 4, les duels, la taverne (games.js)
+// et les jeux de soirée joués entièrement ici (party.js, party-roles.js, party-sound.js).
 // Le serveur décide de tout (mots, points, coups) ; la page affiche et envoie les actions.
 // Mises à jour en « long polling » : la page demande l'état et le serveur répond dès qu'il change.
 //
@@ -12,10 +13,13 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { playedGame, rewardWin } from '../features/treasury.js';
 import { WORDS } from './words.js';
-import { launchSalonGame, registerArcadeGames, soloAct, soloGold, soloView } from './games.js';
+import { registerArcadeGames, soloAct, soloGold, soloView } from './games.js';
+import { images, registerParty } from './party.js';
+import './party-roles.js';
+import { deezerImage, previewAudio } from './party-sound.js';
 
 const WEB = path.resolve('web/arcade');
-const MAX_BODY = 64 * 1024;
+const MAX_BODY = 3 * 1024 * 1024; // un passage de freestyle enregistré au micro
 const SESSION_MS = 12 * 3_600_000;
 const POLL_MS = 25_000;
 const GONE_MS = 40_000;
@@ -230,6 +234,7 @@ const GAMES = {
 };
 
 registerArcadeGames(GAMES, { say, bump, nameOf, reward: (...args) => reward(...args) });
+registerParty(GAMES, { say, bump, nameOf, reward: (...args) => reward(...args), client: () => client });
 const gameOver = (g) => !g || g.kind === 'fin' || g.winner || g.draw || GAMES[g.kind]?.over?.(g);
 
 function guessChat(r, me, text, secret = false) {
@@ -325,6 +330,8 @@ export async function act(r, me, body) {
     if (!G) return { error: 'Jeu inconnu.' };
     if (!gameOver(r.game)) return { error: 'Une partie est déjà en cours.' };
     if (r.players.size < G.min) return { error: `Il faut au moins ${G.min} joueurs dans la salle.` };
+    const refused = G.check?.(r, body);
+    if (refused) return { error: refused };
     r.game = G.start(r, me, body);
     r.lastGame = kind;
     say(r, `🎮 ${p.name} lance ${G.label?.(r.game) ?? { dessin: 'Dessine et devine', morpion: 'le morpion', puissance4: 'le puissance 4' }[kind]} !`);
@@ -332,7 +339,8 @@ export async function act(r, me, body) {
     return { ok: true };
   }
   if (body.type === 'lobby') {
-    if (!gameOver(r.game) && [...r.players.keys()][0] !== me) return { error: 'Seul l’hôte peut arrêter la partie.' };
+    if (!gameOver(r.game) && [...r.players.keys()][0] !== me && r.game?.host !== me) return { error: 'Seul l’hôte (ou celui qui a lancé la partie) peut l’arrêter.' };
+    if (r.game?.kind === 'party') GAMES.party.stop(r.game);
     r.game = null;
     bump(r);
     return { ok: true };
@@ -343,11 +351,12 @@ export async function act(r, me, body) {
     bump(r);
     return out;
   }
-  // Jeux du salon : ils démarrent dans le salon Discord
-  if (body.type === 'launch') {
-    const out = await launchSalonGame(client, r, me, body);
-    if (out.ok) { say(r, `📣 ${p.name} lance ${out.name} dans le salon Discord !`, 'good'); bump(r); }
-    return out;
+  // Jeux de soirée : le chat sert aussi aux réponses (une bonne réponse n'est pas montrée aux autres)
+  if (body.type === 'chat' && r.game?.kind === 'party' && !r.game.over) {
+    const text = String(body.text ?? '').slice(0, 200).trim();
+    if (text && !GAMES.party.chat(r, r.game, me, text)) guessChat(r, me, text);
+    bump(r);
+    return { ok: true };
   }
   if (body.type === 'chat' && (!r.game || r.game.kind !== 'dessin')) {
     if (guessChat(r, me, body.text)) bump(r);
@@ -426,7 +435,7 @@ export async function handleArcadeWeb(req, res, url) {
   if (!pathname.startsWith('/arcade/')) return false;
   const rest = pathname.slice('/arcade/'.length);
   if (rest === '' || rest === 'index.html') {
-    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://discord.com wss://*.discord.com; frame-ancestors https://discord.com https://*.discord.com https://*.discordsays.com 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://discord.com wss://*.discord.com; frame-ancestors https://discord.com https://*.discord.com https://*.discordsays.com 'self'");
     await serve(res, path.join(WEB, 'index.html'), TYPES.html);
     return true;
   }
@@ -443,6 +452,29 @@ export async function handleArcadeWeb(req, res, url) {
     }
     res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=3600' });
     res.end(png);
+    return true;
+  }
+  // Cartes de rôle (loup-garou…), extraits audio et images des jeux de soirée
+  if (/^jeux\/[a-z]+\.gif$/.test(rest)) { await serve(res, path.resolve('assets', rest), 'image/gif', 'public, max-age=604800'); return true; }
+  if (/^api\/audio\/\d{1,15}\.mp3$/.test(rest)) {
+    const buf = await previewAudio(rest.slice(10, -4)).catch(() => null);
+    if (!buf) return json(res, 404, { error: 'extrait introuvable' }), true;
+    res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=900' });
+    res.end(buf);
+    return true;
+  }
+  if (rest === 'api/img') {
+    const img = await deezerImage(String(url.searchParams.get('u') ?? '')).catch(() => null);
+    if (!img) return json(res, 404, { error: 'image introuvable' }), true;
+    res.writeHead(200, { 'Content-Type': img.type, 'Content-Length': img.buf.length, 'Cache-Control': 'public, max-age=3600' });
+    res.end(img.buf);
+    return true;
+  }
+  if (/^api\/pimg\/[a-z0-9-]{5,60}\.jpg$/.test(rest)) {
+    const buf = images.get(rest.slice(9, -4));
+    if (!buf) return json(res, 404, { error: 'image introuvable' }), true;
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=600' });
+    res.end(buf);
     return true;
   }
   if (!rest.startsWith('api/')) { json(res, 404, { error: 'introuvable' }); return true; }

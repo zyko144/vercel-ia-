@@ -433,3 +433,6 @@ export async function handleImpostorComponent(interaction) {
   }
   return undefined;
 }
+
+// Réutilisé par la version arcade (src/arcade/party.js)
+export const IMPOSTOR_PARTS = { wordPair, botClues };

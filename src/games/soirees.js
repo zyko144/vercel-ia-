@@ -487,3 +487,6 @@ export async function handleSoireeComponent(interaction) {
 
 // Pour le banc d'essai (tools/test-soirees.mjs)
 export const _test = { scoreBac, masked, cleanTitle, games };
+
+// Contenus réutilisés par la version arcade (src/arcade/party.js)
+export const PARTY_DATA = { PAIRS, CATEGORIES, LETTERS, ACTIONS, TRUTHS, pair, serverFacts, cleanTitle };
