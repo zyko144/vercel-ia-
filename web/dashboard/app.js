@@ -564,7 +564,7 @@
           return b;
         };
         bloc.replaceChildren(h('div', { class: 'stack' },
-          card('Trésor du serveur', h('div', { class: 'grid cols-4' },
+          card('Trésor du serveur', h('div', { class: 'grid cols-2' },
             ligne('Or en circulation', null, h('b', { class: 'num', text: `🪙 ${num(d.total)}` })),
             ligne('Membres avec de l’or', null, h('b', { class: 'num', text: num(d.holders) })),
             ligne('Gagné en tout', null, h('b', { class: 'num', text: num(d.earned) })),

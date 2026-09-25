@@ -92,8 +92,13 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (!(await handler(req, res, url))) { res.writeHead(404); res.end('hors tableau de bord'); }
 });
-await new Promise((r) => server.listen(0, r));
+await new Promise((r) => server.listen(process.argv.includes('--serve') ? 8813 : 0, r));
 const base = `http://127.0.0.1:${server.address().port}`;
+// --serve : laisse le tableau de bord allumé pour le regarder (jeton de connexion affiché)
+if (process.argv.includes('--serve')) {
+  console.log(`${base}/dashboard/connexion#${createLoginToken(OWNER)}`);
+  await new Promise(() => {});
+}
 
 let cookie = '';
 async function request(path, { method = 'GET', body, headers = {}, withCookie = true, raw = false } = {}) {
