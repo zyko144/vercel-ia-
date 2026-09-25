@@ -32,10 +32,12 @@ async function launch(interaction) {
 
 /** Depuis /jeux : annonce l'arcade dans le salon (pour que les autres rejoignent) et l'ouvre. */
 export async function openArcade(interaction) {
+  const image = art('panneaux', 'jeux');
   await interaction.channel?.send({
     embeds: [new EmbedBuilder().setColor(0xc9a978).setTitle('🕹️ L’arcade du navire est ouverte !')
       .setDescription(`${interaction.user} lance l’arcade dans ce salon : **Dessine et devine**, **Morpion**, **Puissance 4**… Tout le monde joue ensemble, les victoires rapportent des pièces d’or.`)
-      .setImage(art('panneaux', 'jeux'))],
+      .setImage(image.url)],
+    files: image.files,
     components: [arcadeRow()],
   }).catch(() => {});
   return launch(interaction);
