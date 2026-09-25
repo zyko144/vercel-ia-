@@ -14,6 +14,7 @@ import { FANS_PARTS } from '../games/fans.js';
 import { _test as defis } from '../games/defis.js';
 import { matchRatio } from '../music/deezer.js';
 import { playedGame } from '../features/treasury.js';
+import { speech } from './tts.js';
 
 export const PARTY = {};
 export const STOP = Symbol('arrêt');
@@ -39,6 +40,18 @@ export const maskText = (text) => String(text).split(/\s+/).map((w) => [...w].ma
 // Images servies par l'arcade (photos floutées, pochettes) : gardées en mémoire le temps de la partie
 export const images = new Map();
 
+// ------------------------------------------------------------------ Voix
+/** Ce que l'IA lit sur un écran : le texte prévu pour la voix, sinon le récit (histoire, énigme, nuit…). */
+export const sayOf = (screen) => screen?.say ?? screen?.blocks?.find((b) => b.t === 'text' && b.cls === 'quote')?.text ?? null;
+/** Dès qu'un écran s'affiche, la voix est préparée : quand les navigateurs la demandent, elle est prête. */
+function prepareVoice(g, screen) {
+  if (process.env.ARCADE_SPEED) return; // bancs d'essai : pas d'IA vocale
+  const texts = new Set();
+  if (typeof screen === 'function') { for (const id of g.players.filter((x) => !isBot(x)).slice(0, 12)) { try { const t = sayOf(screen(id)); if (t) texts.add(t); } catch { /* écran propre à un joueur */ } } }
+  else if (sayOf(screen)) texts.add(sayOf(screen));
+  for (const t of [...texts].slice(0, 3)) speech(t).catch(() => {});
+}
+
 // ------------------------------------------------------------------ Moteur
 // Les bancs d'essai accélèrent le temps (ARCADE_SPEED=0.02 : 75 s deviennent 1,5 s)
 const SPEED = Number(process.env.ARCADE_SPEED) || 1;
@@ -63,7 +76,7 @@ function context(r, g, h) {
     say: (text, kind) => { h.say(r, text, kind); h.bump(r); },
     bump: () => h.bump(r),
     alive,
-    show(screen) { alive(); g.screen = screen; h.bump(r); },
+    show(screen) { alive(); g.screen = screen; h.bump(r); prepareVoice(g, screen); },
     card(id, card) { g.cards[id] = card; },
     points(id, n = 1) { g.scores[id] = (g.scores[id] ?? 0) + n; },
     async sleep(ms) { alive(); await nap(g, ms); alive(); },
@@ -179,11 +192,14 @@ export function registerParty(GAMES, h) {
       const screen = typeof g.screen === 'function' ? g.screen(me) : g.screen;
       return {
         kind: 'party', game: g.game, name: spec.name, emoji: spec.emoji, screen, card: g.cards[me] ?? null, scores: g.scores, names: g.names, answered: g.onInput ? [...(g.live?.keys() ?? [])] : [],
-        players: g.players, you: g.players.includes(me), host: g.host,
+        players: g.players, you: g.players.includes(me), host: g.host, fixed: !spec.open, spectator: !spec.open && !g.players.includes(me),
       };
     },
     over: (g) => g.over,
+    /** Arrivé après le début d'un jeu à joueurs fixes : il regarde sans jouer. */
+    spectator: (g, me) => !PARTY[g.game].open && !g.players.includes(me),
     act(r, g, me, body) {
+      if (GAMES.party.spectator(g, me)) return false;
       if (PARTY[g.game].open && !g.players.includes(me) && r.players.has(me)) { g.players.push(me); g.names[me] = h.nameOf(r, me); }
       return Boolean(g.onInput?.(me, body) || g.extra?.(me, body));
     },

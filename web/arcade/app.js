@@ -144,7 +144,7 @@ const PARTY = [
   ]],
   ['🎧 Musique et son', [
     ['blindtest', '🎧', 'Blind test', 'Rap FR, TikTok, 2010… 10 extraits', '1+'], ['devine', '🎬', 'Devine l’œuvre', 'Films, séries, animés, jeux', '1+'],
-    ['pendumusical', '🎵', 'Pendu musical', 'Le titre lettre par lettre', '1+'], ['rappeur', '🎤', 'Devine le rappeur', 'La photo floutée se dévoile', '1+'],
+    ['blindperso', '🎁', 'Blind test perso', 'Chacun ajoute 2 sons : qui les a choisis ?', '2+'], ['pendumusical', '🎵', 'Pendu musical', 'Le titre lettre par lettre', '1+'], ['rappeur', '🎤', 'Devine le rappeur', 'La photo floutée se dévoile', '1+'],
     ['freestyle', '🎙️', 'Battle de freestyle', 'Au micro, l’IA juge', '2'],
   ]],
 ];
@@ -209,7 +209,7 @@ function updateChat() {
   const box = $('chat');
   if (!box) return;
   const at = box.scrollTop + box.clientHeight >= box.scrollHeight - 10;
-  box.innerHTML = state.chat.map((m) => (m.kind === 'msg' ? `<div><b>${esc(m.name)}</b> ${esc(m.text)}</div>` : `<div class="${m.kind}">${esc(m.text)}</div>`)).join('');
+  box.innerHTML = state.chat.map((m) => (m.kind === 'msg' ? `<div class="${m.spec ? 'spec' : ''}">${m.spec ? '👀 ' : ''}<b>${esc(m.name)}</b> ${esc(m.text)}</div>` : `<div class="${m.kind}">${esc(m.text)}</div>`)).join('');
   if (at || state.chat.length !== chatCount) box.scrollTop = box.scrollHeight;
   chatCount = state.chat.length;
 }
@@ -521,7 +521,8 @@ const Sound = (() => {
   let buses = null;
   let fx = null; // extrait en cours { src, node }
   let voiceBusy = 0;
-  let voiceQueue = Promise.resolve();
+  let voiceNode = null;
+  let voiceTurn = 0; // chaque nouvelle phrase coupe la précédente : la voix suit toujours la partie
   let lastSaid = '';
   const saveP = () => { try { localStorage.setItem('arcade-son', JSON.stringify(prefs)); } catch { /* sans stockage */ } };
   const duck = () => {
@@ -633,27 +634,39 @@ const Sound = (() => {
     duck();
   }
   // La voix de l'IA : les textes sont lus l'un après l'autre
-  function say(text) {
+  function say(text, key = text) {
     const t = String(text ?? '').trim();
-    if (!t || t === lastSaid || prefs.voice <= 0) return;
-    lastSaid = t;
-    voiceQueue = voiceQueue.then(() => speakNow(t)).catch(() => {});
+    if (!t || key === lastSaid || prefs.voice <= 0) return;
+    lastSaid = key;
+    speakNow(t).catch(() => {});
+  }
+  function hush() {
+    voiceTurn += 1;
+    try { voiceNode?.stop(); } catch { /* déjà fini */ }
+    voiceNode = null;
+    try { speechSynthesis.cancel(); } catch { /* pas de voix du navigateur */ }
   }
   async function speakNow(text) {
     if (!ctx) return;
+    hush();
+    const turn = voiceTurn;
     voiceBusy += 1;
     duck();
     try {
       const res = await fetch(`api/tts?${new URLSearchParams({ room, ...(guild ? { guild } : {}) })}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session}` }, body: JSON.stringify({ text }) });
       const buf = await decode(res);
+      // Trop tard (la partie est passée à l'écran suivant) : on ne lit pas une phrase dépassée
+      if (turn !== voiceTurn) return;
       await new Promise((resolve) => {
         const node = ctx.createBufferSource();
         node.buffer = buf;
         node.connect(buses.voice);
         node.onended = resolve;
+        voiceNode = node;
         node.start();
       });
     } catch {
+      if (turn !== voiceTurn) return;
       // Voix de l'IA indisponible : la voix du navigateur prend le relais
       await new Promise((resolve) => {
         try {
@@ -716,7 +729,7 @@ function block(b, i) {
       const L = ['A', 'B', 'C', 'D', 'E', 'F'];
       return `<div class="choices4">${b.options.map((c, j) => `<button data-pick="${j}" class="${b.right === j ? 'right' : b.right !== null && b.right !== undefined && b.mine === j ? 'wrong' : b.mine === j ? 'mine' : ''}" ${b.mine !== null || (b.right !== null && b.right !== undefined) ? 'disabled' : ''}><b>${L[j]}</b> ${esc(c)}</button>`).join('')}</div>`;
     }
-    case 'buttons': return `<div class="row pbtns">${b.items.map((x) => `<button data-btn="${esc(x.id)}" class="${x.cls ?? ''} ${b.chosen === x.id ? 'on' : ''}">${esc(x.label)}${b.tally?.[x.id] ? ` <small>· ${b.tally[x.id]}</small>` : ''}</button>`).join('')}</div>`;
+    case 'buttons': return `<div class="row pbtns ${b.column ? 'col' : ''}">${b.items.map((x) => `<button data-btn="${esc(x.id)}" class="${x.cls ?? ''} ${b.chosen === x.id ? 'on' : ''}">${esc(x.label)}${b.tally?.[x.id] ? ` <small>· ${b.tally[x.id]}</small>` : ''}</button>`).join('')}</div>`;
     case 'input': return b.done ? '<p class="pt small">✅ Envoyé</p>' : `<form class="say pin" data-input><input data-k="${k}" maxlength="150" autocomplete="off" placeholder="${esc(b.ph ?? '')}"><button>${esc(b.button ?? '➤')}</button></form>`;
     case 'form': return b.done ? '<p class="pt big">✅ Grille rendue, attends les autres…</p>' : `<form class="pform" data-form>${b.fields.map((f, j) => `<label>${esc(f)}<input data-k="${k}-${j}" maxlength="40" autocomplete="off"></label>`).join('')}<button>${esc(b.button ?? 'Envoyer')}</button></form>`;
     case 'vote': return `<div class="pvote">${b.ids.map((id) => `<button data-vote="${id}" class="${b.mine === id ? 'on' : ''}" ${b.lock ? 'disabled' : ''}>${avatar(id)}<span>${esc(b.names?.[id] ?? nameOf(id))}</span>${b.voters?.[id]?.length ? `<i class="voters">${b.voters[id].map((v) => avatar(v.id).replace('<img', `<img title="${esc(v.name)}"`)).join('')}</i>` : ''}${b.counts?.[id] ? `<b>${b.counts[id]}</b>` : ''}</button>`).join('')}</div>`;
@@ -755,7 +768,8 @@ async function startMic(seconds) {
 function updateParty() {
   const g = state.game;
   const sc = g.screen ?? { blocks: [] };
-  $('seats').innerHTML = `<div class="seat">${g.emoji} ${esc(g.name)}${sc.title ? ` · ${esc(sc.title)}` : ''}</div>${sc.sub ? `<div class="psub">${esc(sc.sub)}</div>` : ''}`;
+  $('seats').innerHTML = `<div class="seat">${g.emoji} ${esc(g.name)}${sc.title ? ` · ${esc(sc.title)}` : ''}</div>${sc.sub ? `<div class="psub">${esc(sc.sub)}</div>` : ''}${g.spectator ? '<div class="specbar">👀 Tu es spectateur : la partie a commencé sans toi. Tu joueras à la prochaine !</div>' : ''}`;
+  if ($('sayText')) $('sayText').placeholder = g.spectator ? 'Chat des spectateurs (les joueurs ne le voient pas)…' : 'Ta proposition…';
   const cs = JSON.stringify(g.card);
   if (cs !== cardSig) {
     cardSig = cs;
@@ -785,10 +799,16 @@ function updateParty() {
   }
   if (audioBlock) Sound.playFx(audioBlock.src); else stopPartyAudio();
   // L'IA lit l'écran : le texte prévu pour la voix, sinon le récit (histoire, énigme, nuit…)
-  if (!audioBlock) Sound.say(sc.say ?? sc.blocks.find((b) => b.t === 'text' && b.cls === 'quote')?.text);
+  const voice = sc.say ?? sc.blocks.find((b) => b.t === 'text' && b.cls === 'quote')?.text;
+  if (!audioBlock && voice) Sound.say(voice, `${g.game}|${sc.title}|${voice}`);
   $('actions').innerHTML = state.me === state.host || state.me === g.host ? '<button class="ghost small" id="stopParty">⏹️ Arrêter la partie</button>' : '';
   if ($('stopParty')) $('stopParty').onclick = () => { if (confirm('Arrêter la partie pour tout le monde ?')) send({ type: 'lobby' }); };
-  updatePlayers(g.scores, null, g.answered);
+  if (!g.fixed) { updatePlayers(g.scores, null, g.answered); return; }
+  // Jeu à joueurs fixes : les joueurs de la partie (bots compris), puis les spectateurs arrivés en cours
+  const row = (id, name, spectator = false) => `<div class="player ${spectator ? 'spectator' : ''}">${avatar(id)}<span>${esc(name)}${id === g.host ? ' 👑' : ''}${g.answered?.includes(id) ? ' <small class="done">✅ a répondu</small>' : ''}</span>${spectator ? '' : `<span class="pts">${g.scores[id] ?? 0}</span>`}</div>`;
+  const specs = state.players.filter((p) => !g.players.includes(p.id));
+  $('players').innerHTML = [...g.players].sort((a, b) => (g.scores[b] ?? 0) - (g.scores[a] ?? 0)).map((id) => row(id, nameOf(id))).join('')
+    + (specs.length ? `<h4 class="spech">👀 Spectateurs</h4>${specs.map((p) => row(p.id, p.name, true)).join('')}` : '');
 }
 setInterval(() => {
   const g = state?.game;

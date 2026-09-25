@@ -37,7 +37,8 @@ const SONGS = [
   { id: 12, title: 'Djadja', preview: 'https://preview.test/12.mp3', duration: 180, artist: { id: 2, name: 'Aya Nakamura' }, album: { cover_big: 'https://e-cdns-images.dzcdn.net/b.jpg' }, rank: 900000 },
 ];
 deezer.chart = async () => SONGS;
-deezer.search = async () => SONGS;
+const EXTRA = Array.from({ length: 6 }, (_, i) => ({ id: 20 + i, title: `Son ${i}`, preview: `https://preview.test/${20 + i}.mp3`, duration: 150, artist: { id: 9, name: 'Jul' }, album: {} }));
+deezer.search = async () => [...SONGS, ...EXTRA];
 deezer.track = async (id) => SONGS.find((s) => String(s.id) === String(id)) ?? { id, preview: `https://preview.test/${id}.mp3` };
 deezer.searchArtist = async (q) => [{ id: 5, name: q, picture_xl: 'https://e-cdns-images.dzcdn.net/p.jpg' }];
 deezer.chartArtists = async () => Array.from({ length: 30 }, (_, i) => ({ id: 100 + i }));
@@ -95,7 +96,7 @@ async function play(party, { players = [A, B, C], bots = false, choice, theme, c
       const v = GAMES.party.view(g, u.id);
       for (const b of v.screen?.blocks ?? []) {
         if (b.t === 'choices' && b.mine === null && (b.right === null || b.right === undefined)) await act(r, u.id, { type: 'pick', i: 0 });
-        if (b.t === 'buttons' && !b.chosen && b.items[0]) await act(r, u.id, { type: 'btn', id: b.items.find((x) => x.id !== 'hint')?.id ?? b.items[0].id });
+        if (b.t === 'buttons' && !b.chosen && b.items[0]) { const adds = b.items.filter((x) => x.id.startsWith('add:')); await act(r, u.id, { type: 'btn', id: adds.length ? adds[Math.floor(Math.random() * adds.length)].id : b.items.find((x) => x.id !== 'hint')?.id ?? b.items[0].id }); }
         if (b.t === 'vote' && !b.lock && !b.mine && b.ids.length) await act(r, u.id, { type: 'vote', id: b.ids.find((id) => id !== u.id) ?? b.ids[0] });
         if (b.t === 'input' && !b.done) await act(r, u.id, { type: 'answer', text: answer?.(g, u) ?? 'pirate' });
         if (b.t === 'form' && !b.done) await act(r, u.id, { type: 'form', values: b.fields.map(() => `${v.screen.title.slice(-1)}ouba`) });
@@ -109,8 +110,8 @@ async function play(party, { players = [A, B, C], bots = false, choice, theme, c
   return { r, end: r.game };
 }
 
-await check('catalogue : 18 jeux de soirée, chacun avec un nom, un emoji et un script', async () => {
-  const ids = ['loupgarou', 'imposteur', 'undercover', 'histoire', 'petitbac', 'actionverite', 'quizserveur', 'blindtest', 'devine', 'pendumusical', 'rebus', 'fans', 'chasse', 'rappeur', 'motscroises', 'escape', 'quiditca', 'freestyle'];
+await check('catalogue : 19 jeux de soirée, chacun avec un nom, un emoji et un script', async () => {
+  const ids = ['loupgarou', 'imposteur', 'undercover', 'histoire', 'petitbac', 'actionverite', 'quizserveur', 'blindtest', 'devine', 'pendumusical', 'rebus', 'fans', 'chasse', 'rappeur', 'motscroises', 'escape', 'quiditca', 'freestyle', 'blindperso'];
   for (const id of ids) assert.ok(PARTY[id]?.name && PARTY[id].emoji && typeof PARTY[id].run === 'function', id);
 });
 
@@ -292,6 +293,33 @@ await check('freestyle : deux rappeurs (texte sans micro), le jury désigne le g
   const res = await play('freestyle', { players: [A, B] });
   assert.equal(res.end?.kind, 'fin');
   assert.match(res.end.title, /battle|Égalité/);
+});
+
+await check('blind test perso : chacun cherche et ajoute 2 sons, on devine qui les a choisis', async () => {
+  const res = await play('blindperso', { players: [A, B], answer: () => 'jul' });
+  assert.equal(res.end?.kind, 'fin');
+  assert.ok(res.end.podium.length === 2, 'les deux joueurs marquent');
+});
+
+await check('spectateur : arrivé en cours, il regarde sans jouer et parle dans le chat des spectateurs', async () => {
+  rooms.clear();
+  const r = roomOf(ROOM, G);
+  for (const u of [A, B, C]) join(r, u);
+  await act(r, A.id, { type: 'start', game: 'party', party: 'imposteur' });
+  await wait(100);
+  const D = { id: '888888888888888888', name: 'Yanis' };
+  join(r, D);
+  const g = r.game;
+  const view = GAMES.party.view(g, D.id);
+  assert.equal(view.spectator, true);
+  assert.equal(view.card, null, 'pas de mot pour le spectateur');
+  assert.ok(!g.players.includes(D.id));
+  await act(r, D.id, { type: 'answer', text: 'triche' });
+  await act(r, D.id, { type: 'chat', text: 'secret-spectateur 42' });
+  const { _test: t } = arcade;
+  assert.ok(!t.stateFor(r, A.id).chat.some((m) => m.text.includes('secret-spectateur')), 'les joueurs ne voient pas le chat des spectateurs');
+  assert.ok(t.stateFor(r, D.id).chat.some((m) => m.spec && m.text.includes('secret-spectateur')), 'les spectateurs, si');
+  await act(r, A.id, { type: 'lobby' });
 });
 
 await check('fichiers : carte de rôle, extrait audio, image Deezer (seulement dzcdn), photo en mémoire', async () => {
