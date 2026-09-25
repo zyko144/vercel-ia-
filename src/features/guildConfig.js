@@ -58,6 +58,7 @@ export const SCHEMA = [
   { key: 'shop.customRolePrice', section: 'boutique', type: 'int', min: 0, max: 10000000, label: 'Prix d’un rôle personnalisé (pièces d’or)', def: 20000, help: 'Le membre choisit le nom et la couleur, le staff accepte ou refuse (remboursé).' },
   { key: 'economy.channelId', section: 'boutique', type: 'channel', label: 'Salon du trésor', help: 'Classement des plus riches chaque soir, loterie, enchères, abordages.' },
   { key: 'games.channelId', section: 'boutique', type: 'channel', label: 'Salon des jeux', help: 'Les parties lancées depuis /jeux s’y ouvrent (vide : là où la commande est tapée).' },
+  { key: 'games.dailyQuiz', section: 'boutique', type: 'bool', label: 'Quiz du jour automatique', def: true, help: 'Chaque jour à 18 h, une question dans le salon des jeux : 🪙 100 pour les bonnes réponses.' },
   { key: 'announce.channelId', section: 'boutique', type: 'channel', label: 'Salon des annonces du bot', help: 'Nouveautés du bot, événements et grandes annonces.' },
   { key: 'shop.requestsChannelId', section: 'boutique', type: 'channel', label: 'Salon des demandes de rôle', help: 'Le staff y accepte ou refuse les demandes.' },
 
