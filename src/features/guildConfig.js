@@ -46,6 +46,7 @@ export const SCHEMA = [
   { key: 'levels.channelId', section: 'niveaux', type: 'channel', label: 'Salon des montées de niveau', help: 'Vide : dans le salon où le membre vient d’écrire.' },
   { key: 'levels.voiceXp', section: 'niveaux', type: 'int', min: 0, max: 50, label: 'XP par minute de vocal', def: 8 },
   { key: 'levels.roles', section: 'niveaux', type: 'list', label: 'Rôles par niveau', help: 'Une ligne par palier : « 5 = @Rôle » ou « 5 = identifiant du rôle ».' },
+  { key: 'levels.noXpChannels', section: 'niveaux', type: 'list', label: 'Salons sans XP', help: 'Un salon (ou une catégorie) par ligne : #salon ou son identifiant. Utile pour le spam, les commandes, le salon mèmes.' },
   { key: 'levels.pingEvery', section: 'niveaux', type: 'int', min: 1, max: 50, label: 'Mentionner le membre tous les … niveaux', def: 5, help: 'Les autres niveaux sont annoncés sans notification.' },
   { key: 'daily.amount', section: 'niveaux', type: 'int', min: 0, max: 1000, label: 'Pièces d’or de la récompense du jour', def: 100, help: 'Chaque niveau rapporte aussi 200 pièces.' },
   { key: 'daily.streak', section: 'niveaux', type: 'int', min: 0, max: 200, label: 'Bonus par jour de série', def: 15, help: 'Plafonné à 7 jours de série.' },

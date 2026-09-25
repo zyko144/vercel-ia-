@@ -24,7 +24,7 @@ import { startVoiceGuard } from './features/voiceGuard.js';
 import { loadServers } from './features/premium.js';
 import { loadGuildConfig } from './features/guildConfig.js';
 import { attachSecurityEvents } from './features/security.js';
-import { startLevelLoops } from './features/levels.js';
+import { startLevelLoops, xpForReaction } from './features/levels.js';
 import { startVoiceExtras } from './features/voiceExtras.js';
 import { startWeeklyReports } from './features/weekly.js';
 import { ensureBinaries } from './music/binaries.js';
@@ -39,6 +39,7 @@ const INTENTS = [
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.MessageContent,
   GatewayIntentBits.GuildVoiceStates,
+  GatewayIntentBits.GuildMessageReactions,
   GatewayIntentBits.DirectMessages,
 ];
 
@@ -46,7 +47,7 @@ const client = new Client({
   // L'intent « Présence » sert au partage Spotify ; il est retiré au démarrage s'il n'est pas activé dans le portail Discord
   intents: config.spotify.enabled ? [...INTENTS, GatewayIntentBits.GuildPresences] : INTENTS,
   // Message / membre partiels : le journal voit aussi les messages supprimés qui n'étaient plus en mémoire
-  partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.Reaction],
   // Par défaut le bot ne ping personne (pas de @everyone même si l'IA l'écrit)
   allowedMentions: { parse: [], repliedUser: true },
 });
@@ -99,6 +100,15 @@ client.on(Events.InteractionCreate, (interaction) => {
   onInteraction(client, interaction).catch((err) => console.error('[interactionCreate]', err));
 });
 
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  try {
+    if (reaction.partial) await reaction.fetch();
+    if (reaction.message.partial) await reaction.message.fetch();
+    await xpForReaction(reaction, user);
+  } catch (err) {
+    console.warn('[niveaux] réaction :', err.message);
+  }
+});
 client.on(Events.VoiceStateUpdate, (oldState, newState) => handleMusicVoiceState(oldState, newState));
 
 // Les serveurs audio ont besoin des événements vocaux bruts de Discord
