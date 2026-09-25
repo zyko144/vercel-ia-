@@ -27,6 +27,7 @@ import { GAME_HANDLERS, handleGameAutocomplete, handleGameComponent, isGameCompo
 import { MODERATION_HANDLERS } from './moderation.js';
 import { UTILITY_HANDLERS } from './utility.js';
 import { handlePanelComponent, isPanelCommand, isPanelComponent, openPanel } from '../panels/index.js';
+import { handleAiActionComponent, isAiActionComponent } from '../features/aiActions.js';
 import { handleTicketComponent, isTicketComponent } from '../features/tickets.js';
 import { handleBuildComponent, isBuildComponent } from '../features/build.js';
 import { countEvent } from '../features/weekly.js';
@@ -54,6 +55,7 @@ export async function onInteraction(client, interaction) {
     }
     // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
     if (isPanelComponent(interaction)) return await handlePanelComponent(client, interaction);
+    if (isAiActionComponent(interaction)) return await handleAiActionComponent(client, interaction);
     if (isTicketComponent(interaction)) return await handleTicketComponent(client, interaction);
     if (isBuildComponent(interaction)) return await handleBuildComponent(client, interaction);
     if (isPremiumComponent(interaction)) return await handlePremiumComponent(client, interaction);

@@ -14,7 +14,7 @@ import { buildReport } from './weekly.js';
 import { paymentLink, referralStats, useReferral } from './payments.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
-const siteUrl = () => (config.site.url ? `${config.site.url}/#pacte` : 'https://vercel-ia.onrender.com/#pacte');
+const siteUrl = () => (config.site.url ? `${config.site.url}/#tarifs` : 'https://vercel-ia.onrender.com/#tarifs');
 const fail = (text) => ({ embeds: [new EmbedBuilder().setColor(0xed4245).setDescription(`❌ ${text}`)], ...PRIVATE });
 
 const FEATURES = [

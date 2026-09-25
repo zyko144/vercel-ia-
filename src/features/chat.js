@@ -6,6 +6,7 @@ import { detectEscalation, escalateToOwner } from './escalation.js';
 import { getHistory, remember } from './memory.js';
 import { displayName } from '../utils/discord.js';
 import { buildAnswerPayload } from '../utils/reply.js';
+import { actionRow, actionsPrompt, extractAction } from './aiActions.js';
 
 const PAUSE_TEXT = 'L’IA est en pause pour une maintenance, reviens un peu plus tard 🙏';
 
@@ -29,6 +30,7 @@ export async function askAI({
   client, user, member, guild, channel, link,
   prompt, extraContent = [], notes = [],
   historyKey = null, web = true, thinking, instructions = '', visibility = 'public', tag = 'conversation',
+  actions = false, mentions = {},
 }) {
   const who = `${displayName(member, user)}${user.id === config.ownerId ? ' (le chef)' : ''}`;
   const userText = `${who} : ${prompt || '(pas de texte)'}${notes.length ? ` ${notes.join(' ')}` : ''}`;
@@ -42,6 +44,8 @@ export async function askAI({
   if (instructions) system += `\n\nCONSIGNE POUR CETTE DEMANDE\n${instructions}`;
   // Ce que l'IA a retenu sur ce membre (ses goûts, ses jeux…)
   system += await factsPrompt(guild?.id, user.id, displayName(member, user)).catch(() => '');
+  // Sur un serveur, l'IA peut lancer les actions des panneaux (bouton « Lancer »)
+  if (actions && guild) system += actionsPrompt();
 
   const { text: raw, sources } = await chat({
     history,
@@ -52,8 +56,9 @@ export async function askAI({
     tag,
   });
 
-  const { escalate, text } = detectEscalation(raw);
-  let answer = text || (escalate
+  const found = actions && guild ? extractAction(raw) : { text: raw, action: null };
+  const { escalate, text } = detectEscalation(found.text);
+  let answer = text || (found.action ? `${found.action.emoji} ${found.action.label} : clique sur le bouton pour lancer.` : escalate
     ? 'Là-dessus jpeux pas te répondre de façon fiable.'
     : "J'ai pas réussi à formuler une réponse, reformule stp 🙏");
 
@@ -69,7 +74,9 @@ export async function askAI({
     allowedUsers = result.allowedUsers;
   }
 
-  return buildAnswerPayload({ text: answer, sources, mentionLine, allowedUsers });
+  const payload = buildAnswerPayload({ text: answer, sources, mentionLine, allowedUsers });
+  if (found.action) payload.components = [...(payload.components ?? []), actionRow(found.action, user.id, mentions)].slice(0, 5);
+  return payload;
 }
 
 export function channelLink(guildId, channelId) {

@@ -24,6 +24,7 @@ const IMAGE_INTENT = /^(?:(?:est-ce que\s+)?(?:tu\s+peux|peux[- ]tu|stp|svp|vas-
 const EDIT_INTENT = /^(?:(?:tu\s+peux|peux[- ]tu|stp|svp|vas-y)\s+)?(?:me\s+)?(?:(?:modifie|retouche|transforme|[ée]dite)\b|(?:mets?|ajoute|enl[èe]ve|supprime|remplace|change)\b.*\b(?:image|photo|fond|arri[èe]re-plan|style|couleur|dessus|dessin|pp|pdp|lunettes|chapeau|ciel|texte)\b)/i;
 const isImage = (a) => a.contentType?.startsWith('image/');
 const MAX_REUPLOAD_BYTES = 8 * 1024 * 1024;
+const plainName = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
@@ -68,6 +69,10 @@ export async function onMessage(client, message) {
   // Dans le salon IA, on laisse tranquilles les messages adressés à quelqu'un d'autre
   if (inAiChannel && !mentioned && !repliedToBot && (message.mentions.users.size || message.mentions.repliedUser)) return;
 
+  // Pseudo -> identifiant des membres mentionnés (pour que l'IA puisse viser quelqu'un dans une action)
+  const mentions = {};
+  for (const [id, m] of message.mentions.members ?? []) if (id !== client.user.id) mentions[plainName(m.displayName)] = id;
+  for (const [id, u] of message.mentions.users) if (id !== client.user.id) mentions[plainName(message.guild?.members.cache.get(id)?.displayName ?? u.username)] = id;
   const text = message.content
     .replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '')
     .replace(/<@!?(\d+)>/g, (_, id) => `@${message.guild?.members.cache.get(id)?.displayName ?? client.users.cache.get(id)?.username ?? 'quelqu\'un'}`)
@@ -150,6 +155,8 @@ export async function onMessage(client, message) {
         extraContent: content,
         notes,
         historyKey: conversationKey({ userId: message.author.id }),
+        actions: message.inGuild(),
+        mentions,
       });
     }
     await send(target, replyTo, payload);

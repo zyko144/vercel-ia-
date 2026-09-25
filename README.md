@@ -169,16 +169,11 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 ## 8. Le site vitrine 🌐
 
 `site/index.html`, servi par le bot lui-même à son adresse principale (`https://vercel-ia.onrender.com/`).
-Une seule page, sans bibliothèque, peu d'animations au défilement :
+Une page simple, sans image ni bibliothèque : accueil, fonctionnalités (6 modules), mise en route, **tarifs**
+(3 cartes : Gratuit, Veilleur, Gardien ; le paiement demande l'identifiant du serveur puis envoie sur `/payer`),
+FAQ. Le nom, la photo et le statut du bot sont lus sur `/api/statut`.
 
-- **Accueil** : cartes 3D qui penchent sous la souris, entourées d'un néon animé, une par catégorie
-  (IA, Jeux, Musique et vocal, Sécurité, Tickets et serveur, Niveaux et boutique, Premium).
-- **Une page par catégorie** (`#ia`, `#jeux`, `#musique`, `#securite`, `#serveur`, `#niveaux`) : les avantages,
-  des exemples de messages Discord avec **le nom et la photo du bot** (lus sur `/api/statut`), les bannières des
-  panneaux, les cartes de rôle, la carte de bienvenue et la carte de profil.
-- **Offres** (`#offres`) : les 3 offres, le paiement PayPal (identifiant du serveur → `/payer`) et le parrainage.
-- Autres pages du bot : `/statut` (page de statut publique), `/api/statut` (JSON), `/payer`, `/merci`.
-- Refaire les images d'exemple (carte de bienvenue, carte de profil) : `node tools/make-site-exemples.mjs`.
+- Autres pages du bot : `/statut` (statut public), `/api/statut` (JSON), `/payer`, `/merci`.
 - **Bio du bot** : au démarrage, le lien du site est ajouté dans la bio (« À propos de moi ») du bot
   et de Casinho. `SITE_URL` pour un autre lien, `SITE_IN_BIO=false` pour ne pas toucher à la bio.
 
@@ -320,7 +315,9 @@ Vocal, IA), ou dans Discord avec les panneaux.
 - **Niveaux** : XP messages + vocal, carte de profil néon, classement, récompense du jour et série, boutique,
   rôle personnalisé (nom + couleur choisis par le membre, validés par le staff), membre de la semaine.
 - **Vocal** : vocaux temporaires, radio 24 h/24, conseil en MP pour les micros saturés.
-- **IA** : mémoire des membres, traduction automatique, FAQ apprise, note de punchline.
+- **IA** : mémoire des membres, traduction automatique, FAQ apprise, note de punchline. Quand on lui demande
+  de faire quelque chose (« lance un undercover », « mute Karim 10 min », « mets du Jul »), elle répond avec un bouton
+  **Lancer** : l'action du panneau part au clic (permissions vérifiées), ou sa fenêtre s'ouvre déjà remplie.
 - **Jeux** : Undercover, Petit Bac, Action ou vérité, Pendu musical, Quiz du serveur.
 - **Serveur** : carte de bienvenue, suggestions votées, sauvegarde et restauration (`/pannel` › Serveur).
 
