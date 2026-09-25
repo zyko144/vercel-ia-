@@ -298,7 +298,8 @@ function stateFor(r, me, since = {}) {
     seq: r.seq, now: Date.now(), me,
     players: [...r.players.entries()].map(([id, p]) => ({ id, name: p.name })),
     host: [...r.players.keys()][0] ?? null,
-    chat: r.chat.slice(-30),
+    // Pendant un jeu de soirée, le chat des spectateurs n'est montré qu'aux spectateurs
+    chat: r.chat.filter((m) => !m.spec || g?.kind !== 'party' || g.over || GAMES.party.spectator(g, me)).slice(-30),
     lastGame: r.lastGame,
     game: !g ? null : g.kind === 'fin' ? g : GAMES[g.kind].view(g, me),
     solo: soloView(r.solo?.get(me)),
@@ -355,7 +356,11 @@ export async function act(r, me, body) {
   // Jeux de soirée : le chat sert aussi aux réponses (une bonne réponse n'est pas montrée aux autres)
   if (body.type === 'chat' && r.game?.kind === 'party' && !r.game.over) {
     const text = String(body.text ?? '').slice(0, 200).trim();
-    if (text && !GAMES.party.chat(r, r.game, me, text)) guessChat(r, me, text);
+    // Les spectateurs ont leur propre chat : les joueurs ne le voient pas pendant la partie
+    if (text && GAMES.party.spectator(r.game, me)) {
+      r.chat.push({ at: Date.now(), kind: 'msg', spec: true, from: me, name: p.name, text: text.slice(0, 80) });
+      if (r.chat.length > 40) r.chat.shift();
+    } else if (text && !GAMES.party.chat(r, r.game, me, text)) guessChat(r, me, text);
     bump(r);
     return { ok: true };
   }

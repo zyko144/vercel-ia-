@@ -110,6 +110,71 @@ PARTY.devine = {
 };
 
 // =====================================================================
+// BLIND TEST PERSO : chacun ajoute 2 sons, on devine qui les a choisis
+// =====================================================================
+PARTY.blindperso = {
+  emoji: '🎁', name: 'Blind test perso', desc: 'Chacun ajoute 2 sons, devinez qui les a choisis', min: 2, prize: 70,
+  async run(p) {
+    const PER = 2;
+    const results = {}; // joueur -> derniers résultats de recherche
+    const picks = new Map(); // joueur -> [sons]
+    const endsAt = Date.now() + 120_000;
+    const mine = (me) => picks.get(me) ?? [];
+    p.show((me) => ({
+      title: '🎁 Choisis tes 2 sons', endsAt, sub: `${[...picks.values()].filter((x) => x.length >= PER).length}/${p.players.length} prêt(s)`,
+      say: 'Chacun choisit deux sons en secret. Ensuite, devinez qui a choisi quoi !',
+      blocks: [
+        T('Choisis 2 sons en secret : les autres devront deviner que c’est toi !', 'big'),
+        ...(mine(me).length ? [{ t: 'list', items: mine(me).map((x) => `🎵 **${x.title}** · ${x.artist}`) }] : []),
+        ...(mine(me).length < PER ? [
+          { t: 'input', ph: 'Cherche un son ou un artiste…', button: '🔎 Chercher', keep: true },
+          { t: 'buttons', items: (results[me] ?? []).map((x) => ({ id: `add:${x.id}`, label: `➕ ${x.title} · ${x.artist}` })), column: true },
+        ] : [T('✅ C’est bon ! On attend les autres…', 'small')]),
+      ],
+    }));
+    await p.collect({
+      ms: 120_000, keep: true,
+      enough: () => p.humansHere().every((id) => mine(id).length >= PER),
+      accept: (me, b) => {
+        if (b.type === 'answer' && String(b.text ?? '').trim() && mine(me).length < PER) {
+          deezer.search(String(b.text).slice(0, 80), 8).then((list) => {
+            results[me] = (list ?? []).filter((t) => t.preview).slice(0, 6).map((t) => ({ id: t.id, title: cleanTitle(t.title), artist: t.artist?.name ?? '?', cover: t.album?.cover_big ?? null }));
+            p.bump();
+          }).catch(() => {});
+          return undefined;
+        }
+        if (b.type === 'btn' && String(b.id).startsWith('add:') && mine(me).length < PER) {
+          const song = (results[me] ?? []).find((x) => `add:${x.id}` === b.id);
+          if (!song || [...picks.values()].flat().some((x) => x.id === song.id)) return undefined;
+          picks.set(me, [...mine(me), song]);
+          results[me] = [];
+          return mine(me).length;
+        }
+        return undefined;
+      },
+    });
+    const rounds = shuffle([...picks.entries()].flatMap(([id, list]) => list.map((song) => ({ owner: id, song }))));
+    if (rounds.length < 2) return { title: 'Pas assez de sons choisis pour jouer.' };
+    const players = [...picks.keys()];
+    for (const [i, { owner, song }] of rounds.entries()) {
+      const voters = players.filter((id) => id !== owner);
+      const until = Date.now() + 30_000;
+      p.show((me) => ({
+        title: `🎁 Son ${i + 1}/${rounds.length} · qui l’a choisi ?`, endsAt: until, sub: `${p.g.live?.size ?? 0}/${voters.length} vote(s)`,
+        blocks: [audio(song.id), T(`🎵 ${song.title} · ${song.artist}`, 'big'),
+          ...(me === owner ? [T('🤫 C’est ton son ! Fais genre…', 'small')] : [{ t: 'vote', ids: players.filter((x) => x !== me), names: Object.fromEntries(players.map((x) => [x, p.name(x)])), mine: p.g.live?.get(me) ?? null, counts: null, voters: null, label: 'C’est lui !' }])],
+      }));
+      const votes = await p.collect({ ms: 30_000, who: voters, keep: true, accept: (me, b) => (b.type === 'vote' && players.includes(b.id) && b.id !== me ? b.id : undefined) });
+      const good = [...votes.entries()].filter(([, v]) => v === owner).map(([id]) => id);
+      good.forEach((id) => p.points(id, 1));
+      p.points(owner, voters.length - good.length); // un point par joueur trompé
+      p.show({ title: `🎁 Son ${i + 1}/${rounds.length}`, blocks: [cover(song.cover), { t: 'who', id: owner, name: p.name(owner), text: `a choisi « ${song.title} » · ${good.length ? `trouvé par ${good.map(p.name).join(', ')}` : 'personne n’a trouvé !'}`, big: true }].filter(Boolean), say: `C’était le son de ${p.name(owner)} !` });
+      await p.sleep(6000);
+    }
+  },
+};
+
+// =====================================================================
 // PENDU MUSICAL
 // =====================================================================
 PARTY.pendumusical = {

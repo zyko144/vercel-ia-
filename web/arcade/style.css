@@ -270,3 +270,9 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 .pvote .voters .avatar { width: 20px; height: 20px; border-width: 1px; }
 .player .done { margin-left: 4px; }
 .player .avatar { width: 36px; height: 36px; }
+.specbar { width: 100%; text-align: center; background: #2a2014; border: 1px dashed var(--accent); color: var(--gold); border-radius: 10px; padding: 8px; margin-top: 6px; font-size: 14px; }
+.chat .spec { color: #9ecfff; }
+.spech { margin: 10px 0 4px; color: var(--muted); font-size: 13px; }
+.player.spectator { opacity: .7; }
+.pbtns.col { flex-direction: column; align-items: stretch; max-width: 520px; margin: 0 auto; width: 100%; }
+.pbtns.col button { text-align: left; background: #2a2014; color: var(--text); border: 1px solid #4a3620; box-shadow: none; font-family: Georgia, serif; }
