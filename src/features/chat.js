@@ -1,5 +1,6 @@
 import { factsPrompt, learnFacts } from './aiExtras.js';
 import { config } from '../config.js';
+import { cfg } from './guildConfig.js';
 import { chat } from '../ai/gemini.js';
 import { systemPrompt } from '../ai/persona.js';
 import { detectEscalation, escalateToOwner } from './escalation.js';
@@ -41,6 +42,9 @@ export async function askAI({
   let system = systemPrompt({ botName: client.user.username, guildName: guild?.name });
   // Consignes données par le staff depuis le tableau de bord (événements du moment, règles du serveur…)
   if (config.ai.extraInstructions) system += `\n\nCONSIGNES DU SERVEUR (données par le staff)\n${config.ai.extraInstructions}`;
+  // Personnalité propre à ce serveur (réglée par le staff)
+  const personality = guild ? cfg(guild.id, 'ai.personality') : null;
+  if (personality) system += `\n\nPERSONNALITÉ SUR CE SERVEUR (garde-la dans toutes tes réponses)\n${personality}`;
   if (instructions) system += `\n\nCONSIGNE POUR CETTE DEMANDE\n${instructions}`;
   // Ce que l'IA a retenu sur ce membre (ses goûts, ses jeux…)
   system += await factsPrompt(guild?.id, user.id, displayName(member, user)).catch(() => '');

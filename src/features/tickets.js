@@ -136,17 +136,17 @@ async function handleDraft(client, interaction) {
     d.color = COLORS[interaction.values[0]]?.value ?? d.color;
     return interaction.update({ ...previewMessage(d), attachments: [] });
   }
-  if (what === 'edit') {
-    const fields = d.kind === 'ticket' ? TICKET_FIELDS(d).filter((x) => x.id !== 'salon' && x.id !== 'image') : ANNOUNCE_FIELDS(d).filter((x) => !['salon', 'image', 'mention'].includes(x.id));
-    return interaction.showModal(buildModal(`tkd:editsave:${d.id}`, '✏️ Modifier le texte', fields));
-  }
-  if (what === 'editsave') {
-    const fields = d.kind === 'ticket' ? TICKET_FIELDS(d).filter((x) => x.id !== 'salon' && x.id !== 'image') : ANNOUNCE_FIELDS(d).filter((x) => !['salon', 'image', 'mention'].includes(x.id));
+  if (what === 'edit' || what === 'editsave') {
+    const fields = d.kind === 'ticket'
+      ? [...TICKET_FIELDS(d).filter((x) => x.id !== 'salon' && x.id !== 'image'), f.text('categories', 'Catégories (séparées par | , vide = aucune)', { max: 400, value: (d.categories ?? []).join(' | '), ph: '🛒 Achat | 🐛 Bug | 🚨 Signalement | ❓ Question' })]
+      : ANNOUNCE_FIELDS(d).filter((x) => !['salon', 'image', 'mention'].includes(x.id));
+    if (what === 'edit') return interaction.showModal(buildModal(`tkd:editsave:${d.id}`, '✏️ Modifier le texte', fields));
     const { values, error } = await readModal(interaction, fields);
     if (error) return interaction.reply({ content: `❌ ${error}`, ...PRIVATE });
     d.title = values.titre ?? d.title;
     d.message = values.message ?? d.message;
     d.button = values.bouton ?? d.button;
+    if (d.kind === 'ticket') d.categories = String(values.categories ?? '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 25);
     return interaction.update({ ...previewMessage(d), attachments: [] });
   }
   if (what === 'settings') return interaction.showModal(buildModal(`tkd:settingssave:${d.id}`, '⚙️ Réglages des tickets', SETTINGS_FIELDS()));
@@ -176,9 +176,11 @@ async function sendDraft(client, d) {
     return { error: `Je ne peux pas écrire dans <#${d.channelId}> (il me faut Voir, Envoyer, Intégrer des liens et Joindre des fichiers).` };
   }
   const panelId = newId();
-  const components = d.kind === 'ticket'
-    ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`tk:open:${panelId}`).setLabel(cut(d.button, 80)).setEmoji('🎫').setStyle(ButtonStyle.Success))]
-    : [];
+  // Avec des catégories : un menu pour choisir le motif du ticket ; sinon un simple bouton
+  const components = d.kind !== 'ticket' ? [] : d.categories?.length
+    ? [new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`tk:cat:${panelId}`).setPlaceholder(`🎫 ${cut(d.button, 100)} : choisis le motif`)
+      .addOptions(d.categories.map((c, i) => ({ label: cut(c, 100), value: String(i) }))))]
+    : [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`tk:open:${panelId}`).setLabel(cut(d.button, 80)).setEmoji('🎫').setStyle(ButtonStyle.Success))];
   const content = d.kind === 'annonce' && d.ping ? (d.ping === 'everyone' ? '@everyone' : `<@&${d.ping}>`) : undefined;
   const message = await channel.send({
     content, embeds: [draftEmbed(d)], files: draftFiles(d), components,
@@ -188,7 +190,7 @@ async function sendDraft(client, d) {
     const g = await guildData(d.guildId);
     g.panels[panelId] = {
       id: panelId, channelId: channel.id, messageId: message.id, staffRoleId: d.staffRoleId, categoryId: d.categoryId,
-      logChannelId: d.logChannelId, welcome: d.welcome, unique: d.unique !== false, color: d.color, title: d.title, createdBy: d.userId, at: Date.now(),
+      logChannelId: d.logChannelId, welcome: d.welcome, unique: d.unique !== false, color: d.color, title: d.title, createdBy: d.userId, at: Date.now(), categories: d.categories ?? [],
     };
     persist();
   }
@@ -218,9 +220,10 @@ export const ANNOUNCE_FIELDS = (d = {}) => [
 
 const slug = (text) => String(text).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'membre';
 
-async function openTicket(client, interaction, panelId) {
+async function openTicket(client, interaction, panelId, categoryIndex = null) {
   const g = await guildData(interaction.guildId);
   const panel = g.panels[panelId];
+  const topic = categoryIndex !== null ? panel?.categories?.[Number(categoryIndex)] ?? null : null;
   if (!panel) return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xed4245).setDescription('❌ Ce panneau de tickets n’existe plus. Préviens le staff.')], ...PRIVATE });
   const mine = Object.entries(g.open).find(([channelId, t]) => t.userId === interaction.user.id && interaction.guild.channels.cache.has(channelId));
   if (panel.unique && mine) return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xffc94d).setDescription(`🎫 Tu as déjà un ticket ouvert : <#${mine[0]}>`)], ...PRIVATE });
@@ -248,18 +251,18 @@ async function openTicket(client, interaction, panelId) {
     overwrites.push({ id: panel.staffRoleId, type: OverwriteType.Role, allow: [P.ViewChannel, P.SendMessages, P.AttachFiles, P.EmbedLinks, P.ReadMessageHistory, P.ManageMessages] });
   }
   const channel = await guild.channels.create({
-    name: `ticket-${number}-${slug(interaction.member?.displayName ?? interaction.user.username)}`,
+    name: `${topic ? slug(topic).slice(0, 12) : 'ticket'}-${number}-${slug(interaction.member?.displayName ?? interaction.user.username)}`,
     type: ChannelType.GuildText, parent: category.id, permissionOverwrites: overwrites,
-    topic: `Ticket n°${number} de ${interaction.user.tag ?? interaction.user.username} · ouvert via le panneau « ${cut(panel.title, 60)} »`,
+    topic: `Ticket n°${number} de ${interaction.user.tag ?? interaction.user.username}${topic ? ` · ${cut(topic, 60)}` : ''} · ouvert via le panneau « ${cut(panel.title, 60)} »`,
   });
-  g.open[channel.id] = { userId: interaction.user.id, number, panelId, openedAt: Date.now(), claimedBy: null };
+  g.open[channel.id] = { userId: interaction.user.id, number, panelId, openedAt: Date.now(), claimedBy: null, topic };
   countEvent(guild.id, 'tickets');
   persist();
 
   const gif = art('panneaux', 'ticket');
   const welcome = new EmbedBuilder()
     .setColor(panel.color ?? COLORS.cyan.value)
-    .setTitle(`🎫 Ticket n°${number}`)
+    .setTitle(`🎫 Ticket n°${number}${topic ? ` · ${cut(topic, 80)}` : ''}`)
     .setDescription([
       `Salut ${interaction.user} ! ${panel.welcome ?? 'Explique ton problème ici, un membre du staff te répond au plus vite.'}`,
       '',
@@ -304,9 +307,32 @@ async function transcript(channel) {
   return Buffer.from(`Transcription de #${channel.name}\n${'='.repeat(40)}\n${lines.join('\n')}\n`, 'utf8');
 }
 
+const staffStats = (g, id) => ((g.stats ??= {})[id] ??= { claimed: 0, closed: 0, ratings: [] });
+
+/** Les statistiques du staff sur les tickets (idée 68). */
+export async function ticketStaffEmbed(guild) {
+  const g = await guildData(guild.id);
+  const rows = Object.entries(g.stats ?? {}).map(([id, s]) => ({ id, ...s, avg: s.ratings.length ? s.ratings.reduce((a, b) => a + b, 0) / s.ratings.length : null }))
+    .sort((a, b) => (b.closed + b.claimed) - (a.closed + a.claimed)).slice(0, 15);
+  const stars = (n) => (n === null ? '—' : `${'⭐'.repeat(Math.round(n))} ${n.toFixed(1)}`);
+  return new EmbedBuilder().setColor(0xc9a978).setTitle(`🎫 Le staff et les tickets · ${guild.name}`)
+    .setDescription(rows.length ? rows.map((r, i) => `**${i + 1}.** <@${r.id}> · 🙋 ${r.claimed} pris · 🔒 ${r.closed} fermés · ${stars(r.avg)} (${r.ratings.length} note${r.ratings.length > 1 ? 's' : ''})`).join('\n') : 'Aucun ticket traité pour l’instant.')
+    .setFooter({ text: `${g.counter} tickets ouverts depuis le début · ${Object.keys(g.open).length} ouverts maintenant` });
+}
+
 async function handleTicket(client, interaction) {
-  const [, what, ref] = interaction.customId.split(':');
+  const [, what, ref, a, b] = interaction.customId.split(':');
   if (what === 'open') return openTicket(client, interaction, ref);
+  if (what === 'cat') return openTicket(client, interaction, ref, interaction.values[0]);
+  if (what === 'rate') {
+    // Note de satisfaction envoyée en MP : tk:rate:<serveur>:<étoiles>:<membre du staff>
+    const g = await guildData(ref);
+    if (b && b !== 'x') staffStats(g, b).ratings.push(Number(a));
+    ((g.ratings ??= []).push({ at: Date.now(), stars: Number(a), staff: b !== 'x' ? b : null }));
+    if (g.ratings.length > 500) g.ratings.shift();
+    persist();
+    return interaction.update({ components: [], embeds: [new EmbedBuilder().setColor(0x3fbf6a).setDescription(`Merci ! Tu as donné ${'⭐'.repeat(Number(a))} au support.`)] });
+  }
 
   const g = await guildData(interaction.guildId);
   const ticket = g.open[interaction.channelId];
@@ -316,6 +342,7 @@ async function handleTicket(client, interaction) {
   if (what === 'claim') {
     if (!isStaff(interaction, panel)) return interaction.reply({ content: '🔒 Réservé au staff.', ...PRIVATE });
     ticket.claimedBy = interaction.user.id;
+    staffStats(g, interaction.user.id).claimed += 1;
     persist();
     await interaction.update({ components: [ticketButtons(true)] });
     return interaction.channel.send({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(`🙋 ${interaction.user} prend ce ticket en charge.`)] });
@@ -355,11 +382,26 @@ async function handleTicket(client, interaction) {
         { name: 'Durée', value: `<t:${Math.round(ticket.openedAt / 1000)}:R> → maintenant`, inline: false },
       )
       .setTimestamp();
+    if (ticket.topic) summary.addFields({ name: 'Motif', value: cut(ticket.topic, 200), inline: true });
+    // Résumé du ticket par l'IA (idée 55)
+    const { summarizeTicket } = await import('./assistant.js');
+    const resume = await summarizeTicket(file.toString('utf8'));
+    if (resume) summary.addFields({ name: '🧠 Résumé', value: resume });
+    staffStats(g, interaction.user.id).closed += 1;
     const attach = () => new AttachmentBuilder(file, { name: `ticket-${ticket.number}.txt` });
     const logs = panel?.logChannelId ? client.channels.cache.get(panel.logChannelId) : null;
     await logs?.send({ embeds: [summary], files: [attach()], allowedMentions: { parse: [] } }).catch(() => {});
     const author = await client.users.fetch(ticket.userId).catch(() => null);
     await author?.send({ embeds: [summary.setDescription(`Ton ticket sur **${interaction.guild.name}** est fermé. Voici la transcription.`)], files: [attach()] }).catch(() => {});
+    // Note de satisfaction (idée 67)
+    const { cfg } = await import('./guildConfig.js');
+    if (author && cfg(interaction.guildId, 'tickets.rating')) {
+      const helper = ticket.claimedBy ?? (interaction.user.id !== ticket.userId ? interaction.user.id : 'x');
+      await author.send({
+        embeds: [new EmbedBuilder().setColor(0xc9a978).setDescription(`⭐ Comment s’est passé ton ticket sur **${interaction.guild.name}** ?`)],
+        components: [new ActionRowBuilder().addComponents([1, 2, 3, 4, 5].map((n) => new ButtonBuilder().setCustomId(`tk:rate:${interaction.guildId}:${n}:${helper}`).setLabel('⭐'.repeat(n)).setStyle(n >= 4 ? ButtonStyle.Success : ButtonStyle.Secondary)))],
+      }).catch(() => {});
+    }
     delete g.open[channel.id];
     persist();
     setTimeout(() => channel.delete(`Ticket fermé par ${interaction.user.username}`).catch(() => {}), 5_000);

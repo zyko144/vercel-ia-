@@ -15,7 +15,8 @@ export const SECTIONS = {
   boutique: { label: 'Boutique, trésor et salons', emoji: '🛒', intro: 'Le comptoir du capitaine, le trésor (loterie, enchères, marché) et les salons dédiés du bot.' },
   accueil: { label: 'Bienvenue et suggestions', emoji: '👋', intro: 'Carte de bienvenue et salon des suggestions votées.' },
   vocal: { label: 'Vocal', emoji: '🔊', intro: 'Salons vocaux temporaires, radio 24 h/24, micros saturés.' },
-  ia: { label: 'IA du serveur', emoji: '🧠', intro: 'Mémoire des membres, salons traduits automatiquement, FAQ apprise.' },
+  ia: { label: 'IA du serveur', emoji: '🧠', intro: 'Personnalité, mémoire des membres, résumé du soir, alerte d’ambiance, salons traduits, FAQ apprise.' },
+  outils: { label: 'Outils du serveur', emoji: '🧰', intro: 'Anniversaires, compteur de membres, candidatures staff, note des tickets, classement public.' },
 };
 
 export const SCHEMA = [
@@ -40,6 +41,14 @@ export const SCHEMA = [
   { key: 'appeals.enabled', section: 'securite', type: 'bool', label: 'Contester une sanction', def: true, help: 'Le MP de sanction propose « Contester » : un ticket s’ouvre pour le staff.' },
   { key: 'appeals.categoryId', section: 'securite', type: 'category', label: 'Catégorie des contestations' },
   { key: 'appeals.staffRoleId', section: 'securite', type: 'role', label: 'Rôle du staff (contestations)' },
+  { key: 'mod.escalate', section: 'securite', type: 'bool', label: 'Sanctions progressives', def: true, help: '3 avertissements : muet 1 h · 5 : muet 1 jour · 7 : expulsion.' },
+  { key: 'automod.words', section: 'securite', type: 'list', label: 'Mots interdits', help: 'Un mot ou une expression par ligne : le message est supprimé et compte comme un avertissement.' },
+  { key: 'security.minAccountDays', section: 'securite', type: 'int', min: 0, max: 90, label: 'Âge minimum des comptes (jours)', def: 0, help: 'Les comptes plus récents sont expulsés à l’arrivée (0 = désactivé).' },
+  { key: 'autoSlow.enabled', section: 'securite', type: 'bool', label: 'Mode lent automatique', def: true, help: 'Un salon qui s’emballe (15 messages en 10 s) passe en mode lent 10 s pendant 5 minutes.' },
+  { key: 'alts.enabled', section: 'securite', type: 'bool', label: 'Détection des doubles comptes', def: true, help: 'Un nouveau membre au nom ou à l’avatar d’un banni : le staff est prévenu.' },
+  { key: 'mod.weeklyReport', section: 'securite', type: 'bool', label: 'Rapport de modération chaque lundi', def: true, help: 'Dans le salon du journal : avertissements, muets, messages supprimés de la semaine.' },
+  { key: 'backup.auto', section: 'securite', type: 'bool', label: 'Sauvegarde automatique chaque semaine', def: false, help: 'Rôles, salons et permissions, 3 sauvegardes gardées.' },
+  { key: 'ai.explainDeletions', section: 'securite', type: 'bool', label: 'Expliquer les suppressions en MP', def: true, help: 'Quand le bot supprime un message, l’auteur reçoit pourquoi (et comment éviter).' },
 
   // ---------- Niveaux ----------
   { key: 'levels.enabled', section: 'niveaux', type: 'bool', label: 'Niveaux et XP', def: true },
@@ -80,6 +89,21 @@ export const SCHEMA = [
   { key: 'memory.enabled', section: 'ia', type: 'bool', label: 'L’IA se souvient des membres', def: true, help: 'Elle retient leurs goûts (rappeur, jeu, pseudo en jeu). Chacun peut voir et effacer ce qu’elle sait : /ia.' },
   { key: 'translate.channels', section: 'ia', type: 'list', label: 'Salons traduits automatiquement', help: 'Une ligne par salon : « #salon = langue » (ex : « 123… = français »). Chaque message est traduit dessous.' },
   { key: 'faq.channelId', section: 'ia', type: 'channel', label: 'Salon d’aide (FAQ automatique)', help: 'L’IA répond aux questions déjà posées. Les réponses du staff y sont apprises.' },
+  { key: 'ai.personality', section: 'ia', type: 'text', max: 600, label: 'Personnalité de l’IA sur ce serveur', help: 'Ex : « Tu parles comme un vieux capitaine pirate, tu tutoies, tu restes gentil. »' },
+  { key: 'ai.eveningSummary', section: 'ia', type: 'bool', label: 'Résumé du soir', def: false, help: 'À 22 h, l’IA résume la journée du serveur dans le salon des annonces du bot.' },
+  { key: 'ai.moodAlerts', section: 'ia', type: 'bool', label: 'Alerte d’ambiance', def: false, help: 'L’IA prévient le staff (salon du journal) quand le ton monte dans les discussions.' },
+
+  // ---------- Outils ----------
+  { key: 'birthdays.enabled', section: 'outils', type: 'bool', label: 'Anniversaires', def: true, help: 'Chacun enregistre sa date (/serveur › Mon anniversaire) : le bot le fête à 9 h avec 500 pièces d’or.' },
+  { key: 'birthdays.channelId', section: 'outils', type: 'channel', label: 'Salon des anniversaires', help: 'Vide : le salon des annonces du bot.' },
+  { key: 'birthdays.roleId', section: 'outils', type: 'role', label: 'Rôle du jour d’anniversaire' },
+  { key: 'counter.channelId', section: 'outils', type: 'voice', label: 'Compteur de membres', help: 'Un salon vocal dont le nom devient « 👥 Membres : 1 234 » (mis à jour toutes les 10 min).' },
+  { key: 'staff.applicationsChannelId', section: 'outils', type: 'channel', label: 'Salon des candidatures staff', help: 'Les candidatures y arrivent avec un vote ✅ / ❌ du staff.' },
+  { key: 'tickets.rating', section: 'outils', type: 'bool', label: 'Note de satisfaction des tickets', def: true, help: 'À la fermeture, l’auteur note l’aide reçue de 1 à 5 étoiles.' },
+  { key: 'public.listed', section: 'outils', type: 'bool', label: 'Apparaître dans le classement public', def: false, help: 'Le serveur figure sur la page publique des serveurs les plus actifs du site.' },
+  { key: 'voiceParty.enabled', section: 'vocal', type: 'bool', label: 'Récompense des soirées vocales', def: true, help: '5 personnes ou plus en vocal pendant 1 h : 🪙 150 chacun (une fois par jour).' },
+  { key: 'waiting.channelId', section: 'vocal', type: 'voice', label: 'Salon vocal d’attente', help: 'Quand quelqu’un y entre, le staff est prévenu avec un bouton pour le déplacer.' },
+  { key: 'waiting.alertChannelId', section: 'vocal', type: 'channel', label: 'Salon où prévenir le staff', help: 'Vide : le salon du journal.' },
 ];
 
 const DEFAULTS = {};

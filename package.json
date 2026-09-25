@@ -28,7 +28,8 @@
     "test:app": "node tools/test-app.mjs",
     "test:treasury": "node tools/test-treasury.mjs",
     "test:arcade": "node tools/test-arcade.mjs",
-    "test:arcade-web": "node tools/test-arcade-web.mjs"
+    "test:arcade-web": "node tools/test-arcade-web.mjs",
+    "test:outils": "node tools/test-outils.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

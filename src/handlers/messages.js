@@ -8,6 +8,8 @@ import { hitCooldown } from '../features/limits.js';
 import { protectOwner } from '../features/protectOwner.js';
 import { countMessage } from '../features/weekly.js';
 import { guardMessage } from '../features/security.js';
+import { recordMessage } from '../features/assistant.js';
+import { watchBurst } from '../features/moderation.js';
 import { xpForMessage } from '../features/levels.js';
 import { autoTranslate, faqMessage } from '../features/aiExtras.js';
 import { suggestionMessage } from '../features/community.js';
@@ -32,6 +34,9 @@ export async function onMessage(client, message) {
   if (message.inGuild() && await guardMessage(message).catch(() => false)) return;
   // Rapport de la semaine : on compte (juste un nombre par membre et par salon)
   if (message.inGuild()) countMessage(message);
+  // Extraits courts pour le résumé du soir et l'ambiance ; mode lent si le salon s'emballe
+  if (message.inGuild()) recordMessage(message);
+  if (message.inGuild()) watchBurst(message).catch(() => {});
   if (message.inGuild()) xpForMessage(message).catch((err) => console.warn('[niveaux]', err.message));
   // Salons traduits automatiquement, et FAQ apprise du salon d'aide
   if (message.inGuild()) autoTranslate(message).catch((err) => console.warn('[traduction]', err.message));
