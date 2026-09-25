@@ -104,7 +104,7 @@ export async function wheel(interaction, { bet }) {
   if (r.error) return ko(interaction, r.error);
   const i = Math.floor(Math.random() * WHEEL.length);
   const mult = WHEEL[i];
-  await interaction.reply({ embeds: [new EmbedBuilder().setColor(GOLD).setTitle('🎡 La roue de la fortune').setDescription(`Mise : 🪙 ${fmt(r.bet)}… la roue tourne !`).setImage(art('panneaux', 'roue'))], ...visibility(interaction) });
+  await interaction.reply({ embeds: [new EmbedBuilder().setColor(GOLD).setTitle('🎡 La roue de la fortune').setDescription(`Mise : 🪙 ${fmt(r.bet)}… la roue tourne !`).setImage(art('panneaux', 'roue').url)], files: art('panneaux', 'roue').files, ...visibility(interaction) });
   await sleep(3200);
   const s = await settle(interaction, r.bet, mult, 'roue');
   return interaction.editReply({ embeds: [new EmbedBuilder().setColor(mult >= 2 ? 0x3fbf6a : mult ? GOLD : 0xe0433a).setTitle('🎡 La roue de la fortune')
