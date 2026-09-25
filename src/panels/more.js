@@ -151,3 +151,17 @@ addActions('musique', 'Soirée vocale', [
   },
   { id: 'karaoke-ia', label: 'Karaoké noté par l’IA', emoji: '🎤', desc: '40 s de chant, le jury IA te note', fields: [f.text('chanson', 'Quelle chanson ?', { req: true, max: 120 })], run: (c, i, v) => karaoke(i, v) },
 ]);
+
+// ===================== /serveur › Premium : carte cadeau =====================
+addActions('serveur', 'Premium', [
+  {
+    id: 'carte-cadeau', label: 'Utiliser une carte cadeau', emoji: '🎁', desc: 'Un code VERCEL-… active le premium', perm: P.ManageGuild,
+    fields: [f.text('code', 'Code de la carte', { req: true, max: 40, ph: 'VERCEL-XXXX-XXXX' })],
+    run: async (c, i, v) => {
+      const { redeemGiftCard } = await import('../features/giftCards.js');
+      const r = await redeemGiftCard(v.code, i.guildId, i.user.id);
+      if (r.error) return i.reply(ok(`❌ ${r.error}`, 0xe0433a));
+      return i.reply(ok(`🎁 Carte cadeau utilisée : **${r.plan.emoji} ${r.plan.label}** actif jusqu’au **${new Date(r.plan.until).toLocaleDateString('fr-FR')}** (${r.days} jours). Merci !`, 0xf2c14e));
+    },
+  },
+]);

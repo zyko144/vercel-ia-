@@ -9,6 +9,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits as P, StringSelectMenuBuilder } from 'discord.js';
 import { buildModal, field as f, readModal } from '../panels/ui.js';
 import { cfg } from './guildConfig.js';
+import { isPremium } from './premium.js';
 import {
   DAY, GOLD, ITEMS, TAX, addGold, addToChest, data, dayKey, fmt, giveItem, ko, members, meta, ok, persist, purse,
 } from './economy.js';
@@ -85,14 +86,15 @@ export async function questProgress(guildId, userId, kind, n = 1) {
     quest.done = Math.min(quest.goal, quest.done + n);
     if (quest.done >= quest.goal) {
       quest.paid = true;
-      const reward = quest === q.weekly ? WEEKLY_REWARD : DAILY_REWARD;
+      // Les serveurs premium gagnent deux fois plus avec les quêtes
+      const reward = (quest === q.weekly ? WEEKLY_REWARD : DAILY_REWARD) * (isPremium(guildId) ? 2 : 1);
       await addGold(guildId, userId, reward, `Quête : ${quest.label}`);
       rewards.push(reward);
     }
   }
   if (!q.bonusPaid && q.daily.every((x) => x.paid)) {
     q.bonusPaid = true;
-    await addGold(guildId, userId, DAILY_BONUS, 'Bonus : toutes les quêtes du jour');
+    await addGold(guildId, userId, DAILY_BONUS * (isPremium(guildId) ? 2 : 1), 'Bonus : toutes les quêtes du jour');
   }
   persist();
   return rewards;
@@ -444,6 +446,14 @@ export async function treasuryTick() {
       persist();
     }
     const day = dayKey();
+    // Une photo par jour de l'or en circulation (graphiques du tableau de bord)
+    m.series ??= [];
+    if (m.series.at(-1)?.day !== day) {
+      const all = members(guild.id).map(([id]) => purse(guild.id, id));
+      m.series.push({ day, total: all.reduce((n, p) => n + p.gold + p.bank, 0), holders: all.filter((p) => p.gold > 0).length, chest: m.chest });
+      if (m.series.length > 90) m.series.shift();
+      persist();
+    }
     const channel = treasuryChannel(guild);
     if (channel && m.lastBoardDay !== day && parisHour() >= 20) {
       m.lastBoardDay = day;

@@ -158,6 +158,14 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       return send(res, 200, pay.statusJson());
     }
 
+    // Chiffres en direct et classement public des serveurs (site vitrine)
+    if ((url.pathname === '/api/public' || url.pathname === '/api/classement') && req.method === 'GET') {
+      const { publicStats, publicRanking } = await import('./features/publicStats.js');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      return send(res, 200, url.pathname === '/api/public' ? await publicStats() : await publicRanking());
+    }
+
     // Logo d'un serveur premium (cartes personnalisées)
     const logoMatch = url.pathname.match(/^\/logo\/(\d{15,21})\.png$/);
     if (logoMatch && req.method === 'GET') {
@@ -169,7 +177,8 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     }
 
     // Le site vitrine : la page, puis ses images (cartes/, images/ et images/nuit/, en .webp seulement).
-    const sitePath = url.pathname === '/' || url.pathname === '/site' ? 'index.html' : /^\/(?:cartes|images(?:\/nuit)?)\/[a-z0-9-]+\.webp$/.test(url.pathname) ? url.pathname.slice(1) : null;
+    const PAGES = { '/': 'index.html', '/site': 'index.html', '/demo': 'demo.html', '/nouveautes': 'nouveautes.html', '/classement': 'classement.html' };
+    const sitePath = PAGES[url.pathname] ?? (/^\/(?:cartes|images(?:\/nuit)?)\/[a-z0-9-]+\.webp$/.test(url.pathname) ? url.pathname.slice(1) : null);
     if (sitePath && req.method === 'GET') {
       try {
         const file = await readFile(path.join(SITE_DIR, sitePath));

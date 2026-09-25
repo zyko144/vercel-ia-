@@ -310,6 +310,19 @@ body { background:
 .plan:nth-child(3) .price .amount { color: #14605d; }
 .faq summary:hover { color: var(--amber); }
 .status-dot.on { background: var(--emerald); box-shadow: 0 0 10px var(--emerald); }
+
+/* Chiffres en direct, durée des offres */
+.live { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.live-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; text-align: center; }
+.live-item b { display: block; font-size: 30px; font-family: 'Cinzel', serif; color: #f2c14e; }
+.live-item span { color: var(--muted); font-size: 14px; }
+.live-wrap { padding: 10px 0 0; }
+@media (max-width: 720px) { .live { grid-template-columns: repeat(2, 1fr); } }
+.period { display: flex; justify-content: center; gap: 6px; margin: 0 auto 22px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px; width: fit-content; }
+.period button { border: 0; background: transparent; color: var(--muted); font: 500 14px var(--font); padding: 8px 16px; border-radius: 999px; cursor: pointer; }
+.period button.on { background: var(--accent); color: #fff; }
+.period b { font-size: 11px; background: #3fbf6a; color: #0b1a10; border-radius: 99px; padding: 2px 7px; margin-left: 4px; }
+.gift-note { text-align: center; color: var(--muted); margin-top: 16px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -329,6 +342,9 @@ body { background:
       <a href="#fonctionnalites">Fonctionnalités</a>
       <a href="#tarifs">Tarifs</a>
       <a href="#faq">FAQ</a>
+      <a href="/demo">Démo</a>
+      <a href="/nouveautes">Nouveautés</a>
+      <a href="/classement">Classement</a>
       <a href="/statut">Statut</a>
     </nav>
     <div class="nav-cta">
@@ -376,6 +392,8 @@ body { background:
     </div>
   </section>
 
+  <section class="live-wrap"><div class="container"><div class="live" id="live" hidden></div></div></section>
+
   <section id="fonctionnalites">
     <div class="container">
       <div class="section-head">
@@ -409,7 +427,12 @@ body { background:
         <h2>Simple et sans engagement</h2>
         <p>Commencez gratuitement. Passez à une offre payante quand votre serveur en a besoin.</p>
       </div>
+      <div class="period" role="tablist" aria-label="Durée">
+        <button type="button" class="on" data-period="mois" role="tab">Au mois</button>
+        <button type="button" data-period="an" role="tab">À l’année <b>2 mois offerts</b></button>
+      </div>
       <div class="pricing" id="pricing"></div>
+      <p class="gift-note">🎁 Offrez le premium : cartes cadeaux sur demande, à utiliser dans <b>/serveur</b> › Premium › Utiliser une carte cadeau.</p>
       <div class="pricing-note">
         <span><svg><use href="#i-check"/></svg>Essai gratuit de 7 jours</span>
         <span><svg><use href="#i-check"/></svg>Paiement sécurisé par PayPal</span>
@@ -512,7 +535,7 @@ body { background:
     { id: 'gratuit', name: 'Gratuit', desc: 'Tout le nécessaire pour faire vivre un serveur.', amount: '0 €', per: '', billing: 'Pour toujours', cta: 'Ajouter à Discord',
       items: ['Tous les modules inclus', 'IA vocale : 60 min par mois', 'Tableau de bord complet'], off: ['Choix de la voix de l’IA', 'Embeds aux couleurs du serveur', 'Rapport hebdomadaire', 'Surveillance vocale avancée'] },
     { id: 'veilleur', name: 'Veilleur', desc: 'Pour les serveurs actifs qui veulent leur propre style.', amount: '4,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Veilleur', featured: true,
-      items: ['Tout le plan Gratuit', 'IA vocale : 600 min par mois', 'Choix de la voix de l’IA', 'Embeds à vos couleurs et logo', 'Rapport hebdomadaire en MP'], off: ['Surveillance vocale avancée'] },
+      items: ['Tout le plan Gratuit', 'Quêtes et récompense du jour ×2', 'IA vocale : 600 min par mois', 'Choix de la voix de l’IA', 'Embeds à vos couleurs et logo', 'Rapport hebdomadaire en MP'], off: ['Surveillance vocale avancée'] },
     { id: 'gardien', name: 'Gardien', desc: 'Pour les grandes communautés et leur équipe de staff.', amount: '9,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Gardien',
       items: ['Tout le plan Veilleur', 'IA vocale illimitée', 'Surveillance vocale avancée', 'Staff protégé et mots interdits'], off: [] },
   ];
@@ -730,7 +753,11 @@ body { background:
     return '<article class="card"><div class="icon">' + icon(f.icon) + '</div><h3>' + esc(f.title) + '</h3><p>' + esc(f.text) + '</p>' + checkList(f.items) + '<div class="card-foot"><span class="cmd">' + f.cmd + '</span><a class="details-link" href="#details/' + f.id + '">Détails ' + arrow + '</a></div></article>';
   }).join('');
 
+  var YEAR = { veilleur: '49,90 €', gardien: '99,90 €' };
+  var period = 'mois';
+  function renderPricing() {
   document.getElementById('pricing').innerHTML = PLANS.map(function (p) {
+    if (period === 'an' && YEAR[p.id]) p = Object.assign({}, p, { id: p.id + '-an', amount: YEAR[p.id], per: '/ an', billing: 'Facturé 365 jours à la fois : 2 mois offerts' });
     var action = p.id === 'gratuit'
       ? '<a class="btn btn-secondary btn-block invite" href="#">' + esc(p.cta) + '</a>'
       : '<button class="btn btn-block ' + (p.featured ? 'btn-primary' : 'btn-secondary') + '" type="button" data-plan="' + p.id + '" data-name="' + esc(p.name) + '">' + esc(p.cta) + '</button>';
@@ -739,6 +766,26 @@ body { background:
       '<div class="price"><span class="amount">' + p.amount + '</span><span class="per">' + p.per + '</span></div><p class="billing">' + esc(p.billing) + '</p>' +
       action + checkList(p.items, p.off) + '</article>';
   }).join('');
+  }
+  renderPricing();
+  document.querySelectorAll('[data-period]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      period = b.getAttribute('data-period');
+      document.querySelectorAll('[data-period]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      renderPricing();
+    });
+  });
+
+  // Chiffres en direct
+  fetch('/api/public', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+    if (!s) return;
+    var box = document.getElementById('live');
+    if (!box) return;
+    var n = function (v) { return Number(v || 0).toLocaleString('fr-FR'); };
+    box.innerHTML = [['Serveurs', s.servers], ['Membres', s.members], ['Messages cette semaine', s.messagesWeek], ['Parties jouées cette semaine', s.gamesWeek]]
+      .map(function (x) { return '<div class="live-item"><b>' + n(x[1]) + '</b><span>' + x[0] + '</span></div>'; }).join('');
+    box.hidden = false;
+  }).catch(function () {});
 
   route();
 

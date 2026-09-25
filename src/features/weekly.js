@@ -42,6 +42,12 @@ export function countMessage(message) {
   dirty = true;
 }
 
+/** Les compteurs de la semaine en cours d'un serveur (tableau de bord). */
+export async function weekBucket(guildId) {
+  await all();
+  return stats[guildId]?.[weekOf()] ?? { messages: 0, users: {}, channels: {}, jeux: 0, musique: 0, tickets: 0, sanctions: 0 };
+}
+
 /** Un événement : « jeux », « musique », « tickets », « sanctions ». */
 export function countEvent(guildId, kind, n = 1) {
   if (!stats || !guildId) return;

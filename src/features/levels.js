@@ -10,6 +10,7 @@ import { load, save } from '../storage.js';
 import { cfg, parseLevelRoles, setInternal } from './guildConfig.js';
 import { weekOf } from './weekly.js';
 import { questProgress } from './treasury.js';
+import { isPremium } from './premium.js';
 
 const KEY = 'niveaux-v2';
 export { shopMessage, isShopComponent, handleShopComponent } from './economy.js';
@@ -176,7 +177,7 @@ async function rankOf(guildId, userId) {
 const TORN = 'M0,11 L25,13 L50,19 L75,11 L100,12 L125,13 L150,7 L175,12 L200,14 L225,17 L250,6 L275,9 L300,5 L325,17 L350,15 L375,5 L400,20 L425,19 L450,14 L475,14 L500,7 L525,4 L550,12 L575,5 L600,7 L625,8 L650,4 L675,11 L700,11 L725,17 L750,12 L775,14 L800,12 L825,15 L850,11 L875,8 L900,20 L925,20 L950,17 L975,15 L1000,9 L992,28 L991,55 L995,82 L984,110 L990,138 L982,165 L990,192 L981,220 L982,248 L996,275 L993,302 L981,330 L988,358 L980,385 L990,412 L1000,435 L975,426 L950,424 L925,432 L900,435 L875,431 L850,421 L825,424 L800,434 L775,432 L750,434 L725,435 L700,423 L675,433 L650,427 L625,429 L600,433 L575,424 L550,434 L525,426 L500,434 L475,429 L450,433 L425,432 L400,420 L375,423 L350,431 L325,422 L300,433 L275,430 L250,422 L225,426 L200,434 L175,420 L150,433 L125,432 L100,424 L75,431 L50,431 L25,435 L0,435 L13,412 L8,385 L14,358 L10,330 L11,302 L19,275 L12,248 L13,220 L18,192 L7,165 L6,138 L19,110 L17,82 L8,55 L7,28 Z';
 
 /** Le dessin (SVG) de la carte : un parchemin de pirate déchiré et brûlé sur les bords. */
-async function cardSvg(guild, user, { levelUp = null, reward = null, banner = null, shine = null } = {}) {
+async function cardSvg(guild, user, { levelUp = null, reward = null, banner = null, shine = null, theme = undefined } = {}) {
   await data();
   const m = me(guild.id, user.id);
   const { level, into, need } = levelFromXp(m.xp);
@@ -198,7 +199,7 @@ async function cardSvg(guild, user, { levelUp = null, reward = null, banner = nu
   const looks = cosmeticsOf(guild.id, user.id);
   badges.unshift(...looks.badges);
   badges.length = Math.min(badges.length, 3);
-  const [light, mid, dark] = THEMES[looks.theme]?.colors ?? ['#f3e4bf', '#e2c992', '#b98d4f'];
+  const [light, mid, dark] = THEMES[theme === undefined ? looks.theme : theme]?.colors ?? ['#f3e4bf', '#e2c992', '#b98d4f'];
   const title = `${titleOf(level).toUpperCase()}${m.prestige ? ` · PRESTIGE ${m.prestige}` : ''}`;
   const W = 1000;
   const H = 440;
@@ -329,7 +330,8 @@ export async function claimDaily(guildId, userId, member = null) {
   // Les boosters du serveur touchent 50 % de plus
   const booster = !!member?.premiumSince;
   const base = (cfg(guildId, 'daily.amount') + Math.min(7, m.streak) * cfg(guildId, 'daily.streak')) * dailyMultiplier(guildId, userId);
-  const amount = Math.round(base * (booster ? 1.5 : 1));
+  // Boosters +50 %, serveur premium ×2
+  const amount = Math.round(base * (booster ? 1.5 : 1) * (isPremium(guildId) ? 2 : 1));
   const total = await addGold(guildId, userId, amount, 'Récompense du jour');
   dirty = true;
   return { ok: true, amount, streak: m.streak, balance: total, booster };

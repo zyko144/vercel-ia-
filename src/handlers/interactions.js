@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
+import { maintenance, maintenanceText } from '../features/maintenance.js';
 import { handleBlindTestComponent, isBlindTestComponent } from '../music/blindtest.js';
 import { config } from '../config.js';
 import { chat, describeError, errorDetail } from '../ai/gemini.js';
@@ -57,6 +58,10 @@ export async function onInteraction(client, interaction) {
     if (interaction.isAutocomplete()) {
       if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicAutocomplete(interaction);
       return await handleGameAutocomplete(interaction);
+    }
+    // Mode maintenance (tableau de bord du chef) : seul le chef utilise le bot
+    if (maintenance().on && interaction.user.id !== config.ownerId && interaction.isRepliable?.()) {
+      return await interaction.reply({ content: maintenanceText(), flags: MessageFlags.Ephemeral }).catch(() => {});
     }
     // Boutons, menus et fenêtres (ils n'existent que là où le bot a déjà répondu)
     if (isPanelComponent(interaction)) return await handlePanelComponent(client, interaction);

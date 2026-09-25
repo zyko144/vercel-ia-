@@ -46,6 +46,16 @@ export async function learnFacts(guildId, user, text) {
   save(MEMORY_KEY, all);
 }
 
+/** Remplace les souvenirs d'un membre (modifiés par lui sur le site). */
+export async function setFacts(userId, facts) {
+  const all = await memoryData();
+  const clean = [...new Set(facts.map((x) => String(x).replace(/\s+/g, ' ').trim()).filter((x) => x && x.length <= 120))].slice(0, 20);
+  if (clean.length) all[userId] = { facts: clean.map((text) => ({ text, at: Date.now() })), updated: Date.now() };
+  else delete all[userId];
+  save(MEMORY_KEY, all);
+  return clean;
+}
+
 export async function forgetFacts(userId) {
   const all = await memoryData();
   delete all[userId];

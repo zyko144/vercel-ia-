@@ -128,12 +128,17 @@ export const ITEMS = {
 
 /** L'article en promo aujourd'hui (-30 %), le même pour tout le serveur. */
 export function promoOf(guildId, day = dayKey()) {
-  const keys = Object.keys(ITEMS).filter((k) => !ITEMS[k].stock);
+  const keys = Object.keys(ITEMS).filter((k) => !ITEMS[k].stock && itemOn(guildId, k));
   let h = 0;
   for (const c of `${guildId}${day}`) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return keys[h % keys.length];
 }
-export const priceOf = (guildId, key) => Math.round(ITEMS[key].price * (promoOf(guildId) === key ? 0.7 : 1));
+// Réglages de la boutique par serveur (tableau de bord) : prix changés, articles retirés
+export const shopOverrides = (guildId) => cfg(guildId, 'shop.overrides') ?? { prices: {}, disabled: [] };
+export const basePrice = (guildId, key) => Number(shopOverrides(guildId).prices?.[key]) || ITEMS[key].price;
+export const itemOn = (guildId, key) => !(shopOverrides(guildId).disabled ?? []).includes(key);
+export const shopKeys = (guildId) => Object.keys(ITEMS).filter((k) => itemOn(guildId, k));
+export const priceOf = (guildId, key) => Math.round(basePrice(guildId, key) * (promoOf(guildId) === key ? 0.7 : 1));
 function stockLeft(guildId, key) {
   const m = meta(guildId);
   if (m.stock.month !== monthKey()) m.stock = { month: monthKey(), sold: {} };
@@ -149,7 +154,7 @@ export async function shopMessage(guild, userId) {
   const line = (key) => {
     const i = ITEMS[key];
     const left = stockLeft(guild.id, key);
-    return { name: `${i.emoji} ${i.name} · 🪙 ${fmt(priceOf(guild.id, key))}${key === promo ? ` ~~${fmt(i.price)}~~ 🔥 PROMO` : ''}${i.stock ? ` · ${left > 0 ? `reste ${left}` : 'épuisé ce mois'}` : ''}`, value: i.desc };
+    return { name: `${i.emoji} ${i.name} · 🪙 ${fmt(priceOf(guild.id, key))}${key === promo ? ` ~~${fmt(basePrice(guild.id, key))}~~ 🔥 PROMO` : ''}${i.stock ? ` · ${left > 0 ? `reste ${left}` : 'épuisé ce mois'}` : ''}`, value: i.desc };
   };
   const embed = new EmbedBuilder().setColor(GOLD).setTitle('🏴‍☠️ Le comptoir du capitaine')
     .setDescription([
@@ -158,7 +163,7 @@ export async function shopMessage(guild, userId) {
       '-# Tout ce que tu achètes va dans ta **cale** : utilise-le quand tu veux, offre-le ou revends-le au marché.',
       effects.length ? `\n**En cours**\n${effects.join('\n')}` : null,
     ].filter(Boolean).join('\n'))
-    .addFields(...Object.keys(ITEMS).map(line), { name: `🎨 Rôle personnalisé · 🪙 ${fmt(custom)}`, value: 'Ton nom et ta couleur, validés par le staff. Remboursé s’il refuse.' })
+    .addFields(...shopKeys(guild.id).map(line), { name: `🎨 Rôle personnalisé · 🪙 ${fmt(custom)}`, value: 'Ton nom et ta couleur, validés par le staff. Remboursé s’il refuse.' })
     .setFooter({ text: 'Les pièces ne s’achètent pas avec de l’argent · 200 pièces par niveau' });
   const gif = art('panneaux', 'boutique');
   embed.setImage(gif.url);
@@ -167,7 +172,7 @@ export async function shopMessage(guild, userId) {
     files: gif.files,
     components: [
       new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('sh:buy').setPlaceholder('🪙 Acheter un article')
-        .addOptions(Object.entries(ITEMS).map(([value, i]) => ({ label: `${i.name} · ${fmt(priceOf(guild.id, value))}`.slice(0, 100), value, emoji: i.emoji, description: i.desc.slice(0, 100) })))),
+        .addOptions(shopKeys(guild.id).map((value) => [value, ITEMS[value]]).map(([value, i]) => ({ label: `${i.name} · ${fmt(priceOf(guild.id, value))}`.slice(0, 100), value, emoji: i.emoji, description: i.desc.slice(0, 100) })))),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('sh:hold').setLabel('Ma cale').setEmoji('🧰').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('sh:custom').setLabel(`Rôle perso · ${fmt(custom)}`).setEmoji('🎨').setStyle(ButtonStyle.Primary),
@@ -285,6 +290,7 @@ export async function handleShopComponent(client, interaction) {
     const key = interaction.values[0];
     const item = ITEMS[key];
     if (!item) return interaction.reply(ko('Cet article n’existe plus.'));
+    if (!itemOn(guild.id, key)) return interaction.reply(ko('Cet article n’est plus vendu sur ce serveur.'));
     const price = priceOf(guild.id, key);
     if (stockLeft(guild.id, key) <= 0) return interaction.reply(ko('Épuisé pour ce mois-ci, reviens le mois prochain.'));
     if (p.gold < price) return interaction.reply(ko(`Il te faut 🪙 ${fmt(price)} (tu as 🪙 ${fmt(p.gold)}).`));
@@ -421,11 +427,12 @@ export async function economyOverview(guildId) {
     earned: all.reduce((n, [, p]) => n + p.earned, 0),
     spent: all.reduce((n, [, p]) => n + p.spent, 0),
     chest: meta(guildId).chest,
+    series: meta(guildId).series ?? [],
     top: all.sort((a, b) => b[1].gold - a[1].gold).slice(0, 25).map(([userId, p]) => ({
       userId, gold: p.gold, bank: p.bank, earned: p.earned, spent: p.spent,
       effects: [p.immuneUntil > now ? 'immunite' : null, p.xpBoostUntil > now ? 'xp' : null, p.dailyBoostUntil > now ? 'quotidien' : null].filter(Boolean),
     })),
-    items: Object.entries(ITEMS).map(([key, i]) => ({ key, name: i.name, emoji: i.emoji, price: i.price, promo: promoOf(guildId) === key, stock: i.stock ? stockLeft(guildId, key) : null })),
+    items: Object.entries(ITEMS).map(([key, i]) => ({ key, name: i.name, emoji: i.emoji, price: basePrice(guildId, key), defaultPrice: i.price, on: itemOn(guildId, key), desc: i.desc, promo: promoOf(guildId) === key, stock: i.stock ? stockLeft(guildId, key) : null })),
     purchases: all.flatMap(([userId, p]) => p.history.filter((h) => /^Achat/.test(h.why)).map((h) => ({ userId, ...h }))).sort((a, b) => b.at - a.at).slice(0, 50),
   };
 }
