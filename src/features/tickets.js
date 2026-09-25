@@ -466,6 +466,18 @@ export async function publishFromWeb(client, guild, userId, opts) {
 }
 
 /** Panneaux de tickets publiés sur un serveur. */
+/** Supprime un panneau de tickets (et son message s'il existe encore). */
+export async function removeTicketPanel(client, guildId, panelId) {
+  const g = await guildData(guildId);
+  const panel = g.panels[panelId];
+  if (!panel) return false;
+  const channel = client.channels.cache.get(panel.channelId);
+  await (await channel?.messages?.fetch(panel.messageId).catch(() => null))?.delete().catch(() => {});
+  delete g.panels[panelId];
+  persist();
+  return true;
+}
+
 export async function ticketPanels(guildId) {
   return Object.values((await guildData(guildId)).panels);
 }

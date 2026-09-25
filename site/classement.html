@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classement des serveurs · AI Vercel</title>
+<meta name="description" content="Les serveurs Discord les plus actifs avec AI Vercel.">
+<link rel="icon" href="/avatar.png">
+<meta name="theme-color" content="#120f0b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Crimson+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { color-scheme: dark; --bg: #100d09; --bg2: #1b150e; --paper: #e8d6ae; --paper2: #d4b98a; --ink: #2a1606; --ink2: #5a3b1c; --text: #eadcc0; --muted: #a8977a; --accent: #c9a978; --gold: #f2c14e; --sea: #1fb5b0; --blood: #e0433a; --emerald: #3fbf6a; --royal: #7c6cff; --rose: #ff5fa2; --sky: #4aa8ff;
+  --torn: polygon(0% 2%, 6% 0%, 13% 2%, 21% 0%, 30% 3%, 38% 0%, 47% 2%, 55% 0%, 64% 3%, 72% 1%, 81% 3%, 89% 0%, 96% 2%, 100% 0%, 99% 20%, 100% 41%, 98% 62%, 100% 83%, 99% 100%, 91% 98%, 83% 100%, 74% 97%, 66% 100%, 57% 98%, 49% 100%, 40% 97%, 31% 100%, 22% 98%, 13% 100%, 5% 97%, 0% 100%, 1% 79%, 0% 58%, 2% 37%, 0% 18%); }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 30% 0%, #3a2a17 0%, var(--bg) 55%) fixed, var(--bg); color: var(--text); font: 18px/1.55 'Crimson Pro', Georgia, serif; }
+a { color: inherit; }
+h1, h2, h3, .brand, .btn { font-family: 'Cinzel', Georgia, serif; }
+.container { width: min(1080px, 100% - 32px); margin-inline: auto; }
+.nav { position: sticky; top: 0; z-index: 5; background: rgba(16,13,9,.88); backdrop-filter: blur(8px); border-bottom: 1px solid #3b2a17; }
+.nav .container { display: flex; align-items: center; gap: 22px; height: 62px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--gold); font-weight: 700; text-decoration: none; }
+.brand img { width: 30px; height: 30px; border-radius: 8px; }
+.links { display: flex; gap: 18px; color: var(--muted); font-size: 16px; }
+.links a { text-decoration: none; } .links a:hover, .links a.on { color: var(--gold); }
+.nav .btn { margin-left: auto; }
+@media (max-width: 760px) { .links { display: none; } }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-weight: 700; font-size: 14px; color: #1b1208; background: linear-gradient(#f2c14e, #c9922e); box-shadow: 0 3px 0 #7a5418; text-decoration: none; }
+.hero { text-align: center; padding: 56px 0 24px; }
+.hero h1 { font-size: clamp(30px, 5vw, 48px); color: var(--gold); margin: 0 0 10px; text-shadow: 0 3px 0 #0008; }
+.hero p { color: var(--muted); max-width: 640px; margin: 0 auto; }
+.parchment { background: radial-gradient(ellipse at 40% 30%, #f3e4bf, var(--paper) 55%, var(--paper2) 85%, #a47a45); color: var(--ink); clip-path: var(--torn); padding: 26px 28px; filter: drop-shadow(0 10px 20px #000a); }
+.parchment h2, .parchment h3 { color: var(--ink); margin: 0 0 6px; }
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes sway { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+.rise { animation: rise .6s ease both; }
+footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15px; }
+
+.live { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 10px 0 26px; }
+.live div { background: #1c150d; border: 1px solid #3b2a17; border-radius: 12px; padding: 14px; text-align: center; }
+.live b { display: block; font: 700 26px 'Cinzel', serif; color: var(--gold); }
+.live span { color: var(--muted); font-size: 15px; }
+.rank { display: flex; flex-direction: column; gap: 14px; margin-bottom: 40px; }
+.row { display: grid; grid-template-columns: 56px 56px 1fr auto; gap: 14px; align-items: center; }
+.row .n { font: 800 26px 'Cinzel', serif; color: #8c1c13; text-align: center; }
+.row img, .row .ph { width: 56px; height: 56px; border-radius: 14px; background: #c9a978; object-fit: cover; display: grid; place-items: center; font: 700 22px 'Cinzel', serif; color: var(--ink); }
+.row h3 { margin: 0; font-size: 20px; }
+.row small { color: var(--ink2); font-size: 15px; }
+.row .join { background: var(--ink); color: var(--paper); border-radius: 8px; padding: 8px 12px; font: 700 13px 'Cinzel', serif; text-decoration: none; }
+.prem { color: #8c5a1e; font: 700 12px 'Cinzel', serif; margin-left: 6px; }
+.empty { text-align: center; color: var(--muted); }
+@media (max-width: 720px) { .live { grid-template-columns: repeat(2, 1fr); } .row { grid-template-columns: 40px 44px 1fr; } .row .join { display: none; } }
+
+</style>
+</head>
+<body>
+<header class="nav"><div class="container">
+  <a class="brand" href="/"><img src="/avatar.png" alt="">AI Vercel</a>
+  <nav class="links"><a href="/#fonctionnalites">Fonctionnalités</a><a href="/demo">Démo</a><a href="/nouveautes">Nouveautés</a><a href="/classement" class="on">Classement</a><a href="/#tarifs">Tarifs</a></nav>
+  <a class="btn" href="/app">Tableau de bord</a>
+</div></header>
+<main>
+
+<section class="hero container rise"><h1>🏆 Les serveurs les plus vivants</h1><p>Les serveurs qui utilisent AI Vercel et ont choisi d’apparaître ici, classés par activité de la semaine. Pour y figurer : tableau de bord › Outils du serveur › Apparaître dans le classement public.</p></section>
+<section class="container"><div class="live" id="live"></div><div class="rank" id="rank"><p class="empty">Chargement du classement…</p></div></section>
+
+</main>
+<footer>AI Vercel · <a href="/">Accueil</a> · <a href="/statut">Statut</a> · <a href="/app">Tableau de bord</a></footer>
+<script>
+(function () {
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function n(v) { return Number(v || 0).toLocaleString('fr-FR'); }
+  fetch('/api/public').then(function (r) { return r.json(); }).then(function (s) {
+    document.getElementById('live').innerHTML = [['Serveurs', s.servers], ['Membres', s.members], ['Messages cette semaine', s.messagesWeek], ['Parties cette semaine', s.gamesWeek]]
+      .map(function (x) { return '<div><b>' + n(x[1]) + '</b><span>' + x[0] + '</span></div>'; }).join('');
+  }).catch(function () {});
+  fetch('/api/classement').then(function (r) { return r.json(); }).then(function (d) {
+    var box = document.getElementById('rank');
+    if (!d.servers.length) { box.innerHTML = '<p class="empty">Aucun serveur n’apparaît encore. Soyez le premier : activez « Apparaître dans le classement public » dans le tableau de bord.</p>'; return; }
+    box.innerHTML = d.servers.map(function (s, i) {
+      var icon = s.icon ? '<img src="' + esc(s.icon) + '" alt="">' : '<div class="ph">' + esc(s.name[0] || '?') + '</div>';
+      return '<div class="parchment rise" style="animation-delay:' + (i * 60) + 'ms"><div class="row"><div class="n">' + s.rank + '</div>' + icon +
+        '<div><h3>' + esc(s.name) + (s.premium ? '<span class="prem">★ PREMIUM</span>' : '') + '</h3><small>' + n(s.members) + ' membres · ' + n(s.messages) + ' messages cette semaine · ' + n(s.active) + ' actifs</small></div>' +
+        (s.invite ? '<a class="join" href="' + esc(s.invite) + '" target="_blank" rel="noopener">Rejoindre</a>' : '<span></span>') + '</div></div>';
+    }).join('');
+  }).catch(function () { document.getElementById('rank').innerHTML = '<p class="empty">Le classement est indisponible pour le moment.</p>'; });
+})();
+</script>
+</body>
+</html>

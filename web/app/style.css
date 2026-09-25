@@ -502,3 +502,12 @@ body { background:
 .server.on { border-top: 3px solid var(--sea); }
 
 .dc .embed .eimg { display: block; width: 100%; margin-top: 10px; border-radius: 6px; }
+
+/* Économie, carte, souvenirs */
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 120px; padding: 6px 0; }
+.spark i { flex: 1; background: linear-gradient(180deg, var(--gold), var(--accent)); border-radius: 3px 3px 0 0; min-width: 3px; animation: rise .5s ease both; }
+.card-preview { width: 100%; max-width: 900px; display: block; margin: 0 auto 14px; border-radius: 6px; filter: drop-shadow(0 10px 20px #000a); }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 8px 10px; border-bottom: 1px dashed rgba(201,169,120,.25); text-align: left; }
+.table td.num { text-align: right; font-variant-numeric: tabular-nums; }

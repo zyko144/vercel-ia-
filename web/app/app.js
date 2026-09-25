@@ -128,7 +128,7 @@
   };
   const MODULE_DESC = {
     securite: 'Anti-raid, anti-spam, vérification', niveaux: 'XP, rôles, récompense du jour', boutique: 'Pièces d’or, objets, rôle perso',
-    accueil: 'Carte de bienvenue et suggestions', vocal: 'Vocaux temporaires, radio 24/24', ia: 'Mémoire, traduction, FAQ',
+    accueil: 'Carte de bienvenue et suggestions', vocal: 'Vocaux temporaires, radio, soirées', ia: 'Personnalité, résumé du soir, FAQ', outils: 'Anniversaires, compteur, candidatures',
   };
 
   // ---------------- Un serveur ----------------
@@ -159,6 +159,11 @@
       item('annonce', '📣', 'Annonces', 'Message mis en forme, avec aperçu'),
       item('classement', '🏆', 'Classement', 'Les membres les plus actifs'),
       item('sanctions', '⚖️', 'Sanctions', 'Derniers avertissements', { tag: data.sanctions.length ? h('span', { class: 'tag count', text: data.sanctions.length }) : null }),
+      item('journal', '📜', 'Journal du staff', 'Qui a sanctionné quoi, semaine par semaine'),
+      item('economie', '🪙', 'Économie', 'Bourses, or en circulation, donner ou retirer'),
+      item('programmes', '⏰', 'Messages programmés', 'Rappels et annonces automatiques'),
+      item('carte', '🪪', 'Carte de niveau', 'Aperçu de la carte et de ses thèmes'),
+      item('memoire', '🧠', 'Ce que l’IA sait de moi', 'Voir, corriger ou effacer tes souvenirs'),
       item('jeux', '🎲', 'Jeux', 'Tous les jeux et comment les lancer'),
       item('musique', '🎧', 'Musique et IA vocale', 'Lecteur, radio, parler à l’IA'),
       h('div', { class: 'group', text: 'Modules' }),
@@ -177,7 +182,7 @@
     view().dataset.server = id;
     view().replaceChildren(h('div', { class: 'layout' }, side, panel));
     side.scrollTop = sideScroll;
-    const pages = { vue: overview, guide: guidePage, jeux: gamesPage, musique: musicPage, parrainage: referralPage, commandes: commandsPage, tickets: ticketsPage, annonce: announcePage, classement: leaderboardPage, sanctions: sanctionsPage, premium: premiumOffer };
+    const pages = { vue: overview, guide: guidePage, jeux: gamesPage, musique: musicPage, parrainage: referralPage, commandes: commandsPage, tickets: ticketsPage, annonce: announcePage, classement: leaderboardPage, sanctions: sanctionsPage, premium: premiumOffer, journal: journalPage, economie: economyPage, programmes: schedulesPage, carte: cardPage, memoire: memoryPage };
     if (pages[page]) pages[page](panel);
     else if (data.sections[page]) sectionPage(panel, page);
     else if (PREMIUM[page]) premiumPage(panel, page);
@@ -426,7 +431,11 @@
     publishPage(panel, 'ticket');
     panel.append(h('div', { class: 'grid2' },
       h('div', { class: 'card' }, h('h2', { text: `Panneaux publiés (${t.panels.length})` }),
-        t.panels.length ? h('div', { class: 'list' }, t.panels.map((p) => h('div', { class: 'item' }, h('span', { text: p.title }), h('small', { text: p.channel ? `# ${p.channel}` : 'salon supprimé' })))) : h('p', { class: 'sub', text: 'Aucun pour l’instant.' })),
+        t.panels.length ? h('div', { class: 'list' }, t.panels.map((p) => h('div', { class: 'item' }, h('span', { text: p.title }), h('small', { text: p.channel ? `# ${p.channel}` : 'salon supprimé' }),
+          h('button', { class: 'btn small', text: 'Supprimer', onclick: async () => {
+            if (!confirm(`Supprimer le panneau « ${p.title} » ? Son message sera retiré de Discord.`)) return;
+            try { await api('POST', 'server/tickets/remove', { guildId: data.id, panelId: p.id }); toast('Panneau supprimé.'); reload(); } catch (err) { toast(err.message, true); }
+          } })))) : h('p', { class: 'sub', text: 'Aucun pour l’instant.' })),
       h('div', { class: 'card' }, h('h2', { text: `Tickets ouverts (${t.open.length})` }),
         t.open.length ? h('div', { class: 'list' }, t.open.map((o) => h('div', { class: 'item' }, h('span', { text: o.channel ? `# ${o.channel}` : 'Ticket' }), h('small', { text: o.user ?? '' })))) : h('p', { class: 'sub', text: 'Aucun ticket ouvert.' }))));
   }
@@ -452,6 +461,94 @@
       h('div', { class: 'card' }, data.sanctions.length ? h('div', { class: 'list' }, data.sanctions.map((s) => h('div', { class: 'item' },
         person(s.user), h('small', { text: `${KINDS[s.kind] ?? (s.kind.startsWith('auto') ? 'Automatique' : 'Autre')} · ${s.reason || 'sans raison'} · ${shortDate(s.at)}` }))))
         : h('p', { class: 'sub', text: 'Aucune sanction pour l’instant.' })));
+  }
+
+  // ---------------- Journal du staff ----------------
+  async function journalPage(panel) {
+    panel.append(pageHead('📜', 'Journal du staff', 'L’activité de la modération sur 4 semaines, et les dernières sanctions avec leur auteur.'));
+    const box = h('div', {}, h('p', { class: 'loading', text: 'Chargement…' }));
+    panel.append(box);
+    try {
+      const d = await api('GET', `server/modlog?id=${data.id}`);
+      const cell = (n) => h('td', { class: 'num', text: (n ?? 0).toLocaleString('fr-FR') });
+      box.replaceChildren(
+        h('div', { class: 'card' }, h('h2', { text: 'Semaine par semaine' }), h('table', { class: 'table' },
+          h('tr', {}, ['Semaine du', 'Avertis.', 'Muets', 'Expulsions', 'Supprimés', 'Modes lents'].map((t) => h('th', { text: t }))),
+          d.weeks.map((w) => h('tr', {}, h('td', { text: w.week }), cell(w.warn), cell(w.mute), cell(w.kick), cell(w.deleted), cell(w.slow))))),
+        h('div', { class: 'grid2' },
+          h('div', { class: 'card' }, h('h2', { text: 'Le staff le plus actif' }), d.staff.length ? h('div', { class: 'list' }, d.staff.map((x) => h('div', { class: 'item' }, h('b', { text: x.name }), h('small', { text: `${x.n} sanction(s)` })))) : h('p', { class: 'sub', text: 'Aucune sanction pour l’instant.' })),
+          h('div', { class: 'card' }, h('h2', { text: 'Dernières sanctions' }), d.recent.length ? h('div', { class: 'list' }, d.recent.slice(0, 15).map((x) => h('div', { class: 'item' }, h('b', { text: x.user }), h('small', { text: `${x.reason || 'sans raison'} · par ${x.by} · ${shortDate(x.at)}` })))) : h('p', { class: 'sub', text: 'Rien.' }))));
+    } catch (err) { box.replaceChildren(h('div', { class: 'error', text: err.message })); }
+  }
+
+  // ---------------- Économie ----------------
+  async function economyPage(panel) {
+    panel.append(pageHead('🪙', 'Économie du serveur', 'L’or de tes membres. Tu peux en donner (événement, récompense) ou en retirer.'));
+    const box = h('div', {}, h('p', { class: 'loading', text: 'Chargement…' }));
+    panel.append(box);
+    try {
+      const d = await api('GET', `server/economy?id=${data.id}`);
+      const who = h('select', {}, d.top.map((p) => h('option', { value: p.userId, text: `${p.name} · 🪙 ${p.gold.toLocaleString('fr-FR')}` })));
+      const idInput = h('input', { type: 'text', placeholder: 'ou identifiant Discord du membre' });
+      const amount = h('input', { type: 'number', value: 500, min: -1000000, max: 1000000 });
+      const give = h('button', { class: 'btn primary', text: 'Appliquer', onclick: async () => {
+        try { const r = await api('POST', 'server/economy/gold', { guildId: data.id, userId: idInput.value.trim() || who.value, amount: Number(amount.value) }); toast(`Fait : sa bourse est à 🪙 ${r.gold.toLocaleString('fr-FR')}.`); economyPage(panel.replaceChildren() || panel); } catch (err) { toast(err.message, true); }
+      } });
+      const max = Math.max(1, ...d.series.map((x) => x.total));
+      box.replaceChildren(
+        h('div', { class: 'stats' },
+          h('div', { class: 'stat' }, h('small', { text: 'Or en circulation' }), h('b', { text: `🪙 ${d.total.toLocaleString('fr-FR')}` })),
+          h('div', { class: 'stat' }, h('small', { text: 'Membres avec de l’or' }), h('b', { text: d.holders })),
+          h('div', { class: 'stat' }, h('small', { text: 'Coffre commun' }), h('b', { text: `🏦 ${d.chest.toLocaleString('fr-FR')}` }))),
+        d.series.length > 1 ? h('div', { class: 'card' }, h('h2', { text: 'Évolution (jour par jour)' }), h('div', { class: 'spark' }, d.series.map((x) => { const b = h('i', { title: `${x.day} : ${x.total.toLocaleString('fr-FR')}` }); b.style.height = `${Math.max(3, (x.total / max) * 100)}%`; return b; }))) : null,
+        h('div', { class: 'grid2' },
+          h('div', { class: 'card' }, h('h2', { text: 'Donner ou retirer de l’or' }), field('Membre', who), field('Autre membre', idInput), field('Montant (négatif pour retirer)', amount), give),
+          h('div', { class: 'card' }, h('h2', { text: 'Les plus riches' }), h('div', { class: 'list' }, d.top.slice(0, 12).map((p, i) => h('div', { class: 'item' }, h('b', { text: `${i + 1}. ${p.name}` }), h('small', { text: `🪙 ${p.gold.toLocaleString('fr-FR')}${p.bank ? ` · 🏦 ${p.bank.toLocaleString('fr-FR')}` : ''}` })))))),
+        h('div', { class: 'card' }, h('h2', { text: 'Derniers achats' }), d.purchases.length ? h('div', { class: 'list' }, d.purchases.map((p) => h('div', { class: 'item' }, h('b', { text: p.name }), h('small', { text: `${p.why.replace(/^Achat : /, '')} · 🪙 ${(-p.n).toLocaleString('fr-FR')} · ${shortDate(p.at)}` })))) : h('p', { class: 'sub', text: 'Aucun achat.' })));
+    } catch (err) { box.replaceChildren(h('div', { class: 'error', text: err.message })); }
+  }
+
+  // ---------------- Messages programmés ----------------
+  async function schedulesPage(panel) {
+    panel.append(pageHead('⏰', 'Messages programmés', 'Un message envoyé par le bot à l’heure choisie (heure de Paris), une fois, chaque jour ou chaque semaine.'));
+    const salon = h('select', {}, data.channels.filter((c) => c.type === 'text').map((c) => h('option', { value: c.id, text: `# ${c.name}` })));
+    const text = h('textarea', { maxlength: 1800, placeholder: '🎮 Soirée jeux ce soir à 21 h dans le vocal !' });
+    const when = h('input', { type: 'text', placeholder: '18:30 · 25/12 20:00 · dans 2h' });
+    const repeat = h('select', {}, [['non', 'Une seule fois'], ['jour', 'Chaque jour'], ['semaine', 'Chaque semaine']].map(([v, t]) => h('option', { value: v, text: t })));
+    const list = h('div', { class: 'list' });
+    const load = async () => {
+      const d = await api('GET', `server/schedules?id=${data.id}`);
+      list.replaceChildren(...(d.schedules.length ? d.schedules.map((x) => h('div', { class: 'item' }, h('b', { text: `# ${x.channel ?? '?'} · ${shortDate(x.at)}${x.every ? ' 🔁' : ''}` }), h('small', { text: x.text.slice(0, 120) }),
+        h('button', { class: 'btn small', text: 'Supprimer', onclick: async () => { await api('POST', 'server/schedules', { guildId: data.id, action: 'remove', id: x.id }); load(); } }))) : [h('p', { class: 'sub', text: 'Aucun message programmé.' })]));
+    };
+    const add = h('button', { class: 'btn primary', text: 'Programmer', onclick: async () => {
+      try { await api('POST', 'server/schedules', { guildId: data.id, channelId: salon.value, text: text.value, when: when.value, repeat: repeat.value }); toast('Message programmé.'); text.value = ''; load(); } catch (err) { toast(err.message, true); }
+    } });
+    panel.append(h('div', { class: 'split' },
+      h('div', { class: 'card' }, h('h2', { text: 'Nouveau message' }), field('Salon', salon), field('Message', text), field('Quand ?', when, 'Heure de Paris'), field('Répéter', repeat), add),
+      h('div', { class: 'card' }, h('h2', { text: 'Programmés' }), list)));
+    load().catch((err) => list.replaceChildren(h('div', { class: 'error', text: err.message })));
+  }
+
+  // ---------------- Carte de niveau ----------------
+  function cardPage(panel) {
+    panel.append(pageHead('🪪', 'Carte de niveau', 'Ta vraie carte sur ce serveur. Les membres changent de thème avec les fonds achetés à la boutique.'));
+    const img = h('img', { class: 'card-preview', alt: 'Carte de niveau', src: `/app/api/server/card?id=${data.id}` });
+    const pick = (theme, label) => h('button', { class: 'btn small', text: label, onclick: () => { img.src = `/app/api/server/card?id=${data.id}&theme=${theme}&t=${Date.now()}`; } });
+    panel.append(h('div', { class: 'card torn' }, img, h('div', { class: 'row-btns' }, pick('parchemin', '📜 Parchemin'), pick('ocean', '🌊 Océan'), pick('sang', '🏴‍☠️ Pavillon rouge'), pick('nuit', '🌙 Nuit sans lune'),
+      h('button', { class: 'btn small', text: '🎉 Montée de niveau', onclick: () => { img.src = `/app/api/server/card?id=${data.id}&niveau=10&t=${Date.now()}`; } }))));
+  }
+
+  // ---------------- Souvenirs de l'IA ----------------
+  async function memoryPage(panel) {
+    panel.append(pageHead('🧠', 'Ce que l’IA sait de toi', 'Ces souvenirs aident l’IA à te répondre (tes jeux, tes artistes…). Corrige-les, ajoutes-en, ou efface tout. Un par ligne, 20 maximum.'));
+    const area = h('textarea', { rows: 12, maxlength: 2600 });
+    const save = h('button', { class: 'btn primary', text: 'Enregistrer', onclick: async () => {
+      try { const r = await api('POST', 'me/memories', { facts: area.value.split('\n') }); area.value = r.facts.join('\n'); toast('Souvenirs enregistrés.'); } catch (err) { toast(err.message, true); }
+    } });
+    const wipe = h('button', { class: 'btn', text: 'Tout effacer', onclick: async () => { if (!confirm('Effacer tout ce que l’IA sait de toi ?')) return; await api('POST', 'me/memories', { facts: [] }); area.value = ''; toast('Tout est effacé.'); } });
+    panel.append(h('div', { class: 'card' }, area, h('div', { class: 'row-btns' }, save, wipe), h('p', { class: 'sub', text: 'Rien de sensible n’est gardé (santé, adresse, mots de passe…).' })));
+    try { area.value = (await api('GET', 'me/memories')).facts.join('\n'); } catch (err) { toast(err.message, true); }
   }
 
   // ---------------- Modules (formulaire générique) ----------------

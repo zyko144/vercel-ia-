@@ -1,6 +1,8 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
 import { setArcadeClient } from './arcade/server.js';
+import { setPublicClient } from './features/publicStats.js';
 import { startAssistant } from './features/assistant.js';
+import { loadMaintenance } from './features/maintenance.js';
 import { startModeration } from './features/moderation.js';
 import { startServerTools } from './features/serverTools.js';
 import { startVoicePlus } from './features/voicePlus.js';
@@ -62,6 +64,7 @@ client.once(Events.ClientReady, async (c) => {
   setPaymentsClient(c);
   setAppClient(c);
   setArcadeClient(c);
+  setPublicClient(c);
   console.log(`✅ Connecté en tant que ${c.user.tag} sur ${c.guilds.cache.size} serveur(s)`);
   console.log(`🧠 Chat : ${config.models.chat} (réflexion ${config.models.thinkingLevel}) · 🎨 Images : ${config.limits.imagesEnabled ? config.models.image : 'désactivées'} · 💾 Stockage : ${storageBackend}`);
 
@@ -82,6 +85,7 @@ client.once(Events.ClientReady, async (c) => {
   startVoiceGuard(c);
   startLevelLoops(c);
   startTreasury(c);
+  loadMaintenance().catch(() => {});
   startAssistant(c);
   startModeration(c);
   startServerTools(c);

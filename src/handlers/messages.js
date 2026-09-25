@@ -9,6 +9,7 @@ import { protectOwner } from '../features/protectOwner.js';
 import { countMessage } from '../features/weekly.js';
 import { guardMessage } from '../features/security.js';
 import { recordMessage } from '../features/assistant.js';
+import { maintenance } from '../features/maintenance.js';
 import { watchBurst } from '../features/moderation.js';
 import { xpForMessage } from '../features/levels.js';
 import { autoTranslate, faqMessage } from '../features/aiExtras.js';
@@ -47,6 +48,8 @@ export async function onMessage(client, message) {
   // Jeux en cours (rébus, imposteur, histoire…) : les messages du salon sont des réponses
   if (message.inGuild() && routeGameMessage(message)) return;
   if (!isAllowedChannel(message.channel, message.channelId)) return;
+  // Maintenance : l'IA ne répond qu'au chef
+  if (maintenance().on && message.author.id !== config.ownerId) return;
 
   // Salon des sons : dépôt du son de la semaine (le tribunal vérifie)
   if (message.inGuild() && message.channelId === config.tribunal.sonsChannelId) {

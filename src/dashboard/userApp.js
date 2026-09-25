@@ -194,7 +194,10 @@ function planInfo(guildId) {
   return {
     key: plan.key, label: plan.label, trial: plan.trial, until: plan.until, trialUsed: Boolean(allServers()[guildId]?.trialUsed), trialDays: TRIAL_DAYS,
     features: { voices: plan.voices, branding: plan.branding, report: plan.report, guard: plan.guard, voiceMinutes: plan.voiceMinutes === Infinity ? 'illimitée' : plan.voiceMinutes },
-    offers: Object.entries(PLANS).filter(([k]) => k !== 'gratuit').map(([k, p]) => ({ key: k, label: p.label, price: p.price, pay: `${base()}/payer?serveur=${guildId}&offre=${k}` })),
+    offers: Object.entries(PLANS).filter(([k]) => k !== 'gratuit').flatMap(([k, p]) => [
+      { key: k, label: p.label, price: p.price, pay: `${base()}/payer?serveur=${guildId}&offre=${k}` },
+      { key: `${k}-an`, label: `${p.label} · 1 an`, price: k === 'veilleur' ? '49,90 €/an' : '99,90 €/an', pay: `${base()}/payer?serveur=${guildId}&offre=${k}-an` },
+    ]),
   };
 }
 
@@ -306,6 +309,102 @@ const routes = {
     const r = await publishFromWeb(client, m.guild, s.userId, body);
     return r.error ? json(res, 400, { error: r.error }) : json(res, 200, r);
   },
+  // ---------- Économie pour le staff (idée 88) ----------
+  'GET server/economy': async (req, res, s, url) => {
+    const m = await manageable(s, url.searchParams.get('id'));
+    if (m.error) return json(res, m.status, { error: m.error });
+    const { economyOverview } = await import('../features/economy.js');
+    const eco = await economyOverview(m.guild.id);
+    const name = (id) => m.guild.members.cache.get(id)?.displayName ?? client.users.cache.get(id)?.username ?? `Membre ${id.slice(-4)}`;
+    return json(res, 200, { total: eco.total, holders: eco.holders, chest: eco.chest, series: eco.series, top: eco.top.map((p) => ({ userId: p.userId, name: name(p.userId), gold: p.gold, bank: p.bank })), purchases: eco.purchases.slice(0, 20).map((p) => ({ ...p, name: name(p.userId) })) });
+  },
+  'POST server/economy/gold': async (req, res, s, url, body) => {
+    const m = await manageable(s, body.guildId);
+    if (m.error) return json(res, m.status, { error: m.error });
+    const amount = Math.trunc(Number(body.amount));
+    if (!/^\d{15,21}$/.test(String(body.userId ?? '')) || !amount || Math.abs(amount) > 1_000_000) return json(res, 400, { error: 'Membre ou montant invalide (1 000 000 maximum).' });
+    const target = await m.guild.members.fetch(String(body.userId)).catch(() => null);
+    if (!target) return json(res, 404, { error: 'Ce membre n’est pas sur le serveur.' });
+    if (!allowAttempt('app-gold', s.userId, 30, 10 * 60_000)) return json(res, 429, { error: 'Trop de changements d’affilée.' });
+    const { addGold, goldOf } = await import('../features/economy.js');
+    if (amount < 0 && (await goldOf(m.guild.id, target.id)) < -amount) return json(res, 400, { error: 'Il n’a pas autant d’or.' });
+    const gold = await addGold(m.guild.id, target.id, amount, `${amount > 0 ? 'Don' : 'Retrait'} du staff (${s.name})`);
+    return json(res, 200, { ok: true, gold });
+  },
+
+  // ---------- Messages programmés (idée 89) ----------
+  'GET server/schedules': async (req, res, s, url) => {
+    const m = await manageable(s, url.searchParams.get('id'));
+    if (m.error) return json(res, m.status, { error: m.error });
+    const { schedulesOf } = await import('../features/serverTools.js');
+    return json(res, 200, { schedules: (await schedulesOf(m.guild.id)).map((x) => ({ ...x, channel: m.guild.channels.cache.get(x.channelId)?.name ?? null })) });
+  },
+  'POST server/schedules': async (req, res, s, url, body) => {
+    const m = await manageable(s, body.guildId);
+    if (m.error) return json(res, m.status, { error: m.error });
+    const { parseWhen, removeSchedule, scheduleMessage } = await import('../features/serverTools.js');
+    if (body.action === 'remove') return json(res, (await removeSchedule(m.guild.id, String(body.id))) ? 200 : 404, { ok: true });
+    const channel = m.guild.channels.cache.get(String(body.channelId ?? ''));
+    if (!channel?.isTextBased?.()) return json(res, 400, { error: 'Choisis un salon textuel.' });
+    const text = String(body.text ?? '').trim().slice(0, 1800);
+    if (!text) return json(res, 400, { error: 'Le message est vide.' });
+    const at = parseWhen(String(body.when ?? ''));
+    if (!at) return json(res, 400, { error: 'Date incomprise : « 18:30 », « 25/12 20:00 » ou « dans 2h ».' });
+    const r = await scheduleMessage(m.guild.id, { channelId: channel.id, text, at, repeat: ['jour', 'semaine'].includes(body.repeat) ? body.repeat : 'non', by: s.userId });
+    return r.error ? json(res, 400, { error: r.error }) : json(res, 200, { ok: true, at });
+  },
+
+  // ---------- Aperçu de la carte de niveau (idée 90) ----------
+  'GET server/card': async (req, res, s, url) => {
+    const m = await manageable(s, url.searchParams.get('id'));
+    if (m.error) return json(res, m.status, { error: m.error });
+    if (!allowAttempt('app-card', s.userId, 20, 60_000)) return json(res, 429, { error: 'Doucement.' });
+    const { profileCard } = await import('../features/levels.js');
+    const theme = ['ocean', 'sang', 'nuit', 'parchemin'].includes(url.searchParams.get('theme')) ? url.searchParams.get('theme') : undefined;
+    const card = await profileCard(m.guild, m.member.user, { theme: theme === 'parchemin' ? null : theme, levelUp: url.searchParams.get('niveau') ? Number(url.searchParams.get('niveau')) || null : null });
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
+    return res.end(card.attachment);
+  },
+
+  // ---------- Journal du staff (idée 91) ----------
+  'GET server/modlog': async (req, res, s, url) => {
+    const m = await manageable(s, url.searchParams.get('id'));
+    if (m.error) return json(res, m.status, { error: m.error });
+    const { modStats } = await import('../features/moderation.js');
+    const { weekOf } = await import('../features/weekly.js');
+    const weeks = [];
+    for (let i = 0; i < 4; i++) {
+      const week = weekOf(Date.now() - i * 7 * 86_400_000);
+      weeks.push({ week, ...(await modStats(m.guild.id, week)) });
+    }
+    const warnings = (await load('warnings', {}).catch(() => ({})))?.[m.guild.id] ?? {};
+    const name = (id) => m.guild.members.cache.get(id)?.displayName ?? client.users.cache.get(id)?.username ?? (id === client.user.id ? 'Le bot' : `Membre ${String(id).slice(-4)}`);
+    const staff = {};
+    for (const list of Object.values(warnings)) for (const w of list ?? []) if (w.by) staff[w.by] = (staff[w.by] ?? 0) + 1;
+    const recent = Object.entries(warnings).flatMap(([userId, list]) => (list ?? []).map((w) => ({ user: name(userId), by: name(w.by), reason: w.reason ?? '', kind: w.kind ?? 'manuel', at: w.at })))
+      .sort((a, b) => b.at - a.at).slice(0, 40);
+    return json(res, 200, { weeks, staff: Object.entries(staff).map(([id, n]) => ({ name: name(id), n })).sort((a, b) => b.n - a.n).slice(0, 10), recent });
+  },
+
+  // ---------- Panneaux de tickets (idée 92) ----------
+  'POST server/tickets/remove': async (req, res, s, url, body) => {
+    const m = await manageable(s, body.guildId);
+    if (m.error) return json(res, m.status, { error: m.error });
+    const { removeTicketPanel } = await import('../features/tickets.js');
+    return (await removeTicketPanel(client, m.guild.id, String(body.panelId ?? ''))) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'Panneau introuvable.' });
+  },
+
+  // ---------- Mes souvenirs dans l'IA (idée 56) ----------
+  'GET me/memories': async (req, res, s) => {
+    const { factsOf } = await import('../features/aiExtras.js');
+    return json(res, 200, { facts: (await factsOf(s.userId)).map((f) => f.text) });
+  },
+  'POST me/memories': async (req, res, s, url, body) => {
+    if (!Array.isArray(body.facts) || body.facts.length > 40) return json(res, 400, { error: 'Liste invalide.' });
+    const { setFacts } = await import('../features/aiExtras.js');
+    return json(res, 200, { facts: await setFacts(s.userId, body.facts) });
+  },
+
   'POST logout': async (req, res) => {
     const raw = readCookie(req, cookieName(req));
     if (raw) { (await allSessions()).delete(sha(raw)); persist(); }

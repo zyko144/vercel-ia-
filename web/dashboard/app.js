@@ -176,6 +176,67 @@
     return h('div', {}, svg, h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'a' }), 'Demandes'), h('span', {}, h('i', { class: 'e' }), 'Erreurs')));
   }
 
+  /** Courbe SVG de l'or en circulation, jour par jour. */
+  function courbe(series) {
+    const W = 720;
+    const H = 200;
+    const pad = { l: 56, r: 10, t: 12, b: 24 };
+    const max = Math.max(1, ...series.map((p) => p.total));
+    const x = (i) => pad.l + (i / (series.length - 1)) * (W - pad.l - pad.r);
+    const y = (v) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
+    const pts = series.map((p, i) => `${x(i).toFixed(1)},${y(p.total).toFixed(1)}`).join(' ');
+    const svg = s('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Or en circulation' });
+    for (const v of [0, max / 2, max]) {
+      svg.append(s('line', { class: 'grid-line', x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v) }));
+      svg.append(s('text', { class: 'axis', x: pad.l - 6, y: y(v) + 4, 'text-anchor': 'end' }, num(Math.round(v))));
+    }
+    svg.append(s('polygon', { points: `${x(0)},${y(0)} ${pts} ${x(series.length - 1)},${y(0)}`, fill: 'rgba(242,193,78,.18)' }));
+    svg.append(s('polyline', { points: pts, fill: 'none', stroke: '#f2c14e', 'stroke-width': 2.5 }));
+    series.forEach((p, i) => {
+      if (i % Math.ceil(series.length / 8) === 0 || i === series.length - 1) svg.append(s('text', { class: 'axis', x: x(i), y: H - 6, 'text-anchor': 'middle' }, p.day.slice(5)));
+    });
+    return svg;
+  }
+
+  /** Cartes cadeaux premium : création des codes et suivi. */
+  function carteCadeaux() {
+    const offre = h('select', {}, [['veilleur', 'Veilleur'], ['gardien', 'Gardien']].map(([v, t]) => h('option', { value: v, text: t })));
+    const duree = h('select', {}, [[31, '1 mois'], [93, '3 mois'], [365, '1 an']].map(([v, t]) => h('option', { value: v, text: t })));
+    const nombre = h('input', { type: 'number', min: 1, max: 50, value: 1, class: 'small-input' });
+    const sortie = h('pre', { class: 'codes' });
+    const liste = h('div', { class: 'rows' });
+    const charger = async () => {
+      const d = await api.get('cadeaux');
+      liste.replaceChildren(...(d.cards.length ? d.cards.slice(0, 20).map((c) => ligne(c.code, `${c.plan} · ${c.days} j · créée ${ago(c.at)}`, pill(c.usedBy ? `Utilisée · ${c.guild}` : 'Libre', c.usedBy ? '' : 'ok'))) : [vide('Aucune carte', 'Crée des codes à offrir ou à vendre.')]));
+    };
+    const b = h('button', { class: 'btn primary', type: 'button', text: 'Créer les codes' });
+    b.addEventListener('click', () => action(b, async () => {
+      const r = await api.post('cadeaux/creer', { plan: offre.value, days: Number(duree.value), count: Number(nombre.value) });
+      sortie.textContent = r.codes.join('\n');
+      toast(`${r.codes.length} code(s) créé(s).`);
+      charger();
+    }));
+    charger().catch((err) => liste.replaceChildren(vide('Erreur', err.message)));
+    return card('Cartes cadeaux', h('p', { class: 'sub', text: 'Chaque code active l’offre sur un serveur : /serveur › Premium › Utiliser une carte cadeau.' }),
+      h('div', { class: 'inline' }, offre, duree, nombre, b), sortie, liste);
+  }
+
+  /** Prix et articles de la boutique d'un serveur. */
+  function editeurBoutique(guildId, items) {
+    const lignes = items.map((it) => {
+      const prix = h('input', { type: 'number', min: 1, max: 10000000, value: it.price, class: 'small-input' });
+      const actif = h('input', { type: 'checkbox', checked: it.on !== false });
+      return { it, prix, actif, el: ligne(`${it.emoji} ${it.name}${it.promo ? ' · 🏷️ promo du jour' : ''}`, `${it.price !== it.defaultPrice ? `Prix de base : ${num(it.defaultPrice)} · ` : ''}${it.stock != null ? `Stock du mois : ${it.stock}` : 'Sans limite'}`, h('span', { class: 'inline' }, h('label', { class: 'check' }, actif, 'En vente'), prix)) };
+    });
+    const b = h('button', { class: 'btn primary', type: 'button', text: 'Enregistrer la boutique' });
+    b.addEventListener('click', () => action(b, async () => {
+      await api.post('boutique', { guildId, prices: Object.fromEntries(lignes.map((l) => [l.it.key, Number(l.prix.value)])), disabled: lignes.filter((l) => !l.actif.checked).map((l) => l.it.key) });
+      toast('Boutique enregistrée.');
+      rafraichir();
+    }));
+    return card('Éditeur de la boutique', h('p', { class: 'sub', text: 'Change les prix ou retire un article de la vente sur ce serveur.' }), h('div', { class: 'rows' }, lignes.map((l) => l.el)), h('div', { class: 'actions' }, b));
+  }
+
   function barres(items) {
     const max = Math.max(1, ...items.map((i) => i.n));
     return h('div', { class: 'bars' }, items.map((i) => {
@@ -459,6 +520,73 @@
       },
     },
 
+    chef: {
+      titre: 'Gestion du bot',
+      intro: 'Tous les serveurs d’un coup d’œil, les offres, le mode maintenance et un message à tous les serveurs.',
+      auto: 60000,
+      async rendre(zone) {
+        const [st, maint, p] = await Promise.all([api.get('stats-serveurs'), api.get('maintenance'), api.get('premium')]);
+        // Maintenance
+        const msg = h('input', { type: 'text', maxlength: 300, placeholder: 'Le bot est en maintenance quelques minutes…', value: maint.message ?? '' });
+        const bascule = h('button', { class: `btn ${maint.on ? '' : 'primary'}`, type: 'button', text: maint.on ? 'Terminer la maintenance' : 'Activer la maintenance' });
+        bascule.addEventListener('click', () => action(bascule, async () => { await api.post('maintenance', { on: !maint.on, message: msg.value }); toast(maint.on ? 'Maintenance terminée.' : 'Maintenance activée.'); rafraichir(); }));
+        // Message à tous
+        const titre = h('input', { type: 'text', maxlength: 200, placeholder: '🏴‍☠️ Nouveautés de la semaine' });
+        const texte = h('textarea', { rows: 5, maxlength: 3500, placeholder: 'Le message envoyé dans le salon des annonces du bot de chaque serveur.' });
+        const envoyer = h('button', { class: 'btn primary', type: 'button', text: `Envoyer à ${num(st.servers.length)} serveurs` });
+        envoyer.addEventListener('click', async () => {
+          if (!titre.value.trim() || !texte.value.trim()) return toast('Il faut un titre et un message.', true);
+          if (!await confirmer({ titre: 'Envoyer à tous les serveurs ?', texte: 'Le message part dans le salon des annonces du bot (ou le salon système) de chaque serveur.', bouton: 'Envoyer' })) return;
+          action(envoyer, async () => { const r = await api.post('diffusion', { title: titre.value, message: texte.value }); toast(`Envoyé sur ${r.sent} serveur(s), ${r.skipped} sans salon.`); });
+        });
+        // Offres
+        const offre = (x) => {
+          const sel = h('select', {}, [['gratuit', 'Gratuit (retirer)'], ['veilleur', 'Veilleur'], ['gardien', 'Gardien']].map(([v, t]) => h('option', { value: v, text: t })));
+          const jours = h('select', {}, [[30, '1 mois'], [365, '1 an'], [7, '7 jours']].map(([v, t]) => h('option', { value: v, text: t })));
+          const b = h('button', { class: 'btn small', type: 'button', text: 'Appliquer' });
+          b.addEventListener('click', () => action(b, async () => { const r = await api.post('premium/offre', { guildId: x.id, plan: sel.value, days: Number(jours.value) }); toast(`${x.name} : ${r.plan}`); rafraichir(); }));
+          return h('span', { class: 'inline' }, sel, jours, b);
+        };
+        append(zone, h('div', { class: 'stack' },
+          card(`Serveurs · semaine du ${st.week}`, h('div', { class: 'table-wrap' }, h('table', {},
+            h('thead', {}, h('tr', {}, ['Serveur', 'Membres', 'Messages', 'Actifs', 'Jeux', 'Tickets', 'Sanctions', 'Or', 'Offre'].map((t, i) => h('th', { class: i ? 'right' : '', text: t })))),
+            h('tbody', {}, st.servers.map((x) => h('tr', {}, h('td', {}, personne({ name: x.name, avatar: x.icon })), ...[x.members, x.messages, x.active, x.games, x.tickets, x.sanctions, x.gold].map((n) => h('td', { class: 'right num', text: num(n) })), h('td', { class: 'right' }, pill(x.plan, x.plan === 'Gratuit' ? '' : 'ok')))))))),
+          h('div', { class: 'grid cols-2' },
+            card('Mode maintenance', h('p', { class: 'sub', text: maint.on ? `Activé ${ago(maint.since)} : seul toi peux utiliser le bot.` : 'Le bot répond à tout le monde.' }), champ('Message affiché', msg), h('div', { class: 'actions' }, bascule)),
+            card('Message à tous les serveurs', champ('Titre', titre), champ('Message', texte), h('div', { class: 'actions' }, envoyer))),
+          carteCadeaux(),
+          card('Offres des serveurs', h('p', { class: 'sub', text: 'Active, prolonge (1 mois ou 1 an) ou retire l’offre d’un serveur.' }),
+            h('div', { class: 'rows' }, p.servers.map((x) => ligne(`${x.emoji} ${x.name}`, x.until ? `${x.trial ? 'Essai' : 'Payé'} jusqu’au ${dateHeure(x.until)}` : 'Offre gratuite', offre(x))))),
+        ));
+      },
+    },
+
+    membres: {
+      titre: 'Membres',
+      intro: 'Les membres d’un serveur avec leur niveau, leur or et leurs avertissements. Cherche par nom.',
+      async rendre(zone) {
+        let bloc = $('#mb-bloc', zone);
+        if (!bloc) {
+          const d = await serveurs();
+          if (!d.guilds.length) return append(zone, card(null, vide('Aucun serveur', 'Le bot n’est sur aucun serveur.')));
+          const choix = h('select', { id: 'mb-serveur' }, d.guilds.map((g) => h('option', { value: g.id, text: g.name })));
+          const q = h('input', { id: 'mb-q', type: 'search', placeholder: 'Nom ou pseudo…' });
+          choix.addEventListener('change', () => rafraichir());
+          let t;
+          q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => rafraichir(), 350); });
+          bloc = h('div', { id: 'mb-bloc' });
+          append(zone, h('div', { class: 'stack' }, card(null, h('div', { class: 'grid cols-2' }, champ('Serveur', choix), champ('Chercher', q))), bloc));
+        }
+        const d = await api.get(`serveur/membres?serveur=${$('#mb-serveur').value}&q=${encodeURIComponent($('#mb-q').value)}`);
+        const heures = (m) => `${Math.floor(m / 60)} h`;
+        bloc.replaceChildren(card(`${num(d.members.length)} membre(s) affiché(s) sur ${num(d.total)}`, d.members.length
+          ? h('div', { class: 'table-wrap' }, h('table', {},
+            h('thead', {}, h('tr', {}, ['Membre', 'Niveau', 'Messages', 'Vocal', 'Or', 'Avert.', 'Arrivé'].map((x, i) => h('th', { class: i ? 'right' : '', text: x })))),
+            h('tbody', {}, d.members.map((m) => h('tr', {}, h('td', {}, personne(m)), h('td', { class: 'right num', text: m.level }), h('td', { class: 'right num', text: num(m.messages) }), h('td', { class: 'right num', text: heures(m.voiceMin) }), h('td', { class: 'right num', text: `🪙 ${num(m.gold)}` }), h('td', { class: 'right' }, m.warnings ? pill(m.warnings, m.warnings >= 3 ? 'bad' : 'warn') : '—'), h('td', { class: 'right num', text: ago(m.joinedAt) }))))))
+          : vide('Personne', 'Aucun membre ne correspond.')));
+      },
+    },
+
     rappels: {
       titre: 'Rappels',
       intro: 'Les rappels en attente (créés avec /rappel ou d’ici). Le bot les envoie en MP, ou dans le salon choisi si les MP sont fermés.',
@@ -575,7 +703,8 @@
               h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Membre' }), h('th', { class: 'right', text: 'Niveau' }), h('th', { class: 'right', text: 'Pièces' }), h('th', { text: 'Effets' }), h('th', { class: 'right', text: '' }))),
               h('tbody', {}, d.top.map((p, i) => h('tr', {}, h('td', { class: 'num', text: i + 1 }), h('td', {}, personne(p.user)), h('td', { class: 'right num', text: p.level }), h('td', { class: 'right num', text: num(p.gold) }), h('td', { text: p.effects.map((e) => EFFETS[e]).join(' ') || '—' }), h('td', { class: 'right' }, gerer(p)))))))
             : vide('Personne n’a encore d’or', 'Les membres gagnent 200 pièces par niveau et la récompense du jour.')),
-          card('Articles de la boutique', h('div', { class: 'rows' }, d.items.map((it) => ligne(`${it.emoji} ${it.name}${it.promo ? ' · 🏷️ promo du jour' : ''}`, it.stock != null ? `Stock du mois : ${it.stock}` : null, h('span', { class: 'num', text: `🪙 ${num(it.price)}` }))))),
+          card('Or en circulation (90 derniers jours)', (d.series ?? []).length > 1 ? courbe(d.series) : vide('Pas encore de courbe', 'Une photo de l’or est prise chaque jour : revenez demain.')),
+          editeurBoutique(guildId, d.items),
           card('Derniers achats', (d.purchases ?? []).length
             ? h('div', { class: 'rows' }, d.purchases.slice(0, 15).map((a) => ligne(a.why.replace(/^Achat : /, ''), `${new Date(a.at).toLocaleString('fr-FR')} · ${a.userId}`, h('span', { class: 'num', text: `🪙 ${num(-a.n)}` }))))
             : vide('Aucun achat pour l’instant', 'Les achats de la boutique apparaîtront ici.'))));

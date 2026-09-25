@@ -14,8 +14,11 @@ import { config } from '../config.js';
 import { load, save } from '../storage.js';
 import { PLANS, planOf, setPlan } from './premium.js';
 
-const PRICES = { veilleur: '4.99', gardien: '9.99' };
+// Offres au mois (31 jours) ou à l'année (365 jours, 2 mois offerts)
+const PRICES = { veilleur: '4.99', gardien: '9.99', 'veilleur-an': '49.90', 'gardien-an': '99.90' };
 const DAYS = 31;
+const baseOf = (offer) => String(offer).replace(/-an$/, '');
+const daysOf = (offer) => (String(offer).endsWith('-an') ? 365 : DAYS);
 const PAYPAL_EMAIL = (process.env.PAYPAL_EMAIL ?? '').trim();
 const PAYPAL_ME = (process.env.PAYPAL_ME ?? 'steamapp').trim();
 const IPN_VERIFY = 'https://ipnpb.paypal.com/cgi-bin/webscr';
@@ -85,16 +88,16 @@ export function paymentPage(url) {
   const body = !valid
     ? `<h1>Lien incomplet</h1><p>Dans Discord : <b>/serveur</b> › Offre du serveur › Payer, ou reviens sur le site et choisis une offre.</p>`
     : PAYPAL_EMAIL
-      ? `<h1>${esc(PLANS[plan].emoji)} ${esc(PLANS[plan].label)} · ${PRICES[plan].replace('.', ',')} €</h1>
-<p>Pour ${guildName ? `le serveur <b>${esc(guildName)}</b>` : `le serveur <code>${esc(guildId)}</code>`}, pendant ${DAYS} jours. Activation automatique après le paiement.</p>
+      ? `<h1>${esc(PLANS[baseOf(plan)].emoji)} ${esc(PLANS[baseOf(plan)].label)} · ${PRICES[plan].replace('.', ',')} €</h1>
+<p>Pour ${guildName ? `le serveur <b>${esc(guildName)}</b>` : `le serveur <code>${esc(guildId)}</code>`}, pendant ${daysOf(plan)} jours. Activation automatique après le paiement.</p>
 <form id="pp" method="post" action="https://www.paypal.com/cgi-bin/webscr">
 <input type="hidden" name="cmd" value="_xclick"><input type="hidden" name="business" value="${esc(PAYPAL_EMAIL)}">
-<input type="hidden" name="item_name" value="AI Vercel ${esc(PLANS[plan].label)} (${DAYS} jours)"><input type="hidden" name="amount" value="${PRICES[plan]}">
+<input type="hidden" name="item_name" value="AI Vercel ${esc(PLANS[baseOf(plan)].label)} (${daysOf(plan)} jours)"><input type="hidden" name="amount" value="${PRICES[plan]}">
 <input type="hidden" name="currency_code" value="EUR"><input type="hidden" name="no_shipping" value="1">
 <input type="hidden" name="custom" value="${esc(`${guildId}|${plan}`)}"><input type="hidden" name="notify_url" value="${esc(`${base()}/paypal/ipn`)}">
 <input type="hidden" name="return" value="${esc(`${base()}/merci`)}"><input type="hidden" name="cancel_return" value="${esc(`${base()}/#offres`)}">
 <button type="submit">Payer avec PayPal</button></form>`
-      : `<h1>${esc(PLANS[plan].emoji)} ${esc(PLANS[plan].label)} · ${PRICES[plan].replace('.', ',')} €</h1>
+      : `<h1>${esc(PLANS[baseOf(plan)].emoji)} ${esc(PLANS[baseOf(plan)].label)} · ${PRICES[plan].replace('.', ',')} €</h1>
 <p>Paie avec PayPal, et <b>mets l’identifiant du serveur dans le message du paiement</b> : <code>${esc(guildId)}</code></p>
 <p><a class="bouton" href="https://paypal.me/${encodeURIComponent(PAYPAL_ME)}/${PRICES[plan]}EUR">Payer ${PRICES[plan].replace('.', ',')} € sur PayPal</a></p>
 <p class="petit">L’offre est activée dès que le paiement est vu (en général dans l’heure).</p>`;
@@ -138,14 +141,14 @@ export async function handleIpn(rawBody) {
   if (!txn || all[txn]) return { ok: false, why: 'paiement déjà traité' };
   all[txn] = { guildId, plan, amount: p.get('mc_gross'), payer: p.get('payer_email') ?? null, at: Date.now() };
   save('paiements', all);
-  const result = setPlan(guildId, plan, DAYS);
-  console.log(`[paypal] ${guildId} : ${plan} activé ${DAYS} jours (${p.get('mc_gross')} €)`);
+  const result = setPlan(guildId, baseOf(plan), daysOf(plan));
+  console.log(`[paypal] ${guildId} : ${plan} activé ${daysOf(plan)} jours (${p.get('mc_gross')} €)`);
   await rewardSponsor(guildId).catch(() => {});
   const guild = client?.guilds.cache.get(guildId);
   const owner = await guild?.fetchOwner().catch(() => null);
-  await owner?.send(`✅ Paiement reçu, merci ! **${PLANS[plan].emoji} ${PLANS[plan].label}** est actif sur **${guild?.name ?? guildId}** jusqu’au ${new Date(result.until).toLocaleDateString('fr-FR')}.`).catch(() => {});
+  await owner?.send(`✅ Paiement reçu, merci ! **${PLANS[baseOf(plan)].emoji} ${PLANS[baseOf(plan)].label}** est actif sur **${guild?.name ?? guildId}** jusqu’au ${new Date(result.until).toLocaleDateString('fr-FR')}.`).catch(() => {});
   const chef = await client?.users.fetch(config.ownerId).catch(() => null);
-  await chef?.send(`💶 Nouveau paiement PayPal : ${p.get('mc_gross')} € · ${PLANS[plan].label} · ${guild?.name ?? guildId}`).catch(() => {});
+  await chef?.send(`💶 Nouveau paiement PayPal : ${p.get('mc_gross')} € · ${PLANS[baseOf(plan)].label} · ${guild?.name ?? guildId}`).catch(() => {});
   return { ok: true, plan: result };
 }
 

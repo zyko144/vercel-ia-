@@ -384,6 +384,122 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
       payments: (await paymentHistory()).slice(0, 50).map((x) => ({ ...x, guild: client.guilds.cache.get(x.guildId)?.name ?? x.guildId, payer: undefined })),
     }),
 
+    'POST premium/offre': wrap(async (req, res, body, session) => {
+      if (session.userId !== config.ownerId) refuse('Seul le chef peut changer les offres.', 403);
+      const guild = guildOf(body.guildId);
+      const plan = ['gratuit', 'veilleur', 'gardien'].includes(body.plan) ? body.plan : refuse('Offre inconnue.');
+      const days = plan === 'gratuit' ? 0 : entier(body.days ?? 30, 1, 3650, 'Durée');
+      const { setPlan } = await import('../features/premium.js');
+      const p = setPlan(guild.id, plan, days);
+      audit({ userId: session.userId, action: plan === 'gratuit' ? 'Offre retirée' : `Offre ${plan} (${days} j)`, detail: guild.name, req });
+      return json(res, 200, { ok: true, plan: p.label, until: p.until });
+    }),
+
+    'GET cadeaux': wrap(async (req, res, body, session) => {
+      if (session.userId !== config.ownerId) refuse('Réservé au chef.', 403);
+      const { giftCardList } = await import('../features/giftCards.js');
+      return json(res, 200, { cards: (await giftCardList()).map((c) => ({ ...c, guild: c.usedBy ? client.guilds.cache.get(c.usedBy)?.name ?? c.usedBy : null })) });
+    }),
+    'POST cadeaux/creer': wrap(async (req, res, body, session) => {
+      if (session.userId !== config.ownerId) refuse('Réservé au chef.', 403);
+      const { createGiftCards } = await import('../features/giftCards.js');
+      const codes = await createGiftCards(['veilleur', 'gardien'].includes(body.plan) ? body.plan : refuse('Offre inconnue.'), entier(body.days ?? 31, 1, 3650, 'Durée'), entier(body.count ?? 1, 1, 50, 'Nombre'), session.userId);
+      audit({ userId: session.userId, action: 'Cartes cadeaux créées', detail: `${codes.length} × ${body.plan}`, req });
+      return json(res, 200, { codes });
+    }),
+
+    // ---------- Membres d'un serveur (niveau, or, avertissements) ----------
+    'GET serveur/membres': wrap(async (req, res, body, session, url) => {
+      limit(session, 'fiches', 30, MINUTE);
+      const guild = guildOf(url.searchParams.get('serveur'));
+      if (guild.memberCount <= 2000 && guild.members.cache.size < guild.memberCount) await guild.members.fetch().catch(() => {});
+      const [levels, eco, warnings] = await Promise.all([topLevels(guild.id, 5000).catch(() => []), economyOverview(guild.id), load('warnings', {}).catch(() => ({}))]);
+      const lv = Object.fromEntries(levels.map((l) => [l.userId, l]));
+      const gold = Object.fromEntries(eco.top.map((p) => [p.userId, p.gold + p.bank]));
+      const q = String(url.searchParams.get('q') ?? '').toLowerCase().trim();
+      const list = [...guild.members.cache.values()].filter((m) => !m.user.bot && (!q || m.displayName.toLowerCase().includes(q) || m.user.username.includes(q)))
+        .map((m) => ({
+          id: m.id, name: m.displayName, username: m.user.username, avatar: m.displayAvatarURL({ size: 64 }), joinedAt: m.joinedTimestamp,
+          level: lv[m.id]?.level ?? 0, messages: lv[m.id]?.messages ?? 0, voiceMin: lv[m.id]?.voiceMin ?? 0, gold: gold[m.id] ?? 0,
+          warnings: warnings?.[guild.id]?.[m.id]?.length ?? 0, muted: m.communicationDisabledUntilTimestamp > Date.now(),
+        }))
+        .sort((a, b) => b.level - a.level || b.messages - a.messages).slice(0, 200);
+      return json(res, 200, { total: guild.memberCount, members: list });
+    }),
+
+    // ---------- Éditeur de la boutique ----------
+    'GET boutique': wrap(async (req, res, body, session, url) => {
+      const guild = guildOf(url.searchParams.get('serveur'));
+      const eco = await economyOverview(guild.id);
+      return json(res, 200, { items: eco.items });
+    }),
+    'POST boutique': wrap(async (req, res, body, session) => {
+      limit(session, 'boutique', 20, MINUTE);
+      const guild = guildOf(body.guildId);
+      const { ITEMS } = await import('../features/economy.js');
+      const prices = {};
+      for (const [k, v] of Object.entries(body.prices ?? {})) {
+        if (!ITEMS[k]) continue;
+        const n = entier(v, 1, 10_000_000, `Prix de ${ITEMS[k].name}`);
+        if (n !== ITEMS[k].price) prices[k] = n;
+      }
+      const disabled = (Array.isArray(body.disabled) ? body.disabled : []).filter((k) => ITEMS[k]);
+      const { setInternal } = await import('../features/guildConfig.js');
+      setInternal(guild.id, 'shop.overrides', { prices, disabled });
+      audit({ userId: session.userId, action: 'Boutique modifiée', detail: `${guild.name} : ${Object.keys(prices).length} prix, ${disabled.length} retiré(s)`, req });
+      return json(res, 200, { ok: true });
+    }),
+
+    // ---------- Mode maintenance et message à tous les serveurs ----------
+    'GET maintenance': async (req, res) => {
+      const { maintenance } = await import('../features/maintenance.js');
+      return json(res, 200, maintenance());
+    },
+    'POST maintenance': wrap(async (req, res, body, session) => {
+      if (session.userId !== config.ownerId) refuse('Seul le chef peut activer la maintenance.', 403);
+      const { setMaintenance } = await import('../features/maintenance.js');
+      const s = setMaintenance(body.on, texte(body.message ?? '', 300, 'Message'));
+      audit({ userId: session.userId, action: s.on ? 'Maintenance activée' : 'Maintenance terminée', detail: s.message, req });
+      return json(res, 200, s);
+    }),
+    'POST diffusion': wrap(async (req, res, body, session) => {
+      if (session.userId !== config.ownerId) refuse('Seul le chef peut écrire à tous les serveurs.', 403);
+      limit(session, 'diffusion', 3, 10 * MINUTE);
+      const title = texte(body.title, 200, 'Titre', { required: true });
+      const message = texte(body.message, 3500, 'Message', { required: true });
+      const { cfg } = await import('../features/guildConfig.js');
+      let sent = 0;
+      let skipped = 0;
+      for (const guild of client.guilds.cache.values()) {
+        const channel = guild.channels.cache.get(cfg(guild.id, 'announce.channelId') ?? '') ?? guild.systemChannel;
+        const ok = channel?.isTextBased?.() && channel.permissionsFor(guild.members.me)?.has([P.SendMessages, P.EmbedLinks])
+          && await channel.send({ embeds: [new EmbedBuilder().setColor(0xc9a978).setTitle(title).setDescription(message).setFooter({ text: 'Message de l’équipe d’AI Vercel' }).setTimestamp()], allowedMentions: { parse: [] } }).then(() => true, () => false);
+        if (ok) sent += 1; else skipped += 1;
+      }
+      audit({ userId: session.userId, action: 'Message à tous les serveurs', detail: `${title} (${sent} envoyés)`, req });
+      return json(res, 200, { sent, skipped });
+    }),
+
+    // ---------- Statistiques par serveur ----------
+    'GET stats-serveurs': wrap(async () => {
+      const { weekOf, weekBucket } = await import('../features/weekly.js');
+      const week = weekOf();
+      const { modStats } = await import('../features/moderation.js');
+      const out = [];
+      for (const g of client.guilds.cache.values()) {
+        const w = await weekBucket(g.id);
+        const messages = w.messages ?? 0;
+        const eco = await economyOverview(g.id);
+        const mod = await modStats(g.id);
+        out.push({
+          id: g.id, name: g.name, icon: g.iconURL({ size: 64 }), members: g.memberCount, plan: planOf(g.id).label,
+          messages, active: Object.keys(w.users ?? {}).length, games: w.jeux ?? 0, music: w.musique ?? 0, tickets: w.tickets ?? 0,
+          gold: eco.total, sanctions: (mod.warn ?? 0) + (mod.mute ?? 0) + (mod.kick ?? 0),
+        });
+      }
+      return json(res, 200, { week, servers: out.sort((a, b) => b.messages - a.messages) });
+    }),
+
     // ---------- Le bot ----------
     'POST bot/redemarrer': wrap(async (req, res, body, session) => {
       if (session.userId !== config.ownerId) refuse('Seul le chef peut redémarrer le bot.', 403);
