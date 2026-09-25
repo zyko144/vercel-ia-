@@ -165,13 +165,22 @@
       ...Object.entries(PREMIUM).map(([k, p]) => item(k, p.emoji, p.label, p.desc, { premium: true, tag: unlocked(p.feature) ? h('span', { class: 'tag open', text: '✓ Débloqué' }) : h('span', { class: 'tag lock', text: '🔒 Premium' }) })),
     );
     const panel = h('div', { class: 'panel' });
+    // Même serveur : on garde la position du menu, et la page ne saute pas en haut
+    const oldSide = view().querySelector('.side');
+    const sameServer = view().dataset.server === id && oldSide;
+    const sideScroll = sameServer ? oldSide.scrollTop : 0;
+    const panelTop = sameServer ? view().querySelector('.panel')?.getBoundingClientRect().top ?? 0 : 0;
+    view().dataset.server = id;
     view().replaceChildren(h('div', { class: 'layout' }, side, panel));
+    side.scrollTop = sideScroll;
     const pages = { vue: overview, commandes: commandsPage, tickets: ticketsPage, annonce: announcePage, classement: leaderboardPage, sanctions: sanctionsPage, premium: premiumOffer };
     if (pages[page]) pages[page](panel);
     else if (data.sections[page]) sectionPage(panel, page);
     else if (PREMIUM[page]) premiumPage(panel, page);
     else overview(panel);
-    window.scrollTo(0, 0);
+    // Le haut du contenu reste visible, sans à-coup : on ne remonte que si on était descendu plus bas que lui
+    if (!sameServer) window.scrollTo(0, 0);
+    else if (panelTop < 0) window.scrollTo({ top: window.scrollY + panel.getBoundingClientRect().top - 90 });
   }
   async function reload() {
     data = await api('GET', `server?id=${data.id}`);
