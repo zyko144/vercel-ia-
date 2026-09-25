@@ -129,7 +129,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     }
 
     // Paiement PayPal, statut public (voir features/payments.js)
-    if (['/payer', '/merci', '/statut', '/api/statut', '/paypal/ipn'].includes(url.pathname)) {
+    if (['/payer', '/merci', '/statut', '/api/statut', '/paypal/ipn', '/avatar.png'].includes(url.pathname)) {
       const pay = await import('./features/payments.js');
       const html = (body) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(body); };
       if (url.pathname === '/paypal/ipn' && req.method === 'POST') {
@@ -140,6 +140,11 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
         return undefined;
       }
       if (req.method !== 'GET') return send(res, 405, 'méthode refusée');
+      if (url.pathname === '/avatar.png') {
+        const img = await pay.botAvatar();
+        res.writeHead(200, { 'Content-Type': img.type, 'Cache-Control': 'public, max-age=3600' });
+        return res.end(img.body);
+      }
       if (url.pathname === '/payer') return html(pay.paymentPage(url));
       if (url.pathname === '/merci') return html(pay.thanksPage());
       if (url.pathname === '/statut') return html(pay.statusPage());

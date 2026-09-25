@@ -155,6 +155,22 @@ export async function paymentHistory() {
 export const paypalMode = () => (PAYPAL_EMAIL ? 'automatique' : `manuel (paypal.me/${PAYPAL_ME})`);
 export const paymentLink = (guildId, plan) => `${base()}/payer?serveur=${guildId}&offre=${plan}`;
 
+// ===================== Photo de profil du bot =====================
+
+let avatarCache = { at: 0, png: null };
+const FALLBACK_AVATAR = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#5865f2"/><path d="M18 18h7l7 20 7-20h7L36 48h-8z" fill="#fff"/></svg>');
+/** La photo de profil d'AI Vercel, servie par le bot lui-même (le site et le tableau de bord l'affichent partout). */
+export async function botAvatar() {
+  if (avatarCache.png && Date.now() - avatarCache.at < 3_600_000) return { type: 'image/png', body: avatarCache.png };
+  const url = client?.user?.displayAvatarURL({ extension: 'png', size: 256, forceStatic: true });
+  const res = url ? await fetch(url).catch(() => null) : null;
+  if (res?.ok) {
+    avatarCache = { at: Date.now(), png: Buffer.from(await res.arrayBuffer()) };
+    return { type: 'image/png', body: avatarCache.png };
+  }
+  return { type: 'image/svg+xml', body: avatarCache.png ?? FALLBACK_AVATAR };
+}
+
 // ===================== Statut public =====================
 
 const startedAt = Date.now();

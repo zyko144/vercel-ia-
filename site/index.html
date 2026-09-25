@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Vercel · Le bot Discord tout-en-un</title>
 <meta name="description" content="Assistant IA, jeux, musique, modération, tickets et niveaux dans un seul bot Discord. Gratuit pour commencer.">
+<link rel="icon" href="/avatar.png">
 <meta name="theme-color" content="#120f0b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -279,6 +280,36 @@ main, header, footer { position: relative; z-index: 1; }
   .reveal { opacity: 1; transform: none; }
   body::before { display: none; }
 }
+
+/* ===================== Plus de couleurs (palette pirate : or, rouge sang, bleu océan, émeraude, pourpre) ===================== */
+:root { --sea: #1fb5b0; --blood: #e0433a; --emerald: #3fbf6a; --royal: #7c6cff; --amber: #ff9f2e; }
+body { background:
+  radial-gradient(900px 600px at 85% 10%, rgba(31, 181, 176, .18), transparent 60%),
+  radial-gradient(800px 600px at 5% 60%, rgba(224, 67, 58, .14), transparent 60%),
+  radial-gradient(1400px 900px at 15% -15%, rgba(242, 193, 78, .30), transparent 60%),
+  linear-gradient(165deg, #4a3b27 0%, #2a2117 22%, #16110c 50%, #0a0806 100%) fixed; }
+.btn-primary { background: linear-gradient(135deg, #ffd36b, #ff9f2e 55%, #e0433a); color: #1a0f05; box-shadow: 0 8px 24px -10px rgba(255, 159, 46, .7); }
+.btn-primary:hover { background: linear-gradient(135deg, #ffe08a, #ffb04a 55%, #ef5a4f); }
+.btn-secondary { border-color: rgba(31, 181, 176, .6); color: #bff3ef; }
+.btn-secondary:hover { background: rgba(31, 181, 176, .15); }
+.eyebrow { background: linear-gradient(90deg, var(--amber), var(--blood)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero h1 { background: linear-gradient(90deg, #ffe7a8 0%, #ffb04a 20%, #fff4d6 40%, #1fb5b0 60%, #ffd36b 80%, #ffe7a8 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; }
+.badge b { background: linear-gradient(90deg, var(--blood), var(--amber)); color: #fff; }
+.nav-links a:hover { color: var(--amber); }
+/* Chaque carte de fonctionnalité a sa couleur */
+.grid .card:nth-child(6n+1) { --c: var(--sea); } .grid .card:nth-child(6n+2) { --c: var(--emerald); } .grid .card:nth-child(6n+3) { --c: #ff5fa2; }
+.grid .card:nth-child(6n+4) { --c: var(--blood); } .grid .card:nth-child(6n+5) { --c: var(--amber); } .grid .card:nth-child(6n+6) { --c: var(--royal); }
+.grid .card { border-top: 3px solid var(--c); }
+.grid .card .icon { background: color-mix(in srgb, var(--c) 22%, transparent); color: var(--c); box-shadow: 0 0 18px -4px var(--c); }
+.grid .card .list svg { color: var(--c); }
+.grid .card .details-link { background: var(--c); color: #0e0a06; }
+.grid .card:hover { box-shadow: 0 18px 34px -20px rgba(0, 0, 0, .9), 0 0 0 1px var(--c), 0 0 30px -10px var(--c); }
+.steps .step:nth-child(1)::before { border-color: var(--sea); color: var(--sea); } .steps .step:nth-child(2)::before { border-color: var(--amber); color: var(--amber); } .steps .step:nth-child(3)::before { border-color: var(--emerald); color: var(--emerald); }
+.pricing-note svg { color: var(--emerald); }
+.plan:nth-child(2) .price .amount { color: #a3261a; }
+.plan:nth-child(3) .price .amount { color: #14605d; }
+.faq summary:hover { color: var(--amber); }
+.status-dot.on { background: var(--emerald); box-shadow: 0 0 10px var(--emerald); }
 </style>
 </head>
 <body>
@@ -291,8 +322,7 @@ main, header, footer { position: relative; z-index: 1; }
 <header class="nav">
   <div class="container">
     <a class="logo" href="#top" aria-label="Accueil">
-      <svg class="mark bot-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#5865f2"/><path d="M8 8.5h3.2L14 17l2.8-8.5H20L15.6 20h-3.2z" fill="#fff"/></svg>
-      <img class="bot-avatar" alt="" hidden>
+      <img class="bot-avatar" src="/avatar.png" alt="" width="28" height="28">
       <span class="bot-name">AI Vercel</span>
     </a>
     <nav class="nav-links" aria-label="Navigation">
@@ -328,7 +358,7 @@ main, header, footer { position: relative; z-index: 1; }
             <div><div class="name">Lina</div><div class="body"><span class="mention">@<span class="bot-name">AI Vercel</span></span> lance un undercover, on est cinq</div></div>
           </div>
           <div class="msg">
-            <img class="avatar bot-avatar-msg" alt="">
+            <img class="avatar bot-avatar-msg" src="/avatar.png" alt="">
             <div>
               <div class="name"><span class="bot-name">AI Vercel</span> <span class="tag">APP</span></div>
               <div class="body">C’est parti. Cliquez pour ouvrir la salle d’attente, la partie démarre dès que tout le monde a rejoint.</div>
@@ -752,10 +782,6 @@ main, header, footer { position: relative; z-index: 1; }
     if (s.membres) { var mb = document.getElementById('members'); mb.innerHTML = '<strong>' + number(s.membres) + '</strong> membres'; mb.hidden = false; }
   }).catch(function () { document.getElementById('stats').hidden = true; });
 
-  // Sans photo du bot, le message d'exemple garde un avatar neutre
-  document.querySelectorAll('.bot-avatar-msg').forEach(function (img) {
-    img.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" fill="#5865f2"/><path d="M10 11h4l4 11 4-11h4l-6 15h-4z" fill="#fff"/></svg>');
-  });
 
   // Les blocs apparaissent en douceur quand on arrive dessus
   (function () {

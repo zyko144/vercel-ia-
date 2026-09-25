@@ -91,7 +91,7 @@
     crumbs();
     const err = new URLSearchParams(location.search).get('erreur');
     view().replaceChildren(h('div', { class: 'login' },
-      me.bot?.avatar ? h('img', { src: me.bot.avatar, alt: '' }) : h('div', { class: 'mark', text: 'V' }),
+      h('img', { src: '/avatar.png', alt: '' }),
       h('h1', { text: 'Tableau de bord' }),
       h('p', { text: `Connecte-toi avec Discord pour gérer les serveurs où ${me.bot?.name ?? 'le bot'} est ajouté : tickets, sécurité, niveaux, accueil…` }),
       err && ERRORS[err] ? h('div', { class: 'error', text: ERRORS[err] }) : null,
@@ -193,7 +193,7 @@
   const pageHead = (emoji, title, text, gold = false) => h('div', { class: `page-head${gold ? ' gold' : ''}` }, h('div', { class: 'pi', text: emoji }), h('div', {}, h('h1', { text: title }), text ? h('p', { text }) : null));
 
   // ---------------- Aperçu Discord ----------------
-  const botAv = () => (me.bot?.avatar ? h('img', { class: 'av', src: me.bot.avatar, alt: '' }) : h('div', { class: 'av', text: 'V' }));
+  const botAv = () => h('img', { class: 'av', src: '/avatar.png', alt: '' });
   function dcMessage({ bot = true, author, content, embed, buttons = [], extra }) {
     return h('div', { class: 'msg' },
       bot ? botAv() : h('div', { class: 'av', text: initials(author) }),

@@ -449,10 +449,54 @@ body::after { animation-duration: 95s; animation-delay: -40s; opacity: .45; tran
 .btn .rip { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: rgba(255, 255, 255, .35); pointer-events: none; animation: ripple .6s ease-out forwards; }
 .banner .icon, .side .server-mini .icon { transition: transform .4s; }
 .banner:hover .icon { transform: rotate(-6deg) scale(1.06); }
-.stat b { display: inline-block; }
+.stat b { display: block; width: fit-content; }
 .stat:hover b { animation: bob .6s ease; }
 /* Carte de niveau (aperçu) : parchemin de pirate */
 .dc .card-img.parch { background: radial-gradient(120% 90% at 50% 40%, #f1e1ba 0%, #e0c690 55%, #b98d4f 88%, #6b421d 100%); border: 0; color: #3b2412; box-shadow: inset 0 0 26px 6px rgba(70, 30, 5, .7); border-radius: 4px; }
 .dc .card-img.parch b { color: #8c1c13; text-shadow: none; letter-spacing: .12em; font-family: 'Cinzel', Georgia, serif; }
 .dc .card-img.parch small { color: #6b4a2a; }
 @media (prefers-reduced-motion: reduce) { .premium-card { animation: none; } }
+
+/* ===================== Plus de couleurs ===================== */
+:root { --sea: #1fb5b0; --blood: #e0433a; --emerald: #3fbf6a; --royal: #7c6cff; --amber: #ff9f2e; --rose: #ff5fa2; --sky: #4aa8ff; }
+body { background:
+  radial-gradient(900px 600px at 90% 5%, rgba(31, 181, 176, .16), transparent 60%),
+  radial-gradient(800px 600px at 0% 70%, rgba(224, 67, 58, .12), transparent 60%),
+  radial-gradient(1400px 900px at 15% -15%, rgba(242, 193, 78, .28), transparent 60%),
+  linear-gradient(165deg, #4a3b27 0%, #2a2117 22%, #16110c 50%, #0a0806 100%); background-attachment: fixed; }
+.btn.primary { background: linear-gradient(135deg, #ffd36b, #ff9f2e 55%, #e0433a); border-color: #ff9f2e; color: #1a0f05; box-shadow: 0 8px 22px -10px rgba(255, 159, 46, .7); }
+.btn.primary:hover { background: linear-gradient(135deg, #ffe08a, #ffb04a 55%, #ef5a4f); }
+/* Une couleur par menu */
+.side .nav { --c: var(--accent); }
+.side .nav:nth-of-type(8n+1) { --c: var(--sea); } .side .nav:nth-of-type(8n+2) { --c: var(--amber); } .side .nav:nth-of-type(8n+3) { --c: var(--royal); }
+.side .nav:nth-of-type(8n+4) { --c: var(--emerald); } .side .nav:nth-of-type(8n+5) { --c: var(--rose); } .side .nav:nth-of-type(8n+6) { --c: var(--sky); }
+.side .nav:nth-of-type(8n+7) { --c: var(--blood); } .side .nav:nth-of-type(8n+8) { --c: #c9a978; }
+.side .nav .ni { background: color-mix(in srgb, var(--c) 20%, transparent); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
+.side .nav.on { background: color-mix(in srgb, var(--c) 16%, transparent); border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+.side .nav.on .ni { background: var(--c); }
+.nav.on::before { background: var(--c); box-shadow: 0 0 12px var(--c); }
+.side .nav.premium { --c: var(--gold); }
+/* Tuiles, étapes et chiffres en couleurs */
+.tiles > *:nth-child(7n+1) { --c: var(--blood); } .tiles > *:nth-child(7n+2) { --c: var(--amber); } .tiles > *:nth-child(7n+3) { --c: var(--emerald); }
+.tiles > *:nth-child(7n+4) { --c: var(--sea); } .tiles > *:nth-child(7n+5) { --c: var(--royal); } .tiles > *:nth-child(7n+6) { --c: var(--sky); } .tiles > *:nth-child(7n+7) { --c: var(--rose); }
+.tile { border-top: 3px solid var(--c, var(--accent)); }
+.tile .ti { display: inline-grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; background: color-mix(in srgb, var(--c, var(--accent)) 20%, transparent); box-shadow: 0 0 18px -6px var(--c, var(--accent)); }
+.tile:hover { box-shadow: 0 16px 30px -18px rgba(0, 0, 0, .8), 0 0 0 1px var(--c, var(--accent)), 0 0 26px -10px var(--c, var(--accent)); }
+.tile.gold { --c: var(--gold); }
+.stats .stat:nth-child(4n+1) b { color: var(--sea); } .stats .stat:nth-child(4n+2) b { color: var(--amber); }
+.stats .stat:nth-child(4n+3) b { color: var(--blood); } .stats .stat:nth-child(4n+4) b { color: var(--emerald); }
+.stat { border-left: 3px solid currentColor; }
+.stats .stat:nth-child(4n+1) { border-left-color: var(--sea); } .stats .stat:nth-child(4n+2) { border-left-color: var(--amber); }
+.stats .stat:nth-child(4n+3) { border-left-color: var(--blood); } .stats .stat:nth-child(4n+4) { border-left-color: var(--emerald); }
+.page-head .pi { background: linear-gradient(135deg, rgba(255, 159, 46, .25), rgba(31, 181, 176, .25)); border-color: rgba(255, 159, 46, .45); }
+.page-head h1 { background: linear-gradient(90deg, #fff4d6, #ffd36b 40%, #eadcc0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.step .num { background: color-mix(in srgb, var(--sea) 25%, transparent); color: #bff3ef; }
+.step:hover { border-color: var(--sea); }
+.switch input:checked { background: linear-gradient(90deg, var(--emerald), var(--sea)); }
+.state.on { color: #8ff0b0; background: rgba(63, 191, 106, .18); }
+.bar i { background: linear-gradient(90deg, var(--sea), var(--amber), var(--blood)); }
+.rank.r1 { color: #ffd36b; } .rank.r2 { color: #bfe3ff; } .rank.r3 { color: #ff9f6b; }
+.preview-label::before { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--amber); border-color: var(--amber); }
+.card h2 { color: #ffe7b0; }
+.server.on { border-top: 3px solid var(--sea); }
