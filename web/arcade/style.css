@@ -221,10 +221,11 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 .pform { display: grid; gap: 8px; max-width: 460px; margin: 0 auto; width: 100%; }
 .pform label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
 .pform input, .pform textarea { padding: 9px 10px; border-radius: 8px; border: 1px solid #4a3620; background: #1f170e; color: var(--text); font: inherit; }
-.pvote { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.pvote button { display: flex; align-items: center; gap: 8px; background: #2a2014; color: var(--text); border: 1px solid #4a3620; box-shadow: none; text-align: left; }
-.pvote button span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pvote button b { background: var(--blood); color: #fff; border-radius: 99px; padding: 0 8px; }
+.pvote { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.pvote button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; background: #2a2014; color: var(--text); border: 1px solid #4a3620; box-shadow: none; font-family: Georgia, serif; }
+.pvote button > .avatar { width: 56px; height: 56px; }
+.pvote button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.pvote button b { position: absolute; top: 6px; right: 6px; background: var(--blood); color: #fff; border-radius: 99px; padding: 0 8px; font-size: 13px; }
 .plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .plist li { background: #1f170e; border: 1px solid #3b2a17; border-radius: 8px; padding: 8px 10px; }
 .cross { display: grid; gap: 3px; justify-content: center; overflow-x: auto; }
@@ -239,8 +240,9 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 .duo .vs { color: var(--gold); font-size: 22px; }
 .pmic { display: grid; gap: 10px; justify-items: center; }
 .rolecard { background: #1f170e; border: 2px solid var(--accent); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
-.rolecard.red { border-color: var(--blood); }
-.rolecard.green { border-color: var(--emerald); }
+.rolecard.c-red { border-color: var(--blood); }
+.rolecard.c-green { border-color: var(--emerald); }
+.rolecard.c-gold { border-color: var(--gold); }
 .rolecard summary { cursor: pointer; }
 .rolecard .rc { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
 .rolecard img { width: 96px; border-radius: 10px; }
@@ -249,3 +251,22 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 @media (max-width: 560px) { .duo { grid-template-columns: 1fr; } .rolecard .rc { flex-direction: column; } }
 #plateau .keys { width: 100%; }
 .plist li { text-align: left; }
+.soundbox { position: fixed; top: 60px; right: 12px; z-index: 9; background: #140f09f5; border: 1px solid #4a3620; border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; width: 260px; box-shadow: 0 10px 30px #000a; }
+.soundbox b { color: var(--gold); font-family: 'Cinzel', serif; }
+.soundbox label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+.soundbox input { accent-color: var(--gold); }
+.unlock { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 9; background: var(--gold); color: #1b1208; font-weight: 700; padding: 10px 18px; border-radius: 99px; box-shadow: 0 6px 20px #000a; cursor: pointer; animation: rise .4s ease both; }
+.speaking::after { content: ' 🗣️'; }
+.feed { display: grid; gap: 6px; }
+.feed .fi { display: flex; align-items: center; gap: 10px; background: #1f170e; border: 1px solid #3b2a17; border-radius: 10px; padding: 6px 10px; animation: rise .3s ease both; }
+.feed .fi b { color: var(--gold); }
+.feed .fi.out { opacity: .6; }
+.feed .fi .avatar { width: 36px; height: 36px; }
+.whobox { display: flex; align-items: center; gap: 12px; justify-content: center; }
+.whobox .avatar { width: 56px; height: 56px; }
+.whobox.big .avatar { width: 84px; height: 84px; }
+.whobox b { font-size: 18px; }
+.pvote .voters { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+.pvote .voters .avatar { width: 20px; height: 20px; border-width: 1px; }
+.player .done { margin-left: 4px; }
+.player .avatar { width: 36px; height: 36px; }

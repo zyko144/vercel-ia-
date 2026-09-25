@@ -12,11 +12,19 @@
   <div class="brand"><span class="flag">🏴‍☠️</span><div><b>L’arcade</b><small>d’AI Vercel</small></div></div>
   <div class="crew" id="crew"></div>
   <span class="gold" id="goldTag"></span>
+  <button class="ghost small" id="soundBtn" title="Son">🔊</button>
   <button class="ghost small" id="soloBtn">🍺 Taverne</button>
   <button class="ghost small" id="home" hidden>⬅ Salle</button>
 </header>
 <main id="app"><div class="loading"><div class="spin">⚓</div><p>On hisse les voiles…</p></div></main>
 <aside id="drawer" class="drawer" hidden><div class="drawer-head"><b>🍺 Taverne et jeux solo</b><button class="ghost small" id="drawerClose">✕</button></div><div id="drawerBody"></div></aside>
+<div id="soundBox" class="soundbox" hidden>
+  <b>🔊 Son</b>
+  <label>🎵 Musique de fond <input type="range" min="0" max="1" step="0.05" id="volMusic"></label>
+  <label>🗣️ Voix de l’IA <input type="range" min="0" max="1" step="0.05" id="volVoice"></label>
+  <label>🎧 Extraits et effets <input type="range" min="0" max="1" step="0.05" id="volFx"></label>
+</div>
+<div id="unlock" class="unlock" hidden>🔊 Touche l’écran pour activer le son</div>
 <div id="toast" class="toast" hidden></div>
 <script type="module" src="app.js"></script>
 </body>

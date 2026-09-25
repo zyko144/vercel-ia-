@@ -178,7 +178,7 @@ export function registerParty(GAMES, h) {
       const spec = PARTY[g.game];
       const screen = typeof g.screen === 'function' ? g.screen(me) : g.screen;
       return {
-        kind: 'party', game: g.game, name: spec.name, emoji: spec.emoji, screen, card: g.cards[me] ?? null, scores: g.scores, names: g.names,
+        kind: 'party', game: g.game, name: spec.name, emoji: spec.emoji, screen, card: g.cards[me] ?? null, scores: g.scores, names: g.names, answered: g.onInput ? [...(g.live?.keys() ?? [])] : [],
         players: g.players, you: g.players.includes(me), host: g.host,
       };
     },
@@ -226,6 +226,7 @@ export async function quizRounds(p, questions, { ms = 20_000, title = '❓' } = 
     const endsAt = Date.now() + ms;
     const screen = (right = null) => (me) => ({
       title: `${title} ${i + 1}/${questions.length}`, endsAt: right === null ? endsAt : null, sub: right === null ? `${p.g.live?.size ?? 0} réponse(s)` : '',
+      say: right === null ? q.question : `La réponse était : ${q.choix[right]}`,
       blocks: [T(q.question, 'big'), ...(q.img ? [{ t: 'img', src: q.img }] : []), { t: 'choices', options: q.choix, mine: p.g.live?.get(me)?.i ?? null, right }],
     });
     p.show(screen());
@@ -253,7 +254,7 @@ PARTY.petitbac = {
       const cats = shuffle(CATEGORIES).slice(0, 5);
       const endsAt = Date.now() + 75_000;
       p.show((me) => ({
-        title: `📝 Manche ${round}/3 · lettre ${letter}`, endsAt, sub: `${p.g.live?.size ?? 0} grille(s) rendue(s)`,
+        title: `📝 Manche ${round}/3 · lettre ${letter}`, endsAt, sub: `${p.g.live?.size ?? 0} grille(s) rendue(s)`, say: `Manche ${round}. Lettre ${letter} !`,
         blocks: [T(letter, 'huge'), { t: 'form', fields: cats, done: p.g.live?.has(me) ?? false, button: 'Rendre ma grille' }],
       }));
       const got = await p.collect({ ms: 75_000, who: null, accept: (me, b) => (b.type === 'form' && Array.isArray(b.values) ? cats.map((_, i) => String(b.values[i] ?? '').trim().slice(0, 40)) : undefined) });
@@ -315,7 +316,7 @@ PARTY.actionverite = {
       endsAt = Date.now() + 75_000;
       const judges = p.players.filter((id) => id !== player);
       p.show((me) => ({
-        title: choice === 'action' ? '🔥 ACTION' : '💬 VÉRITÉ', endsAt, sub: `${p.g.live?.size ?? 0}/${judges.length} vote(s)`,
+        title: choice === 'action' ? '🔥 ACTION' : '💬 VÉRITÉ', endsAt, sub: `${p.g.live?.size ?? 0}/${judges.length} vote(s)`, say: `${choice === 'action' ? 'Action' : 'Vérité'} pour ${p.name(player)} : ${challenge}`,
         blocks: [T(`${p.name(player)} : ${challenge}`, 'big'), T(me === player ? 'Réponds dans le chat (ou en vocal) : les autres valident.' : 'Validé ?', 'small'),
           ...(me !== player ? [{ t: 'buttons', items: [{ id: 'yes', label: '👍 Validé', cls: 'green' }, { id: 'no', label: '👎 Pas validé' }], chosen: p.g.live?.get(me) === true ? 'yes' : p.g.live?.get(me) === false ? 'no' : null }] : [])],
       }));

@@ -16,9 +16,12 @@ function tally(votes, tie = null) {
   return sorted[0][0];
 }
 const counts = (votes) => { const c = {}; for (const v of votes?.values() ?? []) if (v) c[v] = (c[v] ?? 0) + 1; return c; };
-const voteBlock = (p, ids, me, { label = 'Voter', show = true, lock = false } = {}) => ({
-  t: 'vote', ids, names: Object.fromEntries(ids.map((id) => [id, p.name(id)])), mine: p.g.live?.get(me) ?? null, counts: show ? counts(p.g.live) : null, label, lock,
-});
+/** Vote sur des joueurs : chacun voit en direct qui a voté pour qui (sauf votes secrets, show = false). */
+const voteBlock = (p, ids, me, { label = 'Voter', show = true, lock = false } = {}) => {
+  const voters = {};
+  if (show) for (const [who, target] of p.g.live ?? []) if (typeof target === 'string') (voters[target] ??= []).push({ id: who, name: p.name(who) });
+  return { t: 'vote', ids, names: Object.fromEntries(ids.map((id) => [id, p.name(id)])), mine: p.g.live?.get(me) ?? null, counts: show ? counts(p.g.live) : null, voters: show ? voters : null, label, lock };
+};
 
 // =====================================================================
 // LOUP-GAROU
@@ -55,8 +58,9 @@ PARTY.loupgarou = {
     let night = true;
     // Les morts ne parlent plus ; la nuit, tout le village se tait
     p.listen((me) => !alive.has(me) || night);
-    p.show({ title: '🐺 Loup-garou', blocks: [T(`${n} joueurs · ${wolves} loup${wolves > 1 ? 's' : ''} parmi vous.`, 'big'), T('Regarde ton rôle en haut de l’écran. Ne le montre à personne !')] });
-    await p.sleep(8000);
+    const lgRules = ['Chaque nuit, les loups-garous choisissent une victime ; la voyante découvre un rôle ; la sorcière peut sauver ou empoisonner.', 'Le jour, le village débat puis vote pour éliminer un suspect. Le chasseur qui meurt tire une dernière flèche.', 'Le village gagne quand tous les loups sont morts ; les loups gagnent quand ils sont aussi nombreux que les villageois.'];
+    p.show({ title: '🐺 Loup-garou · les règles', endsAt: Date.now() + 22_000, blocks: [T(`${n} joueurs · ${wolves} loup${wolves > 1 ? 's' : ''} parmi vous.`, 'big'), { t: 'list', items: lgRules }, T('Regarde ton rôle en haut de l’écran. Ne le montre à personne !', 'small')], say: `Bienvenue au village. ${n} joueurs, dont ${wolves} loup${wolves > 1 ? 's' : ''}. ${lgRules.join(' ')}` });
+    await p.sleep(22_000);
     const reveal = (id) => `${p.name(id)} était ${ROLES[role[id]].emoji} ${ROLES[role[id]].name}`;
     const winner = () => {
       const w = wolfIds().length;
@@ -80,7 +84,7 @@ PARTY.loupgarou = {
       // ---------- Nuit
       night = true;
       p.show({ title: `🌙 Nuit ${day}`, blocks: [T(pick(NIGHT), 'quote'), T('Le village dort…', 'small')] });
-      await p.sleep(3000);
+      await p.sleep(6000);
       const prey = living().filter((id) => role[id] !== 'loup');
       let endsAt = Date.now() + 40_000;
       p.show((me) => ({
@@ -120,7 +124,8 @@ PARTY.loupgarou = {
       const dead = [...new Set([victim, poisoned].filter(Boolean))];
       for (const id of dead) alive.delete(id);
       refreshCards();
-      p.show({ title: `☀️ Jour ${day}`, blocks: [T(dead.length ? `Le village se réveille… ${dead.length > 1 ? 'deux corps' : 'un corps'} sur la place.` : 'Le village se réveille… personne n’est mort cette nuit !', 'big'), { t: 'list', items: dead.map((id) => `💀 ${reveal(id)}`) }] });
+      const dawn = dead.length ? `Le village se réveille… ${dead.length > 1 ? 'deux corps' : 'un corps'} sur la place.` : 'Le village se réveille… personne n’est mort cette nuit !';
+      p.show({ title: `☀️ Jour ${day}`, blocks: [T(dawn, 'big'), { t: 'list', items: dead.map((id) => `💀 ${reveal(id)}`) }], say: `${dawn} ${dead.map(reveal).join('. ')}` });
       for (const id of dead) p.say(`💀 ${reveal(id)}`);
       await p.sleep(6000);
       for (const id of dead) { await hunter(id); refreshCards(); }
@@ -128,7 +133,7 @@ PARTY.loupgarou = {
       if (w) return end(w);
       // ---------- Débat puis vote
       endsAt = Date.now() + 90_000;
-      p.show((me) => ({ title: `☀️ Jour ${day} · débat`, endsAt, sub: `${p.g.live?.size ?? 0}/${living().filter((id) => !isBot(id)).length} prêt(s)`, blocks: [T('Discutez dans le chat (ou en vocal) : qui est loup ?', 'big'), ...(alive.has(me) ? [{ t: 'buttons', items: [{ id: 'ready', label: '🗳️ Prêt à voter' }], chosen: p.g.live?.has(me) ? 'ready' : null }] : [])] }));
+      p.show((me) => ({ title: `☀️ Jour ${day} · débat`, endsAt, say: 'Place au débat. Qui est loup ?', sub: `${p.g.live?.size ?? 0}/${living().filter((id) => !isBot(id)).length} prêt(s)`, blocks: [T('Discutez dans le chat (ou en vocal) : qui est loup ?', 'big'), ...(alive.has(me) ? [{ t: 'buttons', items: [{ id: 'ready', label: '🗳️ Prêt à voter' }], chosen: p.g.live?.has(me) ? 'ready' : null }] : [])] }));
       await p.collect({ ms: 90_000, who: living().filter((id) => !isBot(id)), accept: (me, b) => (b.type === 'btn' && b.id === 'ready' ? true : undefined) });
       endsAt = Date.now() + 45_000;
       const voters = living();
@@ -138,7 +143,7 @@ PARTY.loupgarou = {
       if (out) {
         alive.delete(out);
         refreshCards();
-        p.show({ title: `🗳️ Jour ${day}`, blocks: [T(`Le village élimine ${reveal(out)}`, 'big')] });
+        p.show({ title: `🗳️ Jour ${day}`, blocks: [T(`Le village élimine ${reveal(out)}`, 'big')], say: `Le village a voté. ${reveal(out)}.` });
         p.say(`⚖️ Le village élimine ${reveal(out)}`);
         await p.sleep(5000);
         await hunter(out);
@@ -165,9 +170,33 @@ PARTY.loupgarou = {
 // =====================================================================
 // IMPOSTEUR et UNDERCOVER : même moteur (indices chacun son tour, puis vote)
 // =====================================================================
-async function wordGame(p, { impostors, white, clueRounds, maxRounds, label }) {
+const RULES = {
+  imposteur: [
+    'Tout le monde reçoit le même mot secret… sauf l’imposteur, qui a un mot proche mais différent. Il ne sait pas qu’il est l’imposteur !',
+    'Chacun son tour, donne un indice de 1 à 5 mots sur ton mot, sans le dire. Trop précis, l’imposteur devine ; trop vague, on te soupçonne.',
+    'Après chaque tour, votez. Le plus désigné est éliminé (égalité : personne, on refait un tour).',
+    'Les civils gagnent s’ils éliminent l’imposteur… sauf s’il devine leur mot en dernière chance. L’imposteur gagne s’il survit jusqu’à ce qu’il ne reste que deux joueurs, ou pendant 6 tours.',
+  ],
+  undercover: [
+    'Les civils ont tous le même mot. Les undercovers ont un mot proche mais différent, et ne savent pas qu’ils sont undercover. Mister White n’a aucun mot : il bluffe.',
+    'Chacun son tour, donne un indice de 1 à 5 mots sur ton mot, sans le dire.',
+    'Après chaque tour, votez : le plus désigné est éliminé et son rôle est révélé.',
+    'Mister White éliminé peut gagner en devinant le mot des civils. Les civils gagnent quand tous les infiltrés sont éliminés ; les infiltrés gagnent s’ils sont aussi nombreux que les civils.',
+  ],
+};
+const feed = (p, history) => ({ t: 'feed', items: history.map((x) => ({ id: x.id, name: p.name(x.id), text: x.text, note: x.note ?? null })) });
+
+async function wordGame(p, { kind }) {
+  const label = kind === 'undercover' ? 'Undercover' : 'L’imposteur';
   const ids = shuffle(p.players);
-  const [civil, other] = await within(IMPOSTOR_PARTS.wordPair('tout'), 15_000) ?? shuffle(['Pizza', 'Burger']);
+  const n = ids.length;
+  const impostors = kind === 'undercover' ? (n >= 7 ? 2 : 1) : 1;
+  const white = kind === 'undercover' && n >= 5;
+  const maxRounds = kind === 'undercover' ? 7 : 6;
+  // Deux mots proches mais jamais identiques
+  let pair = await within(IMPOSTOR_PARTS.wordPair('tout'), 15_000);
+  if (!pair || norm(pair[0]) === norm(pair[1])) pair = shuffle(pick([['Pizza', 'Burger'], ['Plage', 'Piscine'], ['Coca', 'Pepsi'], ['Chat', 'Chien'], ['Naruto', 'One Piece']]));
+  const [civil, other] = pair;
   const spots = shuffle(ids);
   const role = Object.fromEntries(ids.map((id) => [id, 'civil']));
   spots.slice(0, impostors).forEach((id) => { role[id] = 'intrus'; });
@@ -175,76 +204,93 @@ async function wordGame(p, { impostors, white, clueRounds, maxRounds, label }) {
   const word = (id) => (role[id] === 'civil' ? civil : role[id] === 'intrus' ? other : null);
   const clues = await within(IMPOSTOR_PARTS.botClues(civil, other), 15_000) ?? { civil: ['connu'], imposteur: ['connu'] };
   const alive = new Set(ids);
+  // La même carte pour tous (seul le mot change) : personne ne sait s'il est l'intrus
   for (const id of ids) {
     p.card(id, word(id)
-      ? { emoji: '🔤', title: word(id), color: 'gold', img: 'jeux/motsecret.gif', text: `Ton mot secret. ${label === 'Undercover' ? 'Tu ne sais pas si tu es civil ou undercover !' : 'Un intrus a un mot proche… démasquez-le.'}` }
+      ? { emoji: '🔤', title: word(id), color: 'gold', img: 'jeux/motsecret.gif', text: kind === 'undercover' ? 'Ton mot secret. Civil ou undercover ? Toi seul ne le sais pas…' : 'Ton mot secret. L’imposteur a un mot proche… et c’est peut-être toi !' }
       : { emoji: '🎩', title: 'Mister White', color: 'red', img: 'jeux/imposteur.gif', text: 'Tu n’as pas de mot : écoute les indices et bluffe. Si tu es éliminé, devine le mot des civils pour gagner.' });
   }
+  const rules = RULES[kind];
+  const count = kind === 'undercover' ? `${n} joueurs · ${impostors} undercover${impostors > 1 ? 's' : ''}${white ? ' · 1 Mister White' : ''}` : `${n} joueurs · 1 imposteur`;
+  p.show({ title: `📜 Les règles · ${label}`, endsAt: Date.now() + 25_000, blocks: [T(count, 'big'), { t: 'list', items: rules }, T('Ton mot est en haut de l’écran. Ne le montre à personne !', 'small')], say: `${label}. ${rules.join(' ')}` });
+  await p.sleep(25_000);
   const history = [];
   const team = (id) => (role[id] === 'civil' ? 'civils' : 'infiltres');
-  const status = () => {
-    const bad = [...alive].filter((id) => role[id] !== 'civil').length;
-    const good = alive.size - bad;
-    if (!bad) return 'civils';
-    if (good <= bad) return 'infiltres';
-    return null;
-  };
-  p.show({ title: `🕵️ ${label}`, blocks: [T('Regarde ton mot en haut de l’écran. Chacun son tour, donne un indice sans trop en dire.', 'big')] });
-  await p.sleep(7000);
+  const roleName = (id) => (role[id] === 'civil' ? '🧑 civil' : role[id] === 'intrus' ? (kind === 'undercover' ? '🕶️ undercover' : '🕵️ l’imposteur') : '🎩 Mister White');
   const end = (winnerTeam, why = '') => ({
-    title: winnerTeam === 'civils' ? '🧑 Les civils gagnent !' : label === 'Undercover' ? '🕶️ Les infiltrés gagnent !' : '🕵️ L’imposteur gagne !',
-    text: `${why}${why ? '\n' : ''}Mot des civils : ${civil} · mot de l’intrus : ${other}\n${ids.map((id) => `${p.name(id)} : ${role[id] === 'civil' ? '🧑 civil' : role[id] === 'intrus' ? (label === 'Undercover' ? '🕶️ undercover' : '🕵️ imposteur') : '🎩 Mister White'}`).join('\n')}`,
+    title: winnerTeam === 'civils' ? '🧑 Les civils gagnent !' : kind === 'undercover' ? '🕶️ Les infiltrés gagnent !' : '🕵️ L’imposteur gagne !',
+    text: `${why}${why ? '\n' : ''}Mot des civils : ${civil} · mot ${kind === 'undercover' ? 'des undercovers' : 'de l’imposteur'} : ${other}\n${ids.map((id) => `${p.name(id)} : ${roleName(id)}`).join('\n')}`,
     winners: ids.filter((id) => team(id) === winnerTeam),
   });
+  const lastChance = async (id) => {
+    const endsAt = Date.now() + 30_000;
+    p.show((me) => ({ title: '🎯 Dernière chance', endsAt, blocks: [T(`${p.name(id)} peut encore gagner en devinant le mot des civils !`, 'big'), ...(me === id ? [{ t: 'input', ph: 'Le mot des civils', button: 'Deviner' }] : [])], say: `${p.name(id)} a une dernière chance : deviner le mot des civils.` }));
+    const guess = (await p.collect({ ms: 30_000, who: [id], accept: (me, b) => (b.type === 'answer' ? String(b.text ?? '').trim().slice(0, 40) : undefined), bot: () => pick([civil, other, 'aucune idée']) })).get(id) ?? '';
+    const ok = norm(guess) && norm(guess) === norm(civil);
+    p.say(ok ? `🎯 ${p.name(id)} trouve « ${civil} » !` : `❌ Raté : « ${guess || '…'} »`, ok ? 'good' : 'info');
+    return ok;
+  };
   for (let round = 1; round <= maxRounds; round++) {
-    for (let turn = 1; turn <= clueRounds; turn++) {
-      for (const id of shuffle([...alive])) {
-        const endsAt = Date.now() + 30_000;
-        p.show((me) => ({
-          title: `💬 Manche ${round} · indice de ${p.name(id)}`, endsAt,
-          blocks: [{ t: 'list', items: history.length ? history.slice(-12) : ['Pas encore d’indice.'] }, ...(me === id ? [{ t: 'input', ph: 'Ton indice (1 à 3 mots)', button: 'Donner' }] : [T(`${p.name(id)} réfléchit…`, 'small')])],
-        }));
-        const clue = (await p.collect({ ms: 30_000, who: [id], accept: (me, b) => (b.type === 'answer' && String(b.text ?? '').trim() ? String(b.text).trim().slice(0, 40) : undefined), bot: (b) => pick(role[b] === 'civil' ? clues.civil : role[b] === 'intrus' ? clues.imposteur : ['je vois', 'classique', 'ça dépend']) })).get(id) ?? '…';
-        history.push(`**${p.name(id)}** : ${clue}`);
-        p.say(`💬 ${p.name(id)} : ${clue}`);
-      }
+    // ---------- Indices, chacun son tour (visibles dès qu'ils sont donnés)
+    for (const id of shuffle([...alive])) {
+      const endsAt = Date.now() + 45_000;
+      p.show((me) => ({
+        title: `💬 Tour ${round} · au tour de ${p.name(id)}`, endsAt,
+        blocks: [feed(p, history.slice(-14)), ...(me === id ? [T('À toi : un indice de 1 à 5 mots sur ton mot, sans le dire.', 'big'), { t: 'input', ph: 'Ton indice', button: 'Donner' }] : [{ t: 'who', id, name: p.name(id), text: 'réfléchit à son indice…' }])],
+        say: me === id ? 'À toi de donner ton indice.' : null,
+      }));
+      const clue = (await p.collect({
+        ms: 45_000, who: [id],
+        accept: (me, b) => {
+          const text = String(b.text ?? '').trim().slice(0, 60);
+          if (b.type !== 'answer' || !text) return undefined;
+          if (text.split(/\s+/).length > 5) return undefined;
+          if (word(me) && norm(text).includes(norm(word(me)))) return undefined; // on ne dit pas son mot
+          return text;
+        },
+        bot: (b) => pick(role[b] === 'civil' ? clues.civil : role[b] === 'intrus' ? clues.imposteur : ['je vois', 'classique', 'ça dépend']),
+      })).get(id);
+      history.push({ id, text: clue ?? '… (pas d’indice)' });
     }
+    // ---------- Vote
     const voters = [...alive];
-    const endsAt = Date.now() + 45_000;
-    p.show((me) => ({ title: `🗳️ Manche ${round} · qui est l’intrus ?`, endsAt, sub: `${p.g.live?.size ?? 0}/${voters.length} vote(s)`, blocks: [{ t: 'list', items: history.slice(-12) }, alive.has(me) ? voteBlock(p, voters.filter((x) => x !== me), me, { label: 'Éliminer' }) : voteBlock(p, voters, me, { lock: true })] }));
-    const votes = await p.collect({ ms: 45_000, who: voters, keep: true, accept: (me, b) => (b.type === 'vote' && voters.includes(b.id) && b.id !== me ? b.id : undefined), bot: (b) => pick(voters.filter((x) => x !== b)) });
+    const endsAt = Date.now() + 60_000;
+    p.show((me) => ({ title: `🗳️ Tour ${round} · qui est ${kind === 'undercover' ? 'infiltré' : 'l’imposteur'} ?`, endsAt, sub: `${p.g.live?.size ?? 0}/${voters.length} vote(s)`, blocks: [feed(p, history.slice(-14)), alive.has(me) ? voteBlock(p, voters.filter((x) => x !== me), me, { label: 'Éliminer' }) : voteBlock(p, voters, me, { lock: true })], say: 'Place au vote !' }));
+    const votes = await p.collect({ ms: 60_000, who: voters, keep: true, accept: (me, b) => (b.type === 'vote' && voters.includes(b.id) && b.id !== me ? b.id : undefined), bot: (b) => pick(voters.filter((x) => x !== b)) });
     const out = tally(votes);
     if (!out) {
-      p.say('⚖️ Égalité : personne n’est éliminé.');
-      if (label !== 'Undercover') return end('infiltres', 'Le village n’a pas réussi à se décider.');
+      p.say('⚖️ Égalité : personne n’est éliminé, on refait un tour.');
+      p.show({ title: `🗳️ Tour ${round}`, blocks: [T('Égalité : personne n’est éliminé. On refait un tour !', 'big')], say: 'Égalité : personne n’est éliminé. On refait un tour.' });
+      await p.sleep(4000);
       continue;
     }
     alive.delete(out);
-    const what = role[out] === 'civil' ? '🧑 civil' : role[out] === 'intrus' ? (label === 'Undercover' ? '🕶️ undercover' : '🕵️ l’imposteur') : '🎩 Mister White';
-    p.say(`⚖️ ${p.name(out)} est éliminé : ${what}`);
-    p.show({ title: `🗳️ Manche ${round}`, blocks: [T(`${p.name(out)} était ${what}`, 'big')] });
-    await p.sleep(4000);
-    if (role[out] === 'white') {
-      const endsAt2 = Date.now() + 30_000;
-      p.show((me) => ({ title: '🎩 Dernière chance', endsAt: endsAt2, blocks: [T('Mister White peut gagner en trouvant le mot des civils.', 'big'), ...(me === out ? [{ t: 'input', ph: 'Le mot des civils', button: 'Deviner' }] : [])] }));
-      const guess = (await p.collect({ ms: 30_000, who: [out], accept: (me, b) => (b.type === 'answer' ? String(b.text ?? '') : undefined), bot: () => pick([civil, other, 'aucune idée']) })).get(out) ?? '';
-      if (norm(guess) === norm(civil)) return { ...end('infiltres'), title: `🎩 Mister White trouve « ${civil} » et gagne !`, winners: [out] };
-      p.say(`🎩 Raté : « ${guess || '…'} »`);
+    history.push({ id: out, text: '❌ éliminé', note: 'out' });
+    // L'imposteur : on dit seulement s'il était l'imposteur (jamais le mot des civils). Undercover : le rôle est révélé.
+    const what = kind === 'undercover' ? `était ${roleName(out)}` : role[out] === 'intrus' ? 'était l’imposteur !' : 'n’était pas l’imposteur…';
+    p.say(`⚖️ ${p.name(out)} est éliminé : il ${what}`);
+    p.show({ title: `🗳️ Tour ${round}`, blocks: [{ t: 'who', id: out, name: p.name(out), text: what, big: true }], say: `${p.name(out)} est éliminé. Il ${what}` });
+    await p.sleep(5000);
+    if (kind === 'imposteur') {
+      if (role[out] === 'intrus') return (await lastChance(out)) ? end('infiltres', `${p.name(out)} a deviné le mot des civils en dernière chance !`) : end('civils');
+      if (alive.size <= 2) return end('infiltres', 'Il ne reste que deux joueurs.');
+      continue;
     }
-    if (label !== 'Undercover') return end(role[out] === 'intrus' ? 'civils' : 'infiltres');
-    const s = status();
-    if (s) return end(s);
+    if (role[out] === 'white' && await lastChance(out)) return { ...end('infiltres'), title: `🎩 Mister White trouve « ${civil} » et gagne !`, winners: [out] };
+    const bad = [...alive].filter((id) => role[id] !== 'civil').length;
+    if (!bad) return end('civils');
+    if (alive.size - bad <= bad) return end('infiltres');
   }
-  return end(status() ?? 'infiltres');
+  return end(kind === 'undercover' ? ([...alive].some((id) => role[id] !== 'civil') ? 'infiltres' : 'civils') : 'infiltres', `${maxRounds} tours sans démasquer ${kind === 'undercover' ? 'les infiltrés' : 'l’imposteur'}.`);
 }
 
 PARTY.imposteur = {
-  emoji: '🕵️', name: 'L’imposteur', desc: 'Un mot secret, un intrus au mot proche', min: 3, fill: 4, bots: true, prize: 60,
-  run: (p) => wordGame(p, { impostors: 1, white: false, clueRounds: 2, maxRounds: 1, label: 'L’imposteur' }),
+  emoji: '🕵️', name: 'L’imposteur', desc: 'Un mot secret, un intrus au mot proche (qui ne le sait pas)', min: 3, fill: 4, bots: true, prize: 60,
+  run: (p) => wordGame(p, { kind: 'imposteur' }),
 };
 PARTY.undercover = {
   emoji: '🕶️', name: 'Undercover', desc: 'Undercovers et Mister White, 4 joueurs min', min: 4, fill: 5, bots: true, prize: 70,
-  run: (p) => wordGame(p, { impostors: p.players.length >= 7 ? 2 : 1, white: p.players.length >= 5, clueRounds: 1, maxRounds: 6, label: 'Undercover' }),
+  run: (p) => wordGame(p, { kind: 'undercover' }),
 };
 
 // =====================================================================
