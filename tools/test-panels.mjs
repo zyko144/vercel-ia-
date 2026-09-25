@@ -24,6 +24,13 @@ const panels = await import('../src/panels/index.js');
 await import('../src/panels/extra.js');
 const { buildModal } = await import('../src/panels/ui.js');
 const { LEGACY_COMMAND_NAMES } = await import('../src/commands/definitions.js');
+// Les jeux sont dans l'arcade : pour tester le moteur des panneaux, on branche deux petites commandes
+const { addActions } = await import('../src/panels/catalog.js');
+const { field } = await import('../src/panels/ui.js');
+addActions('jeux', 'Banc d’essai', [
+  { id: 'pile', label: 'Pile ou face', emoji: '🪙', cmd: 'jeu-pile-ou-face' },
+  { id: 'des', label: 'Lancer des dés', emoji: '🎲', cmd: 'jeu-des', fields: [field.int('faces', 'Faces', { min: 2, top: 1000 }), field.int('nombre', 'Nombre de dés', { min: 1, top: 20 })] },
+]);
 
 let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };

@@ -43,16 +43,16 @@ const guild = {
 
 await check('catalogue : jeux, musique, sanctions ; rien de réservé au chef', async () => {
   const refs = aia.aiCatalog().map((a) => a.ref);
-  for (const r of ['jeux.undercover', 'jeux.loupgarou', 'sanction.mute', 'sanction.warn']) assert.ok(refs.includes(r), r);
+  for (const r of ['jeux.arcade', 'sanction.mute', 'sanction.warn', 'musique.play']) assert.ok(refs.includes(r), r);
   const ownerOnly = Object.entries(PANELS).flatMap(([k, p]) => p.groups.flatMap((g) => g.actions.filter((a) => a.owner).map((a) => `${k}.${a.id}`)));
   for (const r of ownerOnly) assert.ok(!refs.includes(r), `${r} ne doit pas être proposé`);
   assert.match(aia.actionsPrompt(), /\[\[ACTION/);
 });
 
 await check('la ligne d’action est lue puis enlevée ; une action inconnue est ignorée', async () => {
-  const r = aia.extractAction('C’est parti 🕵️\n[[ACTION jeux.undercover {}]]');
+  const r = aia.extractAction('C’est parti 🕵️\n[[ACTION jeux.arcade {}]]');
   assert.equal(r.text, 'C’est parti 🕵️');
-  assert.equal(r.action.id, 'undercover');
+  assert.equal(r.action.id, 'arcade');
   const m = aia.extractAction('Ok [[ACTION sanction.mute {"membre": "Karim", "duree": "10m"}]]');
   assert.deepEqual(m.action.values, { membre: 'Karim', duree: '10m' });
   const bad = aia.extractAction('Hop [[ACTION jeux.inventé {}]]');
@@ -75,13 +75,13 @@ const client = { user: { id: '1', username: 'AI Vercel' } };
 const user = { id: '222222222222222222', username: 'lina' };
 
 await check('l’IA répond et ajoute le bouton « Lancer »', async () => {
-  answer = 'Allez, un Undercover 🕵️\n[[ACTION jeux.undercover {}]]';
-  const payload = await askAI({ client, user, member: null, guild, channel: null, link: '', prompt: 'lance un undercover', actions: true, web: false });
-  assert.match(lastSystem, /jeux\.undercover/, 'la liste est dans le prompt');
+  answer = 'Allez, à l’arcade 🕹️\n[[ACTION jeux.arcade {}]]';
+  const payload = await askAI({ client, user, member: null, guild, channel: null, link: '', prompt: 'lance un jeu', actions: true, web: false });
+  assert.match(lastSystem, /jeux\.arcade/, 'la liste est dans le prompt');
   assert.doesNotMatch(payload.embeds[0].toJSON().description, /\[\[ACTION/);
   const button = payload.components.at(-1).toJSON().components[0];
   assert.match(button.custom_id, /^aia:/);
-  assert.match(button.label, /Undercover/);
+  assert.match(button.label, /arcade/);
   answer = 'Salut 👋';
   const plainPayload = await askAI({ client, user, member: null, guild, channel: null, link: '', prompt: 'salut', actions: true, web: false });
   assert.ok(!plainPayload.components?.some((r) => JSON.stringify(r.toJSON()).includes('aia:')));
@@ -98,10 +98,10 @@ const fakeClick = (customId, { userId = user.id, perms = 0n } = {}) => {
 await check('au clic : action lancée, fenêtre préremplie s’il manque un champ, permissions vérifiées', async () => {
   // Action sans champ obligatoire : elle part tout de suite
   let ran = null;
-  const action = findAction('jeux', 'undercover');
+  const action = findAction('jeux', 'arcade');
   const original = action.run;
   action.run = async (c, i, values) => { ran = values; };
-  const row = aia.actionRow({ key: 'jeux', id: 'undercover', label: 'Undercover', emoji: '🕵️', values: {} }, user.id);
+  const row = aia.actionRow({ key: 'jeux', id: 'arcade', label: 'Ouvrir l’arcade', emoji: '🕹️', values: {} }, user.id);
   const click = fakeClick(row.toJSON().components[0].custom_id);
   await aia.handleAiActionComponent(client, click);
   assert.deepEqual(ran, {});

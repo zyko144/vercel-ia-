@@ -47,52 +47,10 @@ export const PANELS = {
   // ===================== /jeux =====================
   jeux: {
     key: 'jeux', command: 'jeux', color: 0x3dff9a, emoji: '🎮', title: 'Jeux',
-    intro: 'Choisis un jeu : le bot ouvre la partie dans le salon des jeux, les autres rejoignent en un clic. Les victoires rapportent des pièces d’or.',
-    groups: [{
-      label: 'Jeux de groupe',
-      actions: [
-        { id: 'loupgarou', label: 'Loup-garou', emoji: '🐺', desc: 'Avec narrateur à voix haute', cmd: 'jeu-loupgarou' },
-        { id: 'imposteur', label: 'L’imposteur', emoji: '🕵️', desc: 'Un mot secret, un intrus', cmd: 'jeu-imposteur', fields: [f.choice('theme', 'Thème des mots', choicesOf(IMPOSTOR_THEMES))] },
-        { id: 'histoire', label: 'Histoire dont vous êtes les héros', emoji: '📖', desc: 'L’IA raconte, vous décidez', cmd: 'jeu-histoire', fields: [
-          f.choice('univers', 'Univers', choicesOf(STORY_THEMES)),
-          f.choice('mode', 'Mode', [{ label: 'À l’écrit (+ narration)', value: 'texte', emoji: '📝' }, { label: '100 % vocal', value: 'vocal', emoji: '🎙️' }]),
-          f.choice('longueur', 'Longueur', Object.entries(STORY_LENGTHS).map(([value, n]) => ({ label: `${value} (${n} chapitres)`, value }))),
-        ] },
-        { id: 'freestyle', label: 'Battle de freestyle', emoji: '🎤', desc: 'L’IA écoute et désigne le gagnant', cmd: 'jeu-freestyle', fields: [
-          f.user('adversaire', 'Qui tu défies', { req: true }),
-          f.choice('instru', 'Instru', choicesOf(BEAT_STYLES)),
-          f.choice('duree', 'Temps par rappeur', [{ label: '30 s', value: '30' }, { label: '45 s', value: '45' }, { label: '60 s', value: '60' }]),
-        ] },
-        { id: 'quiz', label: 'Quiz IA', emoji: '🧠', desc: 'Une question à 4 choix', cmd: 'jeu-quiz', fields: [
-          f.text('sujet', 'Sujet', { req: true, max: 200, ph: 'Histoire, Naruto, rap FR…' }),
-          f.choice('difficulte', 'Difficulté', [{ label: 'Facile', value: 'facile' }, { label: 'Moyen', value: 'moyen' }, { label: 'Difficile', value: 'difficile' }]),
-        ] },
-        { id: 'rebus', label: 'Rébus en emojis', emoji: '🧩', cmd: 'jeu-rebus', fields: [f.choice('theme', 'Thème', choicesOf(REBUS_THEMES)), f.int('manches', 'Nombre de rébus (3-20)', { min: 3, top: 20 })] },
-        { id: 'fans', label: 'Plus ou moins de fans', emoji: '📊', cmd: 'jeu-fans', fields: [f.choice('theme', 'Artistes', choicesOf(FAN_THEMES))] },
-        { id: 'fantasy', label: 'Fantasy Rap : mon équipe', emoji: '🏆', desc: 'Sans nom : voir ton équipe', cmd: 'jeu-fantasy', sub: 'equipe', fields: [1, 2, 3, 4, 5].map((i) => f.text(`rappeur${i}`, `Rappeur n°${i}`, { max: 100 })) },
-        { id: 'fantasy-top', label: 'Fantasy Rap : classement', emoji: '🥇', cmd: 'jeu-fantasy', sub: 'classement' },
-      ],
-    }, {
-      label: 'Jeux musicaux',
-      actions: [
-        { id: 'blindtest', label: 'Blind test', emoji: '🎧', desc: 'Rap FR, TikTok, années 2010…', cmd: 'jeu-blindtest' },
-        { id: 'devine', label: 'Devine (films, séries, animés…)', emoji: '🎲', cmd: 'jeu-devine' },
-        { id: 'films', label: 'Devine le film', emoji: '🎬', cmd: 'jeu-films' },
-        { id: 'disney', label: 'Devine le Disney', emoji: '🏰', cmd: 'jeu-disney' },
-        { id: 'series', label: 'Devine la série', emoji: '📺', cmd: 'jeu-series' },
-        { id: 'animes', label: 'Devine l’animé', emoji: '🍥', cmd: 'jeu-animes' },
-        { id: 'jeuxvideo', label: 'Devine le jeu vidéo', emoji: '🕹️', cmd: 'jeu-jeuxvideo' },
-        { id: 'paroles', label: 'Suite des paroles', emoji: '🎙️', cmd: 'jeu-paroles' },
-        { id: 'annee', label: 'Devine l’année', emoji: '📅', cmd: 'jeu-annee' },
-        { id: 'stop-musical', label: 'Arrêter le jeu musical', emoji: '⏹️', cmd: 'jeu-blindtest', fixed: { arreter: true } },
-        { id: 'pile', label: 'Pile ou face (sans mise)', emoji: '🪙', cmd: 'jeu-pile-ou-face' },
-        { id: 'des', label: 'Lancer des dés (sans mise)', emoji: '🎲', cmd: 'jeu-des', fields: [f.int('faces', 'Faces (défaut 6)', { min: 2, top: 1000 }), f.int('nombre', 'Nombre de dés (défaut 1)', { min: 1, top: 20 })] },
-        { id: 'choisir', label: 'Le bot choisit pour toi', emoji: '🤔', cmd: 'choisir', fields: [f.text('options', 'Les options, séparées par |', { req: true, max: 600, ph: 'Fortnite | Minecraft | Valo' })] },
-      ],
-    }],
+    intro: 'Tous les jeux sont dans l’arcade, une Activité Discord où tout le salon joue ensemble.',
+    groups: [],
   },
 
-  // ===================== /musique =====================
   musique: {
     key: 'musique', command: 'musique', color: 0xff5fd2, emoji: '🎵', title: 'Musique',
     intro: 'Lance un son, gère la file, les effets, les playlists et la radio. Le bot joue dans son salon vocal.',

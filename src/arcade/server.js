@@ -12,6 +12,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { playedGame, rewardWin } from '../features/treasury.js';
 import { WORDS } from './words.js';
+import { launchSalonGame, registerArcadeGames, soloAct, soloGold, soloView } from './games.js';
 
 const WEB = path.resolve('web/arcade');
 const MAX_BODY = 64 * 1024;
@@ -228,6 +229,9 @@ const GAMES = {
   },
 };
 
+registerArcadeGames(GAMES, { say, bump, nameOf, reward: (...args) => reward(...args) });
+const gameOver = (g) => !g || g.kind === 'fin' || g.winner || g.draw || GAMES[g.kind]?.over?.(g);
+
 function guessChat(r, me, text, secret = false) {
   const t = String(text ?? '').slice(0, 80).trim();
   if (!t) return false;
@@ -266,13 +270,14 @@ function finishDuel(r, g, winner) {
   say(r, winner ? `🏆 ${nameOf(r, winner)} gagne !` : '🤝 Égalité !', 'good');
   reward(r, winner, 40, `Arcade : ${g.kind === 'morpion' ? 'morpion' : 'puissance 4'}`, g.seats.filter(Boolean));
 }
-async function reward(r, winner, amount, label, players) {
+async function reward(r, winner, amount, label, players, { solo = false } = {}) {
   if (!r.guildId || !client) return;
   const guild = client.guilds.cache.get(r.guildId);
   if (!guild) return;
   try {
     await playedGame(r.guildId, players);
-    if (winner && players.length >= 2 && await guild.members.fetch(winner).catch(() => null)) {
+    // En solo (ou contre le bot) le gain est plus petit, et compté dans la limite de 10 gains par jour
+    if (winner && (players.length >= 2 || solo) && await guild.members.fetch(winner).catch(() => null)) {
       const won = await rewardWin(r.guildId, winner, amount, label);
       if (won) say(r, `🪙 +${won} pièces d’or pour ${nameOf(r, winner)} sur le serveur`, 'good');
       bump(r);
@@ -290,6 +295,7 @@ function stateFor(r, me, since = {}) {
     chat: r.chat.slice(-30),
     lastGame: r.lastGame,
     game: !g ? null : g.kind === 'fin' ? g : GAMES[g.kind].view(g, me),
+    solo: soloView(r.solo?.get(me)),
   };
   if (g?.kind === 'dessin') {
     const same = Number(since.epoch) === g.canvas.epoch;
@@ -309,7 +315,7 @@ function join(r, user) {
   }
 }
 
-export function act(r, me, body) {
+export async function act(r, me, body) {
   const p = r.players.get(me);
   if (!p) return { error: 'Rejoins d’abord la salle.' };
   p.seen = Date.now();
@@ -317,19 +323,31 @@ export function act(r, me, body) {
     const kind = String(body.game);
     const G = GAMES[kind];
     if (!G) return { error: 'Jeu inconnu.' };
-    if (r.game && r.game.kind !== 'fin' && !(r.game.winner || r.game.draw)) return { error: 'Une partie est déjà en cours.' };
+    if (!gameOver(r.game)) return { error: 'Une partie est déjà en cours.' };
     if (r.players.size < G.min) return { error: `Il faut au moins ${G.min} joueurs dans la salle.` };
-    r.game = G.start(r, me);
+    r.game = G.start(r, me, body);
     r.lastGame = kind;
-    say(r, `🎮 ${p.name} lance ${{ dessin: 'Dessine et devine', morpion: 'le morpion', puissance4: 'le puissance 4' }[kind]} !`);
+    say(r, `🎮 ${p.name} lance ${G.label?.(r.game) ?? { dessin: 'Dessine et devine', morpion: 'le morpion', puissance4: 'le puissance 4' }[kind]} !`);
     bump(r);
     return { ok: true };
   }
   if (body.type === 'lobby') {
-    if (r.game && r.game.kind !== 'fin' && !(r.game.winner || r.game.draw) && [...r.players.keys()][0] !== me) return { error: 'Seul l’hôte peut arrêter la partie.' };
+    if (!gameOver(r.game) && [...r.players.keys()][0] !== me) return { error: 'Seul l’hôte peut arrêter la partie.' };
     r.game = null;
     bump(r);
     return { ok: true };
+  }
+  // Jeux solo (démineur, taverne) : chacun sa partie
+  if (body.type === 'solo') {
+    const out = await soloAct(r, me, body, { say, nameOf });
+    bump(r);
+    return out;
+  }
+  // Jeux du salon : ils démarrent dans le salon Discord
+  if (body.type === 'launch') {
+    const out = await launchSalonGame(client, r, me, body);
+    if (out.ok) { say(r, `📣 ${p.name} lance ${out.name} dans le salon Discord !`, 'good'); bump(r); }
+    return out;
   }
   if (body.type === 'chat' && (!r.game || r.game.kind !== 'dessin')) {
     if (guessChat(r, me, body.text)) bump(r);
@@ -445,20 +463,20 @@ export async function handleArcadeWeb(req, res, url) {
       join(r, user);
       const since = Number(url.searchParams.get('since')) || 0;
       const opts = { epoch: url.searchParams.get('epoch'), ops: url.searchParams.get('ops') };
-      if (r.seq > since) return json(res, 200, stateFor(r, user.id, opts)), true;
+      if (r.seq > since) return json(res, 200, { ...stateFor(r, user.id, opts), gold: await soloGold(r.guildId, user.id) }), true;
       await new Promise((resolve) => {
         const done = () => { clearTimeout(timer); resolve(); };
         const timer = setTimeout(() => { r.waiters.delete(done); resolve(); }, POLL_MS);
         r.waiters.add(done);
         req.on('close', () => { r.waiters.delete(done); clearTimeout(timer); resolve(); });
       });
-      if (!res.writableEnded) json(res, 200, stateFor(r, user.id, opts));
+      if (!res.writableEnded) json(res, 200, { ...stateFor(r, user.id, opts), gold: await soloGold(r.guildId, user.id) });
       return true;
     }
     if (route === 'act' && req.method === 'POST') {
       join(r, user);
       const body = await readBody(req);
-      const out = act(r, user.id, body);
+      const out = await act(r, user.id, body);
       return json(res, out.error ? 400 : 200, out), true;
     }
     if (route === 'leave' && req.method === 'POST') {

@@ -10,7 +10,6 @@ import { field as f } from './ui.js';
 import { addNote, casierEmbed, verificationPanel } from '../features/security.js';
 import { PRESTIGE_LEVEL, claimDaily, compareEmbed, leaderboardEmbed, prestige, profileCard, shopMessage, statsEmbed } from '../features/levels.js';
 import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../features/aiExtras.js';
-import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUndercover } from '../games/soirees.js';
 import { backupsOf, createBackup, restoreConfirm, welcomeCard } from '../features/community.js';
 import { PANELS } from './catalog.js';
 import './games.js'; // groupes Duels, Taverne, Défis de /jeux
@@ -123,7 +122,7 @@ addActions('serveur', 'Trésor du navire', TREASURY_ACTIONS);
 addActions('ia', 'Demander à l’IA', [
   { id: 'memoire', label: 'Ce que l’IA sait de moi', emoji: '🧠', desc: 'Voir ou effacer ses souvenirs', run: async (client, interaction) => interaction.reply({ ...(await memoryMessage(interaction.user)), ...PRIVATE }) },
 ]);
-addActions('jeux', 'Jeux de groupe', [
+addActions('ia', 'Outils de l’IA', [
   {
     id: 'punchline', label: 'Noter une punchline', emoji: '🎤', desc: 'Le jury IA note sur 10', fields: [f.para('punchline', 'Ta punchline', { req: true, max: 800 }), f.bool('public', 'La montrer à tout le salon ?')],
     run: async (client, interaction, v) => {
@@ -152,17 +151,6 @@ addActions('pannel', 'FAQ du salon d’aide', [
 -# ${e.a.slice(0, 120)}`).join('\n').slice(0, 4000) : 'Vide : ajoute des questions, ou réponds aux membres dans le salon d’aide (en « répondre ») pour que l’IA apprenne.')], ...PRIVATE });
     },
   },
-]);
-
-// ===================== /jeux : jeux de soirée =====================
-addActions('jeux', 'Jeux de groupe', [
-  { id: 'undercover', label: 'Undercover', emoji: '🕶️', desc: 'Undercovers + Mister White, 4 joueurs min', run: (client, interaction) => startUndercover(interaction) },
-  { id: 'petitbac', label: 'Petit Bac', emoji: '📝', desc: 'Une lettre, 5 catégories, l’IA vérifie', run: (client, interaction) => startPetitBac(interaction) },
-  { id: 'actionverite', label: 'Action ou vérité', emoji: '🎲', desc: 'Défis gentils, les autres valident', run: (client, interaction) => startActionVerite(interaction) },
-  { id: 'quizserveur', label: 'Quiz du serveur', emoji: '🧭', desc: 'Des questions sur le serveur et ses membres', run: (client, interaction) => startQuizServeur(interaction) },
-]);
-addActions('jeux', 'Jeux musicaux', [
-  { id: 'pendu', label: 'Pendu musical', emoji: '🎵', desc: 'Le titre lettre par lettre, l’extrait en indice', run: (client, interaction) => startPendu(interaction) },
 ]);
 
 // ===================== /pannel : bienvenue et sauvegardes =====================

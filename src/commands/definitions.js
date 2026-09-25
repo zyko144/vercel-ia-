@@ -313,7 +313,7 @@ export const GAME_COMMAND_NAMES = new Set(gameCommands.map((c) => c.name));
 const panelCommands = [
   guildOnly(new SlashCommandBuilder().setName('sanction').setDescription('🛡️ Avertir, rendre muet, expulser, bannir, nettoyer un salon')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)),
-  guildOnly(new SlashCommandBuilder().setName('jeux').setDescription('🎮 Tous les jeux : loup-garou, imposteur, blind test, quiz…')),
+  guildOnly(new SlashCommandBuilder().setName('jeux').setDescription('🕹️ L’arcade : dessin, quiz, duels, taverne, loup-garou… en Activité Discord')),
   guildOnly(new SlashCommandBuilder().setName('pannel').setDescription('🧩 Tickets, annonces avec aperçu, construction de salons')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)),
   guildOnly(new SlashCommandBuilder().setName('musique').setDescription('🎵 Jouer, file d’attente, effets, playlists, radio')),
