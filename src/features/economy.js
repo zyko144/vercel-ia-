@@ -278,4 +278,42 @@ export async function handleShopComponent(client, interaction) {
   return undefined;
 }
 
+// ===================== Administration (tableau de bord du chef) =====================
+
+/** Vue d'ensemble d'un serveur : or en circulation, classement, effets en cours. */
+export async function economyOverview(guildId) {
+  await data();
+  const all = Object.entries(store[guildId] ?? {});
+  const now = Date.now();
+  return {
+    total: all.reduce((n, [, p]) => n + p.gold, 0),
+    holders: all.filter(([, p]) => p.gold > 0).length,
+    earned: all.reduce((n, [, p]) => n + (p.earned ?? 0), 0),
+    spent: all.reduce((n, [, p]) => n + (p.spent ?? 0), 0),
+    top: all.sort((a, b) => b[1].gold - a[1].gold).slice(0, 25).map(([userId, p]) => ({
+      userId, gold: p.gold, earned: p.earned ?? 0, spent: p.spent ?? 0,
+      effects: [p.immuneUntil > now ? 'immunite' : null, p.xpBoostUntil > now ? 'xp' : null, p.dailyBoostUntil > now ? 'quotidien' : null].filter(Boolean),
+    })),
+    items: Object.entries(ITEMS).map(([key, i]) => ({ key, name: i.name, emoji: i.emoji, price: i.price })),
+  };
+}
+/** Remet une bourse à zéro (or et effets). */
+export async function resetPurse(guildId, userId) {
+  await data();
+  const before = store[guildId]?.[userId]?.gold ?? 0;
+  if (store[guildId]) delete store[guildId][userId];
+  persist();
+  return before;
+}
+/** Offre un effet de la boutique sans le faire payer (immunité, XP ×2, récompense doublée). */
+export async function giftEffect(guildId, userId, key) {
+  await data();
+  const p = purse(guildId, userId);
+  const until = { immunite: ['immuneUntil', DAY], xp: ['xpBoostUntil', DAY], quotidien: ['dailyBoostUntil', 7 * DAY] }[key];
+  if (!until) throw new Error('Effet inconnu.');
+  p[until[0]] = Math.max(p[until[0]], Date.now()) + until[1];
+  persist();
+  return new Date(p[until[0]]);
+}
+
 export const _test = { purse: (g, u) => purse(g, u), data, CHEST };

@@ -127,7 +127,7 @@ await check('la page est servie avec des en-têtes de sécurité stricts', async
 });
 
 await check('sans session, aucune donnée ne sort', async () => {
-  for (const path of ['apercu', 'ia', 'conversations', 'jeux', 'musique', 'casino', 'journaux', 'securite']) {
+  for (const path of ['apercu', 'ia', 'conversations', 'jeux', 'musique', 'journaux', 'securite']) {
     const r = await request(`/dashboard/api/${path}`, { withCookie: false });
     assert.equal(r.status, 401, `${path} doit demander une connexion`);
   }
@@ -300,7 +300,7 @@ await check('modération : le chef est protégé, les sanctions passent avec leu
   assert.ok(secu.json.journal.some((e) => e.action === 'Modération' && /muet 10 min/.test(e.detail)), 'la sanction est au journal');
 });
 
-await check('rappels, jetons du casino et liste noire de l’IA', async () => {
+await check('rappels, pièces d’or du serveur et liste noire de l’IA', async () => {
   const cree = await post('/dashboard/api/rappels/creer', { channelId: CHANNEL, text: 'Lancer la soirée', minutes: 30 });
   assert.equal(cree.status, 200);
   const liste = await request('/dashboard/api/rappels');
@@ -308,9 +308,15 @@ await check('rappels, jetons du casino et liste noire de l’IA', async () => {
   assert.equal((await post('/dashboard/api/rappels/supprimer', { id: cree.json.id })).json.ok, true);
   assert.equal((await request('/dashboard/api/rappels')).json.reminders.length, 0);
 
-  const jetons = await post('/dashboard/api/casino/jetons', { userId: STRANGER, amount: 500 });
-  assert.equal(jetons.status, 200);
-  assert.equal((await post('/dashboard/api/casino/jetons', { userId: STRANGER, amount: 1.5 })).status, 400);
+  const or = await post('/dashboard/api/or/pieces', { guildId: GUILD, userId: STRANGER, amount: 500 });
+  assert.equal(or.status, 200);
+  assert.match(or.json.detail, /bourse 500/);
+  assert.equal((await post('/dashboard/api/or/pieces', { guildId: GUILD, userId: STRANGER, amount: 1.5 })).status, 400);
+  assert.equal((await post('/dashboard/api/or/pieces', { guildId: GUILD, userId: STRANGER, effet: 'xp' })).status, 200);
+  const tresor = await request(`/dashboard/api/or?serveur=${GUILD}`);
+  assert.equal(tresor.json.total, 500);
+  assert.deepEqual(tresor.json.top[0].effects, ['xp']);
+  assert.match((await post('/dashboard/api/or/pieces', { guildId: GUILD, userId: STRANGER, remise: true })).json.detail, /500 pièces/);
 
   const { pausedAnswer } = await import('../src/features/chat.js');
   const bloque = await post('/dashboard/api/ia/reglages', { changes: { blocked: [STRANGER] } });

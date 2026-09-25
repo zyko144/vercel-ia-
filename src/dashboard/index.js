@@ -7,7 +7,6 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events } fr
 import { config } from '../config.js';
 import { chat, webSearchAvailable } from '../ai/gemini.js';
 import { systemPrompt } from '../ai/persona.js';
-import { leaderboard } from '../casinho/economy.js';
 import { voiceStatus } from '../features/voice.js';
 import { forget, forgetAll, listConversations, memoryStats } from '../features/memory.js';
 import { imagesToday } from '../features/limits.js';
@@ -292,10 +291,6 @@ export function createDashboard(client) {
       await actions[body.action]();
       audit({ userId: session.userId, action: `Musique : ${body.action}`, detail: `${player.guild.name} · ${title}`, req });
       return json(res, 200, { ok: true });
-    },
-    'GET casino': async (req, res) => {
-      const top = await leaderboard(10).catch(() => []);
-      return json(res, 200, { enabled: Boolean(config.casinho.token), top: top.map((p) => ({ ...who(client, p.id), chips: p.chips, played: p.played ?? p.games ?? null })) });
     },
     'GET journaux': async (req, res, body, session, url) => json(res, 200, logs(url)),
     'GET securite': async (req, res, body, session) => json(res, 200, {
