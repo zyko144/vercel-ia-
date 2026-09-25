@@ -110,6 +110,12 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       }
     }
 
+    // L'arcade multijoueur d'AI Vercel (Activité Discord ou lien personnel)
+    if (url.pathname.startsWith('/arcade') || url.pathname.startsWith('/.proxy/arcade')) {
+      const { handleArcadeWeb } = await import('./arcade/server.js');
+      if (await handleArcadeWeb(req, res, url)) return undefined;
+    }
+
     // La salle de jeux cliquable du casino (pages, API, et entrée de l'Activité Discord)
     if (await handleSalleWeb(req, res, url)) return;
 

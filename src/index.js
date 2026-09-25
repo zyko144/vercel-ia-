@@ -1,4 +1,5 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
+import { setArcadeClient } from './arcade/server.js';
 import { startTreasury } from './features/treasury.js';
 import { autoInstallBotChannels } from './features/botChannels.js';
 import { setAppClient } from './dashboard/userApp.js';
@@ -56,6 +57,7 @@ client.once(Events.ClientReady, async (c) => {
   setAlertClient(c);
   setPaymentsClient(c);
   setAppClient(c);
+  setArcadeClient(c);
   console.log(`✅ Connecté en tant que ${c.user.tag} sur ${c.guilds.cache.size} serveur(s)`);
   console.log(`🧠 Chat : ${config.models.chat} (réflexion ${config.models.thinkingLevel}) · 🎨 Images : ${config.limits.imagesEnabled ? config.models.image : 'désactivées'} · 💾 Stockage : ${storageBackend}`);
 

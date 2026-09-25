@@ -27,7 +27,8 @@
     "test:ai-actions": "node tools/test-ai-actions.mjs",
     "test:app": "node tools/test-app.mjs",
     "test:treasury": "node tools/test-treasury.mjs",
-    "test:arcade": "node tools/test-arcade.mjs"
+    "test:arcade": "node tools/test-arcade.mjs",
+    "test:arcade-web": "node tools/test-arcade-web.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
