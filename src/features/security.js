@@ -1,6 +1,7 @@
 // Sécurité du serveur : anti-raid, vérification à l'arrivée, filtre de liens, anti-spam, anti-arnaque, journal,
 // casier des membres et contestation des sanctions. Chaque protection se règle par serveur
 // (tableau de bord › Mon serveur › Sécurité), et le staff (Gérer les messages) n'est jamais filtré.
+import { isImmune } from './economy.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, GuildVerificationLevel, MessageFlags, PermissionFlagsBits as P,
 } from 'discord.js';
@@ -53,7 +54,9 @@ export async function notifySanction(user, guild, { title, reason, color = 0xed4
 async function punish(message, { kind, reason, timeoutMs = 0, notice }) {
   const { guild, member, author } = message;
   await message.delete().catch(() => {});
-  if (timeoutMs && member?.moderatable) await member.timeout(timeoutMs, reason).catch(() => {});
+  // Immunité achetée à la boutique : pas d'exclusion automatique (le message est quand même supprimé)
+  const immune = isImmune(guild.id, author.id);
+  if (timeoutMs && member?.moderatable && !immune) await member.timeout(timeoutMs, reason).catch(() => {});
   await autoWarn(guild, author.id, kind, reason);
   if (notice) {
     const sent = await message.channel.send({ content: `${author} ${notice}`, allowedMentions: { users: [author.id] } }).catch(() => null);

@@ -436,3 +436,23 @@ body::after { animation-duration: 95s; animation-delay: -40s; opacity: .45; tran
   *, *::before, *::after { animation: none !important; transition: none !important; }
   body::before, body::after { display: none; }
 }
+
+/* ===================== Encore plus de vie ===================== */
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes borderflow { from { background-position: 0% 50%; } to { background-position: 200% 50%; } }
+@keyframes ripple { to { transform: scale(4); opacity: 0; } }
+@keyframes spinIn { from { transform: rotate(-90deg) scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+.page-head .pi { animation: spinIn .5s cubic-bezier(.2, .8, .2, 1) both, bob 4s ease-in-out .6s infinite; }
+.tiles, .servers, .plans { perspective: 900px; }
+.tile:hover { transform: translateY(-5px) rotateX(4deg); }
+.premium-card { background-image: linear-gradient(var(--surface), var(--surface)), linear-gradient(90deg, #8a6a2a, var(--gold), #fff1c2, var(--gold), #8a6a2a); background-origin: border-box; background-clip: padding-box, border-box; border: 1px solid transparent !important; background-size: 100% 100%, 200% 100%; animation: borderflow 6s linear infinite; }
+.btn .rip { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: rgba(255, 255, 255, .35); pointer-events: none; animation: ripple .6s ease-out forwards; }
+.banner .icon, .side .server-mini .icon { transition: transform .4s; }
+.banner:hover .icon { transform: rotate(-6deg) scale(1.06); }
+.stat b { display: inline-block; }
+.stat:hover b { animation: bob .6s ease; }
+/* Carte de niveau (aperçu) : parchemin de pirate */
+.dc .card-img.parch { background: radial-gradient(120% 90% at 50% 40%, #f1e1ba 0%, #e0c690 55%, #b98d4f 88%, #6b421d 100%); border: 0; color: #3b2412; box-shadow: inset 0 0 26px 6px rgba(70, 30, 5, .7); border-radius: 4px; }
+.dc .card-img.parch b { color: #8c1c13; text-shadow: none; letter-spacing: .12em; font-family: 'Cinzel', Georgia, serif; }
+.dc .card-img.parch small { color: #6b4a2a; }
+@media (prefers-reduced-motion: reduce) { .premium-card { animation: none; } }

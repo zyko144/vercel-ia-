@@ -1,18 +1,17 @@
-// Niveaux et XP, carte de profil, récompense du jour, boutique à jetons, rôle personnalisé et membre de la semaine.
-// - XP : 15 à 25 par message (une fois par minute), et de l'XP par minute de vocal (réglable).
+// Niveaux et XP, carte de profil (parchemin de pirate), récompense du jour et membre de la semaine.
+// - XP : 15 à 25 par message (une fois par minute), et de l'XP par minute de vocal (réglable), doublée si achetée.
+// - Chaque niveau rapporte 200 pièces d'or (voir economy.js). Mention du membre seulement tous les 5 niveaux.
 // - Chaque palier peut donner un rôle (tableau de bord › Mon serveur › Niveaux).
-// - Les jetons sont ceux du casino (même banque) : récompense du jour, boutique, rôle personnalisé.
+// - Remise à zéro de tout le monde avec la version « pièces d'or » : nouvelle clé de stockage (niveaux-v2).
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits as P } from 'discord.js';
-import { SANS } from '../casinho/render/engine.js';
-import { balance, grant } from '../casinho/economy.js';
+import { SANS, SERIF } from '../casinho/render/engine.js';
+import { LEVEL_REWARD, addGold, dailyMultiplier, goldOf, richest, xpMultiplier } from './economy.js';
 import { load, save } from '../storage.js';
-import { buildModal, field as f, readModal } from '../panels/ui.js';
-import { cfg, parseLevelRoles, parseShopItems, setInternal } from './guildConfig.js';
-import { COLORS } from './tickets.js';
+import { cfg, parseLevelRoles, setInternal } from './guildConfig.js';
 import { weekOf } from './weekly.js';
 
-const KEY = 'niveaux';
-const PRIVATE = { flags: MessageFlags.Ephemeral };
+const KEY = 'niveaux-v2';
+export { shopMessage, isShopComponent, handleShopComponent } from './economy.js';
 const MSG_COOLDOWN = 60_000;
 const DAY = 86_400_000;
 const TZ = 'Europe/Paris';
@@ -55,25 +54,30 @@ async function addXp(guild, member, amount, where) {
   if (!member) return;
   const m = me(guild.id, member.id);
   const before = levelFromXp(m.xp).level;
-  m.xp += amount;
+  m.xp += amount * xpMultiplier(guild.id, member.id);
   const after = levelFromXp(m.xp).level;
   m.level = after;
   dirty = true;
-  if (after > before) await levelUp(guild, member, after, where);
+  if (after > before) await levelUp(guild, member, after, where, after - before);
 }
 
-async function levelUp(guild, member, level, where) {
+async function levelUp(guild, member, level, where, gained = 1) {
+  const reward = LEVEL_REWARD * gained;
+  const gold = await addGold(guild.id, member.id, reward);
   const rewards = parseLevelRoles(cfg(guild.id, 'levels.roles'));
   const earned = rewards.filter((r) => r.level <= level).map((r) => r.roleId).filter((id) => guild.roles.cache.has(id) && !member.roles.cache.has(id));
   if (earned.length) await member.roles.add(earned, `Niveau ${level}`).catch(() => {});
   const channelId = cfg(guild.id, 'levels.channelId');
   const channel = (channelId && guild.channels.cache.get(channelId)) || where;
   if (!channel?.isTextBased?.()) return;
-  const card = await profileCard(guild, member.user, { levelUp: level }).catch(() => null);
+  // Mention (notification) seulement tous les 5 niveaux ; sinon le nom, sans ping
+  const every = cfg(guild.id, 'levels.pingEvery') || 5;
+  const ping = level % every === 0;
+  const card = await profileCard(guild, member.user, { levelUp: level, reward }).catch(() => null);
   await channel.send({
-    content: `🎉 ${member} passe **niveau ${level}** !${earned.length ? ` Nouveau rôle : ${earned.map((id) => `<@&${id}>`).join(', ')}` : ''}`,
+    content: `${ping ? '🏴‍☠️🎉' : '🎉'} ${ping ? `${member}` : `**${member.displayName ?? member.user?.username}**`} passe **niveau ${level}** ! **+🪙 ${reward.toLocaleString('fr-FR')} pièces d’or** (bourse : ${gold.toLocaleString('fr-FR')})${earned.length ? ` · nouveau rôle : ${earned.map((id) => `<@&${id}>`).join(', ')}` : ''}`,
     files: card ? [card] : [],
-    allowedMentions: { users: [member.id] },
+    allowedMentions: { users: ping ? [member.id] : [], roles: [] },
   }).catch(() => {});
 }
 
@@ -124,17 +128,22 @@ async function rankOf(guildId, userId) {
   return list.findIndex(([id]) => id === userId) + 1 || list.length + 1;
 }
 
-export async function profileCard(guild, user, { levelUp = null } = {}) {
+// Bord déchiré du parchemin (toujours le même dessin)
+const TORN = 'M0,11 L25,13 L50,19 L75,11 L100,12 L125,13 L150,7 L175,12 L200,14 L225,17 L250,6 L275,9 L300,5 L325,17 L350,15 L375,5 L400,20 L425,19 L450,14 L475,14 L500,7 L525,4 L550,12 L575,5 L600,7 L625,8 L650,4 L675,11 L700,11 L725,17 L750,12 L775,14 L800,12 L825,15 L850,11 L875,8 L900,20 L925,20 L950,17 L975,15 L1000,9 L992,28 L991,55 L995,82 L984,110 L990,138 L982,165 L990,192 L981,220 L982,248 L996,275 L993,302 L981,330 L988,358 L980,385 L990,412 L1000,435 L975,426 L950,424 L925,432 L900,435 L875,431 L850,421 L825,424 L800,434 L775,432 L750,434 L725,435 L700,423 L675,433 L650,427 L625,429 L600,433 L575,424 L550,434 L525,426 L500,434 L475,429 L450,433 L425,432 L400,420 L375,423 L350,431 L325,422 L300,433 L275,430 L250,422 L225,426 L200,434 L175,420 L150,433 L125,432 L100,424 L75,431 L50,431 L25,435 L0,435 L13,412 L8,385 L14,358 L10,330 L11,302 L19,275 L12,248 L13,220 L18,192 L7,165 L6,138 L19,110 L17,82 L8,55 L7,28 Z';
+
+/** Carte de profil ou de niveau : un parchemin de pirate déchiré et brûlé sur les bords. */
+export async function profileCard(guild, user, { levelUp = null, reward = null } = {}) {
   await data();
   const m = me(guild.id, user.id);
   const { level, into, need } = levelFromXp(m.xp);
   const rank = await rankOf(guild.id, user.id);
-  const chips = await balance(user.id).catch(() => 0);
+  const gold = await goldOf(guild.id, user.id).catch(() => 0);
   const avatar = await avatarData(user);
   const member = guild.members.cache.get(user.id);
-  const name = esc((member?.displayName ?? user.username).slice(0, 22));
-  const color = levelUp ? '#3dff9a' : '#5ff0ff';
+  const name = esc((member?.displayName ?? user.username).slice(0, 24));
   const pct = Math.max(0.02, Math.min(1, into / need));
+  const every = cfg(guild.id, 'levels.pingEvery') || 5;
+  const nextMilestone = Math.ceil((level + 1) / every) * every;
   const badges = [
     // Pas d'emoji dans l'image : les polices du serveur ne les dessinent pas
     m.messages >= 1000 ? 'BAVARD · 1000 MESSAGES' : m.messages >= 100 ? '100 MESSAGES' : null,
@@ -142,31 +151,49 @@ export async function profileCard(guild, user, { levelUp = null } = {}) {
     m.streak >= 7 ? `SÉRIE DE ${m.streak} JOURS` : null,
     m.weekWins ? `${m.weekWins}× MEMBRE DE LA SEMAINE` : null,
   ].filter(Boolean).slice(0, 3);
-  const W = 800;
-  const H = 260;
+  const W = 1000;
+  const H = 440;
+  const ink = '#3b2412';
+  const red = '#8c1c13';
+  const stat = (x, label, value) => `<text x="${x}" y="330" font-size="15" letter-spacing="2" fill="#6b4a2a">${label}</text><text x="${x}" y="362" font-family="${SERIF}" font-size="28" fill="${ink}">${value}</text>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <radialGradient id="bg" cx="25%" cy="30%" r="95%"><stop offset="0" stop-color="#1b1026"/><stop offset="0.6" stop-color="#0b0812"/><stop offset="1" stop-color="#050408"/></radialGradient>
-    <filter id="glow" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <clipPath id="round"><circle cx="130" cy="130" r="78"/></clipPath>
-    <linearGradient id="bar" x1="0" x2="1"><stop offset="0" stop-color="${color}"/><stop offset="1" stop-color="#ff5fd2"/></linearGradient>
-    <pattern id="grid" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M26 0H0V26" fill="none" stroke="${color}" stroke-opacity="0.06"/></pattern>
+    <radialGradient id="paper" cx="45%" cy="40%" r="75%"><stop offset="0" stop-color="#f3e4bf"/><stop offset="0.55" stop-color="#e2c992"/><stop offset="0.85" stop-color="#b98d4f"/><stop offset="1" stop-color="#6e4520"/></radialGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.22  0 0 0 0 0.1  0 0 0 0.16 0"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+    <filter id="burn" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.55"/></filter>
+    <clipPath id="torn"><path d="${TORN}"/></clipPath>
+    <clipPath id="round"><circle cx="165" cy="175" r="98"/></clipPath>
+    <linearGradient id="bar" x1="0" x2="1"><stop offset="0" stop-color="#8c5a1e"/><stop offset="1" stop-color="#d9a441"/></linearGradient>
   </defs>
-  <rect width="${W}" height="${H}" rx="24" fill="url(#bg)"/>
-  <rect width="${W}" height="${H}" rx="24" fill="url(#grid)"/>
-  <rect x="6" y="6" width="${W - 12}" height="${H - 12}" rx="20" fill="none" stroke="${color}" stroke-width="2.5" filter="url(#glow)" opacity="0.9"/>
-  <circle cx="130" cy="130" r="84" fill="none" stroke="${color}" stroke-width="4" filter="url(#glow)"/>
-  ${avatar ? `<image href="${avatar}" x="52" y="52" width="156" height="156" clip-path="url(#round)" preserveAspectRatio="xMidYMid slice"/>` : `<circle cx="130" cy="130" r="78" fill="#241a33"/>`}
+  <g filter="url(#shadow)"><path d="${TORN}" fill="url(#paper)"/></g>
+  <g clip-path="url(#torn)">
+    <rect width="${W}" height="${H}" filter="url(#grain)" fill="#000"/>
+    <path d="${TORN}" fill="none" stroke="#2a1606" stroke-width="26" stroke-opacity="0.55" filter="url(#burn)"/>
+    <path d="${TORN}" fill="none" stroke="#120802" stroke-width="7" stroke-opacity="0.8" filter="url(#burn)"/>
+  </g>
+  <circle cx="165" cy="175" r="108" fill="none" stroke="${ink}" stroke-width="4" stroke-dasharray="10 6"/>
+  <circle cx="165" cy="175" r="100" fill="#c9a86a"/>
+  ${avatar ? `<image href="${avatar}" x="67" y="77" width="196" height="196" clip-path="url(#round)" preserveAspectRatio="xMidYMid slice"/>` : ''}
   <g font-family="${SANS}" font-weight="700">
-    <text x="245" y="${levelUp ? 70 : 78}" font-size="34" fill="#ffffff">${name}</text>
-    ${levelUp ? `<text x="245" y="104" font-size="20" fill="${color}" filter="url(#glow)">NIVEAU ${level} ATTEINT !</text>` : ''}
-    <text x="${W - 40}" y="70" font-size="18" fill="#a9b0c0" text-anchor="end">RANG <tspan font-size="34" fill="${color}">#${rank}</tspan></text>
-    <text x="${W - 40}" y="112" font-size="18" fill="#a9b0c0" text-anchor="end">NIVEAU <tspan font-size="34" fill="#ff5fd2">${level}</tspan></text>
-    <rect x="245" y="140" width="${W - 285}" height="26" rx="13" fill="#1d1628" stroke="#2f2540"/>
-    <rect x="245" y="140" width="${Math.round((W - 285) * pct)}" height="26" rx="13" fill="url(#bar)" filter="url(#glow)"/>
-    <text x="${W - 48}" y="159" font-size="15" fill="#ffffff" text-anchor="end">${into.toLocaleString('fr-FR')} / ${need.toLocaleString('fr-FR')} XP</text>
-    <text x="245" y="205" font-size="16" fill="#cfd3e0">MESSAGES <tspan fill="#ffffff">${m.messages.toLocaleString('fr-FR')}</tspan>   ·   VOCAL <tspan fill="#ffffff">${Math.round(m.voiceMin / 60)} h</tspan>   ·   JETONS <tspan fill="#ffffff">${chips.toLocaleString('fr-FR')}</tspan></text>
-    <text x="245" y="235" font-size="13" letter-spacing="1.5" fill="${color}">${esc(badges.join('   ·   '))}</text>
+    <text x="300" y="${levelUp ? 92 : 100}" font-family="${SERIF}" font-size="${levelUp ? 26 : 22}" letter-spacing="3" fill="${levelUp ? red : '#6b4a2a'}">${levelUp ? `NIVEAU ${level} ATTEINT !` : 'CARNET DE BORD'}</text>
+    <text x="300" y="${levelUp ? 150 : 158}" font-family="${SERIF}" font-size="48" fill="${ink}">${name}</text>
+    ${reward ? `<text x="300" y="186" font-size="20" fill="${red}">+ ${reward.toLocaleString('fr-FR')} PIÈCES D’OR</text>` : ''}
+    <text x="${W - 60}" y="96" font-size="17" letter-spacing="2" fill="#6b4a2a" text-anchor="end">RANG</text>
+    <text x="${W - 60}" y="146" font-family="${SERIF}" font-size="52" fill="${red}" text-anchor="end">#${rank}</text>
+    <text x="${W - 190}" y="96" font-size="17" letter-spacing="2" fill="#6b4a2a" text-anchor="end">NIVEAU</text>
+    <text x="${W - 190}" y="146" font-family="${SERIF}" font-size="52" fill="${ink}" text-anchor="end">${level}</text>
+    <rect x="300" y="214" width="${W - 360}" height="30" rx="15" fill="#a88452" fill-opacity="0.45" stroke="${ink}" stroke-opacity="0.5"/>
+    <rect x="300" y="214" width="${Math.round((W - 360) * pct)}" height="30" rx="15" fill="url(#bar)"/>
+    <text x="${W - 72}" y="235" font-size="16" fill="${ink}" text-anchor="end">${into.toLocaleString('fr-FR')} / ${need.toLocaleString('fr-FR')} XP</text>
+    <text x="300" y="274" font-size="15" fill="#6b4a2a">PROCHAIN PALIER : NIVEAU ${nextMilestone} · CHAQUE NIVEAU = ${LEVEL_REWARD} PIÈCES</text>
+    <line x1="60" y1="300" x2="${W - 60}" y2="300" stroke="${ink}" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="3 7"/>
+    ${stat(70, 'PIÈCES D’OR', gold.toLocaleString('fr-FR'))}
+    ${stat(290, 'MESSAGES', m.messages.toLocaleString('fr-FR'))}
+    ${stat(490, 'VOCAL', `${Math.round(m.voiceMin / 60)} h`)}
+    ${stat(650, 'SÉRIE', `${m.streak} j`)}
+    ${stat(800, 'XP TOTALE', m.xp.toLocaleString('fr-FR'))}
+    <text x="70" y="404" font-size="14" letter-spacing="2" fill="${red}">${esc(badges.join('   ·   ') || 'EN ROUTE POUR LE TRÉSOR')}</text>
   </g>
 </svg>`;
   const { default: sharp } = await import('sharp');
@@ -187,8 +214,11 @@ export async function leaderboardEmbed(guild) {
   await data();
   const list = Object.entries(store[guild.id] ?? {}).sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);
   const medals = ['🥇', '🥈', '🥉'];
-  return new EmbedBuilder().setColor(0x5ff0ff).setTitle(`📈 Classement des niveaux · ${guild.name}`)
+  const rich = await richest(guild.id, 5).catch(() => []);
+  const embed = new EmbedBuilder().setColor(0xd9a441).setTitle(`🏴‍☠️ Classement de l’équipage · ${guild.name}`)
     .setDescription(list.length ? list.map(([id, m], i) => `${medals[i] ?? `**${i + 1}.**`} <@${id}> · niveau **${levelFromXp(m.xp).level}** · ${m.xp.toLocaleString('fr-FR')} XP`).join('\n') : 'Personne n’a encore d’XP : écrivez, parlez en vocal !');
+  if (rich.some((r) => r.gold > 0)) embed.addFields({ name: '🪙 Les plus riches', value: rich.filter((r) => r.gold > 0).map((r, i) => `${medals[i] ?? `**${i + 1}.**`} <@${r.userId}> · 🪙 ${r.gold.toLocaleString('fr-FR')}`).join('\n') });
+  return embed;
 }
 
 // ===================== Récompense du jour =====================
@@ -202,105 +232,10 @@ export async function claimDaily(guildId, userId) {
   if (m.dailyAt && dayOf(m.dailyAt) === dayOf(now)) return { ok: false };
   m.streak = m.dailyAt && dayOf(m.dailyAt) === dayOf(now - DAY) ? m.streak + 1 : 1;
   m.dailyAt = now;
-  const amount = cfg(guildId, 'daily.amount') + Math.min(7, m.streak) * cfg(guildId, 'daily.streak');
-  const total = await grant(userId, amount);
+  const amount = (cfg(guildId, 'daily.amount') + Math.min(7, m.streak) * cfg(guildId, 'daily.streak')) * dailyMultiplier(guildId, userId);
+  const total = await addGold(guildId, userId, amount);
   dirty = true;
   return { ok: true, amount, streak: m.streak, balance: total };
-}
-
-// ===================== Boutique =====================
-
-export async function shopMessage(guild, userId) {
-  const items = parseShopItems(cfg(guild.id, 'shop.items')).filter((i) => guild.roles.cache.has(i.roleId));
-  const chips = await balance(userId).catch(() => 0);
-  const custom = cfg(guild.id, 'shop.customRolePrice');
-  const embed = new EmbedBuilder().setColor(0xffc94d).setTitle('🛒 Boutique du serveur')
-    .setDescription([
-      `Ton solde : **🪙 ${chips.toLocaleString('fr-FR')}**`,
-      '',
-      items.length ? items.map((i) => `**${i.name}** · <@&${i.roleId}> · 🪙 ${i.price.toLocaleString('fr-FR')}`).join('\n') : '_Aucun article pour l’instant (tableau de bord › Mon serveur › Boutique)._',
-      custom ? `\n🎨 **Rôle personnalisé** (ton nom, ta couleur, validé par le staff) · 🪙 ${custom.toLocaleString('fr-FR')}` : null,
-    ].filter((x) => x !== null).join('\n'));
-  const rows = [];
-  if (items.length) {
-    const { StringSelectMenuBuilder } = await import('discord.js');
-    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('sh:buy').setPlaceholder('Acheter un article')
-      .addOptions(items.slice(0, 25).map((i) => ({ label: i.name.slice(0, 100), value: i.id, description: `${i.price} jetons` })))));
-  }
-  if (custom) rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('sh:custom').setLabel('Demander un rôle personnalisé').setEmoji('🎨').setStyle(ButtonStyle.Primary)));
-  return { embeds: [embed], components: rows };
-}
-
-const CUSTOM_FIELDS = () => [
-  f.text('nom', 'Nom du rôle', { req: true, max: 40, ph: 'Ex : 👑 Le Boss' }),
-  f.choice('couleur', 'Couleur', Object.entries(COLORS).map(([value, c]) => ({ label: c.label, value, emoji: c.emoji }))),
-  f.text('hex', 'Ou une couleur précise (#RRGGBB)', { max: 7, ph: '#ff5fd2' }),
-];
-
-export const isShopComponent = (interaction) => /^sh:/.test(interaction.customId ?? '');
-
-export async function handleShopComponent(client, interaction) {
-  const [, what, ref] = interaction.customId.split(':');
-  const guild = interaction.guild;
-  if (what === 'buy') {
-    const item = parseShopItems(cfg(guild.id, 'shop.items')).find((i) => i.id === interaction.values[0]);
-    if (!item || !guild.roles.cache.has(item.roleId)) return interaction.reply({ content: '❌ Cet article n’existe plus.', ...PRIVATE });
-    if (interaction.member.roles.cache.has(item.roleId)) return interaction.reply({ content: '✅ Tu l’as déjà.', ...PRIVATE });
-    if ((await balance(interaction.user.id)) < item.price) return interaction.reply({ content: `❌ Il te faut 🪙 ${item.price.toLocaleString('fr-FR')}.`, ...PRIVATE });
-    const ok = await interaction.member.roles.add(item.roleId, `Boutique : ${item.name}`).then(() => true, () => false);
-    if (!ok) return interaction.reply({ content: '❌ Je ne peux pas donner ce rôle (il est au-dessus du mien).', ...PRIVATE });
-    const left = await grant(interaction.user.id, -item.price);
-    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x3dff9a).setDescription(`✅ Acheté : **${item.name}** (<@&${item.roleId}>). Il te reste 🪙 ${left.toLocaleString('fr-FR')}.`)], ...PRIVATE });
-  }
-  if (what === 'custom') return interaction.showModal(buildModal('sh:customsend', '🎨 Mon rôle personnalisé', CUSTOM_FIELDS()));
-  if (what === 'customsend') {
-    const { values, error } = await readModal(interaction, CUSTOM_FIELDS());
-    if (error) return interaction.reply({ content: `❌ ${error}`, ...PRIVATE });
-    const price = cfg(guild.id, 'shop.customRolePrice');
-    const hex = /^#?[0-9a-f]{6}$/i.test(values.hex ?? '') ? parseInt(values.hex.replace('#', ''), 16) : COLORS[values.couleur]?.value ?? COLORS.violet.value;
-    const channel = guild.channels.cache.get(cfg(guild.id, 'shop.requestsChannelId') ?? '');
-    if (!channel?.isTextBased?.()) return interaction.reply({ content: '❌ Le salon des demandes n’est pas réglé (tableau de bord › Mon serveur › Boutique).', ...PRIVATE });
-    if ((await balance(interaction.user.id)) < price) return interaction.reply({ content: `❌ Il te faut 🪙 ${price.toLocaleString('fr-FR')}.`, ...PRIVATE });
-    await grant(interaction.user.id, -price); // remboursé si le staff refuse
-    const id = Math.random().toString(36).slice(2, 10);
-    const all = (await load('demandes-roles', {}).catch(() => ({}))) ?? {};
-    all[id] = { guildId: guild.id, userId: interaction.user.id, name: values.nom, color: hex, price, at: Date.now() };
-    save('demandes-roles', all);
-    await channel.send({
-      embeds: [new EmbedBuilder().setColor(hex).setTitle('🎨 Demande de rôle personnalisé')
-        .setDescription(`${interaction.user} veut le rôle **${values.nom}**`)
-        .addFields({ name: 'Couleur', value: `#${hex.toString(16).padStart(6, '0')} (couleur de cet embed)`, inline: true }, { name: 'Payé', value: `🪙 ${price.toLocaleString('fr-FR')}`, inline: true })
-        .setThumbnail(interaction.user.displayAvatarURL({ size: 64 }))],
-      components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`sh:accept:${id}`).setLabel('Accepter').setEmoji('✅').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`sh:refuse:${id}`).setLabel('Refuser (remboursé)').setEmoji('✖️').setStyle(ButtonStyle.Danger),
-      )],
-      allowedMentions: { parse: [] },
-    });
-    return interaction.reply({ embeds: [new EmbedBuilder().setColor(hex).setDescription(`📨 Demande envoyée au staff : **${values.nom}**. Tu seras prévenu en MP (remboursé si c’est refusé).`)], ...PRIVATE });
-  }
-  if (what === 'accept' || what === 'refuse') {
-    if (!interaction.memberPermissions?.has(P.ManageRoles)) return interaction.reply({ content: '🔒 Il faut pouvoir gérer les rôles.', ...PRIVATE });
-    const all = (await load('demandes-roles', {}).catch(() => ({}))) ?? {};
-    const req = all[ref];
-    if (!req) return interaction.reply({ content: 'Cette demande a déjà été traitée.', ...PRIVATE });
-    delete all[ref];
-    save('demandes-roles', all);
-    const user = await client.users.fetch(req.userId).catch(() => null);
-    if (what === 'refuse') {
-      await grant(req.userId, req.price);
-      await user?.send(`✖️ Ta demande de rôle **${req.name}** sur **${guild.name}** a été refusée. Tes 🪙 ${req.price.toLocaleString('fr-FR')} jetons te sont rendus.`).catch(() => {});
-      return interaction.update({ embeds: [EmbedBuilder.from(interaction.message.embeds[0]).setFooter({ text: `Refusé par ${interaction.user.username} · remboursé` })], components: [] });
-    }
-    const me = guild.members.me;
-    const role = await guild.roles.create({ name: req.name, color: req.color, position: Math.max(1, me.roles.highest.position - 1), reason: `Rôle personnalisé accepté par ${interaction.user.username}` }).catch(() => null);
-    if (!role) return interaction.reply({ content: '❌ Impossible de créer le rôle (permission « Gérer les rôles » ?).', ...PRIVATE });
-    const member = await guild.members.fetch(req.userId).catch(() => null);
-    await member?.roles.add(role).catch(() => {});
-    await user?.send(`✅ Ton rôle **${req.name}** sur **${guild.name}** est accepté et t’a été donné 🎉`).catch(() => {});
-    return interaction.update({ embeds: [EmbedBuilder.from(interaction.message.embeds[0]).setFooter({ text: `Accepté par ${interaction.user.username}` })], components: [] });
-  }
-  return undefined;
 }
 
 // ===================== Membre de la semaine =====================

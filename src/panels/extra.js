@@ -68,7 +68,7 @@ addActions('pannel', 'Créer', [
 // ===================== /serveur : niveaux, récompense du jour, boutique =====================
 addActions('serveur', 'Niveaux et boutique', [
   {
-    id: 'profil', label: 'Carte de profil', emoji: '🪪', desc: 'Niveau, rang, XP, jetons, badges', fields: [f.user('membre', 'Membre (vide = toi)')],
+    id: 'profil', label: 'Carte de profil', emoji: '🪪', desc: 'Niveau, rang, XP, pièces d’or, badges', fields: [f.user('membre', 'Membre (vide = toi)')],
     run: async (client, interaction, v) => {
       await interaction.deferReply(PRIVATE);
       const card = await profileCard(interaction.guild, v.membre?.user ?? interaction.user);
@@ -77,17 +77,17 @@ addActions('serveur', 'Niveaux et boutique', [
   },
   { id: 'classement', label: 'Classement des niveaux', emoji: '📈', run: async (client, interaction) => interaction.reply({ embeds: [await leaderboardEmbed(interaction.guild)], ...PRIVATE }) },
   {
-    id: 'daily', label: 'Récompense du jour', emoji: '🎁', desc: 'Des jetons chaque jour, plus si tu enchaînes',
+    id: 'daily', label: 'Récompense du jour', emoji: '🎁', desc: 'Des pièces d’or chaque jour, plus si tu enchaînes',
     run: async (client, interaction) => {
       const r = await claimDaily(interaction.guildId, interaction.user.id);
       const embed = new EmbedBuilder().setColor(r.ok ? 0x3dff9a : 0xffb020).setDescription(r.ok
-        ? `🎁 **+${r.amount.toLocaleString('fr-FR')} jetons** · série de **${r.streak} jour(s)** 🔥
-Solde : 🪙 ${r.balance.toLocaleString('fr-FR')}`
+        ? `🎁 **+🪙 ${r.amount.toLocaleString('fr-FR')} pièces d’or** · série de **${r.streak} jour(s)** 🔥
+Bourse : 🪙 ${r.balance.toLocaleString('fr-FR')}`
         : '⏳ Déjà prise aujourd’hui : reviens après minuit pour garder ta série.');
       return interaction.reply({ embeds: [embed], ...PRIVATE });
     },
   },
-  { id: 'boutique', label: 'Boutique', emoji: '🛒', desc: 'Rôles à acheter, rôle personnalisé', run: async (client, interaction) => interaction.reply({ ...(await shopMessage(interaction.guild, interaction.user.id)), ...PRIVATE }) },
+  { id: 'boutique', label: 'Boutique du capitaine', emoji: '🏴‍☠️', desc: 'Immunité, XP ×2, coffres, rôle perso…', run: async (client, interaction) => interaction.reply({ ...(await shopMessage(interaction.guild, interaction.user.id)), ...PRIVATE }) },
 ]);
 
 // ===================== IA : mémoire, punchline, FAQ =====================

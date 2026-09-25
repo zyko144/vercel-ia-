@@ -175,6 +175,28 @@ est simplement ignoré : tu peux supprimer ce bot dans le portail Discord et ret
 
 ---
 
+## 7 ter. L'économie pirate 🏴‍☠️ (pièces d'or)
+
+Une bourse de **pièces d'or 🪙 par serveur**, séparée des jetons du casino. Tout le monde a été **remis à zéro**
+(niveaux et pièces) avec cette version.
+
+- **Gagner (lentement)** : **200 pièces par niveau** (les niveaux sont de plus en plus longs), la récompense du jour
+  (100 + 15 par jour de série, 7 jours max), les dons d'autres membres (taxés 5 %).
+- **Le comptoir du capitaine** (`/serveur` › Boutique du capitaine) — pas de rôles à acheter, sauf le rôle perso :
+  | Article | Prix |
+  |---|---|
+  | 🛡️ Immunité 24 h aux exclusions automatiques (anti-spam, liens, arnaques ; le staff peut toujours sanctionner) | 6 000 |
+  | ⚡ XP doublée 24 h | 2 500 |
+  | 🎁 Récompense du jour doublée 7 jours | 3 000 |
+  | 🧽 Effacer son dernier avertissement (1 fois par semaine) | 5 000 |
+  | ✏️ Changer de pseudo | 1 000 |
+  | 📦 Coffre au trésor (200 à 5 000 au hasard, 3 par jour, un peu perdant en moyenne) | 750 |
+  | 🎨 Rôle personnalisé (validé par le staff, remboursé si refusé) | 20 000 |
+- **Niveaux** : carte en parchemin déchiré et brûlé (1000 × 440, avec pièces, messages, vocal, série, palier suivant).
+  Le membre n'est **mentionné que tous les 5 niveaux** (réglable dans le tableau de bord).
+
+---
+
 ## 8. Le site vitrine 🌐
 
 `site/index.html`, servi par le bot lui-même à son adresse principale (`https://vercel-ia.onrender.com/`).
