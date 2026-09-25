@@ -109,7 +109,9 @@ async function levelUp(guild, member, level, where, gained = 1) {
   const earned = rewards.filter((r) => r.level <= level).map((r) => r.roleId).filter((id) => guild.roles.cache.has(id) && !member.roles.cache.has(id));
   if (earned.length) await member.roles.add(earned, `Niveau ${level}`).catch(() => {});
   const channelId = cfg(guild.id, 'levels.channelId');
-  const channel = (channelId && guild.channels.cache.get(channelId)) || where;
+  // Sans réglage : le salon « niveau(x) » du serveur s'il existe, sinon celui où le membre vient d'écrire.
+  const levelRoom = guild.channels.cache.find((c) => c.isTextBased?.() && !c.isThread?.() && /niveau|level/i.test(c.name));
+  const channel = (channelId && guild.channels.cache.get(channelId)) || levelRoom || where;
   if (!channel?.isTextBased?.()) return;
   // Mention (notification) seulement tous les 5 niveaux ; sinon le nom, sans ping
   const every = cfg(guild.id, 'levels.pingEvery') || 5;
