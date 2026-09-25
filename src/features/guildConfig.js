@@ -52,7 +52,7 @@ export const SCHEMA = [
 
   // ---------- Niveaux ----------
   { key: 'levels.enabled', section: 'niveaux', type: 'bool', label: 'Niveaux et XP', def: true },
-  { key: 'levels.channelId', section: 'niveaux', type: 'channel', label: 'Salon des montées de niveau', help: 'Vide : dans le salon où le membre vient d’écrire.' },
+  { key: 'levels.channelId', section: 'niveaux', type: 'channel', label: 'Salon des montées de niveau', help: 'Vide : le salon « niveaux » s’il existe, sinon celui où le membre vient d’écrire.' },
   { key: 'levels.voiceXp', section: 'niveaux', type: 'int', min: 0, max: 50, label: 'XP par minute de vocal', def: 8 },
   { key: 'levels.roles', section: 'niveaux', type: 'list', label: 'Rôles par niveau', help: 'Une ligne par palier : « 5 = @Rôle » ou « 5 = identifiant du rôle ».' },
   { key: 'levels.noXpChannels', section: 'niveaux', type: 'list', label: 'Salons sans XP', help: 'Un salon (ou une catégorie) par ligne : #salon ou son identifiant. Utile pour le spam, les commandes, le salon mèmes.' },
