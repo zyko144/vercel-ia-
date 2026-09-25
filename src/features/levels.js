@@ -7,6 +7,7 @@ import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedB
 import { SANS, SERIF } from '../casinho/render/engine.js';
 import { LEVEL_REWARD, THEMES, addGold, cosmeticsOf, data as economyData, dailyMultiplier, giveItem, goldOf, purse, richest, xpMultiplier } from './economy.js';
 import { load, save } from '../storage.js';
+import { config } from '../config.js';
 import { cfg, parseLevelRoles, setInternal } from './guildConfig.js';
 import { weekOf } from './weekly.js';
 import { questProgress } from './treasury.js';
@@ -111,7 +112,8 @@ async function levelUp(guild, member, level, where, gained = 1) {
   const channelId = cfg(guild.id, 'levels.channelId');
   // Sans réglage : le salon « niveau(x) » du serveur s'il existe, sinon celui où le membre vient d'écrire.
   const levelRoom = guild.channels.cache.find((c) => c.isTextBased?.() && !c.isThread?.() && /niveau|level/i.test(c.name));
-  const channel = (channelId && guild.channels.cache.get(channelId)) || levelRoom || where;
+  const forced = config.levelsChannelId && guild.channels.cache.get(config.levelsChannelId);
+  const channel = forced || (channelId && guild.channels.cache.get(channelId)) || levelRoom || where;
   if (!channel?.isTextBased?.()) return;
   // Mention (notification) seulement tous les 5 niveaux ; sinon le nom, sans ping
   const every = cfg(guild.id, 'levels.pingEvery') || 5;
