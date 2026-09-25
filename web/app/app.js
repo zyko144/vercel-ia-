@@ -127,7 +127,7 @@
       perks: ['Protège les membres du staff des insultes en vocal', 'Tes propres mots interdits en vocal', 'Avertissement, puis exclusion automatique au 3e'] },
   };
   const MODULE_DESC = {
-    securite: 'Anti-raid, anti-spam, vérification', niveaux: 'XP, rôles, récompense du jour', boutique: 'Rôles à acheter avec les jetons',
+    securite: 'Anti-raid, anti-spam, vérification', niveaux: 'XP, rôles, récompense du jour', boutique: 'Pièces d’or, objets, rôle perso',
     accueil: 'Carte de bienvenue et suggestions', vocal: 'Vocaux temporaires, radio 24/24', ia: 'Mémoire, traduction, FAQ',
   };
 
@@ -480,9 +480,9 @@
       const text = String(values['welcome.message'] ?? '').replaceAll('{membre}', `@${me.user.name}`).replaceAll('{serveur}', data.name).replaceAll('{numero}', String(data.members + 1));
       return [dcMessage({ content: text, extra: h('div', { class: 'card-img' }, h('div', {}, h('b', { text: 'BIENVENUE' }), h('div', { text: me.user.name }), h('small', { text: `MEMBRE N°${data.members + 1} · ${data.name.toUpperCase()}` }))) })];
     },
-    niveaux: () => [dcMessage({ embed: dcEmbed({ color: '#5ff0ff', title: `🎉 ${me.user.name} passe niveau 5 !`, text: 'Continue comme ça, le prochain rôle arrive bientôt.', footer: footerName() }) })],
+    niveaux: () => [dcMessage({ content: `🏴‍☠️🎉 @${me.user.name} passe **niveau 5** ! **+🪙 200 pièces d’or**`, extra: h('div', { class: 'card-img parch' }, h('div', {}, h('b', { text: 'NIVEAU 5 ATTEINT !' }), h('div', { text: me.user.name }), h('small', { text: '+ 200 PIÈCES D’OR · RANG #3 · SÉRIE 4 J' }))) })],
     securite: (values) => [dcMessage({ embed: dcEmbed({ color: '#ed4245', title: '🚨 Raid détecté', text: `${values['antiRaid.joins'] ?? 8} arrivées en ${values['antiRaid.seconds'] ?? 15} secondes.\nLe serveur est protégé pendant 10 minutes.`, footer: 'Journal du serveur' }) })],
-    boutique: () => [dcMessage({ embed: dcEmbed({ color: '#faa61a', title: '🛒 Boutique du serveur', text: 'Achète des rôles avec tes jetons.', fields: [['Rôle VIP', '5 000 jetons'], ['Rôle perso', '10 000 jetons']], footer: footerName() }), buttons: [{ label: 'Acheter' }, { label: 'Rôle personnalisé', grey: true }] })],
+    boutique: () => [dcMessage({ embed: dcEmbed({ color: '#d9a441', title: '🏴‍☠️ Le comptoir du capitaine', text: 'Ta bourse : **🪙 4 250 pièces d’or**\nTu gagnes **200 pièces** à chaque niveau.', fields: [['🛡️ Immunité 24 h', '6 000'], ['⚡ XP ×2 24 h', '2 500'], ['📦 Coffre au trésor', '750'], ['🎨 Rôle perso', '20 000']], footer: footerName() }), buttons: [{ label: '🪙 Acheter' }, { label: '🤝 Donner des pièces', grey: true }] })],
     vocal: () => [dcMessage({ embed: dcEmbed({ color: '#3ba55d', title: '➕ Ton salon est prêt', text: `Tu es chef de 🎮 Salon de ${me.user.name}. Renomme-le, limite les places ou verrouille-le.` }), buttons: [{ label: 'Renommer', grey: true }, { label: '🔒 Verrouiller', grey: true }] })],
     ia: () => [dcMessage({ bot: false, author: me.user.name, content: '@AI Vercel tu te rappelles à quoi je joue ?' }), dcMessage({ content: 'Évidemment 😏 Valorant, sous ton pseudo habituel. Une partie ce soir ?' })],
   };
@@ -667,6 +667,17 @@
     });
   }
   new MutationObserver(() => animateIn(view())).observe(view(), { childList: true });
+  // Petite onde au clic sur les boutons
+  document.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest?.('.btn');
+    if (!btn || still) return;
+    const r = btn.getBoundingClientRect();
+    const dot = h('span', { class: 'rip' });
+    dot.style.left = `${e.clientX - r.left}px`;
+    dot.style.top = `${e.clientY - r.top}px`;
+    btn.append(dot);
+    setTimeout(() => dot.remove(), 650);
+  });
 
   start();
 }());

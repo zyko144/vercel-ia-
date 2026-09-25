@@ -12,7 +12,7 @@ const KEY = 'config-serveurs';
 export const SECTIONS = {
   securite: { label: 'Sécurité', emoji: '🛡️', intro: 'Anti-raid, vérification à l’arrivée, filtres de liens, anti-spam, anti-arnaque et journal.' },
   niveaux: { label: 'Niveaux et récompenses', emoji: '📈', intro: 'XP pour les messages et le vocal, rôles gagnés par niveau, récompense du jour, membre de la semaine.' },
-  boutique: { label: 'Boutique', emoji: '🛒', intro: 'Ce que les membres achètent avec leurs jetons, et les demandes de rôle personnalisé.' },
+  boutique: { label: 'Boutique', emoji: '🛒', intro: 'Le comptoir du capitaine : ce que les membres achètent avec leurs pièces d’or, et les demandes de rôle personnalisé.' },
   accueil: { label: 'Bienvenue et suggestions', emoji: '👋', intro: 'Carte de bienvenue et salon des suggestions votées.' },
   vocal: { label: 'Vocal', emoji: '🔊', intro: 'Salons vocaux temporaires, radio 24 h/24, micros saturés.' },
   ia: { label: 'IA du serveur', emoji: '🧠', intro: 'Mémoire des membres, salons traduits automatiquement, FAQ apprise.' },
@@ -46,15 +46,15 @@ export const SCHEMA = [
   { key: 'levels.channelId', section: 'niveaux', type: 'channel', label: 'Salon des montées de niveau', help: 'Vide : dans le salon où le membre vient d’écrire.' },
   { key: 'levels.voiceXp', section: 'niveaux', type: 'int', min: 0, max: 50, label: 'XP par minute de vocal', def: 8 },
   { key: 'levels.roles', section: 'niveaux', type: 'list', label: 'Rôles par niveau', help: 'Une ligne par palier : « 5 = @Rôle » ou « 5 = identifiant du rôle ».' },
-  { key: 'daily.amount', section: 'niveaux', type: 'int', min: 0, max: 100000, label: 'Jetons de la récompense du jour', def: 250 },
-  { key: 'daily.streak', section: 'niveaux', type: 'int', min: 0, max: 10000, label: 'Bonus par jour de série', def: 50, help: 'Plafonné à 7 jours de série.' },
+  { key: 'levels.pingEvery', section: 'niveaux', type: 'int', min: 1, max: 50, label: 'Mentionner le membre tous les … niveaux', def: 5, help: 'Les autres niveaux sont annoncés sans notification.' },
+  { key: 'daily.amount', section: 'niveaux', type: 'int', min: 0, max: 1000, label: 'Pièces d’or de la récompense du jour', def: 100, help: 'Chaque niveau rapporte aussi 200 pièces.' },
+  { key: 'daily.streak', section: 'niveaux', type: 'int', min: 0, max: 200, label: 'Bonus par jour de série', def: 15, help: 'Plafonné à 7 jours de série.' },
   { key: 'weekMember.enabled', section: 'niveaux', type: 'bool', label: 'Membre de la semaine', def: true, help: 'Chaque lundi, le plus actif de la semaine est annoncé avec une carte.' },
   { key: 'weekMember.channelId', section: 'niveaux', type: 'channel', label: 'Salon de l’annonce' },
   { key: 'weekMember.roleId', section: 'niveaux', type: 'role', label: 'Rôle du membre de la semaine', help: 'Donné pour une semaine, repris au suivant.' },
 
   // ---------- Boutique ----------
-  { key: 'shop.items', section: 'boutique', type: 'list', label: 'Articles', help: 'Une ligne par article : « Prix | @Rôle ou identifiant | Nom affiché ». Ex : 5000 | 123… | 🎨 Couleur Or' },
-  { key: 'shop.customRolePrice', section: 'boutique', type: 'int', min: 0, max: 10000000, label: 'Prix d’un rôle personnalisé', def: 20000, help: 'Le membre choisit le nom et la couleur, le staff accepte ou refuse (remboursé).' },
+  { key: 'shop.customRolePrice', section: 'boutique', type: 'int', min: 0, max: 10000000, label: 'Prix d’un rôle personnalisé (pièces d’or)', def: 20000, help: 'Le membre choisit le nom et la couleur, le staff accepte ou refuse (remboursé).' },
   { key: 'shop.requestsChannelId', section: 'boutique', type: 'channel', label: 'Salon des demandes de rôle', help: 'Le staff y accepte ou refuse les demandes.' },
 
   // ---------- Bienvenue et suggestions ----------
