@@ -21,6 +21,7 @@ import {
 } from '../features/premium.js';
 import { COLORS, openTickets, publishFromWeb, ticketPanels } from '../features/tickets.js';
 import { allowAttempt, clientIp, isSecure } from './auth.js';
+import { topLevels } from '../features/levels.js';
 
 const WEB = path.resolve('web/app');
 const STATIC = { 'app.js': 'text/javascript; charset=utf-8', 'style.css': 'text/css; charset=utf-8' };
@@ -204,7 +205,17 @@ async function serverDetail(guild) {
   const roles = guild.roles.cache.filter((r) => r.id !== guild.id && !r.managed).sort((a, b) => b.position - a.position)
     .map((r) => ({ id: r.id, name: r.name, color: r.color ? `#${r.color.toString(16).padStart(6, '0')}` : null }));
   const brand = rawBranding(guild.id) ?? {};
-  const [panels, open] = await Promise.all([ticketPanels(guild.id), openTickets(guild.id)]);
+  const [panels, open, top, warnings] = await Promise.all([
+    ticketPanels(guild.id), openTickets(guild.id), topLevels(guild.id).catch(() => []), load('warnings', {}).catch(() => ({})),
+  ]);
+  const person = (id) => {
+    const u = client.users.cache.get(id);
+    const m = guild.members.cache?.get?.(id);
+    return { id, name: m?.displayName ?? u?.globalName ?? u?.username ?? `Membre ${String(id).slice(-4)}`, avatar: u?.displayAvatarURL?.({ size: 64 }) ?? null };
+  };
+  const sanctions = Object.entries(warnings?.[guild.id] ?? {})
+    .flatMap(([userId, list]) => (list ?? []).map((w) => ({ user: person(userId), reason: w.reason ?? '', kind: w.kind ?? 'manuel', at: w.at })))
+    .sort((a, b) => b.at - a.at).slice(0, 30);
   return {
     id: guild.id, name: guild.name, icon: guild.iconURL({ size: 128 }), members: guild.memberCount,
     plan: planInfo(guild.id), sections: SECTIONS, settings: guildSettings(guild.id), channels, roles,
@@ -215,6 +226,8 @@ async function serverDetail(guild) {
       report: allServers()[guild.id]?.report !== false,
       guard: rawGuardOptions(guild.id),
     },
+    leaderboard: top.map((t) => ({ ...t, user: person(t.userId) })),
+    sanctions,
     tickets: {
       panels: panels.map((p) => ({ id: p.id, title: p.title, channel: guild.channels.cache.get(p.channelId)?.name ?? null, at: p.at })),
       open: open.map((t) => ({ channel: guild.channels.cache.get(t.channelId)?.name ?? null, user: t.userId ? client.users.cache.get(t.userId)?.username ?? t.userId : null, at: t.at ?? null })),
