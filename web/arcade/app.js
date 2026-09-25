@@ -100,9 +100,22 @@ function render() {
   updateChat();
   if ($('soloBox')) renderSolo($('soloBox'));
   if (!$('drawer').hidden) renderSolo($('drawerBody'));
+  setBackground(kind === 'party' ? g.game : ['dessin', 'quiz', 'pendu', 'nombre', 'morpion', 'puissance4'].includes(kind) ? kind : null);
   $('goldTag').textContent = state.gold === null || state.gold === undefined ? '' : `🪙 ${Number(state.gold).toLocaleString('fr-FR')}`;
 }
 $('home').onclick = () => send({ type: 'lobby' });
+// Fond d'écran flouté du jeu en cours (images du dossier « fond jeu ») ; aucun fond si le jeu n'en a pas
+let bgKey = null;
+function setBackground(key) {
+  if (key === bgKey) return;
+  bgKey = key;
+  const el = $('bg');
+  if (!key) { el.classList.remove('on'); return; }
+  const img = new Image();
+  img.onload = () => { if (bgKey !== key) return; el.style.backgroundImage = `url("fond/${key}")`; el.classList.add('on'); };
+  img.onerror = () => { if (bgKey === key) el.classList.remove('on'); };
+  img.src = `fond/${key}`;
+}
 
 // ------------------------------------------------------------------ Salle
 const TABS = {

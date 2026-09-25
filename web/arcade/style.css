@@ -276,3 +276,7 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 .player.spectator { opacity: .7; }
 .pbtns.col { flex-direction: column; align-items: stretch; max-width: 520px; margin: 0 auto; width: 100%; }
 .pbtns.col button { text-align: left; background: #2a2014; color: var(--text); border: 1px solid #4a3620; box-shadow: none; font-family: Georgia, serif; }
+/* Fond d'écran du jeu en cours, flouté et assombri pour garder le texte lisible */
+.bg { position: fixed; inset: -24px; z-index: 0; background: center / cover no-repeat; filter: blur(7px) brightness(.42) saturate(1.1); opacity: 0; transition: opacity .8s ease; pointer-events: none; }
+.bg.on { opacity: 1; }
+.top, main { position: relative; z-index: 1; }
