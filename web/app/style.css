@@ -500,3 +500,5 @@ body { background:
 .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--amber); border-color: var(--amber); }
 .card h2 { color: #ffe7b0; }
 .server.on { border-top: 3px solid var(--sea); }
+
+.dc .embed .eimg { display: block; width: 100%; margin-top: 10px; border-radius: 6px; }

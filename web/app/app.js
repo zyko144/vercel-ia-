@@ -204,9 +204,10 @@
         extra ?? null,
         buttons.length ? h('div', {}, buttons.map((b) => h('span', { class: `dbtn${b.grey ? ' grey' : ''}`, text: b.label }))) : null));
   }
-  function dcEmbed({ color, title, text, fields, footer }) {
+  function dcEmbed({ color, title, text, fields, footer, image }) {
     const e = h('div', { class: 'embed' }, title ? h('div', { class: 'et' }, md(title)) : null, text ? h('div', { class: 'ed' }, md(text)) : null,
       fields ? h('div', { class: 'ef' }, fields.map(([k, v]) => h('div', {}, h('b', { text: k }), v))) : null,
+      image ? h('img', { class: 'eimg', src: image, alt: '' }) : null,
       footer ? h('div', { class: 'foot', text: footer }) : null);
     e.style.setProperty('--ec', color);
     return e;
@@ -482,7 +483,7 @@
     },
     niveaux: () => [dcMessage({ content: `🏴‍☠️🎉 @${me.user.name} passe **niveau 5** ! **+🪙 200 pièces d’or**`, extra: h('div', { class: 'card-img parch' }, h('div', {}, h('b', { text: 'NIVEAU 5 ATTEINT !' }), h('div', { text: me.user.name }), h('small', { text: '+ 200 PIÈCES D’OR · RANG #3 · SÉRIE 4 J' }))) })],
     securite: (values) => [dcMessage({ embed: dcEmbed({ color: '#ed4245', title: '🚨 Raid détecté', text: `${values['antiRaid.joins'] ?? 8} arrivées en ${values['antiRaid.seconds'] ?? 15} secondes.\nLe serveur est protégé pendant 10 minutes.`, footer: 'Journal du serveur' }) })],
-    boutique: () => [dcMessage({ embed: dcEmbed({ color: '#d9a441', title: '🏴‍☠️ Le comptoir du capitaine', text: 'Ta bourse : **🪙 4 250 pièces d’or**\nTu gagnes **200 pièces** à chaque niveau.', fields: [['🛡️ Immunité 24 h', '6 000'], ['⚡ XP ×2 24 h', '2 500'], ['📦 Coffre au trésor', '750'], ['🎨 Rôle perso', '20 000']], footer: footerName() }), buttons: [{ label: '🪙 Acheter' }, { label: '🤝 Donner des pièces', grey: true }] })],
+    boutique: () => [dcMessage({ embed: dcEmbed({ color: '#d9a441', title: '🏴‍☠️ Le comptoir du capitaine', text: 'Ta bourse : **🪙 4 250 pièces d’or**\nTu gagnes **200 pièces** à chaque niveau.', fields: [['🛡️ Immunité 24 h', '6 000'], ['⚡ XP ×2 24 h', '2 500'], ['📦 Coffre au trésor', '750'], ['🎨 Rôle perso', '20 000']], image: '/panneaux/boutique.gif', footer: footerName() }), buttons: [{ label: '🪙 Acheter' }, { label: '🤝 Donner des pièces', grey: true }] })],
     vocal: () => [dcMessage({ embed: dcEmbed({ color: '#3ba55d', title: '➕ Ton salon est prêt', text: `Tu es chef de 🎮 Salon de ${me.user.name}. Renomme-le, limite les places ou verrouille-le.` }), buttons: [{ label: 'Renommer', grey: true }, { label: '🔒 Verrouiller', grey: true }] })],
     ia: () => [dcMessage({ bot: false, author: me.user.name, content: '@AI Vercel tu te rappelles à quoi je joue ?' }), dcMessage({ content: 'Évidemment 😏 Valorant, sous ton pseudo habituel. Une partie ce soir ?' })],
   };

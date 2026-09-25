@@ -12,7 +12,7 @@
 // - rôle personnalisé (20 000, validé par le staff, remboursé si refusé).
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits as P, StringSelectMenuBuilder } from 'discord.js';
 import { load, save } from '../storage.js';
-import { buildModal, field as f, readModal } from '../panels/ui.js';
+import { art, buildModal, field as f, readModal } from '../panels/ui.js';
 import { cfg } from './guildConfig.js';
 import { COLORS } from './tickets.js';
 
@@ -132,8 +132,12 @@ export async function shopMessage(guild, userId) {
       { name: `🎨 Rôle personnalisé · 🪙 ${fmt(custom)}`, value: 'Ton nom et ta couleur, validés par le staff. Remboursé s’il refuse.' },
     )
     .setFooter({ text: 'Choisis un article dans le menu · les pièces ne s’achètent pas avec de l’argent' });
+  // Bannière animée du comptoir (assets/panneaux/boutique.gif, tools/make-shop-gif.mjs)
+  const gif = art('panneaux', 'boutique');
+  embed.setImage(gif.url);
   return {
     embeds: [embed],
+    files: gif.files,
     components: [
       new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('sh:buy').setPlaceholder('🪙 Acheter un article')
         .addOptions(Object.entries(ITEMS).map(([value, i]) => ({ label: `${i.name} · ${fmt(i.price)}`, value, emoji: i.emoji, description: i.desc.slice(0, 100) })))),
