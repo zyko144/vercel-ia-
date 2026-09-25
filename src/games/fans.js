@@ -186,3 +186,6 @@ async function finish(run, reason) {
     .setDescription([why, top ? `\n**Records du serveur**\n${top}` : null].filter(Boolean).join('\n'));
   await run.message?.edit({ content: `<@${run.userId}>`, embeds: [embed], components: [], allowedMentions: { parse: [] } }).catch(() => {});
 }
+
+// Réutilisé par la version arcade (src/arcade/party.js)
+export const FANS_PARTS = { candidates, nextArtist, artistInfo };

@@ -500,4 +500,4 @@ export function startDefis(client) {
   setInterval(() => dailyQuizTick(client).catch((err) => console.warn('[quiz du jour]', err.message)), 5 * 60_000).unref();
 }
 
-export const _test = { games, quizQuestions, crosswordGrid, same, waitAnswer, busy, dailyState: () => daily, closeDailyQuiz, FALLBACK_QUIZ };
+export const _test = { games, quizQuestions, crosswordGrid, same, waitAnswer, busy, dailyState: () => daily, closeDailyQuiz, FALLBACK_QUIZ, RIDDLES, ESCAPE, RAPPERS };

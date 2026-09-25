@@ -190,3 +190,60 @@ canvas.mine { cursor: crosshair; }
 
 .mines button { font-family: Georgia, serif; font-weight: 700; }
 .solo .hint, .solo p { font-family: Georgia, serif; letter-spacing: 0; text-transform: none; }
+
+/* Jeux de soirée */
+.section { color: var(--gold); margin: 18px 0 8px; }
+.game select.choice { width: 100%; margin: 4px 0 8px; padding: 7px; border-radius: 8px; border: 1px solid #a47a45; background: #fbf1d8; color: var(--ink); font: inherit; }
+.game .bots { display: flex; gap: 6px; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--ink2); }
+.botav { display: inline-grid; place-content: center; font-size: 17px; }
+.party { max-width: 760px; margin: 0 auto; }
+.psub { width: 100%; text-align: center; color: var(--muted); font-size: 13px; }
+.pbar { display: flex; align-items: center; gap: 10px; margin: 8px 0 12px; }
+.pbar .progress { flex: 1; }
+.pbar .timer:empty { display: none; }
+#plateau { display: grid; gap: 12px; }
+.pt { margin: 0; text-align: center; white-space: normal; }
+.pt.big { font-size: 20px; font-weight: 700; color: var(--text); }
+.pt.huge { font-size: clamp(34px, 9vw, 64px); line-height: 1.2; }
+.pt.small { color: var(--muted); font-size: 14px; }
+.pt.mono { font-family: ui-monospace, Menlo, monospace; letter-spacing: .12em; color: var(--gold); }
+.pt.quote { background: radial-gradient(ellipse at 40% 30%, #f3e4bf, var(--paper) 60%, var(--paper2)); color: var(--ink); border-radius: 10px; padding: 16px 18px; text-align: left; font-size: 16px; line-height: 1.55; }
+.pimg { display: block; margin: 0 auto; max-width: 100%; max-height: 300px; border-radius: 12px; border: 3px solid var(--accent); }
+.pimg.photo { width: min(320px, 100%); aspect-ratio: 1; object-fit: cover; }
+.paudio { display: flex; gap: 10px; align-items: center; justify-content: center; }
+.paudio input { width: 120px; accent-color: var(--gold); }
+.pbtns { justify-content: center; flex-wrap: wrap; }
+.pbtns button.on, .pvote button.on { outline: 3px solid var(--gold); outline-offset: 2px; }
+button.green { background: linear-gradient(#5fd98a, #2f9e58); }
+button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
+.pbtns small { opacity: .75; }
+.pin { max-width: 440px; margin: 0 auto; width: 100%; }
+.pform { display: grid; gap: 8px; max-width: 460px; margin: 0 auto; width: 100%; }
+.pform label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+.pform input, .pform textarea { padding: 9px 10px; border-radius: 8px; border: 1px solid #4a3620; background: #1f170e; color: var(--text); font: inherit; }
+.pvote { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.pvote button { display: flex; align-items: center; gap: 8px; background: #2a2014; color: var(--text); border: 1px solid #4a3620; box-shadow: none; text-align: left; }
+.pvote button span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pvote button b { background: var(--blood); color: #fff; border-radius: 99px; padding: 0 8px; }
+.plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.plist li { background: #1f170e; border: 1px solid #3b2a17; border-radius: 8px; padding: 8px 10px; }
+.cross { display: grid; gap: 3px; justify-content: center; overflow-x: auto; }
+.cross div { display: flex; gap: 3px; }
+.cross .cell { position: relative; width: 32px; height: 32px; display: grid; place-content: center; background: var(--paper); color: var(--ink); font-weight: 700; border-radius: 4px; }
+.cross .cell.key { background: var(--gold); }
+.cross .cell.void { background: transparent; }
+.cross .cell i { position: absolute; top: 1px; left: 3px; font-size: 9px; font-style: normal; color: var(--ink2); }
+.duo { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.duo .parchment { text-align: center; padding: 14px; }
+.duo img { width: 100%; max-width: 160px; aspect-ratio: 1; object-fit: cover; border-radius: 50%; }
+.duo .vs { color: var(--gold); font-size: 22px; }
+.pmic { display: grid; gap: 10px; justify-items: center; }
+.rolecard { background: #1f170e; border: 2px solid var(--accent); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
+.rolecard.red { border-color: var(--blood); }
+.rolecard.green { border-color: var(--emerald); }
+.rolecard summary { cursor: pointer; }
+.rolecard .rc { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+.rolecard img { width: 96px; border-radius: 10px; }
+.rolecard p { margin: 0; font-size: 14px; }
+.endtext { text-align: left; font-size: 14px; }
+@media (max-width: 560px) { .duo { grid-template-columns: 1fr; } .rolecard .rc { flex-direction: column; } }

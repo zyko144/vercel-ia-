@@ -38,8 +38,8 @@ const send = async (body) => {
 function fatal(text) {
   $('app').innerHTML = `<div class="fatal"><div style="font-size:46px">🏴‍☠️</div><p>${esc(text)}</p></div>`;
 }
-const nameOf = (id) => state?.players.find((p) => p.id === id)?.name ?? 'Joueur';
-const avatar = (id, cls = 'avatar') => `<img class="${cls}" src="avatar/${id}.png" alt="">`;
+const nameOf = (id) => state?.players.find((p) => p.id === id)?.name ?? state?.game?.names?.[id] ?? 'Joueur';
+const avatar = (id, cls = 'avatar') => (/^\d+$/.test(String(id)) ? `<img class="${cls}" src="avatar/${id}.png" alt="">` : `<span class="${cls} botav">🤖</span>`);
 
 // ------------------------------------------------------------------ Connexion
 async function login() {
@@ -93,9 +93,10 @@ function render() {
   $('home').hidden = kind === 'lobby';
   if (kind !== view) {
     view = kind;
-    ({ lobby: mountLobby, dessin: mountDraw, morpion: mountDuel, puissance4: mountDuel, fin: mountEnd, duel: mountBoard, quiz: mountBoard, pendu: mountBoard, nombre: mountBoard })[kind]?.();
+    ({ lobby: mountLobby, dessin: mountDraw, morpion: mountDuel, puissance4: mountDuel, fin: mountEnd, duel: mountBoard, quiz: mountBoard, pendu: mountBoard, nombre: mountBoard, party: mountParty })[kind]?.();
   }
-  ({ lobby: updateLobby, dessin: updateDraw, morpion: updateDuel, puissance4: updateDuel, fin: updateEnd, duel: updateNewDuel, quiz: updateQuiz, pendu: updatePendu, nombre: updateNombre })[kind]?.();
+  ({ lobby: updateLobby, dessin: updateDraw, morpion: updateDuel, puissance4: updateDuel, fin: updateEnd, duel: updateNewDuel, quiz: updateQuiz, pendu: updatePendu, nombre: updateNombre, party: updateParty })[kind]?.();
+  if (kind !== 'party') stopPartyAudio();
   updateChat();
   if ($('soloBox')) renderSolo($('soloBox'));
   if (!$('drawer').hidden) renderSolo($('drawerBody'));
@@ -122,18 +123,30 @@ const TABS = {
     { id: 'duel', duel: 'rimes', emoji: '🎤', name: 'Duel de rimes', desc: 'Chacun écrit, l’IA désigne le gagnant.', tag: '2 joueurs', color: 'var(--rose)' },
   ] },
   taverne: { label: '🍺 Taverne et solo' },
-  salon: { label: '📣 Jeux du salon' },
+  soiree: { label: '🎭 Soirée' },
 };
-const SALON = [
-  ['loupgarou', '🐺', 'Loup-garou', 'Narrateur à voix haute, rôles en MP'], ['imposteur', '🕵️', 'L’imposteur', 'Un mot secret, un intrus'],
-  ['undercover', '🕶️', 'Undercover', 'Undercovers et Mister White'], ['histoire', '📖', 'Histoire interactive', 'L’IA raconte, vous décidez'],
-  ['petitbac', '📝', 'Petit Bac', 'Une lettre, 5 catégories'], ['actionverite', '🎲', 'Action ou vérité', 'Défis validés par les autres'],
-  ['quizserveur', '🧭', 'Quiz du serveur', 'Sur le serveur et ses membres'], ['blindtest', '🎧', 'Blind test', 'Dans le vocal du bot'],
-  ['devine', '🎬', 'Devine le film, la série…', 'Un extrait dans le vocal'], ['pendumusical', '🎵', 'Pendu musical', 'Le titre lettre par lettre'],
-  ['rebus', '🧩', 'Rébus en emojis', 'Devinez le titre caché'], ['fans', '📊', 'Plus ou moins de fans', 'Quel artiste est le plus écouté ?'],
-  ['chasse', '🗺️', 'Chasse au trésor', '3 énigmes, 3 morceaux de carte'], ['rappeur', '🎤', 'Devine le rappeur', 'La photo floutée se dévoile'],
-  ['motscroises', '📰', 'Mots croisés de l’IA', '6 définitions'], ['escape', '🗝️', 'Escape game', '3 salles, 10 minutes'],
-  ['quiditca', '🗨️', 'Qui a dit ça ?', 'Les vrais messages du salon'], ['freestyle', '🎙️', 'Battle de freestyle', 'L’IA écoute (vocal)'],
+// Les jeux de soirée : tout se joue ici (rôles secrets sur ton écran, extraits audio, réponses dans le chat)
+const CHOICES = {
+  rebus: [['tout', '🎲 Tout'], ['films', '🎬 Films'], ['disney', '🏰 Disney'], ['series', '📺 Séries'], ['anime', '🍥 Animés'], ['jeux', '🎮 Jeux vidéo'], ['rapfr', '🎤 Rap FR']],
+  fans: [['tout', '🎲 Tout'], ['rapfr', '🇫🇷 Rap FR'], ['monde', '🌍 Monde']],
+};
+const PARTY = [
+  ['🎭 Rôles secrets', [
+    ['loupgarou', '🐺', 'Loup-garou', 'Ton rôle sur ton écran, nuits et votes', '5+', { bots: true }], ['imposteur', '🕵️', 'L’imposteur', 'Un mot secret, un intrus', '3+', { bots: true }],
+    ['undercover', '🕶️', 'Undercover', 'Undercovers et Mister White', '4+', { bots: true }], ['histoire', '📖', 'Histoire interactive', 'L’IA raconte, vous décidez', '1+'],
+  ]],
+  ['📝 Mots et réflexion', [
+    ['petitbac', '📝', 'Petit Bac', 'Une lettre, 5 catégories, l’IA vérifie', '1+'], ['rebus', '🧩', 'Rébus en emojis', 'Devinez le titre caché', '1+'],
+    ['motscroises', '📰', 'Mots croisés de l’IA', '6 définitions', '1+', { theme: true }], ['quiditca', '🗨️', 'Qui a dit ça ?', 'Les vrais messages du serveur', '1+'],
+    ['quizserveur', '🧭', 'Quiz du serveur', 'Sur le serveur et ses membres', '1+'], ['fans', '📊', 'Plus ou moins de fans', 'Quel artiste est le plus écouté ?', '1+'],
+    ['chasse', '🗺️', 'Chasse au trésor', '3 énigmes, 3 morceaux de carte', '1+'], ['escape', '🗝️', 'Escape game', '3 salles, 10 minutes', '1+', { theme: true }],
+    ['actionverite', '🎲', 'Action ou vérité', 'Défis validés par les autres', '2+'],
+  ]],
+  ['🎧 Musique et son', [
+    ['blindtest', '🎧', 'Blind test', 'Rap FR, TikTok, 2010… 10 extraits', '1+'], ['devine', '🎬', 'Devine l’œuvre', 'Films, séries, animés, jeux', '1+'],
+    ['pendumusical', '🎵', 'Pendu musical', 'Le titre lettre par lettre', '1+'], ['rappeur', '🎤', 'Devine le rappeur', 'La photo floutée se dévoile', '1+'],
+    ['freestyle', '🎙️', 'Battle de freestyle', 'Au micro, l’IA juge', '2'],
+  ]],
 ];
 let lobbyTab = 'ensemble';
 function mountLobby() {
@@ -144,20 +157,17 @@ function mountLobby() {
   document.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { lobbyTab = b.dataset.tab; view = null; render(); }; });
   const body = $('tabBody');
   if (lobbyTab === 'taverne') { body.innerHTML = '<div id="soloBox"></div>'; renderSolo($('soloBox')); }
-  else if (lobbyTab === 'salon') {
-    body.innerHTML = `<p class="hint">Ces jeux ont besoin de Discord (voix du narrateur, rôles secrets en message privé, extraits audio) : l’arcade les lance, ils se jouent dans le salon.</p>
-      <div class="games small">${SALON.map(([id, e, n, d], i) => `<div class="game parchment rise" style="animation-delay:${i * 40}ms"><span class="emoji">${e}</span><h3>${n}</h3><p>${d}</p><button data-launch="${id}">Lancer dans le salon</button></div>`).join('')}</div>`;
-    document.querySelectorAll('[data-launch]').forEach((b) => {
-      b.onclick = async () => {
-        const body2 = { type: 'launch', id: b.dataset.launch };
-        if (b.dataset.launch === 'freestyle') {
-          const others = state.players.filter((p) => p.id !== state.me);
-          if (!others.length) return toast('Il faut un adversaire dans l’arcade.');
-          body2.opponent = others[0].id;
-        }
-        const { ok, data } = await api('act', { method: 'POST', body: body2 });
-        toast(ok ? `📣 ${data.name} démarre dans le salon Discord !` : data.error);
-      };
+  else if (lobbyTab === 'soiree') {
+    body.innerHTML = `<p class="hint">Tout se joue dans l’arcade : ton rôle secret s’affiche sur ton écran, les extraits passent dans ton navigateur, les réponses s’écrivent dans le chat.</p>
+      ${PARTY.map(([title, list]) => `<h3 class="section">${title}</h3><div class="games small">${list.map(([id, e, n, d, tag, o = {}], i) => `
+        <div class="game parchment rise" style="animation-delay:${i * 40}ms"><span class="tag" style="background:var(--royal)">${tag}</span><span class="emoji">${e}</span><h3>${n}</h3><p>${d}</p>
+          ${o.theme ? '<input class="theme" placeholder="Thème (facultatif)" maxlength="60">' : ''}
+          ${CHOICES[id] ? `<select class="choice">${CHOICES[id].map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>` : ''}
+          ${o.bots ? '<label class="bots"><input type="checkbox" class="withBots"> Compléter avec des bots</label>' : ''}
+          <button data-party="${id}">Lancer</button></div>`).join('')}</div>`).join('')}`;
+    document.querySelectorAll('[data-party]').forEach((b) => {
+      const card = b.parentElement;
+      b.onclick = () => send({ type: 'start', game: 'party', party: b.dataset.party, theme: card.querySelector('.theme')?.value || undefined, choice: card.querySelector('.choice')?.value || undefined, bots: card.querySelector('.withBots')?.checked || undefined });
     });
   } else {
     const list = TABS[lobbyTab].games;
@@ -389,8 +399,8 @@ function updateDuel() {
 // ------------------------------------------------------------------ Fin de partie
 function mountEnd() {
   const g = state.game;
-  $('app').innerHTML = `<div class="podium parchment rise"><h2>🏆 Fin de la partie</h2><ol id="podium"></ol><div class="row"><button id="again">Rejouer</button><button class="ghost" id="back">Changer de jeu</button></div></div>`;
-  $('again').onclick = () => send({ type: 'start', game: g.from });
+  $('app').innerHTML = `<div class="podium parchment rise"><h2>${esc(g.title ?? '🏆 Fin de la partie')}</h2>${g.text ? `<p class="endtext">${md(g.text)}</p>` : ''}<ol id="podium"></ol><div class="row"><button id="again">Rejouer</button><button class="ghost" id="back">Changer de jeu</button></div></div>`;
+  $('again').onclick = () => send(g.from === 'party' ? { type: 'start', game: 'party', party: g.party } : { type: 'start', game: g.from });
   $('back').onclick = () => send({ type: 'lobby' });
 }
 function updateEnd() {
@@ -501,6 +511,135 @@ function updateNombre() {
   if ($('again')) { $('again').onclick = () => send({ type: 'start', game: 'nombre' }); $('back').onclick = () => send({ type: 'lobby' }); }
   updatePlayers();
 }
+
+// ------------------------------------------------------------------ Jeux de soirée (écrans décrits par le serveur)
+const md = (text) => esc(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/~~(.+?)~~/g, '<s>$1</s>').replace(/\n/g, '<br>');
+let partySig = '';
+let cardSig = '';
+let rec = null; // enregistrement du micro en cours (freestyle)
+let pausedSrc = null; // extrait mis en pause à la main : on ne le relance pas tout seul
+function mountParty() {
+  $('app').innerHTML = `<div class="duel rise party"><div class="seats" id="seats"></div><div id="roleCard"></div>
+      <div class="pbar"><div class="timer" id="ptimer"></div><div class="progress"><i id="pprog" style="width:100%"></i></div></div>
+      <div id="plateau"></div><div class="row" id="actions"></div></div>
+    <div style="max-width:760px;margin:16px auto 0" class="side">${sidePanels(true)}</div>`;
+  partySig = '';
+  cardSig = '';
+  bindSay();
+}
+function partyAudio() {
+  let a = $('partyAudio');
+  if (!a) { a = document.createElement('audio'); a.id = 'partyAudio'; a.preload = 'auto'; document.body.appendChild(a); }
+  return a;
+}
+function stopPartyAudio() {
+  const a = $('partyAudio');
+  if (a && !a.paused) a.pause();
+}
+function playPartyAudio(src, force = false) {
+  if (!force && pausedSrc === src) return;
+  if (force) pausedSrc = null;
+  const a = partyAudio();
+  if (!a.src.endsWith(src)) { a.src = src; a.currentTime = 0; }
+  if (a.paused) a.play().then(() => { const b = document.querySelector('[data-audio]'); if (b) b.textContent = '🔊 Extrait en cours'; }).catch(() => { const b = document.querySelector('[data-audio]'); if (b) b.textContent = '▶️ Écouter l’extrait'; });
+}
+function block(b, i) {
+  const k = `k${i}`;
+  switch (b.t) {
+    case 'text': return `<p class="pt ${b.cls ?? ''}">${md(b.text)}</p>`;
+    case 'img': return `<img class="pimg ${b.cls ?? ''}" src="${esc(b.src)}" alt="">`;
+    case 'audio': return `<div class="paudio"><button class="ghost" data-audio="${esc(b.src)}">🔊 Extrait en cours</button><input type="range" min="0" max="1" step="0.05" data-vol value="${partyAudio().volume}"></div>`;
+    case 'word': return `<div class="word">${b.letters.map((c) => `<span>${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('')}</div>`;
+    case 'keys': return `<div class="keys">${'abcdefghijklmnopqrstuvwxyz'.split('').map((c) => `<button data-letter="${c}" class="${b.ok.includes(c) ? 'ok' : b.ko.includes(c) ? 'ko' : ''}" ${b.lock || b.ok.includes(c) || b.ko.includes(c) ? 'disabled' : ''}>${c.toUpperCase()}</button>`).join('')}</div>`;
+    case 'choices': {
+      const L = ['A', 'B', 'C', 'D', 'E', 'F'];
+      return `<div class="choices4">${b.options.map((c, j) => `<button data-pick="${j}" class="${b.right === j ? 'right' : b.right !== null && b.right !== undefined && b.mine === j ? 'wrong' : b.mine === j ? 'mine' : ''}" ${b.mine !== null || (b.right !== null && b.right !== undefined) ? 'disabled' : ''}><b>${L[j]}</b> ${esc(c)}</button>`).join('')}</div>`;
+    }
+    case 'buttons': return `<div class="row pbtns">${b.items.map((x) => `<button data-btn="${esc(x.id)}" class="${x.cls ?? ''} ${b.chosen === x.id ? 'on' : ''}">${esc(x.label)}${b.tally?.[x.id] ? ` <small>· ${b.tally[x.id]}</small>` : ''}</button>`).join('')}</div>`;
+    case 'input': return b.done ? '<p class="pt small">✅ Envoyé</p>' : `<form class="say pin" data-input><input data-k="${k}" maxlength="150" autocomplete="off" placeholder="${esc(b.ph ?? '')}"><button>${esc(b.button ?? '➤')}</button></form>`;
+    case 'form': return b.done ? '<p class="pt big">✅ Grille rendue, attends les autres…</p>' : `<form class="pform" data-form>${b.fields.map((f, j) => `<label>${esc(f)}<input data-k="${k}-${j}" maxlength="40" autocomplete="off"></label>`).join('')}<button>${esc(b.button ?? 'Envoyer')}</button></form>`;
+    case 'vote': return `<div class="pvote">${b.ids.map((id) => `<button data-vote="${id}" class="${b.mine === id ? 'on' : ''}" ${b.lock ? 'disabled' : ''}>${avatar(id)}<span>${esc(b.names?.[id] ?? nameOf(id))}</span>${b.counts?.[id] ? `<b>${b.counts[id]}</b>` : ''}</button>`).join('')}</div>`;
+    case 'list': return `<ul class="plist">${b.items.map((x) => `<li>${md(x)}</li>`).join('')}</ul>`;
+    case 'grid': return `<div class="cross">${b.rows.map((row) => `<div>${row.map((c) => (c ? `<span class="cell ${c.key ? 'key' : ''}">${c.n ? `<i>${c.n}</i>` : ''}${esc(c.c)}</span>` : '<span class="cell void"></span>')).join('')}</div>`).join('')}</div>`;
+    case 'duo': return `<div class="duo">${b.items.map((x) => `<div class="parchment">${x.img ? `<img src="${esc(x.img)}" alt="">` : ''}<h3>${esc(x.name)}</h3><p class="big">${esc(x.value)}</p></div>`).join('<b class="vs">VS</b>')}</div>`;
+    case 'mic': return b.done ? '<p class="pt big">✅ Passage envoyé !</p>' : `<div class="pmic"><button id="micBtn" class="red">${rec ? '⏹️ Terminer' : `🎙️ Rapper au micro (${b.seconds} s)`}</button><p class="pt small" id="micState">${rec ? '🔴 Enregistrement…' : ''}</p>
+      <form class="pform" data-input><textarea data-k="${k}" rows="4" maxlength="800" placeholder="${esc(b.ph ?? '')}"></textarea><button class="ghost">Envoyer le texte</button></form></div>`;
+    default: return '';
+  }
+}
+async function startMic(seconds) {
+  if (rec) { rec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = [];
+    const r = new MediaRecorder(stream);
+    rec = r;
+    r.ondataavailable = (e) => chunks.push(e.data);
+    r.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      rec = null;
+      const blob = new Blob(chunks, { type: r.mimeType || 'audio/webm' });
+      const data = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+      send({ type: 'audio', data, mime: blob.type });
+      partySig = '';
+    };
+    r.start();
+    setTimeout(() => { if (r.state === 'recording') r.stop(); }, seconds * 1000);
+    partySig = '';
+    render();
+  } catch {
+    toast('Micro indisponible : écris ton texte à la place.');
+  }
+}
+function updateParty() {
+  const g = state.game;
+  const sc = g.screen ?? { blocks: [] };
+  $('seats').innerHTML = `<div class="seat">${g.emoji} ${esc(g.name)}${sc.title ? ` · ${esc(sc.title)}` : ''}</div>${sc.sub ? `<div class="psub">${esc(sc.sub)}</div>` : ''}`;
+  const cs = JSON.stringify(g.card);
+  if (cs !== cardSig) {
+    cardSig = cs;
+    const open = $('roleCard').querySelector('details')?.open ?? true;
+    $('roleCard').innerHTML = g.card ? `<details class="rolecard ${g.card.color ?? ''}" ${open ? 'open' : ''}><summary>${g.card.emoji} Ton rôle : <b>${esc(g.card.title)}</b> <small>(appuie pour cacher)</small></summary>
+      <div class="rc">${g.card.img ? `<img src="${esc(g.card.img)}" alt="">` : ''}<p>${md(g.card.text ?? '')}</p></div></details>` : '';
+  }
+  const audioBlock = sc.blocks.find((b) => b.t === 'audio');
+  const sig = JSON.stringify(sc.blocks) + (rec ? 'rec' : '');
+  if (sig !== partySig) {
+    partySig = sig;
+    const P = $('plateau');
+    const saved = {};
+    P.querySelectorAll('[data-k]').forEach((el) => { saved[el.dataset.k] = el.value; });
+    const focused = document.activeElement?.dataset?.k;
+    P.innerHTML = sc.blocks.map(block).join('');
+    P.querySelectorAll('[data-k]').forEach((el) => { if (saved[el.dataset.k]) el.value = saved[el.dataset.k]; if (el.dataset.k === focused) el.focus(); });
+    P.querySelectorAll('[data-pick]').forEach((b) => { b.onclick = () => send({ type: 'pick', i: Number(b.dataset.pick) }); });
+    P.querySelectorAll('[data-btn]').forEach((b) => { b.onclick = () => send({ type: 'btn', id: b.dataset.btn }); });
+    P.querySelectorAll('[data-vote]').forEach((b) => { b.onclick = () => send({ type: 'vote', id: b.dataset.vote }); });
+    P.querySelectorAll('[data-letter]').forEach((b) => { b.onclick = () => send({ type: 'letter', letter: b.dataset.letter }); });
+    P.querySelectorAll('[data-audio]').forEach((b) => { b.onclick = () => { const a = partyAudio(); if (a.paused) playPartyAudio(b.dataset.audio, true); else { a.pause(); pausedSrc = b.dataset.audio; b.textContent = '▶️ Écouter l’extrait'; } }; });
+    P.querySelectorAll('[data-vol]').forEach((el) => { el.oninput = () => { partyAudio().volume = Number(el.value); }; });
+    P.querySelectorAll('[data-input]').forEach((f) => { f.onsubmit = (e) => { e.preventDefault(); const el = f.querySelector('[data-k]'); const t = el.value.trim(); if (!t) return; el.value = ''; send({ type: 'answer', text: t }); }; });
+    P.querySelectorAll('[data-form]').forEach((f) => { f.onsubmit = (e) => { e.preventDefault(); send({ type: 'form', values: [...f.querySelectorAll('[data-k]')].map((el) => el.value.trim()) }); }; });
+    const mic = sc.blocks.find((b) => b.t === 'mic');
+    if ($('micBtn')) $('micBtn').onclick = () => startMic(mic?.seconds ?? 30);
+  }
+  if (audioBlock) playPartyAudio(audioBlock.src); else stopPartyAudio();
+  $('actions').innerHTML = state.me === state.host ? '<button class="ghost small" id="stopParty">⏹️ Arrêter la partie</button>' : '';
+  if ($('stopParty')) $('stopParty').onclick = () => { if (confirm('Arrêter la partie pour tout le monde ?')) send({ type: 'lobby' }); };
+  updatePlayers(g.scores);
+}
+setInterval(() => {
+  const g = state?.game;
+  if (g?.kind !== 'party' || !$('ptimer')) return;
+  const end = g.screen?.endsAt;
+  if (!end) { $('ptimer').textContent = ''; $('pprog').style.width = '0%'; return; }
+  const left = Math.max(0, Math.ceil((end - (Date.now() + offset)) / 1000));
+  $('ptimer').textContent = `${left}s`;
+  $('ptimer').classList.toggle('low', left <= 10);
+  const bar = $('pprog');
+  if (!bar.dataset.end || Number(bar.dataset.end) !== end) { bar.dataset.end = end; bar.dataset.total = Math.max(1, left); }
+  bar.style.width = `${Math.min(100, (left / Number(bar.dataset.total)) * 100)}%`;
+}, 250);
 
 // ------------------------------------------------------------------ Taverne et jeux solo (chacun sa partie)
 let soloTab = 'pile';

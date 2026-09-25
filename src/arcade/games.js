@@ -4,7 +4,7 @@
 // - jeux de groupe : quiz (questions de l'IA), pendu, devine le nombre ;
 // - jeux solo, chacun de son côté : démineur, et la taverne en pièces d'or (pile ou face, dés, roue,
 //   machine à sous, blackjack) ;
-// - jeux du salon : lancés depuis l'arcade, ils se jouent dans le salon Discord (voix, rôles en MP…).
+// Les jeux de soirée (loup-garou, blind test, petit bac…) sont dans party*.js.
 import { chatJson } from '../ai/gemini.js';
 import { DUEL_GAMES } from '../games/duels.js';
 import { _test as defis } from '../games/defis.js';
@@ -420,92 +420,3 @@ export function soloView(s) {
   return s;
 }
 export const soloGold = async (guildId, userId) => (guildId ? goldOf(guildId, userId).catch(() => null) : null);
-
-// =====================================================================
-// Jeux du salon : lancés d'ici, joués dans le salon Discord
-// =====================================================================
-
-export const SALON_GAMES = [
-  { id: 'loupgarou', emoji: '🐺', name: 'Loup-garou', desc: 'Avec narrateur à voix haute, rôles en MP', cmd: 'jeu-loupgarou' },
-  { id: 'imposteur', emoji: '🕵️', name: 'L’imposteur', desc: 'Un mot secret, un intrus', cmd: 'jeu-imposteur' },
-  { id: 'undercover', emoji: '🕶️', name: 'Undercover', desc: 'Undercovers et Mister White, 4 joueurs min', run: 'undercover' },
-  { id: 'histoire', emoji: '📖', name: 'Histoire dont vous êtes les héros', desc: 'L’IA raconte, vous décidez', cmd: 'jeu-histoire' },
-  { id: 'petitbac', emoji: '📝', name: 'Petit Bac', desc: 'Une lettre, 5 catégories, l’IA vérifie', run: 'petitbac' },
-  { id: 'actionverite', emoji: '🎲', name: 'Action ou vérité', desc: 'Défis gentils validés par les autres', run: 'actionverite' },
-  { id: 'quizserveur', emoji: '🧭', name: 'Quiz du serveur', desc: 'Des questions sur le serveur et ses membres', run: 'quizserveur' },
-  { id: 'blindtest', emoji: '🎧', name: 'Blind test', desc: 'Rap FR, TikTok, années 2010… dans le vocal', cmd: 'jeu-blindtest' },
-  { id: 'devine', emoji: '🎬', name: 'Devine le film, la série, l’animé', desc: 'Un extrait dans le vocal', cmd: 'jeu-devine' },
-  { id: 'pendumusical', emoji: '🎵', name: 'Pendu musical', desc: 'Le titre lettre par lettre, l’extrait en indice', run: 'pendumusical' },
-  { id: 'rebus', emoji: '🧩', name: 'Rébus en emojis', desc: 'Devinez le titre caché', cmd: 'jeu-rebus' },
-  { id: 'fans', emoji: '📊', name: 'Plus ou moins de fans', desc: 'Quel artiste a le plus d’auditeurs ?', cmd: 'jeu-fans' },
-  { id: 'chasse', emoji: '🗺️', name: 'Chasse au trésor', desc: '3 énigmes, 3 morceaux de carte', run: 'chasse' },
-  { id: 'rappeur', emoji: '🎤', name: 'Devine le rappeur', desc: 'La photo floutée se dévoile', run: 'rappeur' },
-  { id: 'motscroises', emoji: '📰', name: 'Mots croisés de l’IA', desc: '6 définitions, des lettres qui se dévoilent', run: 'motscroises' },
-  { id: 'escape', emoji: '🗝️', name: 'Escape game', desc: '3 salles, 10 minutes, en équipe', run: 'escape' },
-  { id: 'quiditca', emoji: '🗨️', name: 'Qui a dit ça ?', desc: 'Retrouvez l’auteur de vrais messages', run: 'quiditca' },
-  { id: 'freestyle', emoji: '🎙️', name: 'Battle de freestyle', desc: 'L’IA écoute et désigne le gagnant (vocal)', cmd: 'jeu-freestyle', needsOpponent: true },
-];
-
-/** Une fausse « interaction » : le jeu démarre dans le salon comme si on avait tapé la commande. */
-function channelInteraction(client, guild, channel, member, commandName, values) {
-  let replied = false;
-  let deferred = false;
-  const send = async (payload) => {
-    const p = typeof payload === 'string' ? { content: payload } : { ...payload };
-    // Les réponses privées (« la salle est ouverte dans #… ») n'ont pas de sens ici
-    if ((Number(p.flags ?? 0) & 64) || p.ephemeral) return null;
-    delete p.flags;
-    delete p.ephemeral;
-    return channel.send(p).catch(() => null);
-  };
-  const get = (name) => (values[name] === undefined ? null : values[name]);
-  return {
-    client, guild, guildId: guild.id, channel, channelId: channel.id, user: member.user, member, memberPermissions: member.permissions, commandName,
-    options: {
-      getString: (n) => (get(n) === null ? null : String(get(n))), getInteger: (n) => (get(n) === null ? null : Number(get(n))), getNumber: (n) => get(n),
-      getBoolean: (n) => get(n), getUser: (n) => get(n), getMember: (n) => null, getChannel: () => null, getRole: () => null, getSubcommand: () => null, getSubcommandGroup: () => null, getFocused: () => '', data: [],
-    },
-    inGuild: () => true, isChatInputCommand: () => true, isCommand: () => true, isRepliable: () => true, isAutocomplete: () => false, isMessageContextMenuCommand: () => false,
-    isButton: () => false, isStringSelectMenu: () => false, isModalSubmit: () => false,
-    get replied() { return replied; }, get deferred() { return deferred; },
-    reply: async (p) => { replied = true; return send(p); },
-    deferReply: async () => { deferred = true; },
-    editReply: send, followUp: send, fetchReply: async () => null, deleteReply: async () => {}, showModal: async () => {},
-  };
-}
-
-export async function launchSalonGame(client, r, me, body) {
-  const spec = SALON_GAMES.find((x) => x.id === body.id);
-  if (!spec) return { error: 'Jeu inconnu.' };
-  const guild = client?.guilds.cache.get(r.guildId ?? '');
-  const channel = guild?.channels?.cache?.get(r.id);
-  if (!guild || !channel?.isTextBased?.()) return { error: 'Ce jeu se lance depuis un salon de serveur.' };
-  const member = await guild.members.fetch(me).catch(() => null);
-  if (!member) return { error: 'Tu dois être membre du serveur.' };
-  const values = {};
-  if (spec.needsOpponent) {
-    const opp = body.opponent ? await client.users.fetch(String(body.opponent)).catch(() => null) : null;
-    if (!opp) return { error: 'Choisis un adversaire présent dans l’arcade.' };
-    values.adversaire = opp;
-  }
-  const i = channelInteraction(client, guild, channel, member, spec.cmd ?? spec.id, values);
-  try {
-    if (spec.cmd) {
-      const { runCommand } = await import('../handlers/interactions.js');
-      runCommand(client, i).catch((err) => console.warn('[arcade] salon :', err.message));
-    } else {
-      const soirees = await import('../games/soirees.js');
-      const d = await import('../games/defis.js');
-      const RUN = {
-        undercover: () => soirees.startUndercover(i), petitbac: () => soirees.startPetitBac(i), actionverite: () => soirees.startActionVerite(i),
-        quizserveur: () => soirees.startQuizServeur(i), pendumusical: () => soirees.startPendu(i),
-        chasse: () => d.startTreasureHunt(i), rappeur: () => d.startGuessRapper(i), motscroises: () => d.startCrossword(i), escape: () => d.startEscapeGame(i),
-        quiditca: () => d.startWhoSaidIt(i, { source: channel }),
-      };
-      Promise.resolve(RUN[spec.run]()).catch((err) => console.warn('[arcade] salon :', err.message));
-    }
-  } catch (err) {
-    return { error: err.message };
-  }
-  return { ok: true, name: spec.name };
-}

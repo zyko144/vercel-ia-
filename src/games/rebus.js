@@ -214,3 +214,6 @@ export async function handleRebusButton(interaction) {
   await interaction.deferUpdate();
   return end(game, { stopped: true });
 }
+
+// Réutilisé par la version arcade (src/arcade/party.js)
+export const REBUS_PARTS = { answersFor, makeRebus, guesses };
