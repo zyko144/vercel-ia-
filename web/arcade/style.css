@@ -247,3 +247,5 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 .rolecard p { margin: 0; font-size: 14px; }
 .endtext { text-align: left; font-size: 14px; }
 @media (max-width: 560px) { .duo { grid-template-columns: 1fr; } .rolecard .rc { flex-direction: column; } }
+#plateau .keys { width: 100%; }
+.plist li { text-align: left; }

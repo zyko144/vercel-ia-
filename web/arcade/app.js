@@ -624,7 +624,7 @@ function updateParty() {
     if ($('micBtn')) $('micBtn').onclick = () => startMic(mic?.seconds ?? 30);
   }
   if (audioBlock) playPartyAudio(audioBlock.src); else stopPartyAudio();
-  $('actions').innerHTML = state.me === state.host ? '<button class="ghost small" id="stopParty">⏹️ Arrêter la partie</button>' : '';
+  $('actions').innerHTML = state.me === state.host || state.me === g.host ? '<button class="ghost small" id="stopParty">⏹️ Arrêter la partie</button>' : '';
   if ($('stopParty')) $('stopParty').onclick = () => { if (confirm('Arrêter la partie pour tout le monde ?')) send({ type: 'lobby' }); };
   updatePlayers(g.scores);
 }

@@ -99,7 +99,7 @@ async function play(party, { players = [A, B, C], bots = false, choice, theme, c
         if (b.t === 'vote' && !b.lock && !b.mine && b.ids.length) await act(r, u.id, { type: 'vote', id: b.ids.find((id) => id !== u.id) ?? b.ids[0] });
         if (b.t === 'input' && !b.done) await act(r, u.id, { type: 'answer', text: answer?.(g, u) ?? 'pirate' });
         if (b.t === 'form' && !b.done) await act(r, u.id, { type: 'form', values: b.fields.map(() => `${v.screen.title.slice(-1)}ouba`) });
-        if (b.t === 'keys' && !b.lock) { const c = 'eaisnrtoulbdjm'.split('').find((x) => !b.ok.includes(x) && !b.ko.includes(x)); if (c) await act(r, u.id, { type: 'letter', letter: c }); }
+        if (b.t === 'keys' && !b.lock) { const c = 'eaisnrtoulbdjmgcpvfhqyzkwx'.split('').find((x) => !b.ok.includes(x) && !b.ko.includes(x)); if (c) await act(r, u.id, { type: 'letter', letter: c }); }
         if (b.t === 'mic' && !b.done) await act(r, u.id, { type: 'answer', text: 'Je rappe sur le navire, le capitaine est en délire' });
       }
       if (chat) { const t = chat(g, u, v); if (t) await act(r, u.id, { type: 'chat', text: t }); }
@@ -212,7 +212,8 @@ await check('chasse au trésor : la bonne réponse écrite dans le chat gagne le
 
 await check('mots croisés : grille de secours, mots trouvés dans le chat', async () => {
   const words = ['boussole', 'galion', 'ancre', 'vigie', 'tresor', 'recif'];
-  const res = await play('motscroises', { players: [A], chat: () => words.shift() ?? null });
+  let n = 0;
+  const res = await play('motscroises', { players: [A], chat: (g, u, v) => (v.screen?.blocks?.some((b) => b.t === 'grid') ? words[n++ % words.length] : null) });
   assert.equal(res.end?.kind, 'fin');
   assert.equal(res.end.podium[0][1], 6);
 });

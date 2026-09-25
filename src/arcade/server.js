@@ -339,7 +339,7 @@ export async function act(r, me, body) {
     return { ok: true };
   }
   if (body.type === 'lobby') {
-    if (!gameOver(r.game) && [...r.players.keys()][0] !== me) return { error: 'Seul l’hôte peut arrêter la partie.' };
+    if (!gameOver(r.game) && [...r.players.keys()][0] !== me && r.game?.host !== me) return { error: 'Seul l’hôte (ou celui qui a lancé la partie) peut l’arrêter.' };
     if (r.game?.kind === 'party') GAMES.party.stop(r.game);
     r.game = null;
     bump(r);
