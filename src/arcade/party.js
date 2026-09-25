@@ -15,6 +15,7 @@ import { _test as defis } from '../games/defis.js';
 import { matchRatio } from '../music/deezer.js';
 import { playedGame } from '../features/treasury.js';
 import { speech } from './tts.js';
+import { voiceOf } from '../features/premium.js';
 
 export const PARTY = {};
 export const STOP = Symbol('arrêt');
@@ -49,7 +50,7 @@ function prepareVoice(g, screen) {
   const texts = new Set();
   if (typeof screen === 'function') { for (const id of g.players.filter((x) => !isBot(x)).slice(0, 12)) { try { const t = sayOf(screen(id)); if (t) texts.add(t); } catch { /* écran propre à un joueur */ } } }
   else if (sayOf(screen)) texts.add(sayOf(screen));
-  for (const t of [...texts].slice(0, 3)) speech(t).catch(() => {});
+  for (const t of [...texts].slice(0, 3)) speech(t, g.voice).catch(() => {});
 }
 
 // ------------------------------------------------------------------ Moteur
@@ -181,6 +182,7 @@ export function registerParty(GAMES, h) {
       const names = Object.fromEntries([...humans.map((id) => [id, h.nameOf(r, id)]), ...bots.map((id) => [id, botName(id)])]);
       const g = {
         kind: 'party', game: body.party, host, players: [...humans, ...bots], names, scores: {}, cards: {}, wakers: new Set(),
+        voice: voiceOf(r.guildId, 'Charon'),
         screen: { title: `${spec.emoji} ${spec.name}`, blocks: [{ t: 'text', text: 'Préparation de la partie…', cls: 'big' }] },
         opts: { theme: String(body.theme ?? '').slice(0, 60), choice: String(body.choice ?? '').slice(0, 30) }, over: false, stopped: false, imageKeys: [],
       };

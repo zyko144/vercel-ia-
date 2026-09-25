@@ -9,7 +9,8 @@
 <meta name="theme-color" content="#120f0b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Crimson+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Crimson+Pro:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Crimson+Pro:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
 <style>
 :root {
   color-scheme: dark;
@@ -250,8 +251,10 @@ h1, h2, h3, .logo span, .price .amount, .detail-head h1 { font-family: var(--tit
 .hero h1 { animation-delay: .08s; } .hero .lead { animation-delay: .16s; } .hero .actions { animation-delay: .24s; } .hero .note { animation-delay: .3s; } .preview { animation-delay: .38s; } .stats { animation-delay: .46s; }
 .preview { animation: rise .8s cubic-bezier(.2, .8, .2, 1) .38s both, sway 8s ease-in-out 1.2s infinite; }
 .hero h1 { background: linear-gradient(90deg, #eadcc0 0%, #fff4d6 25%, #eadcc0 50%, #d9b77a 75%, #eadcc0 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rise .8s cubic-bezier(.2, .8, .2, 1) .08s both, shimmer 9s linear 1s infinite; }
-.reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2, .8, .2, 1); transition-delay: calc(var(--i, 0) * 70ms); }
-.reveal.seen { opacity: 1; transform: none; }
+.reveal:not(.seen) { opacity: 0; }
+/* Apparition en animation (pas en transition) : le survol des cartes reste instantané */
+.reveal.seen { animation: reveal-in .6s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes reveal-in { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
 body::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 200vh; pointer-events: none; z-index: 0; opacity: .7; animation: drift 70s linear infinite;
   background-image: radial-gradient(2px 2px at 8% 20%, rgba(242, 193, 78, .55), transparent 60%), radial-gradient(1.5px 1.5px at 22% 70%, rgba(234, 220, 192, .45), transparent 60%), radial-gradient(2px 2px at 37% 40%, rgba(242, 193, 78, .4), transparent 60%), radial-gradient(1px 1px at 51% 85%, rgba(234, 220, 192, .5), transparent 60%), radial-gradient(2.5px 2.5px at 66% 30%, rgba(242, 193, 78, .35), transparent 60%), radial-gradient(1.5px 1.5px at 79% 60%, rgba(234, 220, 192, .45), transparent 60%), radial-gradient(2px 2px at 92% 15%, rgba(242, 193, 78, .45), transparent 60%);
   background-size: 100% 100vh; }
@@ -277,7 +280,7 @@ main, header, footer { position: relative; z-index: 1; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  .reveal { opacity: 1; transform: none; }
+  .reveal, .reveal:not(.seen) { opacity: 1; transform: none; animation: none; }
   body::before { display: none; }
 }
 
@@ -541,9 +544,9 @@ body { background:
 
   var PLANS = [
     { id: 'gratuit', name: 'Gratuit', desc: 'Tout le nécessaire pour faire vivre un serveur.', amount: '0 €', per: '', billing: 'Pour toujours', cta: 'Ajouter à Discord',
-      items: ['Tous les modules inclus', 'IA vocale : 60 min par mois', 'Tableau de bord complet'], off: ['Choix de la voix de l’IA', 'Embeds aux couleurs du serveur', 'Rapport hebdomadaire', 'Surveillance vocale avancée'] },
+      items: ['Tous les modules inclus', 'IA vocale : 60 min par mois', 'Tableau de bord complet'], off: ['Gains de l’arcade ×2', 'Choix de la voix de l’IA', 'Embeds aux couleurs du serveur', 'Rapport hebdomadaire', 'Surveillance vocale avancée'] },
     { id: 'veilleur', name: 'Veilleur', desc: 'Pour les serveurs actifs qui veulent leur propre style.', amount: '4,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Veilleur', featured: true,
-      items: ['Tout le plan Gratuit', 'Quêtes et récompense du jour ×2', 'IA vocale : 600 min par mois', 'Choix de la voix de l’IA', 'Embeds à vos couleurs et logo', 'Rapport hebdomadaire en MP'], off: ['Surveillance vocale avancée'] },
+      items: ['Tout le plan Gratuit', 'Quêtes, récompense du jour et gains de l’arcade ×2', 'IA vocale : 600 min par mois', 'Choix de la voix de l’IA (et du narrateur des jeux)', 'Embeds à vos couleurs et logo', 'Rapport hebdomadaire en MP'], off: ['Surveillance vocale avancée'] },
     { id: 'gardien', name: 'Gardien', desc: 'Pour les grandes communautés et leur équipe de staff.', amount: '9,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Gardien',
       items: ['Tout le plan Veilleur', 'IA vocale illimitée', 'Surveillance vocale avancée', 'Staff protégé et mots interdits'], off: [] },
   ];

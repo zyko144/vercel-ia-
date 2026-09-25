@@ -101,6 +101,9 @@ function render() {
   if ($('soloBox')) renderSolo($('soloBox'));
   if (!$('drawer').hidden) renderSolo($('drawerBody'));
   setBackground(kind === 'party' ? g.game : ['dessin', 'quiz', 'pendu', 'nombre', 'morpion', 'puissance4'].includes(kind) ? kind : null);
+  $('premiumTag').hidden = !state.premium;
+  $('premiumTag').textContent = state.premium ? `✨ ${state.premium}` : '';
+  $('premiumTag').title = state.premium ? 'Serveur premium : gains de l’arcade ×2 et voix du narrateur au choix' : '';
   $('goldTag').textContent = state.gold === null || state.gold === undefined ? '' : `🪙 ${Number(state.gold).toLocaleString('fr-FR')}`;
 }
 $('home').onclick = () => send({ type: 'lobby' });

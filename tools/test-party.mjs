@@ -170,14 +170,15 @@ await check('imposteur : mot proche mais différent, même carte pour tous, règ
   const r = roomOf(ROOM, G);
   for (const u of [A, B, C]) join(r, u);
   await act(r, A.id, { type: 'start', game: 'party', party: 'imposteur', bots: true });
-  await wait(300);
+  // L'écran des règles ne dure qu'un instant en mode accéléré : on le guette
+  let rules = null;
+  for (let t = 0; t < 400 && !rules; t++) { const sc = r.game?.cards && Object.keys(r.game.cards).length ? GAMES.party.view(r.game, A.id).screen : null; if (sc?.title?.includes('règles')) rules = sc; else await wait(5); }
   const g = r.game;
   const cards = g.players.map((id) => g.cards[id]);
   const words = new Set(cards.map((c) => c.title));
   assert.equal(words.size, 2, 'deux mots différents');
   assert.equal(new Set(cards.map((c) => c.text)).size, 1, 'même texte : l’imposteur ne sait pas qu’il l’est');
-  const rules = GAMES.party.view(g, A.id).screen;
-  assert.match(rules.title, /règles/);
+  assert.ok(rules, 'écran des règles affiché');
   assert.match(rules.say, /mot proche/);
   // Jusqu'au vote : chacun donne son indice
   const until = Date.now() + 20_000;

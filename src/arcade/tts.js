@@ -34,38 +34,65 @@ const release = () => { running -= 1; waiting.shift()?.(); };
 async function synthesize(text, voice) {
   await slot();
   running += 1;
-  let live = null;
+  let conn = null;
   try {
+    conn = await take(voice);
     const chunks = [];
     await new Promise((resolve, reject) => {
       const guard = setTimeout(resolve, Math.min(40_000, 6_000 + text.length * 90));
-      ai.live.connect({
-        model: config.voiceAi.model,
-        config: {
-          responseModalities: [Modality.AUDIO],
-          systemInstruction: 'Tu es le narrateur d’un jeu entre amis, chaleureux et vivant. Quand on t’envoie un texte, lis-le à voix haute en français, mot pour mot, avec le ton qui va bien. N’ajoute rien, ne commente pas, ne réponds pas aux questions du texte.',
-          speechConfig: { languageCode: 'fr-FR', voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
-          thinkingConfig: { thinkingBudget: 0 },
+      conn.on = {
+        message: (message) => {
+          for (const part of message.serverContent?.modelTurn?.parts ?? []) if (part.inlineData?.data) chunks.push(Buffer.from(part.inlineData.data, 'base64'));
+          if (message.serverContent?.turnComplete) { clearTimeout(guard); resolve(); }
         },
-        callbacks: {
-          onmessage: (message) => {
-            for (const part of message.serverContent?.modelTurn?.parts ?? []) if (part.inlineData?.data) chunks.push(Buffer.from(part.inlineData.data, 'base64'));
-            if (message.serverContent?.turnComplete) { clearTimeout(guard); resolve(); }
-          },
-          onerror: (event) => { clearTimeout(guard); reject(new Error(event?.message ?? 'erreur Gemini')); },
-          onclose: () => { clearTimeout(guard); resolve(); },
-        },
-      }).then((session) => {
-        live = session;
-        try { session.sendRealtimeInput({ text: `Lis ce texte à voix haute : ${text}` }); } catch { session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `Lis ce texte à voix haute : ${text}` }] }], turnComplete: true }); }
-      }).catch(reject);
+        error: (err) => { clearTimeout(guard); reject(err); },
+        close: () => { clearTimeout(guard); resolve(); },
+      };
+      const say = `Lis ce texte à voix haute : ${text}`;
+      try { conn.session.sendRealtimeInput({ text: say }); } catch { conn.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: say }] }], turnComplete: true }); }
     });
     const pcm = Buffer.concat(chunks);
     return pcm.length > 2000 ? toWav(pcm, 24_000) : null;
   } finally {
-    try { live?.close(); } catch { /* déjà fermé */ }
+    try { conn?.session.close(); } catch { /* déjà fermé */ }
     release();
   }
+}
+
+// Une connexion toujours prête pendant qu'on joue : on gagne le temps d'ouverture (souvent 1 s) à chaque phrase.
+const SPARE_MS = 120_000;
+const spares = new Map(); // voix -> { ready: Promise<conn>, at, timer }
+function open(voice) {
+  const conn = { session: null, on: null };
+  const ready = ai.live.connect({
+    model: config.voiceAi.model,
+    config: {
+      responseModalities: [Modality.AUDIO],
+      systemInstruction: 'Tu es le narrateur d’un jeu entre amis, chaleureux et vivant. Quand on t’envoie un texte, lis-le à voix haute en français, mot pour mot, avec le ton qui va bien. N’ajoute rien, ne commente pas, ne réponds pas aux questions du texte.',
+      speechConfig: { languageCode: 'fr-FR', voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+    callbacks: {
+      onmessage: (m) => conn.on?.message(m),
+      onerror: (e) => conn.on?.error(new Error(e?.message ?? 'erreur Gemini')),
+      onclose: () => { conn.closed = true; conn.on?.close(); },
+    },
+  }).then((session) => { conn.session = session; return conn; });
+  return ready;
+}
+async function take(voice) {
+  const spare = spares.get(voice);
+  spares.delete(voice);
+  if (spare) clearTimeout(spare.timer);
+  let conn = spare ? await spare.ready.catch(() => null) : null;
+  if (!conn || conn.closed) conn = await open(voice);
+  // La prochaine connexion s'ouvre déjà, et se ferme si personne ne parle pendant 2 minutes
+  const next = { ready: open(voice), at: Date.now() };
+  next.ready.catch(() => spares.get(voice) === next && spares.delete(voice));
+  next.timer = setTimeout(() => { if (spares.get(voice) === next) { spares.delete(voice); next.ready.then((c) => c.session.close()).catch(() => {}); } }, SPARE_MS);
+  next.timer.unref?.();
+  spares.set(voice, next);
+  return conn;
 }
 
 /** Le texte lu à voix haute (WAV), ou null si l'IA vocale ne répond pas. */
@@ -84,3 +111,6 @@ export async function speech(text, voice = 'Charon') {
   }
   return wav;
 }
+
+// Bancs d'essai
+export const _test = { ai, spares };
