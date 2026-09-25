@@ -105,7 +105,36 @@ section { padding: 96px 0; border-bottom: 1px solid var(--border); }
 .list { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 8px; font-size: 14.5px; color: #cfcfd6; }
 .list li { display: flex; gap: 10px; align-items: flex-start; }
 .list svg { flex: none; width: 16px; height: 16px; margin-top: 4px; color: var(--accent-hover); }
-.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--muted); margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.grid .card { display: flex; flex-direction: column; }
+.grid .card .list { flex: 1; align-content: start; }
+.card-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--muted); }
+.details-link { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 7px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 500; transition: background .15s; }
+.details-link:hover { background: var(--accent-hover); }
+.details-link svg { width: 14px; height: 14px; }
+
+/* Page de détail d'une catégorie */
+.detail { padding: 48px 0 96px; }
+.back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 15px; margin-bottom: 32px; }
+.back:hover { color: var(--text); }
+.detail-head { display: flex; gap: 20px; align-items: flex-start; padding-bottom: 36px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+.detail-head .icon { width: 52px; height: 52px; border-radius: 14px; margin: 0; flex: none; }
+.detail-head .icon svg { width: 26px; height: 26px; }
+.detail-head h1 { font-size: clamp(28px, 4vw, 40px); }
+.detail-head p { color: var(--muted); font-size: 17px; margin-top: 10px; max-width: 680px; }
+.detail-head .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.pill { font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); }
+.pill code { color: var(--text); font-size: 12.5px; }
+.group { margin-bottom: 44px; }
+.group h2 { font-size: 20px; font-weight: 600; }
+.group > p { color: var(--muted); font-size: 15px; margin-top: 6px; }
+.feature-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+@media (max-width: 900px) { .feature-list { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .feature-list { grid-template-columns: 1fr; } }
+.feature { padding: 16px 18px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.feature b { display: block; font-weight: 600; font-size: 15px; }
+.feature span { display: block; color: var(--muted); font-size: 14px; margin-top: 4px; }
+.detail-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-top: 28px; border-top: 1px solid var(--border); }
 
 /* Étapes */
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: step; }
@@ -304,6 +333,10 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
   </section>
 </main>
 
+<div id="detail-view" hidden>
+  <div class="container detail" id="detail"></div>
+</div>
+
 <footer>
   <div class="container">
     <span>© <span id="year"></span> <span class="bot-name">AI Vercel</span></span>
@@ -350,13 +383,14 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
       (off || []).map(function (x) { return '<li class="off"><svg><use href="#i-minus"/></svg><span>' + esc(x) + '</span></li>'; }).join('') + '</ul>';
   }
 
+  var arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
   var FEATURES = [
-    { icon: 'ai', title: 'Assistant IA', text: 'Répond dans vos salons avec le ton du serveur et lance les actions qu’on lui demande.', items: ['Se souvient de chaque membre', 'Parle en vocal', 'Traduction et FAQ automatiques'], cmd: '/ia' },
-    { icon: 'games', title: 'Jeux de groupe', text: 'Des soirées animées par le bot, sans site à côté ni préparation.', items: ['Loup-garou, Undercover, imposteur', 'Petit Bac, quiz, action ou vérité', 'Blind test et pendu musical'], cmd: '/jeux' },
-    { icon: 'music', title: 'Musique', text: 'Un lecteur complet dans vos salons vocaux, en bonne qualité.', items: ['Spotify, YouTube, Apple Music', 'Paroles synchronisées', 'Radio 24 h/24 et vocaux temporaires'], cmd: '/musique' },
-    { icon: 'shield', title: 'Modération et sécurité', text: 'Le serveur se protège seul, le staff garde la main sur chaque décision.', items: ['Anti-raid, anti-spam, anti-arnaque', 'Vérification à l’arrivée', 'Casier, journal et contestation'], cmd: '/sanction' },
-    { icon: 'ticket', title: 'Tickets et outils', text: 'Ce que le staff faisait à la main, en quelques clics.', items: ['Tickets privés avec compte rendu', 'Annonces, suggestions, accueil', 'Sauvegarde et restauration du serveur'], cmd: '/pannel' },
-    { icon: 'chart', title: 'Niveaux et économie', text: 'Des raisons de revenir chaque jour, pour tous les membres.', items: ['XP en écrit et en vocal', 'Récompense quotidienne et boutique', 'Rôles personnalisés validés par le staff'], cmd: '/serveur' },
+    { id: 'ia', icon: 'ai', title: 'Assistant IA', text: 'Répond dans vos salons avec le ton du serveur et lance les actions qu’on lui demande.', items: ['Se souvient de chaque membre', 'Parle en vocal', 'Traduction et FAQ automatiques'], cmd: '/ia' },
+    { id: 'jeux', icon: 'games', title: 'Jeux de groupe', text: 'Des soirées animées par le bot, sans site à côté ni préparation.', items: ['Loup-garou, Undercover, imposteur', 'Petit Bac, quiz, action ou vérité', 'Blind test et pendu musical'], cmd: '/jeux' },
+    { id: 'musique', icon: 'music', title: 'Musique', text: 'Un lecteur complet dans vos salons vocaux, en bonne qualité.', items: ['Spotify, YouTube, Apple Music', 'Paroles synchronisées', 'Radio 24 h/24 et vocaux temporaires'], cmd: '/musique' },
+    { id: 'moderation', icon: 'shield', title: 'Modération et sécurité', text: 'Le serveur se protège seul, le staff garde la main sur chaque décision.', items: ['Anti-raid, anti-spam, anti-arnaque', 'Vérification à l’arrivée', 'Casier, journal et contestation'], cmd: '/sanction' },
+    { id: 'outils', icon: 'ticket', title: 'Tickets et outils', text: 'Ce que le staff faisait à la main, en quelques clics.', items: ['Tickets privés avec compte rendu', 'Annonces, suggestions, accueil', 'Sauvegarde et restauration du serveur'], cmd: '/pannel' },
+    { id: 'niveaux', icon: 'chart', title: 'Niveaux et économie', text: 'Des raisons de revenir chaque jour, pour tous les membres.', items: ['XP en écrit et en vocal', 'Récompense quotidienne et boutique', 'Rôles personnalisés validés par le staff'], cmd: '/serveur' },
   ];
 
   var PLANS = [
@@ -368,8 +402,214 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
       items: ['Tout le plan Veilleur', 'IA vocale illimitée', 'Surveillance vocale avancée', 'Staff protégé et mots interdits'], off: [] },
   ];
 
+
+  // Toutes les fonctionnalités de chaque catégorie (page « Détails »)
+  var DETAILS = {
+    ia: { intro: 'Une IA qui répond dans vos salons, se souvient de vos membres, parle en vocal et lance les actions qu’on lui demande.', cmds: ['/ia', 'mention du bot'], groups: [
+      { title: 'Discussion', items: [
+        ['Répond dans les salons', 'Mentionnez le bot ou écrivez dans le salon IA : il répond avec le ton du serveur.'],
+        ['Conversations privées', 'Dans le salon IA, chaque membre peut avoir son propre fil privé.'],
+        ['Recherche sur le web', 'Pour l’actualité, les prix ou les résultats, avec les sources en lien.'],
+        ['Lance les actions', 'Demandez « lance un undercover » ou « mets du Jul » : un bouton Lancer apparaît.'],
+        ['Prévient le staff', 'Quand il ne peut pas répondre de façon fiable, il prévient le responsable du serveur.'],
+        ['Consignes du serveur', 'Le staff lui donne des règles et infos à connaître depuis le tableau de bord.'],
+      ] },
+      { title: 'Outils', items: [
+        ['Poser une question en privé', 'Réponse visible uniquement par la personne qui demande.'],
+        ['Expliquer un sujet', 'Une explication claire, adaptée au niveau demandé.'],
+        ['Aide en code', 'Explique, corrige ou écrit du code, avec un bouton pour le copier.'],
+        ['Corriger un texte', 'Orthographe, grammaire et tournures.'],
+        ['Traduire', 'Dans la langue de votre choix, ou depuis le clic droit sur un message.'],
+        ['Résumer le salon', 'Ce que vous avez raté, en quelques lignes.'],
+        ['Créer et modifier des images', 'À partir d’une description ou d’une image envoyée.'],
+      ] },
+      { title: 'Mémoire et automatismes', items: [
+        ['Mémoire des membres', 'Il retient les goûts, jeux et pseudos de chacun et s’en sert plus tard.'],
+        ['Oubli à la demande', 'Chaque membre peut voir ce que l’IA sait de lui et tout effacer.'],
+        ['Traduction automatique', 'Dans les salons choisis, chaque message est traduit dans la langue voulue.'],
+        ['FAQ qui apprend', 'Le staff répond une fois ; ensuite l’IA répond seule aux mêmes questions.'],
+      ] },
+      { title: 'IA vocale', items: [
+        ['Conversation à voix haute', 'Elle rejoint votre salon vocal, vous écoute et répond.'],
+        ['Choix de la voix', 'Plusieurs voix disponibles avec les offres Veilleur et Gardien.'],
+        ['Narrateur', 'Elle raconte les parties de loup-garou et les histoires interactives.'],
+      ] },
+    ] },
+    jeux: { intro: 'Des jeux de groupe et des petits jeux animés entièrement dans Discord, pour les soirées comme pour tous les jours.', cmds: ['/jeux'], groups: [
+      { title: 'Jeux de groupe', items: [
+        ['Loup-garou', 'Rôles envoyés en message privé, nuits et votes animés, narrateur vocal.'],
+        ['L’imposteur', 'Tout le monde a le même mot, sauf l’intrus. À vous de le trouver.'],
+        ['Undercover', 'Undercovers et Mister White, à partir de 4 joueurs.'],
+        ['Petit Bac', 'Une lettre, cinq catégories, l’IA vérifie les réponses.'],
+        ['Action ou vérité', 'Des défis tirés au sort, validés par les autres joueurs.'],
+        ['Quiz du serveur', 'Des questions sur votre serveur et ses membres.'],
+        ['Histoire interactive', 'L’IA raconte, les joueurs votent la suite. À l’écrit ou en vocal.'],
+        ['Battle de freestyle', 'Deux rappeurs, une instru, l’IA écoute et désigne le gagnant.'],
+      ] },
+      { title: 'Quiz et devinettes', items: [
+        ['Quiz IA', 'Une question à quatre choix sur le sujet de votre choix.'],
+        ['Devine le film, la série, l’animé', 'Aussi les Disney et les jeux vidéo.'],
+        ['Rébus en emojis', 'Plusieurs thèmes et nombre de manches au choix.'],
+        ['Plus ou moins de fans', 'Quel artiste a le plus d’auditeurs ?'],
+        ['Noter une punchline', 'Une note sur 10 : rimes, jeu de mots, originalité, impact.'],
+        ['Fantasy Rap', 'Composez votre équipe de rappeurs et suivez le classement.'],
+      ] },
+      { title: 'Jeux musicaux', items: [
+        ['Blind test', 'Rap FR, TikTok, années 2010 et d’autres thèmes.'],
+        ['Pendu musical', 'Le titre se dévoile lettre par lettre, l’extrait sert d’indice.'],
+        ['Suite des paroles', 'Complétez les paroles avant les autres.'],
+        ['Devine l’année', 'En quelle année ce morceau est-il sorti ?'],
+      ] },
+      { title: 'Petits outils', items: [
+        ['Pile ou face', 'Pour trancher en une seconde.'],
+        ['Lancer des dés', 'Autant de dés et de faces que nécessaire.'],
+        ['Le bot choisit', 'Donnez plusieurs options, le bot en tire une.'],
+      ] },
+    ] },
+    musique: { intro: 'Un lecteur complet dans vos salons vocaux, des playlists, une radio non-stop et le partage de ce que vous écoutez.', cmds: ['/musique'], groups: [
+      { title: 'Lecture', items: [
+        ['Jouer un son', 'Un nom ou un lien Spotify, YouTube, Deezer ou Apple Music.'],
+        ['Contrôles', 'Pause, passer, précédent, arrêter, volume, aller à un moment.'],
+        ['File d’attente', 'Voir, mélanger, déplacer, retirer ou vider.'],
+        ['Boucle et lecture auto', 'Répète un son, ou enchaîne des sons du même style.'],
+        ['Effets audio', '8D, bass boost, nightcore et d’autres.'],
+        ['Paroles et karaoké', 'Paroles synchronisées avec la musique.'],
+      ] },
+      { title: 'Playlists', items: [
+        ['Playlists personnelles', 'Créer, compléter, lancer, consulter et supprimer.'],
+        ['Importer', 'Depuis un lien de playlist existante.'],
+        ['Playlist créée par l’IA', 'Décrivez une ambiance, l’IA compose la playlist.'],
+        ['Sons les plus écoutés', 'Le classement de votre serveur.'],
+      ] },
+      { title: 'Radio et partage', items: [
+        ['Radio 24 h/24', 'Un salon qui joue en continu, avec le titre en cours affiché.'],
+        ['Partager son Spotify', 'Le bot joue ce que vous écoutez, en même temps que vous.'],
+        ['Diffuser le son de son PC', 'Pour partager une musique qui n’est nulle part ailleurs.'],
+      ] },
+      { title: 'Vocal', items: [
+        ['Vocaux temporaires', 'Rejoignez « Créer un salon » : votre vocal apparaît et disparaît une fois vide.'],
+        ['Micros saturés', 'Le bot repère un micro qui sature et envoie un conseil en message privé.'],
+      ] },
+    ] },
+    moderation: { intro: 'Des outils de sanction clairs pour le staff, et une protection automatique qui tourne en permanence.', cmds: ['/sanction'], groups: [
+      { title: 'Sanctions', items: [
+        ['Avertir', 'Avertissements comptés, le membre est prévenu en message privé.'],
+        ['Rendre muet', 'Exclusion temporaire de 10 minutes à 28 jours.'],
+        ['Expulser et bannir', 'Avec suppression des derniers messages si besoin.'],
+        ['Débannir et rendre la parole', 'En un clic, avec la raison.'],
+        ['Historique', 'Voir ou effacer les avertissements d’un membre.'],
+      ] },
+      { title: 'Salons', items: [
+        ['Supprimer des messages', 'De 1 à 100, de tout le monde ou d’un seul membre.'],
+        ['Mode lent', 'Un délai entre deux messages.'],
+        ['Verrouiller un salon', 'Plus personne ne peut écrire, puis déverrouiller.'],
+      ] },
+      { title: 'Suivi des membres', items: [
+        ['Casier', 'Sanctions, notes du staff et état actuel d’un membre.'],
+        ['Notes du staff', 'Visibles uniquement par l’équipe.'],
+        ['Contestation', 'Le membre sanctionné peut contester : un ticket privé s’ouvre.'],
+        ['Journal', 'Messages supprimés ou modifiés, arrivées, départs, rôles.'],
+      ] },
+      { title: 'Protection automatique', items: [
+        ['Anti-raid', 'Trop d’arrivées d’un coup : invitations coupées et vérification renforcée.'],
+        ['Vérification à l’arrivée', 'Un bouton et un petit calcul pour écarter les robots.'],
+        ['Filtre de liens', 'Liens interdits supprimés, sauf pour les sites autorisés.'],
+        ['Anti-spam', 'Messages en rafale et mentions de masse bloqués.'],
+        ['Anti-arnaque', 'Faux « Nitro gratuit » et liens piégés supprimés.'],
+        ['Surveillance vocale', 'Insultes en vocal : avertissement, puis exclusion au troisième.'],
+      ] },
+    ] },
+    outils: { intro: 'Tickets, annonces, construction de salons, accueil et sauvegarde : tout ce qui fait tourner un serveur.', cmds: ['/pannel', '/serveur'], groups: [
+      { title: 'Tickets et annonces', items: [
+        ['Panneau de tickets', 'Titre, message et image personnalisés, avec aperçu avant publication.'],
+        ['Tickets privés', 'Un salon privé avec le staff, et un compte rendu à la fermeture.'],
+        ['Tickets ouverts', 'La liste des tickets en cours.'],
+        ['Annonces', 'Un message mis en forme avec image, relu avant d’être publié.'],
+        ['Sondages', 'Un vote rapide dans n’importe quel salon.'],
+        ['Faire parler le bot', 'Publier un message au nom du bot.'],
+      ] },
+      { title: 'Serveur', items: [
+        ['Construction de salons', 'Choisissez un thème : catégories, salons et permissions sont créés.'],
+        ['Carte de bienvenue', 'Une image avec la photo et le numéro de chaque nouveau membre.'],
+        ['Suggestions', 'Chaque idée devient un vote ; le staff l’accepte ou la refuse.'],
+        ['Sauvegarde', 'Rôles, salons et permissions sauvegardés (trois gardées).'],
+        ['Restauration', 'Recrée ce qui manque, sans rien supprimer.'],
+        ['Rôles', 'Donner ou retirer un rôle rapidement.'],
+      ] },
+      { title: 'Infos et rappels', items: [
+        ['Infos membre et serveur', 'Date d’arrivée, rôles, statistiques.'],
+        ['Photo de profil', 'Afficher la photo d’un membre en grand.'],
+        ['Rappels', 'Le bot vous prévient à l’heure choisie.'],
+        ['Contacter le responsable', 'Un message transmis directement au propriétaire du bot.'],
+      ] },
+      { title: 'Tableau de bord', items: [
+        ['Réglages par catégorie', 'Sécurité, niveaux, boutique, accueil, vocal et IA.'],
+        ['Suivi', 'Sanctions, parties en cours, rappels et paiements.'],
+        ['Rapport de la semaine', 'Activité du serveur envoyée en message privé (offres payantes).'],
+        ['Couleurs du serveur', 'Votre nom, couleur et logo sur les messages du bot (offres payantes).'],
+      ] },
+    ] },
+    niveaux: { intro: 'De l’XP pour chaque message et chaque minute en vocal, des récompenses et une boutique pour garder vos membres actifs.', cmds: ['/serveur'], groups: [
+      { title: 'Progression', items: [
+        ['XP écrit et vocal', 'Chaque message et chaque minute en vocal rapportent de l’XP.'],
+        ['Rôles de niveau', 'Des rôles donnés automatiquement à certains niveaux.'],
+        ['Carte de profil', 'Niveau, rang, barre d’XP, jetons et badges, en image.'],
+        ['Classement', 'Les membres les plus actifs du serveur.'],
+        ['Annonce des niveaux', 'Un message quand un membre passe un niveau.'],
+      ] },
+      { title: 'Économie', items: [
+        ['Récompense du jour', 'Des jetons chaque jour, plus si la série continue.'],
+        ['Boutique', 'Des rôles et avantages à acheter avec les jetons.'],
+        ['Rôle personnalisé', 'Le membre choisit le nom et la couleur, le staff accepte ou refuse.'],
+        ['Remboursement', 'Les jetons sont rendus si une demande est refusée.'],
+      ] },
+      { title: 'Mise en avant', items: [
+        ['Membre de la semaine', 'Chaque lundi, le membre le plus actif est mis en avant.'],
+        ['Badges', 'Messages, temps en vocal, séries et titres gagnés.'],
+      ] },
+    ] },
+  };
+
+  function renderDetail(id) {
+    var f = FEATURES.filter(function (x) { return x.id === id; })[0];
+    var d = DETAILS[id];
+    if (!f || !d) return false;
+    var i = FEATURES.indexOf(f);
+    var prev = FEATURES[(i + FEATURES.length - 1) % FEATURES.length];
+    var next = FEATURES[(i + 1) % FEATURES.length];
+    var total = d.groups.reduce(function (n, g) { return n + g.items.length; }, 0);
+    document.getElementById('detail').innerHTML =
+      '<a class="back" href="#fonctionnalites">← Toutes les fonctionnalités</a>' +
+      '<div class="detail-head"><div class="icon">' + icon(f.icon) + '</div><div><h1>' + esc(f.title) + '</h1><p>' + esc(d.intro) + '</p>' +
+      '<div class="meta"><span class="pill">' + total + ' fonctionnalités</span>' + d.cmds.map(function (c) { return '<span class="pill"><code>' + esc(c) + '</code></span>'; }).join('') + '</div></div></div>' +
+      d.groups.map(function (g) {
+        return '<div class="group"><h2>' + esc(g.title) + '</h2><div class="feature-list">' +
+          g.items.map(function (it) { return '<div class="feature"><b>' + esc(it[0]) + '</b><span>' + esc(it[1]) + '</span></div>'; }).join('') + '</div></div>';
+      }).join('') +
+      '<div class="detail-nav"><a class="btn btn-secondary" href="#details/' + prev.id + '">← ' + esc(prev.title) + '</a>' +
+      '<a class="btn btn-primary invite" href="' + INVITE + '" target="_blank" rel="noopener">Ajouter à Discord</a>' +
+      '<a class="btn btn-secondary" href="#details/' + next.id + '">' + esc(next.title) + ' →</a></div>';
+    document.title = f.title + ' · ' + (document.querySelector('.bot-name').textContent || 'AI Vercel');
+    return true;
+  }
+
+  var baseTitle = document.title;
+  function route() {
+    var m = location.hash.match(/^#details\/([a-z]+)$/);
+    var detail = m && renderDetail(m[1]);
+    document.getElementById('top').hidden = !!detail;
+    document.getElementById('detail-view').hidden = !detail;
+    if (detail) window.scrollTo(0, 0);
+    else {
+      document.title = baseTitle;
+      var target = location.hash && location.hash.length > 1 && document.getElementById(location.hash.slice(1));
+      if (target) target.scrollIntoView();
+    }
+  }
+  window.addEventListener('hashchange', route);
+
   document.getElementById('features').innerHTML = FEATURES.map(function (f) {
-    return '<article class="card"><div class="icon">' + icon(f.icon) + '</div><h3>' + esc(f.title) + '</h3><p>' + esc(f.text) + '</p>' + checkList(f.items) + '<div class="cmd">' + f.cmd + '</div></article>';
+    return '<article class="card"><div class="icon">' + icon(f.icon) + '</div><h3>' + esc(f.title) + '</h3><p>' + esc(f.text) + '</p>' + checkList(f.items) + '<div class="card-foot"><span class="cmd">' + f.cmd + '</span><a class="details-link" href="#details/' + f.id + '">Détails ' + arrow + '</a></div></article>';
   }).join('');
 
   document.getElementById('pricing').innerHTML = PLANS.map(function (p) {
@@ -381,6 +621,8 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
       '<div class="price"><span class="amount">' + p.amount + '</span><span class="per">' + p.per + '</span></div><p class="billing">' + esc(p.billing) + '</p>' +
       action + checkList(p.items, p.off) + '</article>';
   }).join('');
+
+  route();
 
   // Liens d'invitation
   document.querySelectorAll('.invite').forEach(function (a) { a.href = INVITE; a.target = '_blank'; a.rel = 'noopener'; });
