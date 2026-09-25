@@ -47,7 +47,7 @@ export const PANELS = {
   // ===================== /jeux =====================
   jeux: {
     key: 'jeux', command: 'jeux', color: 0x3dff9a, emoji: '🎮', title: 'Jeux',
-    intro: 'Choisis un jeu : le bot ouvre la salle d’attente, les autres rejoignent en un clic. Les jeux musicaux ouvrent leur propre menu.',
+    intro: 'Choisis un jeu : le bot ouvre la partie dans le salon des jeux, les autres rejoignent en un clic. Les victoires rapportent des pièces d’or.',
     groups: [{
       label: 'Jeux de groupe',
       actions: [
@@ -73,7 +73,7 @@ export const PANELS = {
         { id: 'fantasy-top', label: 'Fantasy Rap : classement', emoji: '🥇', cmd: 'jeu-fantasy', sub: 'classement' },
       ],
     }, {
-      label: 'Jeux musicaux et petits jeux',
+      label: 'Jeux musicaux',
       actions: [
         { id: 'blindtest', label: 'Blind test', emoji: '🎧', desc: 'Rap FR, TikTok, années 2010…', cmd: 'jeu-blindtest' },
         { id: 'devine', label: 'Devine (films, séries, animés…)', emoji: '🎲', cmd: 'jeu-devine' },
@@ -85,8 +85,8 @@ export const PANELS = {
         { id: 'paroles', label: 'Suite des paroles', emoji: '🎙️', cmd: 'jeu-paroles' },
         { id: 'annee', label: 'Devine l’année', emoji: '📅', cmd: 'jeu-annee' },
         { id: 'stop-musical', label: 'Arrêter le jeu musical', emoji: '⏹️', cmd: 'jeu-blindtest', fixed: { arreter: true } },
-        { id: 'pile', label: 'Pile ou face', emoji: '🪙', cmd: 'jeu-pile-ou-face' },
-        { id: 'des', label: 'Lancer des dés', emoji: '🎲', cmd: 'jeu-des', fields: [f.int('faces', 'Faces (défaut 6)', { min: 2, top: 1000 }), f.int('nombre', 'Nombre de dés (défaut 1)', { min: 1, top: 20 })] },
+        { id: 'pile', label: 'Pile ou face (sans mise)', emoji: '🪙', cmd: 'jeu-pile-ou-face' },
+        { id: 'des', label: 'Lancer des dés (sans mise)', emoji: '🎲', cmd: 'jeu-des', fields: [f.int('faces', 'Faces (défaut 6)', { min: 2, top: 1000 }), f.int('nombre', 'Nombre de dés (défaut 1)', { min: 1, top: 20 })] },
         { id: 'choisir', label: 'Le bot choisit pour toi', emoji: '🤔', cmd: 'choisir', fields: [f.text('options', 'Les options, séparées par |', { req: true, max: 600, ph: 'Fortnite | Minecraft | Valo' })] },
       ],
     }],

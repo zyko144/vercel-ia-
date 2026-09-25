@@ -90,7 +90,7 @@ await check('chaque fenêtre respecte les limites de Discord (5 champs, textes c
 
 await check('une action sans champ passe par la commande d’origine et répond en embed avec l’image', async () => {
   replies.length = 0;
-  const interaction = makeInteraction({ customId: 'pn:jeux:1', values: ['pile'] });
+  const interaction = makeInteraction({ customId: `pn:jeux:${PANELS.jeux.groups.findIndex((g) => g.actions.some((a) => a.id === 'pile'))}`, values: ['pile'] });
   await panels.handlePanelComponent(interaction.client, interaction);
   assert.equal(replies.length, 1);
   const embed = replies[0].embeds[0].toJSON();

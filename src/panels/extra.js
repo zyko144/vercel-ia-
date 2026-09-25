@@ -13,6 +13,7 @@ import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../
 import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUndercover } from '../games/soirees.js';
 import { backupsOf, createBackup, restoreConfirm, welcomeCard } from '../features/community.js';
 import { PANELS } from './catalog.js';
+import './games.js'; // groupes Duels, Taverne, Défis de /jeux
 import { TREASURY_ACTIONS, questProgress } from '../features/treasury.js';
 import { installBotChannels, installEmbed } from '../features/botChannels.js';
 
@@ -159,7 +160,7 @@ addActions('jeux', 'Jeux de groupe', [
   { id: 'actionverite', label: 'Action ou vérité', emoji: '🎲', desc: 'Défis gentils, les autres valident', run: (client, interaction) => startActionVerite(interaction) },
   { id: 'quizserveur', label: 'Quiz du serveur', emoji: '🧭', desc: 'Des questions sur le serveur et ses membres', run: (client, interaction) => startQuizServeur(interaction) },
 ]);
-addActions('jeux', 'Jeux musicaux et petits jeux', [
+addActions('jeux', 'Jeux musicaux', [
   { id: 'pendu', label: 'Pendu musical', emoji: '🎵', desc: 'Le titre lettre par lettre, l’extrait en indice', run: (client, interaction) => startPendu(interaction) },
 ]);
 

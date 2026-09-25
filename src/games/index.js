@@ -9,10 +9,14 @@ import { handleImpostorComponent, startImpostor } from './imposteur.js';
 import { handleWerewolfComponent, startWerewolf } from './loupgarou.js';
 import { handleRebusButton, startRebus } from './rebus.js';
 import { handleSoireeComponent } from './soirees.js';
+import { handleDuelComponent } from './duels.js';
+import { handleTripotComponent } from './tripot.js';
+import { handleDefiComponent } from './defis.js';
 
 export { routeGameMessage } from './common.js';
 export { startFantasyLoop } from './fantasy.js';
 export { startBattleLoop, startBattle } from './battle.js';
+export { startDefis } from './defis.js';
 
 export const isGameComponent = (interaction) => (interaction.customId ?? '').startsWith('g:');
 
@@ -26,6 +30,9 @@ const COMPONENTS = {
   fs: handleFreestyleButton,
   bat: handleBattleComponent,
   ng: handleSoireeComponent,
+  duel: handleDuelComponent,
+  tp: handleTripotComponent,
+  df: handleDefiComponent,
 };
 
 export async function handleGameComponent(client, interaction) {
