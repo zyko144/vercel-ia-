@@ -179,6 +179,24 @@ FAQ. Le nom, la photo et le statut du bot sont lus sur `/api/statut`.
 
 ---
 
+## 8 bis. Le tableau de bord public (comme MEE6) 🧭
+
+Sur **`/app`** (ex : `https://vercel-ia.onrender.com/app`, lien « Tableau de bord » du site). Chacun se connecte
+avec **Discord** et gère les serveurs où il a « Gérer le serveur » et où le bot est présent :
+
+- **Vue d'ensemble** : offre du serveur, **essai gratuit de 7 jours** (un clic, vraie date de fin et temps restant),
+  boutons de paiement PayPal.
+- **Tickets** (publier un panneau, voir les panneaux et tickets ouverts), **Annonce**.
+- **Modules gratuits** : Sécurité, Niveaux, Boutique, Bienvenue, Vocal, IA.
+- **Premium** (Couleurs du serveur, Voix de l'IA, Rapport de la semaine, Gardien) : visibles mais verrouillés tant
+  que le serveur n'a pas l'offre ou l'essai ; ils se débloquent tout seuls dès que c'est actif (vérifié aussi côté bot).
+
+**À faire une fois** : Portail Discord › ton application › **OAuth2** : copie le **Client Secret** dans Render
+(`DISCORD_CLIENT_SECRET`) et ajoute la redirection **`https://vercel-ia.onrender.com/app/callback`**.
+Aucun jeton Discord n'est gardé ; les droits sont revérifiés avec le bot à chaque action. Tests : `npm run test:app`.
+
+---
+
 ## 9. Le tableau de bord de l'IA 📊
 
 Une page d'administration, servie par le bot sur **`/dashboard`** (ex : `https://vercel-ia.onrender.com/dashboard`).

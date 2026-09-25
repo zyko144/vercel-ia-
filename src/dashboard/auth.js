@@ -7,7 +7,8 @@
 //   faire des aperçus) : il faut cliquer sur « Se connecter », qui l'envoie en POST.
 // - Session : identifiant aléatoire de 256 bits dans un cookie HttpOnly, SameSite=Strict,
 //   Secure en HTTPS. Côté serveur on ne garde que son empreinte SHA-256. 2 h d'inactivité ou
-//   12 h au total, et elle expire. Un redémarrage du bot déconnecte tout le monde.
+//   12 h au total, et elle expire. Sessions et liens sont gardés dans le stockage (empreintes
+//   seulement) : un redémarrage ou un redéploiement du bot ne déconnecte plus personne.
 // - Chaque modification passe par un POST en JSON, avec un en-tête propre au tableau de
 //   bord et une origine vérifiée : une autre page ne peut pas agir à ta place.
 // - Tentatives limitées par adresse IP, et chaque action est inscrite au journal.
@@ -31,6 +32,28 @@ export function isAllowed(userId) {
 // ===================== Liens de connexion =====================
 
 const links = new Map(); // empreinte du jeton -> { userId, expiresAt }
+const sessions = new Map(); // empreinte de l'identifiant -> session
+
+// ===================== Sauvegarde (sessions + liens) =====================
+
+const STATE_KEY = 'dashboard-sessions';
+let stateTimer = null;
+function persistState() {
+  clearTimeout(stateTimer);
+  stateTimer = setTimeout(() => {
+    const now = Date.now();
+    for (const [h, l] of links) if (l.expiresAt < now) links.delete(h);
+    for (const [h, s] of sessions) if (now - s.lastSeen > IDLE_MS || now - s.createdAt > MAX_AGE_MS) sessions.delete(h);
+    save(STATE_KEY, { links: Object.fromEntries(links), sessions: Object.fromEntries(sessions) });
+  }, 1500);
+}
+/** Recharge sessions et liens (au démarrage, ou quand un lien a été créé par une autre copie du bot). */
+export async function loadAuthState() {
+  const saved = await load(STATE_KEY, null).catch(() => null);
+  if (!saved || typeof saved !== 'object') return;
+  for (const [h, l] of Object.entries(saved.links ?? {})) if (!links.has(h)) links.set(h, l);
+  for (const [h, s] of Object.entries(saved.sessions ?? {})) if (!sessions.has(h)) sessions.set(h, s);
+}
 
 /** Crée un lien de connexion pour un compte autorisé. Renvoie le jeton (à mettre dans l'URL). */
 export function createLoginToken(userId) {
@@ -39,15 +62,18 @@ export function createLoginToken(userId) {
   for (const [hash, link] of links) if (link.expiresAt < now || link.userId === userId) links.delete(hash);
   const token = newSecret();
   links.set(sha(token), { userId, expiresAt: now + LINK_TTL_MS });
+  persistState();
   return token;
 }
 
 /** Utilise un jeton : il ne marche qu'une fois. Renvoie le compte, ou null. */
-export function consumeLoginToken(token) {
+export async function consumeLoginToken(token) {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
   const hash = sha(token);
+  if (!links.has(hash)) await loadAuthState();
   const link = links.get(hash);
   links.delete(hash);
+  persistState();
   if (!link || link.expiresAt < Date.now() || !isAllowed(link.userId)) return null;
   return link.userId;
 }
@@ -67,8 +93,6 @@ export function loginLinkFor(userId) {
 }
 
 // ===================== Sessions =====================
-
-const sessions = new Map(); // empreinte de l'identifiant -> session
 
 export const isSecure = (req) => req.headers['x-forwarded-proto'] === 'https' || Boolean(req.socket?.encrypted);
 const cookieName = (req) => (isSecure(req) ? '__Host-aiv_session' : 'aiv_session');
@@ -109,6 +133,7 @@ export function openSession(req, res, userId) {
     ip: maskIp(clientIp(req)), agent: String(req.headers['user-agent'] ?? '').slice(0, 160),
   });
   setCookie(req, res, secret, Math.floor(MAX_AGE_MS / 1000));
+  persistState();
   return sessions.get(hash);
 }
 
@@ -122,8 +147,10 @@ export function currentSession(req) {
   if (!session) return null;
   if (now - session.lastSeen > IDLE_MS || now - session.createdAt > MAX_AGE_MS || !isAllowed(session.userId)) {
     sessions.delete(hash);
+    persistState();
     return null;
   }
+  if (now - session.lastSeen > 60_000) persistState();
   session.lastSeen = now;
   return session;
 }
@@ -131,6 +158,7 @@ export function currentSession(req) {
 export function closeSession(req, res) {
   const secret = readCookie(req, cookieName(req));
   if (secret) sessions.delete(sha(secret));
+  persistState();
   setCookie(req, res, '', 0);
 }
 
@@ -139,6 +167,7 @@ export function closeSessionById(id) {
   for (const [hash, session] of sessions) {
     if (session.id === id) {
       sessions.delete(hash);
+      persistState();
       return true;
     }
   }
@@ -154,6 +183,7 @@ export function closeAllSessions(exceptId = null) {
       count++;
     }
   }
+  persistState();
   return count;
 }
 

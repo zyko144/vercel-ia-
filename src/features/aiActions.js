@@ -40,6 +40,10 @@ export function aiCatalog() {
   return out;
 }
 
+// Mots qui annoncent une demande d'action (jeu, musique, sanction, outil…). Sinon, pas besoin d'envoyer la liste.
+const ACTION_WORDS = /\b(lance[rz]?|jou(e|er|ez)|met[sz]?|mettre|d[ée]marre[rz]?|commence[rz]?|organise[rz]?|fai[st]|faire|ouvr(e|ir)|cr[ée]{1,2}[rz]?|mute|ban(nis?)?|kick|expulse|avertis|warn|exclu[st]?|supprime|nettoie|verrouille|d[ée]verrouille|affiche|montre|donne|retire|arr[eê]te|passe|skip|pause|stop|play|musique|son|jeu|jeux|partie|game|ticket|sondage|rappel|annonce|profil|classement|boutique|radio|playlist|quiz|blind|undercover|loup|imposteur|bac|v[ée]rit[ée]|pendu|casier|note|sauvegarde|bienvenue|niveau|r[ée]compense)\b/i;
+export const wantsAction = (text) => ACTION_WORDS.test(String(text ?? ''));
+
 let catalogText = null;
 /** Consigne ajoutée au prompt de l'IA quand elle répond à un message. */
 export function actionsPrompt() {

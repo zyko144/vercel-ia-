@@ -168,11 +168,12 @@ async function handleDraft(client, interaction) {
   return undefined;
 }
 
-async function publish(client, interaction, d) {
+/** Publie un brouillon (panneau de tickets ou annonce). Renvoie { channel, message } ou { error }. */
+async function sendDraft(client, d) {
   const channel = client.channels.cache.get(d.channelId);
   const me = channel?.guild?.members.me;
-  if (!channel?.isTextBased?.() || !channel.permissionsFor(me)?.has([P.ViewChannel, P.SendMessages, P.EmbedLinks, P.AttachFiles])) {
-    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xed4245).setDescription(`❌ Je ne peux pas écrire dans <#${d.channelId}> (il me faut Voir, Envoyer, Intégrer des liens et Joindre des fichiers).`)], ...PRIVATE });
+  if (!channel?.isTextBased?.() || (channel.guildId ?? channel.guild?.id) !== d.guildId || !channel.permissionsFor(me)?.has([P.ViewChannel, P.SendMessages, P.EmbedLinks, P.AttachFiles])) {
+    return { error: `Je ne peux pas écrire dans <#${d.channelId}> (il me faut Voir, Envoyer, Intégrer des liens et Joindre des fichiers).` };
   }
   const panelId = newId();
   const components = d.kind === 'ticket'
@@ -191,6 +192,13 @@ async function publish(client, interaction, d) {
     };
     persist();
   }
+  return { channel, message };
+}
+
+async function publish(client, interaction, d) {
+  const sent = await sendDraft(client, d);
+  if (sent.error) return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xed4245).setDescription(`❌ ${sent.error}`)], ...PRIVATE });
+  const { channel, message } = sent;
   drafts.delete(d.id);
   const done = new EmbedBuilder().setColor(0x3dff9a).setDescription(`✅ ${d.kind === 'ticket' ? 'Panneau de tickets' : 'Annonce'} publié${d.kind === 'ticket' ? '' : 'e'} dans ${channel} · [voir le message](${message.url})`);
   return interaction.update({ embeds: [done], components: [], files: [], attachments: [] });
@@ -397,6 +405,29 @@ export async function handleTicketComponent(client, interaction) {
 }
 
 /** Les tickets ouverts d'un serveur (tableau de bord, liste dans /pannel). */
+/**
+ * Publication depuis le tableau de bord du site : panneau de tickets ou annonce, sans passer par Discord.
+ * opts : { kind: 'ticket'|'annonce', channelId, title, message, button, color (clé de COLORS), staffRoleId, categoryId, logChannelId, welcome, unique, ping }
+ */
+export async function publishFromWeb(client, guild, userId, opts) {
+  const kind = opts.kind === 'annonce' ? 'annonce' : 'ticket';
+  const d = {
+    id: newId(), kind, userId, guildId: guild.id, guildName: guild.name, guildIcon: guild.iconURL() ?? null,
+    title: cut(String(opts.title ?? '').trim(), 256), message: cut(String(opts.message ?? '').trim(), 4000), button: cut(String(opts.button || 'Ouvrir un ticket'), 80),
+    channelId: String(opts.channelId ?? ''), color: COLORS[opts.color]?.value ?? (kind === 'ticket' ? COLORS.cyan.value : COLORS.or.value), image: null,
+    staffRoleId: opts.staffRoleId || null, categoryId: opts.categoryId || null, logChannelId: opts.logChannelId || null,
+    welcome: opts.welcome ? cut(String(opts.welcome), 1000) : null, unique: opts.unique !== false, ping: kind === 'annonce' ? opts.ping || null : null, at: Date.now(),
+  };
+  if (!d.title || !d.message) return { error: 'Le titre et le message sont obligatoires.' };
+  const sent = await sendDraft(client, d);
+  return sent.error ? sent : { ok: true, url: sent.message.url };
+}
+
+/** Panneaux de tickets publiés sur un serveur. */
+export async function ticketPanels(guildId) {
+  return Object.values((await guildData(guildId)).panels);
+}
+
 export async function openTickets(guildId) {
   const g = await guildData(guildId);
   return Object.entries(g.open).map(([channelId, t]) => ({ channelId, ...t }));

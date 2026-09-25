@@ -1,5 +1,9 @@
 // Mémoire courte des conversations, une par membre (gardée en RAM).
-const MAX_TURNS = 16;
+// Pour économiser : seulement les derniers échanges, et chaque message gardé est raccourci
+// (le début suffit pour suivre la conversation ; la réponse complète a déjà été envoyée).
+const MAX_TURNS = 10;
+const KEEP_CHARS = { user: 800, model: 600 };
+const shorten = (text, max) => (text.length > max ? `${text.slice(0, max)}…` : text);
 const TTL_MS = 45 * 60_000;
 const conversations = new Map();
 
@@ -17,7 +21,7 @@ export function getHistory(key) {
 }
 
 export function remember(key, userText, modelText) {
-  const turns = [...getHistory(key), { role: 'user', text: userText }, { role: 'model', text: modelText }];
+  const turns = [...getHistory(key), { role: 'user', text: shorten(String(userText), KEEP_CHARS.user) }, { role: 'model', text: shorten(String(modelText), KEEP_CHARS.model) }];
   conversations.set(key, { turns: turns.slice(-MAX_TURNS), updatedAt: Date.now() });
 }
 

@@ -85,6 +85,12 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       return res.end(file);
     }
 
+    // Tableau de bord public (/app) : connexion Discord, gestion de ses serveurs.
+    if (url.pathname === '/app' || url.pathname.startsWith('/app/')) {
+      const { handleUserApp } = await import('./dashboard/userApp.js');
+      if (await handleUserApp(req, res, url)) return undefined;
+    }
+
     // Tableau de bord de l'IA (/dashboard) : il gère lui-même sa sécurité (session, en-têtes).
     if (dashboard && await dashboard(req, res, url)) return undefined;
 
