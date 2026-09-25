@@ -18,6 +18,7 @@ import { images, registerParty } from './party.js';
 import './party-roles.js';
 import { deezerImage, previewAudio } from './party-sound.js';
 import { speech } from './tts.js';
+import { backgroundImage } from './backgrounds.js';
 
 const WEB = path.resolve('web/arcade');
 const MAX_BODY = 3 * 1024 * 1024; // un passage de freestyle enregistré au micro
@@ -498,6 +499,13 @@ export async function handleArcadeWeb(req, res, url) {
     if (!buf) return json(res, 404, { error: 'image introuvable' }), true;
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=600' });
     res.end(buf);
+    return true;
+  }
+  if (/^fond\/[a-z0-9]{2,20}$/.test(rest)) {
+    const img = await backgroundImage(rest.slice(5)).catch(() => null);
+    if (!img) return json(res, 404, { error: 'pas de fond' }), true;
+    res.writeHead(200, { 'Content-Type': img.type, 'Content-Length': img.buf.length, 'Cache-Control': 'public, max-age=3600' });
+    res.end(img.buf);
     return true;
   }
   if (!rest.startsWith('api/')) { json(res, 404, { error: 'introuvable' }); return true; }
