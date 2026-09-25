@@ -18,6 +18,7 @@ import { images, registerParty } from './party.js';
 import './party-roles.js';
 import { deezerImage, previewAudio } from './party-sound.js';
 import { speech } from './tts.js';
+import { isPremium, planOf, voiceOf } from '../features/premium.js';
 import { backgroundImage } from './backgrounds.js';
 
 const WEB = path.resolve('web/arcade');
@@ -285,8 +286,10 @@ async function reward(r, winner, amount, label, players, { solo = false } = {}) 
     await playedGame(r.guildId, players);
     // En solo (ou contre le bot) le gain est plus petit, et compté dans la limite de 10 gains par jour
     if (winner && (players.length >= 2 || solo) && await guild.members.fetch(winner).catch(() => null)) {
-      const won = await rewardWin(r.guildId, winner, amount, label);
-      if (won) say(r, `🪙 +${won} pièces d’or pour ${nameOf(r, winner)} sur le serveur`, 'good');
+      // Serveur premium : gains de l'arcade doublés (comme les quêtes et la récompense du jour)
+      const premium = isPremium(r.guildId);
+      const won = await rewardWin(r.guildId, winner, premium ? amount * 2 : amount, label);
+      if (won) say(r, `🪙 +${won} pièces d’or pour ${nameOf(r, winner)} sur le serveur${premium ? ' (×2 premium ✨)' : ''}`, 'good');
       bump(r);
     }
   } catch { /* la récompense ne doit jamais casser la partie */ }
@@ -302,6 +305,7 @@ function stateFor(r, me, since = {}) {
     // Pendant un jeu de soirée, le chat des spectateurs n'est montré qu'aux spectateurs
     chat: r.chat.filter((m) => !m.spec || g?.kind !== 'party' || g.over || GAMES.party.spectator(g, me)).slice(-30),
     lastGame: r.lastGame,
+    premium: r.guildId && isPremium(r.guildId) ? planOf(r.guildId).label : null,
     game: !g ? null : g.kind === 'fin' ? g : GAMES[g.kind].view(g, me),
     solo: soloView(r.solo?.get(me)),
   };
@@ -527,7 +531,8 @@ export async function handleArcadeWeb(req, res, url) {
     if (nick) user.name = nick;
     if (route === 'tts' && req.method === 'POST') {
       const body = await readBody(req);
-      const wav = await speech(String(body.text ?? ''));
+      // La voix du narrateur : celle choisie par le serveur (premium), sinon la voix de base
+      const wav = await speech(String(body.text ?? ''), voiceOf(r.guildId, 'Charon'));
       if (!wav) return json(res, 503, { error: 'voix indisponible' }), true;
       res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length, 'Cache-Control': 'private, max-age=3600' });
       res.end(wav);

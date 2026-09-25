@@ -67,7 +67,7 @@ button.small { padding: 6px 10px; font-size: 12px; }
 /* Dessin */
 .draw { display: grid; grid-template-columns: 1fr 300px; gap: 14px; max-width: 1200px; margin: 0 auto; }
 .bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.hint { flex: 1; text-align: center; font: 700 26px 'Cinzel', serif; letter-spacing: .25em; color: var(--gold); }
+.bar .hint, .overlay .hint { flex: 1; text-align: center; font: 700 26px 'Cinzel', serif; letter-spacing: .25em; color: var(--gold); }
 .timer { font: 700 20px 'Cinzel', serif; min-width: 56px; text-align: center; color: var(--text); }
 .timer.low { color: var(--blood); animation: pop .5s infinite alternate; }
 .progress { height: 6px; border-radius: 3px; background: #2a2014; overflow: hidden; margin-bottom: 10px; }
@@ -280,3 +280,12 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 .bg { position: fixed; inset: -24px; z-index: 0; background: center / cover no-repeat; filter: blur(7px) brightness(.42) saturate(1.1); opacity: 0; transition: opacity .8s ease; pointer-events: none; }
 .bg.on { opacity: 1; }
 .top, main { position: relative; z-index: 1; }
+/* Lisibilité sur les fonds d'écran : panneau sombre derrière le jeu, texte avec un léger contour */
+.duel #plateau:not(:empty) { background: rgba(16, 12, 8, .74); border: 1px solid #3b2a17; border-radius: 16px; padding: 16px; backdrop-filter: blur(3px); }
+.party .seat, .party .psub, .party .pbar { text-shadow: 0 1px 3px #000; }
+.pt.big, .pt.huge, .pt.small, .pt.mono { text-shadow: 0 1px 3px #000c; }
+.pt.big { line-height: 1.35; }
+.duel .seat { background: rgba(20, 15, 9, .85); }
+.lobby .hint { font-size: 15px; line-height: 1.5; color: var(--text); opacity: .85; }
+.game p { line-height: 1.4; }
+.premium-tag { background: linear-gradient(90deg, #f2c14e, #ff9f2e); color: #1b1208; font-weight: 700; font-size: 12px; padding: 4px 10px; border-radius: 99px; white-space: nowrap; }

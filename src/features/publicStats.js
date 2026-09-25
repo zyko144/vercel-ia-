@@ -8,8 +8,19 @@ let client = null;
 export const setPublicClient = (c) => { client = c; };
 let cache = { at: 0, stats: null, ranking: null };
 
+let refreshing = null;
+/** Réponse immédiate depuis le cache ; au-delà d'une minute, on le rafraîchit en arrière-plan. */
 async function compute() {
-  if (Date.now() - cache.at < 60_000 && cache.stats) return cache;
+  if (cache.stats) {
+    if (Date.now() - cache.at > 60_000) refreshing ??= refresh().catch(() => {}).finally(() => { refreshing = null; });
+    return cache;
+  }
+  refreshing ??= refresh().finally(() => { refreshing = null; });
+  await refreshing;
+  return cache;
+}
+
+async function refresh() {
   const guilds = [...(client?.guilds.cache.values() ?? [])];
   let messages = 0;
   let games = 0;

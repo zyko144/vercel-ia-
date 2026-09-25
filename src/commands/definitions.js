@@ -307,7 +307,7 @@ const gameCommands = [
 export const GAME_COMMAND_NAMES = new Set(gameCommands.map((c) => c.name));
 
 // ===== LES COMMANDES ENREGISTRÉES =====
-// Six commandes, chacune ouvre un panneau qui regroupe les anciennes (src/panels/catalog.js).
+// Six commandes, chacune ouvre un panneau qui regroupe les anciennes (src/panels/catalog.js), plus /play en direct.
 // Les anciennes commandes ci-dessus ne sont plus enregistrées chez Discord : elles servent de modèle
 // aux actions des panneaux (mêmes options, mêmes réponses).
 const panelCommands = [
@@ -321,9 +321,11 @@ const panelCommands = [
   new SlashCommandBuilder().setName('ia').setDescription('🧠 Questions, images, code, traduction, IA vocale'),
 ];
 const adminCommand = utilityCommands.find((c) => c.name === 'admin');
+// /play reste une commande directe : c'est le plus rapide pour lancer un son
+const playCommand = guildOnly(musicCommands.find((c) => c.name === 'play'));
 const contextMenus = aiCommands.filter((c) => c instanceof ContextMenuCommandBuilder);
 
-export const commandDefinitions = [...panelCommands, adminCommand, ...contextMenus];
+export const commandDefinitions = [...panelCommands, playCommand, adminCommand, ...contextMenus];
 
 /** Les anciennes commandes (maintenant des actions de panneau) : pour vérifier le catalogue. */
 export const LEGACY_COMMAND_NAMES = new Set([...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands, ...gameCommands].map((c) => c.name));
