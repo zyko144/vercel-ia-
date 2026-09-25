@@ -13,6 +13,8 @@ import { addFaq, faqEntries, memoryMessage, ratePunchline, removeFaq } from '../
 import { startActionVerite, startPendu, startPetitBac, startQuizServeur, startUndercover } from '../games/soirees.js';
 import { backupsOf, createBackup, restoreConfirm, welcomeCard } from '../features/community.js';
 import { PANELS } from './catalog.js';
+import { TREASURY_ACTIONS, questProgress } from '../features/treasury.js';
+import { installBotChannels, installEmbed } from '../features/botChannels.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
 
@@ -79,9 +81,10 @@ addActions('serveur', 'Niveaux et boutique', [
   {
     id: 'daily', label: 'Récompense du jour', emoji: '🎁', desc: 'Des pièces d’or chaque jour, plus si tu enchaînes',
     run: async (client, interaction) => {
-      const r = await claimDaily(interaction.guildId, interaction.user.id);
+      const r = await claimDaily(interaction.guildId, interaction.user.id, interaction.member);
+      if (r.ok) await questProgress(interaction.guildId, interaction.user.id, 'daily');
       const embed = new EmbedBuilder().setColor(r.ok ? 0x3dff9a : 0xffb020).setDescription(r.ok
-        ? `🎁 **+🪙 ${r.amount.toLocaleString('fr-FR')} pièces d’or** · série de **${r.streak} jour(s)** 🔥
+        ? `🎁 **+🪙 ${r.amount.toLocaleString('fr-FR')} pièces d’or** · série de **${r.streak} jour(s)** 🔥${r.booster ? ' · 💎 bonus booster +50 %' : ''}
 Bourse : 🪙 ${r.balance.toLocaleString('fr-FR')}`
         : '⏳ Déjà prise aujourd’hui : reviens après minuit pour garder ta série.');
       return interaction.reply({ embeds: [embed], ...PRIVATE });
@@ -89,6 +92,8 @@ Bourse : 🪙 ${r.balance.toLocaleString('fr-FR')}`
   },
   { id: 'boutique', label: 'Boutique du capitaine', emoji: '🏴‍☠️', desc: 'Immunité, XP ×2, coffres, rôle perso…', run: async (client, interaction) => interaction.reply({ ...(await shopMessage(interaction.guild, interaction.user.id)), ...PRIVATE }) },
 ]);
+
+addActions('serveur', 'Trésor du navire', TREASURY_ACTIONS);
 
 // ===================== IA : mémoire, punchline, FAQ =====================
 addActions('ia', 'Demander à l’IA', [
@@ -138,6 +143,15 @@ addActions('jeux', 'Jeux musicaux et petits jeux', [
 
 // ===================== /pannel : bienvenue et sauvegardes =====================
 addActions('pannel', 'Serveur', [
+  {
+    id: 'salons-bot', label: 'Installer les salons du bot', emoji: '🏴‍☠️', desc: 'Niveaux, trésor, jeux, annonces, journal : chacun son salon', perm: P.ManageChannels,
+    fields: [f.bool('remplacer', 'Remplacer les salons déjà réglés ?')],
+    run: async (client, interaction, v) => {
+      await interaction.deferReply(PRIVATE);
+      const r = await installBotChannels(interaction.guild, { replace: !!v.remplacer });
+      return interaction.editReply({ embeds: [installEmbed(r)] });
+    },
+  },
   {
     id: 'bienvenue-test', label: 'Voir ma carte de bienvenue', emoji: '👋', desc: 'Aperçu de ce que reçoivent les nouveaux',
     run: async (client, interaction) => {

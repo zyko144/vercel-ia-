@@ -1,4 +1,6 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
+import { startTreasury } from './features/treasury.js';
+import { autoInstallBotChannels } from './features/botChannels.js';
 import { setAppClient } from './dashboard/userApp.js';
 import { setPaymentsClient } from './features/payments.js';
 import { ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, Partials } from 'discord.js';
@@ -72,6 +74,8 @@ client.once(Events.ClientReady, async (c) => {
   lavalink.init(c);
   startVoiceGuard(c);
   startLevelLoops(c);
+  startTreasury(c);
+  autoInstallBotChannels(c).catch((err) => console.warn('[salons] installation :', err.message));
   startVoiceExtras(c);
   startWeeklyReports(c).catch((err) => console.warn('[rapport] démarrage :', err.message));
   startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));

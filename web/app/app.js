@@ -342,7 +342,7 @@
     ['/jeux', 'Tous les jeux', ['Loup-garou, Undercover, imposteur', 'Petit Bac, quiz, action ou vérité', 'Blind test, pendu musical']],
     ['/musique', 'Le lecteur de musique', ['Jouer un son ou une playlist', 'File d’attente, effets, paroles', 'Radio 24 h/24']],
     ['/sanction', 'La modération', ['Avertir, rendre muet, expulser, bannir', 'Casier et notes du staff', 'Nettoyer ou verrouiller un salon']],
-    ['/serveur', 'Outils et premium', ['Profil, classement, boutique', 'Sondage, rappel, infos', 'Offre du serveur et parrainage']],
+    ['/serveur', 'Outils, trésor et premium', ['Profil, classement, boutique', 'Trésor : banque, quêtes, marché, loterie, abordage', 'Sondage, rappel, infos', 'Offre du serveur et parrainage']],
     ['/pannel', 'Les panneaux du staff', ['Tickets, annonces, vérification', 'Construire des salons', 'Bienvenue et sauvegarde']],
   ];
   function commandsPage(panel) {

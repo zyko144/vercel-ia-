@@ -53,7 +53,9 @@ await check('XP par message, 200 pièces par niveau, mention seulement tous les 
   assert.deepEqual(five.allowedMentions.users, [U], 'ping au niveau 5');
   assert.deepEqual(two.allowedMentions.users, [], 'pas de ping au niveau 2');
   assert.match(two.content, /\+🪙 200 pièces/);
-  assert.equal(await economy.goldOf(G, U), up.length * 200);
+  const fromLevels = economy._test.purse(G, U).history.filter((h) => /^Niveau/.test(h.why)).reduce((a, h) => a + h.n, 0);
+  assert.equal(fromLevels, up.length * 200, '200 pièces par niveau');
+  assert.ok(await economy.goldOf(G, U) >= fromLevels, 'plus les quêtes de messages');
   if (process.env.APERCU_DIR) writeFileSync(path.join(process.env.APERCU_DIR, 'carte-niveau.png'), five.files[0].attachment);
 });
 
@@ -71,13 +73,16 @@ await check('récompense du jour en pièces d’or : une fois par jour, série c
   assert.equal(first.amount, 100 + 15);
   assert.equal(await economy.goldOf(G, U), before + 115);
   assert.equal((await levels.claimDaily(G, U)).ok, false);
+  const booster = await levels.claimDaily(G, V, { premiumSince: new Date() });
+  assert.equal(booster.amount, Math.round(115 * 1.5), 'boosters : +50 %');
+  assert.equal(booster.booster, true);
 });
 
 const replies = [];
 const base = (extra = {}) => ({ user, member, guild, guildId: G, memberPermissions: new PermissionsBitField(PermissionsBitField.All), reply: async (p) => replies.push(p), update: async (p) => replies.push(p), showModal: async () => {}, ...extra });
 const text = () => replies.at(-1).embeds[0].toJSON().description;
 
-await check('boutique : pas assez d’or refusé, XP ×2 active, immunité, coffre (3 par jour)', async () => {
+await check('boutique : achat dans la cale, puis utilisation (XP ×2, immunité, coffre 3 par jour)', async () => {
   const shop = await levels.shopMessage(guild, U);
   assert.match(shop.embeds[0].toJSON().title, /comptoir/);
   const p = economy._test.purse(G, U);
@@ -85,29 +90,49 @@ await check('boutique : pas assez d’or refusé, XP ×2 active, immunité, coff
   await levels.handleShopComponent({}, base({ customId: 'sh:buy', values: ['immunite'] }));
   assert.match(text(), /Il te faut/);
   p.gold = 50_000;
+  const cost = (k) => economy.priceOf(G, k);
   await levels.handleShopComponent({}, base({ customId: 'sh:buy', values: ['xp'] }));
+  assert.match(text(), /dans ta cale/);
+  assert.equal(economy.xpMultiplier(G, U), 1, 'pas encore utilisé');
+  assert.equal(replies.at(-1).components[0].toJSON().components[0].custom_id, 'sh:usenow:xp');
+  await levels.handleShopComponent({}, base({ customId: 'sh:usenow:xp' }));
   assert.equal(economy.xpMultiplier(G, U), 2);
   await levels.handleShopComponent({}, base({ customId: 'sh:buy', values: ['immunite'] }));
+  await levels.handleShopComponent({}, base({ customId: 'sh:use', values: ['immunite'] }));
   assert.equal(economy.isImmune(G, U), true);
-  assert.equal(p.gold, 50_000 - 2500 - 6000);
-  for (let i = 0; i < 3; i++) await levels.handleShopComponent({}, base({ customId: 'sh:buy', values: ['coffre'] }));
-  await levels.handleShopComponent({}, base({ customId: 'sh:buy', values: ['coffre'] }));
+  assert.equal(p.gold, 50_000 - cost('xp') - cost('immunite'));
+  for (let i = 0; i < 4; i++) await levels.handleShopComponent({}, base({ customId: 'sh:buy', values: ['coffre'] }));
+  for (let i = 0; i < 3; i++) await levels.handleShopComponent({}, base({ customId: 'sh:usenow:coffre' }));
+  await levels.handleShopComponent({}, base({ customId: 'sh:usenow:coffre' }));
   assert.match(text(), /Trois coffres/);
+  assert.equal(p.inv.coffre, 1, 'le 4e coffre reste dans la cale');
+  await levels.handleShopComponent({}, base({ customId: 'sh:usenow:xp' }));
+  assert.match(text(), /cale|pas/i, 'plus d’XP ×2 en stock');
+});
+
+await check('objets rares : stock du mois limité', async () => {
+  const p = economy._test.purse(G, U);
+  p.gold = 1_000_000;
+  for (let i = 0; i < 6; i++) await levels.handleShopComponent({}, base({ customId: 'sh:buy', values: ['kraken'] }));
+  assert.match(text(), /Épuisé/);
+  assert.equal(p.inv.kraken, 5);
 });
 
 await check('don entre membres taxé à 5 %, rôle personnalisé payé en or et accepté', async () => {
   const p = economy._test.purse(G, U);
   p.gold = 30_000;
+  const vBefore = await economy.goldOf(G, V);
   await levels.handleShopComponent({}, base({ customId: 'sh:giftsend', fields: {
     getSelectedUsers: () => new Collection([[V, { id: V, bot: false, username: 'sami', send: async () => {} }]]), getTextInputValue: (id) => (id === 'montant' ? '1000' : ''),
   }, guild: { ...guild, members: { ...guild.members, fetch: async () => null } } }));
-  assert.equal(await economy.goldOf(G, V), 950);
+  assert.equal(await economy.goldOf(G, V), vBefore + 950);
   assert.equal(p.gold, 29_000);
   setGuildSettings(G, { 'shop.requestsChannelId': '888888888888888888' });
   const requests = [];
   guild.channels.cache.set('888888888888888888', { id: '888888888888888888', isTextBased: () => true, send: async (x) => { requests.push(x); } });
   await levels.handleShopComponent({}, base({ customId: 'sh:customsend', fields: { getTextInputValue: (id) => ({ nom: '👑 Le Boss', hex: '#ff5fd2' }[id] ?? ''), getStringSelectValues: () => [] } }));
   assert.equal(p.gold, 9_000, '20 000 pièces payées');
+  assert.equal(economy._test.meta(G).chest >= 50, true, 'taxe du don au coffre commun');
   const buttons = requests[0].components[0].toJSON().components;
   const created = [];
   guild.members.me = { roles: { highest: { position: 10 } } };

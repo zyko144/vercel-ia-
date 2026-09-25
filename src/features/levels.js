@@ -9,6 +9,7 @@ import { LEVEL_REWARD, addGold, dailyMultiplier, goldOf, richest, xpMultiplier }
 import { load, save } from '../storage.js';
 import { cfg, parseLevelRoles, setInternal } from './guildConfig.js';
 import { weekOf } from './weekly.js';
+import { questProgress } from './treasury.js';
 
 const KEY = 'niveaux-v2';
 export { shopMessage, isShopComponent, handleShopComponent } from './economy.js';
@@ -45,6 +46,7 @@ export async function xpForMessage(message) {
   const m = me(message.guildId, message.author.id);
   m.messages += 1;
   dirty = true;
+  questProgress(message.guildId, message.author.id, 'msg').catch(() => {});
   if (Date.now() - m.lastXp < MSG_COOLDOWN) return;
   m.lastXp = Date.now();
   await addXp(message.guild, message.member, 15 + Math.floor(Math.random() * 11), message.channel);
@@ -63,7 +65,7 @@ async function addXp(guild, member, amount, where) {
 
 async function levelUp(guild, member, level, where, gained = 1) {
   const reward = LEVEL_REWARD * gained;
-  const gold = await addGold(guild.id, member.id, reward);
+  const gold = await addGold(guild.id, member.id, reward, `Niveau ${level}`);
   const rewards = parseLevelRoles(cfg(guild.id, 'levels.roles'));
   const earned = rewards.filter((r) => r.level <= level).map((r) => r.roleId).filter((id) => guild.roles.cache.has(id) && !member.roles.cache.has(id));
   if (earned.length) await member.roles.add(earned, `Niveau ${level}`).catch(() => {});
@@ -94,6 +96,7 @@ export function startLevelLoops(client) {
         for (const member of humans.values()) {
           if (member.voice.selfDeaf || member.voice.serverDeaf) continue;
           me(guild.id, member.id).voiceMin += 1;
+          questProgress(guild.id, member.id, 'voc').catch(() => {});
           if (perMinute) await addXp(guild, member, perMinute, null);
         }
       }
@@ -225,17 +228,20 @@ export async function leaderboardEmbed(guild) {
 
 const dayOf = (at) => new Intl.DateTimeFormat('fr-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
 
-export async function claimDaily(guildId, userId) {
+export async function claimDaily(guildId, userId, member = null) {
   await data();
   const m = me(guildId, userId);
   const now = Date.now();
   if (m.dailyAt && dayOf(m.dailyAt) === dayOf(now)) return { ok: false };
   m.streak = m.dailyAt && dayOf(m.dailyAt) === dayOf(now - DAY) ? m.streak + 1 : 1;
   m.dailyAt = now;
-  const amount = (cfg(guildId, 'daily.amount') + Math.min(7, m.streak) * cfg(guildId, 'daily.streak')) * dailyMultiplier(guildId, userId);
-  const total = await addGold(guildId, userId, amount);
+  // Les boosters du serveur touchent 50 % de plus
+  const booster = !!member?.premiumSince;
+  const base = (cfg(guildId, 'daily.amount') + Math.min(7, m.streak) * cfg(guildId, 'daily.streak')) * dailyMultiplier(guildId, userId);
+  const amount = Math.round(base * (booster ? 1.5 : 1));
+  const total = await addGold(guildId, userId, amount, 'Récompense du jour');
   dirty = true;
-  return { ok: true, amount, streak: m.streak, balance: total };
+  return { ok: true, amount, streak: m.streak, balance: total, booster };
 }
 
 // ===================== Membre de la semaine =====================

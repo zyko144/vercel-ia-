@@ -12,7 +12,7 @@ const KEY = 'config-serveurs';
 export const SECTIONS = {
   securite: { label: 'Sécurité', emoji: '🛡️', intro: 'Anti-raid, vérification à l’arrivée, filtres de liens, anti-spam, anti-arnaque et journal.' },
   niveaux: { label: 'Niveaux et récompenses', emoji: '📈', intro: 'XP pour les messages et le vocal, rôles gagnés par niveau, récompense du jour, membre de la semaine.' },
-  boutique: { label: 'Boutique', emoji: '🛒', intro: 'Le comptoir du capitaine : ce que les membres achètent avec leurs pièces d’or, et les demandes de rôle personnalisé.' },
+  boutique: { label: 'Boutique, trésor et salons', emoji: '🛒', intro: 'Le comptoir du capitaine, le trésor (loterie, enchères, marché) et les salons dédiés du bot.' },
   accueil: { label: 'Bienvenue et suggestions', emoji: '👋', intro: 'Carte de bienvenue et salon des suggestions votées.' },
   vocal: { label: 'Vocal', emoji: '🔊', intro: 'Salons vocaux temporaires, radio 24 h/24, micros saturés.' },
   ia: { label: 'IA du serveur', emoji: '🧠', intro: 'Mémoire des membres, salons traduits automatiquement, FAQ apprise.' },
@@ -55,6 +55,9 @@ export const SCHEMA = [
 
   // ---------- Boutique ----------
   { key: 'shop.customRolePrice', section: 'boutique', type: 'int', min: 0, max: 10000000, label: 'Prix d’un rôle personnalisé (pièces d’or)', def: 20000, help: 'Le membre choisit le nom et la couleur, le staff accepte ou refuse (remboursé).' },
+  { key: 'economy.channelId', section: 'boutique', type: 'channel', label: 'Salon du trésor', help: 'Classement des plus riches chaque soir, loterie, enchères, abordages.' },
+  { key: 'games.channelId', section: 'boutique', type: 'channel', label: 'Salon des jeux', help: 'Les parties lancées depuis /jeux s’y ouvrent (vide : là où la commande est tapée).' },
+  { key: 'announce.channelId', section: 'boutique', type: 'channel', label: 'Salon des annonces du bot', help: 'Nouveautés du bot, événements et grandes annonces.' },
   { key: 'shop.requestsChannelId', section: 'boutique', type: 'channel', label: 'Salon des demandes de rôle', help: 'Le staff y accepte ou refuse les demandes.' },
 
   // ---------- Bienvenue et suggestions ----------
