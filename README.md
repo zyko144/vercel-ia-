@@ -28,12 +28,12 @@ https://discord.com/oauth2/authorize?client_id=TON_APP_ID&scope=bot+applications
 
 | Fonction | Gratuit ? | Réglage |
 |---|---|---|
-| Chat `gemini-3.8-flash` (+ secours `gemini-3.5-flash-lite`) | ✅ | par défaut |
+| Chat `gemini-3.5-flash-lite`, rapide (+ secours `gemini-3.8-flash`) | ✅ | par défaut |
 | Lecture des liens envoyés | ✅ | par défaut |
 | Recherche Google | ❌ bloquée (quota à 0) | `GEMINI_WEB_SEARCH=true` si facturation activée |
 | Génération d'images (Nano Banana) | ❌ payant | `IMAGES_ENABLED=true` si facturation activée |
 
-**Réflexion** (`GEMINI_THINKING_LEVEL`) : `medium` par défaut, soit environ 15 s par réponse. `/code`, `/jeu-quiz` et `/explique` en niveau expert passent automatiquement en `high`. Si le quota gratuit du modèle principal est dépassé, le bot bascule tout seul sur le modèle de secours.
+**Réflexion** (`GEMINI_THINKING_LEVEL`) : `minimal` par défaut, c'est-à-dire pas de réflexion et des réponses immédiates. C'est un plafond : aucune commande ne réfléchit plus. Si le quota gratuit du modèle principal est dépassé, le bot bascule tout seul sur le modèle de secours.
 
 ---
 

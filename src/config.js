@@ -138,11 +138,13 @@ export const config = {
   botStatus: str('BOT_STATUS', 'dictature'),
 
   models: {
-    chat: str('GEMINI_CHAT_MODEL', 'gemini-3.8-flash'),
-    fallback: str('GEMINI_FALLBACK_MODEL', 'gemini-3.5-flash-lite'),
+    // Modèle rapide pour les commandes et les conversations ; le plus complet sert de secours
+    chat: str('GEMINI_CHAT_MODEL', 'gemini-3.5-flash-lite'),
+    fallback: str('GEMINI_FALLBACK_MODEL', 'gemini-3.8-flash'),
     image: str('GEMINI_IMAGE_MODEL', 'gemini-3.1-flash-image'),
     imagePro: str('GEMINI_IMAGE_PRO_MODEL', 'gemini-3-pro-image'),
-    thinkingLevel: str('GEMINI_THINKING_LEVEL', 'medium'),
+    // Réflexion coupée par défaut (réponses immédiates). Aucune demande ne peut monter au-dessus.
+    thinkingLevel: str('GEMINI_THINKING_LEVEL', 'minimal'),
     // Recherche Google : bloquée sur l'offre gratuite, à activer si la facturation est activée
     webSearch: bool('GEMINI_WEB_SEARCH', false),
   },
