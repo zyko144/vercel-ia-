@@ -158,8 +158,9 @@ export function registerArcadeGames(GAMES, h) {
     min: 1,
     label: () => 'le quiz',
     start(r, host, body) {
-      const g = { kind: 'quiz', phase: 'loading', theme: String(body.theme ?? '').slice(0, 60), questions: [], i: -1, answers: {}, scores: {}, endsAt: 0, first: null };
-      defis.quizQuestions(g.theme, 10).then((qs) => { g.questions = qs; g.phase = 'answer'; g.endsAt = 0; h.bump(r); }).catch(() => { g.questions = defis.FALLBACK_QUIZ.slice(0, 10); g.phase = 'answer'; g.endsAt = 0; h.bump(r); });
+      const g = { kind: 'quiz', phase: 'loading', theme: String(body.theme ?? '').slice(0, 60), questions: [], i: -1, answers: {}, scores: {}, endsAt: Date.now() + 20_000, first: null };
+      const ready = (qs) => { if (g.phase !== 'loading') return; g.questions = qs?.length ? qs : shuffle(defis.FALLBACK_QUIZ).slice(0, 10); g.phase = 'answer'; g.endsAt = 0; h.bump(r); };
+      defis.quizQuestions(g.theme, 10).then(ready).catch(() => ready(null));
       return g;
     },
     view(g, me) {
@@ -180,6 +181,8 @@ export function registerArcadeGames(GAMES, h) {
       return true;
     },
     tick(r, g) {
+      // L'IA ne répond pas : on part avec les questions de secours
+      if (g.phase === 'loading' && Date.now() > g.endsAt) { g.questions = shuffle(defis.FALLBACK_QUIZ).slice(0, 10); g.phase = 'answer'; g.endsAt = 0; }
       if (g.phase === 'loading' || Date.now() < g.endsAt) return false;
       if (g.phase === 'question') {
         const q = g.questions[g.i];
