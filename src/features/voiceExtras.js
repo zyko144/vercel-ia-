@@ -11,7 +11,8 @@ import { blindTestActive } from '../music/blindtest.js';
 import { radioTracks } from '../music/handlers.js';
 import { getOrCreatePlayer, getPlayer } from '../music/player.js';
 import { cfg } from './guildConfig.js';
-import { homeChannel, onVoiceReady } from './voice.js';
+import { config } from '../config.js';
+import { homeChannel, joinOwnerTemp, leaveOwnerTemp, onVoiceReady } from './voice.js';
 import { logEvent } from './security.js';
 
 const require = createRequire(import.meta.url);
@@ -38,6 +39,7 @@ async function onVoiceState(oldState, newState) {
       set.delete(channel.id);
       persistTemp();
       await channel.delete('Vocal temporaire vide').catch(() => {});
+      leaveOwnerTemp(guild, channel.id);
     }
   }
   // Quelqu'un rejoint « Créer ton vocal » : on lui crée le sien
@@ -58,6 +60,10 @@ async function onVoiceState(oldState, newState) {
   set.add(channel.id);
   persistTemp();
   await newState.member.voice.setChannel(channel).catch(() => {});
+  // Le chef crée son vocal privé : le bot le rejoint tout de suite
+  if (newState.member.id === config.ownerId) {
+    setTimeout(() => joinOwnerTemp(guild, channel).catch((err) => console.warn('[vocaux temporaires] rejoindre :', err.message)), 800);
+  }
 }
 
 // ===================== Radio 24 h/24 =====================

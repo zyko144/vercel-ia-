@@ -20,6 +20,7 @@ const managed = new WeakSet();
 const musicOverrides = new Map(); // guildId -> channelId
 const externalOwners = new Set(); // serveurs où c'est Lavalink qui tient le vocal
 const readyListeners = new Set();
+const ownerTemps = new Map(); // guildId -> vocal privé que le chef vient de créer (le bot l'y rejoint)
 
 const normalize = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const isVoice = (c) => c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildStageVoice;
@@ -65,11 +66,34 @@ export function isAllowedVoice(guild, channel) {
 export function lockedChannel(guild, wanted = null) {
   if (!config.voice.lockHome) return null;
   if (wanted && config.voice.extraChannels.includes(wanted.id)) return wanted;
+  const temp = ownerTempChannel(guild);
+  if (temp) return temp;
   // Déjà dans un salon autorisé (on l'y a emmené) : il y reste tant qu'il y a du monde
   const current = guild.members.me?.voice?.channel;
   const withSomeone = current?.members?.some((m) => !m.user.bot);
   if (!wanted && current && withSomeone && config.voice.extraChannels.includes(current.id)) return current;
   return homeChannel(guild);
+}
+
+/** Le vocal privé du chef, tant qu'il existe et que le chef y est. */
+function ownerTempChannel(guild) {
+  const channel = guild.channels.cache.get(ownerTemps.get(guild.id));
+  if (!channel || !isVoice(channel) || guild.voiceStates.cache.get(config.ownerId)?.channelId !== channel.id) return null;
+  return channel;
+}
+
+/** Le chef vient de créer son vocal privé : le bot le rejoint (même avec le vocal verrouillé). */
+export async function joinOwnerTemp(guild, channel) {
+  ownerTemps.set(guild.id, channel.id);
+  if (holds.has(guild.id)) return undefined; // blind test en cours : le bot reste avec les joueurs
+  return followNow(guild);
+}
+
+/** Le vocal privé est supprimé : le bot retourne dans son salon. */
+export function leaveOwnerTemp(guild, channelId) {
+  if (ownerTemps.get(guild.id) !== channelId) return;
+  ownerTemps.delete(guild.id);
+  followNow(guild).catch(() => {});
 }
 
 /** Pendant un blind test le bot reste dans le salon de la partie, même si le chef bouge. */
@@ -243,6 +267,11 @@ export async function startVoiceKeeper(client) {
   client.on('voiceStateUpdate', (oldState, newState) => {
     const { guild } = newState;
 
+    // Le chef quitte son vocal privé (vers un autre salon) : le bot retourne là où il doit être
+    if (newState.id === config.ownerId && config.voice.lockHome && oldState.channelId && oldState.channelId === ownerTemps.get(guild.id) && newState.channelId !== oldState.channelId) {
+      setTimeout(() => followNow(guild).catch(() => {}), 700);
+      return;
+    }
     // Le chef rejoint ou change de vocal -> le bot le suit (avec la musique si elle tourne)
     if (newState.id === config.ownerId && config.voice.enabled && newState.channelId !== oldState.channelId) {
       const channel = followedChannel(guild);

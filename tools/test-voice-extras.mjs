@@ -52,5 +52,20 @@ await check('le salon temporaire est supprimé quand il se vide', async () => {
   assert.ok(!(await _test.tempSet()).has('999000000000000001'));
 });
 
+await check('vocal verrouillé : le bot rejoint le vocal privé que le chef vient de créer, puis revient', async () => {
+  const { config } = await import('../src/config.js');
+  const voice = await import('../src/features/voice.js');
+  const { ChannelType } = await import('discord.js');
+  const home = { id: '700000000000000001', type: ChannelType.GuildVoice };
+  const temp = { id: '700000000000000002', type: ChannelType.GuildVoice };
+  const states = new Collection([[config.ownerId, { channelId: temp.id }]]);
+  const g = { id: '444444444444444445', channels: { cache: new Collection([[home.id, home], [temp.id, temp]]) }, voiceStates: { cache: states }, members: { me: { voice: { channelId: temp.id } } } };
+  assert.ok(config.voice.lockHome, 'réglage par défaut : vocal verrouillé');
+  await voice.joinOwnerTemp(g, temp).catch(() => {});
+  assert.equal(voice.lockedChannel(g)?.id, temp.id, 'le bot va dans le vocal privé du chef');
+  states.set(config.ownerId, { channelId: home.id });
+  assert.notEqual(voice.lockedChannel(g)?.id, temp.id, 'le chef en est parti : le bot n’y reste pas');
+});
+
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);
