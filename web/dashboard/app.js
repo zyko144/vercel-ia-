@@ -251,7 +251,7 @@
               : vide('Rien entendu pour l’instant', 'Dès que quelqu’un parle dans le vocal du bot, ça apparaît ici.')),
           card('Raccourcis', h('div', { class: 'shortcuts' },
             [['#envoyer', '✉️', 'Écrire en tant que le bot', 'Message, annonce ou sondage'], ['#moderation', '🛡️', 'Modérer un membre', 'Muet, expulsion, bannissement'], ['#musique', '🎵', 'Lancer de la musique', 'Un titre ou un lien'],
-              ['#rappels', '⏰', 'Programmer un rappel', 'Pour toi ou un membre'], ['#ia', '🧠', 'Régler l’IA', 'Modèle, consignes, pause'], ['#casino', '🪙', 'Donner des jetons', 'Casinho']].map(([href, emoji, titre, sous]) =>
+              ['#rappels', '⏰', 'Programmer un rappel', 'Pour toi ou un membre'], ['#ia', '🧠', 'Régler l’IA', 'Modèle, consignes, pause'], ['#or', '🪙', 'Pièces d’or', 'Bourses et boutique']].map(([href, emoji, titre, sous]) =>
               h('a', { class: 'shortcut', href }, h('span', { class: 'emoji', 'aria-hidden': 'true', text: emoji }), h('b', { text: titre }), h('span', { text: sous }))))),
           card('Dernières actions sur le tableau de bord', d.recent.length
             ? h('div', { class: 'rows' }, d.recent.map((e) => ligne(e.action, `${e.user?.name ?? 'Système'} · ${ago(e.at)}${e.detail ? ` · ${e.detail}` : ''}`, null)))
@@ -540,28 +540,41 @@
       },
     },
 
-    casino: {
-      titre: 'Casino',
-      intro: 'Le classement de Casinho, et les jetons à donner, retirer ou remettre à zéro. Les jetons sont fictifs : ils ne s’achètent pas et ne se retirent pas.',
+    or: {
+      titre: 'Pièces d’or',
+      intro: 'L’économie pirate de chaque serveur : les bourses des membres, l’or en circulation, les objets de la boutique. Donne, retire, remets à zéro ou offre un effet. Les pièces ne s’achètent pas avec de l’argent.',
       garder: true,
+      auto: 30000,
       async rendre(zone) {
-        let classement = $('#casino-classement', zone);
-        if (!classement) {
-          classement = h('div', { id: 'casino-classement' });
-          append(zone, h('div', { class: 'grid cols-3-1' }, classement, carteJetons()));
+        let bloc = $('#or-bloc', zone);
+        if (!bloc) {
+          const d = await serveurs();
+          if (!d.guilds.length) return append(zone, card(null, vide('Aucun serveur', 'Le bot n’est sur aucun serveur.')));
+          const choix = h('select', { id: 'or-serveur' }, d.guilds.map((g) => h('option', { value: g.id, text: g.name })));
+          choix.addEventListener('change', () => rafraichir());
+          bloc = h('div', { id: 'or-bloc' });
+          append(zone, h('div', { class: 'stack' }, card(null, h('div', { class: 'grid cols-2' }, champ('Serveur', choix))), h('div', { class: 'grid cols-3-1' }, bloc, cartePieces())));
         }
-        const d = await api.get('casino');
+        const guildId = $('#or-serveur').value;
+        const d = await api.get(`or?serveur=${guildId}`);
+        const EFFETS = { immunite: '🛡️', xp: '⚡', quotidien: '🎁' };
         const gerer = (p) => {
           const b = h('button', { class: 'btn small', type: 'button', text: 'Gérer' });
-          b.addEventListener('click', () => { const champ = $('#jetons-qui'); champ.value = p.id; champ.focus(); });
+          b.addEventListener('click', () => { const c = $('#or-qui'); c.value = p.userId; c.focus(); });
           return b;
         };
-        classement.replaceChildren(card('Classement', !d.enabled ? h('p', { class: 'sub', text: 'Casinho n’a pas de token : le casino est éteint. Le classement ci-dessous vient des parties passées.' }) : null,
-          d.top.length
+        bloc.replaceChildren(h('div', { class: 'stack' },
+          card('Trésor du serveur', h('div', { class: 'grid cols-4' },
+            ligne('Or en circulation', null, h('b', { class: 'num', text: `🪙 ${num(d.total)}` })),
+            ligne('Membres avec de l’or', null, h('b', { class: 'num', text: num(d.holders) })),
+            ligne('Gagné en tout', null, h('b', { class: 'num', text: num(d.earned) })),
+            ligne('Dépensé en tout', null, h('b', { class: 'num', text: num(d.spent) })))),
+          card('Les plus riches', d.top.length
             ? h('div', { class: 'table-wrap' }, h('table', {},
-              h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Joueur' }), h('th', { class: 'right', text: 'Jetons' }), h('th', { class: 'right', text: '' }))),
-              h('tbody', {}, d.top.map((p, i) => h('tr', {}, h('td', { class: 'num', text: i + 1 }), h('td', {}, personne(p)), h('td', { class: 'right num', text: num(p.chips) }), h('td', { class: 'right' }, gerer(p)))))))
-            : vide('Personne n’a encore joué', 'Le classement se remplit avec /casino.')));
+              h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Membre' }), h('th', { class: 'right', text: 'Niveau' }), h('th', { class: 'right', text: 'Pièces' }), h('th', { text: 'Effets' }), h('th', { class: 'right', text: '' }))),
+              h('tbody', {}, d.top.map((p, i) => h('tr', {}, h('td', { class: 'num', text: i + 1 }), h('td', {}, personne(p.user)), h('td', { class: 'right num', text: p.level }), h('td', { class: 'right num', text: num(p.gold) }), h('td', { text: p.effects.map((e) => EFFETS[e]).join(' ') || '—' }), h('td', { class: 'right' }, gerer(p)))))))
+            : vide('Personne n’a encore d’or', 'Les membres gagnent 200 pièces par niveau et la récompense du jour.')),
+          card('Articles de la boutique', h('div', { class: 'rows' }, d.items.map((it) => ligne(`${it.emoji} ${it.name}`, null, h('span', { class: 'num', text: `🪙 ${num(it.price)}` })))))));
       },
     },
 
@@ -650,7 +663,7 @@
           q('Conversations', 'L’IA garde chaque conversation 45 minutes. Efface-la si quelqu’un veut repartir de zéro, ou si l’IA part dans une mauvaise direction.'),
           q('Écrire en tant que le bot', 'Choisis un serveur et un salon, écris ton message, ajoute si tu veux une carte (titre, couleur, image) : l’aperçu montre le rendu. Personne n’est mentionné sauf si tu choisis un rôle, @here ou @everyone.', 'Le sondage utilise les vrais sondages Discord (2 à 10 réponses).'),
           q('Modération', 'Cherche un membre par son pseudo (ou colle son identifiant pour un banni), mets une raison, puis Rendre muet, Expulser ou Bannir. Le chef ne peut jamais être sanctionné d’ici.', '« Ce que le bot peut faire » montre les permissions qui manquent au rôle du bot.'),
-          q('Musique, rappels, casino', 'Lance un titre ou un lien dans le vocal de ton choix, règle le volume, retire des sons de la file. Programme un rappel pour toi ou un membre. Donne ou retire des jetons de Casinho.'),
+          q('Musique, rappels, pièces d’or', 'Lance un titre ou un lien dans le vocal de ton choix, règle le volume, retire des sons de la file. Programme un rappel pour toi ou un membre. Donne ou retire des jetons de Casinho.'),
           q('Priver quelqu’un d’IA', 'Dans IA › Réglages › « Personnes privées d’IA », colle un identifiant Discord par ligne. Les jeux et la musique restent ouverts pour eux.'),
           q('Render et PC en même temps', 'Avec Supabase configuré, une seule copie du bot répond : Render passe devant (bot et tableau de bord en ligne), le PC ne sert que le site en local et ne prend le relais que si Render s’arrête. Sans Supabase, les deux répondent et les boutons affichent « Unknown interaction ».'),
           q('Journaux', 'Utile quand quelque chose ne marche pas : filtre par mot (« lavalink », « gemini »…) ou affiche seulement les erreurs.'),
@@ -972,29 +985,31 @@
         : h('p', { class: 'sub', text: 'La file est vide : le son en cours est le dernier.' }));
   }
 
-  // ---------- Casino ----------
-  function carteJetons() {
+  // ---------- Pièces d'or ----------
+  function cartePieces() {
     const retour = h('div', { 'aria-live': 'polite' });
-    const qui = h('input', { type: 'text', id: 'jetons-qui', inputmode: 'numeric', placeholder: 'Identifiant Discord du joueur', autocomplete: 'off' });
+    const qui = h('input', { type: 'text', id: 'or-qui', inputmode: 'numeric', placeholder: 'Identifiant Discord du membre', autocomplete: 'off' });
     const combien = h('input', { type: 'number', min: 1, max: 10000000, value: 1000, inputmode: 'numeric' });
-    const envoyer = async (signe) => {
-      const r = await api.post('casino/jetons', { userId: qui.value.trim(), amount: signe * Number(combien.value) });
+    const effet = h('select', {}, [['immunite', '🛡️ Immunité 24 h'], ['xp', '⚡ XP doublée 24 h'], ['quotidien', '🎁 Récompense doublée 7 jours']].map(([v, t]) => h('option', { value: v, text: t })));
+    const envoyer = async (corps) => {
+      const r = await api.post('or/pieces', { guildId: $('#or-serveur').value, userId: qui.value.trim(), ...corps });
       succes(retour, r.detail);
       rafraichir({ silencieux: true });
     };
     const donner = h('button', { class: 'btn primary', type: 'button', text: 'Donner' });
     const retirer = h('button', { class: 'btn', type: 'button', text: 'Retirer' });
+    const offrir = h('button', { class: 'btn', type: 'button', text: 'Offrir l’effet' });
     const remise = h('button', { class: 'btn danger', type: 'button', text: 'Remettre à zéro' });
     const garde = (b, fn) => b.addEventListener('click', () => action(b, async () => { try { await fn(); } catch (err) { echec(retour, err); } }));
-    garde(donner, () => envoyer(1));
-    garde(retirer, () => envoyer(-1));
+    garde(donner, () => envoyer({ amount: Number(combien.value) }));
+    garde(retirer, () => envoyer({ amount: -Number(combien.value) }));
+    garde(offrir, () => envoyer({ effet: effet.value }));
     garde(remise, async () => {
-      if (!await confirmer({ titre: 'Remettre ce compte à zéro ?', texte: 'Jetons, série et statistiques repartent comme pour un nouveau joueur.', bouton: 'Remettre à zéro' })) return;
-      const r = await api.post('casino/jetons', { userId: qui.value.trim(), remise: true });
-      succes(retour, r.detail);
-      rafraichir({ silencieux: true });
+      if (!await confirmer({ titre: 'Remettre cette bourse à zéro ?', texte: 'Ses pièces d’or et ses effets en cours sont effacés sur ce serveur.', bouton: 'Remettre à zéro' })) return;
+      await envoyer({ remise: true });
     });
-    return card('Gérer les jetons', h('div', { class: 'grid cols-2' }, champ('Joueur', qui, 'Clique sur « Gérer » dans le classement pour le remplir.'), champ('Jetons', combien)), h('div', { class: 'actions' }, donner, retirer, h('span', { class: 'spacer' }), remise), retour);
+    return card('Gérer une bourse', champ('Membre', qui, 'Clique sur « Gérer » dans le classement pour le remplir.'), champ('Pièces d’or', combien),
+      h('div', { class: 'actions' }, donner, retirer), champ('Effet de la boutique', effet), h('div', { class: 'actions' }, offrir, h('span', { class: 'spacer' }), remise), retour);
   }
 
   function boutonRedemarrer(d) {
@@ -1168,6 +1183,7 @@
   setInterval(majHorloge, 10000);
 
   function aller() {
+    if (location.hash === '#casino') history.replaceState(null, '', '/dashboard#or');
     const nom = VUES[location.hash.slice(1)] ? location.hash.slice(1) : 'apercu';
     if (nom !== vueActive) $('#contenu').replaceChildren();
     vueActive = nom;
@@ -1207,7 +1223,7 @@
     $('#me-name').textContent = moi.user.name;
     if (moi.user.avatar) { $('#me-avatar').src = moi.user.avatar; $('#me-avatar').hidden = false; }
     montrer('app');
-    if (!VUES[location.hash.slice(1)]) history.replaceState(null, '', '/dashboard#apercu');
+    if (!VUES[location.hash.slice(1)] && location.hash !== '#casino') history.replaceState(null, '', '/dashboard#apercu');
     aller();
   }
 

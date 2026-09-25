@@ -1,9 +1,10 @@
 // Actions du tableau de bord : ce que le chef fait sur Discord depuis la page
-// (écrire en tant que le bot, sondages, modération, musique, rappels, casino, redémarrage).
+// (écrire en tant que le bot, sondages, modération, musique, rappels, pièces d'or, redémarrage).
 // Même règle que le reste : chaque entrée est vérifiée, chaque action est limitée et notée au journal.
 import { ChannelType, EmbedBuilder, PermissionFlagsBits as P } from 'discord.js';
 import { config } from '../config.js';
-import { grant, reset } from '../casinho/economy.js';
+import { addGold, economyOverview, giftEffect, resetPurse } from '../features/economy.js';
+import { topLevels } from '../features/levels.js';
 import { addReminder, listReminders, removeReminder } from '../features/reminders.js';
 import { homeChannel, lockedChannel } from '../features/voice.js';
 import { blindTestActive } from '../music/blindtest.js';
@@ -305,20 +306,30 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
       return json(res, 200, { ok: true });
     }),
 
-    // ---------- Casino ----------
-    'POST casino/jetons': wrap(async (req, res, body, session) => {
-      limit(session, 'casino', 20, MINUTE);
+    // ---------- Pièces d'or (économie de chaque serveur) ----------
+    'GET or': wrap(async (req, res, body, session, url) => {
+      const guild = guildOf(url.searchParams.get('serveur'));
+      const eco = await economyOverview(guild.id);
+      const levels = Object.fromEntries((await topLevels(guild.id, 200)).map((l) => [l.userId, l.level]));
+      return json(res, 200, { guildId: guild.id, ...eco, top: eco.top.map((p) => ({ ...p, user: who(client, p.userId), level: levels[p.userId] ?? 0 })) });
+    }),
+    'POST or/pieces': wrap(async (req, res, body, session) => {
+      limit(session, 'or', 30, MINUTE);
+      const guild = guildOf(body.guildId);
       const userId = String(body.userId ?? '');
       if (!ID.test(userId)) refuse('Identifiant Discord invalide.');
       let detail;
       if (body.remise === true) {
-        detail = `compte remis à zéro (${await reset(userId)} jetons)`;
+        detail = `bourse remise à zéro (${await resetPurse(guild.id, userId)} pièces)`;
+      } else if (body.effet) {
+        const until = await giftEffect(guild.id, userId, String(body.effet)).catch((err) => refuse(err.message));
+        detail = `effet « ${body.effet} » offert jusqu’au ${until.toLocaleString('fr-FR')}`;
       } else {
-        const amount = entier(body.amount, -10_000_000, 10_000_000, 'Jetons');
-        if (!amount) refuse('Jetons : un nombre différent de 0.');
-        detail = `${amount > 0 ? '+' : ''}${amount} jetons → solde ${await grant(userId, amount)}`;
+        const amount = entier(body.amount, -10_000_000, 10_000_000, 'Pièces');
+        if (!amount) refuse('Pièces : un nombre différent de 0.');
+        detail = `${amount > 0 ? '+' : ''}${amount} pièces d’or → bourse ${await addGold(guild.id, userId, amount)}`;
       }
-      audit({ userId: session.userId, action: 'Casino', detail: `${who(client, userId).name} : ${detail}`, req });
+      audit({ userId: session.userId, action: 'Pièces d’or', detail: `${guild.name} · ${who(client, userId).name} : ${detail}`, req });
       return json(res, 200, { ok: true, detail });
     }),
 
