@@ -34,8 +34,8 @@ const MINUTE = 60_000;
 // En-têtes posés sur chaque réponse du tableau de bord.
 function securityHeaders(req, res) {
   res.setHeader('Content-Security-Policy', [
-    "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' data: https://cdn.discordapp.com",
-    "connect-src 'self'", "font-src 'self'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
+    "default-src 'none'", "script-src 'self'", "style-src 'self' https://fonts.googleapis.com", "img-src 'self' data: https://cdn.discordapp.com",
+    "connect-src 'self'", "font-src 'self' https://fonts.gstatic.com", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
