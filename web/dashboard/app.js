@@ -568,13 +568,17 @@
             ligne('Or en circulation', null, h('b', { class: 'num', text: `🪙 ${num(d.total)}` })),
             ligne('Membres avec de l’or', null, h('b', { class: 'num', text: num(d.holders) })),
             ligne('Gagné en tout', null, h('b', { class: 'num', text: num(d.earned) })),
-            ligne('Dépensé en tout', null, h('b', { class: 'num', text: num(d.spent) })))),
+            ligne('Dépensé en tout', null, h('b', { class: 'num', text: num(d.spent) })),
+            ligne('Coffre commun (taxes, amendes)', null, h('b', { class: 'num', text: `🏦 ${num(d.chest ?? 0)}` })))),
           card('Les plus riches', d.top.length
             ? h('div', { class: 'table-wrap' }, h('table', {},
               h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Membre' }), h('th', { class: 'right', text: 'Niveau' }), h('th', { class: 'right', text: 'Pièces' }), h('th', { text: 'Effets' }), h('th', { class: 'right', text: '' }))),
               h('tbody', {}, d.top.map((p, i) => h('tr', {}, h('td', { class: 'num', text: i + 1 }), h('td', {}, personne(p.user)), h('td', { class: 'right num', text: p.level }), h('td', { class: 'right num', text: num(p.gold) }), h('td', { text: p.effects.map((e) => EFFETS[e]).join(' ') || '—' }), h('td', { class: 'right' }, gerer(p)))))))
             : vide('Personne n’a encore d’or', 'Les membres gagnent 200 pièces par niveau et la récompense du jour.')),
-          card('Articles de la boutique', h('div', { class: 'rows' }, d.items.map((it) => ligne(`${it.emoji} ${it.name}`, null, h('span', { class: 'num', text: `🪙 ${num(it.price)}` })))))));
+          card('Articles de la boutique', h('div', { class: 'rows' }, d.items.map((it) => ligne(`${it.emoji} ${it.name}${it.promo ? ' · 🏷️ promo du jour' : ''}`, it.stock != null ? `Stock du mois : ${it.stock}` : null, h('span', { class: 'num', text: `🪙 ${num(it.price)}` }))))),
+          card('Derniers achats', (d.purchases ?? []).length
+            ? h('div', { class: 'rows' }, d.purchases.slice(0, 15).map((a) => ligne(a.why.replace(/^Achat : /, ''), `${new Date(a.at).toLocaleString('fr-FR')} · ${a.userId}`, h('span', { class: 'num', text: `🪙 ${num(-a.n)}` }))))
+            : vide('Aucun achat pour l’instant', 'Les achats de la boutique apparaîtront ici.'))));
       },
     },
 

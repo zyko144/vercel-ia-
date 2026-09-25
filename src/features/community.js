@@ -1,4 +1,5 @@
 // Communauté : carte de bienvenue, suggestions votées, sauvegarde et restauration du serveur.
+import { addGold } from './economy.js';
 import {
   ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags, OverwriteType, PermissionFlagsBits as P,
 } from 'discord.js';
@@ -106,8 +107,11 @@ export async function handleSuggestionComponent(client, interaction) {
   await interaction.update({ embeds: [embed], components: status === STATUS.acceptee || status === STATUS.refusee ? [] : [suggestionButtons()] });
   const authorId = interaction.message.embeds[0]?.footer?.text?.match(/(\d{15,21})$/)?.[1];
   if (authorId) {
+    // Suggestion acceptée : 500 pièces d'or pour son auteur
+    const prime = status === STATUS.acceptee ? 500 : 0;
+    if (prime) await addGold(interaction.guildId, authorId, prime, 'Suggestion acceptée');
     const user = await client.users.fetch(authorId).catch(() => null);
-    await user?.send(`💡 Ta suggestion sur **${interaction.guild.name}** : **${status.emoji} ${status.label}**.\n> ${truncate(interaction.message.embeds[0].description ?? '', 300)}`).catch(() => {});
+    await user?.send(`💡 Ta suggestion sur **${interaction.guild.name}** : **${status.emoji} ${status.label}**.${prime ? ` **+🪙 ${prime} pièces d’or** !` : ''}\n> ${truncate(interaction.message.embeds[0].description ?? '', 300)}`).catch(() => {});
   }
   return undefined;
 }

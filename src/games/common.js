@@ -1,6 +1,7 @@
 // Outils partagés par les jeux : salle d'attente, réponses écrites dans un salon, petits utilitaires.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder, MessageFlags } from 'discord.js';
 import { config } from '../config.js';
+import { cfg } from '../features/guildConfig.js';
 import { botName, isBot, makeBots, who } from './bots.js';
 
 export const PRIVATE = { flags: MessageFlags.Ephemeral };
@@ -38,7 +39,7 @@ export function ranking(scores, count = 10) {
 
 /** Salon où se jouent les jeux écrits (│・mini-jeux), sinon celui de la commande. */
 export async function gameChannel(interaction) {
-  const id = config.games.miniGamesChannelId || interaction.channelId;
+  const id = (interaction.guildId && cfg(interaction.guildId, 'games.channelId')) || config.games.miniGamesChannelId || interaction.channelId;
   // Le cache d'abord : la réponse à la commande doit partir en moins de 3 s
   const channel = interaction.client.channels.cache?.get(id) ?? await interaction.client.channels.fetch(id).catch(() => null);
   return channel?.isTextBased?.() ? channel : interaction.channel;
