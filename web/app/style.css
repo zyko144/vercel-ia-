@@ -244,11 +244,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar, .side::-webkit-scrollbar, .tab
 
 body {
   font-size: 17px;
-  background:
-    radial-gradient(1200px 700px at 50% -10%, rgba(201, 169, 120, .10), transparent 60%),
-    radial-gradient(900px 600px at 100% 100%, rgba(120, 80, 40, .10), transparent 60%),
-    repeating-linear-gradient(0deg, rgba(234, 220, 192, .012) 0 1px, transparent 1px 3px),
-    var(--bg);
+  background: radial-gradient(1400px 900px at 15% -15%, rgba(214, 186, 140, .28), transparent 60%),
+    linear-gradient(165deg, #4a3b27 0%, #2a2117 22%, #16110c 50%, #0a0806 100%);
   background-attachment: fixed;
 }
 h1, h2, h3, .logo, .nav .nt b, .tile b, .server b, .stat b, .banner h2, .page-head h1, .lock-box h3, .cmd code { font-family: var(--title); letter-spacing: .005em; }
@@ -303,3 +300,57 @@ h1 { font-weight: 700; }
 .nav .nt b { font-size: 17.5px; line-height: 1.2; }
 .nav .nt small { font-size: 13px; }
 .dc .app, .dc .av { background: #5865f2; color: #fff; }
+
+/* Police gothique (comme le serveur Dictature) pour les titres */
+.logo span, h1, .card h2, .banner h2, .tile b, .lock-box h3, .nav .nt b, .plan h2, .side .server-mini b { font-family: 'UnifrakturCook', var(--title); font-weight: 700; letter-spacing: .01em; }
+.page-head h1 { font-size: 40px; }
+.card h2 { font-size: 26px; }
+.nav .nt b { font-size: 18px; }
+
+/* Aperçus : une carte de parchemin déchirée, le message Discord reste lisible dedans */
+.torn {
+  background: linear-gradient(175deg, #efe2c4 0%, #e2cfa6 55%, #d6bf90 100%) !important;
+  border: 0 !important; box-shadow: none !important; padding: 30px 24px 34px !important;
+  clip-path: polygon(0.0% 5px, 4.4% 6px, 8.1% 1px, 12.2% 1px, 15.2% 0px, 19.5% 3px, 21.8% 6px, 24.9% 3px, 27.4% 6px, 29.7% 9px, 32.2% 3px, 35.8% 9px, 40.2% 9px, 43.8% 0px, 48.2% 0px, 51.7% 2px, 54.5% 2px, 58.0% 9px, 60.9% 2px, 63.3% 9px, 67.0% 5px, 69.4% 1px, 72.9% 9px, 75.6% 8px, 78.8% 5px, 82.1% 7px, 85.1% 3px, 89.1% 3px, 91.5% 4px, 94.9% 5px, 98.8% 4px, 100% 1px, 100.0% calc(100% - 1px), 96.6% calc(100% - 2px), 92.7% calc(100% - 2px), 88.3% calc(100% - 6px), 86.0% calc(100% - 1px), 82.1% calc(100% - 9px), 78.1% calc(100% - 5px), 75.1% calc(100% - 5px), 71.5% calc(100% - 9px), 67.5% calc(100% - 1px), 63.4% calc(100% - 4px), 60.1% calc(100% - 1px), 57.7% calc(100% - 4px), 54.0% calc(100% - 7px), 51.2% calc(100% - 6px), 46.9% calc(100% - 5px), 44.7% calc(100% - 7px), 41.7% calc(100% - 9px), 39.2% calc(100% - 0px), 36.5% calc(100% - 4px), 34.0% calc(100% - 3px), 30.9% calc(100% - 7px), 28.5% calc(100% - 7px), 25.4% calc(100% - 4px), 21.1% calc(100% - 6px), 17.0% calc(100% - 4px), 13.1% calc(100% - 5px), 9.4% calc(100% - 6px), 5.0% calc(100% - 2px), 2.6% calc(100% - 2px), 0% calc(100% - 3px));
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, .55));
+  transform: rotate(-.6deg);
+}
+.torn .preview-label { color: #6b5433; }
+.torn .preview-label::before { background: #8a6a3a; box-shadow: none; }
+.torn .dc { box-shadow: 0 2px 0 rgba(0, 0, 0, .15), 0 8px 18px rgba(60, 40, 15, .35); transform: rotate(.6deg); }
+
+/* Nouveaux menus */
+.bar.wide { width: 100%; max-width: none; height: 10px; margin-top: 14px; }
+.steps { display: grid; gap: 10px; margin-top: 20px; }
+.step { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); cursor: pointer; text-align: left; }
+.step:hover { border-color: var(--accent); }
+.step .num { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-family: var(--title); font-weight: 700; font-size: 20px; background: var(--surface-3); color: var(--muted); }
+.step.done .num { background: var(--ok); color: #111; }
+.step b { display: block; font-size: 17px; }
+.step small { color: var(--muted); font-size: 14px; }
+.step .go { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.step.done .go { color: var(--ok); }
+.tile.static { cursor: default; }
+.tile.static:hover { transform: none; border-color: var(--border); }
+.tile .how, .code-box code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--accent); background: rgba(0, 0, 0, .25); padding: 4px 8px; border-radius: 6px; align-self: flex-start; }
+.howto { margin: 14px 0 0; padding-left: 22px; display: grid; gap: 8px; color: var(--text); }
+.code-box { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.code-box code { font-size: 22px; padding: 10px 16px; color: var(--gold); letter-spacing: .08em; }
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 1180px) { .plans { grid-template-columns: 1fr; } }
+.plan { position: relative; display: flex; flex-direction: column; gap: 10px; }
+.plan .price b { font-family: var(--title); font-size: 38px; }
+.plan .price small { color: var(--muted); margin-left: 6px; }
+.plan .checks { margin-top: 6px; }
+.plan .btn { margin-top: auto; }
+.plan.featured { border-color: var(--gold-line); box-shadow: 0 0 0 1px var(--gold-line), 0 20px 50px -25px rgba(242, 193, 78, .5); }
+.plan.featured h2 { color: var(--gold); }
+.plan.current { outline: 2px solid var(--ok); outline-offset: 2px; }
+.ribbon { position: absolute; top: -12px; right: 18px; background: var(--gold); color: #1d1604; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.faq details { border-bottom: 1px solid var(--border); padding: 14px 0; }
+.faq summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; justify-content: space-between; }
+.faq summary::after { content: "+"; color: var(--faint); }
+.faq details[open] summary::after { content: "–"; }
+.faq details p { color: var(--muted); margin-top: 8px; }
+.incl { color: var(--gold); font-size: 14px; margin-top: 14px; }
+html { background: #0a0806; }

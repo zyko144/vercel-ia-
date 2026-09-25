@@ -159,7 +159,7 @@ export function createDashboard(client) {
       services: {
         gemini: Boolean(config.geminiKey), storage: storageBackend, instance: instance.where,
         voiceGuard: { enabled: config.voiceGuard.enabled, ...voiceGuardStats }, casino: Boolean(config.casinho.token),
-        voiceAi: Boolean(config.voiceAi.token), site: config.site.url || null, publicUrl: config.publicUrl || null,
+        voiceAi: true, site: config.site.url || null, publicUrl: config.publicUrl || null,
       },
       alerts,
       recent: auditLog().slice(0, 6).map((e) => ({ ...e, user: e.userId ? who(client, e.userId) : null })),

@@ -390,52 +390,7 @@ const SLASH_HANDLERS = {
         ...PRIVATE,
       });
     }
-    if (!isOwner(interaction.user)) return interaction.reply({ content: '🔒 Commande réservée au chef.', ...PRIVATE });
-
-    if (interaction.options.getSubcommand() === 'voc') {
-      if (!interaction.guild) return interaction.reply({ content: 'À utiliser dans le serveur.', ...PRIVATE });
-      await interaction.deferReply(PRIVATE);
-      const ok = await rejoinVoice(interaction.guild);
-      return interaction.editReply(ok
-        ? `🎧 Reconnecté : ${voiceStatus(interaction.guild)}`
-        : "⚠️ Pas réussi à rejoindre le vocal (ou la musique tient le vocal en ce moment). Vérifie l'ID du salon et la permission Se connecter.");
-    }
-
-    if (interaction.options.getSubcommand() === 'musique') {
-      const nodes = lavalink.status();
-      const players = allPlayers();
-      const embed = new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setTitle('🎶 Serveurs audio (musique)')
-        .setDescription(nodes.length
-          ? nodes.map((n) => {
-            const state = n.connected ? (n.incompatible ? '⛔ refusé par Discord' : n.broken ? '⚠️ problèmes de lecture' : '✅ connecté') : '❌ hors ligne';
-            return `**${n.name}** ${n.secure ? '🔒' : ''} · ${state}${n.version ? ` · v${n.version}` : ''}${n.connected ? ` · ${n.players} lecteur(s)` : ''}`;
-          }).join('\n')
-          : 'Aucun serveur audio configuré (lecteur local uniquement).')
-        .addFields(
-          { name: 'Moteur', value: players.length ? players.map((p) => `${p.guild.name} : ${p.backend?.name ?? 'inactif'}`).join('\n') : 'Aucune musique en cours' },
-          { name: 'Derniers événements', value: lavalink.logs.length ? lavalink.logs.slice(-8).map((l) => `<t:${Math.floor(l.at / 1000)}:t> ${truncate(l.text, 90)}`).join('\n') : 'Rien à signaler' },
-        );
-      return interaction.reply({ embeds: [embed], ...PRIVATE });
-    }
-
-    const uptime = process.uptime();
-    const embed = new EmbedBuilder()
-      .setColor(0x57f287)
-      .setTitle('📊 Stats du bot')
-      .addFields(
-        { name: 'En ligne depuis', value: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}min`, inline: true },
-        { name: 'Serveurs', value: `${client.guilds.cache.size}`, inline: true },
-        { name: 'Latence', value: `${Math.round(client.ws.ping)} ms`, inline: true },
-        { name: 'RAM', value: `${Math.round(process.memoryUsage().rss / 1024 / 1024)} Mo`, inline: true },
-        { name: 'Convs en mémoire', value: `${memoryStats()}`, inline: true },
-        { name: "Images aujourd'hui", value: `${await imagesToday()}`, inline: true },
-        { name: 'Vocal', value: interaction.guild ? voiceStatus(interaction.guild) : '—', inline: true },
-        { name: 'Stockage', value: storageBackend, inline: true },
-        { name: 'Modèles', value: `Chat : \`${config.models.chat}\` (réflexion ${config.models.thinkingLevel})\nSecours : \`${config.models.fallback}\`` },
-      );
-    await interaction.reply({ embeds: [embed], ...PRIVATE });
+    return interaction.reply({ content: 'Sous-commande inconnue.', ...PRIVATE });
   },
 };
 

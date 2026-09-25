@@ -125,8 +125,7 @@ processus. Sans token il reste simplement éteint : le bot principal n'est pas a
 1. Developer Portal › l'application **Casinho** › Bot › *Reset Token*, puis copie.
 2. Ajoute `TOKEN_CASINHO` dans `.env` en local, **et** dans Render › Environment.
    La casse du nom n’a pas d’importance : `TOKEN_CASINHO` ou `token_casinho`, les deux marchent.
-   ⚠️ Ce token est réservé au casino : l’IA vocale ne le prendra jamais. Si elle n’a pas
-   le sien (`VOICE_BOT_TOKEN`, ou un 2e token dans `DISCORD_TOKEN=token1;token2`), elle reste éteinte.
+   ⚠️ Ce token est réservé au casino.
 3. Invite-le avec les scopes `bot` + `applications.commands`.
 4. Au démarrage, les commandes sont enregistrées sur le serveur `CASINHO_GUILD_ID`
    (immédiat) ; sinon en global (jusqu'à une heure d'attente).
@@ -163,6 +162,16 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 **Taux de redistribution** : blackjack ≈ 99,5 % · roulette 97,3 % · pile ou face et rouge/noir
 97,5 % · dés 95,8 à 96,7 % · mines, crash et plus ou moins 97 % · machine à sous 95,6 % ·
 `/duel` 100 % (aucun prélèvement, c'est du joueur contre joueur).
+
+---
+
+## 7 bis. Un seul bot : l'IA vocale est dans AI Vercel 🎙️
+
+L'ancien bot « AI Vocal Vercel » n'est plus utilisé : **tout passe par AI Vercel** (musique, surveillance vocale,
+IA vocale, narrateur des jeux). Pour parler à l'IA : rejoins le salon vocal du bot, puis **/ia › Parler à l'IA en
+vocal**. Pendant qu'elle parle, la musique locale est mise de côté puis reprend à la fin ; si la musique passe par
+le serveur audio (Lavalink), il faut l'arrêter avant. Un ancien `VOICE_BOT_TOKEN` (ou 2e token dans `DISCORD_TOKEN`)
+est simplement ignoré : tu peux supprimer ce bot dans le portail Discord et retirer le token de Render.
 
 ---
 

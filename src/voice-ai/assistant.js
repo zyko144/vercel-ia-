@@ -1,6 +1,7 @@
-// IA vocale : un 2e bot (« AI Vocal Vercel ») reste 24h/24 dans le vocal du bot.
-// Avec /vocal, il écoute la personne et lui répond à voix haute en direct (Gemini Live),
-// et peut piloter la musique du bot principal. Pour certains jeux (freestyle) il rejoint un autre salon puis revient.
+// IA vocale, intégrée au bot principal AI Vercel (il n'y a plus de 2e bot).
+// Avec /ia › Parler à l'IA en vocal, le bot écoute la personne dans SON salon vocal et répond à voix haute
+// en direct (Gemini Live). Il partage la connexion vocale du bot : pendant qu'il parle, la musique locale
+// est coupée puis reprend à la fin. Pour certains jeux (freestyle), il va dans un autre salon puis revient.
 import { PassThrough, Readable } from 'node:stream';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import {
@@ -16,6 +17,7 @@ import {
   StreamType,
   VoiceConnectionStatus,
 } from '@discordjs/voice';
+import { connectForMusic, ensureInVoice as keepInVoice, findTargetChannel, isExternalVoice, releaseMusic } from '../features/voice.js';
 import { EndSensitivity, GoogleGenAI, Modality, StartSensitivity, Type } from '@google/genai';
 import { ActivityType, Client, EmbedBuilder, Events, GatewayIntentBits } from 'discord.js';
 import prism from 'prism-media';
@@ -28,7 +30,6 @@ import { reportProblem } from '../features/alerts.js';
 import { truncate } from '../utils/discord.js';
 import { findSong, popularArtistNames, voiceVocabulary } from './songs.js';
 
-const GROUP = 'ia-vocale'; // connexion vocale séparée de celle du bot principal
 const CHECK_EVERY_MS = 20_000;
 const STUCK_AFTER_MS = 45_000; // une connexion pas prête au bout de ce temps ne le sera plus
 const SEND_CHUNK_BYTES = 3_200; // 100 ms de voix à 16 kHz mono
@@ -49,7 +50,7 @@ setInterval(() => {
   load.lastAt = Date.now();
 }, 5_000).unref();
 // homeOverride : salon prêté le temps d'un jeu (freestyle dans Dictature) ; busy : ce qui occupe la voix (narrateur, enregistrement)
-const state = { client: null, mainClient: null, player: null, session: null, checker: null, homeOverride: null, busy: null, listening: false };
+const state = { client: null, mainClient: null, player: null, session: null, checker: null, homeOverride: null, busy: null, listening: false, prevPlayer: undefined };
 
 // ===================== Conversion audio =====================
 
@@ -101,95 +102,64 @@ function primeReceive() {
   state.player.play(createAudioResource(Readable.from([Buffer.alloc(3_840 * PRIME_FRAMES)]), { inputType: StreamType.Raw }));
 }
 
-function homeGuildChannel() {
-  const channel = state.client?.channels.cache.get(state.homeOverride ?? config.voiceAi.channelId);
+/** Le serveur de l'IA vocale : celui de la conversation en cours, sinon celui de VOICE_AI_CHANNEL_ID. */
+function homeGuild(guildId = state.session?.guildId) {
+  return state.client?.guilds.cache.get(guildId ?? '') ?? state.client?.channels.cache.get(config.voiceAi.channelId)?.guild ?? null;
+}
+
+/** Le salon vocal où est le bot (ou celui prêté à un jeu). */
+function homeGuildChannel(guildId) {
+  if (state.homeOverride) {
+    const borrowed = state.client?.channels.cache.get(state.homeOverride);
+    if (borrowed?.isVoiceBased?.()) return borrowed;
+  }
+  const guild = homeGuild(guildId);
+  if (!guild) return null;
+  const current = getVoiceConnection(guild.id)?.joinConfig.channelId ?? guild.members.me?.voice.channelId;
+  const channel = guild.channels.cache.get(current ?? '') ?? findTargetChannel(guild);
   return channel?.isVoiceBased?.() ? channel : null;
 }
 
-function connection() {
-  const channel = homeGuildChannel();
-  return channel ? getVoiceConnection(channel.guild.id, GROUP) : undefined;
+/** La connexion vocale du bot principal (partagée avec la musique et la surveillance vocale). */
+function connection(guildId) {
+  const guild = homeGuild(guildId);
+  return guild ? getVoiceConnection(guild.id) : undefined;
 }
 
-/** Le bot vocal reste dans son salon (sourdine quand personne ne lui parle). */
-function ensureInVoice() {
-  const channel = homeGuildChannel();
-  if (!channel) return;
-  const existing = getVoiceConnection(channel.guild.id, GROUP);
-  const status = existing?.state.status;
-  const alive = existing && ![VoiceConnectionStatus.Destroyed, VoiceConnectionStatus.Disconnected].includes(status);
-  // Coincée en « signalling » ou « connecting » (souvent juste après un redéploiement,
-  // quand l'ancienne instance tient encore le vocal) : elle n'arrivera plus, on la refait.
-  const stuck = alive && status !== VoiceConnectionStatus.Ready && Date.now() - (state.joinedAt ?? 0) > STUCK_AFTER_MS;
-  if (alive && !stuck && existing.joinConfig.channelId === channel.id) return;
-  if (stuck) {
-    console.warn(`[vocal] connexion bloquée en « ${status} » depuis ${Math.round((Date.now() - state.joinedAt) / 1000)} s : on la relance`);
-    // Ça revient sans arrêt : presque toujours une 2e copie du bot (PC + Render) qui se dispute le vocal
-    state.stuckTimes = [...(state.stuckTimes ?? []).filter((t) => Date.now() - t < 10 * 60_000), Date.now()];
-    if (state.stuckTimes.length === 3) console.warn('[vocal] ⚠️ 3 blocages en 10 min : le bot tourne sûrement ailleurs en même temps (PC + Render). Ferme demarrer.bat ou mets SUPABASE_SERVICE_KEY dans Render.');
-  }
-  existing?.destroy();
-  state.joinedAt = Date.now();
-
-  const conn = joinVoiceChannel({
-    channelId: channel.id,
-    guildId: channel.guild.id,
-    adapterCreator: channel.guild.voiceAdapterCreator,
-    group: GROUP,
-    selfDeaf: !state.session && !state.listening,
-    selfMute: false,
-  });
-  conn.on('error', (err) => console.warn('[vocal] connexion :', err.message));
-  conn.on(VoiceConnectionStatus.Disconnected, async () => {
-    try {
-      await Promise.race([
-        entersState(conn, VoiceConnectionStatus.Signalling, 5_000),
-        entersState(conn, VoiceConnectionStatus.Connecting, 5_000),
-      ]);
-    } catch {
-      if (conn.state.status !== VoiceConnectionStatus.Destroyed) conn.destroy();
-      setTimeout(ensureInVoice, 3_000);
-    }
-  });
-  conn.subscribe(state.player);
-  entersState(conn, VoiceConnectionStatus.Ready, 30_000)
-    .then(() => {
-      console.log(`[vocal] IA vocale dans #${channel.name} 🎙️`);
-      primeReceive();
-    })
-    .catch(() => {
-      // Avant, cet échec était ignoré et la voix restait muette jusqu'au redémarrage.
-      console.warn(`[vocal] pas de réponse du vocal après 30 s (état « ${conn.state.status} ») : nouvel essai`);
-      if (conn.state.status !== VoiceConnectionStatus.Destroyed) conn.destroy();
-      setTimeout(ensureInVoice, 5_000).unref?.();
-    });
+/** Le bot rejoint son salon (ou le salon prêté à un jeu), via le gardien du vocal du bot principal. */
+function ensureInVoice(guildId) {
+  const guild = homeGuild(guildId);
+  if (!guild) return Promise.resolve();
+  const borrowed = state.homeOverride ? state.client.channels.cache.get(state.homeOverride) : null;
+  const task = borrowed?.isVoiceBased?.() ? connectForMusic(guild, borrowed) : keepInVoice(guild);
+  return task.catch((err) => console.warn('[vocal] connexion :', err.message));
 }
+
+/** L'IA prend la parole sur la connexion (la musique locale est mise de côté), puis la rend. */
+function takeSpeaker(conn) {
+  if (!conn) return;
+  if (state.prevPlayer === undefined) state.prevPlayer = conn.state.subscription?.player ?? null;
+  if (conn.state.subscription?.player !== state.player) conn.subscribe(state.player);
+}
+function giveBackSpeaker(conn = connection()) {
+  const prev = state.prevPlayer;
+  state.prevPlayer = undefined;
+  if (conn && conn.state.status !== VoiceConnectionStatus.Destroyed && prev && prev !== state.player) conn.subscribe(prev);
+}
+const restDeaf = () => !config.voiceGuard.enabled;
 
 export async function startVoiceAssistant(mainClient) {
-  if (!config.voiceAi.token) {
-    console.log('🎙️ IA vocale désactivée : pas de token pour le 2e bot (DISCORD_TOKEN=token1;token2 ou VOICE_BOT_TOKEN)');
-    return;
-  }
-  console.log(`🎙️ IA vocale : token lu dans ${config.voiceAi.tokenSource} · ${generateDependencyReport().split('\n').filter((line) => /opus/i.test(line)).map((line) => line.trim()).join(' ')}`);
+  if (config.voiceAi.token) console.log('🎙️ IA vocale : le token du 2e bot est ignoré, tout passe maintenant par AI Vercel (tu peux supprimer l’ancien bot vocal).');
+  console.log(`🎙️ IA vocale intégrée à ${mainClient.user.tag} · ${generateDependencyReport().split('\n').filter((line) => /opus/i.test(line)).map((line) => line.trim()).join(' ')}`);
   state.mainClient = mainClient;
+  state.client = mainClient;
   state.player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Play, maxMissedFrames: 250 } });
   state.player.on('error', (err) => console.warn('[vocal] lecture :', err.message));
   state.player.on(AudioPlayerStatus.Idle, () => onPlayerIdle());
-
-  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
-  state.client = client;
-  client.once(Events.ClientReady, (c) => {
-    console.log(`🎙️ IA vocale connectée : ${c.user.tag}`);
-    c.user.setPresence({ activities: [{ name: 'custom', type: ActivityType.Custom, state: '🎙️ /vocal pour me parler' }], status: 'online' });
-    ensureInVoice();
-    state.checker = setInterval(ensureInVoice, CHECK_EVERY_MS);
-    voiceVocabulary().then((words) => console.log(`[vocal] vocabulaire rap FR prêt (${words.length} mots)`)).catch(() => {});
-  });
-  client.on(Events.VoiceStateUpdate, (oldState, newState) => {
-    // Déplacé ou éjecté : retour dans son salon
-    if (newState.id === client.user.id && newState.channelId !== (state.homeOverride ?? config.voiceAi.channelId)) setTimeout(ensureInVoice, 2_000);
-    // La personne quitte le salon : fin de la conversation
+  voiceVocabulary().then((words) => console.log(`[vocal] vocabulaire rap FR prêt (${words.length} mots)`)).catch(() => {});
+  mainClient.on(Events.VoiceStateUpdate, (oldState, newState) => {
     const session = state.session;
+    // La personne quitte le salon : fin de la conversation
     if (session && !session.listenAll && newState.id === session.userId && newState.channelId !== session.channelId) {
       stopSession('tu as quitté le vocal').catch(() => {});
     }
@@ -199,16 +169,14 @@ export async function startVoiceAssistant(mainClient) {
       if (!left) stopSession('plus personne dans le vocal').catch(() => {});
     }
   });
-  client.on(Events.Error, (err) => console.warn('[vocal] discord :', err.message));
-  await client.login(config.voiceAi.token).catch((err) => console.error('❌ IA vocale : connexion impossible :', err.message));
 }
 
 export function voiceAssistantState() {
   const conn = connection();
   const s = state.session;
   return {
-    enabled: Boolean(config.voiceAi.token),
-    tokenSource: config.voiceAi.tokenSource,
+    enabled: true,
+    tokenSource: 'bot principal (AI Vercel)',
     bot: state.client?.user?.tag ?? null,
     voice: conn?.state.status ?? 'déconnecté',
     model: config.voiceAi.model,
@@ -222,7 +190,7 @@ export function voiceAssistantState() {
 function systemPrompt(session, artists = []) {
   const date = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
   return [
-    `Tu es « AI Vocal Vercel », l'assistante vocale du serveur Discord DDV. Tu parles en direct avec ${session.userName} dans le salon vocal.`,
+    `Tu es « AI Vercel », l'assistante vocale du serveur Discord DDV. Tu parles en direct avec ${session.userName} dans le salon vocal.`,
     'Réponds TOUJOURS en français, à l\'oral : phrases courtes et naturelles, une à trois phrases, sans liste, sans émoji, sans markdown.',
     'Style jeune et détendu, tutoiement, quelques expressions courantes mais sans en faire trop.',
     'Si tu ne sais pas quelque chose, dis-le franchement au lieu d\'inventer.',
@@ -230,7 +198,7 @@ function systemPrompt(session, artists = []) {
     'La personne parle TOUJOURS en français, même si un mot ressemble à une autre langue : c\'est souvent un nom de rappeur ou de son.',
     `Rappeurs français souvent demandés : ${artists.join(', ')}.`,
     'Pour lancer un son, donne à jouer_musique l\'artiste et le titre séparément, bien orthographiés. Si tu n\'as compris que l\'artiste, laisse le titre vide. Si l\'outil ne trouve pas, propose les sons qu\'il te renvoie ou demande de répéter : ne lance jamais un son au hasard.',
-    'La musique du serveur est jouée par l\'autre bot dans le salon vocal Dictature, pas dans le tien : quand tu lances un son, précise que ça joue dans Dictature.',
+    'La musique joue dans le même salon vocal que toi, par toi : elle reprend dès que la conversation est finie.',
     'Si la personne dit au revoir ou qu\'elle a fini, réponds brièvement puis appelle l\'outil terminer_conversation.',
     `Nous sommes le ${date}.`,
   ].join('\n');
@@ -240,7 +208,7 @@ const TOOLS = [{
   functionDeclarations: [
     {
       name: 'jouer_musique',
-      description: 'Lance un son dans le salon Dictature (ajouté à la file si de la musique joue déjà). Donne l\'artiste et le titre séparément, bien orthographiés.',
+      description: 'Lance un son dans le salon vocal (ajouté à la file si de la musique joue déjà). Donne l\'artiste et le titre séparément, bien orthographiés.',
       parameters: {
         type: Type.OBJECT,
         properties: {
@@ -277,8 +245,9 @@ export async function startVoiceSession({
   const allowed = config.voiceAi.allowedUsers;
   // Le créateur du bot a toujours accès, en plus des membres autorisés
   if (!force && allowed.length && !allowed.includes(userId) && userId !== config.ownerId) return { error: "🔒 L'IA vocale est réservée à certains membres." };
-  if (!state.client?.isReady()) return problem("🎙️ L'IA vocale est pas connectée pour le moment (token du 2e bot manquant ou invalide).", { userId, guildId });
-  const channel = homeGuildChannel();
+  if (!state.client?.isReady()) return problem("🎙️ Le bot démarre, réessaie dans quelques secondes.", { userId, guildId });
+  if (isExternalVoice(guildId)) return { error: '🎵 La musique occupe le vocal en ce moment. Arrête-la (**/musique** › Arrêter) pour parler à l’IA.' };
+  const channel = homeGuildChannel(guildId);
   if (!channel || channel.guild.id !== guildId) return problem("🎙️ L'IA vocale trouve pas son salon.", { userId, guildId });
   if (!force && memberChannelId !== channel.id) return { error: `🎧 Rejoins <#${channel.id}> pour parler à l'IA vocale.` };
   if (state.busy) return { error: `🎙️ L'IA vocale est occupée (${state.busy}), réessaie après.` };
@@ -295,8 +264,8 @@ export async function startVoiceSession({
     return { error: `🎙️ L'IA vocale est déjà occupée avec <@${state.session.userId}>, attends qu'ils aient fini.` };
   }
 
-  ensureInVoice();
-  const conn = connection();
+  await ensureInVoice(guildId);
+  const conn = connection(guildId);
   try {
     await entersState(conn, VoiceConnectionStatus.Ready, 10_000);
   } catch {
@@ -327,6 +296,7 @@ export async function startVoiceSession({
 
   // On ne se met plus en sourdine : il faut entendre la personne
   conn.rejoin({ ...conn.joinConfig, selfDeaf: false, selfMute: false });
+  takeSpeaker(conn);
   primeReceive();
   // Un peu de silence tout de suite : la 1re réponse arrive aussi vite que les suivantes
   for (let i = 0; i < 5; i++) sendAudio(session, Buffer.alloc(SEND_CHUNK_BYTES));
@@ -684,7 +654,8 @@ async function stopSession(reason) {
   }
   stopSpeaking(session);
   duckMusic(session, false);
-  if (conn && conn.state.status === VoiceConnectionStatus.Ready && !state.listening) conn.rejoin({ ...conn.joinConfig, selfDeaf: true, selfMute: false });
+  if (conn && conn.state.status === VoiceConnectionStatus.Ready && !state.listening) conn.rejoin({ ...conn.joinConfig, selfDeaf: restDeaf(), selfMute: false });
+  if (!state.busy) giveBackSpeaker(conn);
   addVoiceMinutes(session.guildId, (Date.now() - session.startedAt) / 60_000);
   console.log(`[vocal] fin de ${session.title ?? 'la conversation'} (${reason})`);
   homeGuildChannel()?.send({
@@ -722,14 +693,18 @@ export async function borrowVoiceAi(what, { channelId = null, listen = false } =
   state.busy = what;
   state.listening = listen;
   if (channelId && channelId !== config.voiceAi.channelId) state.homeOverride = channelId;
-  const current = connection();
-  if (current && current.joinConfig.channelId !== homeGuildChannel()?.id) current.destroy();
-  ensureInVoice();
-  const conn = connection();
+  if (state.homeOverride && isExternalVoice(state.client.channels.cache.get(state.homeOverride)?.guild?.id)) {
+    state.busy = null;
+    state.homeOverride = null;
+    throw new Error('la musique occupe le vocal, arrête-la d’abord');
+  }
+  await ensureInVoice(state.homeOverride ? state.client.channels.cache.get(state.homeOverride)?.guild?.id : undefined);
+  const conn = connection(state.homeOverride ? state.client.channels.cache.get(state.homeOverride)?.guild?.id : undefined);
   try {
     if (!conn) throw new Error("l'IA vocale trouve pas le salon");
     await entersState(conn, VoiceConnectionStatus.Ready, 15_000);
     if (listen) conn.rejoin({ ...conn.joinConfig, selfDeaf: false, selfMute: false });
+    takeSpeaker(conn);
     primeReceive();
   } catch (err) {
     await releaseVoiceAi();
@@ -739,14 +714,15 @@ export async function borrowVoiceAi(what, { channelId = null, listen = false } =
 }
 
 async function releaseVoiceAi() {
-  const moved = Boolean(state.homeOverride);
+  const borrowedGuild = state.homeOverride ? state.client.channels.cache.get(state.homeOverride)?.guild : null;
   state.busy = null;
   state.listening = false;
   state.homeOverride = null;
-  const conn = connection() ?? (state.client ? [...state.client.guilds.cache.values()].map((g) => getVoiceConnection(g.id, GROUP)).find(Boolean) : null);
-  if (moved) conn?.destroy();
-  else if (conn && conn.state.status === VoiceConnectionStatus.Ready) conn.rejoin({ ...conn.joinConfig, selfDeaf: true, selfMute: false });
-  setTimeout(ensureInVoice, moved ? 1_000 : 0);
+  const conn = connection(borrowedGuild?.id);
+  giveBackSpeaker(conn);
+  if (conn && conn.state.status === VoiceConnectionStatus.Ready) conn.rejoin({ ...conn.joinConfig, selfDeaf: restDeaf(), selfMute: false });
+  // Le bot retourne dans son salon habituel
+  if (borrowedGuild) releaseMusic(borrowedGuild);
 }
 
 /**
