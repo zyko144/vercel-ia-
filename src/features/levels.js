@@ -176,6 +176,13 @@ export async function profileCard(guild, user, { levelUp = null } = {}) {
 
 // ===================== Classement =====================
 
+/** Les 10 premiers du serveur (pour le tableau de bord). */
+export async function topLevels(guildId, n = 10) {
+  await data();
+  return Object.entries(store[guildId] ?? {}).sort((a, b) => b[1].xp - a[1].xp).slice(0, n)
+    .map(([userId, m]) => ({ userId, xp: m.xp, level: levelFromXp(m.xp).level, messages: m.messages ?? 0, voiceMin: m.voiceMin ?? 0, streak: m.streak ?? 0 }));
+}
+
 export async function leaderboardEmbed(guild) {
   await data();
   const list = Object.entries(store[guild.id] ?? {}).sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);
