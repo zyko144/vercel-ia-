@@ -39,7 +39,7 @@ function fatal(text) {
   $('app').innerHTML = `<div class="fatal"><div style="font-size:46px">🏴‍☠️</div><p>${esc(text)}</p></div>`;
 }
 const nameOf = (id) => state?.players.find((p) => p.id === id)?.name ?? state?.game?.names?.[id] ?? 'Joueur';
-const avatar = (id, cls = 'avatar') => (/^\d+$/.test(String(id)) ? `<img class="${cls}" src="avatar/${id}.png" alt="">` : `<span class="${cls} botav">🤖</span>`);
+const avatar = (id, cls = 'avatar') => (/^\d+$/.test(String(id)) ? `<img class="${cls}" src="avatar/${id}.png${guild ? `?g=${guild}` : ''}" alt="">` : `<span class="${cls} botav">🤖</span>`);
 
 // ------------------------------------------------------------------ Connexion
 async function login() {
@@ -198,10 +198,10 @@ function bindSay() {
     send({ type: 'chat', text: t });
   };
 }
-function updatePlayers(scores = null, g = null) {
+function updatePlayers(scores = null, g = null, answered = null) {
   const list = [...state.players];
   if (scores) list.sort((a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
-  $('players').innerHTML = list.map((p) => `<div class="player ${g?.drawer === p.id ? 'drawing' : ''} ${g?.guessed?.includes(p.id) ? 'found' : ''}">${avatar(p.id)}<span>${esc(p.name)}${p.id === state.host ? ' 👑' : ''}${g?.drawer === p.id ? ' ✏️' : ''}${g?.guessed?.includes(p.id) ? ' ✅' : ''}</span>${scores ? `<span class="pts">${scores[p.id] ?? 0}</span>` : ''}</div>`).join('');
+  $('players').innerHTML = list.map((p) => `<div class="player ${g?.drawer === p.id ? 'drawing' : ''} ${g?.guessed?.includes(p.id) ? 'found' : ''}">${avatar(p.id)}<span>${esc(p.name)}${p.id === state.host ? ' 👑' : ''}${g?.drawer === p.id ? ' ✏️' : ''}${g?.guessed?.includes(p.id) ? ' ✅' : ''}${answered?.includes(p.id) ? ' <small class="done">✅ a répondu</small>' : ''}</span>${scores ? `<span class="pts">${scores[p.id] ?? 0}</span>` : ''}</div>`).join('');
 }
 function updateLobby() { updatePlayers(); }
 let chatCount = 0;
@@ -512,12 +512,186 @@ function updateNombre() {
   updatePlayers();
 }
 
+// ------------------------------------------------------------------ Son : musique de fond, voix de l'IA, extraits
+// Tout passe par un seul AudioContext, débloqué au premier geste (Discord bloque le son automatique avant).
+const Sound = (() => {
+  const prefs = { music: 0.25, voice: 0.9, fx: 0.8 };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem('arcade-son') || '{}')); } catch { /* sans stockage */ }
+  let ctx = null;
+  let buses = null;
+  let fx = null; // extrait en cours { src, node }
+  let voiceBusy = 0;
+  let voiceQueue = Promise.resolve();
+  let lastSaid = '';
+  const saveP = () => { try { localStorage.setItem('arcade-son', JSON.stringify(prefs)); } catch { /* sans stockage */ } };
+  const duck = () => {
+    if (!buses) return;
+    const target = prefs.music * (voiceBusy || fx ? 0.3 : 1);
+    buses.music.gain.setTargetAtTime(target, ctx.currentTime, 0.4);
+  };
+  function unlock() {
+    try {
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const master = ctx.createGain();
+        master.connect(ctx.destination);
+        buses = Object.fromEntries(['music', 'voice', 'fx'].map((k) => { const g = ctx.createGain(); g.gain.value = prefs[k]; g.connect(master); return [k, g]; }));
+        startMusic();
+      }
+      if (ctx.state !== 'running') ctx.resume();
+      $('unlock').hidden = true;
+    } catch { /* pas de son possible */ }
+  }
+  // Musique de fond douce, jouée par le navigateur : accords lents de taverne et vagues
+  function startMusic() {
+    const CHORDS = [[220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66], [164.81, 207.65, 246.94]];
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;
+    filter.connect(buses.music);
+    let i = 0;
+    const play = () => {
+      const t = ctx.currentTime;
+      for (const f of CHORDS[i % CHORDS.length]) {
+        for (const detune of [-4, 4]) {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'triangle';
+          o.frequency.value = f / 2;
+          o.detune.value = detune;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.05, t + 1.6);
+          g.gain.linearRampToValueAtTime(0.035, t + 4.5);
+          g.gain.linearRampToValueAtTime(0, t + 6.5);
+          o.connect(g).connect(filter);
+          o.start(t);
+          o.stop(t + 6.6);
+        }
+      }
+      // Une petite note de guitare de temps en temps
+      if (i % 2 === 0) {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = CHORDS[i % CHORDS.length][(i >> 1) % 3] * 2;
+        g.gain.setValueAtTime(0.045, t + 2);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 4);
+        o.connect(g).connect(filter);
+        o.start(t + 2);
+        o.stop(t + 4.1);
+      }
+      i += 1;
+    };
+    play();
+    setInterval(play, 5000);
+    // Vagues : bruit filtré qui monte et descend
+    const noise = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
+    const d = noise.getChannelData(0);
+    for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    src.loop = true;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 500;
+    const g = ctx.createGain();
+    g.gain.value = 0.015;
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.value = 0.09;
+    lfoGain.gain.value = 0.012;
+    lfo.connect(lfoGain).connect(g.gain);
+    src.connect(lp).connect(g).connect(buses.music);
+    src.start();
+    lfo.start();
+  }
+  async function decode(res) {
+    if (!res.ok) throw new Error(String(res.status));
+    return ctx.decodeAudioData(await res.arrayBuffer());
+  }
+  // Extrait (blind test…) : un seul à la fois
+  async function playFx(src) {
+    if (!ctx || fx?.src === src) return;
+    stopFx();
+    const mine = { src, node: null };
+    fx = mine;
+    duck();
+    try {
+      const buf = await decode(await fetch(src));
+      if (fx !== mine) return;
+      const node = ctx.createBufferSource();
+      node.buffer = buf;
+      node.connect(buses.fx);
+      node.start();
+      mine.node = node;
+      node.onended = () => { if (fx === mine) { fx = { src, node: null, done: true }; duck(); } };
+    } catch { if (fx === mine) fx = null; duck(); }
+  }
+  function stopFx() {
+    try { fx?.node?.stop(); } catch { /* déjà fini */ }
+    fx = null;
+    duck();
+  }
+  // La voix de l'IA : les textes sont lus l'un après l'autre
+  function say(text) {
+    const t = String(text ?? '').trim();
+    if (!t || t === lastSaid || prefs.voice <= 0) return;
+    lastSaid = t;
+    voiceQueue = voiceQueue.then(() => speakNow(t)).catch(() => {});
+  }
+  async function speakNow(text) {
+    if (!ctx) return;
+    voiceBusy += 1;
+    duck();
+    try {
+      const res = await fetch(`api/tts?${new URLSearchParams({ room, ...(guild ? { guild } : {}) })}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session}` }, body: JSON.stringify({ text }) });
+      const buf = await decode(res);
+      await new Promise((resolve) => {
+        const node = ctx.createBufferSource();
+        node.buffer = buf;
+        node.connect(buses.voice);
+        node.onended = resolve;
+        node.start();
+      });
+    } catch {
+      // Voix de l'IA indisponible : la voix du navigateur prend le relais
+      await new Promise((resolve) => {
+        try {
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'fr-FR';
+          u.volume = prefs.voice;
+          u.onend = resolve;
+          u.onerror = resolve;
+          speechSynthesis.speak(u);
+          setTimeout(resolve, 20_000);
+        } catch { resolve(); }
+      });
+    } finally {
+      voiceBusy -= 1;
+      duck();
+    }
+  }
+  function setVol(k, v) {
+    prefs[k] = v;
+    saveP();
+    if (buses) { if (k === 'music') duck(); else buses[k].gain.setTargetAtTime(v, ctx.currentTime, 0.1); }
+  }
+  for (const ev of ['pointerdown', 'keydown', 'touchstart']) document.addEventListener(ev, unlock, { capture: true });
+  setTimeout(() => { if (!ctx || ctx.state !== 'running') $('unlock').hidden = false; }, 1500);
+  $('unlock').onclick = unlock;
+  $('soundBtn').onclick = () => { $('soundBox').hidden = !$('soundBox').hidden; };
+  for (const [id, k] of [['volMusic', 'music'], ['volVoice', 'voice'], ['volFx', 'fx']]) {
+    $(id).value = prefs[k];
+    $(id).oninput = () => setVol(k, Number($(id).value));
+  }
+  return { playFx, stopFx, say, fxSrc: () => fx?.src ?? null, fxPlaying: () => Boolean(fx?.node) };
+})();
+
 // ------------------------------------------------------------------ Jeux de soirée (écrans décrits par le serveur)
 const md = (text) => esc(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/~~(.+?)~~/g, '<s>$1</s>').replace(/\n/g, '<br>');
 let partySig = '';
 let cardSig = '';
 let rec = null; // enregistrement du micro en cours (freestyle)
-let pausedSrc = null; // extrait mis en pause à la main : on ne le relance pas tout seul
 function mountParty() {
   $('app').innerHTML = `<div class="duel rise party"><div class="seats" id="seats"></div><div id="roleCard"></div>
       <div class="pbar"><div class="timer" id="ptimer"></div><div class="progress"><i id="pprog" style="width:100%"></i></div></div>
@@ -527,28 +701,15 @@ function mountParty() {
   cardSig = '';
   bindSay();
 }
-function partyAudio() {
-  let a = $('partyAudio');
-  if (!a) { a = document.createElement('audio'); a.id = 'partyAudio'; a.preload = 'auto'; document.body.appendChild(a); }
-  return a;
-}
-function stopPartyAudio() {
-  const a = $('partyAudio');
-  if (a && !a.paused) a.pause();
-}
-function playPartyAudio(src, force = false) {
-  if (!force && pausedSrc === src) return;
-  if (force) pausedSrc = null;
-  const a = partyAudio();
-  if (!a.src.endsWith(src)) { a.src = src; a.currentTime = 0; }
-  if (a.paused) a.play().then(() => { const b = document.querySelector('[data-audio]'); if (b) b.textContent = '🔊 Extrait en cours'; }).catch(() => { const b = document.querySelector('[data-audio]'); if (b) b.textContent = '▶️ Écouter l’extrait'; });
-}
+function stopPartyAudio() { Sound.stopFx(); }
 function block(b, i) {
   const k = `k${i}`;
   switch (b.t) {
     case 'text': return `<p class="pt ${b.cls ?? ''}">${md(b.text)}</p>`;
     case 'img': return `<img class="pimg ${b.cls ?? ''}" src="${esc(b.src)}" alt="">`;
-    case 'audio': return `<div class="paudio"><button class="ghost" data-audio="${esc(b.src)}">🔊 Extrait en cours</button><input type="range" min="0" max="1" step="0.05" data-vol value="${partyAudio().volume}"></div>`;
+    case 'audio': return `<div class="paudio"><button class="ghost" data-audio="${esc(b.src)}">🔁 Réécouter l’extrait</button></div>`;
+    case 'feed': return `<div class="feed">${b.items.length ? b.items.map((x) => `<div class="fi ${x.note ?? ''}">${avatar(x.id)}<b>${esc(x.name)}</b><span>${md(x.text)}</span></div>`).join('') : '<p class="pt small">Pas encore d’indice.</p>'}</div>`;
+    case 'who': return `<div class="whobox ${b.big ? 'big' : ''}">${avatar(b.id)}<div><b>${esc(b.name)}</b><div>${md(b.text ?? '')}</div></div></div>`;
     case 'word': return `<div class="word">${b.letters.map((c) => `<span>${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('')}</div>`;
     case 'keys': return `<div class="keys">${'abcdefghijklmnopqrstuvwxyz'.split('').map((c) => `<button data-letter="${c}" class="${b.ok.includes(c) ? 'ok' : b.ko.includes(c) ? 'ko' : ''}" ${b.lock || b.ok.includes(c) || b.ko.includes(c) ? 'disabled' : ''}>${c.toUpperCase()}</button>`).join('')}</div>`;
     case 'choices': {
@@ -558,7 +719,7 @@ function block(b, i) {
     case 'buttons': return `<div class="row pbtns">${b.items.map((x) => `<button data-btn="${esc(x.id)}" class="${x.cls ?? ''} ${b.chosen === x.id ? 'on' : ''}">${esc(x.label)}${b.tally?.[x.id] ? ` <small>· ${b.tally[x.id]}</small>` : ''}</button>`).join('')}</div>`;
     case 'input': return b.done ? '<p class="pt small">✅ Envoyé</p>' : `<form class="say pin" data-input><input data-k="${k}" maxlength="150" autocomplete="off" placeholder="${esc(b.ph ?? '')}"><button>${esc(b.button ?? '➤')}</button></form>`;
     case 'form': return b.done ? '<p class="pt big">✅ Grille rendue, attends les autres…</p>' : `<form class="pform" data-form>${b.fields.map((f, j) => `<label>${esc(f)}<input data-k="${k}-${j}" maxlength="40" autocomplete="off"></label>`).join('')}<button>${esc(b.button ?? 'Envoyer')}</button></form>`;
-    case 'vote': return `<div class="pvote">${b.ids.map((id) => `<button data-vote="${id}" class="${b.mine === id ? 'on' : ''}" ${b.lock ? 'disabled' : ''}>${avatar(id)}<span>${esc(b.names?.[id] ?? nameOf(id))}</span>${b.counts?.[id] ? `<b>${b.counts[id]}</b>` : ''}</button>`).join('')}</div>`;
+    case 'vote': return `<div class="pvote">${b.ids.map((id) => `<button data-vote="${id}" class="${b.mine === id ? 'on' : ''}" ${b.lock ? 'disabled' : ''}>${avatar(id)}<span>${esc(b.names?.[id] ?? nameOf(id))}</span>${b.voters?.[id]?.length ? `<i class="voters">${b.voters[id].map((v) => avatar(v.id).replace('<img', `<img title="${esc(v.name)}"`)).join('')}</i>` : ''}${b.counts?.[id] ? `<b>${b.counts[id]}</b>` : ''}</button>`).join('')}</div>`;
     case 'list': return `<ul class="plist">${b.items.map((x) => `<li>${md(x)}</li>`).join('')}</ul>`;
     case 'grid': return `<div class="cross">${b.rows.map((row) => `<div>${row.map((c) => (c ? `<span class="cell ${c.key ? 'key' : ''}">${c.n ? `<i>${c.n}</i>` : ''}${esc(c.c)}</span>` : '<span class="cell void"></span>')).join('')}</div>`).join('')}</div>`;
     case 'duo': return `<div class="duo">${b.items.map((x) => `<div class="parchment">${x.img ? `<img src="${esc(x.img)}" alt="">` : ''}<h3>${esc(x.name)}</h3><p class="big">${esc(x.value)}</p></div>`).join('<b class="vs">VS</b>')}</div>`;
@@ -599,7 +760,7 @@ function updateParty() {
   if (cs !== cardSig) {
     cardSig = cs;
     const open = $('roleCard').querySelector('details')?.open ?? true;
-    $('roleCard').innerHTML = g.card ? `<details class="rolecard ${g.card.color ?? ''}" ${open ? 'open' : ''}><summary>${g.card.emoji} Ton rôle : <b>${esc(g.card.title)}</b> <small>(appuie pour cacher)</small></summary>
+    $('roleCard').innerHTML = g.card ? `<details class="rolecard c-${g.card.color ?? 'none'}" ${open ? 'open' : ''}><summary>${g.card.emoji} Ton rôle : <b>${esc(g.card.title)}</b> <small>(appuie pour cacher)</small></summary>
       <div class="rc">${g.card.img ? `<img src="${esc(g.card.img)}" alt="">` : ''}<p>${md(g.card.text ?? '')}</p></div></details>` : '';
   }
   const audioBlock = sc.blocks.find((b) => b.t === 'audio');
@@ -616,17 +777,18 @@ function updateParty() {
     P.querySelectorAll('[data-btn]').forEach((b) => { b.onclick = () => send({ type: 'btn', id: b.dataset.btn }); });
     P.querySelectorAll('[data-vote]').forEach((b) => { b.onclick = () => send({ type: 'vote', id: b.dataset.vote }); });
     P.querySelectorAll('[data-letter]').forEach((b) => { b.onclick = () => send({ type: 'letter', letter: b.dataset.letter }); });
-    P.querySelectorAll('[data-audio]').forEach((b) => { b.onclick = () => { const a = partyAudio(); if (a.paused) playPartyAudio(b.dataset.audio, true); else { a.pause(); pausedSrc = b.dataset.audio; b.textContent = '▶️ Écouter l’extrait'; } }; });
-    P.querySelectorAll('[data-vol]').forEach((el) => { el.oninput = () => { partyAudio().volume = Number(el.value); }; });
+    P.querySelectorAll('[data-audio]').forEach((b) => { b.onclick = () => { Sound.stopFx(); Sound.playFx(b.dataset.audio); }; });
     P.querySelectorAll('[data-input]').forEach((f) => { f.onsubmit = (e) => { e.preventDefault(); const el = f.querySelector('[data-k]'); const t = el.value.trim(); if (!t) return; el.value = ''; send({ type: 'answer', text: t }); }; });
     P.querySelectorAll('[data-form]').forEach((f) => { f.onsubmit = (e) => { e.preventDefault(); send({ type: 'form', values: [...f.querySelectorAll('[data-k]')].map((el) => el.value.trim()) }); }; });
     const mic = sc.blocks.find((b) => b.t === 'mic');
     if ($('micBtn')) $('micBtn').onclick = () => startMic(mic?.seconds ?? 30);
   }
-  if (audioBlock) playPartyAudio(audioBlock.src); else stopPartyAudio();
+  if (audioBlock) Sound.playFx(audioBlock.src); else stopPartyAudio();
+  // L'IA lit l'écran : le texte prévu pour la voix, sinon le récit (histoire, énigme, nuit…)
+  if (!audioBlock) Sound.say(sc.say ?? sc.blocks.find((b) => b.t === 'text' && b.cls === 'quote')?.text);
   $('actions').innerHTML = state.me === state.host || state.me === g.host ? '<button class="ghost small" id="stopParty">⏹️ Arrêter la partie</button>' : '';
   if ($('stopParty')) $('stopParty').onclick = () => { if (confirm('Arrêter la partie pour tout le monde ?')) send({ type: 'lobby' }); };
-  updatePlayers(g.scores);
+  updatePlayers(g.scores, null, g.answered);
 }
 setInterval(() => {
   const g = state?.game;

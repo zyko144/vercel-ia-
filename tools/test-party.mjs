@@ -164,6 +164,33 @@ for (const party of ['imposteur', 'undercover']) {
   });
 }
 
+await check('imposteur : mot proche mais différent, même carte pour tous, règles lues, votes visibles en direct', async () => {
+  rooms.clear();
+  const r = roomOf(ROOM, G);
+  for (const u of [A, B, C]) join(r, u);
+  await act(r, A.id, { type: 'start', game: 'party', party: 'imposteur', bots: true });
+  await wait(300);
+  const g = r.game;
+  const cards = g.players.map((id) => g.cards[id]);
+  const words = new Set(cards.map((c) => c.title));
+  assert.equal(words.size, 2, 'deux mots différents');
+  assert.equal(new Set(cards.map((c) => c.text)).size, 1, 'même texte : l’imposteur ne sait pas qu’il l’est');
+  const rules = GAMES.party.view(g, A.id).screen;
+  assert.match(rules.title, /règles/);
+  assert.match(rules.say, /mot proche/);
+  // Jusqu'au vote : chacun donne son indice
+  const until = Date.now() + 20_000;
+  while (Date.now() < until && !GAMES.party.view(g, A.id).screen.title.startsWith('🗳️')) {
+    for (const u of [A, B, C]) await act(r, u.id, { type: 'answer', text: 'rond' });
+    await wait(40);
+  }
+  await act(r, A.id, { type: 'vote', id: B.id });
+  const vote = GAMES.party.view(g, C.id).screen.blocks.find((b) => b.t === 'vote');
+  assert.ok(vote.voters[B.id].some((v) => v.id === A.id && v.name === 'Lina'), 'C voit tout de suite que A a voté contre B');
+  assert.ok(GAMES.party.view(g, C.id).answered.includes(A.id));
+  await act(r, A.id, { type: 'lobby' });
+});
+
 await check('histoire : sans IA, le maître du jeu s’arrête proprement', async () => {
   const res = await play('histoire');
   assert.equal(res.end?.kind, 'fin');
@@ -279,6 +306,7 @@ await check('fichiers : carte de rôle, extrait audio, image Deezer (seulement d
   assert.equal((await get(`api/img?u=${encodeURIComponent('https://evil.test/x.jpg')}`)).status, 404);
   assert.equal((await get(`api/img?u=${encodeURIComponent('https://e-cdns-images.dzcdn.net/x.jpg')}`)).status, 200);
   assert.equal((await get('api/pimg/inconnu-12345.jpg')).status, 404);
+  assert.equal((await realFetch(`${base}/api/tts?room=${ROOM}&guild=${G}`, { method: 'POST', body: '{"text":"bonjour"}' })).status, 401, 'la voix demande une session');
   server.close();
 });
 

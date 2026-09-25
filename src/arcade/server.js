@@ -17,6 +17,7 @@ import { registerArcadeGames, soloAct, soloGold, soloView } from './games.js';
 import { images, registerParty } from './party.js';
 import './party-roles.js';
 import { deezerImage, previewAudio } from './party-sound.js';
+import { speech } from './tts.js';
 
 const WEB = path.resolve('web/arcade');
 const MAX_BODY = 3 * 1024 * 1024; // un passage de freestyle enregistré au micro
@@ -417,15 +418,31 @@ async function discordLogin(code) {
   return { access_token: token.access_token, session: createSession(user), user };
 }
 const avatars = new Map();
-async function avatar(id) {
-  const hit = avatars.get(id);
+/** La photo de profil Discord (celle du serveur si le membre en a une). */
+async function avatar(id, guildId = null) {
+  const key = `${guildId ?? ''}:${id}`;
+  const hit = avatars.get(key);
   if (hit && Date.now() - hit.at < 3_600_000) return hit.png;
-  const user = await client?.users.fetch(id).catch(() => null);
+  const member = guildId ? await client?.guilds.cache.get(guildId)?.members.fetch(id).catch(() => null) : null;
+  const user = member ?? await client?.users.fetch(id).catch(() => null);
   if (!user) return null;
-  const png = Buffer.from(await (await fetch(user.displayAvatarURL({ extension: 'png', size: 64 }))).arrayBuffer());
-  avatars.set(id, { at: Date.now(), png });
+  const png = Buffer.from(await (await fetch(user.displayAvatarURL({ extension: 'png', size: 128 }))).arrayBuffer());
+  avatars.set(key, { at: Date.now(), png });
   if (avatars.size > 500) avatars.delete(avatars.keys().next().value);
   return png;
+}
+
+const nicks = new Map();
+async function serverName(guildId, id) {
+  if (!guildId) return null;
+  const key = `${guildId}:${id}`;
+  const hit = nicks.get(key);
+  if (hit && Date.now() - hit.at < 600_000) return hit.name;
+  const member = await client?.guilds.cache.get(guildId)?.members.fetch(id).catch(() => null);
+  const name = member?.displayName ?? null;
+  nicks.set(key, { at: Date.now(), name });
+  if (nicks.size > 2000) nicks.delete(nicks.keys().next().value);
+  return name;
 }
 
 /** Répond aux adresses de l'arcade ; false si ce n'est pas pour elle. */
@@ -443,7 +460,8 @@ export async function handleArcadeWeb(req, res, url) {
   if (rest === 'sdk.js') { await serve(res, path.resolve('web/salle/sdk.js'), TYPES.js, 'public, max-age=86400'); return true; }
   if (rest === 'fonts/cinzel.ttf') { await serve(res, path.resolve('assets/Cinzel-Bold.ttf'), TYPES.ttf, 'public, max-age=604800'); return true; }
   if (/^avatar\/\d{5,25}\.png$/.test(rest)) {
-    const png = await avatar(rest.slice(7, -4)).catch(() => null);
+    const g = url.searchParams.get('g');
+    const png = await avatar(rest.slice(7, -4), /^\d{5,25}$/.test(g ?? '') ? g : null).catch(() => null);
     if (!png) {
       // Pas d'avatar : une ancre sur un médaillon de parchemin
       res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=600' });
@@ -491,6 +509,17 @@ export async function handleArcadeWeb(req, res, url) {
     if (!/^\d{5,25}$/.test(roomId)) return json(res, 400, { error: 'Salle inconnue.' }), true;
     const guildId = /^\d{5,25}$/.test(url.searchParams.get('guild') ?? '') ? url.searchParams.get('guild') : null;
     const r = roomOf(roomId, guildId);
+    // Le pseudo affiché : celui du serveur Discord (comme dans le salon)
+    const nick = await serverName(r.guildId, user.id);
+    if (nick) user.name = nick;
+    if (route === 'tts' && req.method === 'POST') {
+      const body = await readBody(req);
+      const wav = await speech(String(body.text ?? ''));
+      if (!wav) return json(res, 503, { error: 'voix indisponible' }), true;
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length, 'Cache-Control': 'private, max-age=3600' });
+      res.end(wav);
+      return true;
+    }
     if (route === 'poll' && req.method === 'GET') {
       join(r, user);
       const since = Number(url.searchParams.get('since')) || 0;
