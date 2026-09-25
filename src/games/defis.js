@@ -158,12 +158,14 @@ const FALLBACK_QUIZ = [
   { question: 'Quelle est la capitale du Japon ?', choix: ['Kyoto', 'Osaka', 'Tokyo', 'Séoul'], bonne: 2 },
 ];
 async function quizQuestions(theme, n) {
-  const ai = await chatJson({
+  // L'IA a 15 secondes : au-delà, on joue avec les questions de secours plutôt que d'attendre
+  const late = new Promise((resolve) => { setTimeout(resolve, 15_000, null).unref?.(); });
+  const ai = await Promise.race([late, chatJson({
     tag: 'jeux', thinking: 'minimal',
     system: 'Tu écris des questions de quiz en français, vérifiables, avec 4 choix plausibles et une seule bonne réponse. Varie les difficultés.',
     prompt: `Thème : ${theme || 'culture générale, musique, jeux vidéo, sport, cinéma'}. Écris ${n} questions.`,
     schema: { type: 'object', properties: { questions: { type: 'array', items: { type: 'object', properties: { question: { type: 'string' }, choix: { type: 'array', items: { type: 'string' } }, bonne: { type: 'integer' } }, required: ['question', 'choix', 'bonne'] } } }, required: ['questions'] },
-  }).catch(() => null);
+  }).catch(() => null)]);
   const list = (ai?.questions ?? []).filter((q) => q.choix?.length === 4 && q.bonne >= 0 && q.bonne < 4);
   const fill = shuffle(FALLBACK_QUIZ).filter((q) => !list.some((x) => x.question === q.question));
   return [...list, ...fill].slice(0, n).map((q) => {
