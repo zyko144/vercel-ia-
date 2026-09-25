@@ -3,662 +3,429 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Vercel · le bot Discord qui fait vivre ton serveur</title>
-<meta name="description" content="IA qui se souvient de chaque membre, jeux de soirée, musique, sécurité, tickets, niveaux et boutique. Tout se règle avec 6 commandes à panneaux.">
-<meta name="theme-color" content="#07060d">
+<title>AI Vercel · Le bot Discord tout-en-un</title>
+<meta name="description" content="Assistant IA, jeux, musique, modération, tickets et niveaux dans un seul bot Discord. Gratuit pour commencer.">
+<meta name="theme-color" content="#0b0b0d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-@property --a { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 :root {
   color-scheme: dark;
-  --bg: #07060d; --panel: #110d1b; --panel2: #171126; --line: #2a2140;
-  --text: #ece8ff; --mute: #a49fbf; --faint: #6f6a89;
-  --cyan: #5ff0ff; --pink: #ff5fd2; --green: #3dff9a; --gold: #ffc94d; --violet: #a58bff; --red: #ff4d6d;
-  --discord: #313338; --discord2: #2b2d31; --blurple: #5865f2;
-  --r: 22px;
-  --display: 'Space Grotesk', system-ui, sans-serif;
-  --body: 'Inter', system-ui, sans-serif;
+  --bg: #0b0b0d;
+  --surface: #121215;
+  --surface-2: #17171b;
+  --border: #232329;
+  --border-strong: #2f2f37;
+  --text: #ededf0;
+  --muted: #a0a0ab;
+  --faint: #6e6e79;
+  --accent: #5865f2;
+  --accent-hover: #6b76f5;
+  --accent-soft: rgba(88, 101, 242, .12);
+  --ok: #3ba55d;
+  --radius: 12px;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+h1, h2, h3 { margin: 0; line-height: 1.15; letter-spacing: -.02em; font-weight: 700; }
+p { margin: 0; }
+.container { width: min(1120px, 100% - 40px); margin-inline: auto; }
 [hidden] { display: none !important; }
-html, body { margin: 0; }
-body {
-  background: var(--bg); color: var(--text); font: 16px/1.55 var(--body);
-  min-height: 100vh; overflow-x: hidden;
-  background-image:
-    radial-gradient(900px 500px at 15% -10%, #ff5fd21a, transparent 60%),
-    radial-gradient(900px 600px at 95% 0%, #5ff0ff17, transparent 60%),
-    linear-gradient(#ffffff05 1px, transparent 1px), linear-gradient(90deg, #ffffff05 1px, transparent 1px);
-  background-size: auto, auto, 40px 40px, 40px 40px;
-}
-a { color: inherit; }
-img { max-width: 100%; display: block; }
-h1, h2, h3 { font-family: var(--display); line-height: 1.1; margin: 0; letter-spacing: -.01em; }
-.wrap { width: min(1180px, 100% - 32px); margin-inline: auto; }
 
-/* ---------- Barre du haut ---------- */
-header.top { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); background: #07060dcc; border-bottom: 1px solid #ffffff0d; }
-header.top .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--display); font-weight: 700; font-size: 18px; }
-.brand img { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--cyan), 0 0 16px #5ff0ff88; }
-nav.links { display: flex; gap: 4px; margin-left: auto; }
-nav.links a { text-decoration: none; color: var(--mute); padding: 8px 12px; border-radius: 10px; font-weight: 500; font-size: 15px; }
-nav.links a:hover, nav.links a[aria-current="page"] { color: var(--text); background: #ffffff0d; }
-.btn { display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; text-decoration: none; font: 600 15px var(--body); padding: 11px 18px; border-radius: 999px; color: #0a0612; background: linear-gradient(90deg, var(--cyan), var(--pink)); box-shadow: 0 0 24px #5ff0ff44; transition: transform .15s, box-shadow .15s; white-space: nowrap; }
-.btn:hover { transform: translateY(-1px); box-shadow: 0 0 34px #ff5fd266; }
-.btn.ghost { background: #ffffff0d; color: var(--text); box-shadow: inset 0 0 0 1px #ffffff1f; }
-.btn.ghost:hover { background: #ffffff17; }
-.btn.small { padding: 8px 14px; font-size: 14px; }
-@media (max-width: 760px) { nav.links a.opt { display: none; } }
-@media (max-width: 520px) { nav.links { display: none; } header.top .btn { margin-left: auto; } }
+/* Boutons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 8px; font: 500 15px var(--font); border: 1px solid transparent; cursor: pointer; transition: background .15s, border-color .15s; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+.btn-secondary:hover { background: var(--surface-2); }
+.btn-lg { height: 46px; padding: 0 22px; font-size: 16px; }
+.btn-block { width: 100%; }
+.btn:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ---------- Vues ---------- */
-main { padding: 28px 0 60px; }
-.view { display: none; }
-.view.on { display: block; animation: enter .45s cubic-bezier(.2, .8, .2, 1); }
-@keyframes enter { from { opacity: 0; transform: translateY(10px); } }
+/* En-tête */
+.nav { position: sticky; top: 0; z-index: 10; background: rgba(11, 11, 13, .85); backdrop-filter: saturate(160%) blur(10px); border-bottom: 1px solid var(--border); }
+.nav .container { display: flex; align-items: center; height: 64px; gap: 32px; }
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; }
+.logo img, .logo .mark { width: 28px; height: 28px; border-radius: 8px; }
+.nav-links { display: flex; gap: 24px; font-size: 15px; color: var(--muted); }
+.nav-links a:hover { color: var(--text); }
+.nav-cta { margin-left: auto; display: flex; gap: 10px; }
+@media (max-width: 820px) { .nav-links { display: none; } }
+@media (max-width: 480px) { .nav-cta .btn-secondary { display: none; } }
 
-/* ---------- Accueil ---------- */
-.hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; padding: 8px 0 30px; }
-.hero h1 { font-size: clamp(32px, 4.4vw, 52px); }
-.hero h1 .glow { background: linear-gradient(90deg, var(--cyan), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px #5ff0ff55); }
-.hero p.lead { color: var(--mute); font-size: 18px; max-width: 540px; margin: 16px 0 22px; }
-.hero .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
-.live { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
-.chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: #ffffff0a; border: 1px solid #ffffff14; color: var(--mute); font-size: 14px; }
-.chip b { color: var(--text); font-weight: 600; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-.dot.on { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2s infinite; }
-@keyframes pulse { 50% { opacity: .45; } }
-@media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 26px; } }
+/* Sections */
+section { padding: 96px 0; border-bottom: 1px solid var(--border); }
+.eyebrow { font-size: 14px; font-weight: 600; color: var(--accent-hover); margin-bottom: 12px; }
+.section-head { max-width: 640px; margin-bottom: 48px; }
+.section-head h2 { font-size: clamp(28px, 3.6vw, 38px); }
+.section-head p { color: var(--muted); font-size: 17px; margin-top: 14px; }
+.center { text-align: center; margin-inline: auto; }
 
-.section-title { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 8px 0 18px; }
-.section-title h2 { font-size: 26px; }
-.section-title p { color: var(--mute); margin: 6px 0 0; }
+/* Accueil */
+.hero { padding: 88px 0 72px; text-align: center; }
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 13.5px; color: var(--muted); margin-bottom: 28px; }
+.badge b { background: var(--accent-soft); color: var(--accent-hover); padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+.hero h1 { font-size: clamp(36px, 6vw, 60px); max-width: 820px; margin-inline: auto; }
+.hero .lead { color: var(--muted); font-size: clamp(17px, 2vw, 19px); max-width: 620px; margin: 20px auto 32px; }
+.hero .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.hero .note { margin-top: 18px; font-size: 14px; color: var(--faint); }
+.stats { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 32px; margin-top: 56px; color: var(--muted); font-size: 14.5px; }
+.stats strong { color: var(--text); font-weight: 600; }
+.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 8px; vertical-align: 1px; }
+.status-dot.on { background: var(--ok); }
 
-/* ---------- Carte néon 3D ---------- */
-.neon { --c1: var(--cyan); --c2: var(--pink); --rx: 0deg; --ry: 0deg; position: relative; padding: 2px; border-radius: var(--r); isolation: isolate; transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)); transform-style: preserve-3d; transition: transform .25s ease-out; }
-.neon::before, .neon::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; background: conic-gradient(from var(--a), var(--c1), transparent 22%, var(--c2) 50%, transparent 72%, var(--c1)); animation: spin 5s linear infinite; }
-.neon::after { filter: blur(18px); opacity: .35; transition: opacity .25s; }
-.neon:hover::after, .neon:focus-visible::after { opacity: .8; }
-.neon > .in { position: relative; height: 100%; border-radius: calc(var(--r) - 2px); background: linear-gradient(160deg, var(--panel2), var(--panel) 60%); overflow: hidden; }
-@keyframes spin { to { --a: 360deg; } }
+/* Aperçu sobre d'un message */
+.preview { max-width: 640px; margin: 56px auto 0; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.preview-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13.5px; color: var(--faint); }
+.preview-bar span { color: var(--muted); }
+.msgs { padding: 20px; display: grid; gap: 18px; }
+.msg { display: grid; grid-template-columns: 36px 1fr; gap: 12px; font-size: 15px; }
+.avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-weight: 600; font-size: 14px; color: var(--muted); object-fit: cover; }
+.msg .name { font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 6px; }
+.msg .tag { font-size: 10.5px; font-weight: 600; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; }
+.msg .body { color: #d4d4da; margin-top: 2px; }
+.msg .mention { color: #c9cdfb; background: var(--accent-soft); border-radius: 4px; padding: 0 3px; }
+.msg .button { display: inline-flex; margin-top: 10px; height: 32px; align-items: center; padding: 0 14px; border-radius: 6px; background: var(--ok); color: #fff; font-size: 14px; font-weight: 500; }
 
-.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; }
-a.cat { text-decoration: none; color: inherit; display: block; outline: none; }
-a.cat .in { padding: 20px; display: flex; flex-direction: column; gap: 12px; min-height: 250px; }
-a.cat .shine { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 0%), #ffffff14, transparent 45%); opacity: 0; transition: opacity .25s; }
-a.cat:hover .shine { opacity: 1; }
-a.cat .ico { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; font-size: 28px; background: color-mix(in srgb, var(--c1) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c1) 40%, transparent), 0 0 20px color-mix(in srgb, var(--c1) 30%, transparent); transform: translateZ(40px); }
-a.cat h3 { font-size: 21px; transform: translateZ(30px); }
-a.cat p { margin: 0; color: var(--mute); font-size: 15px; flex: 1; transform: translateZ(20px); }
-a.cat .thumb { height: 64px; border-radius: 12px; background-size: cover; background-position: center; opacity: .85; box-shadow: inset 0 0 0 1px #ffffff14; }
-a.cat .go { font-weight: 600; font-size: 14px; color: var(--c1); display: flex; align-items: center; gap: 6px; }
-a.cat .go span { transition: transform .2s; }
-a.cat:hover .go span { transform: translateX(4px); }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #ffffff0b; color: var(--mute); border: 1px solid #ffffff12; }
+/* Fonctionnalités */
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; transition: border-color .15s; }
+.card:hover { border-color: var(--border-strong); }
+.icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-hover); margin-bottom: 18px; }
+.icon svg { width: 20px; height: 20px; }
+.card h3 { font-size: 17px; font-weight: 600; }
+.card > p { color: var(--muted); font-size: 15px; margin-top: 8px; }
+.list { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 8px; font-size: 14.5px; color: #cfcfd6; }
+.list li { display: flex; gap: 10px; align-items: flex-start; }
+.list svg { flex: none; width: 16px; height: 16px; margin-top: 4px; color: var(--accent-hover); }
+.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--muted); margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 
-.strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 34px; }
-.strip .item { padding: 18px; border-radius: 18px; background: #ffffff06; border: 1px solid #ffffff10; }
-.strip .item b { display: block; font-family: var(--display); font-size: 17px; margin-bottom: 4px; }
-.strip .item span { color: var(--mute); font-size: 14.5px; }
-@media (max-width: 760px) { .strip { grid-template-columns: 1fr; } }
+/* Étapes */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: step; }
+@media (max-width: 820px) { .steps { grid-template-columns: 1fr; } }
+.step { padding: 24px; border-radius: var(--radius); border: 1px solid var(--border); }
+.step::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-strong); font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 16px; }
+.step h3 { font-size: 17px; font-weight: 600; }
+.step p { color: var(--muted); font-size: 15px; margin-top: 8px; }
 
-/* ---------- Page d'une catégorie ---------- */
-.back { display: inline-flex; align-items: center; gap: 6px; color: var(--mute); text-decoration: none; font-weight: 500; margin-bottom: 18px; }
-.back:hover { color: var(--text); }
-.cat-head { display: grid; grid-template-columns: 1fr 420px; gap: 32px; align-items: center; margin-bottom: 34px; }
-.cat-head .big { font-size: 44px; line-height: 1; margin-bottom: 12px; }
-.cat-head h1 { font-size: clamp(30px, 4.4vw, 46px); }
-.cat-head h1 em { font-style: normal; color: var(--c1); text-shadow: 0 0 22px color-mix(in srgb, var(--c1) 60%, transparent); }
-.cat-head p { color: var(--mute); font-size: 17.5px; margin: 14px 0 20px; max-width: 560px; }
-.cat-head .banner .in { padding: 10px; }
-.cat-head .banner img { border-radius: 14px; width: 100%; aspect-ratio: 480 / 150; object-fit: cover; }
-.cat-head .banner .cap { font-size: 13px; color: var(--faint); padding: 8px 6px 2px; }
-@media (max-width: 900px) { .cat-head { grid-template-columns: 1fr; } }
+/* Tarifs */
+.pricing { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: stretch; }
+@media (max-width: 900px) { .pricing { grid-template-columns: 1fr; max-width: 440px; margin-inline: auto; } }
+.plan { position: relative; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+.plan.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 20px 50px -20px rgba(88, 101, 242, .45); }
+.plan .ribbon { position: absolute; top: -12px; left: 28px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.plan h3 { font-size: 18px; font-weight: 600; }
+.plan .desc { color: var(--muted); font-size: 14.5px; margin-top: 6px; min-height: 46px; }
+.price { display: flex; align-items: baseline; gap: 6px; margin: 22px 0 4px; }
+.price .amount { font-size: 42px; font-weight: 700; letter-spacing: -.03em; }
+.price .per { color: var(--muted); font-size: 15px; }
+.plan .billing { color: var(--faint); font-size: 13.5px; margin-bottom: 22px; }
+.plan .btn { margin-bottom: 24px; }
+.plan .list { margin: 0; flex: 1; align-content: start; }
+.plan .list li.off { color: var(--faint); }
+.plan .list li.off svg { color: var(--faint); }
+.pricing-note { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 28px; margin-top: 32px; color: var(--muted); font-size: 14.5px; }
+.pricing-note span { display: inline-flex; gap: 8px; align-items: center; }
+.pricing-note svg { width: 16px; height: 16px; color: var(--ok); }
 
-.perks { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; margin-bottom: 40px; }
-.perk { padding: 18px; border-radius: 18px; background: linear-gradient(160deg, #ffffff0a, #ffffff04); border: 1px solid #ffffff12; position: relative; overflow: hidden; }
-.perk::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--c1); box-shadow: 0 0 12px var(--c1); }
-.perk .e { font-size: 22px; }
-.perk b { display: block; font-family: var(--display); font-size: 17px; margin: 6px 0 4px; }
-.perk span { color: var(--mute); font-size: 14.5px; }
+/* FAQ */
+.faq { max-width: 760px; margin-inline: auto; border-top: 1px solid var(--border); }
+.faq details { border-bottom: 1px solid var(--border); }
+.faq summary { list-style: none; cursor: pointer; padding: 20px 0; font-weight: 500; font-size: 16.5px; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; color: var(--faint); font-size: 22px; line-height: 1; transition: transform .2s; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq details p { color: var(--muted); padding: 0 0 20px; font-size: 15.5px; max-width: 680px; }
 
-.examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 22px; margin-bottom: 36px; }
-.ex .in { padding: 0; display: flex; flex-direction: column; }
-.ex .dc { flex: 1; }
-.ex .ex-title { padding: 12px 16px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--c1); border-bottom: 1px solid #ffffff0f; display: flex; align-items: center; gap: 8px; }
-@media (max-width: 420px) { .examples { grid-template-columns: 1fr; } }
+/* Appel final */
+.cta { text-align: center; border-bottom: 0; }
+.cta h2 { font-size: clamp(28px, 4vw, 40px); }
+.cta p { color: var(--muted); margin: 14px auto 28px; max-width: 520px; font-size: 17px; }
+.cta .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 
-.cmds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 36px; }
-.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; padding: 7px 12px; border-radius: 10px; background: #0d0a16; border: 1px solid color-mix(in srgb, var(--c1) 35%, transparent); color: var(--text); }
-.cmd b { color: var(--c1); font-weight: 600; }
-.next { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 20px; border-radius: 18px; background: #ffffff06; border: 1px solid #ffffff10; }
-.next p { margin: 0; color: var(--mute); }
-
-/* ---------- Faux Discord ---------- */
-.dc { background: var(--discord); padding: 14px 16px 16px; font-size: 15px; color: #dbdee1; display: flex; flex-direction: column; gap: 14px; }
-.dc .msg { display: grid; grid-template-columns: 40px 1fr; gap: 12px; }
-.dc .pp { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #444; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 17px; }
-.dc .who { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #f2f3f5; line-height: 1.3; }
-.dc .who time { color: #949ba4; font-size: 12px; font-weight: 400; }
-.dc .badge { background: var(--blurple); color: #fff; font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; }
-.dc .txt { margin-top: 2px; white-space: pre-line; }
-.dc .txt b { color: #fff; }
-.dc .mention { color: #c9cdfb; background: #5865f24d; border-radius: 3px; padding: 0 2px; }
-.dc .embed { margin-top: 6px; background: var(--discord2); border-left: 4px solid var(--ec, var(--cyan)); border-radius: 4px; padding: 10px 14px 12px; max-width: 440px; }
-.dc .embed .et { font-weight: 700; color: #fff; margin-bottom: 4px; }
-.dc .embed .ed { font-size: 14px; white-space: pre-line; }
-.dc .embed .ef { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 8px; }
-.dc .embed .ef div { font-size: 13.5px; }
-.dc .embed .ef b { display: block; color: #fff; font-size: 13px; }
-.dc .embed img { border-radius: 6px; margin-top: 10px; width: 100%; }
-.dc .embed .foot { font-size: 12px; color: #949ba4; margin-top: 8px; }
-.dc .attach { margin-top: 6px; border-radius: 8px; max-width: 440px; width: 100%; }
-.dc .attach.card { max-width: 300px; }
-.dc .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.dc .b { font-size: 14px; font-weight: 500; padding: 6px 14px; border-radius: 4px; background: #4e5058; color: #fff; }
-.dc .b.g { background: #248046; } .dc .b.r { background: #da373c; } .dc .b.p { background: var(--blurple); }
-.dc .eph { font-size: 12px; color: #949ba4; margin-top: 4px; }
-
-/* ---------- Offres ---------- */
-.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin: 10px 0 34px; }
-.plan .in { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
-.plan h3 { font-size: 22px; display: flex; align-items: center; gap: 10px; }
-.plan .price { font-family: var(--display); font-size: 38px; font-weight: 700; }
-.plan .price small { font-size: 15px; color: var(--mute); font-weight: 500; }
-.plan ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; flex: 1; align-content: start; }
-.plan li { display: flex; gap: 10px; color: #d6d1ee; font-size: 15px; }
-.plan li::before { content: "✓"; color: var(--c1); font-weight: 700; }
-.plan li.no { color: var(--faint); }
-.plan li.no::before { content: "–"; color: var(--faint); }
-.plan .pop { position: absolute; top: 14px; right: 14px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--c1); color: #0a0612; }
-@media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
-.pay { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; }
-.pay .box { padding: 22px; border-radius: 20px; background: #ffffff06; border: 1px solid #ffffff12; }
-.pay h3 { font-size: 20px; margin-bottom: 8px; }
-.pay p { color: var(--mute); margin: 0 0 14px; font-size: 15px; }
-.form { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
-.form input, .form select { font: 15px var(--body); color: var(--text); background: #0d0a16; border: 1px solid #ffffff22; border-radius: 12px; padding: 11px 14px; min-width: 0; }
-.form input:focus, .form select:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
-.form .err { grid-column: 1 / -1; color: var(--red); font-size: 14px; min-height: 1em; }
-.hint { font-size: 13.5px; color: var(--faint); }
-@media (max-width: 900px) { .pay { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .form { grid-template-columns: 1fr; } }
-
-footer { border-top: 1px solid #ffffff0d; padding: 24px 0 40px; color: var(--faint); font-size: 14px; }
-footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
-footer a { color: var(--mute); text-decoration: none; margin-left: 14px; }
+footer { border-top: 1px solid var(--border); padding: 32px 0 48px; color: var(--faint); font-size: 14px; }
+footer .container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+footer nav { display: flex; gap: 24px; }
 footer a:hover { color: var(--text); }
 
-@media (prefers-reduced-motion: reduce) {
-  .neon::before, .neon::after, .dot.on { animation: none; }
-  .neon { transform: none !important; }
-  .view.on { animation: none; }
-}
+/* Fenêtre de paiement */
+dialog { border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface); color: var(--text); padding: 28px; width: min(440px, 100% - 32px); }
+dialog::backdrop { background: rgba(0, 0, 0, .6); }
+dialog h3 { font-size: 19px; font-weight: 600; }
+dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
+.field { display: grid; gap: 6px; margin-top: 18px; font-size: 14px; font-weight: 500; }
+.field input, .field select { height: 42px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 15px var(--font); }
+.help { font-size: 13px; color: var(--faint); font-weight: 400; }
+.error { color: #f38b8b; font-size: 13.5px; min-height: 20px; margin-top: 8px; }
+.dialog-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="wrap">
-    <a class="brand" href="#"><img class="bot-pp" alt="" width="34" height="34"><span class="bot-name">AI Vercel</span></a>
-    <nav class="links" aria-label="Menu">
-      <a href="#" data-nav="accueil">Fonctionnalités</a>
-      <a href="#offres" data-nav="offres">Offres</a>
-      <a class="opt" href="/statut">Statut</a>
-      <a class="opt" href="/dashboard">Tableau de bord</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 12h12"/></symbol>
+</svg>
+
+<header class="nav">
+  <div class="container">
+    <a class="logo" href="#top" aria-label="Accueil">
+      <svg class="mark bot-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#5865f2"/><path d="M8 8.5h3.2L14 17l2.8-8.5H20L15.6 20h-3.2z" fill="#fff"/></svg>
+      <img class="bot-avatar" alt="" hidden>
+      <span class="bot-name">AI Vercel</span>
+    </a>
+    <nav class="nav-links" aria-label="Navigation">
+      <a href="#fonctionnalites">Fonctionnalités</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="#faq">FAQ</a>
+      <a href="/statut">Statut</a>
     </nav>
-    <a class="btn small invite" href="#">Ajouter le bot</a>
+    <div class="nav-cta">
+      <a class="btn btn-secondary" href="/dashboard">Tableau de bord</a>
+      <a class="btn btn-primary invite" href="#">Ajouter à Discord</a>
+    </div>
   </div>
 </header>
 
-<main class="wrap">
-  <!-- Accueil -->
-  <section class="view" id="v-accueil">
-    <div class="hero">
-      <div>
-        <h1>Le bot qui fait <span class="glow">vivre</span> ton serveur Discord.</h1>
-        <p class="lead">Une IA qui se souvient de chaque membre, des soirées jeux, de la musique, une vraie sécurité et des niveaux. Tout se règle avec 6 commandes à panneaux.</p>
-        <div class="ctas">
-          <a class="btn invite" href="#">Ajouter <span class="bot-name">AI Vercel</span></a>
-          <a class="btn ghost" href="#offres">Voir les offres · essai 7 jours</a>
-        </div>
-        <div class="live">
-          <span class="chip"><span class="dot" id="st-dot"></span><span id="st-txt">Connexion…</span></span>
-          <span class="chip" id="st-srv" hidden></span>
-          <span class="chip" id="st-mem" hidden></span>
+<main id="top">
+  <section class="hero">
+    <div class="container">
+      <div class="badge"><b>Nouveau</b> Demandez à l’IA, elle lance le jeu ou l’action pour vous</div>
+      <h1>Tout votre serveur Discord, géré par un seul bot.</h1>
+      <p class="lead">Assistant IA, jeux, musique, modération, tickets et niveaux. Six commandes, un tableau de bord, et c’est réglé.</p>
+      <div class="actions">
+        <a class="btn btn-primary btn-lg invite" href="#">Ajouter à Discord</a>
+        <a class="btn btn-secondary btn-lg" href="#tarifs">Voir les tarifs</a>
+      </div>
+      <p class="note">Gratuit pour commencer · Essai de 7 jours sur les offres payantes</p>
+
+      <div class="preview" aria-label="Exemple de conversation avec le bot">
+        <div class="preview-bar"># <span>général</span></div>
+        <div class="msgs">
+          <div class="msg">
+            <div class="avatar">L</div>
+            <div><div class="name">Lina</div><div class="body"><span class="mention">@<span class="bot-name">AI Vercel</span></span> lance un undercover, on est cinq</div></div>
+          </div>
+          <div class="msg">
+            <img class="avatar bot-avatar-msg" alt="">
+            <div>
+              <div class="name"><span class="bot-name">AI Vercel</span> <span class="tag">APP</span></div>
+              <div class="body">C’est parti. Cliquez pour ouvrir la salle d’attente, la partie démarre dès que tout le monde a rejoint.</div>
+              <span class="button">Lancer : Undercover</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="neon" style="--c1: var(--cyan); --c2: var(--pink)">
-        <div class="in" id="hero-demo"></div>
+
+      <div class="stats" id="stats">
+        <span><span class="status-dot" id="dot"></span><span id="state">Vérification du statut…</span></span>
+        <span id="servers" hidden></span>
+        <span id="members" hidden></span>
       </div>
-    </div>
-
-    <div class="section-title">
-      <div><h2>Choisis ce qui t’intéresse</h2><p>Clique sur une carte pour voir ce que ça t’apporte, avec des exemples.</p></div>
-    </div>
-    <div class="cats" id="cats"></div>
-
-    <div class="strip">
-      <div class="item"><b>6 commandes, c’est tout</b><span>/ia, /jeux, /musique, /serveur, /sanction, /pannel : chacune ouvre un panneau avec des boutons.</span></div>
-      <div class="item"><b>Réglé en 2 minutes</b><span>Le tableau de bord range tout par catégorie : sécurité, niveaux, boutique, accueil, vocal, IA.</span></div>
-      <div class="item"><b>Gratuit pour commencer</b><span>Tout le principal est gratuit. Les offres ajoutent plus d’IA vocale et des options de staff.</span></div>
     </div>
   </section>
 
-  <!-- Une catégorie (remplie par le script) -->
-  <section class="view" id="v-cat"></section>
-
-  <!-- Offres -->
-  <section class="view" id="v-offres">
-    <a class="back" href="#">← Toutes les fonctionnalités</a>
-    <div class="section-title" style="margin-top:0">
-      <div><h2 style="font-size:clamp(28px,4vw,40px)">Des offres simples, sans engagement</h2><p>Chaque offre dure 31 jours et s’active toute seule après le paiement PayPal. Essai gratuit de 7 jours : <b>/serveur</b> › Offre du serveur.</p></div>
-    </div>
-    <div class="plans" id="plans"></div>
-    <div class="pay">
-      <div class="box" id="payer">
-        <h3>Payer avec PayPal</h3>
-        <p>Colle l’identifiant de ton serveur, choisis l’offre : tu es envoyé sur PayPal, puis l’offre s’active sur ton serveur.</p>
-        <form class="form" id="pay-form" novalidate>
-          <input id="pay-id" inputmode="numeric" autocomplete="off" placeholder="Identifiant du serveur" aria-label="Identifiant du serveur">
-          <select id="pay-plan" aria-label="Offre"><option value="veilleur">🌙 Veilleur · 4,99 €</option><option value="gardien">🛡️ Gardien · 9,99 €</option></select>
-          <button class="btn" type="submit">Payer</button>
-          <div class="err" id="pay-err" role="alert"></div>
-        </form>
-        <p class="hint">Identifiant du serveur : clic droit sur le serveur › Copier l’identifiant du serveur (active le mode développeur dans Paramètres › Avancés). Plus simple : <b>/serveur</b> › Offre du serveur › Payer, le lien est déjà rempli.</p>
+  <section id="fonctionnalites">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Fonctionnalités</div>
+        <h2>Ce dont votre communauté a besoin, au même endroit</h2>
+        <p>Plus besoin d’empiler cinq bots. Chaque module se règle depuis Discord ou depuis le tableau de bord.</p>
       </div>
-      <div class="box">
-        <h3>🤝 Parrainage</h3>
-        <p>Chaque serveur a un code (<b>/serveur</b> › Parrainage). Donne-le à un serveur que tu invites : il l’entre au même endroit, et à son premier paiement, <b>tu gagnes 1 mois offert</b>.</p>
-        <div class="dc" style="border-radius:14px">
-          <div class="msg"><img class="pp bot-pp" alt=""><div><div class="who"><span class="bot-name">AI Vercel</span><span class="badge">✔ APP</span></div>
-            <div class="embed" style="--ec: var(--green)"><div class="et">🤝 Parrainage</div><div class="ed">Ton code : <b>VERCEL-7F3A2C</b>
-Serveurs parrainés : <b>3</b> · abonnés : <b>1</b></div></div>
-            <div class="eph">👁 Seul toi peux voir ce message</div></div></div>
-        </div>
+      <div class="grid" id="features"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow">Mise en route</div>
+        <h2>Prêt en quelques minutes</h2>
+      </div>
+      <div class="steps">
+        <div class="step"><h3>Ajoutez le bot</h3><p>Un clic sur « Ajouter à Discord », choisissez votre serveur, c’est installé.</p></div>
+        <div class="step"><h3>Réglez l’essentiel</h3><p>Salons, sécurité, niveaux, accueil : tout est rangé par catégorie dans le tableau de bord.</p></div>
+        <div class="step"><h3>Laissez faire</h3><p>Vos membres utilisent six commandes, ou demandent simplement à l’IA.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tarifs">
+    <span id="offres"></span><span id="pacte"></span>
+    <div class="container">
+      <div class="section-head center">
+        <div class="eyebrow">Tarifs</div>
+        <h2>Simple et sans engagement</h2>
+        <p>Commencez gratuitement. Passez à une offre payante quand votre serveur en a besoin.</p>
+      </div>
+      <div class="pricing" id="pricing"></div>
+      <div class="pricing-note">
+        <span><svg><use href="#i-check"/></svg>Essai gratuit de 7 jours</span>
+        <span><svg><use href="#i-check"/></svg>Paiement sécurisé par PayPal</span>
+        <span><svg><use href="#i-check"/></svg>Activation automatique</span>
+        <span><svg><use href="#i-check"/></svg>Parrainage : 1 mois offert</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="container">
+      <div class="section-head center">
+        <div class="eyebrow">FAQ</div>
+        <h2>Questions fréquentes</h2>
+      </div>
+      <div class="faq">
+        <details><summary>Le bot est-il vraiment gratuit ?</summary><p>Oui. L’offre gratuite donne accès à tous les modules : IA, jeux, musique, modération, tickets et niveaux. Les offres payantes ajoutent du temps d’IA vocale et des options pour le staff.</p></details>
+        <details><summary>Comment fonctionne l’essai de 7 jours ?</summary><p>Dans Discord, tapez <b>/serveur</b> puis « Offre du serveur » et cliquez sur « Essai gratuit ». Vous profitez de l’offre Gardien pendant 7 jours, une fois par serveur, sans moyen de paiement.</p></details>
+        <details><summary>Comment payer une offre ?</summary><p>Choisissez une offre ci-dessus, indiquez l’identifiant de votre serveur et payez avec PayPal. L’offre s’active automatiquement pour 31 jours. Le lien est aussi disponible dans <b>/serveur</b> › Offre du serveur, déjà rempli.</p></details>
+        <details><summary>Où trouver l’identifiant de mon serveur ?</summary><p>Activez le mode développeur (Paramètres › Avancés), puis faites un clic droit sur le serveur et choisissez « Copier l’identifiant du serveur ».</p></details>
+        <details><summary>Comment marche le parrainage ?</summary><p>Chaque serveur a un code dans <b>/serveur</b> › Parrainage. Quand un serveur que vous avez invité paie pour la première fois, vous recevez un mois offert.</p></details>
+        <details><summary>Quelles permissions demande le bot ?</summary><p>Le bot a besoin des droits d’administration pour gérer la modération, les salons, les rôles et les tickets. Chaque action reste limitée aux membres qui ont la permission correspondante.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="container">
+      <h2>Essayez-le sur votre serveur</h2>
+      <p>L’installation prend une minute. Vous pourrez tout régler ensuite.</p>
+      <div class="actions">
+        <a class="btn btn-primary btn-lg invite" href="#">Ajouter à Discord</a>
+        <a class="btn btn-secondary btn-lg" href="/dashboard">Ouvrir le tableau de bord</a>
       </div>
     </div>
   </section>
 </main>
 
 <footer>
-  <div class="wrap">
-    <span>© <span id="year"></span> <span class="bot-name">AI Vercel</span> · fait pour les serveurs francophones</span>
-    <span><a href="/statut">Statut</a><a href="/dashboard">Tableau de bord</a><a href="#offres">Offres</a></span>
+  <div class="container">
+    <span>© <span id="year"></span> <span class="bot-name">AI Vercel</span></span>
+    <nav aria-label="Liens"><a href="#tarifs">Tarifs</a><a href="/statut">Statut</a><a href="/dashboard">Tableau de bord</a></nav>
   </div>
 </footer>
+
+<dialog id="pay" aria-labelledby="pay-title">
+  <form id="pay-form" method="dialog" novalidate>
+    <h3 id="pay-title">Offre <span id="pay-plan-name"></span></h3>
+    <p>Vous serez redirigé vers PayPal. L’offre s’active automatiquement sur votre serveur après le paiement.</p>
+    <label class="field">Identifiant du serveur
+      <input id="pay-id" inputmode="numeric" autocomplete="off" placeholder="Ex. 1234567890123456789">
+      <span class="help">Clic droit sur le serveur › Copier l’identifiant du serveur</span>
+    </label>
+    <div class="error" id="pay-error" role="alert"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" id="pay-cancel">Annuler</button>
+      <button class="btn btn-primary" type="submit">Continuer vers PayPal</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 (function () {
   'use strict';
   var INVITE = 'https://discord.com/oauth2/authorize?client_id=1549507270193193071&scope=bot%20applications.commands&permissions=8';
-  var FALLBACK_PP = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ff0ff"/><stop offset="1" stop-color="#ff5fd2"/></linearGradient></defs><rect width="64" height="64" fill="#110d1b"/><path d="M16 18h8l8 22 8-22h8L36 48h-8z" fill="url(#g)"/></svg>');
-  var bot = { nom: 'AI Vercel', avatar: FALLBACK_PP };
 
-  // ---------------- Contenu ----------------
-  // Messages d'exemple : { u: 'Nom', c: 'couleur', t: 'texte' } pour un membre, { bot: true, ... } pour le bot.
-  var CATS = [
-    {
-      id: 'ia', titre: 'Intelligence artificielle', mot: 'IA', emoji: '🧠', c1: '#5ff0ff', c2: '#a58bff', gif: '/panneaux/ia.gif',
-      court: 'Une IA qui parle comme un membre, se souvient de chacun et répond même en vocal.',
-      tags: ['Mémoire', 'Vocal', 'Traduction', 'FAQ'],
-      accroche: 'Mentionne-le, parle-lui en vocal : il répond avec le ton du serveur, se souvient de ce que chacun lui a dit et apprend les réponses de ton staff.',
-      avantages: [
-        ['💬', 'Discute partout', 'Mentionne le bot dans n’importe quel salon : réponses naturelles, en français, sans phrases de robot.'],
-        ['🧠', 'Se souvient de chaque membre', 'Jeux, artistes, pseudos… il retient et s’en sert plus tard. Chacun peut tout effacer d’un bouton.'],
-        ['🎙️', 'IA vocale et narrateur', 'Il rejoint le vocal, écoute et répond à voix haute. Voix au choix avec les offres.'],
-        ['🌍', 'Traduction automatique', 'Dans les salons que tu choisis, chaque message est traduit dans la langue voulue.'],
-        ['❓', 'FAQ qui apprend seule', 'Le staff répond une fois à une question ; ensuite l’IA répond à sa place.'],
-        ['🎤', 'Note de punchline', 'Une rime, une note sur 10 : rimes, jeu de mots, originalité et impact.'],
-      ],
-      exemples: [
-        { titre: 'Il se souvient', msgs: [
-          { u: 'Lina', c: '#ff5fd2', t: '@bot tu te rappelles à quoi je joue ?' },
-          { bot: true, t: 'Évidemment 😏 Valorant, sous le pseudo **LinaV**. Toujours bloquée en Platine ou ça y est ?' },
-        ] },
-        { titre: 'FAQ apprise', msgs: [
-          { u: 'Sami', c: '#ffc94d', t: 'comment on a le rôle VIP ?' },
-          { bot: true, embed: { c: '#5ff0ff', t: '❓ Déjà répondu par le staff', d: 'Il faut être **niveau 10**, ou l’acheter dans la boutique (/serveur › Boutique).' } },
-        ] },
-        { titre: 'Note de punchline', msgs: [
-          { bot: true, embed: { c: '#a58bff', t: '🎤 8,5 / 10', d: '« J’ai la dalle comme un bus sans chauffeur »\nPropre, ça claque.', f: [['Rimes', '9'], ['Jeu de mots', '8'], ['Originalité', '7'], ['Impact', '9']] } },
-        ] },
-      ],
-      cmds: [['/ia', 'discuter, vocal, voix'], ['/ia', 'Mémoire'], ['/jeux', 'Punchline']],
-    },
-    {
-      id: 'jeux', titre: 'Jeux de soirée', mot: 'Jeux', emoji: '🎲', c1: '#ff5fd2', c2: '#ffc94d', gif: '/panneaux/jeux.gif', thumb: '/cartes/loup.webp',
-      court: 'Loup-garou avec cartes de rôle, Undercover, Petit Bac, quiz, casino…',
-      tags: ['Loup-garou', 'Undercover', 'Petit Bac', 'Quiz'],
-      accroche: 'Tout se joue dans Discord, sans site à côté : le bot distribue les rôles en MP, anime la partie et compte les points.',
-      avantages: [
-        ['🐺', 'Loup-garou', 'Cartes de rôle illustrées en MP, nuits et votes animés, narrateur vocal.'],
-        ['🕵️', 'Imposteur et Undercover', 'Un mot secret pour tous, un autre pour l’intrus. À vous de le démasquer.'],
-        ['📝', 'Petit Bac', 'Une lettre, des catégories, l’IA vérifie les réponses et compte les points.'],
-        ['🔥', 'Action ou vérité', 'Des défis adaptés au serveur, tirés au sort à chaque tour.'],
-        ['🎵', 'Pendu musical et blind test', 'Devine le titre ou l’artiste avant les autres.'],
-        ['🏆', 'Quiz du serveur', 'Des questions sur ton propre serveur : qui a le plus parlé, qui est arrivé en premier…'],
-      ],
-      exemples: [
-        { titre: 'Ta carte de rôle en MP', msgs: [
-          { bot: true, t: '🌙 La nuit tombe sur le village. Voici ton rôle, garde-le secret :', img: '/cartes/voyante.webp', card: true },
-        ] },
-        { titre: 'Undercover', msgs: [
-          { bot: true, embed: { c: '#ff5fd2', t: '🕵️ Undercover · manche 2', d: 'Chacun donne un indice sur son mot, puis on vote.\nIl reste **5 joueurs**, dont **1 intrus**.' }, btns: [['Voir mon mot', 'p'], ['Voter', 'g']] },
-        ] },
-        { titre: 'Petit Bac', msgs: [
-          { bot: true, embed: { c: '#ffc94d', t: '📝 Petit Bac · lettre M', d: 'Pays · Animal · Métier · Marque\n⏳ 60 secondes, écris tes réponses !', f: [['Lina', '+30'], ['Sami', '+20'], ['Noé', '+10']] } },
-        ] },
-      ],
-      cmds: [['/jeux', 'tous les jeux'], ['/jeux', 'Undercover'], ['/jeux', 'Quiz du serveur']],
-      extra: ['/cartes/loup.webp', '/cartes/sorciere.webp', '/cartes/chasseur.webp'],
-    },
-    {
-      id: 'musique', titre: 'Musique et vocal', mot: 'Musique', emoji: '🎧', c1: '#3dff9a', c2: '#5ff0ff', gif: '/panneaux/musique.gif',
-      court: 'Musique en qualité, paroles en direct, radio 24 h/24 et vocaux temporaires.',
-      tags: ['Paroles', 'Radio 24/24', 'Vocaux temporaires'],
-      accroche: 'Un titre ou un lien Spotify, YouTube, Apple Music : c’est parti. Et le vocal se range tout seul.',
-      avantages: [
-        ['▶️', 'Lecteur complet', 'File d’attente, filtres, playlists du serveur, tout avec des boutons.'],
-        ['🎤', 'Paroles en direct', 'Les paroles défilent en même temps que la musique.'],
-        ['📻', 'Radio 24 h/24', 'Un salon qui joue en continu, avec le titre en cours affiché.'],
-        ['➕', 'Vocaux temporaires', 'Rejoins « Créer un salon » : ton vocal apparaît, et disparaît quand il est vide.'],
-        ['🔊', 'Micros saturés', 'Le bot repère un micro qui crache et envoie un conseil en MP.'],
-      ],
-      exemples: [
-        { titre: 'En ce moment', msgs: [
-          { u: 'Noé', c: '#3dff9a', t: '/musique › Jouer · « Jul — Tchikita »' },
-          { bot: true, embed: { c: '#3dff9a', t: '🎧 En ce moment', d: '**Tchikita** · Jul\n▰▰▰▰▰▱▱▱▱▱ 1:42 / 3:28', foot: 'Demandé par Noé · 3 titres à suivre' }, btns: [['⏯', ''], ['⏭', ''], ['🔀', ''], ['🎤 Paroles', 'p']] },
-        ] },
-        { titre: 'Vocal temporaire', msgs: [
-          { bot: true, embed: { c: '#5ff0ff', t: '➕ Ton salon est prêt', d: 'Tu es chef de **🎮 Salon de Lina**.\nRenomme-le, limite les places ou verrouille-le.' }, btns: [['Renommer', ''], ['Limiter', ''], ['🔒 Verrouiller', 'r']] },
-        ] },
-      ],
-      cmds: [['/musique', 'jouer, file, radio']],
-    },
-    {
-      id: 'securite', titre: 'Modération et sécurité', mot: 'Sécurité', emoji: '🛡️', c1: '#ff4d6d', c2: '#ffc94d', gif: '/panneaux/sanction.gif',
-      court: 'Anti-raid, vérification, anti-arnaque, casier, surveillance vocale.',
-      tags: ['Anti-raid', 'Vérification', 'Casier', 'Journal'],
-      accroche: 'Le serveur se protège tout seul, et le staff garde la main : chaque sanction est expliquée, notée au casier et peut être contestée.',
-      avantages: [
-        ['🚨', 'Anti-raid', 'Trop d’arrivées d’un coup : les invitations sont coupées et la vérification monte au maximum pendant 10 minutes.'],
-        ['✅', 'Vérification à l’arrivée', 'Un petit calcul pour prouver qu’on n’est pas un robot.'],
-        ['🔗', 'Liens, spam, arnaques', 'Liens interdits, messages en rafale et faux « Nitro gratuit » sont supprimés.'],
-        ['📒', 'Casier et journal', 'Avertissements, notes du staff, messages supprimés, arrivées et départs : tout est gardé.'],
-        ['⚖️', 'Contestation', 'Le membre sanctionné peut contester : un ticket privé s’ouvre avec le staff.'],
-        ['🎙️', 'Surveillance vocale', 'Insultes en vocal : avertissement, puis exclusion au 3e. Gardien : staff protégé et mots interdits.'],
-      ],
-      exemples: [
-        { titre: 'Sanction expliquée', msgs: [
-          { bot: true, t: '<@Karim>', embed: { c: '#ff4d6d', t: '⚠️ Avertissement 2 / 3', d: 'Raison : insulte envers un membre du staff.\nAu 3e avertissement : exclusion temporaire.', img: '/sanction/avertissement.gif' }, btns: [['Contester', '']] },
-        ] },
-        { titre: 'Journal du staff', msgs: [
-          { bot: true, embed: { c: '#ffc94d', t: '🚨 Raid détecté', d: '12 arrivées en 20 secondes.\nInvitations coupées, vérification au maximum pendant 10 min.', foot: 'Journal · #logs' } },
-        ] },
-      ],
-      cmds: [['/sanction', 'avertir, exclure, casier, note']],
-    },
-    {
-      id: 'serveur', titre: 'Tickets et gestion du serveur', mot: 'Tickets', emoji: '🎫', c1: '#a58bff', c2: '#5ff0ff', gif: '/panneaux/ticket.gif', thumb: '/images/bienvenue.webp',
-      court: 'Tickets, salons construits en un clic, carte de bienvenue, suggestions, sauvegarde.',
-      tags: ['Tickets', 'Bienvenue', 'Suggestions', 'Sauvegarde'],
-      accroche: 'Tout ce qu’un staff fait à la main, en un clic : ouvrir un ticket, construire des salons, accueillir, sauvegarder.',
-      avantages: [
-        ['🎫', 'Tickets', 'Un bouton, un salon privé avec le staff, un compte rendu à la fermeture.'],
-        ['🏗️', 'Construction de salons', 'Choisis un modèle, le bot crée catégories, salons et permissions.'],
-        ['👋', 'Carte de bienvenue', 'Une carte néon avec la photo et le numéro du nouveau membre.'],
-        ['💡', 'Suggestions votées', 'Chaque idée devient un vote 👍 / 👎, le staff l’accepte ou la refuse et l’auteur est prévenu.'],
-        ['💾', 'Sauvegarde du serveur', 'Rôles, salons et permissions sauvegardés ; la restauration recrée ce qui manque sans rien supprimer.'],
-        ['⚙️', 'Tableau de bord', 'Tous les réglages rangés par catégorie, depuis ton navigateur.'],
-      ],
-      exemples: [
-        { titre: 'Carte de bienvenue', msgs: [
-          { bot: true, t: 'Bienvenue <@Lina> sur **Les Veilleurs** ! 🎉', img: '/images/bienvenue.webp' },
-        ] },
-        { titre: 'Suggestion', msgs: [
-          { bot: true, embed: { c: '#3dff9a', t: '💡 Suggestion de Lina', d: 'Ajouter un salon pour partager nos mèmes.', f: [['Statut', '✅ Acceptée'], ['Votes', '👍 24 · 👎 2']] } },
-        ] },
-        { titre: 'Ticket', msgs: [
-          { bot: true, embed: { c: '#a58bff', t: '🎫 Besoin d’aide ?', d: 'Clique sur le bouton : un salon privé s’ouvre avec le staff.', img: '/panneaux/ticket.gif' }, btns: [['Ouvrir un ticket', 'p']] },
-        ] },
-      ],
-      cmds: [['/pannel', 'ticket, build, annonce, bienvenue, sauvegarde']],
-    },
-    {
-      id: 'niveaux', titre: 'Niveaux et boutique', mot: 'Niveaux', emoji: '⚡', c1: '#ffc94d', c2: '#ff5fd2', gif: '/panneaux/serveur.gif', thumb: '/images/profil.webp',
-      court: 'XP, carte de profil néon, récompense du jour, boutique et rôle personnalisé.',
-      tags: ['XP', 'Carte de profil', 'Boutique', 'Membre de la semaine'],
-      accroche: 'Chaque message et chaque minute en vocal rapportent de l’XP. Les membres reviennent chaque jour pour leur série.',
-      avantages: [
-        ['📈', 'XP et niveaux', 'Messages et vocal rapportent de l’XP, avec des rôles donnés à certains niveaux.'],
-        ['🪪', 'Carte de profil néon', 'Rang, niveau, barre d’XP et badges, dans une vraie image.'],
-        ['🎁', 'Récompense du jour', 'Des jetons chaque jour, plus si la série continue.'],
-        ['🛍️', 'Boutique', 'Des rôles et avantages à acheter avec les jetons.'],
-        ['🎨', 'Rôle personnalisé', 'Le membre choisit le nom et la couleur, le staff accepte ou refuse.'],
-        ['🌟', 'Membre de la semaine', 'Chaque lundi, le membre le plus actif est mis en avant.'],
-      ],
-      exemples: [
-        { titre: 'Carte de profil', msgs: [
-          { u: 'Lina', c: '#ff5fd2', t: '/serveur › Mon profil' },
-          { bot: true, img: '/images/profil.webp' },
-        ] },
-        { titre: 'Rôle personnalisé', msgs: [
-          { bot: true, embed: { c: '#ff5fd2', t: '🎨 Demande de rôle personnalisé', d: '**Lina** voudrait le rôle **Reine de la nuit**, couleur rose néon.\nPayé : 5 000 jetons (remboursés si refusé).' }, btns: [['Accepter', 'g'], ['Refuser', 'r']] },
-        ] },
-        { titre: 'Récompense du jour', msgs: [
-          { bot: true, embed: { c: '#ffc94d', t: '🎁 Récompense du jour', d: '+ **350 jetons**\n🔥 Série de **12 jours** · reviens demain pour +50.' } },
-        ] },
-      ],
-      cmds: [['/serveur', 'profil, classement, récompense, boutique']],
-    },
-    {
-      id: 'premium', titre: 'Offres premium', mot: 'Premium', emoji: '⭐', c1: '#ffc94d', c2: '#5ff0ff', gif: '/panneaux/serveur.gif', go: 'offres',
-      court: 'Plus d’IA vocale, voix au choix, cartes à tes couleurs, rapport de la semaine.',
-      tags: ['Essai 7 jours', 'PayPal', 'Parrainage'],
-    },
+  // Icônes (traits simples, 24 × 24)
+  var ICONS = {
+    ai: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/>',
+    games: '<rect x="3" y="7" width="18" height="11" rx="4"/><path d="M8 11v3M6.5 12.5h3"/><circle cx="15.5" cy="11.5" r=".8" fill="currentColor"/><circle cx="17.5" cy="13.5" r=".8" fill="currentColor"/>',
+    music: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+    shield: '<path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
+    ticket: '<path d="M4 7a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 000-4z"/><path d="M13 5v2M13 11v2M13 17v0"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  };
+  function icon(name) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[name] + '</svg>';
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function checkList(items, off) {
+    return '<ul class="list">' + items.map(function (x) { return '<li><svg><use href="#i-check"/></svg><span>' + esc(x) + '</span></li>'; }).join('') +
+      (off || []).map(function (x) { return '<li class="off"><svg><use href="#i-minus"/></svg><span>' + esc(x) + '</span></li>'; }).join('') + '</ul>';
+  }
+
+  var FEATURES = [
+    { icon: 'ai', title: 'Assistant IA', text: 'Répond dans vos salons avec le ton du serveur et lance les actions qu’on lui demande.', items: ['Se souvient de chaque membre', 'Parle en vocal', 'Traduction et FAQ automatiques'], cmd: '/ia' },
+    { icon: 'games', title: 'Jeux de groupe', text: 'Des soirées animées par le bot, sans site à côté ni préparation.', items: ['Loup-garou, Undercover, imposteur', 'Petit Bac, quiz, action ou vérité', 'Blind test et pendu musical'], cmd: '/jeux' },
+    { icon: 'music', title: 'Musique', text: 'Un lecteur complet dans vos salons vocaux, en bonne qualité.', items: ['Spotify, YouTube, Apple Music', 'Paroles synchronisées', 'Radio 24 h/24 et vocaux temporaires'], cmd: '/musique' },
+    { icon: 'shield', title: 'Modération et sécurité', text: 'Le serveur se protège seul, le staff garde la main sur chaque décision.', items: ['Anti-raid, anti-spam, anti-arnaque', 'Vérification à l’arrivée', 'Casier, journal et contestation'], cmd: '/sanction' },
+    { icon: 'ticket', title: 'Tickets et outils', text: 'Ce que le staff faisait à la main, en quelques clics.', items: ['Tickets privés avec compte rendu', 'Annonces, suggestions, accueil', 'Sauvegarde et restauration du serveur'], cmd: '/pannel' },
+    { icon: 'chart', title: 'Niveaux et économie', text: 'Des raisons de revenir chaque jour, pour tous les membres.', items: ['XP en écrit et en vocal', 'Récompense quotidienne et boutique', 'Rôles personnalisés validés par le staff'], cmd: '/serveur' },
   ];
 
   var PLANS = [
-    { id: 'gratuit', nom: 'Gratuit', emoji: '🌱', prix: '0 €', c1: '#3dff9a', c2: '#5ff0ff', inclus: ['Toutes les fonctions de base', 'IA vocale : 60 min / mois', 'Jeux, musique, sécurité, tickets, niveaux'], non: ['Choix de la voix', 'Cartes aux couleurs du serveur', 'Rapport de la semaine', 'Surveillance vocale Gardien'] },
-    { id: 'veilleur', nom: 'Veilleur', emoji: '🌙', prix: '4,99 €', c1: '#a58bff', c2: '#5ff0ff', pop: 'Le plus pris', inclus: ['Tout le gratuit', 'IA vocale : 600 min / mois', 'Choix de la voix de l’IA', 'Cartes et embeds aux couleurs du serveur', 'Rapport de la semaine en MP'], non: ['Surveillance vocale Gardien'] },
-    { id: 'gardien', nom: 'Gardien', emoji: '🛡️', prix: '9,99 €', c1: '#ffc94d', c2: '#ff4d6d', inclus: ['Tout Veilleur', 'IA vocale illimitée', 'Surveillance vocale Gardien', 'Staff protégé et mots interdits en vocal'], non: [] },
+    { id: 'gratuit', name: 'Gratuit', desc: 'Tout le nécessaire pour faire vivre un serveur.', amount: '0 €', per: '', billing: 'Pour toujours', cta: 'Ajouter à Discord',
+      items: ['Tous les modules inclus', 'IA vocale : 60 min par mois', 'Tableau de bord complet'], off: ['Choix de la voix de l’IA', 'Embeds aux couleurs du serveur', 'Rapport hebdomadaire', 'Surveillance vocale avancée'] },
+    { id: 'veilleur', name: 'Veilleur', desc: 'Pour les serveurs actifs qui veulent leur propre style.', amount: '4,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Veilleur', featured: true,
+      items: ['Tout le plan Gratuit', 'IA vocale : 600 min par mois', 'Choix de la voix de l’IA', 'Embeds à vos couleurs et logo', 'Rapport hebdomadaire en MP'], off: ['Surveillance vocale avancée'] },
+    { id: 'gardien', name: 'Gardien', desc: 'Pour les grandes communautés et leur équipe de staff.', amount: '9,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Gardien',
+      items: ['Tout le plan Veilleur', 'IA vocale illimitée', 'Surveillance vocale avancée', 'Staff protégé et mots interdits'], off: [] },
   ];
 
-  // ---------------- Outils ----------------
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function fmt(s) {
-    return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-      .replace(/&lt;@(\w+)&gt;/g, '<span class="mention">@$1</span>')
-      .replace(/@bot/g, '<span class="mention">@<span class="bot-name">' + esc(bot.nom) + '</span></span>');
-  }
-  function $(sel, root) { return (root || document).querySelector(sel); }
-  var HOURS = ['21:04', '21:05', '21:07', '21:12', '22:31'];
+  document.getElementById('features').innerHTML = FEATURES.map(function (f) {
+    return '<article class="card"><div class="icon">' + icon(f.icon) + '</div><h3>' + esc(f.title) + '</h3><p>' + esc(f.text) + '</p>' + checkList(f.items) + '<div class="cmd">' + f.cmd + '</div></article>';
+  }).join('');
 
-  function discord(msgs) {
-    return '<div class="dc">' + msgs.map(function (m, i) {
-      var time = '<time>Aujourd’hui à ' + HOURS[i % HOURS.length] + '</time>';
-      var head, pp;
-      if (m.bot) {
-        pp = '<img class="pp bot-pp" alt="" src="' + esc(bot.avatar) + '">';
-        head = '<div class="who"><span class="bot-name">' + esc(bot.nom) + '</span><span class="badge">✔ APP</span>' + time + '</div>';
-      } else {
-        pp = '<div class="pp" style="background:' + esc(m.c) + '">' + esc(m.u[0]) + '</div>';
-        head = '<div class="who" style="color:' + esc(m.c) + '">' + esc(m.u) + time + '</div>';
-      }
-      var body = '';
-      if (m.t) body += '<div class="txt">' + fmt(m.t) + '</div>';
-      if (m.img) body += '<img class="attach' + (m.card ? ' card' : '') + '" loading="lazy" alt="" src="' + esc(m.img) + '">';
-      if (m.embed) {
-        var e = m.embed;
-        body += '<div class="embed" style="--ec:' + esc(e.c) + '">' + (e.t ? '<div class="et">' + fmt(e.t) + '</div>' : '') +
-          (e.d ? '<div class="ed">' + fmt(e.d) + '</div>' : '') +
-          (e.f ? '<div class="ef">' + e.f.map(function (x) { return '<div><b>' + fmt(x[0]) + '</b>' + fmt(x[1]) + '</div>'; }).join('') + '</div>' : '') +
-          (e.img ? '<img loading="lazy" alt="" src="' + esc(e.img) + '">' : '') +
-          (e.foot ? '<div class="foot">' + fmt(e.foot) + '</div>' : '') + '</div>';
-      }
-      if (m.btns) body += '<div class="row">' + m.btns.map(function (b) { return '<span class="b ' + b[1] + '">' + esc(b[0]) + '</span>'; }).join('') + '</div>';
-      return '<div class="msg">' + pp + '<div>' + head + body + '</div></div>';
-    }).join('') + '</div>';
-  }
+  document.getElementById('pricing').innerHTML = PLANS.map(function (p) {
+    var action = p.id === 'gratuit'
+      ? '<a class="btn btn-secondary btn-block invite" href="#">' + esc(p.cta) + '</a>'
+      : '<button class="btn btn-block ' + (p.featured ? 'btn-primary' : 'btn-secondary') + '" type="button" data-plan="' + p.id + '" data-name="' + esc(p.name) + '">' + esc(p.cta) + '</button>';
+    return '<article class="plan' + (p.featured ? ' featured' : '') + '">' + (p.featured ? '<span class="ribbon">Le plus choisi</span>' : '') +
+      '<h3>' + esc(p.name) + '</h3><p class="desc">' + esc(p.desc) + '</p>' +
+      '<div class="price"><span class="amount">' + p.amount + '</span><span class="per">' + p.per + '</span></div><p class="billing">' + esc(p.billing) + '</p>' +
+      action + checkList(p.items, p.off) + '</article>';
+  }).join('');
 
-  function neon(c1, c2, inner, cls, tag, attrs) {
-    tag = tag || 'div';
-    return '<' + tag + ' class="neon ' + (cls || '') + '" style="--c1:' + c1 + ';--c2:' + c2 + '"' + (attrs || '') + '><div class="in">' + inner + '</div></' + tag + '>';
-  }
-
-  // ---------------- Accueil ----------------
-  function renderHome() {
-    $('#cats').innerHTML = CATS.map(function (c) {
-      var href = '#' + (c.go || c.id);
-      var thumb = c.thumb || c.gif;
-      return neon(c.c1, c.c2,
-        '<div class="shine"></div><div class="ico">' + c.emoji + '</div><h3>' + esc(c.titre) + '</h3><p>' + esc(c.court) + '</p>' +
-        '<div class="thumb" style="background-image:url(\'' + thumb + '\')"></div>' +
-        '<div class="tags">' + c.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>' +
-        '<div class="go">Découvrir <span>→</span></div>',
-        'cat tilt', 'a', ' href="' + href + '" aria-label="' + esc(c.titre) + '"');
-    }).join('');
-    $('#hero-demo').innerHTML = discord([
-      { u: 'Lina', c: '#ff5fd2', t: '@bot on fait quoi ce soir ?' },
-      { bot: true, t: 'Loup-garou à 21 h ? Il manque 2 joueurs, je lance les inscriptions 🐺', embed: { c: '#ff5fd2', t: '🐺 Loup-garou · inscriptions', d: '**6 / 8** joueurs · départ dans 5 min', img: '/panneaux/jeux.gif' }, btns: [['Rejoindre', 'g'], ['Voir les rôles', '']] },
-    ]);
-  }
-
-  // ---------------- Page d'une catégorie ----------------
-  function renderCat(c) {
-    var i = CATS.indexOf(c);
-    var next = CATS[(i + 1) % CATS.length];
-    var extra = c.extra ? '<div style="display:flex;gap:10px;margin-top:10px">' + c.extra.map(function (src) { return '<img loading="lazy" alt="" src="' + src + '" style="width:31%;border-radius:10px">'; }).join('') + '</div>' : '';
-    var v = $('#v-cat');
-    v.style.setProperty('--c1', c.c1);
-    v.innerHTML =
-      '<a class="back" href="#">← Toutes les fonctionnalités</a>' +
-      '<div class="cat-head" style="--c1:' + c.c1 + '">' +
-        '<div><div class="big">' + c.emoji + '</div><h1></h1>' +
-        '<p>' + esc(c.accroche) + '</p><div class="ctas" style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn invite" href="' + INVITE + '" target="_blank" rel="noopener">Ajouter le bot</a><a class="btn ghost" href="#offres">Offres</a></div></div>' +
-        neon(c.c1, c.c2, '<img alt="Bannière du panneau ' + esc(c.mot) + '" src="' + c.gif + '">' + extra + '<div class="cap">La bannière animée du panneau, telle qu’elle apparaît dans Discord.</div>', 'banner tilt') +
-      '</div>' +
-      '<div class="section-title"><div><h2>Ce que ça t’apporte</h2></div></div>' +
-      '<div class="perks" style="--c1:' + c.c1 + '">' + c.avantages.map(function (a) { return '<div class="perk"><div class="e">' + a[0] + '</div><b>' + esc(a[1]) + '</b><span>' + esc(a[2]) + '</span></div>'; }).join('') + '</div>' +
-      '<div class="section-title"><div><h2>Exemples dans Discord</h2><p>Voilà ce que voient tes membres.</p></div></div>' +
-      '<div class="examples">' + c.exemples.map(function (ex) { return neon(c.c1, c.c2, '<div class="ex-title">' + esc(ex.titre) + '</div>' + discord(ex.msgs), 'ex'); }).join('') + '</div>' +
-      '<div class="section-title"><div><h2>Les commandes</h2></div></div>' +
-      '<div class="cmds" style="--c1:' + c.c1 + '">' + c.cmds.map(function (x) { return '<span class="cmd"><b>' + esc(x[0]) + '</b> › ' + esc(x[1]) + '</span>'; }).join('') + '</div>' +
-      '<div class="next"><p>Suivant : <b>' + next.emoji + ' ' + esc(next.titre) + '</b></p><a class="btn ghost" href="#' + (next.go || next.id) + '">Voir →</a></div>';
-    fixTitle(v, c);
-    paintBot(v);
-    bindTilt(v);
-  }
-  // Titre avec son premier mot en couleur néon.
-  function fixTitle(v, c) {
-    var h = $('h1', v);
-    h.innerHTML = esc(c.titre).replace(new RegExp('(' + c.titre.split(' ')[0] + ')'), '<em>$1</em>');
-  }
-
-  // ---------------- Offres ----------------
-  function renderPlans() {
-    $('#plans').innerHTML = PLANS.map(function (p) {
-      return neon(p.c1, p.c2,
-        (p.pop ? '<span class="pop">' + esc(p.pop) + '</span>' : '') +
-        '<h3>' + p.emoji + ' ' + esc(p.nom) + '</h3><div class="price">' + p.prix + ' <small>' + (p.id === 'gratuit' ? 'pour toujours' : '/ 31 jours') + '</small></div>' +
-        '<ul>' + p.inclus.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + p.non.map(function (x) { return '<li class="no">' + esc(x) + '</li>'; }).join('') + '</ul>' +
-        (p.id === 'gratuit'
-          ? '<a class="btn ghost invite" href="' + INVITE + '" target="_blank" rel="noopener">Ajouter le bot</a>'
-          : '<a class="btn" href="#payer" data-plan="' + p.id + '">Prendre ' + esc(p.nom) + '</a>'),
-        'plan tilt');
-    }).join('');
-    bindTilt($('#plans'));
-  }
-
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest('[data-plan]');
-    if (!a) return;
-    e.preventDefault();
-    $('#pay-plan').value = a.getAttribute('data-plan');
-    $('#payer').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    $('#pay-id').focus({ preventScroll: true });
-  });
-  $('#pay-form').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var id = $('#pay-id').value.replace(/\D/g, '');
-    if (!/^\d{15,21}$/.test(id)) { $('#pay-err').textContent = 'Il faut l’identifiant du serveur : un nombre de 17 à 20 chiffres.'; return; }
-    $('#pay-err').textContent = '';
-    location.href = '/payer?serveur=' + id + '&offre=' + encodeURIComponent($('#pay-plan').value);
-  });
-
-  // ---------------- Cartes 3D ----------------
-  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function bindTilt(root) {
-    if (still) return;
-    root.querySelectorAll('.tilt').forEach(function (el) {
-      if (el.dataset.tilt) return;
-      el.dataset.tilt = '1';
-      el.addEventListener('pointermove', function (e) {
-        if (e.pointerType !== 'mouse') return;
-        var r = el.getBoundingClientRect();
-        var x = (e.clientX - r.left) / r.width;
-        var y = (e.clientY - r.top) / r.height;
-        el.style.setProperty('--ry', ((x - 0.5) * 12).toFixed(2) + 'deg');
-        el.style.setProperty('--rx', ((0.5 - y) * 10).toFixed(2) + 'deg');
-        el.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
-        el.style.setProperty('--my', (y * 100).toFixed(1) + '%');
-      });
-      el.addEventListener('pointerleave', function () {
-        el.style.setProperty('--rx', '0deg');
-        el.style.setProperty('--ry', '0deg');
-      });
-    });
-  }
-
-  // ---------------- Navigation ----------------
-  function route() {
-    var h = decodeURIComponent(location.hash.slice(1));
-    if (h === 'pacte') h = 'offres';
-    var cat = CATS.find(function (c) { return c.id === h && !c.go; });
-    var view = h === 'offres' || h === 'payer' ? 'offres' : cat ? 'cat' : 'accueil';
-    document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('on', v.id === 'v-' + view); });
-    document.querySelectorAll('[data-nav]').forEach(function (a) {
-      if (a.getAttribute('data-nav') === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-    });
-    if (cat) renderCat(cat);
-    document.title = (cat ? cat.titre + ' · ' : view === 'offres' ? 'Offres · ' : '') + bot.nom;
-    if (h === 'payer') setTimeout(function () { $('#payer').scrollIntoView({ block: 'center' }); }, 50);
-    else window.scrollTo(0, 0);
-  }
-  window.addEventListener('hashchange', route);
-
-  // ---------------- Nom, photo et état du bot ----------------
-  function paintBot(root) {
-    (root || document).querySelectorAll('.bot-pp').forEach(function (img) { img.src = bot.avatar; });
-    (root || document).querySelectorAll('.bot-name').forEach(function (s) { s.textContent = bot.nom; });
-  }
-  function status() {
-    fetch('/api/statut', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
-      if (!s) throw new Error('pas de statut');
-      bot.nom = s.nom || bot.nom;
-      if (s.avatar) bot.avatar = s.avatar;
-      paintBot();
-      $('#st-dot').classList.toggle('on', !!s.enLigne);
-      $('#st-txt').innerHTML = s.enLigne ? '<b>En ligne</b>' + (s.latenceMs != null ? ' · ' + s.latenceMs + ' ms' : '') : 'Hors ligne';
-      if (s.serveurs) { $('#st-srv').hidden = false; $('#st-srv').innerHTML = '<b>' + s.serveurs.toLocaleString('fr-FR') + '</b> serveurs'; }
-      if (s.membres) { $('#st-mem').hidden = false; $('#st-mem').innerHTML = '<b>' + s.membres.toLocaleString('fr-FR') + '</b> membres'; }
-    }).catch(function () { $('#st-txt').textContent = 'Statut indisponible'; });
-  }
-
+  // Liens d'invitation
   document.querySelectorAll('.invite').forEach(function (a) { a.href = INVITE; a.target = '_blank'; a.rel = 'noopener'; });
-  $('#year').textContent = new Date().getFullYear();
-  renderHome();
-  renderPlans();
-  paintBot();
-  bindTilt(document);
-  route();
-  status();
-  setInterval(status, 60000);
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // Paiement : identifiant du serveur, puis /payer
+  var dialog = document.getElementById('pay');
+  var plan = 'veilleur';
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-plan]');
+    if (!b) return;
+    plan = b.getAttribute('data-plan');
+    document.getElementById('pay-plan-name').textContent = b.getAttribute('data-name');
+    document.getElementById('pay-error').textContent = '';
+    if (dialog.showModal) dialog.showModal(); else dialog.setAttribute('open', '');
+    document.getElementById('pay-id').focus();
+  });
+  document.getElementById('pay-cancel').addEventListener('click', function () { dialog.close(); });
+  document.getElementById('pay-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var id = document.getElementById('pay-id').value.replace(/\D/g, '');
+    if (!/^\d{15,21}$/.test(id)) { document.getElementById('pay-error').textContent = 'L’identifiant est un nombre de 17 à 20 chiffres.'; return; }
+    location.href = '/payer?serveur=' + id + '&offre=' + encodeURIComponent(plan);
+  });
+
+  // Nom, photo et statut du bot
+  function number(n) { return Number(n).toLocaleString('fr-FR'); }
+  fetch('/api/statut', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+    if (!s) throw new Error();
+    document.querySelectorAll('.bot-name').forEach(function (el) { el.textContent = s.nom; });
+    if (s.avatar) {
+      document.querySelectorAll('.bot-avatar').forEach(function (img) { img.src = s.avatar; img.hidden = false; });
+      document.querySelectorAll('.bot-mark').forEach(function (m) { m.style.display = 'none'; });
+      document.querySelectorAll('.bot-avatar-msg').forEach(function (img) { img.src = s.avatar; });
+    }
+    document.getElementById('dot').classList.toggle('on', !!s.enLigne);
+    document.getElementById('state').textContent = s.enLigne ? 'En ligne' : 'Hors ligne';
+    if (s.serveurs) { var sv = document.getElementById('servers'); sv.innerHTML = '<strong>' + number(s.serveurs) + '</strong> serveurs'; sv.hidden = false; }
+    if (s.membres) { var mb = document.getElementById('members'); mb.innerHTML = '<strong>' + number(s.membres) + '</strong> membres'; mb.hidden = false; }
+  }).catch(function () { document.getElementById('stats').hidden = true; });
+
+  // Sans photo du bot, le message d'exemple garde un avatar neutre
+  document.querySelectorAll('.bot-avatar-msg').forEach(function (img) {
+    img.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" fill="#5865f2"/><path d="M10 11h4l4 11 4-11h4l-6 15h-4z" fill="#fff"/></svg>');
+  });
 }());
 </script>
 </body>

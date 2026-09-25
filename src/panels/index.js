@@ -84,7 +84,7 @@ export async function handlePanelComponent(client, interaction) {
   return undefined;
 }
 
-async function runAction(client, interaction, panel, action, values) {
+export async function runAction(client, interaction, panel, action, values) {
   const all = { ...values, ...(action.fixed ?? {}) };
   if (action.run) return action.run(client, interaction, all, { panel, action });
   const { runCommand } = await import('../handlers/interactions.js');

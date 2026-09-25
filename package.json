@@ -23,7 +23,8 @@
     "test:voice-extras": "node tools/test-voice-extras.mjs",
     "test:ai-extras": "node tools/test-ai-extras.mjs",
     "test:soirees": "node tools/test-soirees.mjs",
-    "test:payments": "node tools/test-payments.mjs"
+    "test:payments": "node tools/test-payments.mjs",
+    "test:ai-actions": "node tools/test-ai-actions.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

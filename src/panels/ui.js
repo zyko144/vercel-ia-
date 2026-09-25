@@ -63,13 +63,18 @@ export function buildModal(customId, title, fields) {
       if (f.value !== undefined && f.value !== null && f.value !== '') input.setValue(String(f.value).slice(0, f.kind === 'int' ? 10 : f.max ?? 4000));
       label.setTextInputComponent(input);
     } else if (f.kind === 'user') {
-      label.setUserSelectMenuComponent(new UserSelectMenuBuilder().setCustomId(f.id).setRequired(required).setMaxValues(1));
+      const select = new UserSelectMenuBuilder().setCustomId(f.id).setRequired(required).setMaxValues(1);
+      if (f.value) select.setDefaultUsers(String(f.value));
+      label.setUserSelectMenuComponent(select);
     } else if (f.kind === 'channel') {
       const select = new ChannelSelectMenuBuilder().setCustomId(f.id).setRequired(required).setMaxValues(1);
       if (f.types) select.setChannelTypes(...f.types);
+      if (f.value) select.setDefaultChannels(String(f.value));
       label.setChannelSelectMenuComponent(select);
     } else if (f.kind === 'role') {
-      label.setRoleSelectMenuComponent(new RoleSelectMenuBuilder().setCustomId(f.id).setRequired(required).setMaxValues(1));
+      const select = new RoleSelectMenuBuilder().setCustomId(f.id).setRequired(required).setMaxValues(1);
+      if (f.value) select.setDefaultRoles(String(f.value));
+      label.setRoleSelectMenuComponent(select);
     } else if (f.kind === 'choice') {
       const select = new StringSelectMenuBuilder().setCustomId(f.id).setRequired(required).setMaxValues(1)
         .addOptions(f.options.slice(0, 25).map((o) => ({ label: cut(o.label, 100), value: o.value, ...(o.emoji ? { emoji: o.emoji } : {}), ...(o.description ? { description: cut(o.description, 100) } : {}), default: f.value !== undefined && String(f.value) === o.value })));
