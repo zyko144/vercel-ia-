@@ -5,6 +5,7 @@ import { PANELS, addActions } from './catalog.js';
 import { field as f } from './ui.js';
 import { DUEL_GAMES, startDuel } from '../games/duels.js';
 import { blackjack, coinFlip, diceDuel, slots, startGuessNumber, startHangman, startMinesweeper, wheel } from '../games/tripot.js';
+import { openArcade } from '../arcade/discord.js';
 import { startCrossword, startEscapeGame, startGuessRapper, startQuizTournament, startTreasureHunt, startWhoSaidIt } from '../games/defis.js';
 
 const BET = () => f.int('mise', 'Mise en pièces d’or (10 à 10 000)', { req: true, min: 10, top: 10_000 });
@@ -20,6 +21,13 @@ const duel = (kind, desc) => ({
     bet: v.mise ?? 0,
   }),
 });
+
+addActions('jeux', 'Jeux de groupe', [
+  { id: 'arcade', label: 'Arcade (Activité Discord)', emoji: '🕹️', desc: 'Dessine et devine, morpion, puissance 4 : tous ensemble', run: (c, i) => openArcade(i) },
+]);
+// L'arcade en tête du menu
+const group = PANELS.jeux.groups.find((g) => g.label === 'Jeux de groupe');
+group.actions.unshift(group.actions.pop());
 
 addActions('jeux', 'Duels à deux', [
   duel('morpion', 'Trois pions alignés, contre un ami ou le bot'),

@@ -35,6 +35,7 @@ import { handlePremiumComponent, isPremiumComponent } from '../features/premiumP
 import { handleSecurityComponent, isSecurityComponent } from '../features/security.js';
 import { handleShopComponent, isShopComponent } from '../features/levels.js';
 import { handleTreasuryComponent, isTreasuryComponent } from '../features/treasury.js';
+import { handleArcadeComponent, isArcadeComponent } from '../arcade/discord.js';
 import { handleMemoryComponent, isMemoryComponent } from '../features/aiExtras.js';
 import { handleBackupComponent, handleSuggestionComponent, isBackupComponent, isSuggestionComponent } from '../features/community.js';
 
@@ -63,6 +64,7 @@ export async function onInteraction(client, interaction) {
     if (isSecurityComponent(interaction)) return await handleSecurityComponent(client, interaction);
     if (isShopComponent(interaction)) return await handleShopComponent(client, interaction);
     if (isTreasuryComponent(interaction)) return await handleTreasuryComponent(client, interaction);
+    if (isArcadeComponent(interaction)) return await handleArcadeComponent(client, interaction);
     if (isMemoryComponent(interaction)) return await handleMemoryComponent(client, interaction);
     if (isSuggestionComponent(interaction)) return await handleSuggestionComponent(client, interaction);
     if (isBackupComponent(interaction)) return await handleBackupComponent(client, interaction);
