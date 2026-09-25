@@ -7,6 +7,9 @@ import { load, save } from '../storage.js';
 import { applyVoiceGuard } from '../features/voiceGuard.js';
 
 const KEY = 'dashboard-settings';
+// Version des réglages de modèles : quand elle change, les anciens choix (modèle, réflexion) sont oubliés une fois.
+const MODELS_VERSION = 2;
+const MODEL_KEYS = ['chatModel', 'fallbackModel', 'thinkingLevel'];
 
 const MODEL = /^[a-z0-9][a-z0-9.\-]{2,63}$/;
 const THINKING = ['minimal', 'low', 'medium', 'high'];
@@ -32,7 +35,7 @@ export const SETTINGS = {
   },
   thinkingLevel: {
     label: 'Niveau de réflexion', group: 'Modèles', options: THINKING,
-    help: 'Plus haut = réponses plus réfléchies mais plus lentes et plus coûteuses. « medium » est un bon équilibre.',
+    help: '« minimal » = pas de réflexion, réponses immédiates (conseillé). Plus haut = plus lent. C’est un plafond pour toutes les demandes.',
     get: () => config.models.thinkingLevel,
     set: (v) => { config.models.thinkingLevel = v; },
     check: (v) => (THINKING.includes(v) ? null : 'Choisis minimal, low, medium ou high.'),
@@ -164,7 +167,7 @@ export function updateSettings(changes, client) {
     setting.apply?.(client);
     changed.push({ key, from, to: value });
   }
-  if (changed.length) save(KEY, Object.fromEntries(Object.keys(SETTINGS).map((k) => [k, SETTINGS[k].get()])));
+  if (changed.length) save(KEY, { ...Object.fromEntries(Object.keys(SETTINGS).map((k) => [k, SETTINGS[k].get()])), modelsVersion: MODELS_VERSION });
   return { ok: true, changed };
 }
 
@@ -172,7 +175,9 @@ export function updateSettings(changes, client) {
 export async function loadSettings(client) {
   const saved = await load(KEY, null).catch(() => null);
   if (!saved || typeof saved !== 'object') return;
+  const oldModels = saved.modelsVersion !== MODELS_VERSION;
   for (const [key, value] of Object.entries(saved)) {
+    if (oldModels && MODEL_KEYS.includes(key)) continue;
     const setting = SETTINGS[key];
     if (setting && !setting.check(value)) setting.set(value);
   }

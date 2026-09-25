@@ -6,11 +6,14 @@ const ai = new GoogleGenAI({ apiKey: config.geminiKey });
 
 const THINKING_ORDER = ['minimal', 'low', 'medium', 'high'];
 
-/** Garde le niveau de réflexion le plus élevé entre la config et la demande. */
+/**
+ * Niveau de réflexion : celui de la config est un plafond (« minimal » = pas de réflexion, réponse immédiate).
+ * Une demande peut réfléchir moins, jamais plus.
+ */
 function thinkingLevel(requested) {
-  const base = config.models.thinkingLevel;
-  if (!requested) return base;
-  return THINKING_ORDER.indexOf(requested) > THINKING_ORDER.indexOf(base) ? requested : base;
+  const cap = config.models.thinkingLevel;
+  if (!requested) return cap;
+  return THINKING_ORDER.indexOf(requested) < THINKING_ORDER.indexOf(cap) ? requested : cap;
 }
 
 const SEARCH_RETRY_MS = 60 * 60_000;
@@ -136,7 +139,7 @@ async function chatOnce({ history = [], content, system, web = true, thinking, e
   const tools = web ? webTools() : null;
   const base = {
     system_instruction: system,
-    generation_config: { thinking_level: exactThinking && thinking ? thinking : thinkingLevel(thinking) },
+    generation_config: { thinking_level: thinkingLevel(thinking) },
     store: false,
     ...(tools ? { tools } : {}),
     ...(responseFormat ? { response_format: responseFormat } : {}),
