@@ -6,7 +6,7 @@ import { detectEscalation, escalateToOwner } from './escalation.js';
 import { getHistory, remember } from './memory.js';
 import { displayName } from '../utils/discord.js';
 import { buildAnswerPayload } from '../utils/reply.js';
-import { actionRow, actionsPrompt, extractAction } from './aiActions.js';
+import { actionRow, actionsPrompt, extractAction, wantsAction } from './aiActions.js';
 
 const PAUSE_TEXT = 'L’IA est en pause pour une maintenance, reviens un peu plus tard 🙏';
 
@@ -45,7 +45,8 @@ export async function askAI({
   // Ce que l'IA a retenu sur ce membre (ses goûts, ses jeux…)
   system += await factsPrompt(guild?.id, user.id, displayName(member, user)).catch(() => '');
   // Sur un serveur, l'IA peut lancer les actions des panneaux (bouton « Lancer »)
-  if (actions && guild) system += actionsPrompt();
+  // La liste des actions (longue) n'est envoyée que si le message ressemble à une demande d'action
+  if (actions && guild && wantsAction(prompt)) system += actionsPrompt();
 
   const { text: raw, sources } = await chat({
     history,

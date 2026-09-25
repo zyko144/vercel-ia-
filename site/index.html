@@ -113,7 +113,16 @@ section { padding: 96px 0; border-bottom: 1px solid var(--border); }
 .details-link:hover { background: var(--accent-hover); }
 .details-link svg { width: 14px; height: 14px; }
 
-/* Page de détail d'une catégorie */
+/* Page de détail d'une catégorie : couleur et bannière propres à chaque catégorie */
+.detail { --cat: var(--accent); }
+.detail-banner { position: relative; margin-bottom: 32px; border-radius: 16px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--cat) 45%, transparent); background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--cat) 30%, transparent), transparent 60%), var(--surface); box-shadow: 0 20px 60px -30px var(--cat); }
+.detail-banner img { width: 100%; aspect-ratio: 480 / 150; object-fit: cover; display: block; }
+.detail .detail-head .icon { background: color-mix(in srgb, var(--cat) 20%, transparent); color: var(--cat); }
+.detail .group h2 { display: flex; align-items: center; gap: 10px; }
+.detail .group h2::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--cat); box-shadow: 0 0 12px var(--cat); }
+.detail .feature { border-left: 3px solid var(--cat); background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 10%, transparent), var(--surface) 60%); }
+.detail .pill { border-color: color-mix(in srgb, var(--cat) 50%, transparent); }
+.detail .detail-head h1 { background: linear-gradient(90deg, var(--text), var(--cat)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .detail { padding: 48px 0 96px; }
 .back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 15px; margin-bottom: 32px; }
 .back:hover { color: var(--text); }
@@ -217,7 +226,7 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
       <a href="/statut">Statut</a>
     </nav>
     <div class="nav-cta">
-      <a class="btn btn-secondary" href="/dashboard">Tableau de bord</a>
+      <a class="btn btn-secondary" href="/app">Tableau de bord</a>
       <a class="btn btn-primary invite" href="#">Ajouter à Discord</a>
     </div>
   </div>
@@ -327,7 +336,7 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
       <p>L’installation prend une minute. Vous pourrez tout régler ensuite.</p>
       <div class="actions">
         <a class="btn btn-primary btn-lg invite" href="#">Ajouter à Discord</a>
-        <a class="btn btn-secondary btn-lg" href="/dashboard">Ouvrir le tableau de bord</a>
+        <a class="btn btn-secondary btn-lg" href="/app">Ouvrir le tableau de bord</a>
       </div>
     </div>
   </section>
@@ -340,7 +349,7 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
 <footer>
   <div class="container">
     <span>© <span id="year"></span> <span class="bot-name">AI Vercel</span></span>
-    <nav aria-label="Liens"><a href="#tarifs">Tarifs</a><a href="/statut">Statut</a><a href="/dashboard">Tableau de bord</a></nav>
+    <nav aria-label="Liens"><a href="#tarifs">Tarifs</a><a href="/statut">Statut</a><a href="/app">Tableau de bord</a></nav>
   </div>
 </footer>
 
@@ -578,8 +587,11 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
     var prev = FEATURES[(i + FEATURES.length - 1) % FEATURES.length];
     var next = FEATURES[(i + 1) % FEATURES.length];
     var total = d.groups.reduce(function (n, g) { return n + g.items.length; }, 0);
+    var LOOK = { ia: ['#7c8cff', 'ia'], jeux: ['#3ba55d', 'jeux'], musique: ['#eb459e', 'musique'], moderation: ['#ed4245', 'sanction'], outils: ['#faa61a', 'ticket'], niveaux: ['#f5c451', 'serveur'] }[id];
+    document.getElementById('detail').style.setProperty('--cat', LOOK[0]);
     document.getElementById('detail').innerHTML =
       '<a class="back" href="#fonctionnalites">← Toutes les fonctionnalités</a>' +
+      '<div class="detail-banner"><img src="/panneaux/' + LOOK[1] + '.gif" alt="Bannière du panneau ' + esc(f.title) + ' dans Discord"></div>' +
       '<div class="detail-head"><div class="icon">' + icon(f.icon) + '</div><div><h1>' + esc(f.title) + '</h1><p>' + esc(d.intro) + '</p>' +
       '<div class="meta"><span class="pill">' + total + ' fonctionnalités</span>' + d.cmds.map(function (c) { return '<span class="pill"><code>' + esc(c) + '</code></span>'; }).join('') + '</div></div></div>' +
       d.groups.map(function (g) {

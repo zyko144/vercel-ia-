@@ -19,7 +19,7 @@ import { recentLogs } from '../utils/logbuffer.js';
 import { voiceAssistantState } from '../voice-ai/assistant.js';
 import {
   allowAttempt, audit, auditLog, clientIp, closeAllSessions, closeSession, closeSessionById, consumeLoginToken,
-  createLoginToken, currentSession, dashboardBaseUrl, isAllowed, isSecure, listSessions, loadAudit, openSession, sameOriginWrite,
+  createLoginToken, currentSession, dashboardBaseUrl, isAllowed, isSecure, listSessions, loadAudit, loadAuthState, openSession, sameOriginWrite,
 } from './auth.js';
 import { actionRoutes } from './actions.js';
 import { aiMetrics, loadMetrics, redact } from './metrics.js';
@@ -113,6 +113,7 @@ export function createDashboard(client) {
   const loop = monitorEventLoopDelay({ resolution: 20 });
   loop.enable();
   loadAudit();
+  loadAuthState();
   loadMetrics();
   // Les réglages enregistrés s'appliquent dès que le bot est connecté (le statut en a besoin).
   if (client.isReady()) loadSettings(client);
@@ -197,7 +198,7 @@ export function createDashboard(client) {
     // Connexion avec le jeton reçu en MP. Limité : 10 essais par quart d'heure et par adresse.
     'POST login': async (req, res, body) => {
       if (!allowAttempt('login', clientIp(req), 10, 15 * MINUTE)) return json(res, 429, { error: 'Trop d’essais. Réessaie dans un quart d’heure.' });
-      const userId = consumeLoginToken(body.jeton);
+      const userId = await consumeLoginToken(body.jeton);
       if (!userId) return json(res, 401, { error: 'Ce lien n’est plus valable (déjà utilisé ou plus de 10 minutes). Demande-en un nouveau.' });
       const session = openSession(req, res, userId);
       audit({ userId, action: 'Connexion', detail: `session ${session.id}`, req });
