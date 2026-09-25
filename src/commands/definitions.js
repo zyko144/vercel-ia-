@@ -266,9 +266,6 @@ const utilityCommands = [
   new SlashCommandBuilder()
     .setName('admin')
     .setDescription('Commandes réservées au chef')
-    .addSubcommand((s) => s.setName('stats').setDescription('Statistiques du bot'))
-    .addSubcommand((s) => s.setName('voc').setDescription('Force le bot à (re)rejoindre le vocal'))
-    .addSubcommand((s) => s.setName('musique').setDescription('État des serveurs audio (musique)'))
     .addSubcommand((s) => s.setName('dashboard').setDescription('Lien de connexion au tableau de bord de l’IA (usage unique, 10 min)')),
 ];
 

@@ -124,7 +124,7 @@ export function findTargetChannel(guild) {
   return config.voice.enabled ? anchorChannel(guild) : null;
 }
 
-async function ensureInVoice(guild) {
+export async function ensureInVoice(guild) {
   const pending = joining.get(guild.id);
   if (pending) await pending.catch(() => {});
   const run = connect(guild);

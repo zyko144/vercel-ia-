@@ -152,16 +152,20 @@
       h('div', { class: 'server-mini' }, icon(data.icon, data.name), h('div', {}, h('b', { text: data.name }), h('small', { text: `${data.members.toLocaleString('fr-FR')} membres · ${data.plan.trial ? 'Essai' : ''} ${data.plan.label}` }))),
       h('div', { class: 'group', text: 'Tableau de bord' }),
       item('vue', '🏠', 'Vue d’ensemble', 'État du serveur et des modules'),
+      item('guide', '🧭', 'Guide de démarrage', 'Les étapes pour bien régler le bot', { tag: h('span', { class: 'tag count', text: `${guideSteps().filter((x) => x.done).length}/${guideSteps().length}` }) }),
       item('commandes', '⌨️', 'Commandes', 'Les 6 commandes du bot'),
       h('div', { class: 'group', text: 'Gestion' }),
       item('tickets', '🎫', 'Tickets', 'Panneau d’aide avec aperçu', { tag: data.tickets.open.length ? h('span', { class: 'tag count', text: data.tickets.open.length }) : null }),
       item('annonce', '📣', 'Annonces', 'Message mis en forme, avec aperçu'),
       item('classement', '🏆', 'Classement', 'Les membres les plus actifs'),
       item('sanctions', '⚖️', 'Sanctions', 'Derniers avertissements', { tag: data.sanctions.length ? h('span', { class: 'tag count', text: data.sanctions.length }) : null }),
+      item('jeux', '🎲', 'Jeux', 'Tous les jeux et comment les lancer'),
+      item('musique', '🎧', 'Musique et IA vocale', 'Lecteur, radio, parler à l’IA'),
       h('div', { class: 'group', text: 'Modules' }),
       ...Object.entries(data.sections).map(([k, s]) => item(k, s.emoji, s.label, MODULE_DESC[k])),
       h('div', { class: 'group gold', text: '★ Premium' }),
       item('premium', '⭐', 'Offre premium', data.plan.key === 'gratuit' ? 'Essai gratuit 7 jours' : 'Ton offre et ses avantages', { premium: true }),
+      item('parrainage', '🤝', 'Parrainage', '1 mois offert par serveur invité', { premium: true }),
       ...Object.entries(PREMIUM).map(([k, p]) => item(k, p.emoji, p.label, p.desc, { premium: true, tag: unlocked(p.feature) ? h('span', { class: 'tag open', text: '✓ Débloqué' }) : h('span', { class: 'tag lock', text: '🔒 Premium' }) })),
     );
     const panel = h('div', { class: 'panel' });
@@ -173,7 +177,7 @@
     view().dataset.server = id;
     view().replaceChildren(h('div', { class: 'layout' }, side, panel));
     side.scrollTop = sideScroll;
-    const pages = { vue: overview, commandes: commandsPage, tickets: ticketsPage, annonce: announcePage, classement: leaderboardPage, sanctions: sanctionsPage, premium: premiumOffer };
+    const pages = { vue: overview, guide: guidePage, jeux: gamesPage, musique: musicPage, parrainage: referralPage, commandes: commandsPage, tickets: ticketsPage, annonce: announcePage, classement: leaderboardPage, sanctions: sanctionsPage, premium: premiumOffer };
     if (pages[page]) pages[page](panel);
     else if (data.sections[page]) sectionPage(panel, page);
     else if (PREMIUM[page]) premiumPage(panel, page);
@@ -207,7 +211,7 @@
     e.style.setProperty('--ec', color);
     return e;
   }
-  const previewBox = (...children) => h('div', { class: 'card sticky' }, h('div', { class: 'preview-label', text: 'Aperçu en direct' }), h('div', { class: 'dc' }, ...children));
+  const previewBox = (...children) => h('div', { class: 'card sticky torn' }, h('div', { class: 'preview-label', text: 'Aperçu en direct' }), h('div', { class: 'dc' }, ...children));
   const footerName = () => (data.plan.features.branding && data.premium.branding.name ? `${data.premium.branding.name} · propulsé par AI Vercel` : data.name);
 
   // ---------------- Vue d'ensemble ----------------
@@ -250,6 +254,85 @@
         try { await api('POST', 'server/trial', { guildId: data.id }); toast(`Essai de ${p.trialDays} jours activé : tout le premium est débloqué.`); await reload(); } catch (err) { toast(err.message, true); e.target.disabled = false; }
       },
     }, `★ Essai gratuit de ${p.trialDays} jours`);
+  }
+
+  // ---------------- Guide de démarrage ----------------
+  const val = (key) => { const s = data.settings.find((x) => x.key === key); return s ? s.value ?? s.def ?? null : null; };
+  function guideSteps() {
+    return [
+      { done: Boolean(val('logs.channelId')), title: 'Choisir le salon du journal', text: 'Messages supprimés, arrivées, départs et sanctions y sont notés.', page: 'securite' },
+      { done: data.tickets.panels.length > 0, title: 'Publier un panneau de tickets', text: 'Tes membres ouvrent un salon privé avec le staff en un clic.', page: 'tickets' },
+      { done: Boolean(val('welcome.enabled') && val('welcome.channelId')), title: 'Activer la carte de bienvenue', text: 'Chaque nouveau reçoit une carte avec sa photo et son numéro.', page: 'accueil' },
+      { done: Boolean(val('verification.enabled')), title: 'Activer la vérification', text: 'Un petit calcul à l’arrivée pour bloquer les robots.', page: 'securite' },
+      { done: Boolean(val('levels.enabled')), title: 'Activer les niveaux', text: 'De l’XP pour chaque message et minute en vocal.', page: 'niveaux' },
+      { done: Boolean(val('suggestions.channelId')), title: 'Ouvrir un salon de suggestions', text: 'Chaque idée devient un vote 👍 / 👎.', page: 'accueil' },
+      { done: data.plan.key !== 'gratuit' || data.plan.trialUsed, title: 'Essayer le premium 7 jours', text: 'Couleurs du serveur, voix de l’IA, rapport, Gardien.', page: 'premium' },
+    ];
+  }
+  function guidePage(panel) {
+    const steps = guideSteps();
+    const done = steps.filter((x) => x.done).length;
+    const bar = h('div', { class: 'bar wide' }, (() => { const i = h('i'); i.style.width = `${Math.round((done / steps.length) * 100)}%`; return i; })());
+    panel.append(pageHead('🧭', 'Guide de démarrage', 'Les réglages conseillés pour un serveur prêt. Clique sur une étape pour la faire.'),
+      h('div', { class: 'card' }, h('h2', { text: `${done} étape${done > 1 ? 's' : ''} sur ${steps.length}` }), bar,
+        h('div', { class: 'steps' }, steps.map((x, i) => h('button', { class: `step${x.done ? ' done' : ''}`, onclick: () => { location.hash = `#serveur/${data.id}/${x.page}`; } },
+          h('span', { class: 'num', text: x.done ? '✓' : i + 1 }), h('span', {}, h('b', { text: x.title }), h('small', { text: x.text })), h('span', { class: 'go', text: x.done ? 'Fait' : 'Régler →' }))))));
+  }
+
+  // ---------------- Jeux ----------------
+  const GAMES = [
+    ['🐺', 'Loup-garou', 'Rôles en message privé, nuits et votes, narrateur à voix haute.', '/jeux › Loup-garou'],
+    ['🕵️', 'Undercover', 'Undercovers et Mister White, dès 4 joueurs.', '/jeux › Undercover'],
+    ['🎭', 'L’imposteur', 'Un mot secret pour tous, sauf pour l’intrus.', '/jeux › L’imposteur'],
+    ['📝', 'Petit Bac', 'Une lettre, cinq catégories, l’IA vérifie.', '/jeux › Petit Bac'],
+    ['🔥', 'Action ou vérité', 'Des défis tirés au sort, validés par les autres.', '/jeux › Action ou vérité'],
+    ['🏆', 'Quiz du serveur', 'Des questions sur ton serveur et ses membres.', '/jeux › Quiz du serveur'],
+    ['🧠', 'Quiz IA', 'Une question à 4 choix sur le sujet de ton choix.', '/jeux › Quiz IA'],
+    ['📖', 'Histoire interactive', 'L’IA raconte, les joueurs votent la suite.', '/jeux › Histoire'],
+    ['🎤', 'Battle de freestyle', 'Deux rappeurs, une instru, l’IA désigne le gagnant.', '/jeux › Battle de freestyle'],
+    ['🎧', 'Blind test', 'Rap FR, TikTok, années 2010…', '/jeux › Blind test'],
+    ['🎵', 'Pendu musical', 'Le titre lettre par lettre, l’extrait en indice.', '/jeux › Pendu musical'],
+    ['🧩', 'Rébus en emojis', 'Films, séries, animés, rap FR…', '/jeux › Rébus'],
+  ];
+  function gamesPage(panel) {
+    panel.append(pageHead('🎲', 'Jeux', 'Tout se joue dans Discord : le bot ouvre la salle d’attente, les autres rejoignent en un clic. Tu peux aussi demander à l’IA « lance un undercover ».'),
+      h('div', { class: 'card' }, h('div', { class: 'tiles' }, GAMES.map(([e, t, d, c]) => h('div', { class: 'tile static' }, h('div', { class: 'tt' }, h('span', { class: 'ti', text: e }), h('span', { class: 'state on', text: 'Gratuit' })), h('b', { text: t }), h('p', { text: d }), h('code', { class: 'how', text: c }))))),
+      h('div', { class: 'split' },
+        h('div', { class: 'card' }, h('h2', { text: 'Comment lancer une partie' }), h('ol', { class: 'howto' }, h('li', { text: 'Tape /jeux dans un salon.' }), h('li', { text: 'Choisis le jeu dans le menu.' }), h('li', { text: 'Les joueurs cliquent sur « Rejoindre », la partie démarre toute seule.' }))),
+        previewBox(dcMessage({ embed: dcEmbed({ color: '#3ba55d', title: '🕵️ Undercover · salle d’attente', text: '**3 / 8** joueurs · départ dans 90 secondes', footer: footerName() }), buttons: [{ label: 'Rejoindre' }, { label: 'Commencer', grey: true }] }))));
+  }
+
+  // ---------------- Musique et IA vocale ----------------
+  function musicPage(panel) {
+    const radio = val('radio.enabled');
+    const temp = val('tempVoice.enabled');
+    panel.append(pageHead('🎧', 'Musique et IA vocale', 'Un seul bot pour tout : la musique, la radio et l’IA qui parle en vocal.'),
+      h('div', { class: 'tiles' },
+        h('div', { class: 'tile static' }, h('div', { class: 'tt' }, h('span', { class: 'ti', text: '▶️' }), h('span', { class: 'state on', text: 'Toujours là' })), h('b', { text: 'Lecteur' }), h('p', { text: 'Un nom ou un lien Spotify, YouTube, Deezer ou Apple Music. File d’attente, effets, paroles.' }), h('code', { class: 'how', text: '/musique › Jouer un son' })),
+        h('button', { class: 'tile', onclick: () => { location.hash = `#serveur/${data.id}/vocal`; } }, h('div', { class: 'tt' }, h('span', { class: 'ti', text: '📻' }), h('span', { class: `state ${radio ? 'on' : 'off'}`, text: radio ? 'Active' : 'Inactive' })), h('b', { text: 'Radio 24 h/24' }), h('p', { text: 'Quand rien ne joue, le bot lance la radio. Réglage dans le module Vocal.' })),
+        h('button', { class: 'tile', onclick: () => { location.hash = `#serveur/${data.id}/vocal`; } }, h('div', { class: 'tt' }, h('span', { class: 'ti', text: '➕' }), h('span', { class: `state ${temp ? 'on' : 'off'}`, text: temp ? 'Actifs' : 'Inactifs' })), h('b', { text: 'Vocaux temporaires' }), h('p', { text: 'Rejoindre « Créer un salon » ouvre un vocal perso, supprimé une fois vide.' })),
+        h('div', { class: 'tile static' }, h('div', { class: 'tt' }, h('span', { class: 'ti', text: '🎙️' }), h('span', { class: 'state on', text: `${data.plan.features.voiceMinutes === 'illimitée' ? 'Illimitée' : `${data.plan.features.voiceMinutes} min/mois`}` })), h('b', { text: 'IA vocale' }), h('p', { text: 'Rejoins le salon vocal du bot, puis /ia › Parler à l’IA en vocal : elle t’écoute et répond à voix haute. La musique reprend après.' }), h('code', { class: 'how', text: '/ia › Parler à l’IA en vocal' }))),
+      h('div', { class: 'split' },
+        h('div', { class: 'card' }, h('h2', { text: 'L’IA vocale peut piloter la musique' }), h('p', { class: 'sub', text: 'En vocal, dis par exemple « mets Tiakola », « baisse le son » ou « c’est quoi ce son ? ». Elle s’en occupe et te répond.' })),
+        previewBox(dcMessage({ embed: dcEmbed({ color: '#3ba55d', title: '🎧 En ce moment', text: '**Meuda** · Tiakola\n▰▰▰▰▱▱▱▱▱▱ 1:12 / 2:48', footer: 'Demandé à l’IA vocale' }), buttons: [{ label: '⏯', grey: true }, { label: '⏭', grey: true }, { label: '🎤 Paroles' }] }))));
+  }
+
+  // ---------------- Parrainage ----------------
+  function referralPage(panel) {
+    const r = data.referral ?? { code: '—', invited: 0, paid: 0 };
+    panel.append(pageHead('🤝', 'Parrainage', 'Invite d’autres serveurs : à leur premier paiement, tu gagnes 1 mois de premium offert.', true),
+      h('div', { class: 'card premium-card' },
+        h('h2', { text: 'Ton code de parrainage' }),
+        h('div', { class: 'code-box' }, h('code', { text: r.code }), h('button', { class: 'btn small', onclick: async () => { await navigator.clipboard?.writeText(r.code).catch(() => {}); toast('Code copié.'); }, text: 'Copier' })),
+        h('div', { class: 'stats' },
+          h('div', { class: 'stat' }, h('small', { text: 'Serveurs parrainés' }), h('b', { text: r.invited })),
+          h('div', { class: 'stat' }, h('small', { text: 'Déjà abonnés' }), h('b', { text: r.paid })),
+          h('div', { class: 'stat' }, h('small', { text: 'Mois gagnés' }), h('b', { text: r.paid })))),
+      h('div', { class: 'card' }, h('h2', { text: 'Comment ça marche' }),
+        h('ol', { class: 'howto' },
+          h('li', { text: 'Donne ton code à un serveur que tu invites.' }),
+          h('li', { text: 'Son staff l’entre dans Discord : /serveur › Parrainage.' }),
+          h('li', { text: 'À son premier paiement, ton serveur reçoit 1 mois de premium (Veilleur, ou prolongation de ton offre).' }))));
   }
 
   // ---------------- Commandes ----------------
@@ -334,7 +417,7 @@
       } catch (err) { toast(err.message, true); } finally { submit.disabled = false; }
     });
     refresh();
-    panel.append(h('div', { class: 'split' }, h('div', { class: 'card' }, h('h2', { text: isTicket ? 'Créer un panneau' : 'Écrire l’annonce' }), form), h('div', { class: 'card sticky' }, h('div', { class: 'preview-label', text: 'Aperçu en direct' }), preview)));
+    panel.append(h('div', { class: 'split' }, h('div', { class: 'card' }, h('h2', { text: isTicket ? 'Créer un panneau' : 'Écrire l’annonce' }), form), h('div', { class: 'card sticky torn' }, h('div', { class: 'preview-label', text: 'Aperçu en direct' }), preview)));
   }
   function ticketsPage(panel) {
     const t = data.tickets;
@@ -444,11 +527,26 @@
     }
     refresh();
     panel.append(pageHead(sec.emoji, sec.label, sec.intro),
-      SECTION_PREVIEW[key] ? h('div', { class: 'split' }, card, h('div', { class: 'card sticky' }, h('div', { class: 'preview-label', text: 'Aperçu dans Discord' }), preview)) : card,
+      SECTION_PREVIEW[key] ? h('div', { class: 'split' }, card, h('div', { class: 'card sticky torn' }, h('div', { class: 'preview-label', text: 'Aperçu dans Discord' }), preview)) : card,
       bar);
   }
 
   // ---------------- Premium ----------------
+  const PLAN_DETAILS = [
+    { key: 'gratuit', emoji: '🌱', name: 'Gratuit', price: '0 €', per: 'pour toujours', pitch: 'Tout le nécessaire pour faire vivre un serveur.',
+      items: ['Tous les modules : sécurité, niveaux, boutique, accueil, vocal, IA', 'Tickets, annonces, classement, sanctions', 'Tous les jeux et la musique', 'IA vocale : 60 min par mois'], off: ['Couleurs du serveur', 'Voix de l’IA au choix', 'Rapport de la semaine', 'Surveillance Gardien'] },
+    { key: 'veilleur', emoji: '🌙', name: 'Veilleur', price: '4,99 €', per: '/ 31 jours', pitch: 'Pour les serveurs actifs qui veulent leur propre style.',
+      items: ['Tout le gratuit', 'IA vocale : 600 min par mois', 'Ton nom et ta couleur sur tous les messages du bot', 'Ton logo sur les panneaux, tickets et annonces', 'Voix de l’IA au choix (plusieurs voix)', 'Rapport de la semaine en MP, chaque dimanche'], off: ['Surveillance Gardien'] },
+    { key: 'gardien', emoji: '🛡️', name: 'Gardien', price: '9,99 €', per: '/ 31 jours', pitch: 'Pour les grandes communautés et leur staff.',
+      items: ['Tout Veilleur', 'IA vocale illimitée', 'Surveillance Gardien : staff protégé en vocal', 'Tes propres mots interdits en vocal', 'Avertissement puis exclusion automatique au 3e'], off: [] },
+  ];
+  const PREMIUM_FAQ = [
+    ['Comment marche l’essai de 7 jours ?', 'Un clic, une fois par serveur, sans paiement : tout le Gardien est débloqué pendant 7 jours. À la fin, le serveur repasse en gratuit tout seul, rien n’est prélevé.'],
+    ['Comment payer ?', 'Avec PayPal, en un paiement pour 31 jours. L’offre s’active toute seule sur ton serveur dès que PayPal confirme.'],
+    ['Est-ce un abonnement ?', 'Non. Chaque paiement donne 31 jours, sans renouvellement automatique. Tu reprends quand tu veux.'],
+    ['Que se passe-t-il à la fin ?', 'Les fonctions premium se verrouillent à nouveau, tes réglages sont gardés : ils reviennent dès que tu reprends une offre.'],
+    ['Le parrainage compte-t-il ?', 'Oui : chaque serveur que tu invites et qui paie te donne 1 mois de premium offert.'],
+  ];
   function premiumOffer(panel) {
     const p = data.plan;
     const countdown = h('b');
@@ -473,10 +571,17 @@
           : 'Tout le premium est débloqué jusqu’à la date de fin.' }),
         p.until ? h('div', { class: 'stats' }, h('div', { class: 'stat' }, h('small', { text: 'Fin' }), h('b', { text: date(p.until) })), h('div', { class: 'stat' }, h('small', { text: 'Temps restant' }), countdown)) : null,
         h('div', { class: 'row' }, trialButton(), ...p.offers.map((o) => h('a', { class: `btn${o.key === 'veilleur' ? ' gold' : ''}`, href: o.pay, target: '_blank', rel: 'noopener', text: `${o.label} · ${o.price}` })))),
+      h('div', { class: 'plans' }, PLAN_DETAILS.map((pl) => h('div', { class: `card plan${pl.key === p.key && !p.trial ? ' current' : ''}${pl.key === 'veilleur' ? ' featured' : ''}` },
+        pl.key === 'veilleur' ? h('span', { class: 'ribbon', text: 'Le plus choisi' }) : null,
+        h('h2', { text: `${pl.emoji} ${pl.name}` }), h('div', { class: 'price' }, h('b', { text: pl.price }), h('small', { text: pl.per })), h('p', { class: 'sub', text: pl.pitch }),
+        h('ul', { class: 'checks' }, pl.items.map((x) => h('li', { text: x }))),
+        pl.off.length ? h('ul', { class: 'checks muted' }, pl.off.map((x) => h('li', { text: x }))) : null,
+        pl.key === 'gratuit' ? null : h('a', { class: `btn${pl.key === 'veilleur' ? ' gold' : ''}`, href: p.offers.find((o) => o.key === pl.key)?.pay, target: '_blank', rel: 'noopener', text: `Prendre ${pl.name}` })))),
       h('div', { class: 'card' }, h('h2', { text: 'Comparer les offres' }),
         h('div', { class: 'table-wrap' }, h('table', { class: 'compare' },
           h('thead', {}, h('tr', {}, h('th', { text: '' }), h('th', { text: 'Gratuit' }), h('th', { class: 'gold', text: 'Veilleur · 4,99 €' }), h('th', { class: 'gold', text: 'Gardien · 9,99 €' }))),
-          h('tbody', {}, rows.map(([label, ...v]) => h('tr', {}, h('td', { text: label }), ...v.map(cell))))))));
+          h('tbody', {}, rows.map(([label, ...v]) => h('tr', {}, h('td', { text: label }), ...v.map(cell))))))),
+      h('div', { class: 'card' }, h('h2', { text: 'Questions sur le premium' }), h('div', { class: 'faq' }, PREMIUM_FAQ.map(([q, a]) => h('details', {}, h('summary', { text: q }), h('p', { text: a }))))));
   }
 
   function premiumPage(panel, key) {
@@ -515,7 +620,7 @@
     formCard.addEventListener('change', refresh);
     refresh();
     panel.append(pageHead(page.emoji, page.label, page.desc, true));
-    const content = h('div', { class: 'split' }, formCard, h('div', { class: 'card sticky' }, h('div', { class: 'preview-label', text: 'Aperçu dans Discord' }), preview));
+    const content = h('div', { class: 'split' }, formCard, h('div', { class: 'card sticky torn' }, h('div', { class: 'preview-label', text: 'Aperçu dans Discord' }), preview));
     if (!unlocked) {
       const p = data.plan;
       panel.append(h('div', { class: 'locked-wrap' }, h('div', { class: 'blur', 'aria-hidden': 'true' }, content),
@@ -524,6 +629,7 @@
           h('h3', { text: 'Débloqué avec Premium' }),
           h('p', { text: `« ${page.label} » fait partie du premium. Dès que ton serveur a l’offre (ou l’essai), ce menu s’ouvre ici.` }),
           h('ul', { class: 'checks' }, page.perks.map((x) => h('li', { text: x }))),
+          h('p', { class: 'incl', text: page.feature === 'guard' ? 'Inclus dans : Gardien (9,99 €) et l’essai gratuit' : 'Inclus dans : Veilleur (4,99 €), Gardien (9,99 €) et l’essai gratuit' }),
           h('div', { class: 'row' }, trialButton(), h('a', { class: `btn${p.trialUsed ? ' gold' : ''}`, href: `#serveur/${data.id}/premium`, text: 'Voir les offres' }))))));
       return;
     }

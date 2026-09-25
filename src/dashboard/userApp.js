@@ -22,6 +22,7 @@ import {
 import { COLORS, openTickets, publishFromWeb, ticketPanels } from '../features/tickets.js';
 import { allowAttempt, clientIp, isSecure } from './auth.js';
 import { topLevels } from '../features/levels.js';
+import { referralStats } from '../features/payments.js';
 
 const WEB = path.resolve('web/app');
 const STATIC = { 'app.js': 'text/javascript; charset=utf-8', 'style.css': 'text/css; charset=utf-8' };
@@ -227,6 +228,7 @@ async function serverDetail(guild) {
       guard: rawGuardOptions(guild.id),
     },
     leaderboard: top.map((t) => ({ ...t, user: person(t.userId) })),
+    referral: await referralStats(guild.id).catch(() => null),
     sanctions,
     tickets: {
       panels: panels.map((p) => ({ id: p.id, title: p.title, channel: guild.channels.cache.get(p.channelId)?.name ?? null, at: p.at })),
