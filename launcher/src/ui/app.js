@@ -5,7 +5,7 @@ import { filterSort } from '../core/sort.js';
 const $ = (id) => document.getElementById(id);
 let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
-const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], friends: null, song: null, account: null };
+const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -175,7 +175,7 @@ async function loadFriends(force = false) {
   state.friends = r;
   const online = r.friends.filter((f) => f.online).length;
   $('friendsOnline').textContent = online || '';
-  if (state.view === 'amis') renderFriends();
+  if (state.view === 'amis' && state.ftab === 'steam') renderFriends();
 }
 function renderFriends() {
   const r = state.friends;
@@ -198,8 +198,67 @@ function renderFriends() {
         </div>
       </div>`).join('')}</div>`).join('') || '<div class="empty">Aucun ami Steam pour l’instant.</div>';
 }
-$('friendsRefresh').addEventListener('click', () => loadFriends(true).then(() => toast('Amis actualisés')));
-setInterval(() => { if (state.view === 'amis') loadFriends(); }, 60_000);
+// ---------- Amis History (comptes du launcher) et soirées jeu ----------
+const needLogin = '<div class="empty">Connecte-toi à ton compte History pour ajouter des amis et organiser des soirées.<br><br><button class="btn play" data-login="1">Se connecter</button></div>';
+async function loadHistory() {
+  const [r, ev] = await Promise.all([api.hFriends?.().catch(() => null), api.events?.().catch(() => null)]);
+  state.hist = r;
+  state.events = ev?.soirees ?? [];
+  renderHistory();
+  const online = (r?.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
+  $('friendsOnline').textContent = online || '';
+}
+function renderHistory() {
+  const r = state.hist;
+  if (!r || r.status === 401) { $('hFriends').innerHTML = needLogin; $('hRequests').innerHTML = ''; $('myCode').textContent = '—'; $('eventsList').innerHTML = ''; return; }
+  if (r.error) { $('hFriends').innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
+  $('myCode').textContent = r.code;
+  $('hRequests').innerHTML = r.demandes.length ? `<div class="reqbox"><b class="sub">Demandes d’ami</b>${r.demandes.map((d) => `
+    <div class="hfriend"><div class="finfo"><b>${esc(d.pseudo)}</b><small>${esc(d.code)}</small></div><button class="btn play" data-hacc="${esc(d.id)}">Accepter</button><button class="btn" data-hrem="${esc(d.id)}">Refuser</button></div>`).join('')}</div>` : '';
+  $('hFriends').innerHTML = r.amis.length ? r.amis.map((a) => `
+    <div class="hfriend ${a.playing ? 'ingame' : a.online ? 'on' : ''}"><span class="dot"></span>
+      <div class="finfo"><b>${esc(a.pseudo)}</b><small>${a.playing ? `Joue à ${esc(a.playing)}` : a.online ? 'En ligne' : 'Hors ligne'}${a.week ? ` · ${hours(a.week)} cette semaine` : ''}</small></div>
+      <button class="btn ghost" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer">✕</button></div>`).join('') : '<div class="empty">Pas encore d’amis : donne ton code à tes potes, ou ajoute le leur.</div>';
+  renderEvents();
+  $('eInvites').innerHTML = r.amis.length ? r.amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}">${esc(a.pseudo)}</label>`).join('') : '<small class="hint">Ajoute d’abord des amis.</small>';
+  const list = games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes);
+  $('eGame').innerHTML = list.map((i) => `<option>${esc(i.name)}</option>`).join('');
+  if (!$('eAt').value) { const d = new Date(Date.now() + 3_600_000); d.setMinutes(0, 0, 0); $('eAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
+}
+function renderEvents() {
+  const when = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  $('eventsList').innerHTML = state.events.length ? state.events.map((e) => {
+    const yes = e.invites.filter((i) => i.reponse === 'oui').map((i) => i.pseudo);
+    const live = e.at <= Date.now();
+    return `<div class="eve"><b>${esc(e.game)}</b><span class="when">${live ? 'En cours' : esc(when(e.at))}</span>
+      <span class="who">${e.mine ? 'Organisée par toi' : `Organisée par ${esc(e.organisateur)}`} · ${yes.length ? `${esc(yes.join(', '))} ${yes.length > 1 ? 'viennent' : 'vient'}` : 'Personne n’a encore répondu'}</span>
+      <div class="acts">${e.mine ? `<button class="btn" data-ecancel="${esc(e.id)}">Annuler</button>` : `<button class="btn ${e.ma === 'oui' ? 'play' : ''}" data-eresp="${esc(e.id)}" data-r="oui">Je viens</button><button class="btn ${e.ma === 'non' ? 'play' : ''}" data-eresp="${esc(e.id)}" data-r="non">Pas dispo</button>`}
+      ${state.items.some((i) => i.installed && i.name === e.game) ? `<button class="btn" data-id="${esc(state.items.find((i) => i.installed && i.name === e.game).id)}">Voir le jeu</button>` : ''}</div></div>`;
+  }).join('') : '<div class="empty">Aucune soirée prévue.</div>';
+}
+function showFriendTab(tab) {
+  state.ftab = tab;
+  document.querySelectorAll('#friendTabs button').forEach((b) => b.classList.toggle('on', b.dataset.ftab === tab));
+  $('fHistory').hidden = tab !== 'history';
+  $('fSteam').hidden = tab !== 'steam';
+  if (tab === 'history') { $('friendsCount').textContent = ''; loadHistory(); } else { renderFriends(); loadFriends(); }
+}
+$('copyCode').addEventListener('click', () => { navigator.clipboard?.writeText($('myCode').textContent); toast('Code copié'); });
+$('addFriend').addEventListener('click', async () => {
+  const code = $('addCode').value.trim();
+  if (!code) return;
+  const r = await api.hFriendAdd(code);
+  toast(r?.amis ? 'Vous êtes maintenant amis !' : r?.envoye ? 'Demande envoyée' : r?.error ?? 'Impossible pour l’instant');
+  if (r?.amis || r?.envoye) { $('addCode').value = ''; loadHistory(); }
+});
+$('eCreate').addEventListener('click', async () => {
+  const invites = [...document.querySelectorAll('#eInvites input:checked')].map((i) => i.value);
+  const r = await api.eventCreate({ jeu: $('eGame').value, at: new Date($('eAt').value).getTime(), invites });
+  if (r?.soirees) { state.events = r.soirees; renderEvents(); $('eCreate').closest('details').open = false; toast('Invitations envoyées'); } else toast(r?.error ?? 'Impossible pour l’instant');
+});
+$('friendsRefresh').addEventListener('click', () => (state.ftab === 'history' ? loadHistory() : loadFriends(true)).then(() => toast('Amis actualisés')));
+setInterval(() => { if (state.view === 'amis' && state.ftab === 'history') loadHistory(); }, 60_000);
+setInterval(() => { if (state.view === 'amis' && state.ftab === 'steam') loadFriends(); }, 60_000);
 
 // ---------- Mon PC : jauges en direct, boost, nettoyage ----------
 const gb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.round(b / 1e6)} Mo`);
@@ -308,6 +367,7 @@ async function renderStats() {
 // ---------- Classement ----------
 const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 async function renderRanking() {
+  if (state.rank === 'amis') return renderFriendRanking();
   let list = games().filter((i) => i.minutes > 0).sort((a, b) => b.minutes - a.minutes);
   let minutesOf = (i) => i.minutes;
   if (state.rank !== 'tout') {
@@ -330,6 +390,20 @@ async function renderRanking() {
       <div><b>${esc(i.name)}</b><small>${esc(src?.label ?? 'PC')} · ${ago(i.lastPlayed)}</small></div>
       <div class="barw"><i style="width:${Math.max(2, (minutesOf(i) / max) * 100)}%"></i></div><span class="t">${hours(minutesOf(i))}</span></div>`;
   }).join('');
+}
+
+// Classement entre amis History : temps de jeu des 7 derniers jours (toi compris)
+async function renderFriendRanking() {
+  const r = await api.hFriends?.().catch(() => null);
+  $('podium').innerHTML = '';
+  if (!r || r.status === 401) { $('ranklist').innerHTML = needLogin; return; }
+  if (r.error) { $('ranklist').innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
+  const people = [{ pseudo: state.account?.pseudo ? `${state.account.pseudo} (toi)` : 'Toi', week: r.moi.week, top: r.moi.top, me: true }, ...r.amis].sort((a, b) => b.week - a.week);
+  if (people.length < 2) { $('ranklist').innerHTML = '<div class="empty">Ajoute des amis dans Amis › History pour vous comparer chaque semaine.</div>'; return; }
+  const max = people[0].week || 1;
+  $('ranklist').innerHTML = people.map((p, n) => `<div class="rrow ${p.me ? 'me' : ''}" style="--c:${['#ffd34d', '#c9d3e0', '#e39a5b'][n] ?? '#2f8bff'}"><span class="n">${n < 3 ? MEDALS[n + 1] : n + 1}</span><div class="thumb"><span class="fav">${esc(p.pseudo[0])}</span></div>
+    <div><b>${esc(p.pseudo)}</b><small>${p.top ? `Surtout ${esc(p.top)}` : 'Pas encore joué cette semaine'}</small></div>
+    <div class="barw"><i style="width:${Math.max(2, (p.week / max) * 100)}%"></i></div><span class="t">${hours(p.week)}</span></div>`).join('');
 }
 
 // ---------- Assistant ----------
@@ -420,7 +494,7 @@ function go(view) {
   if (state.view === 'liste') renderList();
   if (state.view === 'stats') renderStats();
   if (state.view === 'classement') renderRanking();
-  if (state.view === 'amis') { renderFriends(); loadFriends(); }
+  if (state.view === 'amis') showFriendTab(state.ftab);
   if (state.view === 'pc') openPc();
   $('main').scrollTop = 0;
 }
@@ -540,6 +614,17 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.inst) { document.querySelectorAll('#installed button').forEach((x) => x.classList.toggle('on', x === t)); state.list.installed = t.dataset.inst; return renderList(); }
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
+  if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
+  if (t.dataset.login) return showAuth(true);
+  if (t.dataset.hacc) { const r = await api.hFriendAccept(t.dataset.hacc); if (r?.amis) { state.hist = r; renderHistory(); toast('Nouvel ami ajouté'); } return; }
+  if (t.dataset.hrem) {
+    if (t.dataset.name && !window.confirm(`Retirer ${t.dataset.name} de tes amis ?`)) return;
+    const r = await api.hFriendRemove(t.dataset.hrem);
+    if (r?.amis) { state.hist = r; renderHistory(); }
+    return;
+  }
+  if (t.dataset.eresp) { const r = await api.eventRespond(t.dataset.eresp, t.dataset.r); if (r?.soirees) { state.events = r.soirees; renderEvents(); } return; }
+  if (t.dataset.ecancel) { if (!window.confirm('Annuler cette soirée ?')) return; const r = await api.eventCancel(t.dataset.ecancel); if (r?.soirees) { state.events = r.soirees; renderEvents(); } return; }
   if (t.dataset.friend) {
     const r = await api.friendAction(t.dataset.friend, t.dataset.fid);
     return toast(r?.ok ? { join: 'Connexion à la partie…', message: 'Discussion Steam ouverte', profile: 'Profil ouvert' }[t.dataset.friend] : r?.error ?? 'Impossible pour l’instant');
@@ -606,6 +691,8 @@ function showKeys(s) {
   $('directLaunch').checked = s.directLaunch !== false;
   $('gameMode').checked = s.gameMode !== false;
   $('dealAlerts').checked = s.dealAlerts !== false;
+  $('discordStatus').checked = s.discordStatus !== false;
+  $('shareActivity').checked = s.shareActivity !== false;
   $('geminiState').textContent = s.gemini ? '✅ IA active.' : 'Pas de clé trouvée : l’assistant et la recherche d’images par l’IA sont en pause.';
   $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée.' : 'Sans clé : jeux installés ou déjà joués seulement.';
   $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée.' : 'Facultatif : l’IA cherche déjà les images manquantes.';
@@ -629,6 +716,8 @@ $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
 $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: e.target.checked }));
+$('discordStatus').addEventListener('change', (e) => api.setSettings({ discordStatus: e.target.checked }));
+$('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActivity: e.target.checked }));
 $('saveKeys').addEventListener('click', async (e) => {
   e.stopPropagation();
   const patch = {};
@@ -801,6 +890,8 @@ function demoApi() {
       { id64: '76561198000000003', name: 'Sam', avatar: null, online: true, status: 'En ligne', game: null },
       { id64: '76561198000000004', name: 'Zoé', avatar: null, online: false, status: 'Hors ligne', game: null }] }),
     friendAction: async () => ({ ok: true }), openDeal: async () => {},
+    hFriends: async () => ({ code: 'Noam#3F9A2C', moi: { week: 610, top: 'Rocket League' }, demandes: [{ id: 'z', pseudo: 'Zoé', code: 'Zoé#11AA22' }], amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Rocket League', week: 840, top: 'Rocket League' }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT' }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }] }),
+    events: async () => ({ soirees: [{ id: 'e1', game: 'Rocket League', at: Date.now() + 5 * 3_600_000, mine: true, organisateur: 'Noam', ma: 'oui', invites: [{ pseudo: 'Max', reponse: 'oui' }, { pseudo: 'Léa', reponse: null }] }, { id: 'e2', game: 'VALORANT', at: Date.now() + 26 * 3_600_000, mine: false, organisateur: 'Léa', ma: null, invites: [{ pseudo: 'Noam', reponse: null }] }] }),
     pc: async () => ({ cpu: { usage: 37, temp: null, name: 'AMD Ryzen 7 5800X' }, ram: { used: 11.2e9, total: 32e9 }, gpu: { name: 'NVIDIA GeForce RTX 3070', usage: 92, temp: 71, vramUsed: 6200, vramTotal: 8192 } }),
     boost: async () => ({ enabled: true, power: true, restore: true, heatAlerts: true, close: ['chrome'], apps: [{ id: 'chrome', label: 'Google Chrome' }, { id: 'edge', label: 'Microsoft Edge' }, { id: 'onedrive', label: 'OneDrive' }, { id: 'office', label: 'Word / Excel / PowerPoint' }] }),
     setBoost: async (b) => b, cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
