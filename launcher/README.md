@@ -26,6 +26,19 @@ L'installeur est créé dans `dist\`. Une fois installée, l'appli s'ouvre au d�
 - **Thème vivant** : la couleur suit l'élément sélectionné (bleu Steam, rouge Riot…). Spotify et Deezer passent en violet flou, avec des néons qui tournent autour de la fenêtre.
 - Fermer la fenêtre la range dans la barre des tâches (le suivi continue). Pour quitter : clic droit sur l'icône, puis « Quitter ».
 
+## Étape 2 : images et fiches
+- **Chaque carte a un fond et le vrai logo** :
+  - jaquette officielle Steam ou Epic ;
+  - sinon le logo du jeu sur son grand fond flou ;
+  - sinon l'icône haute définition de l'appli (la même que dans Windows) sur un fond à ses couleurs.
+- **Jeux des autres launchers** (Ubisoft, EA…) : trouvés sur le magasin Steam quand ils y sont, pour avoir leurs images officielles.
+- **Fiche complète** au clic : description, genres, studio, date de sortie, note Metacritic, captures d'écran, et « aussi sur Epic » si le jeu est possédé deux fois (une seule carte).
+- **Jeux Epic possédés non installés** (lus dans le catalogue du launcher Epic), avec un bouton Installer.
+- **Réglages** (en bas à gauche) :
+  - **clé d'API Steam** (gratuite) : tous tes jeux Steam, même jamais installés ;
+  - **clé SteamGridDB** (gratuite) : jaquettes et logos pour 100 % des jeux et applis (Valorant, Minecraft, Spotify…).
+  - Les deux clés sont chiffrées par Windows sur ce PC.
+
 ## Sécurité
 Interface isolée (`contextIsolation`, `sandbox`, CSP stricte). L'interface ne peut demander qu'une action sur un élément déjà trouvé par le launcher, jamais lancer une commande de son choix. Seuls les liens `steam://`, `com.epicgames.launcher://` et les pages du magasin Steam sont ouverts. Une confirmation est demandée avant chaque désinstallation.
 

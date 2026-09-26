@@ -33,21 +33,41 @@ function toast(text) {
   toast.timer = setTimeout(() => t.classList.remove('on'), 2600);
 }
 
-// ---------- Images (jaquette Steam, sinon icône de l'appli, sinon initiale) ----------
+// ---------- Images : chaque carte a un fond et le vrai logo ----------
+const url = (u) => `url("${String(u).replace(/["\\\n]/g, '')}")`;
+/**
+ * Face d'une carte : jaquette verticale si elle existe ; sinon grand fond flou (image du jeu ou logo de l'appli)
+ * avec, par-dessus, le logo officiel du jeu, la bannière ou l'icône de l'appli en grand.
+ */
 function face(item, big = false) {
-  const cover = item.art?.cover;
-  if (cover) {
-    const fallback = item.art.header ?? '';
-    return `<img src="${esc(cover)}" alt="" loading="${big ? 'eager' : 'lazy'}" data-fallback="${esc(fallback)}">`;
+  const a = item.art ?? {};
+  const bg = a.hero ?? a.header ?? a.cover ?? item.iconData ?? null;
+  const back = bg ? `<div class="bgl" style="background-image:${url(bg)}"></div>` : '<div class="bgl none"></div>';
+  if (a.cover) {
+    return `${back}<img class="cov" src="${esc(a.cover)}" alt="" loading="${big ? 'eager' : 'lazy'}" data-fallback="1">${fallbackFront(item)}`;
   }
-  return `<div class="appface">${item.iconData ? `<img src="${esc(item.iconData)}" alt="">` : `<span class="letter">${esc((item.name ?? '?')[0].toUpperCase())}</span>`}</div>`;
+  return `${back}${fallbackFront(item, true)}`;
 }
-// Jaquette absente sur Steam : on passe à l'image horizontale, puis à l'initiale
+/** Ce qu'on montre sans jaquette : logo du jeu, sinon bannière, sinon icône de l'appli, sinon initiale. */
+function fallbackFront(item, visible = false) {
+  const a = item.art ?? {};
+  const inner = a.logo ? `<img class="logo" src="${esc(a.logo)}" alt="">`
+    : a.header ? `<img class="banner" src="${esc(a.header)}" alt="">`
+      : item.iconData || a.icon ? `<img class="appicon" src="${esc(a.icon ?? item.iconData)}" alt="">`
+        : `<span class="letter">${esc((item.name ?? '?')[0].toUpperCase())}</span>`;
+  return `<div class="front ${visible ? 'show' : ''}">${inner}</div>`;
+}
+// Une image qui ne se charge pas : on montre le plan suivant (logo, bannière, icône, initiale)
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (img.tagName !== 'IMG') return;
-  if (img.dataset.fallback) { img.src = img.dataset.fallback; img.dataset.fallback = ''; img.style.objectFit = 'cover'; }
-  else img.replaceWith(Object.assign(document.createElement('div'), { className: 'appface', innerHTML: '<span class="letter">◆</span>' }));
+  if (img.classList.contains('cov')) { img.remove(); img.parentElement?.querySelector('.front')?.classList.add('show'); return; }
+  const item = state.items.find((i) => i.id === img.closest('[data-id]')?.dataset.id) ?? state.sel;
+  if (img.classList.contains('herologo')) { img.replaceWith(Object.assign(document.createElement('h1'), { textContent: item?.name ?? '' })); return; }
+  const next = img.classList.contains('logo') && item?.art?.header ? `<img class="banner" src="${esc(item.art.header)}" alt="">`
+    : (img.classList.contains('logo') || img.classList.contains('banner')) && (item?.iconData || item?.art?.icon) ? `<img class="appicon" src="${esc(item.art?.icon ?? item.iconData)}" alt="">`
+      : `<span class="letter">${esc((item?.name ?? '?')[0].toUpperCase())}</span>`;
+  img.outerHTML = next;
 }, true);
 
 // ---------- Rendu ----------
@@ -83,25 +103,33 @@ function renderHero() {
   const btn = (action, label, cls = '') => `<button class="btn ${cls}" data-action="${action}">${label}</button>`;
   const actions = [];
   if (i.installed) actions.push(btn('launch', i.kind === 'game' ? '▶ Jouer' : '▶ Ouvrir', 'play'));
-  else if (i.source === 'steam') actions.push(btn('install', '⤓ Installer', 'play'));
+  else if (['steam', 'epic'].includes(i.source)) actions.push(btn('install', '⤓ Installer', 'play'));
   if (i.installed && ['steam', 'epic'].includes(i.source)) actions.push(btn('verify', '✓ Vérifier les fichiers'));
   if (i.installDir && i.installed) actions.push(btn('folder', '📁 Dossier'));
   if (i.source === 'steam') actions.push(btn('store', '🛈 Page Steam'));
   actions.push(`<button class="btn ${i.favorite ? 'on' : ''}" data-set="favorite">${i.favorite ? '★ Favori' : '☆ Favori'}</button>`);
   actions.push(`<button class="btn" data-set="hidden">${i.hidden ? '◉ Afficher' : '◌ Masquer'}</button>`);
   if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) actions.push(btn('uninstall', '🗑 Désinstaller', 'danger'));
+  const d = i.details;
+  const title = i.art?.logo ? `<img class="herologo" src="${esc(i.art.logo)}" alt="${esc(i.name)}">` : `<h1>${esc(i.name)}</h1>`;
   hero.innerHTML = `
-    <div class="cover" style="--c:${esc(colorOf(i))}">${face(i, true)}</div>
-    <div>
-      <div class="kicker"><span class="dot" style="color:${esc(colorOf(i))};background:${esc(colorOf(i))}"></span>${esc(src)} · ${esc(KIND_LABEL[i.kind] ?? '')}${i.installed ? '' : ' · non installé'}${playing ? ' · <span class="live">En cours</span>' : ''}</div>
-      <h1>${esc(i.name)}</h1>
+    <div class="cover" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${face(i, true)}</div>
+    <div class="info">
+      <div class="kicker"><span class="dot" style="color:${esc(colorOf(i))};background:${esc(colorOf(i))}"></span>${esc(src)} · ${esc(KIND_LABEL[i.kind] ?? '')}${i.installed ? '' : ' · non installé'}${i.alsoOn?.length ? ` · aussi sur ${i.alsoOn.map((o) => esc(state.sources[o.source]?.label ?? o.source)).join(', ')}` : ''}${playing ? ' · <span class="live">En cours</span>' : ''}</div>
+      ${title}
+      ${d?.genres?.length ? `<div class="chips">${d.genres.map((g) => `<span>${esc(g)}</span>`).join('')}</div>` : ''}
+      ${d?.description ? `<p class="desc">${esc(d.description)}</p>` : ''}
       <div class="stats">
         <div class="stat"><b>${hours(i.minutes)}</b><span>${i.kind === 'game' ? 'de jeu' : 'd’utilisation'}</span></div>
         <div class="stat"><b>${ago(i.lastPlayed)}</b><span>dernière fois</span></div>
         <div class="stat"><b>${size(i.size)}</b><span>sur le disque</span></div>
+        ${d?.score ? `<div class="stat score"><b>${esc(d.score)}</b><span>Metacritic</span></div>` : ''}
+        ${d?.released ? `<div class="stat"><b>${esc(d.released)}</b><span>sortie</span></div>` : ''}
+        ${d?.developers?.length ? `<div class="stat"><b>${esc(d.developers[0])}</b><span>studio</span></div>` : ''}
         ${i.version ? `<div class="stat"><b>${esc(i.version)}</b><span>version</span></div>` : ''}
       </div>
       <div class="actions">${actions.join('')}</div>
+      ${d?.screenshots?.length ? `<div class="shots">${d.screenshots.map((u) => `<img src="${esc(u)}" alt="" loading="lazy">`).join('')}</div>` : ''}
     </div>`;
   hero.style.animation = 'none';
   void hero.offsetWidth; // relance l'animation d'apparition
@@ -115,13 +143,23 @@ function select(item, scroll = true) {
   if (item?.kind === 'game') { document.body.style.setProperty('--accent', colorOf(item)); document.body.style.setProperty('--accent-2', shade(colorOf(item))); }
   else { document.body.style.removeProperty('--accent'); document.body.style.removeProperty('--accent-2'); }
   const bg = $('bgimg');
-  const img = item?.art?.hero ?? item?.art?.cover ?? item?.iconData ?? null;
+  // Grand fond flou : seulement une vraie image du jeu (une icône d'appli étalée noierait tout dans sa couleur)
+  const img = item?.details?.background ?? item?.art?.hero ?? item?.art?.cover ?? null;
   bg.classList.toggle('on', Boolean(img));
   if (img) bg.style.backgroundImage = `url("${img.replace(/"/g, '%22')}")`;
   renderHero();
   document.querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));
   document.querySelector(`.card[data-id="${CSS.escape(item?.id ?? '')}"]`)?.classList.add('sel');
   if (scroll && item) $('hero').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Fiche complète (description, genres, captures…) chargée à la demande
+  if (item?.kind === 'game' && !item.details && api.details && !item.detailsAsked) {
+    item.detailsAsked = true;
+    api.details(item.id).then((d) => {
+      if (!d) return;
+      item.details = d;
+      if (state.sel?.id === item.id) { renderHero(); select(item, false); }
+    }).catch(() => {});
+  }
 }
 function shade(hex) {
   const n = Number.parseInt(hex.slice(1), 16);
@@ -158,7 +196,7 @@ $('grid').addEventListener('mouseout', (e) => {
 async function act(action) {
   const item = state.sel;
   if (!item) return;
-  const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name} dans Steam…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page Steam ouverte' };
+  const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name} dans ${item.source === 'epic' ? 'Epic' : 'Steam'}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page Steam ouverte' };
   if (action === 'store') return api.action(item.id, 'store').then(() => toast(labels.store));
   const r = await api.action(item.id, action);
   if (r?.ok) toast(labels[action]);
@@ -198,6 +236,36 @@ $('sort').addEventListener('change', (e) => setView({ sort: e.target.value }));
 $('q').addEventListener('input', (e) => setView({ q: e.target.value.trim() }));
 document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => api.win(b.dataset.win)));
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }).then(() => toast(e.target.checked ? 'S’ouvrira au démarrage du PC' : 'Ne s’ouvrira plus au démarrage')));
+function showKeys(s) {
+  $('autostart').checked = Boolean(s.autostart);
+  $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée : tous tes jeux Steam sont affichés.' : 'Pas de clé : seuls les jeux installés ou déjà joués sont affichés.';
+  $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée : les images arrivent en arrière-plan.' : '';
+}
+$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); $('settings').showModal(); });
+document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', () => api.openLink?.(b.dataset.link)));
+$('saveKeys').addEventListener('click', async () => {
+  const patch = {};
+  if ($('steamKey').value.trim()) patch.steamKey = $('steamKey').value.trim();
+  if ($('gridKey').value.trim()) patch.gridKey = $('gridKey').value.trim();
+  if (!Object.keys(patch).length) return toast('Colle une clé d’abord');
+  const s = await api.setSettings(patch);
+  $('steamKey').value = '';
+  $('gridKey').value = '';
+  showKeys(s);
+  if (s.error) return toast(`Clé refusée : ${s.error}`);
+  toast('Clés enregistrées, recherche en cours…');
+  load(true);
+});
+api.onUpdate?.(({ items, sources }) => {
+  const sel = state.sel?.id;
+  const details = new Map(state.items.filter((i) => i.details).map((i) => [i.id, i.details]));
+  state.items = items.map((i) => ({ ...i, details: i.details ?? details.get(i.id) ?? null }));
+  state.sources = sources;
+  state.sel = state.items.find((i) => i.id === sel) ?? state.sel;
+  renderSources();
+  renderGrid();
+  renderHero();
+});
 $('rescan').addEventListener('click', () => load(true));
 // Raccourcis : Ctrl+F pour chercher, Entrée pour lancer
 document.addEventListener('keydown', (e) => {
@@ -225,7 +293,7 @@ async function load(again = false) {
   if (wanted) select(state.items.find((i) => i.name === wanted) ?? state.sel, false);
 }
 
-api.settings().then((s) => { $('autostart').checked = Boolean(s.autostart); });
+api.settings().then(showKeys);
 load();
 
 // ---------- Aperçu hors Electron ----------

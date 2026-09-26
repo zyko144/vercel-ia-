@@ -11,6 +11,8 @@ import { parseVdf } from '../src/core/vdf.js';
 import { parseRegQuery, programsFromRegistry } from '../src/core/registry.js';
 import { filterSort, findExe, merge, scanAll } from '../src/core/library.js';
 import { activeItems } from '../src/core/tracker.js';
+import { enrich, sameName } from '../src/core/art.js';
+import { ownedSteamGames, steamDetails } from '../src/core/steam.js';
 
 let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };
@@ -32,6 +34,15 @@ const epic = path.join(T, 'Epic', 'Manifests');
 put(path.join(epic, 'A.item'), JSON.stringify({ DisplayName: 'Fortnite', AppName: 'Fortnite', CatalogNamespace: 'fn', CatalogItemId: 'abc', InstallLocation: 'C:\\Epic\\Fortnite', LaunchExecutable: 'FortniteGame\\Binaries\\Win64\\FortniteLauncher.exe', InstallSize: 40e9, AppCategories: ['games'] }));
 put(path.join(epic, 'B.item'), JSON.stringify({ DisplayName: 'Unreal Plugin', AppName: 'Plug', CatalogNamespace: 'x', CatalogItemId: 'y', AppCategories: ['plugins'] }));
 put(path.join(epic, 'C.item'), JSON.stringify({ DisplayName: 'Jeu à moitié', AppName: 'Half', bIsIncompleteInstall: true }));
+
+// ---- Faux catalogue Epic (jeux possédés, avec les images officielles)
+const epicCat = path.join(T, 'Epic', 'Catalog');
+const img = (type, u) => ({ type, url: `https://cdn1.epicgames.com/${u}` });
+put(path.join(epicCat, 'catcache.bin'), Buffer.from(JSON.stringify([
+  { id: 'abc', namespace: 'fn', title: 'Fortnite', description: 'Battle royale', developer: 'Epic Games', categories: [{ path: 'games' }], releaseInfo: [{ appId: 'Fortnite' }], keyImages: [img('DieselGameBoxTall', 'fn-tall.jpg'), img('DieselGameBox', 'fn-wide.jpg'), img('DieselGameBoxLogo', 'fn-logo.png')] },
+  { id: 'gta', namespace: 'gtans', title: 'Grand Theft Auto V', categories: [{ path: 'games' }], releaseInfo: [{ appId: 'Blade' }], keyImages: [img('DieselGameBoxTall', 'gta-tall.jpg')] },
+  { id: 'dlc', namespace: 'gtans', title: 'Pack DLC', mainGameItem: { id: 'gta' }, categories: [{ path: 'addons' }], releaseInfo: [{ appId: 'Dlc' }] },
+])).toString('base64'));
 
 // ---- Faux registre (sortie de reg query /s)
 const REG = `
@@ -99,7 +110,7 @@ await check('programmes : applis et jeux des autres launchers, sans bruit ni dou
 
 let all;
 await check('bibliothèque complète : Steam (2 disques), Epic, registre', async () => {
-  all = await scanAll({ steam, epic, registry: parseRegQuery(REG) });
+  all = await scanAll({ steam, epic, epicCatalog: epicCat, registry: parseRegQuery(REG) });
   const byName = (n) => all.find((i) => i.name === n);
   assert.ok(byName('Counter-Strike 2')?.installed, 'jeu de la 2e bibliothèque');
   assert.equal(byName('Counter-Strike 2').minutes, 12000);
@@ -120,6 +131,9 @@ await check('tri : plus joués, favoris en tête, filtres jeux/applis/sources/in
   assert.equal(top[0].name, 'Fortnite', 'favori d’abord');
   assert.equal(top[1].name, 'Spotify', 'puis le plus utilisé');
   assert.deepEqual(filterSort(lib, { kind: 'jeux', installed: 'non' }).map((i) => i.name), ['Grand Theft Auto V']);
+  const gta = lib.find((i) => i.name === 'Grand Theft Auto V');
+  assert.deepEqual(gta.alsoOn.map((o) => o.source), ['epic'], 'une seule carte, « aussi sur Epic »');
+  assert.equal(gta.minutes, 900);
   assert.ok(filterSort(lib, { kind: 'applis' }).every((i) => i.kind !== 'game'));
   assert.deepEqual(filterSort(lib, { source: 'riot' }).map((i) => i.name), ['VALORANT']);
   assert.deepEqual(filterSort(lib, { q: 'baldur' }).map((i) => i.name), ["Baldur's Gate 3"]);
@@ -142,6 +156,68 @@ await check('exécutable principal : le plus gros .exe, pas l’installeur', asy
   put(path.join(d, 'Bin', 'Jeu.exe'), 'x'.repeat(3000));
   put(path.join(d, 'Bin', 'CrashReporter.exe'), 'x'.repeat(9000));
   assert.equal(await findExe(d), path.join(d, 'Bin', 'Jeu.exe'));
+});
+
+await check('Epic : jeux possédés non installés + images officielles, sans DLC', async () => {
+  const fn = all.find((i) => i.id === 'epic:Fortnite');
+  assert.equal(fn.installed, true);
+  assert.equal(fn.art.cover, 'https://cdn1.epicgames.com/fn-tall.jpg');
+  assert.equal(fn.art.logo, 'https://cdn1.epicgames.com/fn-logo.png');
+  assert.equal(fn.details.developers[0], 'Epic Games');
+  const gta = all.find((i) => i.id === 'epic:Blade');
+  assert.equal(gta.installed, false);
+  assert.match(gta.epicKey, /gtans%3Agta%3ABlade/);
+  assert.ok(!all.some((i) => i.name === 'Pack DLC'));
+});
+
+// Faux internet : magasin Steam, SteamGridDB, API Steam
+const web = async (u) => {
+  const ok = (data) => ({ ok: true, json: async () => data });
+  if (u.includes('storesearch')) return ok({ items: [{ type: 'app', id: 359550, name: "Tom Clancy's Rainbow Six® Siege" }, { type: 'app', id: 1, name: 'Rainbow Six Siege Soundtrack' }] });
+  if (u.includes('appdetails')) return ok({ 359550: { success: true, data: { name: 'R6', short_description: '<b>Tactique</b> &amp; équipe', developers: ['Ubisoft Montreal'], genres: [{ description: 'Action' }], release_date: { date: '1 déc. 2015' }, metacritic: { score: 79 }, screenshots: [{ path_thumbnail: 's1.jpg' }] } } });
+  if (u.includes('autocomplete')) return ok({ data: [{ id: 42, name: 'VALORANT' }] });
+  if (u.includes('/grids/game/42')) return ok({ data: [{ url: 'https://cdn2.steamgriddb.com/grid/valo.png' }] });
+  if (u.includes('/heroes/game/42')) return ok({ data: [{ url: 'https://cdn2.steamgriddb.com/hero/valo.png' }] });
+  if (u.includes('/logos/game/42')) return ok({ data: [{ url: 'https://cdn2.steamgriddb.com/logo/valo.png' }] });
+  if (u.includes('/icons/game/42')) return ok({ data: [] });
+  if (u.includes('GetOwnedGames')) return ok({ response: { games: [{ appid: 570, name: 'Dota 2', playtime_forever: 900, rtime_last_played: 1700000000 }] } });
+  return { ok: false, json: async () => null };
+};
+
+await check('même jeu malgré les variantes de nom, jamais un autre', async () => {
+  assert.ok(sameName("Tom Clancy's Rainbow Six® Siege", 'Rainbow Six Siege'));
+  assert.ok(sameName('VALORANT', 'Valorant'));
+  assert.ok(!sameName('Rainbow Six Siege Soundtrack', 'Rainbow Six Siege'));
+  assert.ok(!sameName('Portal', 'Portal 2'));
+});
+
+await check('images : jeu d’un autre launcher trouvé sur Steam (logo, jaquette, fiche)', async () => {
+  const r = await enrich({ id: 'reg:r6', kind: 'game', name: 'Rainbow Six Siege', art: {} }, { fetchImpl: web, details: true });
+  assert.equal(r.steamId, '359550');
+  assert.match(r.art.cover, /359550\/library_600x900/);
+  assert.match(r.art.logo, /359550\/logo\.png/);
+  assert.equal(r.details.description, 'Tactique & équipe');
+  assert.equal(r.details.score, 79);
+});
+
+await check('images : SteamGridDB (clé) pour Valorant, et cache de 14 jours respecté', async () => {
+  const r = await enrich({ id: 'reg:valorant', kind: 'game', name: 'VALORANT', art: {} }, { fetchImpl: web, gridKey: 'k' });
+  assert.equal(r.art.cover, 'https://cdn2.steamgriddb.com/grid/valo.png');
+  assert.equal(r.art.logo, 'https://cdn2.steamgriddb.com/logo/valo.png');
+  let calls = 0;
+  const again = await enrich({ id: 'reg:valorant', kind: 'game', name: 'VALORANT', art: {} }, { cache: r, gridKey: 'k', fetchImpl: async (u) => { calls++; return web(u); } });
+  assert.equal(calls, 0);
+  assert.equal(again, r);
+});
+
+await check('Steam : jeux possédés via la clé d’API, fiche complète nettoyée', async () => {
+  const owned = await ownedSteamGames('cle', '7656', web);
+  assert.equal(owned[0].name, 'Dota 2');
+  assert.equal(owned[0].installed, false);
+  assert.equal(owned[0].minutes, 900);
+  const d = await steamDetails('359550', web);
+  assert.deepEqual(d.genres, ['Action']);
+  assert.deepEqual(d.screenshots, ['s1.jpg']);
 });
 
 console.log(`\n${passed} vérifications passées.`);

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://cdn.cloudflare.steamstatic.com https://shared.cloudflare.steamstatic.com https://steamcdn-a.akamaihd.net https://cdn.akamai.steamstatic.com; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>History Launcher</title>
 <link rel="stylesheet" href="style.css">
@@ -36,7 +36,7 @@
   <h4>Sources</h4>
   <nav id="sources"></nav>
   <div class="grow"></div>
-  <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
+  <button id="openSettings" class="ghost">⚙ Réglages</button>
   <button id="rescan" class="ghost">⟳ Actualiser</button>
 </aside>
 
@@ -48,6 +48,25 @@
   </section>
 </main>
 <div class="toast" id="toast"></div>
+<dialog id="settings">
+  <form method="dialog" class="panel">
+    <h2>Réglages</h2>
+    <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
+    <div class="keybox">
+      <b>🎮 Tous tes jeux Steam (même jamais installés)</b>
+      <p>Colle ta clé d’API Steam (gratuite). Elle reste chiffrée sur ce PC.</p>
+      <div class="row"><input id="steamKey" type="password" placeholder="Clé d’API Steam" autocomplete="off"><button type="button" class="btn" data-link="steam">Obtenir ma clé</button></div>
+      <small id="steamState"></small>
+    </div>
+    <div class="keybox">
+      <b>🖼 Jaquettes et logos pour 100 % des jeux et applis</b>
+      <p>Sans clé, les images viennent de Steam et d’Epic (et l’icône de l’appli sinon). Avec une clé SteamGridDB (gratuite), même Valorant, Minecraft ou Spotify ont leur jaquette et leur logo.</p>
+      <div class="row"><input id="gridKey" type="password" placeholder="Clé SteamGridDB" autocomplete="off"><button type="button" class="btn" data-link="grid">Obtenir ma clé</button></div>
+      <small id="gridState"></small>
+    </div>
+    <div class="row end"><button type="button" class="btn" id="saveKeys">Enregistrer</button><button class="btn play">Fermer</button></div>
+  </form>
+</dialog>
 <script type="module" src="app.js"></script>
 </body>
 </html>
