@@ -119,6 +119,10 @@ export async function handleAccountApi(req, res, url, { readJson, send, clientIp
     if (route === 'POST /api/compte/connexion') { const r = await login(await readJson(req), ip); return send(res, r.status, r); }
     if (route === 'POST /api/compte/deconnexion') { const r = await logout(token); return send(res, r.status, r); }
     if (route === 'GET /api/compte/moi') { const c = await me(token); return c ? send(res, 200, { compte: c }) : send(res, 401, { error: 'Session expirée, reconnecte-toi.' }); }
+    if (url.pathname === '/api/compte/sauvegarde' && ['GET', 'POST'].includes(req.method)) {
+      const { handleBackupApi } = await import('./launcherBackup.js');
+      return await handleBackupApi(req, res, { readJson, send });
+    }
     if (route === 'POST /api/compte/ia') {
       const { handleLauncherAi } = await import('./launcherAi.js');
       return await handleLauncherAi(req, res, { readJson, send });

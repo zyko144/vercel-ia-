@@ -111,6 +111,19 @@ await check('messages, « on joue ? », invitation et réponse avec de quoi rejo
   assert.deepEqual((await call('inviter/repondre', max, { id: inv.id, oui: true })).join, { steam: '252950' });
 });
 
+await check('sauvegarde en ligne : par compte, retrouvée, taille plafonnée', async () => {
+  assert.equal((await call('sauvegarde', null)).status, 401);
+  assert.equal((await call('sauvegarde', noam)).data, null);
+  const r = await call('sauvegarde', noam, { pc: 'PC-Noam', data: { collections: { c1: { name: 'Potes', items: [] } }, time: { 'steam:1': 120 } } });
+  assert.equal(r.ok, true);
+  const back = await call('sauvegarde', noam);
+  assert.equal(back.data.collections.c1.name, 'Potes');
+  assert.equal(back.pc, 'PC-Noam');
+  assert.equal((await call('sauvegarde', max)).data, null, 'chacun sa sauvegarde');
+  assert.equal((await call('sauvegarde', noam, { data: 'pas un objet' })).status, 400);
+  assert.equal((await call('sauvegarde', noam, { data: { gros: 'x'.repeat(1_600_000) } })).status, 413);
+});
+
 await check('retirer un ami : des deux côtés', async () => {
   const maxId = (await call('amis', noam)).amis[0].id;
   await call('amis/retirer', noam, { id: maxId });

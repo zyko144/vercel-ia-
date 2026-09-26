@@ -2,12 +2,14 @@
 const stack = document.getElementById('stack');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const shown = new Set();
-window.notif.onCards((cards) => {
+window.notif.onCards((cards, opts) => {
+  window.sfx?.set({ on: false, notif: opts.sound !== false, vol: opts.vol ?? 0.6 });
   const ids = new Set(cards.map((c) => c.id));
   for (const el of [...stack.children]) if (!ids.has(el.dataset.id)) { el.classList.add('out'); setTimeout(() => el.remove(), 250); shown.delete(el.dataset.id); }
   for (const c of cards) {
     if (shown.has(c.id)) continue;
     shown.add(c.id);
+    window.sfx?.play(c.kind === 'ask' || c.kind === 'invite' ? 'call' : 'notif');
     const el = document.createElement('div');
     el.className = 'card';
     el.dataset.id = c.id;
