@@ -15,7 +15,7 @@ import { adminRoutes, testAudioFile } from './admin.js';
 import { startCasinho } from './casinho/index.js';
 import { startVoiceAssistant } from './voice-ai/assistant.js';
 import { config } from './config.js';
-import { commandDefinitions } from './commands/definitions.js';
+import { commandDefinitions, guildCommandDefinitions } from './commands/definitions.js';
 import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
 import { putSiteInBio } from './features/bio.js';
@@ -79,6 +79,12 @@ client.once(Events.ClientReady, async (c) => {
   } catch (err) {
     console.error('❌ Enregistrement des commandes impossible :', err);
   }
+  // /play sur chaque serveur : visible tout de suite, sans attendre la mise à jour globale de Discord
+  const guildPayload = guildCommandDefinitions.map((cmd) => cmd.toJSON());
+  const registerOn = (guild) => guild.commands.set(guildPayload).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
+  await Promise.all([...c.guilds.cache.values()].map(registerOn));
+  console.log(`▶️ /play enregistrée sur ${c.guilds.cache.size} serveur(s)`);
+  c.on(Events.GuildCreate, (guild) => registerOn(guild));
 
   putSiteInBio(c, { tag: 'bot' });
   lavalink.init(c);

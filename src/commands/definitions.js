@@ -325,7 +325,9 @@ const adminCommand = utilityCommands.find((c) => c.name === 'admin');
 const playCommand = guildOnly(musicCommands.find((c) => c.name === 'play'));
 const contextMenus = aiCommands.filter((c) => c instanceof ContextMenuCommandBuilder);
 
-export const commandDefinitions = [...panelCommands, playCommand, adminCommand, ...contextMenus];
+export const commandDefinitions = [...panelCommands, adminCommand, ...contextMenus];
+/** Enregistrées serveur par serveur : elles apparaissent tout de suite (les globales peuvent mettre du temps). */
+export const guildCommandDefinitions = [playCommand];
 
 /** Les anciennes commandes (maintenant des actions de panneau) : pour vérifier le catalogue. */
 export const LEGACY_COMMAND_NAMES = new Set([...aiCommands, ...moderationCommands, ...utilityCommands, ...musicCommands, ...gameCommands].map((c) => c.name));
