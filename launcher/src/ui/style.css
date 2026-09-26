@@ -328,3 +328,14 @@ body.listening .aifab .pulse { animation: ring 1.8s ease-out infinite; }
 .vok { padding: 12px 14px; border-radius: 12px; background: rgba(46, 224, 122, .1); border: 1px solid rgba(46, 224, 122, .35); color: #9ff0c1; }
 .vbad { padding: 12px 14px; border-radius: 12px; background: rgba(224, 35, 58, .1); border: 1px solid rgba(224, 35, 58, .35); }
 .vbad ul { margin: 8px 0 0; padding-left: 18px; color: #ffc4cc; font-size: 12.5px; max-height: 140px; overflow-y: auto; }
+
+/* Grosses applis : fond aux couleurs de la marque, logo officiel blanc bien net */
+.brandbg { background: radial-gradient(120% 95% at 28% 12%, color-mix(in srgb, var(--b) 88%, #fff), var(--b) 32%, color-mix(in srgb, var(--b) 45%, #05070d) 78%, #05070d) !important; filter: none !important; }
+.art .bgl.brandbg { inset: 0; }
+.art .bgl.brandbg::after, .hero .hbg.brandbg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(140deg, rgba(255, 255, 255, .22), transparent 38%), radial-gradient(circle at 80% 110%, rgba(0, 0, 0, .45), transparent 60%); }
+.front .appicon.brandlogo { width: 46%; max-width: 118px; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .4)); }
+.front .appicon { image-rendering: auto; }
+.hero .hbg.brandbg { transform: none; }
+.hero .happicon.brandlogo { width: 120px; height: 120px; }
+.atile .ai.brandbg { position: relative; overflow: hidden; }
+.atile .ai .aimg { width: 62%; height: 62%; border-radius: 0; }

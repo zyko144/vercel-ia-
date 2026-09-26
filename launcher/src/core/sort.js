@@ -21,8 +21,8 @@ export function filterSort(items, { sort = 'joues', kind = 'tout', source = 'tou
     .filter((i) => kind === 'tout' || kind === 'caches' ? true : kind === 'favoris' ? i.favorite : kind === 'jeux' ? i.kind === 'game' : kind === 'applis' ? i.kind !== 'game' : true)
     .filter((i) => kind !== 'caches' || i.hidden)
     .filter((i) => source === 'tout' || i.source === source)
-    // Applis : par défaut seulement les connues (Spotify, Discord, CCleaner…) ou celles qu'on utilise vraiment
-    .filter((i) => (installed === 'oui' ? i.installed : installed === 'non' ? !i.installed : (i.kind === 'game' ? i.installed || played(i) : i.known !== false || played(i)) || i.favorite || Boolean(words)))
+    // Applis : par défaut seulement les grosses (Spotify, Discord, OBS…) ; les autres restent dans « Tous les installés »
+    .filter((i) => (installed === 'oui' ? i.installed : installed === 'non' ? !i.installed : (i.kind === 'game' ? i.installed || played(i) : i.known !== false) || i.favorite || Boolean(words)))
     .filter((i) => !words || norm(i.name).includes(words))
     .sort((a, b) => (b.installed - a.installed) || (b.favorite - a.favorite) || (SORTS[sort] ?? SORTS.joues)(a, b));
 }
