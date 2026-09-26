@@ -37,7 +37,16 @@ export async function createAi(key) {
     const out = String(r.output_text ?? '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
     return schema ? JSON.parse(out) : out;
   };
-  return { ask };
+  /** Transcrit un enregistrement du micro (bouton micro de l'assistant). */
+  const transcribe = async (base64, mime) => {
+    const r = await ai.interactions.create({
+      model: MODELS.chat, store: false, generation_config: { thinking_level: 'minimal' },
+      system_instruction: 'Tu transcris exactement ce qui est dit, en français, sans rien ajouter.',
+      input: [{ type: 'text', text: 'Transcris cet enregistrement.' }, { type: 'audio', mime_type: mime, data: base64 }],
+    });
+    return String(r.output_text ?? '').trim();
+  };
+  return { ask, transcribe };
 }
 
 // ===================== Images trouvées par l'IA =====================

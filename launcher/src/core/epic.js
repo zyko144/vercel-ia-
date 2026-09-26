@@ -52,7 +52,7 @@ export async function scanEpic(manifestDir, catalogDir = null) {
     const cat = byApp.get(m.AppName);
     items.push({
       id: `epic:${m.AppName}`, source: 'epic', kind: 'game', name: m.DisplayName, installed: true,
-      installDir: m.InstallLocation ?? '', exe: m.InstallLocation && m.LaunchExecutable ? path.join(m.InstallLocation, m.LaunchExecutable) : null,
+      installDir: m.InstallLocation ?? '', manifest: path.join(manifestDir, file), exe: m.InstallLocation && m.LaunchExecutable ? path.join(m.InstallLocation, m.LaunchExecutable) : null,
       size: Number(m.InstallSize ?? 0), minutes: 0, lastPlayed: 0, art: cat?.art ?? {}, details: cat?.details ?? null, epicKey: key,
     });
   }

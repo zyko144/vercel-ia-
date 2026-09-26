@@ -11,6 +11,8 @@ import { parseVdf } from '../src/core/vdf.js';
 import { parseRegQuery, programsFromRegistry } from '../src/core/registry.js';
 import { filterSort, findExe, merge, scanAll } from '../src/core/library.js';
 import { activeItems } from '../src/core/tracker.js';
+import { quickVerify, safeGameDir, uninstallFiles } from '../src/core/manage.js';
+import { existsSync, readFileSync } from 'node:fs';
 import { enrich, sameName } from '../src/core/art.js';
 import { aiFindArt, geminiKeyFromEnv } from '../src/core/ai.js';
 import { parseTitle } from '../src/core/media.js';
@@ -140,7 +142,13 @@ await check('tri : plus joués, favoris en tête, filtres jeux/applis/sources/in
   assert.ok(filterSort(lib, { kind: 'applis' }).every((i) => i.kind !== 'game'));
   assert.deepEqual(filterSort(lib, { source: 'riot' }).map((i) => i.name), ['VALORANT']);
   assert.deepEqual(filterSort(lib, { q: 'baldur' }).map((i) => i.name), ["Baldur's Gate 3"]);
-  assert.equal(filterSort(lib, { sort: 'nom' }).at(-1).name, 'VALORANT');
+  const byName = filterSort(lib, { sort: 'nom' });
+  assert.equal(byName.at(-1).name, 'Grand Theft Auto V', 'les jeux installés d’abord, le non installé en dernier');
+  assert.ok(byName.findIndex((i) => !i.installed) > byName.findLastIndex((i) => i.installed));
+  // Jeu Epic seulement possédé (jamais lancé) : caché par défaut, visible dans « Non installés »
+  const owned = [{ id: 'epic:FS', name: 'Farming Simulator 22', kind: 'game', source: 'epic', installed: false, minutes: 0, lastPlayed: 0 }];
+  assert.equal(filterSort(owned, {}).length, 0);
+  assert.equal(filterSort(owned, { installed: 'non' }).length, 1);
 });
 
 await check('suivi du temps : bon jeu repéré par son dossier, jamais par un dossier trop large', async () => {
@@ -288,6 +296,49 @@ await check('images Steam en ligne : API officielle, et les images du PC passent
   assert.equal(merged[0].art.cover, 'libimg://img/cover', 'image du PC d’abord');
   assert.equal(merged[0].art.hero, 'https://en-ligne/hero.jpg', 'puis l’API officielle');
   assert.equal(merged[0].art.logo, 'ancien-logo', 'l’ancienne adresse en dernier recours');
+});
+
+await check('désinstallation Steam par le launcher : dossier du jeu + fiche, rien d’autre', async () => {
+  const libDir = path.join(T, 'SteamDel', 'steamapps');
+  put(path.join(libDir, 'common', 'MonJeu', 'Jeu.exe'), 'x'.repeat(100));
+  put(path.join(libDir, 'common', 'AutreJeu', 'a.exe'), 'x');
+  put(path.join(libDir, 'appmanifest_42.acf'), '"AppState" {}');
+  const item = { source: 'steam', installDir: path.join(libDir, 'common', 'MonJeu'), steamLibrary: libDir, manifest: path.join(libDir, 'appmanifest_42.acf') };
+  await uninstallFiles(item);
+  assert.ok(!existsSync(item.installDir) && !existsSync(item.manifest));
+  assert.ok(existsSync(path.join(libDir, 'common', 'AutreJeu', 'a.exe')), 'l’autre jeu est intact');
+});
+
+await check('désinstallation : refusée hors de la bibliothèque, sur une racine ou un dossier système', async () => {
+  const libDir = path.join(T, 'SteamDel', 'steamapps');
+  assert.equal(safeGameDir({ source: 'steam', installDir: path.join(libDir, 'common'), steamLibrary: libDir }).ok, false, 'le dossier common lui-même');
+  assert.equal(safeGameDir({ source: 'steam', installDir: path.join(libDir, 'common', 'A', '..', '..'), steamLibrary: libDir }).ok, false, 'remonter avec ..');
+  assert.equal(safeGameDir({ source: 'steam', installDir: path.join(T, 'ailleurs', 'Jeu'), steamLibrary: libDir }).ok, false, 'hors bibliothèque');
+  assert.equal(safeGameDir({ source: 'epic', installDir: '/' }).ok, false, 'racine');
+  assert.equal(safeGameDir({ source: 'epic', installDir: '' }).ok, false);
+});
+
+await check('désinstallation Epic : dossier + fiche .item + LauncherInstalled.dat, seulement si la fiche correspond', async () => {
+  const dir = path.join(T, 'EpicGames', 'Fortnite');
+  const man = path.join(T, 'EpicMan', 'F.item');
+  const dat = path.join(T, 'EpicMan', 'LauncherInstalled.dat');
+  put(path.join(dir, 'game.exe'), 'x');
+  put(man, JSON.stringify({ AppName: 'Fortnite', InstallLocation: dir }));
+  put(dat, JSON.stringify({ InstallationList: [{ AppName: 'Fortnite', InstallLocation: dir }, { AppName: 'Autre', InstallLocation: 'D:/X' }] }));
+  await assert.rejects(uninstallFiles({ source: 'epic', installDir: path.join(T, 'EpicGames', 'Autre'), manifest: man }), /ne correspond pas/);
+  await uninstallFiles({ source: 'epic', installDir: dir, manifest: man }, { launcherInstalled: dat });
+  assert.ok(!existsSync(dir) && !existsSync(man));
+  assert.deepEqual(JSON.parse(readFileSync(dat, 'utf8')).InstallationList.map((e) => e.AppName), ['Autre']);
+});
+
+await check('vérification rapide : exécutable manquant et fichiers manquants détectés', async () => {
+  const dir = path.join(T, 'Verif', 'Jeu');
+  put(path.join(dir, 'data.pak'), 'x'.repeat(1000));
+  const ok = await quickVerify({ installDir: dir, size: 1000 });
+  assert.equal(ok.ok, true);
+  const bad = await quickVerify({ installDir: dir, size: 5e9, exe: path.join(dir, 'Jeu.exe') });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.problems.length, 2);
 });
 
 console.log(`\n${passed} vérifications passées.`);

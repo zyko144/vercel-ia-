@@ -18,4 +18,12 @@ contextBridge.exposeInMainWorld('launcher', {
   nowPlaying: () => ipcRenderer.invoke('media:now'),
   mediaKey: (name) => ipcRenderer.invoke('media:key', name),
   ask: (message) => ipcRenderer.invoke('ai:ask', message),
+  setVoice: (on) => ipcRenderer.invoke('voice:set', on),
+  transcribe: (audio, mime) => ipcRenderer.invoke('voice:transcribe', audio, mime),
+  onVoice: (fn) => { ipcRenderer.on('voice:state', (_e, v) => fn('state', v)); ipcRenderer.on('voice:heard', (_e, v) => fn('heard', v)); ipcRenderer.on('voice:reply', (_e, v) => fn('reply', v)); },
+  account: () => ipcRenderer.invoke('account:get'),
+  register: (body) => ipcRenderer.invoke('account:inscription', body),
+  login: (body) => ipcRenderer.invoke('account:connexion', body),
+  logout: () => ipcRenderer.invoke('account:logout'),
+  skipAccount: () => ipcRenderer.invoke('account:skip'),
 });

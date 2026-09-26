@@ -4,7 +4,7 @@ import { filterSort } from '../core/sort.js';
 
 const $ = (id) => document.getElementById(id);
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
-const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], song: null };
+const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], song: null, account: null };
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -142,7 +142,7 @@ function renderHome() {
 
 function renderRecos() {
   const list = state.recos;
-  $('recoTitle').textContent = list.some((r) => r.steamId) ? 'Recommandés pour vous' : 'Dans ta bibliothèque';
+  $('recoBlock').hidden = !list.length;
   $('recos').innerHTML = list.length ? list.slice(0, 5).map((r, n) => `
     <div class="rcard" data-reco="${n}">
       <img src="${esc(r.art?.header ?? r.art?.hero ?? r.art?.cover ?? '')}" alt="">
@@ -176,8 +176,7 @@ async function renderStats() {
   $('donut').innerHTML = `<circle cx="60" cy="60" r="${R}" stroke="rgba(255,255,255,.06)" stroke-width="11"/>${arcs}<text x="60" y="62" text-anchor="middle">${hours(total)}</text><text class="s" x="60" y="76" text-anchor="middle">Temps total</text>`;
   $('legend').innerHTML = CATS.map(([k, label, color]) => `<div><i style="background:${color}"></i>${label}<span>${total ? Math.round((s.split[k] / total) * 100) : 0} %</span></div>`).join('');
   state.profile = s.profile || state.profile;
-  $('profileName').textContent = state.profile;
-  $('avatar').textContent = state.profile[0]?.toUpperCase() ?? '?';
+  if (!state.account) { $('profileName').textContent = state.profile; $('avatar').textContent = state.profile[0]?.toUpperCase() ?? '?'; }
   if (state.view === 'stats') {
     const max = Math.max(1, ...s.top.map((t) => t.minutes));
     $('statsBig').innerHTML = s.top.map((t) => `<div class="bar"><b>${esc(t.name)}</b><i style="width:${Math.max(2, (t.minutes / max) * 100)}%"></i><span>${hours(t.minutes)}</span></div>`).join('') || '<div class="empty">Pas encore de temps enregistré.</div>';
@@ -227,12 +226,23 @@ function renderChips() {
     notInstalled && ['⤓', `Installe ${notInstalled.name}`],
     top && ['✓', `Vérifie les fichiers de ${top.name}`],
     ['🗑', 'Quel jeu je pourrais désinstaller ?'],
-    ['▦', 'Montre mes jeux les plus joués'],
-    ['♫', 'Qu’est-ce que j’écoute en ce moment ?'],
+    ['🏆', 'Ouvre le classement'],
+    ['⏱', 'Quel est mon jeu le plus joué ?'],
+    ['♫', 'Qu’est-ce que j’écoute ?'],
+    ['🔊', 'Monte le son'],
     ['⇅', 'Trie mes jeux par taille'],
-    ['⏸', 'Mets la musique en pause'],
   ].filter(Boolean);
   $('chips').innerHTML = chips.map(([ico, t]) => `<button data-ask="${esc(t)}"><i>${ico}</i>${esc(t)}</button>`).join('');
+}
+function applyReply(r) {
+  if (!r) return;
+  say(r.reply || 'D’accord.');
+  const views = { jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque', accueil: 'accueil' };
+  if (r.action === 'show') { if (r.value === 'parametres') $('openSettings').click(); else go(views[r.value] ?? 'bibliotheque'); }
+  if (r.action === 'sort') { state.list.sort = r.value; $('sort').value = r.value; go('bibliotheque'); }
+  if (r.action === 'search') { $('q').value = r.value; $('q').dispatchEvent(new Event('input')); }
+  if (r.itemId && !['uninstall'].includes(r.action)) { const it = state.items.find((i) => i.id === r.itemId); if (it) select(it); }
+  if (['music', 'volume'].includes(r.action)) setTimeout(refreshMusic, 800);
 }
 async function ask(text) {
   if (!text.trim()) return;
@@ -240,11 +250,7 @@ async function ask(text) {
   const wait = say('…', 'wait');
   const r = await api.ask(text).catch((err) => ({ reply: `Erreur : ${err.message}` }));
   wait.remove();
-  say(r.reply || 'D’accord.');
-  if (r.action === 'show') go({ jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque' }[r.value] ?? 'bibliotheque');
-  if (r.action === 'sort') { state.list.sort = r.value; $('sort').value = r.value; go('bibliotheque'); }
-  if (r.itemId) { const it = state.items.find((i) => i.id === r.itemId); if (it) select(it); }
-  if (r.action === 'music') setTimeout(refreshMusic, 800);
+  applyReply(r);
 }
 
 // ---------- Musique ----------
@@ -286,7 +292,7 @@ function showView(name) {
 function go(view) {
   const lists = { bibliotheque: 'tout', jeux: 'jeux', applis: 'applis', favoris: 'favoris' };
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
-  if (view === 'ia') { $('askInput').focus(); return; }
+  if (view === 'ia') { openAssistant(true); document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === state.view || (state.view === 'liste' && false))); return; }
   if (view in lists) { state.list.kind = lists[view]; state.list.source = 'tout'; showView('liste'); } else showView(view);
   renderPlatforms();
   if (state.view === 'liste') renderList();
@@ -363,7 +369,6 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.inst) { document.querySelectorAll('#installed button').forEach((x) => x.classList.toggle('on', x === t)); state.list.installed = t.dataset.inst; return renderList(); }
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
-  if (t.id === 'fold' || t.closest('#unfold')) return setFold(t.id === 'fold');
   if (t.dataset.reco !== undefined) {
     const r = state.recos[Number(t.dataset.reco)];
     if (r?.itemId) return select(state.items.find((i) => i.id === r.itemId));
@@ -414,12 +419,100 @@ $('saveKeys').addEventListener('click', async (e) => {
   load();
 });
 
-// Assistant repliable (choix gardé)
-function setFold(folded) {
-  document.body.classList.toggle('ai-folded', folded);
-  try { localStorage.setItem('ai-folded', folded ? '1' : '0'); } catch { /* stockage indisponible */ }
+// Assistant : bulle en bas à droite, qui s'ouvre et se referme
+function openAssistant(open = !$('aipop').classList.contains('open')) {
+  $('aipop').classList.toggle('open', open);
+  if (open) setTimeout(() => $('askInput').focus(), 50);
 }
-try { if (localStorage.getItem('ai-folded') === '1') document.body.classList.add('ai-folded'); } catch { /* stockage indisponible */ }
+$('aifab').addEventListener('click', () => openAssistant());
+$('fold').addEventListener('click', () => openAssistant(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openAssistant(false); });
+
+// Voix : écoute « Hey History » (Windows) et bouton micro
+$('voiceToggle').addEventListener('change', async (e) => {
+  await api.setVoice?.(e.target.checked);
+  $('voiceState').textContent = e.target.checked ? 'Démarrage de l’écoute…' : '';
+  document.body.classList.toggle('listening', e.target.checked);
+});
+api.onVoice?.((kind, v) => {
+  if (kind === 'state') {
+    const text = { pret: '🎙 J’écoute : dis « Hey History, lance… »', ecoute: '🎙 Oui ? Je t’écoute…', erreur: `⚠️ ${v.message ?? 'Erreur du micro'}`, arret: 'Écoute arrêtée.', off: '' }[v.state] ?? '';
+    $('voiceState').textContent = text;
+    document.body.classList.toggle('listening', v.state === 'pret' || v.state === 'ecoute');
+    if (v.state === 'erreur') $('voiceToggle').checked = false;
+  }
+  if (kind === 'heard') { openAssistant(true); say(`🎙 ${v.text}`, 'me'); }
+  if (kind === 'reply') applyReply(v);
+});
+let recorder = null;
+$('micBtn').addEventListener('click', async () => {
+  if (recorder) { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = [];
+    recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      $('micBtn').classList.remove('rec');
+      recorder = null;
+      const buf = new Uint8Array(await new Blob(chunks, { type: 'audio/webm' }).arrayBuffer());
+      const wait = say('🎙 …', 'wait');
+      const r = await api.transcribe(buf, 'audio/webm').catch(() => ({ reply: 'Micro indisponible.' }));
+      wait.remove();
+      if (r.heard) say(`🎙 ${r.heard}`, 'me');
+      applyReply(r);
+    };
+    recorder.start();
+    $('micBtn').classList.add('rec');
+    setTimeout(() => recorder?.state === 'recording' && recorder.stop(), 8000);
+  } catch {
+    toast('Micro inaccessible : autorise-le dans Windows (Paramètres › Confidentialité › Microphone).');
+  }
+});
+
+// ---------- Compte ----------
+let authMode = 'connexion';
+function showAuth(show) { $('auth').hidden = !show; if (show) setTimeout(() => $('aEmail').focus(), 50); }
+function setAccount(c) {
+  state.account = c;
+  const name = c?.pseudo ?? state.profile;
+  $('profileName').textContent = name;
+  $('avatar').textContent = name[0]?.toUpperCase() ?? '?';
+  $('profileSub').innerHTML = c ? '<i class="online"></i>Compte History' : 'Pas connecté · se connecter';
+}
+$('authTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  authMode = b.dataset.auth;
+  document.querySelectorAll('#authTabs button').forEach((x) => x.classList.toggle('on', x === b));
+  $('pseudoField').hidden = authMode !== 'inscription';
+  $('authGo').textContent = authMode === 'inscription' ? 'Créer mon compte' : 'Se connecter';
+  $('aPass').autocomplete = authMode === 'inscription' ? 'new-password' : 'current-password';
+  $('authErr').textContent = '';
+});
+$('authForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('authErr').textContent = '';
+  $('authGo').disabled = true;
+  const body = { pseudo: $('aPseudo').value.trim(), email: $('aEmail').value.trim(), motDePasse: $('aPass').value };
+  const r = await (authMode === 'inscription' ? api.register(body) : api.login(body)).catch(() => ({ error: 'Erreur réseau.' }));
+  $('authGo').disabled = false;
+  if (!r.ok) { $('authErr').textContent = r.error ?? 'Erreur.'; return; }
+  $('aPass').value = '';
+  setAccount(r.compte);
+  showAuth(false);
+  toast(authMode === 'inscription' ? `Bienvenue ${r.compte.pseudo} ! 🎉` : `Content de te revoir, ${r.compte.pseudo} !`);
+});
+$('authSkip').addEventListener('click', async () => { await api.skipAccount?.(); showAuth(false); });
+$('profileBtn').addEventListener('click', async () => {
+  if (!state.account) return showAuth(true);
+  if (!window.confirm(`Connecté en tant que ${state.account.pseudo} (${state.account.email}).\n\nSe déconnecter ?`)) return;
+  await api.logout();
+  setAccount(null);
+  showAuth(true);
+});
+api.account?.().then((r) => { setAccount(r.compte); if (!r.compte && !r.skipped) showAuth(true); }).catch(() => {});
 
 // ---------- Données ----------
 function renderAll() {
@@ -445,14 +538,15 @@ async function load() {
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
 api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(); });
 api.settings().then(showKeys);
-say('Salut ! 👋\nJe peux lancer un jeu, en installer un, vérifier ses fichiers, trier ta bibliothèque, piloter ta musique et répondre à tes questions.');
+say('Salut ! 👋 Dis-moi ce que tu veux : « lance Rocket League », « ferme Discord », « monte le son », « trie par taille »… Tu peux aussi activer « Hey History » en bas pour me parler.');
 load().then(() => {
   renderStats().catch(() => {});
   // Aperçu : #vue=classement ou #sel=Nom
   const h = !window.launcher && decodeURIComponent(location.hash.slice(1));
   if (h?.startsWith('vue=')) go(h.slice(4));
   else if (h?.startsWith('sel=')) select(state.items.find((i) => i.name === h.slice(4)) ?? state.sel);
-  if (h?.includes('replie')) setFold(true);
+  if (h?.includes('assistant')) openAssistant(true);
+  if (h?.includes('compte')) showAuth(true);
 });
 refreshMusic();
 setInterval(refreshMusic, 5000);
@@ -479,6 +573,6 @@ function demoApi() {
     reco: async () => [1, 2, 3, 4, 5].map((n) => ({ name: `Jeu recommandé ${n}`, why: 'Même style que GTA V', steamId: String(n), art: { header: img(n % 2 ? 'h1.jpg' : 'h2.jpg') } })),
     stats: async () => ({ split: { jeux: 1814, applis: 454, musique: 151, autres: 101 }, top: items.map((i) => ({ name: i.name, minutes: i.minutes })), recent: { 'reg:valorant': 300, 'steam:271590': 240, 'epic:Fortnite': 120, 'epic:rl': 60 }, profile: 'Noam' }),
     nowPlaying: async () => ({ player: 'Spotify', artist: 'Bir Hakeim', title: 'Cherry Pie', playing: true, cover: img('c4.jpg'), duration: 192 }),
-    mediaKey: async () => true, ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
+    mediaKey: async () => true, account: async () => ({ compte: null, skipped: true }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }

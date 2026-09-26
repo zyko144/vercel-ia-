@@ -61,6 +61,21 @@ Dans cet ordre, sans jamais rien dessiner :
 
 Les applis gardent leur icône officielle, celle de Windows.
 
+## Sans ouvrir Steam ni Epic
+- **Jouer** : les jeux Steam se lancent avec `steam.exe -silent -applaunch`. Steam tourne en fond, sans fenêtre. Les jeux Epic passent par le lien silencieux d'Epic.
+- **Désinstaller** : le launcher supprime lui-même le dossier du jeu et sa fiche d'installation (`appmanifest` pour Steam ; `.item` et `LauncherInstalled.dat` pour Epic), après confirmation, et seulement si le dossier est bien celui du jeu, dans une bibliothèque connue.
+- **Vérifier** : le launcher contrôle lui-même que l'exécutable est présent et que la taille sur le disque est celle attendue. En cas de problème, il propose la réparation officielle, lancée en arrière-plan.
+- **Installer** et **réparer** passent forcément par les serveurs de Steam ou d'Epic (compte, licence, téléchargement) : ils sont lancés en arrière-plan.
+
+## Compte History
+Page d'inscription et de connexion au premier lancement (« Continuer sans compte » possible). Les comptes sont gardés par le serveur du bot : mot de passe chiffré (scrypt), sessions de 90 jours, tentatives limitées.
+
+## Assistant gratuit et « Hey History »
+- La bulle en bas à droite comprend, sans IA payante : lance, ferme, installe, désinstalle, vérifie, dossier, favoris, masque, musique (pause, suivant, précédent), volume, tri, recherche, « ouvre le classement », « quel est mon jeu le plus joué ? », « combien d'heures sur… ». Les surnoms marchent aussi (gta, lol, rl, cs, rdr2…).
+- Les autres questions vont à Gemini, avec la clé du bot.
+- **« Hey History, lance Rocket League »** : coche « Écouter Hey History » dans la bulle. C'est la reconnaissance vocale de Windows (gratuite, sans internet, en français si Windows l'a installée), et la réponse est lue à voix haute.
+- **Bouton micro** 🎙 : tu parles, Gemini transcrit.
+
 ## Sécurité
 Interface isolée (`contextIsolation`, `sandbox`, CSP stricte). L'interface ne peut demander qu'une action sur un élément déjà trouvé par le launcher, jamais lancer une commande de son choix. Seuls les liens `steam://`, `com.epicgames.launcher://` et les pages du magasin Steam sont ouverts. Une confirmation est demandée avant chaque désinstallation.
 

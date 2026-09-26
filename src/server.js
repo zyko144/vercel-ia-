@@ -219,6 +219,12 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       return send(res, 200, pay.statusJson());
     }
 
+    // Comptes History Launcher (inscription, connexion, profil)
+    if (url.pathname.startsWith('/api/compte/')) {
+      const { handleAccountApi } = await import('./features/launcherAccounts.js');
+      return handleAccountApi(req, res, url, { readJson, send, clientIp });
+    }
+
     // Chiffres en direct et classement public des serveurs (site vitrine)
     if ((url.pathname === '/api/public' || url.pathname === '/api/classement') && req.method === 'GET') {
       const { publicStats, publicRanking } = await import('./features/publicStats.js');

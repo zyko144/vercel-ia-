@@ -26,7 +26,7 @@
   <nav id="platforms" class="platforms"></nav>
   <div class="grow"></div>
   <button id="openSettings" class="navlike"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Paramètres</button>
-  <div class="profile"><span class="avatar" id="avatar">?</span><div><b id="profileName">Joueur</b><small><i class="online"></i>En ligne</small></div></div>
+  <button class="profile" id="profileBtn" title="Mon compte"><span class="avatar" id="avatar">?</span><div><b id="profileName">Joueur</b><small id="profileSub"><i class="online"></i>En ligne</small></div></button>
 </aside>
 
 <header class="top">
@@ -37,18 +37,18 @@
 <main id="main">
   <section id="view-accueil" class="view on">
     <div class="hero" id="hero"></div>
-    <div class="row-head"><h2>Jeux les plus joués</h2><button class="seeall" data-go="jeux">Voir tout ›</button></div>
+    <div class="row-head"><h2>Tes jeux les plus joués</h2><small class="hint">Installés en premier</small><button class="seeall" data-go="jeux">Voir tout ›</button></div>
     <div class="cards" id="topGames"></div>
-    <div class="row-head"><h2>Applications</h2><button class="seeall" data-go="applis">Voir tout ›</button></div>
+    <div class="row-head"><h2>Tes applications</h2><small class="hint">Double-clic pour ouvrir</small><button class="seeall" data-go="applis">Voir tout ›</button></div>
     <div class="apps" id="topApps"></div>
-    <div class="row-head"><h2 id="recoTitle">Recommandés pour vous</h2></div>
-    <div class="recos" id="recos"></div>
+    <div id="recoBlock" hidden><div class="row-head"><h2 id="recoTitle">Recommandés pour toi</h2><small class="hint">Proposés par l’IA d’après tes jeux</small></div>
+    <div class="recos" id="recos"></div></div>
   </section>
 
   <section id="view-liste" class="view">
     <div class="list-head">
       <h2 id="listTitle">Bibliothèque</h2><span id="count"></span>
-      <div class="seg" id="installed"><button data-inst="tout" class="on">Tous</button><button data-inst="oui">Installés</button><button data-inst="non">Non installés</button></div>
+      <div class="seg" id="installed"><button data-inst="tout" class="on">Installés et joués</button><button data-inst="oui">Installés</button><button data-inst="non">Non installés</button></div>
       <select id="sort"><option value="joues">Les plus joués</option><option value="recents">Joués récemment</option><option value="nom">Nom (A → Z)</option><option value="taille">Taille</option></select>
     </div>
     <div class="grid" id="grid"></div>
@@ -69,15 +69,15 @@
   </section>
 </main>
 
-<aside class="right">
-  <button class="unfold" id="unfold" title="Ouvrir l’assistant IA"><img src="icon.png" alt=""><span>Assistant IA</span></button>
-  <section class="panel assistant">
-    <div class="panel-head"><img src="icon.png" alt=""><b>Assistant IA</b><span class="aistate" id="aiState"></span><button class="fold" id="fold" title="Réduire l’assistant">⟩</button></div>
-    <div class="chat" id="chat"></div>
-    <div class="chips" id="chips"></div>
-    <form class="ask" id="askForm"><input id="askInput" placeholder="Écris ta demande…" autocomplete="off" maxlength="500"><button title="Envoyer">➤</button></form>
-  </section>
-</aside>
+<button class="aifab" id="aifab" title="Assistant IA (ou dis « Hey History »)"><img src="icon.png" alt=""><span class="pulse"></span></button>
+<section class="aipop" id="aipop" aria-label="Assistant IA">
+  <div class="panel-head"><img src="icon.png" alt=""><div><b>Assistant History</b><small id="aiState">Gratuit · commandes et voix</small></div><button class="fold" id="fold" title="Réduire">✕</button></div>
+  <div class="chat" id="chat"></div>
+  <div class="chips" id="chips"></div>
+  <form class="ask" id="askForm"><button type="button" class="mic" id="micBtn" title="Parler (maintiens ou clique)">🎙</button><input id="askInput" placeholder="« Lance Rocket League », « monte le son »…" autocomplete="off" maxlength="500"><button title="Envoyer">➤</button></form>
+  <label class="toggle voice"><input type="checkbox" id="voiceToggle"><span></span>Écouter « Hey History » en permanence</label>
+  <small class="fine" id="voiceState"></small>
+</section>
 
 <footer class="player" id="player">
   <img class="pcover" id="pCover" alt="">
@@ -90,6 +90,23 @@
 </footer>
 
 <div class="toast" id="toast"></div>
+
+<section class="auth" id="auth" hidden>
+  <div class="authcard">
+    <img src="icon.png" alt="" class="authlogo">
+    <h1>Bienvenue sur <span>History</span></h1>
+    <p class="sub">Ta bibliothèque de jeux et d’applis, au même endroit.</p>
+    <div class="tabs" id="authTabs"><button data-auth="connexion" class="on">Se connecter</button><button data-auth="inscription">Créer un compte</button></div>
+    <form id="authForm" autocomplete="on">
+      <label class="field" id="pseudoField" hidden><span>Pseudo</span><input id="aPseudo" autocomplete="nickname" maxlength="20" placeholder="Ton pseudo"></label>
+      <label class="field"><span>E-mail</span><input id="aEmail" type="email" autocomplete="email" maxlength="254" placeholder="toi@exemple.fr" required></label>
+      <label class="field"><span>Mot de passe</span><input id="aPass" type="password" autocomplete="current-password" maxlength="128" placeholder="8 caractères, une lettre et un chiffre" required></label>
+      <p class="autherr" id="authErr"></p>
+      <button class="btn play big" id="authGo">Se connecter</button>
+    </form>
+    <button class="linkbtn" id="authSkip">Continuer sans compte</button>
+  </div>
+</section>
 
 <dialog id="sheet"><div class="sheet" id="sheetBody"></div></dialog>
 

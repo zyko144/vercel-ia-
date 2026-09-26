@@ -58,7 +58,7 @@ export async function scanSteam(steamPath) {
       if (/redistributable|steamworks common|proton|steam linux runtime/i.test(name)) continue;
       items.push({
         id: `steam:${id}`, source: 'steam', kind: 'game', name, installed: true,
-        installDir: path.join(dir, 'common', pick(acf, 'installdir') ?? ''),
+        installDir: path.join(dir, 'common', pick(acf, 'installdir') ?? ''), steamLibrary: dir, manifest: path.join(dir, file),
         size: Number(pick(acf, 'SizeOnDisk') ?? 0),
         minutes: times[id]?.minutes ?? 0, lastPlayed: times[id]?.lastPlayed || Number(pick(acf, 'LastPlayed') ?? 0) * 1000 || 0,
         art: {}, cdnArt: art(id), localArt: await steamLocalArt(steamPath, id), steamId: id,
