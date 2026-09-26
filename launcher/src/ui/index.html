@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: libimg:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>History Launcher</title>
 <link rel="stylesheet" href="style.css">
@@ -19,6 +19,7 @@
     <button data-view="applis"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Applications</button>
     <button data-view="favoris"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9a4.8 4.8 0 0 1 9-3 4.8 4.8 0 0 1 9 3c-2 4.6-9 9-9 9z"/></svg>Favoris</button>
     <button data-view="stats"><svg viewBox="0 0 24 24"><path d="M5 20V10m5 10V4m5 16v-8m5 8V7"/></svg>Statistiques</button>
+    <button data-view="classement"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>Classement</button>
     <button data-view="ia"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M6 6l2 2m8 8 2 2M6 18l2-2m8-8 2-2"/><circle cx="12" cy="12" r="3"/></svg>IA Assistant</button>
   </nav>
   <h5>Plateformes</h5>
@@ -54,29 +55,37 @@
   </section>
 
   <section id="view-stats" class="view">
-    <div class="list-head"><h2>Statistiques</h2></div>
-    <div class="statsbig" id="statsBig"></div>
+    <div class="list-head"><h2>Statistiques</h2><div class="tabs" id="periods"><button data-p="semaine" class="on">Semaine</button><button data-p="mois">Mois</button><button data-p="annee">Année</button></div></div>
+    <div class="statsgrid">
+      <div class="panel donutCard"><h3>Répartition du temps</h3><div class="donutWrap"><svg id="donut" viewBox="0 0 120 120"></svg><div class="legend" id="legend"></div></div></div>
+      <div class="panel"><h3>Les plus utilisés (temps total)</h3><div class="statsbig" id="statsBig"></div></div>
+    </div>
+  </section>
+
+  <section id="view-classement" class="view">
+    <div class="list-head"><h2>Classement des meilleurs jeux</h2><div class="tabs" id="rankTabs"><button data-rank="tout" class="on">Depuis toujours</button><button data-rank="semaine">Cette semaine</button><button data-rank="mois">Ce mois</button></div></div>
+    <div class="podium" id="podium"></div>
+    <div class="ranklist" id="ranklist"></div>
   </section>
 </main>
 
 <aside class="right">
+  <button class="unfold" id="unfold" title="Ouvrir l’assistant IA"><img src="icon.png" alt=""><span>Assistant IA</span></button>
   <section class="panel assistant">
-    <div class="panel-head"><img src="icon.png" alt=""><b>Assistant IA</b><span class="aistate" id="aiState"></span></div>
+    <div class="panel-head"><img src="icon.png" alt=""><b>Assistant IA</b><span class="aistate" id="aiState"></span><button class="fold" id="fold" title="Réduire l’assistant">⟩</button></div>
     <div class="chat" id="chat"></div>
     <div class="chips" id="chips"></div>
     <form class="ask" id="askForm"><input id="askInput" placeholder="Écris ta demande…" autocomplete="off" maxlength="500"><button title="Envoyer">➤</button></form>
-  </section>
-  <section class="panel statsCard">
-    <h3>Statistiques globales</h3>
-    <div class="tabs" id="periods"><button data-p="semaine" class="on">Semaine</button><button data-p="mois">Mois</button><button data-p="annee">Année</button></div>
-    <div class="donutWrap"><svg id="donut" viewBox="0 0 120 120"></svg><div class="legend" id="legend"></div></div>
   </section>
 </aside>
 
 <footer class="player" id="player">
   <img class="pcover" id="pCover" alt="">
   <div class="pmeta"><b id="pTitle">Aucune musique</b><small id="pArtist">Lance Spotify ou Deezer</small></div>
-  <div class="pctrl"><button data-key="previous" title="Précédent">⏮</button><button data-key="toggle" class="pp" id="pPlay" title="Lecture / pause">▶</button><button data-key="next" title="Suivant">⏭</button></div>
+  <div class="pmid">
+    <div class="pctrl"><button data-key="previous" title="Précédent">⏮</button><button data-key="toggle" class="pp" id="pPlay" title="Lecture / pause">▶</button><button data-key="next" title="Suivant">⏭</button></div>
+    <div class="pbar"><span id="pNow">0:00</span><div class="track"><i id="pFill"></i></div><span id="pDur">0:00</span></div>
+  </div>
   <div class="pvol"><button data-key="mute" title="Couper le son">🔈</button><button data-key="voldown" title="Moins fort">−</button><button data-key="volup" title="Plus fort">+</button></div>
 </footer>
 

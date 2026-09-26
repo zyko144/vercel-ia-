@@ -2,7 +2,7 @@
 //  1. SteamGridDB (si l'utilisateur a mis sa clé gratuite) : jaquette, grand fond, logo, icône pour presque tout ;
 //  2. sinon le magasin Steam : beaucoup de jeux d'autres launchers y sont aussi (même nom) → images officielles Steam.
 // Tout est gardé en cache 14 jours : rien n'est redemandé à chaque ouverture.
-import { steamArt, steamDetails } from './steam.js';
+import { steamArt, steamDetails, steamStoreAssets } from './steam.js';
 import { norm } from './sort.js';
 
 const DAY = 86_400_000;
@@ -19,6 +19,13 @@ export function sameName(a, b) {
   const x = clean(a);
   const y = clean(b);
   return Boolean(x) && x === y;
+}
+
+/** Images officielles actuelles d'un jeu Steam (API du magasin), sinon les anciennes adresses. */
+export async function steamImages(appid, fetchImpl = fetch) {
+  const found = (await steamStoreAssets([appid], fetchImpl))[String(appid)] ?? {};
+  const clean = Object.fromEntries(Object.entries(found).filter(([, v]) => v));
+  return { ...steamArt(appid), ...clean };
 }
 
 /** Cherche le jeu sur le magasin Steam. */
@@ -55,14 +62,18 @@ export async function enrich(item, { cache = null, gridKey = null, fetchImpl = f
     return { ...cache, details: id ? await steamDetails(id, fetchImpl) : null };
   }
   const out = { at: now, gridKey: gridKey ? 'oui' : null, art: {}, details: null, steamId: item.steamId ?? null };
-  const hasArt = Boolean(item.art?.cover || item.art?.hero);
+  const local = item.localArt ?? {};
+  const hasArt = Boolean(item.art?.cover || item.art?.hero || (local.cover && local.hero));
 
-  if (!hasArt || item.kind !== 'game') {
+  // Jeu Steam sans images sur le PC : adresses officielles actuelles du magasin
+  if (item.source === 'steam' && item.steamId && !(local.cover && local.hero && local.logo)) {
+    out.art = await steamImages(item.steamId, fetchImpl);
+  } else if (!hasArt || item.kind !== 'game') {
     const grid = await gridArt(item.name, gridKey, fetchImpl);
     if (grid) out.art = grid;
     if (!grid?.cover && item.kind === 'game' && !out.steamId) {
       out.steamId = await steamMatch(item.name, fetchImpl);
-      if (out.steamId) out.art = { ...steamArt(out.steamId), ...Object.fromEntries(Object.entries(out.art).filter(([, v]) => v)) };
+      if (out.steamId) out.art = { ...await steamImages(out.steamId, fetchImpl), ...Object.fromEntries(Object.entries(out.art).filter(([, v]) => v)) };
     }
   }
   if (details && out.steamId && item.kind === 'game') out.details = await steamDetails(out.steamId, fetchImpl);

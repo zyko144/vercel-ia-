@@ -4,7 +4,7 @@ import { filterSort } from '../core/sort.js';
 
 const $ = (id) => document.getElementById(id);
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
-const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', profile: 'Joueur', music: null, recos: [] };
+const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], song: null };
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -184,6 +184,33 @@ async function renderStats() {
   }
 }
 
+// ---------- Classement ----------
+const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+async function renderRanking() {
+  let list = games().filter((i) => i.minutes > 0).sort((a, b) => b.minutes - a.minutes);
+  let minutesOf = (i) => i.minutes;
+  if (state.rank !== 'tout') {
+    const s = await api.stats(state.rank);
+    const recent = s.recent ?? {};
+    minutesOf = (i) => recent[i.id] ?? 0;
+    list = games().filter((i) => minutesOf(i) > 0).sort((a, b) => minutesOf(b) - minutesOf(a));
+  }
+  if (!list.length) {
+    $('podium').innerHTML = '';
+    $('ranklist').innerHTML = `<div class="empty">${state.rank === 'tout' ? 'Pas encore de temps de jeu.' : 'Aucun jeu lancé sur cette période (le launcher compte le temps dès qu’il est ouvert).'}</div>`;
+    return;
+  }
+  const pod = (i, n) => i ? `<div class="pod ${['', 'first', 'second', 'third'][n]}" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}"><span class="medal">${MEDALS[n]}</span>${art(i)}<div class="meta"><b>${esc(i.name)}</b><small>${CLOCK}${hours(minutesOf(i))}</small></div></div>` : '<div></div>';
+  $('podium').innerHTML = pod(list[1], 2) + pod(list[0], 1) + pod(list[2], 3);
+  const max = minutesOf(list[0]) || 1;
+  $('ranklist').innerHTML = list.slice(3, 30).map((i, n) => {
+    const src = state.sources[i.source];
+    return `<div class="rrow" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}"><span class="n">${n + 4}</span><div class="thumb">${art(i)}</div>
+      <div><b>${esc(i.name)}</b><small>${esc(src?.label ?? 'PC')} · ${ago(i.lastPlayed)}</small></div>
+      <div class="barw"><i style="width:${Math.max(2, (minutesOf(i) / max) * 100)}%"></i></div><span class="t">${hours(minutesOf(i))}</span></div>`;
+  }).join('');
+}
+
 // ---------- Assistant ----------
 function say(text, who = 'bot') {
   const div = Object.assign(document.createElement('div'), { className: `msg ${who === 'me' ? 'me' : who === 'wait' ? 'wait' : ''}` });
@@ -214,13 +241,14 @@ async function ask(text) {
   const r = await api.ask(text).catch((err) => ({ reply: `Erreur : ${err.message}` }));
   wait.remove();
   say(r.reply || 'D’accord.');
-  if (r.action === 'show') go({ jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', bibliotheque: 'bibliotheque' }[r.value] ?? 'bibliotheque');
+  if (r.action === 'show') go({ jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque' }[r.value] ?? 'bibliotheque');
   if (r.action === 'sort') { state.list.sort = r.value; $('sort').value = r.value; go('bibliotheque'); }
   if (r.itemId) { const it = state.items.find((i) => i.id === r.itemId); if (it) select(it); }
   if (r.action === 'music') setTimeout(refreshMusic, 800);
 }
 
 // ---------- Musique ----------
+const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 async function refreshMusic() {
   const m = await api.nowPlaying().catch(() => null);
   state.music = m;
@@ -229,7 +257,26 @@ async function refreshMusic() {
   $('pPlay').textContent = m?.playing ? '⏸' : '▶';
   if (m?.cover) { $('pCover').src = m.cover; $('pCover').style.visibility = ''; } else $('pCover').removeAttribute('src');
   $('player').classList.toggle('music', Boolean(m?.playing));
+  // Progression : le titre démarre quand on le voit apparaître ; en pause, le compteur s'arrête
+  const key = m?.title ? `${m.artist}|${m.title}` : null;
+  const now = Date.now();
+  if (key && key !== state.song?.key) state.song = { key, start: now, pausedAt: null, duration: m.duration ?? 0 };
+  if (state.song) {
+    if (!m?.playing && !state.song.pausedAt) state.song.pausedAt = now;
+    if (m?.playing && state.song.pausedAt) { state.song.start += now - state.song.pausedAt; state.song.pausedAt = null; }
+    if (m?.duration) state.song.duration = m.duration;
+  }
+  tickProgress();
 }
+function tickProgress() {
+  const sg = state.song;
+  if (!sg || !state.music) { $('pNow').textContent = '0:00'; $('pDur').textContent = '0:00'; $('pFill').style.width = '0'; return; }
+  const elapsed = Math.min(((sg.pausedAt ?? Date.now()) - sg.start) / 1000, sg.duration || Infinity);
+  $('pNow').textContent = mmss(elapsed);
+  $('pDur').textContent = sg.duration ? mmss(sg.duration) : '–:––';
+  $('pFill').style.width = sg.duration ? `${Math.min(100, (elapsed / sg.duration) * 100)}%` : '0';
+}
+setInterval(tickProgress, 1000);
 
 // ---------- Navigation ----------
 function showView(name) {
@@ -244,6 +291,7 @@ function go(view) {
   renderPlatforms();
   if (state.view === 'liste') renderList();
   if (state.view === 'stats') renderStats();
+  if (state.view === 'classement') renderRanking();
   $('main').scrollTop = 0;
 }
 
@@ -314,6 +362,8 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.key) { await api.mediaKey(t.dataset.key); setTimeout(refreshMusic, 700); return; }
   if (t.dataset.inst) { document.querySelectorAll('#installed button').forEach((x) => x.classList.toggle('on', x === t)); state.list.installed = t.dataset.inst; return renderList(); }
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
+  if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
+  if (t.id === 'fold' || t.closest('#unfold')) return setFold(t.id === 'fold');
   if (t.dataset.reco !== undefined) {
     const r = state.recos[Number(t.dataset.reco)];
     if (r?.itemId) return select(state.items.find((i) => i.id === r.itemId));
@@ -364,6 +414,13 @@ $('saveKeys').addEventListener('click', async (e) => {
   load();
 });
 
+// Assistant repliable (choix gardé)
+function setFold(folded) {
+  document.body.classList.toggle('ai-folded', folded);
+  try { localStorage.setItem('ai-folded', folded ? '1' : '0'); } catch { /* stockage indisponible */ }
+}
+try { if (localStorage.getItem('ai-folded') === '1') document.body.classList.add('ai-folded'); } catch { /* stockage indisponible */ }
+
 // ---------- Données ----------
 function renderAll() {
   renderPlatforms();
@@ -390,14 +447,16 @@ api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(
 api.settings().then(showKeys);
 say('Salut ! 👋\nJe peux lancer un jeu, en installer un, vérifier ses fichiers, trier ta bibliothèque, piloter ta musique et répondre à tes questions.');
 load().then(() => {
-  renderStats();
-  // Aperçu : #sel=Nom pour ouvrir directement un élément
-  const wanted = !window.launcher && decodeURIComponent(location.hash.replace(/^#sel=/, ''));
-  if (wanted) select(state.items.find((i) => i.name === wanted) ?? state.sel);
+  renderStats().catch(() => {});
+  // Aperçu : #vue=classement ou #sel=Nom
+  const h = !window.launcher && decodeURIComponent(location.hash.slice(1));
+  if (h?.startsWith('vue=')) go(h.slice(4));
+  else if (h?.startsWith('sel=')) select(state.items.find((i) => i.name === h.slice(4)) ?? state.sel);
+  if (h?.includes('replie')) setFold(true);
 });
 refreshMusic();
 setInterval(refreshMusic, 5000);
-setInterval(renderStats, 60_000);
+setInterval(() => { if (state.view === 'stats') renderStats(); if (state.view === 'classement') renderRanking(); }, 60_000);
 
 // ---------- Aperçu hors Electron (données d'exemple, images locales du dossier demo/) ----------
 function demoApi() {
@@ -418,8 +477,8 @@ function demoApi() {
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
     details: async () => ({ developers: ['Rockstar North'], screenshots: [img('h1.jpg'), img('c2.jpg'), img('h2.jpg')], achievements: { done: 45, total: 77 } }),
     reco: async () => [1, 2, 3, 4, 5].map((n) => ({ name: `Jeu recommandé ${n}`, why: 'Même style que GTA V', steamId: String(n), art: { header: img(n % 2 ? 'h1.jpg' : 'h2.jpg') } })),
-    stats: async () => ({ split: { jeux: 1814, applis: 454, musique: 151, autres: 101 }, top: items.map((i) => ({ name: i.name, minutes: i.minutes })), profile: 'Noam' }),
-    nowPlaying: async () => ({ player: 'Spotify', artist: 'Bir Hakeim', title: 'Cherry Pie', playing: true, cover: img('c4.jpg') }),
+    stats: async () => ({ split: { jeux: 1814, applis: 454, musique: 151, autres: 101 }, top: items.map((i) => ({ name: i.name, minutes: i.minutes })), recent: { 'reg:valorant': 300, 'steam:271590': 240, 'epic:Fortnite': 120, 'epic:rl': 60 }, profile: 'Noam' }),
+    nowPlaying: async () => ({ player: 'Spotify', artist: 'Bir Hakeim', title: 'Cherry Pie', playing: true, cover: img('c4.jpg'), duration: 192 }),
     mediaKey: async () => true, ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }

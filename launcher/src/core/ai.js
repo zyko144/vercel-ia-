@@ -6,8 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { GoogleGenAI } from '@google/genai';
-import { sameName, steamMatch } from './art.js';
-import { steamArt } from './steam.js';
+import { sameName, steamImages, steamMatch } from './art.js';
 
 export const MODELS = { chat: process.env.GEMINI_CHAT_MODEL || 'gemini-3.5-flash-lite', search: process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.8-flash' };
 const TOKEN_SHAPE = /^[\w-]{20,}\.[\w-]{5,}\.[\w-]{20,}$/;
@@ -84,7 +83,7 @@ Sources conseillées : steamgriddb.com, le site officiel de l'éditeur, store.ep
     const confirmed = await steamMatch(found.officialName || name, fetchImpl);
     if (confirmed === found.steamAppId || (confirmed && sameName(found.officialName, name))) {
       out.steamId = confirmed;
-      out.art = steamArt(confirmed);
+      out.art = await steamImages(confirmed, fetchImpl);
       return out;
     }
   }

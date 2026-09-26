@@ -15,7 +15,7 @@ import { enrich, sameName } from '../src/core/art.js';
 import { aiFindArt, geminiKeyFromEnv } from '../src/core/ai.js';
 import { parseTitle } from '../src/core/media.js';
 import { dayKey, periodStats, statCategory } from '../src/core/tracker.js';
-import { ownedSteamGames, steamDetails } from '../src/core/steam.js';
+import { ownedSteamGames, steamDetails, steamLocalArt, steamStoreAssets } from '../src/core/steam.js';
 
 let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };
@@ -176,6 +176,7 @@ await check('Epic : jeux possédés non installés + images officielles, sans DL
 // Faux internet : magasin Steam, SteamGridDB, API Steam
 const web = async (u) => {
   const ok = (data) => ({ ok: true, json: async () => data });
+  if (u.includes('IStoreBrowseService')) return ok({ response: { store_items: [{ appid: 359550, assets: { asset_url_format: 'steam/apps/359550/abc123/${FILENAME}?t=1', library_capsule: 'library_600x900.jpg', library_capsule_2x: 'library_600x900_2x.jpg', library_hero: 'library_hero.jpg', header: 'header.jpg' } }] } });
   if (u.includes('storesearch')) return ok({ items: [{ type: 'app', id: 359550, name: "Tom Clancy's Rainbow Six® Siege" }, { type: 'app', id: 1, name: 'Rainbow Six Siege Soundtrack' }] });
   if (u.includes('appdetails')) return ok({ 359550: { success: true, data: { name: 'R6', short_description: '<b>Tactique</b> &amp; équipe', developers: ['Ubisoft Montreal'], genres: [{ description: 'Action' }], release_date: { date: '1 déc. 2015' }, metacritic: { score: 79 }, screenshots: [{ path_thumbnail: 's1.jpg' }] } } });
   if (u.includes('autocomplete')) return ok({ data: [{ id: 42, name: 'VALORANT' }] });
@@ -197,7 +198,7 @@ await check('même jeu malgré les variantes de nom, jamais un autre', async () 
 await check('images : jeu d’un autre launcher trouvé sur Steam (logo, jaquette, fiche)', async () => {
   const r = await enrich({ id: 'reg:r6', kind: 'game', name: 'Rainbow Six Siege', art: {} }, { fetchImpl: web, details: true });
   assert.equal(r.steamId, '359550');
-  assert.match(r.art.cover, /359550\/library_600x900/);
+  assert.equal(r.art.cover, 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/359550/abc123/library_600x900_2x.jpg?t=1', 'adresse officielle actuelle');
   assert.match(r.art.logo, /359550\/logo\.png/);
   assert.equal(r.details.description, 'Tactique & équipe');
   assert.equal(r.details.score, 79);
@@ -262,6 +263,31 @@ await check('statistiques : jeux / applis / musique / autres, sur 7, 30 ou 365 j
   const days = { [dayKey(now)]: { jeux: 60, musique: 30 }, [dayKey(now - 10 * 86_400_000)]: { jeux: 100 } };
   assert.deepEqual(periodStats(days, 7, now), { jeux: 60, applis: 0, musique: 30, autres: 0 });
   assert.equal(periodStats(days, 30, now).jeux, 160);
+});
+
+await check('images Steam sur le PC : ancien et nouveau rangement du cache', async () => {
+  const cache = path.join(steam, 'appcache', 'librarycache');
+  put(path.join(cache, '730_library_600x900.jpg'), 'x');
+  put(path.join(cache, '730_logo.png'), 'x');
+  put(path.join(cache, '1086940', 'library_600x900.jpg'), 'x');
+  put(path.join(cache, '1086940', 'a1b2c3', 'library_hero.jpg'), 'x');
+  put(path.join(cache, '1086940', 'logo.png'), 'x');
+  assert.deepEqual(await steamLocalArt(steam, '730'), { cover: path.join(cache, '730_library_600x900.jpg'), logo: path.join(cache, '730_logo.png') });
+  const bg3 = await steamLocalArt(steam, '1086940');
+  assert.equal(bg3.hero, path.join(cache, '1086940', 'a1b2c3', 'library_hero.jpg'));
+  assert.equal(bg3.logo, path.join(cache, '1086940', 'logo.png'));
+  const lib = await scanAll({ steam, epic, epicCatalog: epicCat, registry: [] });
+  assert.ok(lib.find((i) => i.steamId === '730').localArt.cover, 'le scan joint les images locales');
+});
+
+await check('images Steam en ligne : API officielle, et les images du PC passent devant', async () => {
+  const a = await steamStoreAssets(['359550'], web);
+  assert.match(a['359550'].hero, /store_item_assets\/steam\/apps\/359550\/abc123\/library_hero\.jpg/);
+  const store = { art: { 'steam:730': { art: { cover: 'https://en-ligne/cover.jpg', hero: 'https://en-ligne/hero.jpg' } } }, time: {}, items: {}, names: {} };
+  const merged = merge([{ id: 'steam:730', source: 'steam', kind: 'game', name: 'CS2', minutes: 0, lastPlayed: 0, art: {}, cdnArt: { cover: 'ancienne', logo: 'ancien-logo' }, localArt: { cover: 'C:/cache/730.jpg' } }], store, (l) => Object.fromEntries(Object.entries(l ?? {}).map(([k]) => [k, `libimg://img/${k}`])));
+  assert.equal(merged[0].art.cover, 'libimg://img/cover', 'image du PC d’abord');
+  assert.equal(merged[0].art.hero, 'https://en-ligne/hero.jpg', 'puis l’API officielle');
+  assert.equal(merged[0].art.logo, 'ancien-logo', 'l’ancienne adresse en dernier recours');
 });
 
 console.log(`\n${passed} vérifications passées.`);

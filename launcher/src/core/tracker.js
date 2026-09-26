@@ -42,6 +42,15 @@ export function periodStats(days, n, now = Date.now()) {
   return out;
 }
 
+/** Minutes par élément sur les N derniers jours (classement de la semaine / du mois). */
+export function periodItems(days, n, now = Date.now()) {
+  const out = {};
+  for (let i = 0; i < n; i++) {
+    for (const [id, m] of Object.entries(days?.[dayKey(now - i * 86_400_000)]?.items ?? {})) out[id] = (out[id] ?? 0) + m;
+  }
+  return out;
+}
+
 export function startTracker(getItems, store, onChange, everyMs = 60_000) {
   const tick = async () => {
     const items = getItems();
@@ -55,6 +64,7 @@ export function startTracker(getItems, store, onChange, everyMs = 60_000) {
       t.lastPlayed = now;
       const cat = statCategory(items.find((i) => i.id === id));
       day[cat] = (day[cat] ?? 0) + everyMs / 60_000;
+      (day.items ??= {})[id] = (day.items[id] ?? 0) + everyMs / 60_000;
     }
     // On garde un an d'historique
     for (const k of Object.keys(store.data.days)) if (k < dayKey(now - 400 * 86_400_000)) delete store.data.days[k];
