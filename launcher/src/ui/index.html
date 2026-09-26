@@ -69,8 +69,33 @@
   </section>
 
   <section id="view-amis" class="view">
-    <div class="list-head"><h2>Amis Steam</h2><span id="friendsCount"></span><button class="btn" id="friendsRefresh" type="button">↻ Actualiser</button></div>
-    <div id="friendsBody"></div>
+    <div class="list-head"><h2>Amis</h2><div class="tabs" id="friendTabs"><button data-ftab="history" class="on">History</button><button data-ftab="steam">Steam</button></div><span id="friendsCount"></span><button class="btn" id="friendsRefresh" type="button">↻ Actualiser</button></div>
+    <div id="fHistory">
+      <div class="pcgrid">
+        <div class="panel">
+          <h3>👥 Amis History</h3>
+          <p class="hint">Tes potes qui ont History Launcher, quelle que soit leur plateforme (Steam, Epic, Riot…).</p>
+          <div class="codebox"><span>Ton code ami</span><b id="myCode">…</b><button class="btn" type="button" id="copyCode">Copier</button></div>
+          <div class="addfriend"><input id="addCode" placeholder="Code ami de ton pote (ex. Max#3F9A2C)" maxlength="40"><button class="btn play" type="button" id="addFriend">Ajouter</button></div>
+          <div id="hRequests"></div>
+          <div class="hlist" id="hFriends"></div>
+        </div>
+        <div class="panel">
+          <h3>🎉 Soirées jeu</h3>
+          <p class="hint">Choisis un jeu et une heure : tes amis sont invités et tout le monde reçoit un rappel 10 min avant.</p>
+          <div id="eventsList"></div>
+          <details class="neweve"><summary class="btn">+ Organiser une soirée</summary>
+            <div class="eveform">
+              <label>Jeu<select id="eGame"></select></label>
+              <label>Quand<input type="datetime-local" id="eAt"></label>
+              <b class="sub">Inviter</b><div class="checks" id="eInvites"></div>
+              <button class="btn play" type="button" id="eCreate">Envoyer les invitations</button>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+    <div id="fSteam" hidden><div id="friendsBody"></div></div>
   </section>
 
   <section id="view-pc" class="view">
@@ -98,7 +123,7 @@
   </section>
 
   <section id="view-classement" class="view">
-    <div class="list-head"><h2>Classement des meilleurs jeux</h2><div class="tabs" id="rankTabs"><button data-rank="tout" class="on">Depuis toujours</button><button data-rank="deux">2 dernières semaines</button></div></div>
+    <div class="list-head"><h2>Classement des meilleurs jeux</h2><div class="tabs" id="rankTabs"><button data-rank="tout" class="on">Depuis toujours</button><button data-rank="deux">2 dernières semaines</button><button data-rank="amis">Entre amis (7 jours)</button></div></div>
     <div class="podium" id="podium"></div>
     <div class="ranklist" id="ranklist"></div>
   </section>
@@ -114,7 +139,7 @@
   <small class="fine" id="voiceState"></small>
 </section>
 
-<footer class="player" id="player">
+<footer class="player" id="player" hidden>
   <img class="pcover" id="pCover" alt="">
   <div class="pmeta"><b id="pTitle">Aucune musique</b><small id="pArtist">Lance Spotify ou Deezer</small></div>
   <div class="pmid">
@@ -185,6 +210,8 @@
     <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
     <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
     <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher pendant que je joue</label>
+    <label class="toggle"><input type="checkbox" id="discordStatus"><span></span>Afficher le jeu en cours sur mon profil Discord</label>
+    <label class="toggle"><input type="checkbox" id="shareActivity"><span></span>Montrer à mes amis History à quoi je joue et mon temps de la semaine</label>
     <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
     <button type="button" class="btn" id="openKeys">⌨ Raccourcis clavier</button>
     <div class="keybox">

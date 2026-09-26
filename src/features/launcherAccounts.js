@@ -109,6 +109,10 @@ export async function handleAccountApi(req, res, url, { readJson, send, clientIp
     if (route === 'POST /api/compte/connexion') { const r = await login(await readJson(req), ip); return send(res, r.status, r); }
     if (route === 'POST /api/compte/deconnexion') { const r = await logout(token); return send(res, r.status, r); }
     if (route === 'GET /api/compte/moi') { const c = await me(token); return c ? send(res, 200, { compte: c }) : send(res, 401, { error: 'Session expirée, reconnecte-toi.' }); }
+    if (/^\/api\/compte\/(amis|presence|soirees)(\/|$)/.test(url.pathname)) {
+      const { handleSocialApi } = await import('./launcherSocial.js');
+      return await handleSocialApi(req, res, url, { readJson, send });
+    }
   } catch {
     return send(res, 400, { error: 'Demande illisible.' });
   }

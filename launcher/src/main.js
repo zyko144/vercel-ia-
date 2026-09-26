@@ -26,6 +26,7 @@ import { safeGameDir, uninstallFiles } from './core/manage.js';
 import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
+import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
@@ -309,7 +310,8 @@ function gameMode(item) {
 let playSession = null;
 let lastActive = { ids: [], at: 0 };
 // Partie en cours : lancée par le launcher, sinon repérée par le suivi du temps (dans les 2 dernières minutes)
-const currentSession = () => playSession ?? (Date.now() - lastActive.at < 120_000 ? (() => { const g = items.find((i) => lastActive.ids.includes(i.id) && i.kind === 'game'); return g ? { id: g.id, name: g.name, start: null } : null; })() : null);
+let detected = null;
+const currentSession = () => playSession ?? (detected && Date.now() - lastActive.at < 120_000 && lastActive.ids.includes(detected.id) ? detected : null);
 let boosted = null;
 const boostSettings = () => ({ enabled: false, power: true, close: [], restore: true, ...(store.data.settings.boost ?? {}) });
 function notify(title, body) {
@@ -573,6 +575,8 @@ ipcMain.handle('accounts:set', async (_e, patch) => {
 });
 ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
+  if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
+  if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
   if ('dealAlerts' in patch) store.data.settings.dealAlerts = Boolean(patch.dealAlerts);
   if ('gameMode' in patch) store.data.settings.gameMode = Boolean(patch.gameMode);
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
@@ -677,6 +681,70 @@ ipcMain.handle('deals:get', async () => {
   return checkDeals(false);
 });
 ipcMain.handle('deals:open', (_e, appid) => (/^\d{1,8}$/.test(String(appid)) ? openLink(`https://store.steampowered.com/app/${appid}`) : null));
+
+// ---------- Fin de partie, statut Discord et présence pour les amis History (toutes les 30 s) ----------
+const rpc = new DiscordPresence();
+let lastPresence = 0;
+setInterval(async () => {
+  if (playSession && Date.now() - playSession.start > 90_000) {
+    const it = items.find((i) => i.id === playSession.id);
+    const running = it && activeItems([it], await runningPaths()).size > 0;
+    playSession.misses = running ? 0 : (playSession.misses ?? 0) + 1;
+    if (playSession.misses >= 2) playSession = null;
+  }
+  const s = currentSession();
+  if (store.data.settings.discordStatus !== false) await rpc.set(s ? activityFor(s, items.find((i) => i.id === s.id)) : null).catch(() => {});
+  else if (rpc.ready) await rpc.set(null).catch(() => {});
+  if (Date.now() - lastPresence > 55_000) { lastPresence = Date.now(); sendPresence(s).catch(() => {}); }
+}, 30_000);
+
+async function sendPresence(s) {
+  const token = secret('account');
+  if (!token) return;
+  const share = store.data.settings.shareActivity !== false;
+  const week = periodItems(store.data.days, 7);
+  const games = Object.entries(week).map(([id, m]) => [items.find((i) => i.id === id), m]).filter(([i]) => i?.kind === 'game');
+  const top = games.sort((a, b) => b[1] - a[1])[0]?.[0]?.name ?? null;
+  await api('/api/compte/presence', { method: 'POST', token, body: { playing: share && s ? s.name : null, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
+}
+
+// ---------- Amis History (comptes du launcher) et soirées jeu ----------
+async function social(pathname, body) {
+  const token = secret('account');
+  if (!token) return { status: 401, error: 'Connecte-toi à ton compte History pour ça.' };
+  return api(pathname, { method: body ? 'POST' : 'GET', token, body }).catch(() => ({ status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }));
+}
+const ID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
+ipcMain.handle('hfriends:get', () => social('/api/compte/amis'));
+ipcMain.handle('hfriends:add', (_e, code) => social('/api/compte/amis/ajouter', { code: String(code ?? '').slice(0, 40) }));
+ipcMain.handle('hfriends:accept', (_e, id) => social('/api/compte/amis/accepter', { id: ID(id) }));
+ipcMain.handle('hfriends:remove', (_e, id) => social('/api/compte/amis/retirer', { id: ID(id) }));
+ipcMain.handle('events:get', () => social('/api/compte/soirees'));
+ipcMain.handle('events:create', (_e, e) => social('/api/compte/soirees', { jeu: String(e?.jeu ?? '').slice(0, 80), at: Number(e?.at), invites: (Array.isArray(e?.invites) ? e.invites : []).slice(0, 50).map(ID) }));
+ipcMain.handle('events:respond', (_e, id, reponse) => social('/api/compte/soirees/repondre', { id: ID(id), reponse: reponse === 'oui' ? 'oui' : 'non' }));
+ipcMain.handle('events:cancel', (_e, id) => social('/api/compte/soirees/annuler', { id: ID(id) }));
+
+// Rappels : nouvelle invitation, et 10 min avant une soirée acceptée (clic = lancer le jeu s'il est installé)
+async function checkEvents() {
+  const r = await social('/api/compte/soirees');
+  if (!Array.isArray(r.soirees)) return;
+  const seen = (store.data.eventsSeen ??= {});
+  const when = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  for (const e of r.soirees) {
+    if (!e.mine && e.ma === null && !seen[`inv:${e.id}`]) { seen[`inv:${e.id}`] = Date.now(); notify(`${e.organisateur} t’invite à jouer`, `${e.game}, ${when(e.at)}. Réponds dans Amis › Soirées.`); }
+    const soon = e.at - Date.now();
+    if (e.ma === 'oui' && soon > 0 && soon <= 11 * 60_000 && !seen[`go:${e.id}`]) {
+      seen[`go:${e.id}`] = Date.now();
+      const game = items.find((i) => i.installed && norm(i.name) === norm(e.game));
+      const n = new Notification({ title: `${e.game} dans ${Math.max(1, Math.round(soon / 60_000))} min`, body: game ? 'Clique pour lancer le jeu.' : `Soirée organisée par ${e.organisateur}.`, icon: ICON });
+      if (game) n.on('click', () => doAction(game.id, 'launch').catch(() => {}));
+      n.show();
+    }
+  }
+  for (const [k, t] of Object.entries(seen)) if (Date.now() - t > 30 * 86_400_000) delete seen[k];
+  store.save();
+}
+setInterval(() => checkEvents().catch(() => {}), 2 * 60_000);
 
 // ---------- Statistiques ----------
 ipcMain.handle('stats:get', (_e, period) => {
@@ -845,9 +913,14 @@ async function start() {
   globalShortcut.register('CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
   setTimeout(() => checkDeals().catch(() => {}), 60_000);
   setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);
-  startTracker(() => items, store, (ids) => { lastActive = { ids, at: Date.now() }; win?.webContents.send('lib:active', ids); }, 60_000, accountFor);
+  startTracker(() => items, store, (ids) => {
+    lastActive = { ids, at: Date.now() };
+    const g = items.find((i) => ids.includes(i.id) && i.kind === 'game');
+    if (g && detected?.id !== g.id) detected = { id: g.id, name: g.name, start: Date.now() - 60_000 };
+    win?.webContents.send('lib:active', ids);
+  }, 60_000, accountFor);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
-app.on('before-quit', () => { quitting = true; endBoost().catch(() => {}); });
+app.on('before-quit', () => { quitting = true; endBoost().catch(() => {}); rpc.reset(); });
 app.on('window-all-closed', (e) => e.preventDefault());
 
