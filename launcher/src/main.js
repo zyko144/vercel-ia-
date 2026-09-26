@@ -9,7 +9,7 @@ import os from 'node:os';
 import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library.js';
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
-import { activeItems, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
+import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
 import { heatAlerts, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
@@ -1316,6 +1316,7 @@ ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; s
 
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
+ipcMain.handle('stats:game', (_e, id) => itemHistory(store.data.days, String(id), 30));
 ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('app:log', async () => {
   const file = path.join(app.getPath('userData'), 'erreurs.log');

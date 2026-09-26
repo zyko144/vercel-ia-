@@ -627,3 +627,9 @@ body.big .gcard:hover, body.big .gridcard:hover { transform: translateY(-6px) sc
 .wnew > div > span { font-size: 20px; width: 28px; text-align: center; }
 .wnew b { display: block; }
 .wnew small { color: var(--muted); }
+
+/* Historique d'un jeu (fiche) */
+.histo { width: 100%; height: 90px; display: block; margin-bottom: 8px; }
+.histo rect { fill: rgba(255, 255, 255, .07); stroke: none; }
+.histo rect.on { fill: var(--blue); opacity: .85; }
+.histo rect.on:hover { opacity: 1; fill: var(--cyan); }

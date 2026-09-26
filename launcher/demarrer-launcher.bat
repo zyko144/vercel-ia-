@@ -14,7 +14,7 @@ rem Mise a jour automatique : recupere la derniere version (le fichier se relanc
 if /i not "%~1"=="nopull" (
   where git >nul 2>nul && (
     echo Recherche de mises a jour...
-    git pull --ff-only -q 2>nul || echo Mise a jour impossible pour l instant, on continue avec cette version.
+    git pull --ff-only -q 2>nul || echo Mise a jour impossible : des fichiers ont ete modifies a la main. Lance restaurer-launcher.bat pour revenir a la version officielle.
     "%~f0" nopull
   )
 )
