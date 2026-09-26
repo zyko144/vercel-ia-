@@ -24,9 +24,9 @@ let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };
 const G = '444444444444444444';
 
-await check('gratuit : 60 min d’IA vocale, pas de couleurs, pas de voix au choix', async () => {
+await check('gratuit : 30 min d’IA vocale, pas de couleurs, pas de voix au choix', async () => {
   assert.equal(premium.planOf(G).key, 'gratuit');
-  assert.equal(premium.voiceUsage(G).limit, 60);
+  assert.equal(premium.voiceUsage(G).limit, 30);
   premium.setBranding(G, { name: 'Dictature', color: 0xff0000 });
   assert.equal(premium.brandingOf(G), null, 'les couleurs attendent une offre');
   premium.setVoice(G, 'Kore');
