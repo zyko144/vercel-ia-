@@ -11,7 +11,7 @@
 // au premier paiement du nouveau serveur, le parrain gagne 1 mois offert.
 import crypto from 'node:crypto';
 import { config } from '../config.js';
-import { load, save } from '../storage.js';
+import { load, save, writeNow } from '../storage.js';
 import { PLANS, planOf, setPlan } from './premium.js';
 
 // Offres au mois (31 jours) ou à l'année (365 jours, 2 mois offerts)
@@ -131,16 +131,27 @@ export async function handleIpn(rawBody) {
     .then((r) => r.text()).catch(() => 'ERREUR');
   const p = new URLSearchParams(rawBody);
   if (verify.trim() !== 'VERIFIED') return { ok: false, why: `PayPal ne confirme pas (${verify.trim().slice(0, 20)})` };
+  // Remboursement ou litige perdu : l'offre payée est retirée (on ne garde jamais un accès non payé)
+  if (['Refunded', 'Reversed'].includes(p.get('payment_status'))) return revokePayment(p);
   if (p.get('payment_status') !== 'Completed') return { ok: false, why: `statut ${p.get('payment_status')}` };
   if (!PAYPAL_EMAIL || (p.get('receiver_email') ?? '').toLowerCase() !== PAYPAL_EMAIL.toLowerCase()) return { ok: false, why: 'mauvais destinataire' };
   const [guildId, plan] = String(p.get('custom') ?? '').split('|');
   if (!ID.test(guildId) || !PRICES[plan]) return { ok: false, why: 'serveur ou offre inconnus' };
   if (p.get('mc_currency') !== 'EUR' || Number(p.get('mc_gross')) + 0.001 < Number(PRICES[plan])) return { ok: false, why: 'montant incorrect' };
-  const all = await payments();
   const txn = p.get('txn_id');
-  if (!txn || all[txn]) return { ok: false, why: 'paiement déjà traité' };
-  all[txn] = { guildId, plan, amount: p.get('mc_gross'), payer: p.get('payer_email') ?? null, at: Date.now() };
-  save('paiements', all);
+  if (!txn || !/^[A-Z0-9-]{1,32}$/i.test(txn)) return { ok: false, why: 'transaction invalide' };
+  // Deux notifications identiques en même temps : la seconde attend, puis voit le paiement déjà traité
+  if (inFlight.has(txn)) return { ok: false, why: 'paiement déjà en cours de traitement' };
+  inFlight.add(txn);
+  try {
+    const all = await payments();
+    if (all[txn]) return { ok: false, why: 'paiement déjà traité' };
+    all[txn] = { guildId, plan, amount: p.get('mc_gross'), at: Date.now() }; // pas d'adresse e-mail gardée : inutile, donc jamais exposée
+    await writeNow('paiements', all);
+  } finally {
+    inFlight.delete(txn);
+  }
+  paymentLog('paiement', { txn, guildId, plan, amount: p.get('mc_gross') });
   const result = setPlan(guildId, baseOf(plan), daysOf(plan));
   console.log(`[paypal] ${guildId} : ${plan} activé ${daysOf(plan)} jours (${p.get('mc_gross')} €)`);
   await rewardSponsor(guildId).catch(() => {});
@@ -150,6 +161,40 @@ export async function handleIpn(rawBody) {
   const chef = await client?.users.fetch(config.ownerId).catch(() => null);
   await chef?.send(`💶 Nouveau paiement PayPal : ${p.get('mc_gross')} € · ${PLANS[baseOf(plan)].label} · ${guild?.name ?? guildId}`).catch(() => {});
   return { ok: true, plan: result };
+}
+
+const inFlight = new Set();
+
+/** Journal des paiements, activations et remboursements (sans adresse e-mail). */
+function paymentLog(kind, detail) {
+  load('paiements-journal', []).then((list) => {
+    const next = [...(Array.isArray(list) ? list : []), { at: Date.now(), kind, ...detail }].slice(-500);
+    save('paiements-journal', next);
+  }).catch(() => {});
+  console.log(`[paiements] ${kind}`, JSON.stringify(detail));
+}
+
+/** Paiement remboursé ou annulé par PayPal : l'offre du serveur repasse en gratuit. */
+async function revokePayment(p) {
+  const parent = p.get('parent_txn_id');
+  const all = await payments();
+  const original = parent ? all[parent] : null;
+  if (!original) return { ok: false, why: 'remboursement d’un paiement inconnu' };
+  if (original.revoked) return { ok: false, why: 'déjà retiré' };
+  original.revoked = { at: Date.now(), status: p.get('payment_status') };
+  await writeNow('paiements', all);
+  // Les autres paiements encore valables de ce serveur restent acquis ; sinon, retour à l'offre gratuite
+  const still = Object.values(all)
+    .filter((x) => x.guildId === original.guildId && !x.revoked)
+    .map((x) => ({ plan: baseOf(x.plan), until: x.at + daysOf(x.plan) * 86_400_000 }))
+    .filter((x) => x.until > Date.now())
+    .sort((a, b) => b.until - a.until)[0];
+  if (still) setPlan(original.guildId, still.plan, Math.ceil((still.until - Date.now()) / 86_400_000));
+  else setPlan(original.guildId, 'gratuit', 0);
+  paymentLog('remboursement', { txn: parent, guildId: original.guildId, status: p.get('payment_status') });
+  const chef = await client?.users.fetch(config.ownerId).catch(() => null);
+  await chef?.send(`↩️ Paiement ${p.get('payment_status') === 'Refunded' ? 'remboursé' : 'annulé (litige)'} : l’offre du serveur ${original.guildId} est retirée.`).catch(() => {});
+  return { ok: true, revoked: true };
 }
 
 export async function paymentHistory() {

@@ -6,6 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { config } from './config.js';
 import { handleSalleWeb } from './casinho/salle/web.js';
+import { allowAttempt, clientIp, isSecure } from './dashboard/auth.js';
 
 const KEEP_ALIVE_MS = 10 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -64,6 +65,46 @@ function readRaw(req) {
   });
 }
 
+/**
+ * En-têtes de sécurité sur toutes les réponses. Les pages qui ont leurs propres règles (tableaux de bord,
+ * arcade dans l'Activité Discord) les remplacent ensuite.
+ */
+function hardenResponse(req, res, url) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), payment=(), usb=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('X-Powered-By', '');
+  res.removeHeader('X-Powered-By');
+  if (isSecure(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // L'arcade s'ouvre dans l'Activité Discord (iframe) ; le reste ne doit jamais être encadré par un autre site
+  const framed = url.pathname.startsWith('/arcade') || url.pathname.startsWith('/.proxy') || url.pathname.startsWith('/salle');
+  if (!framed) {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self' https://www.paypal.com");
+  }
+}
+
+/** Origines du site public (Vercel, Render) : les seules autorisées à lire l'API publique depuis un navigateur. */
+function siteOrigins() {
+  return [config.publicUrl, config.site.url, process.env.APP_URL, 'https://historyia.vercel.app']
+    .filter(Boolean).map((u) => { try { return new URL(u).origin; } catch { return null; } }).filter(Boolean);
+}
+function allowSiteOrigin(req, res) {
+  const origin = String(req.headers.origin ?? '');
+  if (origin && siteOrigins().includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+}
+function preflight(req, res) {
+  allowSiteOrigin(req, res);
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Max-Age', '600');
+  res.writeHead(204);
+  return res.end();
+}
+
 const send = (res, status, body) => {
   const isText = typeof body === 'string';
   res.writeHead(status, { 'Content-Type': isText ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8' });
@@ -76,7 +117,27 @@ const send = (res, status, body) => {
  */
 export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => null, liveRoute = null, dashboard = null) {
   const server = http.createServer(async (req, res) => {
+    try {
+      await route(req, res);
+    } catch (err) {
+      // Jamais de détail interne (pile d'appels, message d'erreur) renvoyé au visiteur
+      console.error('[http]', req.method, String(req.url).split('?')[0], err?.message ?? err);
+      if (!res.headersSent) send(res, 500, { error: 'Erreur du serveur.' });
+      else res.end();
+    }
+  });
+
+  async function route(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    hardenResponse(req, res, url);
+    // Surface d'attaque réduite : seulement GET, HEAD, POST et OPTIONS
+    if (!['GET', 'HEAD', 'POST', 'OPTIONS'].includes(req.method)) return send(res, 405, 'méthode refusée');
+    if (req.method === 'OPTIONS') return preflight(req, res);
+    // Anti-automatisation : au-delà de 600 requêtes par minute depuis une même adresse, on refuse
+    if (!url.pathname.startsWith('/health') && !allowAttempt('http', clientIp(req), 600, 60_000)) {
+      res.setHeader('Retry-After', '60');
+      return send(res, 429, { error: 'Trop de requêtes, ralentis un peu.' });
+    }
 
     if (url.pathname.startsWith('/voice-test/')) {
       const file = publicFile(url.pathname);
@@ -154,14 +215,14 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       if (url.pathname === '/payer') return html(pay.paymentPage(url));
       if (url.pathname === '/merci') return html(pay.thanksPage());
       if (url.pathname === '/statut') return html(pay.statusPage());
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      allowSiteOrigin(req, res);
       return send(res, 200, pay.statusJson());
     }
 
     // Chiffres en direct et classement public des serveurs (site vitrine)
     if ((url.pathname === '/api/public' || url.pathname === '/api/classement') && req.method === 'GET') {
       const { publicStats, publicRanking } = await import('./features/publicStats.js');
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      allowSiteOrigin(req, res);
       res.setHeader('Cache-Control', 'public, max-age=60');
       return send(res, 200, url.pathname === '/api/public' ? await publicStats() : await publicRanking());
     }
@@ -190,9 +251,16 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     }
 
     const status = getStatus();
-    if (url.pathname.startsWith('/health')) return send(res, 200, status);
+    // Page d'état publique : le strict minimum (pas de version, de mémoire ni de détail interne)
+    if (url.pathname.startsWith('/health')) return send(res, 200, { ok: true, discord: status.discord ?? null });
+    if (url.pathname !== '/') return send(res, 404, 'introuvable');
     return send(res, 200, `${status.bot ?? 'Bot'} : ${status.discord === 'ready' ? 'en ligne ✅' : 'démarrage…'}`);
-  });
+  }
+
+  // Lenteurs volontaires (slowloris) : délais maximaux pour recevoir en-têtes et corps
+  server.headersTimeout = 20_000;
+  server.requestTimeout = 60_000;
+  server.maxHeadersCount = 100;
 
   server.listen(config.port, () => console.log(`🌐 Serveur HTTP sur le port ${config.port}`));
   startHttpServer.server = server;

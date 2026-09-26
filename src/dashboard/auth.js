@@ -97,13 +97,24 @@ export function loginLinkFor(userId) {
 export const isSecure = (req) => req.headers['x-forwarded-proto'] === 'https' || Boolean(req.socket?.encrypted);
 const cookieName = (req) => (isSecure(req) ? '__Host-aiv_session' : 'aiv_session');
 
+/**
+ * L'adresse IP du visiteur, impossible à falsifier : le proxy de l'hébergeur AJOUTE l'adresse qui se connecte
+ * à la fin de X-Forwarded-For, alors que le début de la liste peut être écrit par n'importe qui.
+ * Via le relais Vercel, la dernière adresse est celle de Vercel, qui met celle du visiteur en premier.
+ */
+export function edgeIp(req) {
+  const list = String(req.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  return list.at(-1) || req.socket?.remoteAddress || 'inconnue';
+}
 export function clientIp(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-  return forwarded || req.socket?.remoteAddress || 'inconnue';
+  const list = String(req.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  const edge = edgeIp(req);
+  return req.headers['x-vercel-id'] && list.length > 1 ? `${edge}>${list[0].slice(0, 45)}` : edge;
 }
 
 /** Adresse IP à moitié masquée (assez pour reconnaître ses appareils, pas plus). */
 export function maskIp(ip) {
+  ip = String(ip).split('>').at(-1);
   const v4 = ip.replace(/^::ffff:/, '').match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
   if (v4) return `${v4[1]}.${v4[2]}.x.x`;
   return ip.includes(':') ? `${ip.split(':').slice(0, 2).join(':')}:…` : ip;

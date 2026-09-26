@@ -39,7 +39,7 @@ function fatal(text) {
   $('app').innerHTML = `<div class="fatal"><div style="font-size:46px">🏴‍☠️</div><p>${esc(text)}</p></div>`;
 }
 const nameOf = (id) => state?.players.find((p) => p.id === id)?.name ?? state?.game?.names?.[id] ?? 'Joueur';
-const avatar = (id, cls = 'avatar') => (/^\d+$/.test(String(id)) ? `<img class="${cls}" src="avatar/${id}.png${guild ? `?g=${guild}` : ''}" alt="">` : `<span class="${cls} botav">🤖</span>`);
+const avatar = (id, cls = 'avatar') => (/^\d+$/.test(String(id)) ? `<img class="${cls}" src="avatar/${id}.png${guild ? `?g=${encodeURIComponent(guild)}` : ''}" alt="">` : `<span class="${cls} botav">🤖</span>`);
 
 // ------------------------------------------------------------------ Connexion
 async function login() {
@@ -59,8 +59,10 @@ async function login() {
     if (!room) throw new Error('Ouvre l’arcade depuis un salon du serveur.');
     return;
   }
-  room = params.get('room');
-  guild = params.get('guild');
+  // Identifiants Discord uniquement (chiffres) : rien d'autre ne peut être glissé dans la page par le lien
+  const id = (v) => (/^\d{5,25}$/.test(String(v ?? '')) ? String(v) : null);
+  room = id(params.get('room'));
+  guild = id(params.get('guild'));
   const fromHash = new URLSearchParams(location.hash.slice(1)).get('s');
   if (fromHash) {
     try { sessionStorage.setItem('arcade', fromHash); } catch { /* sans stockage */ }

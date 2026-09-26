@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
+import { allowAttempt } from '../dashboard/auth.js';
 import { maintenance, maintenanceText } from '../features/maintenance.js';
 import { handleBlindTestComponent, isBlindTestComponent } from '../music/blindtest.js';
 import { config } from '../config.js';
@@ -58,6 +59,11 @@ export async function onInteraction(client, interaction) {
     if (interaction.isAutocomplete()) {
       if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicAutocomplete(interaction);
       return await handleGameAutocomplete(interaction);
+    }
+    // Anti-spam global : 25 actions (commandes, boutons, menus) en 20 s par personne au maximum
+    if (interaction.user.id !== config.ownerId && !allowAttempt('discord-act', interaction.user.id, 25, 20_000)) {
+      if (interaction.isRepliable?.()) await interaction.reply({ content: '⏳ Doucement ! Trop d’actions d’affilée, attends quelques secondes.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      return;
     }
     // Mode maintenance (tableau de bord du chef) : seul le chef utilise le bot
     if (maintenance().on && interaction.user.id !== config.ownerId && interaction.isRepliable?.()) {

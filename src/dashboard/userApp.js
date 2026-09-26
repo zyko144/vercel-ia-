@@ -41,7 +41,7 @@ const secret = () => randomBytes(32).toString('base64url');
 const base = () => (process.env.APP_URL || config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
 const redirectUri = () => `${base()}/app/callback`;
 const clientSecret = () => (process.env.DISCORD_CLIENT_SECRET ?? '').trim();
-const inviteUrl = (guildId) => `https://discord.com/oauth2/authorize?client_id=${client?.user?.id ?? ''}&scope=bot%20applications.commands&permissions=8${guildId ? `&guild_id=${guildId}&disable_guild_select=true` : ''}`;
+const inviteUrl = (guildId) => `https://discord.com/oauth2/authorize?client_id=${client?.user?.id ?? ''}&scope=bot%20applications.commands&permissions=2253846893423863${guildId ? `&guild_id=${guildId}&disable_guild_select=true` : ''}`;
 
 // ===================== Sessions (gardées dans le stockage) =====================
 

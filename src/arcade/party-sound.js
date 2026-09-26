@@ -1,6 +1,7 @@
 // Jeux de soirée avec du son, dans l'arcade : l'extrait est joué par le navigateur de chaque joueur
 // (servi par l'arcade depuis Deezer), les réponses s'écrivent dans le chat.
 // Blind test, devine l'œuvre, pendu musical, devine le rappeur, battle de freestyle.
+import { safeFetch } from '../utils/netSafety.js';
 import { spawn } from 'node:child_process';
 import { chat } from '../ai/gemini.js';
 import { deezer } from '../music/deezer.js';
@@ -354,11 +355,9 @@ export async function previewAudio(id) {
 }
 /** Une image Deezer (photo d'artiste, pochette), seulement depuis leurs serveurs d'images. */
 export async function deezerImage(u) {
-  let url;
-  try { url = new URL(u); } catch { return null; }
-  if (url.protocol !== 'https:' || !/(^|\.)dzcdn\.net$/.test(url.hostname)) return null;
-  const res = await fetch(url).catch(() => null);
-  if (!res?.ok) return null;
-  return { type: res.headers.get('content-type') ?? 'image/jpeg', buf: Buffer.from(await res.arrayBuffer()) };
+  // Seulement les serveurs d'images de Deezer, en https, une vraie image de 5 Mo maximum (jamais du HTML renvoyé tel quel)
+  if (!/^https:\/\//.test(String(u))) return null;
+  const { buf, type } = await safeFetch(u, { hosts: ['dzcdn.net'], types: ['image/'], maxBytes: 5 * 1024 * 1024, timeout: 8_000 }).catch(() => ({}));
+  return buf ? { type, buf } : null;
 }
 export { hasPreview };

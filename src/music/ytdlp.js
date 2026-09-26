@@ -86,7 +86,7 @@ export async function extractAudio(target, { firstResult = false } = {}) {
     '--print', META_TEMPLATE,
     '--print', 'urls',
     ...(firstResult ? ['--playlist-items', '1'] : ['--no-playlist']),
-    target,
+    '--', target, // « -- » : la cible ne peut jamais être lue comme une option de yt-dlp
   ]);
   const lines = out.split('\n').map((l) => l.trim()).filter(Boolean);
   const metaLine = lines.find((l) => l.startsWith('{'));
@@ -97,7 +97,7 @@ export async function extractAudio(target, { firstResult = false } = {}) {
 
 /** Liste une playlist complète (ou une recherche) sans extraire chaque son. */
 export async function flatPlaylist(target, limit = 5000) {
-  const out = await ytdlp(['--flat-playlist', '-J', '--playlist-items', `1:${limit}`, target], { timeout: 180_000 });
+  const out = await ytdlp(['--flat-playlist', '-J', '--playlist-items', `1:${limit}`, '--', target], { timeout: 180_000 });
   return JSON.parse(out);
 }
 

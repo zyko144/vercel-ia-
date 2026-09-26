@@ -44,14 +44,24 @@ export const images = new Map();
 // ------------------------------------------------------------------ Voix
 /** Ce que l'IA lit sur un écran : le texte prévu pour la voix, sinon le récit (histoire, énigme, nuit…). */
 export const sayOf = (screen) => screen?.say ?? screen?.blocks?.find((b) => b.t === 'text' && b.cls === 'quote')?.text ?? null;
-/** Dès qu'un écran s'affiche, la voix est préparée : quand les navigateurs la demandent, elle est prête. */
+const voiceKey = (t) => String(t ?? '').replace(/\*\*|~~/g, '').replace(/\s+/g, ' ').trim().slice(0, 700);
+/**
+ * Dès qu'un écran s'affiche, la voix est préparée : quand les navigateurs la demandent, elle est prête.
+ * Les textes de l'écran sont aussi retenus : l'IA vocale ne lit QUE ce que la partie affiche (jamais un texte
+ * choisi par un joueur, qui ferait dire n'importe quoi au bot et coûterait de l'IA pour rien).
+ */
 function prepareVoice(g, screen) {
-  if (process.env.ARCADE_SPEED) return; // bancs d'essai : pas d'IA vocale
   const texts = new Set();
   if (typeof screen === 'function') { for (const id of g.players.filter((x) => !isBot(x)).slice(0, 12)) { try { const t = sayOf(screen(id)); if (t) texts.add(t); } catch { /* écran propre à un joueur */ } } }
   else if (sayOf(screen)) texts.add(sayOf(screen));
+  g.voiceTexts ??= [];
+  for (const t of texts) g.voiceTexts.push(voiceKey(t));
+  g.voiceTexts = g.voiceTexts.slice(-30);
+  if (process.env.ARCADE_SPEED) return; // bancs d'essai : pas d'IA vocale
   for (const t of [...texts].slice(0, 3)) speech(t, g.voice).catch(() => {});
 }
+/** Ce texte a-t-il été affiché par la partie en cours de cette salle ? */
+export const voiceAllowed = (r, text) => Boolean(r.game?.voiceTexts?.includes(voiceKey(text)));
 
 // ------------------------------------------------------------------ Moteur
 // Les bancs d'essai accélèrent le temps (ARCADE_SPEED=0.02 : 75 s deviennent 1,5 s)
