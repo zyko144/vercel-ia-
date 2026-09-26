@@ -446,6 +446,7 @@ document.addEventListener('keydown', (e) => {
 // Réglages
 function showKeys(s) {
   $('autostart').checked = Boolean(s.autostart);
+  $('directLaunch').checked = s.directLaunch !== false;
   $('geminiState').textContent = s.gemini ? '✅ IA active.' : 'Pas de clé trouvée : l’assistant et la recherche d’images par l’IA sont en pause.';
   $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée.' : 'Sans clé : jeux installés ou déjà joués seulement.';
   $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée.' : 'Facultatif : l’IA cherche déjà les images manquantes.';
@@ -466,6 +467,7 @@ $('accEpic').addEventListener('change', (e) => api.setPlatformAccounts({ epic: e
 $('totalTime').addEventListener('change', (e) => api.setPlatformAccounts({ total: e.target.checked }).then(() => toast(e.target.checked ? 'Temps total de tous les comptes' : 'Temps d’un seul compte')));
 document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); api.openLink?.(b.dataset.link); }));
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
+$('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('saveKeys').addEventListener('click', async (e) => {
   e.stopPropagation();
   const patch = {};

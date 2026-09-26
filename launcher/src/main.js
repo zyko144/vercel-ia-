@@ -21,6 +21,7 @@ import { steamActions } from './core/steam.js';
 import { createStore } from './core/store.js';
 import { safeGameDir, uninstallFiles } from './core/manage.js';
 import { verifyGame } from './core/verify.js';
+import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
 import { session } from 'electron';
@@ -281,6 +282,34 @@ async function runSilentSteam(args) {
   spawn(exe, ['-silent', ...args], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   return true;
 }
+function remember(id, how) {
+  const entry = (store.data.items[id] ??= {});
+  if (entry.launch !== how) { entry.launch = how; store.save(); }
+}
+const gameRunning = (dir) => new Promise((resolve) => {
+  const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Process | Where-Object { $_.Path } | ForEach-Object { $_.Path }'], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  let out = '';
+  ps.stdout.on('data', (d) => { out += d; });
+  ps.on('error', () => resolve(false));
+  ps.on('close', () => resolve(out.split(/\r?\n/).some((p) => insideDir(p.trim(), dir))));
+});
+/** Lance l'exécutable seul ; vrai si le jeu tourne encore quelques secondes après (sinon il exige sa plateforme). */
+function startDirect(item, exe) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(exe, [], { cwd: path.dirname(exe), env: directEnv(item), detached: true, stdio: 'ignore' });
+    } catch { resolve(false); return; }
+    child.unref();
+    const timer = setTimeout(() => resolve(true), 8000);
+    child.on('error', () => { clearTimeout(timer); resolve(false); });
+    child.on('exit', () => {
+      clearTimeout(timer);
+      // Certains jeux passent la main à un autre exécutable : on regarde si quelque chose du dossier tourne encore
+      setTimeout(() => gameRunning(item.installDir || path.dirname(exe)).then(resolve), 3000);
+    });
+  });
+}
 const epicLauncherInstalled = () => path.join(process.env.ProgramData ?? 'C:\\ProgramData', 'Epic', 'UnrealEngineLauncher', 'LauncherInstalled.dat');
 
 async function doAction(id, action) {
@@ -290,14 +319,25 @@ async function doAction(id, action) {
   if (action === 'store' && item.source === 'steam') return openLink(steamActions(item.steamId).store).then(() => ({ ok: true }));
 
   if (action === 'launch') {
-    // Steam : sans ouvrir Steam (il tourne en fond, invisible) ; Epic : lien silencieux ; autres : l'exécutable
-    if (item.source === 'steam' && await runSilentSteam(['-applaunch', item.steamId])) return { ok: true };
-    if (item.source === 'epic') return openLink(epicActions(item.epicKey).launch).then(() => ({ ok: true }));
-    const exe = item.exe ?? await findExe(item.installDir);
-    if (!exe) throw new Error('exécutable introuvable');
-    const err = await shell.openPath(exe);
-    if (err) throw new Error(err);
-    return { ok: true };
+    // Le jeu seul d'abord (sans Steam / Epic) ; s'il a besoin de sa plateforme, elle est démarrée en arrière-plan
+    const memo = store.data.items[item.id]?.launch ?? null;
+    for (const way of launchPlan(item, { direct: store.data.settings.directLaunch !== false, memo })) {
+      if (way === 'exe') {
+        const exe = item.exe ?? await findExe(item.installDir);
+        if (!exe) continue;
+        if (!item.source || !['steam', 'epic'].includes(item.source)) {
+          const err = await shell.openPath(exe);
+          if (err) throw new Error(err);
+          return { ok: true };
+        }
+        if (await startDirect(item, exe)) { remember(item.id, 'direct'); return { ok: true, direct: true }; }
+        remember(item.id, 'client'); // ce jeu a besoin de sa plateforme : on ne réessaiera plus en direct
+        continue;
+      }
+      if (item.source === 'steam' && await runSilentSteam(['-applaunch', item.steamId])) return { ok: true };
+      if (item.source === 'epic') return openLink(epicActions(item.epicKey).launch).then(() => ({ ok: true }));
+    }
+    throw new Error('exécutable introuvable');
   }
 
   if (action === 'verify') {
@@ -411,6 +451,7 @@ ipcMain.handle('accounts:set', async (_e, patch) => {
 });
 ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
+  if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   try {
     if ('steamKey' in patch) setSecret('steam', patch.steamKey);
     if ('gridKey' in patch) { setSecret('grid', patch.gridKey); store.data.art = {}; }
