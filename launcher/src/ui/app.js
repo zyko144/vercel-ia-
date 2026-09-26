@@ -131,6 +131,7 @@ function card(i, cls = 'gcard') {
 function renderHome() {
   const top = filterSort(games(), { sort: 'joues' }).slice(0, 6);
   $('topGames').innerHTML = top.length ? top.map((i) => card(i)).join('') : '<div class="empty">Aucun jeu trouvé pour l’instant.</div>';
+  // Applis de l'accueil : les connues ou utilisées (filterSort les filtre déjà), les plus utilisées d'abord
   const a = filterSort(apps().filter((i) => i.kind === 'app'), { sort: 'joues' }).slice(0, 6);
   $('topApps').innerHTML = a.length ? a.map((i) => {
     const icon = i.art?.icon ?? i.iconData;
