@@ -46,6 +46,13 @@ let items = [];
 let quitting = false;
 const store = createStore(app.getPath('userData'));
 
+// Note une erreur dans le journal sans rien afficher
+async function fatalLog(err) {
+  try {
+    const { appendFile } = await import('node:fs/promises');
+    await appendFile(path.join(app.getPath('userData'), 'erreurs.log'), `${new Date().toISOString()} ${err?.stack ?? err}\n`);
+  } catch { /* journal impossible */ }
+}
 // Toute erreur au démarrage est notée dans un journal et affichée (au lieu d'une fermeture silencieuse)
 async function fatal(err) {
   const text = `${new Date().toISOString()} ${err?.stack ?? err}\n`;
@@ -55,6 +62,8 @@ async function fatal(err) {
     await appendFile(path.join(app.getPath('userData'), 'erreurs.log'), text);
   } catch { /* journal impossible */ }
   console.error('[launcher]', err);
+  // Une fois la fenêtre ouverte, une erreur passagère ne bloque plus tout : petit message dans le launcher
+  if (win && !win.isDestroyed()) { win.webContents.send('app:error', String(err?.message ?? err).slice(0, 200)); return; }
   if (app.isReady()) dialog.showErrorBox('History Launcher : erreur', `${err?.message ?? err}\n\nJournal : ${path.join(app.getPath('userData'), 'erreurs.log')}`);
 }
 process.on('uncaughtException', (err) => { fatal(err); });
@@ -363,15 +372,16 @@ async function startBoost(item) {
     if (boosted.misses >= 2) endBoost().catch(() => {});
   }, 20_000);
 }
-async function endBoost() {
+async function endBoost({ silent = false } = {}) {
   if (!boosted) return;
   const { scheme, closed, timer } = boosted;
+  const changed = Boolean((scheme && scheme !== HIGH_PERFORMANCE) || closed.length);
   clearInterval(timer);
   boosted = null;
   playSession = null;
   if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(scheme);
   if (boostSettings().restore) for (const c of closed) spawn(c.path, [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
-  notify('Boost terminé', 'Ton PC est revenu à ses réglages habituels.');
+  if (changed && !silent) notify('Boost terminé', 'Partie finie : ton PC est revenu à ses réglages habituels.');
 }
 ipcMain.handle('boost:get', () => ({ ...boostSettings(), heatAlerts: store.data.settings.heatAlerts !== false, apps: BOOST_APPS.map(({ id, label }) => ({ id, label })) }));
 ipcMain.handle('boost:set', (_e, patch) => {
@@ -429,7 +439,9 @@ async function optiScan(progress = () => {}) {
   lastScan = r;
   return r;
 }
-ipcMain.handle('opti:scan', () => optiScan((p) => send('opti:progress', { phase: 'scan', ...p })));
+ipcMain.handle('opti:scan', async () => {
+  try { return await optiScan((p) => send('opti:progress', { phase: 'scan', ...p })); } catch (err) { fatalLog(err); return { error: `Analyse impossible : ${err.message}` }; }
+});
 async function optiApply(plan, progress = () => {}) {
   const junk = cleanList.filter((t) => plan?.junk?.includes(t.id));
   const orphans = orphanList.filter((o) => plan?.orphans?.includes(o.id));
@@ -440,10 +452,12 @@ async function optiApply(plan, progress = () => {}) {
   for (const [i, st] of steps.entries()) {
     progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'en cours', freed });
     let got = 0;
-    if (st.kind === 'junk') got = await cleanTarget(st.t).catch(() => 0);
-    if (st.kind === 'orphan') got = await removeOrphan(st.o, st.o.libs).catch(() => 0);
-    if (st.kind === 'recycle') { const size = lastScan?.recycle ?? 0; await emptyRecycleBin(); got = size; }
-    if (st.kind === 'tweak') await setTweak(st.id, true).catch(() => {});
+    try {
+      if (st.kind === 'junk') got = await cleanTarget(st.t);
+      if (st.kind === 'orphan') got = await removeOrphan(st.o, st.o.libs);
+      if (st.kind === 'recycle') { const size = lastScan?.recycle ?? 0; await emptyRecycleBin(); got = size; }
+      if (st.kind === 'tweak') await setTweak(st.id, true);
+    } catch (err) { fatalLog(err); } // un élément bloqué (fichier ouvert, droits) n'arrête pas le reste
     freed += got;
     progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'fait', got, freed });
   }
@@ -451,9 +465,14 @@ async function optiApply(plan, progress = () => {}) {
   return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: tweaks.length };
 }
 ipcMain.handle('opti:run', async (_e, plan) => {
-  const r = await optiApply(plan, (p) => send('opti:progress', p));
-  const scan = await optiScan().catch(() => null);
-  return { ...r, score: scan?.score ?? null, scan };
+  try {
+    const r = await optiApply(plan, (p) => send('opti:progress', p));
+    const scan = await optiScan().catch(() => null);
+    return { ...r, score: scan?.score ?? null, scan };
+  } catch (err) {
+    fatalLog(err);
+    return { ok: false, error: err.message };
+  }
 });
 ipcMain.handle('opti:startup', async (_e, name, enabled) => {
   if (!startupList.some((s) => s.name === String(name))) return { ok: false };
@@ -1178,6 +1197,14 @@ ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; s
 
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
+ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.handle('app:log', async () => {
+  const file = path.join(app.getPath('userData'), 'erreurs.log');
+  const { stat } = await import('node:fs/promises');
+  if (!(await stat(file).catch(() => null))) return { ok: false };
+  await shell.openPath(file);
+  return { ok: true };
+});
 ipcMain.handle('win:fullscreen', (_e, on) => { if (!win) return false; win.setFullScreen(on === undefined ? !win.isFullScreen() : Boolean(on)); return win.isFullScreen(); });
 ipcMain.on('win', (_e, what) => {
   if (what === 'min') win?.minimize();
@@ -1213,6 +1240,6 @@ async function start() {
   }, 60_000, accountFor);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
-app.on('before-quit', () => { quitting = true; endBoost().catch(() => {}); rpc.reset(); });
+app.on('before-quit', () => { quitting = true; endBoost({ silent: true }).catch(() => {}); rpc.reset(); });
 app.on('window-all-closed', (e) => e.preventDefault());
 

@@ -203,6 +203,7 @@ const ui = {
   },
 };
 api.onAsk?.(async (q) => api.answer(q.id, await ui.confirm(q)));
+api.onAppError?.((m) => toast(`⚠️ ${m}`));
 if (!window.launcher) window.hlui = ui; // aperçu dans un navigateur (bancs d'essai)
 
 function card(i, cls = 'gcard') {
@@ -450,6 +451,31 @@ window.addEventListener('gamepadconnected', () => { document.body.classList.add(
 window.addEventListener('gamepaddisconnected', () => { if (![...(navigator.getGamepads?.() ?? [])].some(Boolean)) document.body.classList.remove('pad'); });
 requestAnimationFrame(padLoop);
 
+// ---------- Quoi de neuf (après chaque mise à jour) ----------
+const WHATS_NEW = [
+  ['⚡', 'Page Optimisation', 'Score de santé du PC, catégories rangées, avancement en direct et optimisation automatique chaque semaine.'],
+  ['🔎', 'Recherche rapide', 'Ctrl+Espace (ou Ctrl+Alt+Espace depuis Windows) : lance n’importe quel jeu en 2 touches.'],
+  ['🖱', 'Clic droit partout', 'Jouer, favori, collections, masquer, désinstaller… sur chaque jeu et appli.'],
+  ['🎙', 'Voix améliorée', 'Windows écoute tes jeux par leur nom ; « Hey History » seul = écoute par Gemini.'],
+  ['📺', 'Mode grand écran', 'F11 : tout en grand, idéal avec une manette sur la TV.'],
+  ['🚀', 'Plus rapide et plus léger', 'Bibliothèque affichée tout de suite au démarrage, beaucoup moins de tâches en fond.'],
+  ['🌐', 'Actus en français', 'Les nouvelles de tes jeux sont traduites automatiquement.'],
+];
+async function showWhatsNew(force = false) {
+  const v = await api.version?.().catch(() => null);
+  let seen = null;
+  try { seen = localStorage.getItem('hl-seen-version'); } catch { /* rien */ }
+  if (!force && (!v || seen === v)) return;
+  try { localStorage.setItem('hl-seen-version', v ?? ''); } catch { /* rien */ }
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✨</span><h2>Quoi de neuf${v ? ` · v${esc(v)}` : ''}</h2></div>
+    <div class="wnew">${WHATS_NEW.map(([ic, t, d]) => `<div><span>${ic}</span><div><b>${esc(t)}</b><small>${esc(d)}</small></div></div>`).join('')}</div>
+    <div class="row end"><button type="button" class="btn play" data-m="1">C’est parti</button></div>`;
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); };
+  $('modal').showModal();
+}
+$('openNews2').addEventListener('click', () => { $('settings').close(); showWhatsNew(true); });
+$('openLog').addEventListener('click', () => api.openLog?.().then((r) => toast(r?.ok ? 'Journal ouvert : envoie-le si un bug revient' : 'Aucune erreur enregistrée 👍')));
+
 // ---------- Recherche rapide (Ctrl+Espace, ou Ctrl+Alt+Espace depuis Windows) ----------
 const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']];
 const PAL_ACTIONS = [
@@ -663,7 +689,7 @@ async function optiScanUi() {
   state.optiDraw = null;
   showProgress(null);
   $('optiScan').disabled = false; $('optiScan').textContent = 'Analyser à nouveau';
-  if (opti) renderOpti(); else toast('Analyse impossible pour l’instant');
+  if (opti?.error) { toast(opti.error); opti = null; } else if (opti) renderOpti(); else toast('Analyse impossible pour l’instant');
 }
 let runLog = [];
 api.onOpti?.((p) => {
@@ -686,7 +712,7 @@ $('optiRun').addEventListener('click', async () => {
   $('optiRun').disabled = true; $('optiScan').disabled = true;
   const r = await api.optiRun(plan).catch(() => null);
   $('optiRun').disabled = false; $('optiScan').disabled = false;
-  if (!r?.ok) { showProgress(null); return toast('Optimisation impossible pour l’instant'); }
+  if (!r?.ok) { showProgress(null); return ui.confirm({ title: 'L’optimisation s’est arrêtée', text: r?.error ? `Erreur : ${r.error}` : 'Réessaie dans un instant.', ok: 'OK', cancel: 'Fermer', icon: '⚠️' }); }
   if (r.scan) { opti = r.scan; renderOpti(); }
   showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks}</b><small>réglage${r.tweaks > 1 ? 's' : ''} appliqué${r.tweaks > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>score de santé</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>`);
 });
@@ -1344,7 +1370,7 @@ async function load() {
   loadFriends();
   renderUpdates();
   api.news?.().then(renderNews).catch(() => {});
-  api.recap?.().then((r) => { if (r?.fresh) showRecap(r); }).catch(() => {});
+  api.recap?.().then((r) => { if (r?.fresh) showRecap(r); else showWhatsNew(); }).catch(() => showWhatsNew());
   api.collections?.().then((c) => { state.cols = c ?? {}; renderCollections(); }).catch(() => {});
 }
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
@@ -1406,6 +1432,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
+    version: async () => '0.9.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
