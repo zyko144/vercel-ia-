@@ -34,8 +34,8 @@ export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
   // Sécurité : arnaques, liens interdits, spam (le message supprimé ne va pas plus loin)
   if (message.inGuild() && await guardMessage(message).catch(() => false)) return;
-  // Commandes rapides en « ! » (!clear 20)
-  if (message.inGuild() && message.content.startsWith('!') && await prefixCommand(message).catch((err) => { console.warn('[!clear]', err.message); return false; })) return;
+  // Commandes rapides en « !! » (!!clear 20, !!ban, !!close, !!roles, !!play…)
+  if (message.inGuild() && message.content.startsWith('!!') && await prefixCommand(message).catch((err) => { console.warn('[!!]', err.message); return false; })) return;
   // Rapport de la semaine : on compte (juste un nombre par membre et par salon)
   if (message.inGuild()) countMessage(message);
   // Extraits courts pour le résumé du soir et l'ambiance ; mode lent si le salon s'emballe

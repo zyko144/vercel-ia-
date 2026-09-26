@@ -85,6 +85,8 @@ client.once(Events.ClientReady, async (c) => {
   await Promise.all([...c.guilds.cache.values()].map(registerOn));
   console.log(`▶️ /play enregistrée sur ${c.guilds.cache.size} serveur(s)`);
   c.on(Events.GuildCreate, (guild) => registerOn(guild));
+  // Résumé des commandes « !! » dans le salon agora (une fois par version)
+  import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));
 
   putSiteInBio(c, { tag: 'bot' });
   lavalink.init(c);
