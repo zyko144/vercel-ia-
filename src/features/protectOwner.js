@@ -18,7 +18,7 @@ const HISTORY_SIZE = 40;
 // Insultes claires (abréviations comprises) : sanctionnées même si l'IA de vérification est indispo
 const STRONG = [
   'fdp', 'fils de pute', 'fils de chien', 'ntm', 'nique ta mere', 'nik ta mere', 'niquer ta mere', 'nique ta grand mere', 'ntgm', 'nsm',
-  'nique ta race', 'ntr', 'nique tes morts', 'nik tes morts', 'ftg', 'ferme ta gueule', 'tg', 'ta gueule', 'ta geule', 'vtff',
+  'nique ta race', 'nique tes morts', 'nik tes morts', 'ftg', 'ferme ta gueule', 'tg', 'ta gueule', 'ta geule', 'vtff',
   'va te faire foutre', 'va te faire enculer', 'vtfe', 'encule', 'enculer', 'connard', 'conard', 'connasse', 'conasse', 'batard',
   'btrd', 'salope', 'salopard', 'pute', 'tepu', 'pd', 'pede', 'tapette', 'tarlouze', 'tafiole', 'lopette', 'fiotte',
   'abruti', 'cretin', 'imbecile', 'mongol', 'mongolien', 'gogol', 'golmon', 'triso', 'trisomique', 'attarde', 'bouffon', 'boloss',
@@ -26,14 +26,14 @@ const STRONG = [
   'sale merde', 'raclure', 'enfoire', 'fumier', 'salaud', 'petasse', 'pouffiasse', 'poufiasse', 'grognasse', 'chienne', 'sale chien',
   'sale pute', 'grosse vache', 'gros porc', 'sale arabe', 'sale noir', 'sale juif', 'sale renoi', 'sale rebeu', 'sale blanc', 'baltringue', 'teube', 'zamel', 'zemel', 'qahba', 'kahba', 'nardinamouk', 'nik mok', 'negre', 'bougnoule', 'youpin',
   'chinetoque', 'bamboula', 'fuck you', 'fuck u', 'fck u', 'fk u', 'fuck off', 'stfu', 'shut the fuck up', 'bitch', 'son of a bitch',
-  'motherfucker', 'asshole', 'dumbass', 'retard', 'moron', 'kys', 'kill yourself', 'nigger', 'faggot', 'cunt', 'dickhead',
+  'motherfucker', 'asshole', 'dumbass', 'moron', 'kys', 'kill yourself', 'nigger', 'faggot', 'cunt', 'dickhead',
 ];
 // Mots qui peuvent être des insultes selon le contexte (« c'est con », « le son est nul ») : l'IA tranche
 const CONTEXTUAL = [
   'con', 'conne', 'idiot', 'debile', 'nul', 'nulle', 'nullos', 'naze', 'moche', 'victime', 'rat', 'rate', 'une merde', 'de la merde',
   'bete', 'porc', 'un chien', 'autiste', 'noob', 'loser', 'boulet', 'clown', 'guignol', 'blaireau', 'ordure', 'dechet', 'clochard',
   'clodo', 'ta mere', 'ta race', 'degage', 'casse toi', 'tais toi', 'ferme la', 'degueulasse', 'rageux', 'puceau', 'fragile',
-  'pauvre type', 'pauvre con', 'pedale', 'miskine', 'mskn', 'hmar', 'sheitan', 'tete de',
+  'pauvre type', 'pauvre con', 'pedale', 'retard', 'ntr', 'miskine', 'mskn', 'hmar', 'sheitan', 'tete de',
 ];
 
 const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', '@': 'a', $: 's', '€': 'e' };
@@ -59,6 +59,17 @@ const toPattern = (entry) => {
 };
 const STRONG_RE = new RegExp(`(?:^| )(${STRONG.map(toPattern).join('|')})(?= |$)`, 'g');
 const CONTEXTUAL_RE = new RegExp(`(?:^| )(${CONTEXTUAL.map(toPattern).join('|')})(?= |$)`, 'g');
+
+/**
+ * Où sont les insultes dans le texte : leur position en nombre de mots (texte simplifié), pour vérifier
+ * qu'elles sont bien à côté du nom de la personne visée.
+ */
+export function insultSpots(text) {
+  const simple = simplify(text);
+  const wordAt = (index) => simple.slice(0, index).split(' ').filter(Boolean).length;
+  const spots = (re) => [...simple.matchAll(re)].map((m) => wordAt(m.index + m[0].indexOf(m[1])));
+  return { words: simple.split(' '), strong: spots(STRONG_RE), contextual: spots(CONTEXTUAL_RE), simplify };
+}
 
 export function findInsults(text) {
   const simple = simplify(text);
@@ -109,11 +120,14 @@ function relationTo(message, id) {
   const fromThem = recent.filter((m) => m.authorId === id);
   if (!fromThem.length) return null;
   // La personne lui a parlé (ping / réponse), ou ils échangent tous les deux dans le salon
+  // Le message répond ou parle à quelqu'un d'autre : il ne vise pas la personne protégée
+  const others = [...message.mentions.users.keys()].filter((u) => u !== id && u !== message.client.user?.id);
+  if (others.length || (message.mentions.repliedUser && message.mentions.repliedUser.id !== id)) return null;
+  // La personne lui a parlé (ping / réponse), il lui a parlé, ou elle a écrit juste avant lui
   if (fromThem.some((m) => m.targets.has(message.author.id))) return 'conversation';
   if (recent.some((m) => m.authorId === message.author.id && m.targets.has(id))) return 'conversation';
   const previous = recent.at(-2); // le message juste avant celui-ci
-  if (previous?.authorId === id) return 'conversation';
-  if (recent.some((m) => m.authorId === message.author.id && m !== recent.at(-1))) return 'conversation';
+  if (previous?.authorId === id && now - previous.at < 60_000) return 'conversation';
   return null;
 }
 
@@ -133,9 +147,10 @@ const SCHEMA = {
   properties: {
     insulte_la_personne: { type: 'boolean' },
     mot: { type: 'string' },
+    certitude: { type: 'integer' },
     raison: { type: 'string' },
   },
-  required: ['insulte_la_personne', 'mot', 'raison'],
+  required: ['insulte_la_personne', 'mot', 'certitude', 'raison'],
 };
 
 async function aimedAt(message, target, words) {
@@ -157,7 +172,9 @@ Mots repérés : ${words.join(', ')}
 
 Est-ce que ce message insulte ${name} (directement, en parlant d'elle, ou en lui répondant) ? Même pour rire, une insulte envers ${name} compte.
 Ne compte PAS : une insulte envers quelqu'un d'autre, se rabaisser soi-même (« jsuis con »), un juron sans cible (« putain », « merde j'ai perdu »), rapporter ce qu'un autre a dit (« il m'a traité de fdp »), ou un mot pas insultant ici (« c'est con », « le son est nul », « le chien de ma voisine »).
-Réponds : insulte_la_personne, mot (l'insulte exacte, vide sinon), raison (une phrase courte).`,
+Ne compte PAS non plus : une taquinerie sans mot insultant, une blague sur une situation (« t'es en retard », « t'as perdu »), un mot insultant qui vise un jeu, un objet ou une chose.
+En cas de doute sur la cible ou le sens : false.
+Réponds : insulte_la_personne, mot (l'insulte exacte, vide sinon), certitude (0 à 100), raison (une phrase courte).`,
     schema: SCHEMA,
     thinking: 'low',
     exactThinking: true,
@@ -234,6 +251,8 @@ export async function protectOwner(client, message) {
   const words = [...strong, ...contextual];
 
   for (const target of targetsOf(message)) {
+    // Échange en cours sans ping, réponse ni nom : seules les insultes claires sont vérifiées
+    if (target.relation === 'conversation' && !strong.length) continue;
     let verdict;
     try {
       verdict = await aimedAt(message, target, words);
@@ -242,7 +261,9 @@ export async function protectOwner(client, message) {
       console.warn('[protection] vérification IA impossible :', err.message);
       verdict = { insulte_la_personne: target.relation === 'direct' && strong.length > 0, mot: strong[0] ?? '' };
     }
-    if (verdict?.insulte_la_personne) return punish(client, message, target, verdict.mot || words[0]);
+    // L'IA doit être sûre, et le mot qu'elle cite doit vraiment être dans le message
+    const quoted = !verdict?.mot || simplify(message.content).includes(simplify(verdict.mot));
+    if (verdict?.insulte_la_personne && (verdict.certitude ?? 100) >= 80 && quoted) return punish(client, message, target, verdict.mot || words[0]);
     console.log(`[protection] « ${truncate(message.content, 80)} » de ${message.author.username} : pas une insulte envers ${nameOf(message.guild, target.id)} (${verdict?.raison ?? '?'})`);
   }
 }

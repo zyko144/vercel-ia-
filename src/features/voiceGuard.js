@@ -16,7 +16,7 @@ import { EndBehaviorType, getVoiceConnection } from '@discordjs/voice';
 import { chat } from '../ai/gemini.js';
 import { config } from '../config.js';
 import { dmOwner } from './escalation.js';
-import { addInsultWarning, findInsults } from './protectOwner.js';
+import { addInsultWarning, findInsults, insultSpots } from './protectOwner.js';
 import { guardOptionsOf } from './premium.js';
 import { onVoiceReady } from './voice.js';
 import { truncate } from '../utils/discord.js';
@@ -34,6 +34,7 @@ const GROUP_WAIT_MS = 2500; // attente d'une phrase suivante avant d'envoyer le 
 const MAX_GROUP_S = 20;
 const USER_GAP_MS = 4000; // au moins 4 s entre deux vérifications d'une même personne
 const TIMEOUT_MS = 60_000;
+const MIN_CERTAINTY = 80; // en dessous, l'IA n'est pas assez sûre : pas de sanction
 export const SANCTION_AT = 3; // avertissements avant l'exclusion
 const GIFS = { avertissement: 'assets/sanction/avertissement.gif', sanction: 'assets/sanction/sanction.gif' };
 
@@ -143,9 +144,10 @@ const SCHEMA = {
     insulte: { type: 'boolean' },
     cible: { type: 'string', enum: ['chef', 'aucune'] },
     mot: { type: 'string' },
+    certitude: { type: 'integer' },
     raison: { type: 'string' },
   },
-  required: ['transcription', 'insulte', 'cible', 'mot', 'raison'],
+  required: ['transcription', 'insulte', 'cible', 'mot', 'certitude', 'raison'],
 };
 
 async function check(client, guild, userId, channelId, packets) {
@@ -176,14 +178,15 @@ async function check(client, guild, userId, channelId, packets) {
     content: [
       { type: 'text', text: `Extrait audio de ${speaker?.displayName ?? 'un membre'} dans le salon vocal « ${channel?.name ?? '?'} ».
 ${targets.length ? `Personnes protégées présentes : ${targets.map((t) => `${t.label} (${t.names.join(', ')})`).join(' ; ')}.
-Seules comptent les phrases où l'on DIT leur nom. Écris ces noms tels quels dans la transcription.` : 'Aucune personne protégée n\'est présente : transcris simplement.'}
+Seules comptent les phrases où l'on DIT leur nom. N'écris un nom dans la transcription que s'il est clairement prononcé : ne le devine jamais.` : 'Aucune personne protégée n\'est présente : transcris simplement.'}
 Autres personnes présentes : ${others.join(', ') || 'personne'}.
 
 1. transcription : ce qui est dit, mot pour mot, en français.
 2. insulte : true seulement si la personne insulte VRAIMENT une personne protégée en la nommant (« Noam t'es un fdp », « ferme ta gueule Noam »), même pour rire.
    Ne compte PAS : une phrase sans son nom, une insulte envers quelqu'un d'autre (le bot, un autre membre), un juron sans cible (« putain », « merde »), se rabaisser soi-même, citer ou chanter des paroles, parler d'un jeu, ou quand on ne sait pas qui est visé.
 3. cible : « chef » (une personne protégée est visée) ou « aucune ».
-4. mot : l'insulte exacte (vide sinon). 5. raison : une phrase courte.` },
+   Audio pas clair, mot mal compris, ou doute sur la cible : insulte = false.
+4. mot : l'insulte exacte (vide sinon). 5. certitude : de 0 à 100, ta certitude que c'est une vraie insulte envers la personne protégée. 6. raison : une phrase courte.` },
       { type: 'audio', mime_type: 'audio/ogg', data: opusToOgg(packets).toString('base64') },
     ],
     web: false,
@@ -207,14 +210,33 @@ Autres personnes présentes : ${others.join(', ') || 'personne'}.
 
   if (!verdict.insulte || verdict.cible === 'aucune') return note({ who, heard: verdict.transcription, decision: 'pas d’insulte envers Noam' });
   // Garde-fous : un vrai mot d'insulte doit être dans ce qui a été dit, et la personne doit être nommée
+  if ((verdict.certitude ?? 100) < MIN_CERTAINTY) return note({ who, heard: verdict.transcription, decision: `ignoré : pas sûr (${verdict.certitude} %)` });
   const { strong, contextual } = findInsults(verdict.transcription);
   if (!strong.length && !contextual.length) return note({ who, heard: verdict.transcription, decision: 'ignoré : pas de vrai mot d’insulte' });
   const victim = targets.find((t) => says([...t.names, ...t.spellings]));
   if (!victim) return note({ who, heard: verdict.transcription, decision: 'ignoré : Noam n’est pas visé nommément' });
+  // Le nom et l'insulte doivent être dans la même phrase, tout près l'un de l'autre (le paquet regroupe jusqu'à 20 s de paroles)
+  if (!nearName(verdict.transcription, [...victim.names, ...victim.spellings], strong, contextual)) return note({ who, heard: verdict.transcription, decision: 'ignoré : insulte et nom trop éloignés' });
   note({ who, heard: verdict.transcription, decision: `INSULTE (« ${verdict.mot} »)` });
 
   voiceGuardStats.insults++;
   await punish(client, guild, speaker, channel, verdict, { victimId: victim.id, victimLabel: victim.label });
+}
+
+/**
+ * Le nom est-il juste à côté de l'insulte, dans la même phrase ? Insulte claire : 6 mots d'écart au plus ;
+ * mot qui dépend du contexte (« tais-toi », « nul ») : 3 mots au plus.
+ */
+export function nearName(transcription, names, strong, contextual) {
+  for (const sentence of String(transcription).split(/[.!?…\n]+/)) {
+    const spot = insultSpots(sentence);
+    const wanted = names.map((n) => spot.simplify(n).split(' ')[0]).filter((n) => n.length >= 3);
+    const nameAt = spot.words.flatMap((w, i) => (wanted.includes(w) ? [i] : []));
+    if (!nameAt.length) continue;
+    const near = (list, gap) => list.some((at) => nameAt.some((n) => Math.abs(n - at) <= gap));
+    if (near(spot.strong, 6) || near(spot.contextual, 3)) return true;
+  }
+  return false;
 }
 
 /** Les personnes protégées présentes dans le vocal : le chef, plus celles de l'offre Gardien. */
