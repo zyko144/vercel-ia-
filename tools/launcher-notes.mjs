@@ -27,7 +27,8 @@ export function notesFor(version, log = readChangelog()) {
 export function shotScript(version, log = readChangelog()) {
   const clicks = (log[version] ?? []).find((e) => Array.isArray(e[3]))?.[3] ?? [];
   const safe = clicks.filter((c) => typeof c === 'string' && /^[#.\w\s\-=[\]"']{1,80}$/.test(c));
-  return `document.getElementById('auth').hidden = true; ${JSON.stringify(safe)}.forEach((sel, i) => setTimeout(() => document.querySelector(sel)?.click(), 250 * (i + 1)));`;
+  // La fenêtre « Quoi de neuf » (premier lancement) est fermée avant de cliquer
+  return `document.getElementById('auth').hidden = true; const shut = () => document.querySelectorAll('dialog[open]').forEach((d) => d.close()); setTimeout(shut, 150); ${JSON.stringify(safe)}.forEach((sel, i) => setTimeout(() => { if (i === 0) shut(); document.querySelector(sel)?.click(); }, 300 + 250 * i));`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

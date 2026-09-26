@@ -109,6 +109,34 @@
   <section id="view-pc" class="view">
     <div class="list-head"><h2>Mon PC</h2><small class="hint">Surveillance en direct · Ctrl+Alt+O : infos par-dessus le jeu</small></div>
     <div class="gauges" id="pcGauges"></div>
+    <div class="pchero">
+      <div><b>🔬 Analyse de ton PC</b><small>Vraies mesures de Windows : santé et durée de vie des composants, points faibles, antivirus, programmes, benchmark.</small></div>
+      <div class="row">
+        <button class="btn" type="button" id="pcDiagBtn">⚡ Diagnostic rapide</button>
+        <button class="btn" type="button" id="pcBenchBtn">🏁 Benchmark</button>
+        <button class="btn" type="button" id="pcReportBtn">📄 Rapport détaillé</button>
+        <button class="btn play" type="button" id="pcDeepBtn">🔬 Analyse complète <em class="prem">PREMIUM</em></button>
+      </div>
+      <div class="pcprog" id="pcProg" hidden><div class="updbar"><i id="pcProgFill"></i></div><small id="pcProgText"></small></div>
+    </div>
+    <div id="pcScore" class="pcscore" hidden></div>
+    <h3 class="pch">🧩 Composants <small class="hint">santé et durée de vie estimée</small></h3>
+    <div class="comps" id="pcComps"><div class="empty">Lance un diagnostic pour voir tes composants.</div></div>
+    <h3 class="pch">💡 Améliorations conseillées</h3>
+    <div class="advice" id="pcAdvice"><div class="empty">Les conseils apparaîtront après le diagnostic.</div></div>
+    <div class="pcgrid">
+      <div class="panel">
+        <h3>🛡 Sécurité (antivirus de Windows)</h3>
+        <div id="pcAv" class="hint">Lance un diagnostic pour voir l’état de la protection.</div>
+        <div class="row"><button class="btn" type="button" data-avscan="quick">Analyse rapide</button><button class="btn" type="button" data-avscan="full">Analyse complète</button><button class="btn ghost" type="button" id="avRemove">Supprimer les menaces</button></div>
+      </div>
+      <div class="panel">
+        <h3>🏁 Benchmark History</h3>
+        <div id="pcBench" class="hint">Mesure réelle du processeur, de la mémoire, du disque et de la carte graphique. 1000 = PC de jeu milieu de gamme.</div>
+      </div>
+    </div>
+    <h3 class="pch">🧠 Programmes qui consomment <button class="btn ghost sm" type="button" id="procRefresh">Actualiser</button></h3>
+    <div class="procs" id="pcProcs"><div class="empty">Clique sur Actualiser pour voir ce qui tourne.</div></div>
     <div class="pcgrid">
       <div class="panel">
         <h3>⚡ Boost de jeu</h3>

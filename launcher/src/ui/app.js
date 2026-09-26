@@ -584,6 +584,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.14.0': [
+    ['🔬', 'Analyse complète du PC', 'Mon PC › Analyse complète : composants, antivirus complet, programmes louches, fichiers inutiles, benchmark et rapport détaillé.', ['[data-view=pc]']],
+    ['⏳', 'Durée de vie des composants', 'Usure réelle des SSD, heures des disques durs, santé de la batterie : avec une estimation en années.'],
+    ['💡', 'Améliorations conseillées', 'Barrette manquante, XMP désactivé, disque système lent, pilote ancien… avec le gain attendu.'],
+    ['🏁', 'Benchmark History', 'Processeur, mémoire, disque et carte graphique mesurés pour de vrai, avec un score comparable.'],
+    ['🛡', 'Antivirus intégré', 'Analyse rapide ou complète avec l’antivirus de Windows et suppression des menaces depuis le launcher.'],
+  ],
   '0.13.1': [
     ['📣', 'Nouveautés annoncées sur Discord', 'Chaque nouvelle version est postée sur le serveur Discord avec une capture de la nouveauté.', ['#openSettings', '.setnav [data-pane=about]']],
   ],
@@ -862,6 +869,8 @@ async function renderPc() {
 let pcTimer = null;
 async function openPc() {
   renderPc();
+  if (!$('pcScore').innerHTML) pcDiag(false);
+  api.pcBenchHistory?.().then((h) => h?.length && renderBench(h[0], h)).catch(() => {});
   clearInterval(pcTimer);
   pcTimer = setInterval(() => (state.view === 'pc' ? renderPc() : clearInterval(pcTimer)), 2500);
   const b = await api.boost?.().catch(() => null);
@@ -869,6 +878,86 @@ async function openPc() {
   $('boostOn').checked = b.enabled; $('boostPower').checked = b.power; $('boostRestore').checked = b.restore; $('heatAlerts').checked = b.heatAlerts;
   $('boostApps').innerHTML = b.apps.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}" ${b.close.includes(a.id) ? 'checked' : ''}>${esc(a.label)}</label>`).join('');
 }
+// ---------- Mon PC : diagnostic, composants, conseils, antivirus, programmes, benchmark, rapport ----------
+const STATUS = { ok: 'En forme', warn: 'À surveiller', bad: 'Problème' };
+function renderDiag(d) {
+  if (!d || d.error) { $('pcComps').innerHTML = `<div class="empty">${esc(d?.error ?? 'Diagnostic impossible.')}</div>`; return; }
+  const col = d.score >= 85 ? '#2ee07a' : d.score >= 65 ? '#22d3ee' : d.score >= 45 ? '#f59e0b' : '#ef4444';
+  $('pcScore').hidden = false;
+  $('pcScore').innerHTML = `<b class="big" style="color:${col}">${d.score}</b><div><b>Score de santé du PC</b><small class="hint">${esc(d.os.name)} · build ${esc(d.os.build)} · allumé depuis ${d.os.uptimeDays ?? '?'} j${d.board ? ` · carte mère ${esc(d.board)}` : ''}</small></div>`;
+  $('pcComps').innerHTML = d.components.map((c) => `<div class="comp ${c.status}">
+    <div class="ch"><span>${c.icon}</span><div><small>${esc(c.title)}</small><b>${esc(c.name)}</b></div><em class="chip">${STATUS[c.status]}</em></div>
+    <ul>${c.specs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+    ${c.life?.pct != null ? `<div class="lifebar"><i style="width:${c.life.pct}%;background-position:${100 - c.life.pct}% 0"></i></div>` : ''}
+    <div class="life">⏳ ${esc(c.life?.text ?? '')}</div></div>`).join('');
+  $('pcAdvice').innerHTML = d.advice.length ? d.advice.map((a) => `<div class="adv p${a.prio}"><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small>${a.gain ? `<em>↗ ${esc(a.gain)}</em>` : ''}</div></div>`).join('') : '<div class="empty">Rien à améliorer d’urgent : ton PC est en forme 👌</div>';
+  const av = d.av;
+  const threats = (d.threats ?? []).filter((t) => !t.removed);
+  $('pcAv').innerHTML = av ? `${av.on && av.realtime ? '<span class="ok">● Protection en temps réel active</span>' : '<span class="bad">● Protection désactivée</span>'} · définitions de ${av.sigAge ?? '?'} j · dernière analyse rapide il y a ${av.quickAge ?? '?'} j, complète il y a ${av.fullAge ?? 'jamais'} j${threats.length ? `<br><b class="bad">${threats.length} menace(s) à supprimer :</b> ${threats.map((t) => esc(t.files[0] ?? t.id)).join(', ')}` : '<br>Aucune menace active.'}` : 'Antivirus de Windows introuvable (un autre antivirus est peut-être installé).';
+}
+function renderBench(r, hist = []) {
+  if (!r) return;
+  const rows = [['Processeur (1 cœur)', r.scores.cpu1, `${r.cpu.single} Mo/s`], ['Processeur (tous)', r.scores.cpuN, `${r.cpu.multi} Mo/s · ${r.cpu.threads} threads`], ['Mémoire', r.scores.ram, `${r.ram.gbps} Go/s`], ['Disque', r.scores.disk, r.disk ? `${r.disk.write} / ${r.disk.read} Mo/s · ${r.disk.iops} IOPS` : 'n/d'], ['Carte graphique', r.scores.gpu, r.gpu?.fps ? `${r.gpu.fps} images/s` : 'n/d']];
+  const max = Math.max(2000, ...rows.map(([, v]) => v ?? 0));
+  $('pcBench').innerHTML = `<div class="pcscore"><b class="big">${r.scores.total ?? '–'}</b><div><b>${esc(r.tier ?? '')}</b><small class="hint">le ${new Date(r.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · trait blanc = PC de référence (1000)</small></div></div>
+    <div class="benchbars">${rows.map(([n, v, raw]) => `<div class="bbar"><span>${n}</span><div class="t"><i style="width:${Math.min(100, (100 * (v ?? 0)) / max)}%"></i><b style="left:${(100 * 1000) / max}%"></b></div><b>${v ?? '–'}</b></div><small class="hint" style="margin:-4px 0 0 140px">${esc(raw)}</small>`).join('')}</div>
+    ${hist.length > 1 ? `<small class="hint">Précédent : ${hist[1].scores.total} (${new Date(hist[1].at).toLocaleDateString('fr-FR')})</small>` : ''}`;
+}
+async function renderProcs() {
+  $('pcProcs').innerHTML = '<div class="empty">Mesure pendant 2 secondes…</div>';
+  const list = await api.pcProcs?.().catch(() => null);
+  if (!Array.isArray(list)) { $('pcProcs').innerHTML = `<div class="empty">${esc(list?.error ?? 'Impossible de lire les programmes.')}</div>`; return; }
+  $('pcProcs').innerHTML = list.slice(0, 18).map((p) => `<div class="proc ${p.suspect ? 'suspect' : ''}"><div><b>${esc(p.name)}</b>${p.suspect ? ' <span class="bad">⚠ non signé, lancé depuis un dossier temporaire</span>' : ''}<small title="${esc(p.path)}">${esc(p.signer ? `${p.signer} · ` : p.signed ? '' : 'non signé · ')}${esc(p.path)}</small></div><span>${p.cpu} % CPU</span><span>${Math.round(p.ram / 1e6)} Mo</span>${/\\windows\\/i.test(p.path) ? '<small>Windows</small>' : `<button class="btn ghost sm" data-kill="${p.id}" data-kpath="${esc(p.path)}">Fermer</button>`}</div>`).join('');
+}
+function pcProgress(p) {
+  $('pcProg').hidden = p.step === 'done';
+  $('pcProgFill').style.width = `${p.pct ?? 0}%`;
+  $('pcProgText').textContent = `${p.pct != null ? `${p.pct} % · ` : ''}${p.label ?? ''}`;
+}
+api.onPcProgress?.(pcProgress);
+async function pcDiag(force) {
+  pcProgress({ step: 'diag', pct: 20, label: 'Lecture des composants et de leur santé…' });
+  const d = await api.pcDiag?.(force).catch((err) => ({ error: err.message }));
+  pcProgress({ step: 'done' });
+  renderDiag(d);
+  return d;
+}
+function showReport(r, title = 'Rapport détaillé') {
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📄</span><h2>${esc(title)}</h2></div><div class="reporttxt">${esc(r?.text ?? r?.error ?? 'Rapport indisponible.')}</div>
+    <small class="hint">${r?.ai ? 'Rédigé par l’IA à partir des vraies mesures de ton PC.' : 'Rapport automatique (connecte-toi pour la version rédigée par l’IA).'}</small>
+    <div class="row end"><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); if (e.target.closest('#repCopy')) { navigator.clipboard?.writeText(r?.text ?? ''); toast('Rapport copié'); } };
+}
+$('pcDiagBtn').addEventListener('click', () => pcDiag(true));
+$('pcBenchBtn').addEventListener('click', async () => {
+  if (!(await ui.confirm({ title: 'Lancer le benchmark ?', text: 'Environ 30 secondes. Ferme tes jeux pour un résultat juste : une fenêtre 3D s’ouvre pendant l’épreuve graphique.', ok: '🏁 C’est parti', icon: '🏁' }))) return;
+  const r = await api.pcBench();
+  pcProgress({ step: 'done' });
+  if (r?.error) return toast(r.error);
+  window.sfx?.play('success');
+  renderBench(r, await api.pcBenchHistory());
+});
+$('pcReportBtn').addEventListener('click', async () => { toast('Rédaction du rapport…'); showReport(await api.pcReport()); });
+$('pcDeepBtn').addEventListener('click', async () => {
+  if (!(await ui.confirm({ title: 'Analyse complète du PC', text: 'Tout y passe : composants et durée de vie, programmes et fichiers louches, fichiers inutiles, analyse antivirus complète de Windows, benchmark et rapport détaillé. Compte 30 min à 1 h (l’antivirus est l’étape la plus longue) ; tu peux continuer à utiliser le PC.', ok: '🔬 Lancer l’analyse', icon: '🔬' }))) return;
+  const r = await api.pcDeep();
+  pcProgress({ step: 'done' });
+  if (r?.error) return toast(r.error);
+  renderDiag(r.diag); renderBench(r.bench, await api.pcBenchHistory()); renderProcs();
+  window.sfx?.play('success');
+  showReport(r.report, `Analyse complète · score ${r.diag.score}/100`);
+});
+$('procRefresh').addEventListener('click', renderProcs);
+document.querySelectorAll('[data-avscan]').forEach((b) => b.addEventListener('click', async () => {
+  toast(b.dataset.avscan === 'full' ? 'Analyse complète lancée (longue)…' : 'Analyse rapide lancée…');
+  const r = await api.pcDefScan(b.dataset.avscan);
+  pcProgress({ step: 'done' });
+  toast(r?.found ? '⚠ Menaces trouvées : clique sur « Supprimer les menaces »' : '✓ Aucune menace trouvée');
+  pcDiag(true);
+}));
+$('avRemove').addEventListener('click', async () => { const r = await api.pcDefRemove(); toast(r?.ok ? 'Menaces supprimées ✓' : 'Accepte la demande administrateur de Windows pour supprimer'); pcDiag(true); });
+$('pcProcs').addEventListener('click', async (e) => { const b = e.target.closest('[data-kill]'); if (!b) return; const r = await api.pcKill(Number(b.dataset.kill), b.dataset.kpath); if (r?.ok) { toast('Programme fermé'); renderProcs(); } else if (!r?.cancelled) toast(r?.error ?? 'Impossible'); });
 for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boostRestore', 'restore'], ['heatAlerts', 'heatAlerts']]) {
   $(id).addEventListener('change', (e) => api.setBoost({ [key]: e.target.checked }).then(() => key === 'enabled' && toast(e.target.checked ? 'Boost activé pour les prochaines parties' : 'Boost désactivé')));
 }
@@ -1859,7 +1948,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.13.1',
+    version: async () => '0.14.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
