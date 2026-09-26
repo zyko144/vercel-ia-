@@ -204,6 +204,7 @@ const ui = {
 };
 api.onAsk?.(async (q) => api.answer(q.id, await ui.confirm(q)));
 api.onAppError?.((m) => toast(`⚠️ ${m}`));
+api.onCols?.((c) => { state.cols = c ?? {}; renderCollections(); });
 if (!window.launcher) window.hlui = ui; // aperçu dans un navigateur (bancs d'essai)
 
 function card(i, cls = 'gcard') {
@@ -853,13 +854,18 @@ function renderChips() {
   const chips = [
     top && ['▶', `Lance ${top.name}`],
     notInstalled && ['⤓', `Installe ${notInstalled.name}`],
-    top && ['✓', `Vérifie les fichiers de ${top.name}`],
+    ['🚀', 'Optimise mon PC'],
+    ['👥', 'Qui joue parmi mes amis ?'],
+    ['💽', 'Combien de place il me reste ?'],
+    ['🌡', 'Est-ce que mon PC chauffe ?'],
+    ['⚡', 'Active le boost'],
+    top && ['📚', `Ajoute ${top.name} à la collection À finir`],
+    ['✅', 'Accepte mes demandes d’amis'],
+    ['♻', 'Vide la corbeille'],
+    ['⏻', 'Désactive Discord au démarrage'],
+    ['🎉', 'Organise une soirée demain à 21h'],
     ['🗑', 'Quel jeu je pourrais désinstaller ?'],
-    ['🏆', 'Ouvre le classement'],
     ['⏱', 'Quel est mon jeu le plus joué ?'],
-    ['♫', 'Qu’est-ce que j’écoute ?'],
-    ['🔊', 'Monte le son'],
-    ['⇅', 'Trie mes jeux par taille'],
   ].filter(Boolean);
   $('chips').innerHTML = chips.map(([ico, t]) => `<button data-ask="${esc(t)}"><i>${ico}</i>${esc(t)}</button>`).join('');
 }
@@ -868,7 +874,12 @@ function applyReply(r) {
   say(r.reply || 'D’accord.');
   const views = { jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque', accueil: 'accueil', amis: 'amis', pc: 'pc', optimisation: 'optimisation' };
   if (r.action === 'show') { if (r.value === 'parametres') $('openSettings').click(); else go(views[r.value] ?? 'bibliotheque'); }
-  if (r.action === 'optimize') { go('optimisation'); setTimeout(() => $('optiScan')?.click(), 300); }
+  if (r.action === 'optimize') { go('optimisation'); setTimeout(async () => { await optiScanUi(); if (r.value === 'run' && opti && !opti.error) $('optiRun').click(); }, 300); }
+  if (r.action === 'deep_clean') { go('optimisation'); setTimeout(async () => { if (!opti) await optiScanUi(); $('optiDeep')?.click(); }, 300); }
+  if (r.action === 'theme' && r.value) { themeName = r.value; $('themeSel').value = r.value; if (r.value === 'auto') themeFor(state.sel); else applyTheme(THEMES[r.value]); }
+  if (r.action === 'fullscreen') toggleBig(true);
+  if (r.action === 'recap') api.recap?.().then(showRecap);
+  if (r.action === 'daily_limit') $('dailyLimit').value = String(r.value ?? 0);
   if (r.action === 'sort') { state.list.sort = r.value; $('sort').value = r.value; go('bibliotheque'); }
   if (r.action === 'search') { $('q').value = r.value; $('q').dispatchEvent(new Event('input')); }
   if (r.itemId && !['uninstall'].includes(r.action)) { const it = state.items.find((i) => i.id === r.itemId); if (it) select(it); }

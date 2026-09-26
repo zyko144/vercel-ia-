@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld('launcher', {
   fullscreen: (on) => ipcRenderer.invoke('win:fullscreen', on),
   version: () => ipcRenderer.invoke('app:version'),
   openLog: () => ipcRenderer.invoke('app:log'),
+  onCols: (fn) => ipcRenderer.on('cols:update', (_e, c) => fn(c)),
   onAppError: (fn) => ipcRenderer.on('app:error', (_e, m) => fn(m)),
   onOverlay: (fn) => ipcRenderer.on('overlay:data', (_e, d) => fn(d)),
   openFree: (slug) => ipcRenderer.invoke('free:open', slug),

@@ -32,7 +32,7 @@ import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
-import { findItem as findByName, stripWake, understand } from './core/commands.js';
+import { findItem as findByName, similarity, stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
 import { session } from 'electron';
 import { enrich } from './core/art.js';
@@ -1078,6 +1078,102 @@ const findItem = (name) => {
   return items.find((i) => norm(i.name) === n) ?? items.find((i) => norm(i.name).includes(n) || n.includes(norm(i.name)));
 };
 // ---------- Assistant : commandes gratuites d'abord, Gemini pour le reste ----------
+// ---------- Actions que l'assistant peut faire à ta place (en plus de lancer / fermer les jeux) ----------
+const gbTxt = (b) => `${(b / 1e9).toFixed(1).replace('.', ',')} Go`;
+const bestMatch = (list, name, key = (x) => x.name) => list.map((x) => ({ x, s: similarity(name, key(x)) + (norm(key(x)).startsWith(norm(name)) ? 0.3 : 0) })).sort((a, b) => b.s - a.s).find((m) => m.s >= 0.55)?.x ?? null;
+const LAUNCHER_ACTIONS = ['add_friend', 'accept_friends', 'friends_status', 'empty_bin', 'boost', 'disk_status', 'pc_status', 'daily_limit', 'startup_off', 'collection_add', 'steam_join', 'steam_message', 'unfavorite', 'overlay', 'theme', 'event', 'tweak'];
+async function execAction(c) {
+  const a = c.action;
+  if (a === 'add_friend') {
+    const r = await social('/api/compte/amis/ajouter', { code: String(c.value ?? '').slice(0, 40) });
+    return r.amis ? `C’est fait : vous êtes maintenant amis 🎉` : r.envoye ? `Demande d’ami envoyée à ${c.value}.` : r.error ?? 'Impossible pour l’instant.';
+  }
+  if (a === 'accept_friends') {
+    const r = await social('/api/compte/amis');
+    if (r.error) return r.error;
+    for (const d of r.demandes ?? []) await social('/api/compte/amis/accepter', { id: d.id });
+    return r.demandes?.length ? `J’ai accepté ${r.demandes.map((d) => d.pseudo).join(', ')} 👍` : 'Tu n’as aucune demande d’ami en attente.';
+  }
+  if (a === 'friends_status') {
+    const h = await social('/api/compte/amis').catch(() => ({}));
+    if (!friendsCache.data || Date.now() - friendsCache.at > 60_000) friendsCache = { at: Date.now(), data: await steamFriends(secret('steam'), myId64()).catch(() => null) };
+    const playing = [...(h.amis ?? []).filter((x) => x.playing).map((x) => `${x.pseudo} joue à ${x.playing}`), ...(friendsCache.data?.friends ?? []).filter((f) => f.game).map((f) => `${f.name} joue à ${f.game}`)];
+    const online = [...(h.amis ?? []).filter((x) => x.online && !x.playing).map((x) => x.pseudo), ...(friendsCache.data?.friends ?? []).filter((f) => f.online && !f.game).map((f) => f.name)];
+    if (!playing.length && !online.length) return 'Aucun ami en ligne pour l’instant.';
+    return `${playing.length ? `${playing.slice(0, 6).join(', ')}.` : ''}${online.length ? ` En ligne : ${online.slice(0, 8).join(', ')}.` : ''}`.trim();
+  }
+  if (a === 'empty_bin') {
+    const size = await recycleBinSize();
+    if (!size) return 'Ta corbeille est déjà vide.';
+    if (!(await confirm('Vider la corbeille ?', `${gbTxt(size)} seront supprimés définitivement.`, { danger: true, ok: 'Vider', icon: '♻' }))) return 'D’accord, je ne touche à rien.';
+    await emptyRecycleBin();
+    return `Corbeille vidée : ${gbTxt(size)} libérés.`;
+  }
+  if (a === 'boost') {
+    store.data.settings.boost = { ...boostSettings(), enabled: c.value !== 'off' };
+    store.save();
+    return c.value === 'off' ? 'Boost désactivé.' : 'Boost activé : tes prochaines parties auront les performances au max.';
+  }
+  if (a === 'disk_status') {
+    const [free, disk] = await Promise.all([freeSpace(), diskSize()]);
+    return free == null ? 'Je n’arrive pas à lire ton disque.' : `Il te reste ${gbTxt(free)} de libres sur ${gbTxt(disk)}${free / disk < 0.15 ? ' : c’est peu, je te conseille une optimisation.' : '.'}`;
+  }
+  if (a === 'pc_status') {
+    const p = await snapshot().catch(() => null);
+    if (!p) return 'Je n’arrive pas à lire les capteurs.';
+    const parts = [`processeur ${p.cpu.usage ?? '?'} %${p.cpu.temp ? ` (${p.cpu.temp} °C)` : ''}`, `mémoire ${Math.round((100 * p.ram.used) / p.ram.total)} %`];
+    if (p.gpu) parts.push(`carte graphique ${p.gpu.usage ?? '?'} %${p.gpu.temp != null ? ` (${p.gpu.temp} °C)` : ''}`);
+    const hot = (p.gpu?.temp ?? 0) >= 85 || (p.cpu.temp ?? 0) >= 90;
+    return `En ce moment : ${parts.join(', ')}.${hot ? ' Ça chauffe : aère le PC ou baisse les graphismes.' : ' Tout va bien.'}`;
+  }
+  if (a === 'daily_limit') { store.data.settings.dailyLimit = Math.max(0, Math.min(1440, Number(c.value) || 0)); store.save(); return null; }
+  if (a === 'startup_off') {
+    if (!startupList.length) startupList = await startupApps().catch(() => []);
+    const hit = bestMatch(startupList, String(c.target ?? ''));
+    if (!hit) return `Je ne trouve pas « ${c.target} » dans les applis au démarrage.`;
+    await setStartup(hit.name, false).catch(() => {});
+    startupList = await startupApps().catch(() => startupList);
+    return `${hit.name} ne se lancera plus au démarrage de Windows.`;
+  }
+  if (a === 'collection_add') {
+    const item = items.find((i) => i.id === c.itemId) ?? findByName(items, String(c.target ?? ''));
+    if (!item) return 'Je ne trouve pas ce jeu.';
+    const cols = (store.data.collections ??= {});
+    const name = String(c.value ?? '').trim().slice(0, 40) || 'Ma collection';
+    let id = Object.keys(cols).find((k) => norm(cols[k].name) === norm(name));
+    if (!id) { id = `c${Date.now().toString(36)}`; cols[id] = { name: name[0].toUpperCase() + name.slice(1), items: [] }; }
+    cols[id].items = [...new Set([...cols[id].items, item.id])];
+    store.save();
+    send('cols:update', cols);
+    return `${item.name} est dans la collection « ${cols[id].name} ».`;
+  }
+  if (a === 'steam_join' || a === 'steam_message') {
+    if (!friendsCache.data || Date.now() - friendsCache.at > 60_000) friendsCache = { at: Date.now(), data: await steamFriends(secret('steam'), myId64()).catch(() => null) };
+    if (!friendsCache.data?.ok) return 'Je n’ai pas accès à tes amis Steam (ajoute ta clé Steam dans Paramètres).';
+    const f = bestMatch(friendsCache.data.friends, String(c.target ?? ''));
+    if (!f) return `Je ne trouve pas « ${c.target} » dans tes amis Steam.`;
+    const link = friendLink(a === 'steam_join' ? 'join' : 'message', f);
+    if (!link) return `${f.name} n’a pas de partie ouverte à rejoindre${f.game ? ` (il joue à ${f.game})` : ''}.`;
+    await runSilentSteam([link]);
+    return a === 'steam_join' ? `Je te connecte à la partie de ${f.name} (${f.game}).` : `Discussion Steam avec ${f.name} ouverte.`;
+  }
+  if (a === 'unfavorite' && c.itemId) { (store.data.items[c.itemId] ??= {}).favorite = false; store.save(); await remerge(); send('lib:update', library()); return null; }
+  if (a === 'overlay') { if (!overlay) toggleOverlay(); return null; }
+  if (a === 'theme') { if (['bleu', 'violet', 'rouge', 'vert', 'orange', 'rose', 'auto'].includes(c.value)) { store.data.settings.theme = c.value; store.save(); } return null; }
+  if (a === 'tweak') { const ok = await setTweak(String(c.value), true).catch(() => false); return ok ? 'Réglage appliqué ✅' : 'Je ne connais pas ce réglage.'; }
+  if (a === 'event') {
+    const h = await social('/api/compte/amis');
+    if (h.error) return h.error;
+    const names = String(c.extra ?? '').split(/[,;]| et /).map((x) => x.trim()).filter(Boolean);
+    const invites = (names.length ? names.map((n) => bestMatch(h.amis ?? [], n, (x) => x.pseudo)).filter(Boolean) : h.amis ?? []).map((x) => x.id);
+    const at = Date.parse(String(c.value ?? ''));
+    const game = findByName(items, String(c.target ?? ''))?.name ?? String(c.target ?? '').slice(0, 80);
+    const r = await social('/api/compte/soirees', { jeu: game, at, invites });
+    return r.soirees ? `Soirée ${game} organisée le ${new Date(at).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} : ${invites.length} ami(s) invité(s) 🎉` : r.error ?? 'Impossible d’organiser la soirée.';
+  }
+  return null;
+}
+
 async function runCommand(text, { voice = false } = {}) {
   const clean = String(text ?? '').slice(0, 500).trim();
   if (!clean) return { reply: '…', action: 'none' };
@@ -1088,6 +1184,9 @@ async function runCommand(text, { voice = false } = {}) {
     const done = await doAction(c.itemId, c.action).catch((err) => ({ ok: false, error: err.message }));
     if (done.ok === false && done.error) out.reply = `${c.reply.replace(/\.$/, '')} : impossible (${done.error}).`;
     if (done.ok === false && !done.error) out.reply = 'D’accord, j’annule.';
+  } else if (LAUNCHER_ACTIONS.includes(c.action)) {
+    const reply = await execAction(c).catch((err) => `Impossible pour l’instant (${err.message}).`);
+    if (reply) out.reply = reply;
   } else if (c.action === 'music') {
     await mediaKey(c.value === 'pause' || c.value === 'play' ? 'toggle' : c.value);
   } else if (c.action === 'volume') {
@@ -1108,8 +1207,16 @@ async function runCommand(text, { voice = false } = {}) {
           music: np?.artist ? `${np.artist} - ${np.title}` : '',
           extra: `Jeu en cours : ${currentSession()?.name ?? 'aucun'} · Temps de jeu aujourd'hui : ${todayGameMinutes(store.data.days)} min · Amis Steam en jeu : ${(friendsCache.data?.friends ?? []).filter((f) => f.game).map((f) => `${f.name} (${f.game})`).slice(0, 5).join(', ') || 'aucun'}`,
         };
+        const h = await social('/api/compte/amis').catch(() => ({}));
+        const [free, disk] = await Promise.all([freeSpace().catch(() => null), diskSize().catch(() => null)]);
+        context.extra += `\nAmis History : ${(h.amis ?? []).map((a) => `${a.pseudo}${a.playing ? ` (joue à ${a.playing})` : a.online ? ' (en ligne)' : ''}`).join(', ') || 'aucun'}${h.demandes?.length ? ` · demandes en attente : ${h.demandes.map((d) => d.pseudo).join(', ')}` : ''}`;
+        context.extra += `\nDisque : ${free != null ? `${gbTxt(free)} libres sur ${gbTxt(disk)}` : 'inconnu'} · Boost : ${boostSettings().enabled ? 'activé' : 'désactivé'} · Collections : ${Object.values(store.data.collections ?? {}).map((x) => x.name).join(', ') || 'aucune'}`;
         const r = await assistant(ai, clean, context);
         out = { reply: r.reply, action: r.action, value: r.value };
+        if (LAUNCHER_ACTIONS.includes(r.action)) {
+          const reply = await execAction({ ...r, itemId: r.target ? findByName(items, r.target)?.id : undefined }).catch((err) => `Impossible pour l’instant (${err.message}).`);
+          if (reply) out.reply = reply;
+        }
         const item = r.target ? items.find((i) => norm(i.name) === norm(r.target)) ?? findByName(items, r.target) : null;
         if (item && ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) { out.itemId = item.id; await doAction(item.id, r.action).catch(() => {}); }
       } catch (err) {

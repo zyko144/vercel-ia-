@@ -89,6 +89,36 @@ export function understand(text, items, { music = null } = {}) {
     return item ? { action, itemId: item.id, reply: `${verb} ${item.name}.` } : { action: 'answer', reply: `Je ne trouve pas « ${rest(re) || '…'} » dans ta bibliothèque.` };
   };
 
+  // ===== Actions du launcher (amis, optimisation, réglages…) =====
+  const code = raw.match(/([\p{L}\p{N}._-]{2,20}#[0-9A-Fa-f]{6})/u)?.[1];
+  if (code && /(ajoute|ajouter|invite|demande)/.test(t)) return { action: 'add_friend', value: code, reply: `J’envoie une demande d’ami à ${code}.` };
+  if (/(accepte|valide).*(demande|invitation).*(ami|amis|potes)/.test(t)) return { action: 'accept_friends', reply: 'J’accepte tes demandes d’amis.' };
+  if (/(qui|quels? amis?|mes amis?|mes potes?).*(joue|jouent|en ligne|connecte|dispo)/.test(t)) return { action: 'friends_status', reply: '' };
+  if (/nettoyage profond|nettoie (a fond|en profondeur)|nettoyage complet de windows/.test(t)) return { action: 'deep_clean', reply: 'Je lance le nettoyage profond de Windows : accepte la demande d’autorisation.' };
+  if (/(vide|videz|vider) (la |ma )?corbeille/.test(t)) return { action: 'empty_bin', reply: 'Je vide la corbeille.' };
+  if (/^(optimise|nettoie|nettoye|accelere|boost(e)?)\b.*\b(pc|ordi|ordinateur)\b|^(mon pc|le pc|l ordi|mon ordi) (rame|lag|lague|est lent|galere)|fais (une |l )?opti/.test(t)) return { action: 'optimize', value: 'run', reply: 'J’analyse ton PC et je te propose l’optimisation complète.' };
+  if (/(active|allume|mets?) (le )?boost/.test(t)) return { action: 'boost', value: 'on', reply: 'Boost activé pour tes prochaines parties.' };
+  if (/(desactive|coupe|enleve|eteins) (le )?boost/.test(t)) return { action: 'boost', value: 'off', reply: 'Boost désactivé.' };
+  if (/(combien|quelle|il reste).*(place|espace|stockage|disque)/.test(t)) return { action: 'disk_status', reply: '' };
+  if (/(temperature|chauffe|chaud|cpu|processeur|carte graphique|gpu|ram|memoire).*(pc|ordi|combien|est|a)?/.test(t) && /(combien|quelle|chauffe|temperature|comment va|etat)/.test(t)) return { action: 'pc_status', reply: '' };
+  const theme = t.match(/(?:theme|couleur)\s+(?:en\s+)?(bleu|violet|rouge|vert|orange|rose|auto)/)?.[1];
+  if (theme) return { action: 'theme', value: theme, reply: `Thème ${theme} appliqué.` };
+  if (/(mode )?grand ecran|plein ecran|mode tv/.test(t)) return { action: 'fullscreen', reply: 'Mode grand écran.' };
+  if (/(infos?|ecran|overlay).*(en jeu|par dessus)/.test(t)) return { action: 'overlay', reply: 'Écran d’infos en jeu affiché (Ctrl+Alt+O pour le masquer).' };
+  if (/resume de (la|ma) semaine|bilan de (la|ma) semaine/.test(t)) return { action: 'recap', reply: 'Voici ta semaine.' };
+  const limit = t.match(/limite.*?(\d+)\s*(h|heure|min)/);
+  if (limit) { const m = Number(limit[1]) * (limit[2].startsWith('min') ? 1 : 60); return { action: 'daily_limit', value: String(m), reply: `Limite de jeu réglée à ${limit[2].startsWith('min') ? `${m} min` : `${limit[1]} h`} par jour.` }; }
+  if (/(enleve|retire|supprime|desactive).*(limite)/.test(t)) return { action: 'daily_limit', value: '0', reply: 'Plus de limite de jeu.' };
+  const startup = t.match(/(?:desactive|enleve|retire|empeche)\s+(.+?)\s+(?:au|du|de)\s+demarrage/);
+  if (startup) return { action: 'startup_off', target: startup[1], reply: `${startup[1]} ne se lancera plus au démarrage.` };
+  const col = t.match(/(?:ajoute|mets?|range)\s+(.+?)\s+(?:dans|a) (?:la |ma )?collection\s+(.+)/);
+  if (col) { const item = findItem(items, col[1]); return item ? { action: 'collection_add', itemId: item.id, value: col[2], reply: `${item.name} ajouté à la collection « ${col[2]} ».` } : { action: 'answer', reply: `Je ne trouve pas « ${col[1]} ».` }; }
+  const join = t.match(/^(?:rejoins|rejoindre|rejoint)\s+(.+)/);
+  if (join) return { action: 'steam_join', target: join[1].replace(/^(la partie de|mon pote|mon ami)\s+/, ''), reply: '' };
+  const msg = t.match(/^(?:envoie un message a|ecris a|parle a|message a)\s+(.+)/);
+  if (msg) return { action: 'steam_message', target: msg[1], reply: '' };
+  if (/(retire|enleve).*(des favoris)/.test(t)) { const item = findItem(items, raw.replace(/^(retire|enl[eè]ve)\s+/i, '').replace(/\s+des\s+favoris.*$/i, '')); return item ? { action: 'unfavorite', itemId: item.id, reply: `${item.name} retiré des favoris.` } : { action: 'answer', reply: 'Je ne trouve pas ce jeu.' }; }
+
   // Musique et volume
   if (/\b(pause|stop)\b.*(musique|son|chanson|spotify|deezer)?|mets? (la musique )?en pause/.test(t) && !/lance|ouvre/.test(t)) return { action: 'music', value: 'pause', reply: 'Musique en pause.' };
   if (/(chanson|musique|titre|son) suivant|\bsuivant(e)?\b|\bnext\b|passe (la|le|a la)/.test(t)) return { action: 'music', value: 'next', reply: 'Titre suivant.' };
