@@ -13,6 +13,8 @@ import { activeItems, periodItems, periodStats, runningPaths, statCategory } fro
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
 import { heatAlerts, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
+import { deepClean, emptyRecycleBin, extraTargets, freeSpace, orphanGameFolders, recycleBinSize, removeOrphan, setStartup, setTweak, startupApps, tweakStates } from './core/optimize.js';
+import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
 import { readRegValue } from './core/registry.js';
@@ -368,6 +370,55 @@ ipcMain.handle('clean:run', async (_e, ids) => {
   let freed = 0;
   for (const t of chosen) freed += await cleanTarget(t).catch(() => 0);
   return { ok: true, freed };
+});
+
+// ---------- Optimisation complète ----------
+let orphanList = [];
+let startupList = [];
+ipcMain.handle('opti:scan', async () => {
+  const root = await steamPath();
+  const libs = root ? await steamLibraries(root) : [];
+  const [junk, recycle, orphans, startup, tweaks, free] = await Promise.all([
+    Promise.all([cleanTargets(process.env, root), extraTargets()]).then(([a, b]) => measureTargets([...a, ...b])),
+    recycleBinSize(), orphanGameFolders(libs).catch(() => []), startupApps().catch(() => []), tweakStates().catch(() => []), freeSpace(),
+  ]);
+  cleanList = junk.filter((t) => t.bytes > 0);
+  orphanList = orphans.map((o) => ({ ...o, libs }));
+  startupList = startup;
+  return {
+    junk: cleanList.map(({ id, label, bytes, note }) => ({ id, label, bytes, note })).sort((a, b) => b.bytes - a.bytes),
+    recycle, orphans: orphans.map(({ id, label, bytes }) => ({ id, label, bytes })), startup, tweaks, free,
+  };
+});
+ipcMain.handle('opti:run', async (_e, plan) => {
+  const junk = cleanList.filter((t) => plan?.junk?.includes(t.id));
+  const orphans = orphanList.filter((o) => plan?.orphans?.includes(o.id));
+  const tweaks = (plan?.tweaks ?? []).map(String);
+  const parts = [junk.length && `${junk.length} cache(s)`, plan?.recycle && 'la corbeille', orphans.length && `${orphans.length} reste(s) de jeux désinstallés (${orphans.map((o) => o.label).join(', ')})`, tweaks.length && `${tweaks.length} réglage(s) Windows`].filter(Boolean);
+  if (!parts.length) return { ok: false };
+  if (!(await confirm('Lancer l’optimisation ?', `Seront nettoyés ou appliqués : ${parts.join(', ')}.\nTes jeux installés, sauvegardes, mots de passe et fichiers personnels ne sont pas touchés.`))) return { ok: false };
+  const before = await freeSpace();
+  let freed = 0;
+  for (const t of junk) freed += await cleanTarget(t).catch(() => 0);
+  for (const o of orphans) freed += await removeOrphan(o, o.libs).catch(() => 0);
+  if (plan?.recycle) await emptyRecycleBin();
+  for (const id of tweaks) await setTweak(id, true).catch(() => {});
+  const after = await freeSpace();
+  return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, tweaks: tweaks.length };
+});
+ipcMain.handle('opti:startup', async (_e, name, enabled) => {
+  if (!startupList.some((s) => s.name === String(name))) return { ok: false };
+  await setStartup(String(name), Boolean(enabled)).catch(() => {});
+  startupList = await startupApps().catch(() => startupList);
+  return { ok: true, startup: startupList };
+});
+ipcMain.handle('opti:tweak', async (_e, id, on) => ({ ok: await setTweak(String(id), Boolean(on)).catch(() => false), tweaks: await tweakStates().catch(() => []) }));
+ipcMain.handle('opti:deep', async () => {
+  if (!(await confirm('Nettoyage profond de Windows ?', 'Windows va demander l’autorisation administrateur. Seront vidés : fichiers temporaires de Windows, anciennes mises à jour téléchargées, cache d’optimisation de la distribution, rapports d’erreur, puis nettoyage des composants Windows. Ça peut prendre plusieurs minutes.'))) return { ok: false };
+  const before = await freeSpace();
+  const ok = await deepClean();
+  const after = await freeSpace();
+  return { ok, freed: before != null && after != null ? Math.max(0, after - before) : null };
 });
 
 // Alertes de chauffe (toutes les minutes)

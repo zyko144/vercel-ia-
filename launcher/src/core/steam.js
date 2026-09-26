@@ -15,6 +15,9 @@ export const steamArt = (id) => ({
 });
 const art = steamArt;
 
+export async function steamLibraries(steamPath) {
+  return libraries(steamPath);
+}
 async function libraries(steamPath) {
   const text = await readFile(path.join(steamPath, 'steamapps', 'libraryfolders.vdf'), 'utf8').catch(() => null);
   const dirs = new Set([path.join(steamPath, 'steamapps')]);
