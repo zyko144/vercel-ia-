@@ -116,6 +116,8 @@ export async function onMessage(client, message) {
     const wantsEdit = EDIT_INTENT.test(text);
     if (!imageAttachments.length && wantsEdit && ref) imageAttachments = [...ref.attachments.values()].filter(isImage);
     const isImageRequest = (IMAGE_INTENT.test(text) && !imageAttachments.length) || (imageAttachments.length > 0 && wantsEdit);
+    // « Parle en vocal », « teste ta voix », « dis-le à voix haute » : la réponse est aussi lue dans le vocal
+    const wantsVoice = !isImageRequest && message.inGuild() && VOICE_INTENT.test(text);
 
     const images = [];
     if (isImageRequest && config.limits.imagesEnabled) {
@@ -165,7 +167,7 @@ export async function onMessage(client, message) {
         guild: message.guild,
         channel: target,
         link: replyTo ? message.url : target.url,
-        prompt: text,
+        prompt: wantsVoice ? `${text}\n(Ta réponse sera lue à voix haute dans le vocal : 3 phrases maximum, naturelles, sans liste ni emoji.)` : text,
         extraContent: content,
         notes,
         historyKey: conversationKey({ userId: message.author.id }),
@@ -174,6 +176,7 @@ export async function onMessage(client, message) {
       });
     }
     await send(target, replyTo, payload);
+    if (wantsVoice) speakAnswer(message, payload).catch(() => {});
   } catch (err) {
     console.error('[message]', err.body ? errorDetail(err) : err);
     const shown = `❌ ${describeError(err)}`;
@@ -181,6 +184,22 @@ export async function onMessage(client, message) {
     reportProblem({ what: 'réponse de l\'IA', error: err.body ? errorDetail(err) : err, userId: message.author.id, guild: message.guild, channelId: message.channelId, shown }).catch(() => {});
   } finally {
     typing?.stop();
+  }
+}
+
+const VOICE_INTENT = /\b(?:en|au|dans le|sur le) voc(?:al)?\b|(?:^|\s)[àa] voix haute|\bteste?r? ta voix\b|\bparle(?:-moi)?\b.*\bvoc(?:al)?\b|\bvoc(?:al)? pour (?:un|voir|tester)\b/i;
+/** Lit la réponse de l'IA dans le vocal (celui de la personne si elle y est). */
+async function speakAnswer(message, payload) {
+  const text = String(payload.embeds?.[0]?.data?.description ?? payload.content ?? '').replace(/<[@#&!:a-z0-9_]+>/gi, '').replace(/[*_`>#~|]/g, '').trim().slice(0, 900);
+  if (!text) return;
+  const { speakInVoice } = await import('../features/assistant.js');
+  const { voiceOf } = await import('../features/premium.js');
+  const react = await message.react('🔊').catch(() => null);
+  try {
+    await speakInVoice(text, { channelId: message.member?.voice?.channelId ?? null, voice: voiceOf(message.guildId, 'Charon') });
+  } catch (err) {
+    await react?.remove().catch(() => {});
+    await message.reply({ content: `🔇 Je peux pas parler en vocal là : ${err.message}.`, allowedMentions: { repliedUser: false } }).catch(() => {});
   }
 }
 

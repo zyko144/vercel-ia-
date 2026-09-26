@@ -86,9 +86,10 @@ function draftView(id) {
 // ===================== Réponse à voix haute et traduction lue =====================
 
 /** L'IA vocale lit un texte dans le salon vocal du bot (idées 49 et 53). */
-export async function speakInVoice(text, { voice = 'Charon', style = 'Tu es une voix chaleureuse et claire.' } = {}) {
+export async function speakInVoice(text, { voice = 'Charon', style = 'Tu es une voix chaleureuse et claire.', channelId = null } = {}) {
   const { borrowVoiceAi, createNarrator } = await import('../voice-ai/assistant.js');
-  const release = await borrowVoiceAi('lecture à voix haute');
+  // Dans le vocal de la personne si elle y est, sinon dans le vocal habituel de l'IA
+  const release = await borrowVoiceAi('lecture à voix haute', { channelId });
   const narrator = createNarrator({ voice, style });
   try {
     await narrator.say(text);
