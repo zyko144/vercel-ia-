@@ -5,7 +5,7 @@ import { filterSort } from '../core/sort.js';
 const $ = (id) => document.getElementById(id);
 let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
-const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], song: null, account: null };
+const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], song: null, account: null };
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -149,6 +149,18 @@ function renderHome() {
     return `<div class="atile" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${mark ?? (icon ? `<img src="${esc(icon)}" alt="">` : `<span class="ai">${esc(i.name[0])}</span>`)}<div><b>${esc(i.name)}</b>${status}</div></div>`;
   }).join('') : '<div class="empty">Aucune application trouvée.</div>';
   renderRecos();
+}
+
+function renderFree() {
+  const list = state.free.slice(0, 5);
+  $('freeBlock').hidden = !list.length;
+  const day = (t) => new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('freeGames').innerHTML = list.map((g) => `
+    <div class="rcard free ${g.now ? 'now' : ''}" data-free="${esc(g.slug)}">
+      ${g.image ? `<img src="${esc(g.image)}" alt="" loading="lazy">` : ''}
+      <span class="badge ${g.now ? 'live' : ''}">${g.now ? 'Gratuit' : 'Bientôt'}</span>
+      <div class="meta"><b>${esc(g.name)}</b><small>${g.now ? `Jusqu’au ${day(g.until)}` : `À partir du ${day(g.from)}`}</small></div>
+    </div>`).join('');
 }
 
 function renderRecos() {
@@ -398,7 +410,7 @@ async function act(action) {
 
 // ---------- Événements ----------
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('button, [data-id], [data-reco]');
+  const t = e.target.closest('button, [data-id], [data-reco], [data-free]');
   if (!t) { $('heroMenu')?.classList.remove('on'); return; }
   if (t.id === 'moreBtn') { $('heroMenu').classList.toggle('on'); return; }
   $('heroMenu')?.classList.remove('on');
@@ -427,6 +439,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.inst) { document.querySelectorAll('#installed button').forEach((x) => x.classList.toggle('on', x === t)); state.list.installed = t.dataset.inst; return renderList(); }
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
+  if (t.dataset.free) return api.openFree?.(t.dataset.free).then(() => toast('Page Epic ouverte'));
   if (t.dataset.reco !== undefined) {
     const r = state.recos[Number(t.dataset.reco)];
     if (r?.itemId) return select(state.items.find((i) => i.id === r.itemId));
@@ -456,6 +469,7 @@ document.addEventListener('keydown', (e) => {
 function showKeys(s) {
   $('autostart').checked = Boolean(s.autostart);
   $('directLaunch').checked = s.directLaunch !== false;
+  $('gameMode').checked = s.gameMode !== false;
   $('geminiState').textContent = s.gemini ? '✅ IA active.' : 'Pas de clé trouvée : l’assistant et la recherche d’images par l’IA sont en pause.';
   $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée.' : 'Sans clé : jeux installés ou déjà joués seulement.';
   $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée.' : 'Facultatif : l’IA cherche déjà les images manquantes.';
@@ -477,6 +491,7 @@ $('totalTime').addEventListener('change', (e) => api.setPlatformAccounts({ total
 document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); api.openLink?.(b.dataset.link); }));
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
+$('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
 $('saveKeys').addEventListener('click', async (e) => {
   e.stopPropagation();
   const patch = {};
@@ -605,6 +620,7 @@ async function load() {
   renderAll();
   if (state.sel && !state.sel.detailsAsked) select(state.sel);
   api.reco?.().then((r) => { state.recos = r ?? []; renderRecos(); }).catch(() => {});
+  api.freeGames?.().then((f) => { state.free = f ?? []; renderFree(); }).catch(() => {});
 }
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
 api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(); });
@@ -640,6 +656,7 @@ function demoApi() {
     app('Spotify', 'musique', 2418, img('i1.png')), app('Discord', 'discussion', 900, img('i2.png')), app('Google Chrome', 'appli', 600, img('i3.png')), app('OBS Studio', 'video', 480, null),
   ];
   return {
+    freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
     details: async () => ({ developers: ['Rockstar North'], screenshots: [img('h1.jpg'), img('c2.jpg'), img('h2.jpg')], achievements: { done: 45, total: 77 } }),

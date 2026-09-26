@@ -54,8 +54,11 @@ export function periodItems(days, n, now = Date.now()) {
 export function startTracker(getItems, store, onChange, everyMs = 60_000, accountFor = () => 'principal') {
   const tick = async () => {
     const items = getItems();
-    const active = activeItems(items, await runningPaths());
+    const paths = await runningPaths();
+    const active = activeItems(items, paths);
     if (!active.size) return;
+    // Jeu Steam lancé sans Steam (lancement direct) : Steam ne compte pas ce temps, le launcher le garde à part
+    const steamOn = paths.some((p) => /[\\/]steam\.exe$/i.test(p));
     const now = Date.now();
     const day = ((store.data.days ??= {})[dayKey(now)] ??= {});
     for (const id of active) {
@@ -64,6 +67,7 @@ export function startTracker(getItems, store, onChange, everyMs = 60_000, accoun
       const t = (((store.data.timeBy ??= {})[id] ??= {})[accountFor(item)] ??= { minutes: 0, lastPlayed: 0 });
       t.minutes += everyMs / 60_000;
       t.lastPlayed = now;
+      if (item.source === 'steam' && !steamOn) (store.data.offSteam ??= {})[id] = (store.data.offSteam[id] ?? 0) + everyMs / 60_000;
       const cat = statCategory(item);
       day[cat] = (day[cat] ?? 0) + everyMs / 60_000;
       (day.items ??= {})[id] = (day.items[id] ?? 0) + everyMs / 60_000;

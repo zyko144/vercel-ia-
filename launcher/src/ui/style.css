@@ -343,3 +343,6 @@ body.listening .aifab .pulse { animation: ring 1.8s ease-out infinite; }
 /* Logos des plateformes (barre de gauche) */
 .pdot.plogo { display: inline-grid; place-items: center; }
 .pdot.plogo img { width: 62%; height: 62%; object-fit: contain; margin: 0; border-radius: 0; }
+
+/* Jeux gratuits Epic */
+.rcard.free.now { border-color: color-mix(in srgb, #2ee07a 45%, var(--line)); }

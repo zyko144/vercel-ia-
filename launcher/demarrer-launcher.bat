@@ -10,6 +10,15 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem Mise a jour automatique : recupere la derniere version (le fichier se relance ensuite, a jour)
+if /i not "%~1"=="nopull" (
+  where git >nul 2>nul && (
+    echo Recherche de mises a jour...
+    git pull --ff-only -q 2>nul || echo Mise a jour impossible pour l instant, on continue avec cette version.
+    "%~f0" nopull
+  )
+)
+
 rem A chaque lancement : installe ce qui manque (rapide si tout est deja la)
 echo Verification des modules...
 call npm install --no-audit --no-fund
