@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
 const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], cols: {}, friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
+const sidebar = { hiddenPlatforms: [], hiddenNav: [] }; // menu de gauche personnalisé (sur ce compte)
 const unread = {}; // messages d'amis non lus (id -> nombre)
 let chatWith = null; // discussion ouverte
 
@@ -76,6 +77,7 @@ document.addEventListener('error', (e) => {
 function renderPlatforms() {
   const counts = {};
   for (const i of state.items) if (!i.hidden && i.kind === 'game') counts[i.source] = (counts[i.source] ?? 0) + 1;
+  for (const k of sidebar.hiddenPlatforms) delete counts[k];
   $('platforms').innerHTML = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => {
     const s = state.sources[k] ?? { label: k, color: '#999' };
     // Logo officiel net sur la couleur de la plateforme (PC = Windows)
@@ -338,6 +340,64 @@ function renderHistory() {
   $('eGame').innerHTML = list.map((i) => `<option>${esc(i.name)}</option>`).join('');
   if (!$('eAt').value) { const d = new Date(Date.now() + 3_600_000); d.setMinutes(0, 0, 0); $('eAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
 }
+// ---------- Clic droit sur le menu de gauche : onglets, plateformes, collections ----------
+const NAV_FIXED = ['accueil', 'bibliotheque'];
+function applySidebar() {
+  document.querySelectorAll('#nav button[data-view]').forEach((b) => { b.hidden = sidebar.hiddenNav.includes(b.dataset.view); });
+  renderPlatforms();
+}
+const saveSidebar = () => api.setSettings({ sidebar: { ...sidebar } }).then(applySidebar);
+function sideMenu(el, x, y) {
+  const b = (a, label, k = '', cls = '') => `<button data-side="${a}" data-k="${esc(k)}" class="${cls}">${label}</button>`;
+  let title = '';
+  const m = [];
+  if (el.dataset.col) {
+    const c = state.cols[el.dataset.col];
+    if (!c) return;
+    title = c.name;
+    m.push(b('col-open', '📂 Ouvrir', el.dataset.col), b('col-rename', '✏ Renommer', el.dataset.col), b('col-empty', '🧹 Vider (retirer tous les jeux)', el.dataset.col), '<hr>', b('col-del', '🗑 Supprimer la collection', el.dataset.col, 'danger'));
+  } else if (el.dataset.platform) {
+    const k = el.dataset.platform;
+    title = state.sources[k]?.label ?? k;
+    m.push(b('plat-open', '📂 Voir ses jeux', k), b('plat-hide', '◌ Masquer du menu', k));
+  } else if (el.dataset.view) {
+    const v = el.dataset.view;
+    title = el.textContent.trim();
+    m.push(b('nav-open', '📂 Ouvrir', v));
+    if (!NAV_FIXED.includes(v)) m.push(b('nav-hide', '◌ Masquer cet onglet', v));
+  } else if (el.closest('.colhead')) {
+    title = 'Collections';
+    m.push(b('col-new', '＋ Nouvelle collection'));
+  } else return;
+  const hid = sidebar.hiddenNav.length + sidebar.hiddenPlatforms.length;
+  if (hid) m.push('<hr>', b('side-reset', `◉ Réafficher ce que j’ai masqué (${hid})`));
+  const ctx = $('ctx');
+  ctx.innerHTML = `<div class="ctxhead">${esc(title)}</div>${m.join('')}`;
+  ctx.hidden = false;
+  ctx.style.left = `${Math.min(x, window.innerWidth - ctx.offsetWidth - 8)}px`;
+  ctx.style.top = `${Math.max(8, Math.min(y, window.innerHeight - ctx.offsetHeight - 8))}px`;
+  ctx.classList.remove('show'); void ctx.offsetWidth; ctx.classList.add('show');
+}
+document.querySelector('.side').addEventListener('contextmenu', (e) => {
+  const el = e.target.closest('[data-col], [data-platform], [data-view], .colhead');
+  if (!el) return;
+  e.preventDefault();
+  e.stopPropagation();
+  sideMenu(el, e.clientX, e.clientY);
+});
+async function sideAction(a, k) {
+  if (a === 'col-open') return document.querySelector(`#collections [data-col="${CSS.escape(k)}"]`)?.click();
+  if (a === 'col-rename') { const n = await ui.prompt({ title: 'Renommer la collection', value: state.cols[k]?.name ?? '', ok: 'Renommer', icon: '📚' }); if (n && state.cols[k]) { state.cols[k].name = n.slice(0, 40); saveCols(); toast('Collection renommée'); } return; }
+  if (a === 'col-empty') { if (state.cols[k] && await ui.confirm({ title: `Vider « ${state.cols[k].name} » ?`, text: 'Les jeux restent dans la bibliothèque.', ok: 'Vider', icon: '🧹' })) { state.cols[k].items = []; saveCols(); if (state.list.collection === k) renderList(); } return; }
+  if (a === 'col-del') { if (state.cols[k] && await ui.confirm({ title: `Supprimer « ${state.cols[k].name} » ?`, text: 'Les jeux restent dans la bibliothèque.', ok: 'Supprimer', danger: true, icon: '📚' })) { delete state.cols[k]; saveCols(); if (state.list.collection === k) go('bibliotheque'); toast('Collection supprimée'); } return; }
+  if (a === 'col-new') return $('newCol').click();
+  if (a === 'plat-open') return document.querySelector(`#platforms [data-platform="${CSS.escape(k)}"]`)?.click();
+  if (a === 'plat-hide') { sidebar.hiddenPlatforms = [...new Set([...sidebar.hiddenPlatforms, k])]; await saveSidebar(); return toast('Plateforme masquée du menu (clic droit › Réafficher pour la remettre)'); }
+  if (a === 'nav-open') return go(k);
+  if (a === 'nav-hide') { sidebar.hiddenNav = [...new Set([...sidebar.hiddenNav, k])]; if (state.view === k) go('accueil'); await saveSidebar(); return toast('Onglet masqué (clic droit › Réafficher pour le remettre)'); }
+  if (a === 'side-reset') { sidebar.hiddenNav = []; sidebar.hiddenPlatforms = []; await saveSidebar(); return toast('Menu remis comme avant'); }
+}
+
 // ---------- Messages entre amis + synchro en direct ----------
 async function openChat(id, name) {
   const f = state.hist?.amis?.find((a) => a.id === id);
@@ -514,6 +574,9 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.11.1': [
+    ['🖱', 'Clic droit sur le menu', 'Collections : renommer, vider, supprimer. Plateformes et onglets : masquer (réglage perso, remis d’un clic).'],
+  ],
   '0.11.0': [
     ['👥', 'Amis en direct', 'Quand un ami lance un jeu, une notification apparaît en bas à gauche : Rejoindre ou « On joue ? ».'],
     ['💬', 'Messages entre amis', 'Écris à tes amis History : ils reçoivent le message en bas à gauche de leur écran, même en jeu.'],
@@ -1244,6 +1307,7 @@ document.addEventListener('click', async (e) => {
   if (t.id === 'moreBtn') { if ($('ctx').hidden) openCtx(state.sel, 0, 0, t); else hideCtx(); return; }
   hideCtx();
   if (inCtx && t.tagName === 'HR') return;
+  if (t.dataset.side) return sideAction(t.dataset.side, t.dataset.k);
   if (t.dataset.view) return go(t.dataset.view);
   if (t.dataset.go) return go(t.dataset.go);
   if (t.dataset.platform) {
@@ -1362,6 +1426,8 @@ $('openKeys').addEventListener('click', (e) => { e.preventDefault(); $('settings
 
 // Réglages
 function showKeys(s) {
+  Object.assign(sidebar, { hiddenPlatforms: [], hiddenNav: [] }, s.sidebar ?? {});
+  applySidebar();
   $('autostart').checked = Boolean(s.autostart);
   $('directLaunch').checked = s.directLaunch !== false;
   $('gameMode').checked = s.gameMode !== false;
@@ -1619,7 +1685,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.11.0',
+    version: async () => '0.11.1',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

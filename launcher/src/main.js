@@ -109,6 +109,8 @@ function createWindow() {
   if (process.env.LAUNCHER_SHOT) {
     win.webContents.once('did-finish-load', () => setTimeout(async () => {
       const { writeFile } = await import('node:fs/promises');
+      // LAUNCHER_SHOT_JS : script de mise en scène avant la capture (bancs d'essai uniquement)
+      if (process.env.LAUNCHER_SHOT_JS) { await win.webContents.executeJavaScript(process.env.LAUNCHER_SHOT_JS).catch(() => {}); await new Promise((r) => setTimeout(r, 1200)); }
       await writeFile(process.env.LAUNCHER_SHOT, (await win.webContents.capturePage()).toPNG());
       quitting = true;
       app.quit();
@@ -746,6 +748,11 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
   if ('friendNotifs' in patch) store.data.settings.friendNotifs = Boolean(patch.friendNotifs);
+  if ('sidebar' in patch) {
+    const sb = patch.sidebar ?? {};
+    const ids = (v, re) => [...new Set((Array.isArray(v) ? v : []).map(String).filter((x) => re.test(x)))].slice(0, 40);
+    store.data.settings.sidebar = { hiddenPlatforms: ids(sb.hiddenPlatforms, /^[\w-]{1,30}$/), hiddenNav: ids(sb.hiddenNav, /^(jeux|applis|favoris|stats|classement|amis|pc|optimisation|ia)$/) };
+  }
   if ('dailyLimit' in patch) store.data.settings.dailyLimit = Math.max(0, Math.min(1440, Number(patch.dailyLimit) || 0));
   if ('breakEvery' in patch) store.data.settings.breakEvery = Math.max(0, Math.min(600, Number(patch.breakEvery) || 0));
   if ('theme' in patch && ['bleu', 'violet', 'rouge', 'vert', 'orange', 'rose', 'auto'].includes(patch.theme)) store.data.settings.theme = patch.theme;
