@@ -28,6 +28,20 @@ let items = [];
 let quitting = false;
 const store = createStore(app.getPath('userData'));
 
+// Toute erreur au démarrage est notée dans un journal et affichée (au lieu d'une fermeture silencieuse)
+async function fatal(err) {
+  const text = `${new Date().toISOString()} ${err?.stack ?? err}\n`;
+  try {
+    const { appendFile, mkdir } = await import('node:fs/promises');
+    await mkdir(app.getPath('userData'), { recursive: true });
+    await appendFile(path.join(app.getPath('userData'), 'erreurs.log'), text);
+  } catch { /* journal impossible */ }
+  console.error('[launcher]', err);
+  if (app.isReady()) dialog.showErrorBox('History Launcher : erreur', `${err?.message ?? err}\n\nJournal : ${path.join(app.getPath('userData'), 'erreurs.log')}`);
+}
+process.on('uncaughtException', (err) => { fatal(err); });
+process.on('unhandledRejection', (err) => { fatal(err); });
+
 if (!app.requestSingleInstanceLock()) app.quit();
 
 // Images de la bibliothèque Steam sur le PC, servies par « libimg:// » : seulement les fichiers que le scan a trouvés
@@ -138,7 +152,7 @@ let raw = [];
 let aiCache = { key: null, ai: null };
 async function getAi() {
   const key = secret('gemini') ?? await geminiKeyFromEnv(path.join(here, '..'));
-  if (key !== aiCache.key) aiCache = { key, ai: createAi(key) };
+  if (key !== aiCache.key) aiCache = { key, ai: await createAi(key) };
   return aiCache.ai;
 }
 const send = (channel, payload) => win?.webContents.send(channel, payload);
@@ -360,7 +374,8 @@ ipcMain.on('win', (_e, what) => {
   else if (what === 'close') win?.hide();
 });
 
-app.whenReady().then(async () => {
+app.whenReady().then(start).catch(async (err) => { await fatal(err); app.exit(1); });
+async function start() {
   protocol.handle('libimg', (req) => {
     const token = new URL(req.url).pathname.replace(/^\//, '').replace(/\.(png|jpg)$/, '');
     const file = localFiles.get(token);
@@ -371,7 +386,7 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
   startTracker(() => items, store, (ids) => win?.webContents.send('lib:active', ids));
-});
+}
 app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', (e) => e.preventDefault());
 
