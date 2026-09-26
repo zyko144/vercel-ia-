@@ -29,6 +29,7 @@ import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
+import { dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { stripWake, understand } from './core/commands.js';
@@ -283,7 +284,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
 async function confirm(message, detail) {
@@ -525,6 +526,12 @@ async function doAction(id, action) {
     throw new Error('exécutable introuvable');
   }
 
+  if (action === 'update' && item.source === 'steam') {
+    // Steam fait la mise à jour puis lance le jeu (en arrière-plan, sans fenêtre)
+    if (await runSilentSteam(['-applaunch', item.steamId])) { gameMode(item); return { ok: true }; }
+    throw new Error('Steam introuvable');
+  }
+
   if (action === 'verify') {
     const result = await startVerify(item.id);
     return { ok: true, verify: result };
@@ -637,6 +644,9 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
+  if ('dailyLimit' in patch) store.data.settings.dailyLimit = Math.max(0, Math.min(1440, Number(patch.dailyLimit) || 0));
+  if ('breakEvery' in patch) store.data.settings.breakEvery = Math.max(0, Math.min(600, Number(patch.breakEvery) || 0));
+  if ('theme' in patch && ['bleu', 'violet', 'rouge', 'vert', 'orange', 'rose', 'auto'].includes(patch.theme)) store.data.settings.theme = patch.theme;
   if ('dealAlerts' in patch) store.data.settings.dealAlerts = Boolean(patch.dealAlerts);
   if ('gameMode' in patch) store.data.settings.gameMode = Boolean(patch.gameMode);
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
@@ -756,6 +766,13 @@ setInterval(async () => {
   if (store.data.settings.discordStatus !== false) await rpc.set(s ? activityFor(s, items.find((i) => i.id === s.id)) : null).catch(() => {});
   else if (rpc.ready) await rpc.set(null).catch(() => {});
   if (Date.now() - lastPresence > 55_000) { lastPresence = Date.now(); sendPresence(s).catch(() => {}); }
+  // Limite du jour et pauses
+  const set = store.data.settings;
+  if (set.dailyLimit > 0 || set.breakEvery > 0) {
+    const reminders = playReminders({ today: todayGameMinutes(store.data.days), limit: Number(set.dailyLimit) || 0, sessionMinutes: s?.start ? (Date.now() - s.start) / 60_000 : 0, breakEvery: Number(set.breakEvery) || 0 }, (store.data.reminders ??= {}));
+    for (const r of reminders) notify(r.kind === 'limit' ? 'Limite de jeu atteinte' : 'Petite pause ?', r.text);
+    if (reminders.length) store.save();
+  }
 }, 30_000);
 
 async function sendPresence(s) {
@@ -890,6 +907,54 @@ ipcMain.handle('custom:remove', async (_e, id) => {
   await remerge();
   send('lib:update', library());
   return { ok: true };
+});
+
+// ---------- Résumé de la semaine (chaque lundi), actus des jeux, notes de mise à jour, couleur du thème ----------
+ipcMain.handle('recap:get', () => {
+  const recap = weeklyRecap(store.data.days, items);
+  const fresh = store.data.recapShown !== recap.week && recap.minutes > 0;
+  if (fresh) { store.data.recapShown = recap.week; store.save(); }
+  return { ...recap, fresh };
+});
+setInterval(() => {
+  const recap = weeklyRecap(store.data.days, items);
+  if (recap.minutes > 0 && store.data.recapNotified !== recap.week) {
+    store.data.recapNotified = recap.week;
+    store.save();
+    notify('Ton résumé de la semaine est prêt', `${Math.floor(recap.minutes / 60)} h de jeu${recap.top[0] ? `, surtout ${recap.top[0].name}` : ''}. Ouvre le launcher pour tout voir.`);
+  }
+}, 3_600_000);
+ipcMain.handle('news:get', async () => {
+  const c = store.data.news;
+  if (c && Date.now() - c.at < 3 * 3_600_000) return c.list;
+  const games = items.filter((i) => i.source === 'steam' && i.installed && /^\d+$/.test(i.steamId ?? '')).sort((a, b) => b.minutes - a.minutes).slice(0, 6);
+  const all = (await Promise.all(games.map((g) => steamNews(g.steamId, 2).then((n) => n.map((x) => ({ ...x, game: g.name, id: g.id, image: g.art?.header ?? g.art?.hero ?? null }))).catch(() => [])))).flat();
+  const list = all.sort((a, b) => b.at - a.at).slice(0, 8);
+  store.data.news = { at: Date.now(), list };
+  store.save();
+  return list;
+});
+ipcMain.handle('news:game', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  return item?.source === 'steam' ? steamNews(item.steamId, 3).catch(() => []) : [];
+});
+ipcMain.handle('news:open', (_e, appid, gid) => (/^\d{1,8}$/.test(String(appid)) && /^\d{1,25}$/.test(String(gid)) ? openLink(`https://store.steampowered.com/news/app/${appid}/view/${gid}`) : null));
+const colorCache = new Map();
+ipcMain.handle('color:of', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item) return null;
+  if (colorCache.has(item.id)) return colorCache.get(item.id);
+  let color = item.brand?.color ?? null;
+  if (!color) {
+    const src = [item.art?.cover, item.art?.hero, item.art?.header].find(Boolean);
+    let buf = null;
+    if (src?.startsWith('libimg://')) { const f = localFiles.get(new URL(src).pathname.replace(/^\//, '').replace(/\.(png|jpg)$/, '')); if (f) buf = await import('node:fs/promises').then((fs) => fs.readFile(f)).catch(() => null); }
+    else if (/^https:\/\//.test(src ?? '')) buf = Buffer.from(await (await fetch(src, { signal: AbortSignal.timeout(8000) })).arrayBuffer().catch(() => new ArrayBuffer(0)));
+    const img = buf?.length ? nativeImage.createFromBuffer(buf) : null;
+    if (img && !img.isEmpty()) color = dominantColor(img.resize({ width: 32 }).toBitmap());
+  }
+  colorCache.set(item.id, color);
+  return color;
 });
 
 // ---------- Statistiques ----------

@@ -101,6 +101,7 @@ function renderHero() {
   const d = i.details ?? {};
   const ach = d.achievements ? `<dt>Succès</dt><dd>${d.achievements.done} / ${d.achievements.total}</dd>` : '';
   const menu = [];
+  if (i.updatePending) menu.push('<button data-action="update">⟳ Mettre à jour et jouer</button>');
   if (i.installed && ['steam', 'epic'].includes(i.source)) menu.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
   if (i.installed && i.installDir) menu.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
   if (i.source === 'steam') menu.push('<button data-action="store">🛈 Page du magasin</button>');
@@ -136,7 +137,7 @@ function card(i, cls = 'gcard') {
   const icon = srcIcon(i);
   return `<div class="${cls} ${i.installed ? '' : 'off'} ${state.sel?.id === i.id ? 'sel' : ''}" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">
     ${art(i)}${icon ? `<img class="srcicon" src="${esc(icon)}" alt="">` : ''}
-    ${live ? '<span class="badge live">En cours</span>' : i.installed ? '' : '<span class="badge">Non installé</span>'}
+    ${live ? '<span class="badge live">En cours</span>' : !i.installed ? '<span class="badge">Non installé</span>' : i.updatePending ? '<span class="badge upd">Mise à jour</span>' : ''}
     <div class="meta"><b>${esc(i.name)}</b><small>${CLOCK}${hours(i.minutes)}</small></div></div>`;
 }
 
@@ -152,6 +153,19 @@ function renderHome() {
     return `<div class="atile" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${mark ?? (icon ? `<img src="${esc(icon)}" alt="">` : `<span class="ai">${esc(i.name[0])}</span>`)}<div><b>${esc(i.name)}</b>${status}</div></div>`;
   }).join('') : '<div class="empty">Aucune application trouvée.</div>';
   renderRecos();
+  renderUpdates();
+}
+
+function renderUpdates() {
+  const list = state.items.filter((i) => i.updatePending && i.installed).slice(0, 6);
+  $('updBlock').hidden = !list.length;
+  $('updates').innerHTML = list.map((i) => `<div class="atile" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${i.art?.logo || i.art?.header ? `<img src="${esc(i.art.header ?? i.art.logo)}" alt="" class="wide">` : `<span class="ai">${esc(i.name[0])}</span>`}<div><b>${esc(i.name)}</b><small>Mise à jour en attente</small></div><button class="btn play" data-upd="${esc(i.id)}">Mettre à jour</button></div>`).join('');
+}
+function renderNews(list) {
+  $('newsBlock').hidden = !list?.length;
+  const day = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+  $('news').innerHTML = (list ?? []).slice(0, 6).map((n) => `<div class="newscard" data-news="${esc(n.appid)}" data-gid="${esc(n.gid)}">
+    ${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy">` : ''}<div><small>${esc(n.game)} · ${day(n.at)}${n.patch ? ' · <span class="upd">Mise à jour</span>' : ''}</small><b>${esc(n.title)}</b><p>${esc(n.text)}</p></div></div>`).join('');
 }
 
 function renderDeals() {
@@ -262,6 +276,106 @@ $('eCreate').addEventListener('click', async () => {
 $('friendsRefresh').addEventListener('click', () => (state.ftab === 'history' ? loadHistory() : loadFriends(true)).then(() => toast('Amis actualisés')));
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'history') loadHistory(); }, 60_000);
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'steam') loadFriends(); }, 60_000);
+
+// ---------- Résumé de la semaine ----------
+function showRecap(r) {
+  const trend = r.change == null ? '' : r.change >= 0 ? `<span class="up">▲ ${r.change} %</span> par rapport à la semaine d’avant` : `<span class="down">▼ ${-r.change} %</span> par rapport à la semaine d’avant`;
+  const max = r.top[0]?.minutes || 1;
+  $('recapBody').innerHTML = r.minutes ? `
+    <div class="recapbig"><b>${hours(r.minutes)}</b><small>de jeu la semaine dernière · ${r.count} jeu${r.count > 1 ? 'x' : ''}</small><div class="hint">${trend}</div></div>
+    ${r.top.map((g, n) => `<div class="rrow" data-id="${esc(g.id)}" style="--c:#2f8bff"><span class="n">${MEDALS[n + 1]}</span><div><b>${esc(g.name)}</b></div><div class="barw"><i style="width:${(g.minutes / max) * 100}%"></i></div><span class="t">${hours(g.minutes)}</span></div>`).join('')}` : '<div class="empty">Pas de partie la semaine dernière. Cette semaine, c’est la bonne 😉</div>';
+  $('recapDlg').showModal();
+}
+$('openRecap').addEventListener('click', () => api.recap?.().then(showRecap));
+
+// ---------- Thèmes ----------
+const THEMES = { bleu: '#2f8bff', violet: '#8b5cf6', rouge: '#ef4444', vert: '#22c55e', orange: '#f97316', rose: '#ec4899' };
+function mix(hex, other, k) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [a, b] = [p(hex), p(other)];
+  return `#${a.map((v, i) => Math.round(v * (1 - k) + b[i] * k).toString(16).padStart(2, '0')).join('')}`;
+}
+function applyTheme(color) {
+  if (!/^#[0-9a-f]{6}$/i.test(color ?? '')) return;
+  const root = document.documentElement.style;
+  root.setProperty('--blue', color);
+  root.setProperty('--blue-2', mix(color, '#000000', 0.35));
+  root.setProperty('--cyan', mix(color, '#ffffff', 0.35));
+}
+let themeName = 'bleu';
+async function themeFor(item) {
+  if (themeName !== 'auto' || !item) return;
+  const c = await api.colorOf?.(item.id).catch(() => null);
+  applyTheme(c ?? THEMES.bleu);
+}
+$('themeSel').addEventListener('change', (e) => { themeName = e.target.value; api.setSettings({ theme: themeName }); if (themeName === 'auto') themeFor(state.sel); else applyTheme(THEMES[themeName]); });
+$('dailyLimit').addEventListener('change', (e) => api.setSettings({ dailyLimit: Number(e.target.value) }).then(() => toast(Number(e.target.value) ? 'Limite enregistrée' : 'Pas de limite')));
+$('breakEvery').addEventListener('change', (e) => api.setSettings({ breakEvery: Number(e.target.value) }));
+api.settings?.().then((s) => {
+  themeName = s?.theme ?? 'bleu';
+  $('themeSel').value = themeName; $('dailyLimit').value = String(s?.dailyLimit ?? 0); $('breakEvery').value = String(s?.breakEvery ?? 0);
+  if (themeName !== 'auto') applyTheme(THEMES[themeName] ?? THEMES.bleu);
+}).catch(() => {});
+
+// ---------- Manette (Xbox, PlayStation…) : navigation dans tout le launcher ----------
+const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, VIEW: 8, MENU: 9, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+let padFocus = null;
+let padPrev = [];
+let padRepeat = 0;
+const focusables = () => [...document.querySelectorAll(document.querySelector('dialog[open]') ? 'dialog[open] button, dialog[open] input, dialog[open] select' : '#nav button, .view.on [data-id], .view.on .btn, .view.on [data-free], .view.on [data-deal], .view.on [data-news], #hero .playbtn .main')].filter((el) => el.offsetParent && el.getBoundingClientRect().width > 0);
+function padMove(dx, dy) {
+  const list = focusables();
+  if (!list.length) return;
+  if (!padFocus || !list.includes(padFocus)) { setPadFocus(list.find((el) => el.closest('.view.on')) ?? list[0]); return; }
+  const r = padFocus.getBoundingClientRect();
+  const cx = r.left + r.width / 2; const cy = r.top + r.height / 2;
+  let best = null; let bestScore = Infinity;
+  for (const el of list) {
+    if (el === padFocus) continue;
+    const q = el.getBoundingClientRect();
+    const x = q.left + q.width / 2 - cx; const y = q.top + q.height / 2 - cy;
+    const along = x * dx + y * dy;
+    if (along <= 4) continue;
+    const across = Math.abs(x * dy - y * dx);
+    const score = along + across * 2.2;
+    if (score < bestScore) { bestScore = score; best = el; }
+  }
+  if (best) setPadFocus(best);
+}
+function setPadFocus(el) {
+  padFocus?.classList.remove('padfocus');
+  padFocus = el;
+  el.classList.add('padfocus');
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  if (el.dataset.id && !el.closest('dialog')) { const item = state.items.find((i) => i.id === el.dataset.id); if (item && state.view === 'accueil') { state.sel = item; renderHero(); } }
+}
+function padPress(b) {
+  const open = document.querySelector('dialog[open]');
+  if (b === PAD.A && padFocus) { if (padFocus.dataset.id && state.sel?.id === padFocus.dataset.id && state.view === 'accueil' && state.sel.installed) return act('launch'); return padFocus.click(); }
+  if (b === PAD.B) { if (open) return open.close(); if ($('aipop').classList.contains('open')) return openAssistant(false); return go('accueil'); }
+  if (b === PAD.X && state.sel) return openSheet(state.sel);
+  if (b === PAD.Y && state.sel) { const on = !state.sel.favorite; return api.setItem(state.sel.id, { favorite: on }).then(() => { state.sel.favorite = on; toast(on ? 'Ajouté aux favoris' : 'Retiré des favoris'); }); }
+  if (b === PAD.LB || b === PAD.RB) { const at = Math.max(0, VIEW_KEYS.indexOf(state.view === 'liste' ? ({ tout: 'bibliotheque', jeux: 'jeux', applis: 'applis', favoris: 'favoris' })[state.list.kind] ?? 'bibliotheque' : state.view)); go(VIEW_KEYS[(at + (b === PAD.RB ? 1 : -1) + VIEW_KEYS.length) % VIEW_KEYS.length]); padFocus = null; return; }
+  if (b === PAD.MENU) return $('openSettings').click();
+  if (b === PAD.VIEW) return openAssistant(true);
+}
+function padLoop() {
+  const pad = [...(navigator.getGamepads?.() ?? [])].find(Boolean);
+  if (pad) {
+    const now = performance.now();
+    const pressed = pad.buttons.map((x) => x.pressed);
+    pressed.forEach((p, i) => { if (p && !padPrev[i] && ![PAD.UP, PAD.DOWN, PAD.LEFT, PAD.RIGHT].includes(i)) padPress(i); });
+    const [ax, ay] = [pad.axes[0] ?? 0, pad.axes[1] ?? 0];
+    const dx = pressed[PAD.LEFT] || ax < -0.5 ? -1 : pressed[PAD.RIGHT] || ax > 0.5 ? 1 : 0;
+    const dy = pressed[PAD.UP] || ay < -0.5 ? -1 : pressed[PAD.DOWN] || ay > 0.5 ? 1 : 0;
+    if ((dx || dy) && now > padRepeat) { padMove(dx, dy); padRepeat = now + (padRepeat ? 180 : 320); } else if (!dx && !dy) padRepeat = 0;
+    padPrev = pressed;
+  }
+  requestAnimationFrame(padLoop);
+}
+window.addEventListener('gamepadconnected', () => { document.body.classList.add('pad'); toast('🎮 Manette connectée : navigue avec la croix, A pour ouvrir'); if (!padFocus) padMove(0, 1); });
+window.addEventListener('gamepaddisconnected', () => { if (![...(navigator.getGamepads?.() ?? [])].some(Boolean)) document.body.classList.remove('pad'); });
+requestAnimationFrame(padLoop);
 
 // ---------- Collections ----------
 function renderCollections() {
@@ -580,6 +694,7 @@ function go(view) {
 function select(item) {
   if (!item) return;
   state.sel = item;
+  themeFor(item);
   if (state.view !== 'accueil') go('accueil');
   renderHero();
   renderHome();
@@ -601,7 +716,7 @@ function openSheet(i) {
     ${d.description ? `<p>${esc(d.description)}</p>` : '<p class="fine">Pas de description disponible.</p>'}
     <p class="fine">${[d.developers?.[0] && `Studio : ${esc(d.developers[0])}`, d.released && `Sortie : ${esc(d.released)}`, d.score && `Metacritic : ${esc(d.score)}`, `Temps : ${hours(i.minutes)}`, `Taille : ${size(i.size)}`].filter(Boolean).join(' · ')}</p>
     ${d.screenshots?.length ? `<div class="shots">${d.screenshots.map((s) => `<img src="${esc(s)}" alt="">`).join('')}</div>` : ''}
-    <div id="sxTime"></div><div id="sxAch"></div><div id="sxCaps"></div>
+    <div id="sxTime"></div><div id="sxPatch"></div><div id="sxAch"></div><div id="sxCaps"></div>
     <div class="acts"><button class="btn" data-close="1">Fermer</button></div>`;
   $('sheet').showModal();
   loadSheetExtras(i);
@@ -618,6 +733,11 @@ async function loadSheetExtras(i) {
     $('sxTime').innerHTML = `<h3>⏱ Durée pour finir <small class="hint">moyennes HowLongToBeat</small></h3>
       <div class="hltb">${[['Histoire', t.main], ['+ À côtés', t.extra], ['100 %', t.complete]].map(([k, v]) => `<div><small>${k}</small><b>${v ? `${String(v).replace('.', ',')} h` : '—'}</b></div>`).join('')}</div>
       ${t.main ? `<div class="gbar big"><i style="width:${pct}%"></i></div><p class="fine">${left > 0 ? `Il te reste environ ${hours(left * 60)} pour finir l’histoire.` : 'Tu as déjà dépassé la durée moyenne de l’histoire 🎉'}</p>` : ''}`;
+  }).catch(() => {});
+  api.gameNews?.(i.id).then((list) => {
+    const n = list?.find((x) => x.patch) ?? list?.[0];
+    if (!n || !$('sxPatch')) return;
+    $('sxPatch').innerHTML = `<h3>📰 ${n.patch ? 'Dernière mise à jour' : 'Dernière actu'} <small class="hint">${new Date(n.at).toLocaleDateString('fr-FR')}</small></h3><div class="newscard flat" data-news="${esc(n.appid)}" data-gid="${esc(n.gid)}"><div><b>${esc(n.title)}</b><p>${esc(n.text)}</p><small class="link">Lire l’article complet ›</small></div></div>`;
   }).catch(() => {});
   api.achievements?.(i.id).then((a) => {
     if (!$('sxAch') || !a) return;
@@ -696,7 +816,7 @@ async function act(action) {
 
 // ---------- Événements ----------
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal]');
+  const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal], [data-news]');
   if (!t) { $('heroMenu')?.classList.remove('on'); return; }
   if (t.id === 'moreBtn') { $('heroMenu').classList.toggle('on'); return; }
   $('heroMenu')?.classList.remove('on');
@@ -726,6 +846,8 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
+  if (t.dataset.upd) { const r = await api.action(t.dataset.upd, 'update'); return toast(r?.ok ? 'Steam fait la mise à jour puis lance le jeu' : r?.error ?? 'Impossible pour l’instant'); }
+  if (t.dataset.news) return api.openNews(t.dataset.news, t.dataset.gid).then(() => toast('Article ouvert'));
   if (t.dataset.cap) return api.openCapture(t.dataset.cap);
   if (t.dataset.capdir) return api.captureFolder(t.dataset.capdir);
   if (t.dataset.cols && state.sel) return openCollections(state.sel);
@@ -966,6 +1088,9 @@ async function load() {
   api.freeGames?.().then((f) => { state.free = f ?? []; renderFree(); }).catch(() => {});
   api.deals?.().then((d) => { state.deals = d ?? []; renderDeals(); }).catch(() => {});
   loadFriends();
+  renderUpdates();
+  api.news?.().then(renderNews).catch(() => {});
+  api.recap?.().then((r) => { if (r?.fresh) showRecap(r); }).catch(() => {});
   api.collections?.().then((c) => { state.cols = c ?? {}; renderCollections(); }).catch(() => {});
 }
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
@@ -1008,6 +1133,9 @@ function demoApi() {
       { id64: '76561198000000003', name: 'Sam', avatar: null, online: true, status: 'En ligne', game: null },
       { id64: '76561198000000004', name: 'Zoé', avatar: null, online: false, status: 'Hors ligne', game: null }] }),
     friendAction: async () => ({ ok: true }), openDeal: async () => {},
+    recap: async () => ({ fresh: true, minutes: 1260, change: 18, count: 5, top: [{ id: 'steam:271590', name: 'Grand Theft Auto V', minutes: 540 }, { id: 'epic:Fortnite', name: 'Fortnite', minutes: 380 }, { id: 'steam:252950', name: 'Rocket League', minutes: 200 }] }),
+    news: async () => [{ appid: '252950', gid: '1', game: 'Rocket League', title: 'Saison 18 : nouvelle arène et Rocket Pass', text: 'La saison 18 arrive avec une arène inédite, de nouvelles voitures et le retour du mode Heatseeker.', at: Date.now() - 86_400_000, patch: false, image: img('h1.jpg') }, { appid: '730', gid: '2', game: 'Counter-Strike 2', title: 'Mise à jour du 24 septembre', text: 'Corrections de bugs sur Mirage, amélioration du netcode et nouvelles options pour la vidéo.', at: Date.now() - 2 * 86_400_000, patch: true, image: img('h2.jpg') }],
+    gameNews: async () => [], colorOf: async () => '#e5484d',
     collections: async () => ({ c1: { name: 'Avec les potes', items: ['epic:Fortnite', 'riot:valorant'] }, c2: { name: 'À finir', items: ['steam:271590'] } }), saveCollections: async (c) => c,
     pickGame: async () => ({ ok: true, name: 'Mon jeu' }), addGameFile: async () => ({ ok: true, name: 'Mon jeu' }),
     timeToBeat: async () => ({ main: 31.5, extra: 48, complete: 82 }),

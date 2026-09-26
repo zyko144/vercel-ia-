@@ -47,6 +47,10 @@
     <div class="apps" id="topApps"></div>
     <div id="dealBlock" hidden><div class="row-head"><h2>En promo dans ta liste de souhaits</h2><small class="hint">Steam · tu es prévenu dès qu’une promo commence</small></div>
     <div class="recos" id="deals"></div></div>
+    <div id="updBlock" hidden><div class="row-head"><h2>Mises à jour disponibles</h2><small class="hint">Steam les fait en arrière-plan puis lance le jeu</small></div>
+    <div class="apps" id="updates"></div></div>
+    <div id="newsBlock" hidden><div class="row-head"><h2>Actus de tes jeux</h2><small class="hint">Nouveautés et notes de mise à jour</small></div>
+    <div class="news" id="news"></div></div>
     <div id="freeBlock" hidden><div class="row-head"><h2>Jeux gratuits de la semaine</h2><small class="hint">Epic Games Store · à récupérer, gardés pour toujours</small></div>
     <div class="recos" id="freeGames"></div></div>
     <div id="recoBlock" hidden><div class="row-head"><h2 id="recoTitle">Recommandés pour toi</h2><small class="hint">Proposés par l’IA d’après tes jeux</small></div>
@@ -64,7 +68,7 @@
   </section>
 
   <section id="view-stats" class="view">
-    <div class="list-head"><h2>Statistiques</h2><div class="tabs" id="periods"><button data-p="semaine" class="on">Semaine</button><button data-p="mois">Mois</button><button data-p="annee">Année</button></div></div>
+    <div class="list-head"><h2>Statistiques</h2><button class="btn" type="button" id="openRecap">📅 Résumé de la semaine</button><div class="tabs" id="periods"><button data-p="semaine" class="on">Semaine</button><button data-p="mois">Mois</button><button data-p="annee">Année</button></div></div>
     <div class="statsgrid">
       <div class="panel donutCard"><h3>Répartition du temps</h3><div class="donutWrap"><svg id="donut" viewBox="0 0 120 120"></svg><div class="legend" id="legend"></div></div></div>
       <div class="panel"><h3>Les plus utilisés (temps total)</h3><div class="statsbig" id="statsBig"></div></div>
@@ -195,6 +199,14 @@
 
 <div id="dropzone" hidden><div>Lâche le fichier .exe pour ajouter le jeu</div></div>
 
+<dialog id="recapDlg">
+  <form method="dialog" class="dlg recap">
+    <h2>📅 Ta semaine</h2>
+    <div id="recapBody"></div>
+    <div class="row end"><button class="btn play">Fermer</button></div>
+  </form>
+</dialog>
+
 <dialog id="keys">
   <form method="dialog" class="dlg">
     <h2>Raccourcis clavier</h2>
@@ -211,6 +223,7 @@
       <div class="krow"><span class="kk"><kbd>F5</kbd></span><span>Rechercher de nouveaux jeux et applis</span></div>
       <div class="krow"><span class="kk"><kbd>Espace</kbd></span><span>Musique : lecture / pause</span></div>
       <div class="krow"><span class="kk"><kbd>Échap</kbd></span><span>Fermer</span></div>
+      <div class="krow"><span class="kk"><kbd>🎮</kbd></span><span>Manette : croix / stick pour bouger, A ouvrir / jouer, B retour, X fiche, Y favori, LB / RB changer de page</span></div>
       <div class="krow"><span class="kk"><kbd>?</kbd></span><span>Cette aide</span></div>
     </div>
     <div class="row end"><button class="btn play">Fermer</button></div>
@@ -225,6 +238,9 @@
     <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher pendant que je joue</label>
     <label class="toggle"><input type="checkbox" id="discordStatus"><span></span>Afficher le jeu en cours sur mon profil Discord</label>
     <label class="toggle"><input type="checkbox" id="shareActivity"><span></span>Montrer à mes amis History à quoi je joue et mon temps de la semaine</label>
+    <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option></select></div>
+    <div class="setrow"><span>Limite de jeu par jour</span><select id="dailyLimit"><option value="0">Aucune</option><option value="60">1 h</option><option value="120">2 h</option><option value="180">3 h</option><option value="240">4 h</option><option value="360">6 h</option></select></div>
+    <div class="setrow"><span>Rappel de pause</span><select id="breakEvery"><option value="0">Jamais</option><option value="45">Toutes les 45 min</option><option value="60">Toutes les heures</option><option value="90">Toutes les 1 h 30</option><option value="120">Toutes les 2 h</option></select></div>
     <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
     <button type="button" class="btn" id="openKeys">⌨ Raccourcis clavier</button>
     <div class="keybox">

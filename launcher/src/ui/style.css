@@ -476,3 +476,30 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 6
 .optiacts { flex-wrap: wrap; }
 .tlabel { display: grid; gap: 2px; }
 .tlabel small { font-size: 11.5px; }
+
+/* Mises à jour, actus, résumé, manette */
+.badge.upd, .upd { background: #f59e0b; color: #1f1300; font-weight: 800; }
+span.upd { padding: 0 6px; border-radius: 6px; }
+.atile img.wide { width: 92px; height: 46px; object-fit: cover; border-radius: 8px; }
+.atile .btn.play { margin-left: auto; height: 32px; padding: 0 12px; font-size: 12px; }
+.news { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.newscard { display: flex; gap: 12px; padding: 10px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); cursor: pointer; transition: border-color .3s, transform .2s; }
+.newscard:hover { border-color: var(--blue); transform: translateY(-2px); }
+.newscard img { width: 150px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; flex: none; }
+.newscard div { min-width: 0; }
+.newscard small { color: var(--muted); font-size: 11.5px; }
+.newscard b { display: block; margin: 2px 0 4px; }
+.newscard p { margin: 0; color: #c9c3d0; font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.newscard.flat { background: var(--panel-2); }
+.newscard .link { color: var(--cyan); display: block; margin-top: 6px; }
+.recapbig { padding: 16px; border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--blue) 25%, var(--panel-2)), var(--panel-2)); margin-bottom: 8px; }
+.recapbig b { font-size: 34px; display: block; }
+.recapbig .up { color: #2ee07a; font-weight: 700; }
+.recapbig .down { color: #ff6b6b; font-weight: 700; }
+.recap .rrow { grid-template-columns: 34px minmax(0, 1fr) 1.2fr 70px; }
+#view-stats .list-head #openRecap { margin-left: 10px; }
+.setrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.setrow select { height: 36px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel-2); color: inherit; padding: 0 10px; font: inherit; }
+body.pad .padfocus { outline: 3px solid var(--cyan) !important; outline-offset: 3px; box-shadow: 0 0 24px -4px var(--cyan) !important; }
+body.pad .gcard.padfocus, body.pad .gridcard.padfocus { transform: translateY(-6px) scale(1.04); }
+body.pad { cursor: none; }

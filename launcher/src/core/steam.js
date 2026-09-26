@@ -93,6 +93,8 @@ export async function scanSteam(steamPath) {
         size: Number(pick(acf, 'SizeOnDisk') ?? 0),
         minutes: t.minutes, lastPlayed: t.lastPlayed || Number(pick(acf, 'LastPlayed') ?? 0) * 1000 || 0, steamTimes: times[id] ?? {},
         art: {}, cdnArt: art(id), localArt: await steamLocalArt(steamPath, id), steamId: id,
+        // Steam : 2 = mise à jour à faire, 1024/512 = mise à jour en cours
+        updatePending: (Number(pick(acf, 'StateFlags') ?? 4) & (2 | 512 | 1024)) !== 0,
       });
     }
   }
