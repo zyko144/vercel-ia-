@@ -13,3 +13,4 @@ nightvault/dev.db-journal
 nightvault/.env
 logos casinho/
 .ai-local/
+backups/

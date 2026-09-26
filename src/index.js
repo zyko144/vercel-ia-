@@ -60,6 +60,16 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, async (c) => {
+  // Code modifié depuis la version livrée ? (INTEGRITY_CHECK=1 et security/manifest.json)
+  if (process.env.INTEGRITY_CHECK === '1') {
+    import('./utils/integrity.js').then((m) => m.checkIntegrity()).then(async (r) => {
+      if (!r) return console.warn('[intégrité] pas de manifeste : lance npm run integrity');
+      if (!r.changed.length) return console.log(`🔒 Intégrité du code vérifiée (${r.version})`);
+      console.warn(`[intégrité] ${r.changed.length} fichier(s) modifié(s) :`, r.changed.slice(0, 10).join(', '));
+      const owner = await c.users.fetch(config.ownerId).catch(() => null);
+      await owner?.send(`🔒 **Alerte intégrité** : ${r.changed.length} fichier(s) du bot ne correspondent pas à la version ${r.version}.\n${r.changed.slice(0, 10).map((f) => `• \`${f}\``).join('\n')}`).catch(() => {});
+    }).catch((err) => console.warn('[intégrité]', err.message));
+  }
   setAlertClient(c);
   setPaymentsClient(c);
   setAppClient(c);

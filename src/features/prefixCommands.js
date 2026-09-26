@@ -1,6 +1,8 @@
 // Commandes rapides en « !! » : !!clear 20, !!ban @membre raison, !!close, !!roles, !!play son…
 // Elles passent par les mêmes fonctions que les commandes slash (casier, MP de sanction, journal du staff) :
 // on leur donne une « interaction » construite à partir du message.
+import { config } from '../config.js';
+import { allowAttempt } from '../dashboard/auth.js';
 import { EmbedBuilder, MessageFlags, PermissionFlagsBits as P } from 'discord.js';
 import { load, save } from '../storage.js';
 
@@ -227,8 +229,10 @@ export async function prefixCommand(message) {
   const [word, ...args] = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const cmd = C[String(word ?? '').toLowerCase()];
   if (!cmd) return false;
+  // Anti-spam : 15 commandes !! en 20 s par personne au maximum
+  if (message.author.id !== config.ownerId && !allowAttempt('prefix', message.author.id, 15, 20_000)) return true;
   try {
-    await cmd.run(message, args.filter(Boolean));
+    await cmd.run(message, args.filter(Boolean).slice(0, 50));
   } catch (err) {
     console.warn(`[!!${cmd.name}]`, err.message);
     await need(message, `Ça a pas marché : ${err.message}`);

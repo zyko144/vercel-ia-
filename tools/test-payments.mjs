@@ -87,6 +87,18 @@ await check('IPN : paiement vérifié → offre active, parrain récompensé, pa
   assert.ok(dms.some((t) => /Paiement reçu/.test(t)));
 });
 
+await check('IPN : deux notifications identiques en même temps → une seule activation ; remboursement → offre retirée', async () => {
+  const [a, b] = await Promise.all([pay.handleIpn(ipn({ txn_id: 'T2' })), pay.handleIpn(ipn({ txn_id: 'T2' }))]);
+  assert.equal([a, b].filter((x) => x.ok).length, 1);
+  assert.equal((await pay.handleIpn(ipn({ payment_status: 'Refunded', parent_txn_id: 'T404', txn_id: 'R0' }))).ok, false, 'remboursement inconnu');
+  const r = await pay.handleIpn(ipn({ payment_status: 'Refunded', parent_txn_id: 'T1', txn_id: 'R1', mc_gross: '-14.99' }));
+  assert.equal(r.revoked, true);
+  assert.equal(planOf(B).key, 'gardien', 'le 2e paiement (T2) reste valable');
+  await pay.handleIpn(ipn({ payment_status: 'Reversed', parent_txn_id: 'T2', txn_id: 'R2' }));
+  assert.equal(planOf(B).key, 'gratuit', 'plus aucun paiement valable');
+  assert.equal((await pay.handleIpn(ipn({ payment_status: 'Refunded', parent_txn_id: 'T1', txn_id: 'R1' }))).ok, false, 'pas deux fois');
+});
+
 await check('statut public : en ligne, latence, nombre de serveurs', async () => {
   const s = pay.statusJson();
   assert.equal(s.enLigne, true);

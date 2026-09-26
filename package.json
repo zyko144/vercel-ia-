@@ -29,7 +29,10 @@
     "test:treasury": "node tools/test-treasury.mjs",
     "test:arcade": "node tools/test-arcade.mjs",
     "test:arcade-web": "node tools/test-arcade-web.mjs",
-    "test:outils": "node tools/test-outils.mjs"
+    "test:outils": "node tools/test-outils.mjs",
+    "integrity": "node tools/integrity.mjs",
+    "backup": "node tools/backup.mjs",
+    "test:hardening": "node tools/test-hardening.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -51,5 +54,8 @@
   "devDependencies": {
     "@discord/embedded-app-sdk": "^2.5.0",
     "esbuild": "^0.28.2"
+  },
+  "overrides": {
+    "tar": "^7.5.22"
   }
 }

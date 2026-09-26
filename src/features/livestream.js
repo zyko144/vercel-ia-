@@ -50,7 +50,7 @@ export function setLiveClient(discordClient) {
 // ===================== Réception depuis le PC =====================
 
 export function attachLiveServer(server) {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');

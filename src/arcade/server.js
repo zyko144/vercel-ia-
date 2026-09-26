@@ -7,14 +7,15 @@
 //
 // Pages : /arcade/ (et /.proxy/arcade/ derrière le relais de Discord)
 // Dans le portail Discord : Activités › URL Mappings, cible « vercel-ia.onrender.com/arcade ».
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../config.js';
+import { clientIp } from '../dashboard/auth.js';
 import { playedGame, rewardWin } from '../features/treasury.js';
 import { WORDS } from './words.js';
 import { registerArcadeGames, soloAct, soloGold, soloView } from './games.js';
-import { images, registerParty } from './party.js';
+import { images, registerParty, voiceAllowed } from './party.js';
 import './party-roles.js';
 import { deezerImage, previewAudio } from './party-sound.js';
 import { speech } from './tts.js';
@@ -30,7 +31,7 @@ let client = null;
 export const setArcadeClient = (c) => { client = c; };
 
 // ------------------------------------------------------------------ Sessions signées
-const secret = () => createHmac('sha256', config.discordToken || 'arcade').update('arcade-ai-vercel').digest();
+const secret = () => createHmac('sha256', config.discordToken || randomBytes(32)).update('arcade-ai-vercel').digest();
 const sign = (p) => createHmac('sha256', secret()).update(p).digest('base64url');
 export function createSession({ id, name }, ttl = SESSION_MS) {
   const payload = Buffer.from(JSON.stringify({ u: String(id), n: String(name ?? '').slice(0, 32), e: Date.now() + ttl })).toString('base64url');
@@ -465,7 +466,7 @@ function limited(key, max, ms) {
   return h.n > max;
 }
 setInterval(() => { const now = Date.now(); for (const [k, h] of hits) if (now > h.until) hits.delete(k); }, 60_000).unref();
-const ipOf = (req) => String(req.headers['x-forwarded-for'] ?? req.socket?.remoteAddress ?? '').split(',')[0].trim();
+const ipOf = (req) => clientIp(req);
 const tooMany = (res) => json(res, 429, { error: 'Doucement ! Trop de demandes, réessaie dans un instant.' });
 
 /** Répond aux adresses de l'arcade ; false si ce n'est pas pour elle. */
@@ -546,6 +547,7 @@ export async function handleArcadeWeb(req, res, url) {
     if (route === 'tts' && req.method === 'POST') {
       if (limited(`tts:${user.id}`, 30, 60_000)) return tooMany(res), true;
       const body = await readBody(req);
+      if (!voiceAllowed(r, body.text)) return json(res, 403, { error: 'texte non prévu par la partie' }), true;
       // La voix du narrateur : celle choisie par le serveur (premium), sinon la voix de base
       const wav = await speech(String(body.text ?? ''), voiceOf(r.guildId, 'Charon'));
       if (!wav) return json(res, 503, { error: 'voix indisponible' }), true;

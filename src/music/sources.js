@@ -5,6 +5,7 @@ import { bestMatch, deezer, matchRatio, popularMatch, trackFromDeezer } from './
 import { biggestImage, parseSpotifyUrl, spotifyEntity, spotifyTracks } from './spotify.js';
 import { lavalink } from './lavalink.js';
 import { MusicError, extractAudio, flatPlaylist, streamExpiry } from './ytdlp.js';
+import { isPublicUrl } from '../utils/netSafety.js';
 
 export const SOURCES = {
   youtube: { label: 'YouTube', color: 0xff0033 },
@@ -157,6 +158,8 @@ async function resolveRaw(query, playlistMode, fast = false) {
   if (/^dz:\d+$/.test(query)) return { tracks: [trackFromDeezer(await deezer.track(query.slice(3)))] };
 
   if (isUrl(query)) {
+    // Jamais une adresse interne (localhost, réseau privé, métadonnées du serveur) : protection SSRF
+    if (!/^spotify:/i.test(query) && !await isPublicUrl(query)) throw new MusicError('ce lien n’est pas accepté');
     const spotify = parseSpotifyUrl(query);
     if (spotify) {
       const data = await spotifyTracks(query);
