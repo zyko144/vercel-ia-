@@ -430,3 +430,34 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 6
 .eveform input[type=datetime-local] { color-scheme: dark; }
 .rrow .thumb .fav { display: grid; place-items: center; width: 100%; height: 100%; font-weight: 900; font-size: 20px; background: color-mix(in srgb, var(--c) 30%, #151b27); color: var(--c); }
 .rrow.me { border-color: color-mix(in srgb, var(--blue) 60%, var(--line)); }
+
+/* Collections, ajout de jeux, fiche enrichie */
+.colhead { display: flex; align-items: center; justify-content: space-between; }
+.colhead button { width: 22px; height: 22px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted); cursor: pointer; line-height: 1; }
+.colhead button:hover { color: #fff; border-color: var(--blue); }
+.colempty { display: block; padding: 0 12px; font-size: 11.5px; }
+#collections .pdot { background: transparent !important; font-size: 13px; }
+.check .colx { margin-left: auto; height: 26px; padding: 0 8px; }
+#dropzone { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(5, 10, 20, .75); backdrop-filter: blur(4px); pointer-events: none; }
+#dropzone div { padding: 40px 60px; border: 2px dashed var(--blue); border-radius: 22px; font-size: 20px; font-weight: 700; box-shadow: 0 0 40px -10px var(--blue); }
+.sheet h3 { margin: 14px 0 6px; font-size: 16px; }
+.sheet h3 small { font-weight: 400; margin-left: 6px; }
+.hltb { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.hltb div { padding: 10px 12px; border-radius: 12px; background: var(--panel-2); }
+.hltb small { display: block; color: var(--muted); font-size: 11.5px; }
+.hltb b { font-size: 20px; }
+.gbar.big { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; margin: 10px 0 4px; }
+.gbar.big i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--blue)); }
+.achi { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.achi img, .achi .noic { width: 38px; height: 38px; border-radius: 8px; flex: none; display: grid; place-items: center; background: var(--panel-2); }
+.achi div { min-width: 0; flex: 1; }
+.achi b { display: block; font-size: 13px; }
+.achi small { color: var(--muted); font-size: 12px; }
+.achi em { font-style: normal; font-weight: 700; color: var(--cyan); font-size: 12px; }
+.sheet details summary { cursor: pointer; color: var(--muted); margin: 6px 0; }
+.caps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.caps img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; cursor: zoom-in; border: 1px solid var(--line); }
+.caps img:hover { border-color: var(--blue); }
+#dropzone[hidden] { display: none; }
+.side { overflow-y: auto; scrollbar-width: none; }
+.side::-webkit-scrollbar { display: none; }

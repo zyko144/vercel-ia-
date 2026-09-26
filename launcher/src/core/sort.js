@@ -22,7 +22,7 @@ export function filterSort(items, { sort = 'joues', kind = 'tout', source = 'tou
     .filter((i) => kind !== 'caches' || i.hidden)
     .filter((i) => source === 'tout' || i.source === source)
     // Applis : par défaut seulement les grosses (Spotify, Discord, OBS…) ; les autres restent dans « Tous les installés »
-    .filter((i) => (installed === 'oui' ? i.installed : installed === 'non' ? !i.installed : (i.kind === 'game' ? i.installed || played(i) : i.known !== false) || i.favorite || Boolean(words)))
+    .filter((i) => installed === 'tous' || (installed === 'oui' ? i.installed : installed === 'non' ? !i.installed : (i.kind === 'game' ? i.installed || played(i) : i.known !== false) || i.favorite || Boolean(words)))
     .filter((i) => !words || norm(i.name).includes(words))
     .sort((a, b) => (b.installed - a.installed) || (b.favorite - a.favorite) || (SORTS[sort] ?? SORTS.joues)(a, b));
 }

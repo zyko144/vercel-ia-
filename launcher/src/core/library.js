@@ -23,6 +23,8 @@ export const SOURCES = {
   gog: { label: 'GOG', color: '#b44fe0', logo: 'brands/gogdotcom.svg', bg: '#86328a' },
   roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' },
   rockstar: { label: 'Rockstar', color: '#fcaf17', logo: 'brands/rockstargames.svg', bg: '#e59a00' },
+  xbox: { label: 'Xbox', color: '#107c10', bg: '#107c10' },
+  custom: { label: 'Ajoutés', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#3a4150' },
   pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' },
 };
 

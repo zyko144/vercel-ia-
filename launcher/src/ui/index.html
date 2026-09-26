@@ -26,6 +26,8 @@
   </nav>
   <h5>Plateformes</h5>
   <nav id="platforms" class="platforms"></nav>
+  <h5 class="colhead">Collections <button id="newCol" title="Nouvelle collection">+</button></h5>
+  <nav id="collections" class="platforms"></nav>
   <div class="grow"></div>
   <button id="openSettings" class="navlike"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Paramètres</button>
   <button class="profile" id="profileBtn" title="Mon compte"><span class="avatar" id="avatar">?</span><div><b id="profileName">Joueur</b><small id="profileSub"><i class="online"></i>En ligne</small></div></button>
@@ -55,6 +57,7 @@
     <div class="list-head">
       <h2 id="listTitle">Bibliothèque</h2><span id="count"></span>
       <div class="seg" id="installed"><button data-inst="tout" class="on" title="Jeux installés ou joués, applis connues ou utilisées">Principaux</button><button data-inst="oui" title="Tout ce qui est installé">Tous les installés</button><button data-inst="non">Non installés</button></div>
+      <button class="btn" id="addGame" type="button" title="Ajouter un jeu (ou glisse son .exe dans la fenêtre)">+ Ajouter un jeu</button>
       <select id="sort"><option value="joues">Les plus joués</option><option value="recents">Joués récemment</option><option value="nom">Nom (A → Z)</option><option value="taille">Taille</option></select>
     </div>
     <div class="grid" id="grid"></div>
@@ -181,6 +184,17 @@
 </dialog>
 
 <dialog id="sheet"><div class="sheet" id="sheetBody"></div></dialog>
+
+<dialog id="colDlg">
+  <form method="dialog" class="dlg">
+    <h2 id="colTitle">Collections</h2>
+    <div class="checks" id="colChecks"></div>
+    <div class="addfriend"><input id="colName" placeholder="Nouvelle collection (ex. Avec les potes)" maxlength="40"><button class="btn" type="button" id="colAdd">Créer</button></div>
+    <div class="row end"><button class="btn play">Fermer</button></div>
+  </form>
+</dialog>
+
+<div id="dropzone" hidden><div>Lâche le fichier .exe pour ajouter le jeu</div></div>
 
 <dialog id="keys">
   <form method="dialog" class="dlg">
