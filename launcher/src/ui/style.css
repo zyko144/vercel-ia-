@@ -339,3 +339,7 @@ body.listening .aifab .pulse { animation: ring 1.8s ease-out infinite; }
 .hero .happicon.brandlogo { width: 120px; height: 120px; }
 .atile .ai.brandbg { position: relative; overflow: hidden; }
 .atile .ai .aimg { width: 62%; height: 62%; border-radius: 0; }
+
+/* Logos des plateformes (barre de gauche) */
+.pdot.plogo { display: inline-grid; place-items: center; }
+.pdot.plogo img { width: 62%; height: 62%; object-fit: contain; margin: 0; border-radius: 0; }

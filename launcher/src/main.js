@@ -10,7 +10,7 @@ import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { periodItems, periodStats, statCategory } from './core/tracker.js';
-import { listSteamAccounts, steamAchievements, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
+import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
 import { readRegValue } from './core/registry.js';
 import { steamMatch } from './core/art.js';
@@ -158,10 +158,20 @@ async function iconOf(item) {
 // Noms des jeux Steam désinstallés (le fichier local ne garde que leur numéro) : API officielle, par lots de 50.
 // Un nom provisoire (« Jeu Steam 123 ») n'est jamais enregistré : il sera redemandé au prochain lancement.
 async function fillSteamNames(list) {
-  const missing = list.filter((i) => i.source === 'steam' && !i.name && !/\D/.test(i.steamId) && (!store.data.names[i.steamId] || /^Jeu Steam \d+$/.test(store.data.names[i.steamId])));
+  const types = (store.data.steamTypes ??= {});
+  const missing = list.filter((i) => i.source === 'steam' && !/\D/.test(i.steamId) && ((!i.name && (!store.data.names[i.steamId] || /^Jeu Steam \d+$/.test(store.data.names[i.steamId]))) || !types[i.steamId]));
   if (!missing.length) return;
-  const names = await steamNames(missing.map((i) => i.steamId)).catch(() => ({}));
-  for (const i of missing) {
+  // 1) Le cache de Steam sur le PC : connaît aussi les jeux retirés du magasin, et dit si c'est un jeu ou un outil
+  const root = await steamPath();
+  const local = root ? await steamAppInfo(root, missing.map((i) => i.steamId)) : {};
+  for (const [id, info] of Object.entries(local)) {
+    if (!store.data.names[id] || /^Jeu Steam \d+$/.test(store.data.names[id])) store.data.names[id] = info.name;
+    if (info.type) types[id] = info.type;
+  }
+  // 2) Le reste : l'API officielle du magasin
+  const rest = missing.filter((i) => !i.name && !store.data.names[i.steamId]);
+  const names = rest.length ? await steamNames(rest.map((i) => i.steamId)).catch(() => ({})) : {};
+  for (const i of rest) {
     if (names[i.steamId]) store.data.names[i.steamId] = names[i.steamId];
     else delete store.data.names[i.steamId];
   }

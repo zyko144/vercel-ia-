@@ -12,12 +12,12 @@ import { parseRegQuery, programsFromRegistry } from '../src/core/registry.js';
 import { filterSort, findExe, merge, scanAll } from '../src/core/library.js';
 import { activeItems } from '../src/core/tracker.js';
 import { quickVerify, safeGameDir, uninstallFiles } from '../src/core/manage.js';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, utimesSync } from 'node:fs';
 import { enrich, sameName } from '../src/core/art.js';
 import { aiFindArt, geminiKeyFromEnv } from '../src/core/ai.js';
 import { parseTitle } from '../src/core/media.js';
 import { dayKey, periodStats, statCategory } from '../src/core/tracker.js';
-import { listSteamAccounts, ownedSteamGames, steamDetails, steamLocalArt, steamNames, steamStoreAssets } from '../src/core/steam.js';
+import { listSteamAccounts, ownedSteamGames, parseAppInfo, steamDetails, steamLocalArt, steamNames, steamStoreAssets } from '../src/core/steam.js';
 import { playtimeOf } from '../src/core/library.js';
 
 let passed = 0;
@@ -385,8 +385,50 @@ await check('temps de jeu : un seul compte (le choisi), ou le total ; jamais com
 await check('vrais noms Steam (API officielle, par lots) ; jamais « Jeu Steam 123 » gardé', async () => {
   const names = await steamNames(['1248130', '730'], async () => ({ ok: true, json: async () => ({ response: { store_items: [{ appid: 1248130, name: 'Farming Simulator 22' }, { appid: 730, name: 'Counter-Strike 2' }] } }) }));
   assert.deepEqual(names, { 1248130: 'Farming Simulator 22', 730: 'Counter-Strike 2' });
-  const [m] = merge([{ id: 'steam:9', source: 'steam', kind: 'game', name: null, steamId: '9', minutes: 0, lastPlayed: 0 }], { names: { 9: 'Jeu Steam 9' }, items: {}, time: {} });
-  assert.equal(m.name, 'Jeu Steam 9', 'affiché en attendant, mais redemandé (pas considéré comme un vrai nom)');
+  const g = (id, name = null) => ({ id: `steam:${id}`, source: 'steam', kind: 'game', name, steamId: String(id), minutes: 0, lastPlayed: 0 });
+  assert.equal(merge([g(9)], { names: { 9: 'Jeu Steam 9' }, items: {}, time: {} }).length, 0, 'sans vrai nom : pas affiché');
+  const shown = merge([g(1, 'Portal 2'), g(2, 'Steamworks Common Redistributables'), g(3)], { names: { 3: 'Ancien jeu retiré' }, steamTypes: { 1: 'game', 2: 'tool', 3: 'game' }, items: {}, time: {} });
+  assert.deepEqual(shown.map((i) => i.name).sort(), ['Ancien jeu retiré', 'Portal 2'], 'outils écartés');
+});
+
+await check('cache local de Steam (appinfo.vdf v28 et v29) : nom et type', async () => {
+  const kv = (key) => (typeof key === 'number' ? Buffer.from(new Uint32Array([key]).buffer) : Buffer.from(`${key}\0`));
+  const blob = (k) => Buffer.concat([Buffer.from([0]), k('appinfo'), Buffer.from([2]), k('appid'), Buffer.alloc(4), Buffer.from([0]), k('common'),
+    Buffer.from([1]), k('name'), Buffer.from('Jeu Retiré\0'), Buffer.from([1]), k('type'), Buffer.from('Game\0'), Buffer.from([8, 8, 8])]);
+  const entry = (id, body) => { const b = Buffer.alloc(8 + 60); b.writeUInt32LE(id, 0); b.writeUInt32LE(60 + body.length, 4); return Buffer.concat([b, body]); };
+  // v28 : clés en texte
+  const v28 = Buffer.concat([Buffer.from(new Uint32Array([0x07564428, 1]).buffer), entry(555, blob(kv)), entry(777, blob(kv)), Buffer.alloc(4)]);
+  assert.deepEqual(parseAppInfo(v28, new Set(['555'])), { 555: { name: 'Jeu Retiré', type: 'game' } });
+  // v29 : clés = numéros dans une table de textes à la fin
+  const table = ['appinfo', 'appid', 'common', 'name', 'type'];
+  const body = Buffer.concat([entry(42, blob((k) => kv(table.indexOf(k)))), Buffer.alloc(4)]);
+  const headLen = 16;
+  const strings = Buffer.concat([Buffer.from(new Uint32Array([table.length]).buffer), ...table.map((t) => Buffer.from(`${t}\0`))]);
+  const head = Buffer.alloc(headLen); head.writeUInt32LE(0x07564429, 0); head.writeUInt32LE(1, 4); head.writeBigInt64LE(BigInt(headLen + body.length), 8);
+  assert.deepEqual(parseAppInfo(Buffer.concat([head, body, strings])), { 42: { name: 'Jeu Retiré', type: 'game' } });
+});
+
+await check('Roblox détecté (dossier Versions, la version la plus récente) et plateforme à part', async () => {
+  const dir = path.join(T, 'Local', 'Roblox', 'Versions');
+  put(path.join(dir, 'version-old', 'RobloxPlayerBeta.exe'), 'x');
+  put(path.join(dir, 'version-new', 'RobloxPlayerBeta.exe'), 'xx');
+  const t = Date.now() / 1000;
+  utimesSync(path.join(dir, 'version-old', 'RobloxPlayerBeta.exe'), t - 99, t - 99);
+  const reg = parseRegQuery(`
+HKEY_CURRENT_USER\\X\\roblox-player
+    DisplayName    REG_SZ    Roblox Player
+    UninstallString    REG_SZ    C:\\R\\RobloxPlayerInstaller.exe -uninstall
+`);
+  const lib = await scanAll({ steam: path.join(T, 'rien'), epic: path.join(T, 'rien'), epicCatalog: path.join(T, 'rien'), registry: reg, roblox: [dir] });
+  const r = lib.filter((i) => /roblox/i.test(i.name));
+  assert.equal(r.length, 1, 'une seule entrée Roblox');
+  assert.equal(r[0].kind, 'game');
+  assert.equal(r[0].source, 'roblox');
+  assert.ok(r[0].exe.includes('version-new'));
+  assert.ok(r[0].uninstallCmd.includes('-uninstall'));
+  // Sans dossier trouvé : l'entrée du registre devient le jeu
+  const fromReg = await scanAll({ steam: path.join(T, 'rien'), epic: path.join(T, 'rien'), epicCatalog: path.join(T, 'rien'), registry: reg, roblox: [path.join(T, 'rien')] });
+  assert.equal(fromReg.find((i) => i.source === 'roblox')?.name, 'Roblox');
 });
 
 console.log(`\n${passed} vérifications passées.`);

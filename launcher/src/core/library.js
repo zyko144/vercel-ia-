@@ -1,4 +1,5 @@
 // La bibliothèque : réunit Steam, Epic et le registre, ajoute le temps suivi par le launcher, trie et filtre.
+import { scanRoblox } from './roblox.js';
 import { readdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,18 +11,19 @@ import { norm } from './sort.js';
 export { SORTS, filterSort } from './sort.js';
 
 // Le nom du launcher dans Windows : son icône sert de logo officiel dans la barre de gauche
-export const LAUNCHER_NAMES = { steam: /^steam$/i, epic: /^epic games launcher$/i, ubisoft: /^ubisoft connect$/i, ea: /^(ea app|ea desktop|origin)$/i, battlenet: /^battle\.net$/i, gog: /^gog galaxy$/i, riot: /^riot client$/i, rockstar: /^rockstar games launcher$/i };
+export const LAUNCHER_NAMES = { steam: /^steam$/i, epic: /^epic games launcher$/i, ubisoft: /^ubisoft connect$/i, ea: /^(ea app|ea desktop|origin)$/i, battlenet: /^battle\.net$/i, gog: /^gog galaxy$/i, riot: /^riot client$/i, rockstar: /^rockstar games launcher$/i, roblox: /^roblox( player)?$/i };
 
 export const SOURCES = {
-  steam: { label: 'Steam', color: '#66c0f4' },
-  epic: { label: 'Epic Games', color: '#e6e6e6' },
-  riot: { label: 'Riot', color: '#ff4655' },
-  ubisoft: { label: 'Ubisoft', color: '#2c7cff' },
-  ea: { label: 'EA', color: '#ff4747' },
-  battlenet: { label: 'Battle.net', color: '#148eff' },
-  gog: { label: 'GOG', color: '#b44fe0' },
-  rockstar: { label: 'Rockstar', color: '#fcaf17' },
-  pc: { label: 'PC', color: '#9aa0aa' },
+  steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' },
+  epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' },
+  riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' },
+  ubisoft: { label: 'Ubisoft', color: '#2c7cff', logo: 'brands/ubisoft.svg', bg: '#0070ff' },
+  ea: { label: 'EA', color: '#ff4747', logo: 'brands/ea.svg', bg: '#ff4747' },
+  battlenet: { label: 'Battle.net', color: '#148eff', logo: 'brands/battledotnet.svg', bg: '#148eff' },
+  gog: { label: 'GOG', color: '#b44fe0', logo: 'brands/gogdotcom.svg', bg: '#86328a' },
+  roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' },
+  rockstar: { label: 'Rockstar', color: '#fcaf17', logo: 'brands/rockstargames.svg', bg: '#e59a00' },
+  pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' },
 };
 
 export async function steamPath() {
@@ -36,13 +38,16 @@ export const epicManifests = () => path.join(epicData(), 'Manifests');
 export const epicCatalog = () => path.join(epicData(), 'Catalog');
 
 /** Tout ce qui est sur le PC (et ce qui est possédé mais pas installé). `paths` permet de pointer ailleurs (bancs d'essai). */
+const ROBLOX_BRAND = { color: '#e2231a', logo: 'brands/roblox.svg' };
+
 export async function scanAll(paths = {}, { steamApiKey = null, fetchImpl = fetch } = {}) {
   const steamDir = paths.steam ?? await steamPath();
-  const [steam, epic, reg, owned] = await Promise.all([
+  const [steam, epic, reg, owned, roblox] = await Promise.all([
     scanSteam(steamDir),
     scanEpic(paths.epic ?? epicManifests(), paths.epicCatalog ?? epicCatalog()),
     paths.registry ? Promise.resolve(paths.registry) : Promise.all(UNINSTALL_KEYS.map(readRegistry)).then((l) => l.flat()),
     steamApiKey ? lastSteamUser(steamDir).then((id) => ownedSteamGames(steamApiKey, id, fetchImpl)) : Promise.resolve([]),
+    paths.roblox ? scanRoblox(paths.roblox) : paths.registry ? Promise.resolve([]) : scanRoblox(),
   ]);
   // Jeux Steam possédés (clé d'API) : ajoutés s'ils manquent, sinon ils complètent le nom et le temps de jeu
   const bySteam = new Map(steam.map((i) => [i.steamId, i]));
@@ -53,10 +58,18 @@ export async function scanAll(paths = {}, { steamApiKey = null, fetchImpl = fetc
     local.minutes = Math.max(local.minutes, g.minutes);
     local.lastPlayed = Math.max(local.lastPlayed, g.lastPlayed);
   }
-  const programs = programsFromRegistry(reg);
+  let programs = programsFromRegistry(reg);
+  // Roblox : trouvé dans ses dossiers ; sinon son entrée du registre devient le jeu Roblox
+  const isPlayer = (p) => /^roblox( player)?$/i.test(p.name) || /^(bloxstrap|fishstrap)$/i.test(p.name);
+  if (roblox.length) {
+    roblox[0].uninstallCmd = programs.find((p) => /^roblox( player)?$/i.test(p.name))?.uninstallCmd ?? null;
+    programs = programs.filter((p) => !isPlayer(p));
+  }
+  else programs = programs.map((p) => (/^roblox( player)?$/i.test(p.name) ? { ...p, id: 'roblox:player', name: 'Roblox', source: 'roblox', kind: 'game', category: 'jeu', known: true, brand: ROBLOX_BRAND } : p));
   // Un jeu Steam/Epic peut aussi apparaître dans le registre : on garde la version du launcher
   const known = new Set([...steam, ...epic].filter((i) => i.name).map((i) => norm(i.name)));
-  return [...steam, ...epic, ...programs.filter((p) => !known.has(norm(p.name)))];
+  for (const r of roblox) r.brand = ROBLOX_BRAND;
+  return [...steam, ...epic, ...roblox, ...programs.filter((p) => !known.has(norm(p.name)))];
 }
 
 /** Ajoute le temps suivi par le launcher, les images et fiches trouvées en ligne, et les réglages de l'utilisateur. */
@@ -85,8 +98,13 @@ export function playtimeOf(i, store, { total = false, steamAccount = null, accou
 
 const realName = (n) => (n && !/^Jeu Steam \d+$/.test(n) ? n : null);
 
+// Ce qui n'est pas un jeu pour Steam : serveurs dédiés, redistribuables, SDK, contenus additionnels, bandes-son…
+const NOT_GAMES = new Set(['tool', 'config', 'dlc', 'music', 'video', 'series', 'episode', 'hardware', 'beta', 'advertising', 'plugin']);
+
 export function merge(items, store, localUrls = null, timeOptions = {}) {
-  return dedupe(items.map((i) => {
+  // Jeu Steam sans vrai nom (ni sur le PC, ni sur le magasin) : on ne l'affiche pas plutôt que « Jeu Steam 123 »
+  const shown = items.filter((i) => i.source !== 'steam' || ((i.name || store.items?.[i.id]?.name || realName(store.names?.[i.steamId])) && !NOT_GAMES.has(store.steamTypes?.[i.steamId])));
+  return dedupe(shown.map((i) => {
     const t = playtimeOf(i, store, timeOptions);
     const extra = store.items?.[i.id] ?? {};
     const found = store.art?.[i.id] ?? {};
@@ -94,7 +112,7 @@ export function merge(items, store, localUrls = null, timeOptions = {}) {
     // Du moins sûr au plus sûr : ancienne adresse Steam < trouvées en ligne < images du launcher (Epic) < images sur le PC
     const art = { ...ok(i.cdnArt), ...ok(found.art), ...ok(i.art), ...ok(localUrls?.(i.localArt)) };
     return {
-      ...i, name: i.name ?? extra.name ?? realName(store.names?.[i.steamId]) ?? `Jeu Steam ${i.steamId}`,
+      ...i, name: i.name ?? extra.name ?? realName(store.names?.[i.steamId]),
       art, details: found.details ?? i.details ?? null, matchSteamId: found.steamId ?? i.steamId ?? null,
       minutes: t.minutes, lastPlayed: t.lastPlayed, recent2w: t.recent ?? null,
       favorite: Boolean(extra.favorite), hidden: Boolean(extra.hidden),

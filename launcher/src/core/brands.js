@@ -14,7 +14,7 @@ export const BRANDS = [
   B('steam', '#1b2838', 'steam'), B('epic games launcher', '#2a2a2a', 'epicgames'), B('ubisoft connect', '#0070ff', 'ubisoft'),
   B('ea app|ea desktop|origin', '#ff4747', 'ea'), B('battle\\.net', '#148eff', 'battledotnet'), B('riot client', '#eb0029', 'riotgames'),
   B('rockstar games launcher', '#fcaf17', 'rockstargames'), B('gog galaxy', '#86328a', 'gogdotcom'), B('xbox', '#107c10'),
-  B('minecraft launcher', '#3c8527'), B('curseforge', '#f16436', 'curseforge'),
+  B('roblox studio', '#00a2ff', 'robloxstudio'), B('minecraft launcher', '#3c8527'), B('curseforge', '#f16436', 'curseforge'),
   // Navigateurs
   B('google chrome', '#4285f4', 'googlechrome'), B('mozilla firefox|firefox', '#ff7139', 'firefoxbrowser'), B('brave', '#fb542b', 'brave'),
   // Stream, capture, vidéo
