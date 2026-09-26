@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://cdn.cloudflare.steamstatic.com https://shared.cloudflare.steamstatic.com https://steamcdn-a.akamaihd.net https://cdn.akamai.steamstatic.com; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>History Launcher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="jeu">
+<div class="backdrop"><div class="bgimg" id="bgimg"></div><div class="blob b1"></div><div class="blob b2"></div><div class="grain"></div></div>
+<div class="neon" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="brand"><span class="logo">◆</span><b>History</b> Launcher</div>
+  <label class="search"><span>⌕</span><input id="q" type="search" placeholder="Rechercher un jeu, une appli…" autocomplete="off"></label>
+  <select id="sort" title="Trier">
+    <option value="joues">Les plus joués</option>
+    <option value="recents">Joués récemment</option>
+    <option value="nom">Nom (A → Z)</option>
+    <option value="taille">Taille sur le disque</option>
+  </select>
+  <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste dans la barre des tâches)">✕</button></div>
+</header>
+
+<aside class="rail">
+  <nav id="kinds">
+    <button data-kind="tout" class="on"><i>▦</i>Tout</button>
+    <button data-kind="jeux"><i>🎮</i>Jeux</button>
+    <button data-kind="applis"><i>◎</i>Applis</button>
+    <button data-kind="favoris"><i>★</i>Favoris</button>
+    <button data-kind="caches"><i>◌</i>Masqués</button>
+  </nav>
+  <h4>Installés</h4>
+  <div class="seg" id="installed"><button data-inst="tout" class="on">Tous</button><button data-inst="oui">Oui</button><button data-inst="non">Non</button></div>
+  <h4>Sources</h4>
+  <nav id="sources"></nav>
+  <div class="grow"></div>
+  <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
+  <button id="rescan" class="ghost">⟳ Actualiser</button>
+</aside>
+
+<main>
+  <section class="hero" id="hero"></section>
+  <section class="shelf">
+    <div class="shelf-head"><h2 id="shelfTitle">Les plus joués</h2><span id="count"></span></div>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
