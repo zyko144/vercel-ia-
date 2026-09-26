@@ -340,10 +340,22 @@ async function runSilentSteam(args) {
 }
 // Mode jeu : le launcher se range dans la barre des tâches pendant la partie (rien ne tourne à l'écran, zéro gêne)
 function gameMode(item) {
-  if (item.kind !== 'game') return;
+  if (item.kind !== 'game') return; // jamais pour une appli (Discord, Spotify…)
   playSession = { id: item.id, name: item.name, start: Date.now() };
   startBoost(item).catch(() => {});
-  if (store.data.settings.gameMode !== false) setTimeout(() => win?.hide(), 1500);
+  if (store.data.settings.gameMode !== false) hideWhenPlaying(item);
+}
+// Mode jeu : le launcher se range SEULEMENT quand le jeu tourne vraiment et que tu n'es plus dans le launcher
+// (jamais pendant que tu cliques dedans, jamais si le jeu ne démarre pas).
+function hideWhenPlaying(item) {
+  const started = Date.now();
+  const check = async () => {
+    if (!win || win.isDestroyed() || !win.isVisible() || Date.now() - started > 45_000) return;
+    const running = activeItems([item], await runningPaths(0)).size > 0;
+    if (running && !win.isFocused()) { win.hide(); return; }
+    setTimeout(check, 3000);
+  };
+  setTimeout(check, 4000);
 }
 
 // ---------- Boost : performances élevées + applis choisies fermées pendant la partie, puis tout est remis ----------
