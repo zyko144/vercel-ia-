@@ -7,6 +7,7 @@ let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
 const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], cols: {}, friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
 const sidebar = { hiddenPlatforms: [], hiddenNav: [] }; // menu de gauche personnalisé (sur ce compte)
+let boostGames = {}; // opti auto par jeu : id -> true (toujours) | false (jamais)
 const unread = {}; // messages d'amis non lus (id -> nombre)
 let chatWith = null; // discussion ouverte
 
@@ -140,6 +141,10 @@ function menuFor(i) {
   if (i.installed && i.installDir) m.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
   if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
   if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
+  if (i.kind === 'game') {
+    const g = boostGames[i.id];
+    m.push(`<button data-boostgame="${g === true ? 'off' : g === false ? 'auto' : 'on'}">${g === true ? '⚡ Opti auto : toujours (changer → jamais)' : g === false ? '⚡ Opti auto : jamais (changer → par défaut)' : '⚡ Toujours optimiser ce jeu'}</button>`);
+  }
   if (i.source === 'fivem') m.push('<button data-fivemsrv="1">🌐 Mes serveurs FiveM</button><button data-fivem="1">🔗 Rejoindre un serveur…</button>');
   if (i.custom) m.push('<button data-rename="1">✏ Renommer</button>');
   m.push('<hr>');
@@ -574,6 +579,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.11.2': [
+    ['⚡', 'Opti par jeu', 'Clic droit sur un jeu › « Toujours optimiser ce jeu » (ou jamais). Marche aussi quand le jeu est lancé hors du launcher.'],
+    ['🖥', 'Alerte pilote graphique', 'Si ton pilote NVIDIA, AMD ou Intel est vieux, un rappel te mène à la page officielle.'],
+    ['✨', 'Score d’opti plus propre', 'Plus de carré autour du cercle.'],
+  ],
   '0.11.1': [
     ['🖱', 'Clic droit sur le menu', 'Collections : renommer, vider, supprimer. Plateformes et onglets : masquer (réglage perso, remis d’un clic).'],
   ],
@@ -842,6 +852,7 @@ function setRing(score, label) {
   const col = score == null ? 'var(--muted)' : score >= 90 ? '#2ee07a' : score >= 75 ? '#22d3ee' : score >= 55 ? '#f59e0b' : '#ef4444';
   $('ringVal').style.strokeDasharray = `${score == null ? 0 : (score / 100) * C} ${C}`;
   $('ringVal').style.stroke = col;
+  $('optiRing').style.setProperty('--ring', col);
   $('ringNum').textContent = score ?? '–';
   $('ringNum').style.color = col;
   $('ringLabel').textContent = label ?? 'Pas encore analysé';
@@ -1336,6 +1347,11 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
   if (t.dataset.upd) { const r = await api.action(t.dataset.upd, 'update'); return toast(r?.ok ? 'Steam fait la mise à jour puis lance le jeu' : r?.error ?? 'Impossible pour l’instant'); }
   if (t.dataset.news) return api.openNews(t.dataset.news, t.dataset.gid).then(() => toast('Article ouvert'));
+  if (t.dataset.boostgame && state.sel) {
+    const r = await api.setBoost({ game: { id: state.sel.id, mode: t.dataset.boostgame } });
+    boostGames = r?.games ?? {};
+    return toast(t.dataset.boostgame === 'on' ? `⚡ ${state.sel.name} sera toujours optimisé au lancement` : t.dataset.boostgame === 'off' ? `${state.sel.name} ne sera jamais optimisé` : 'Réglage par défaut remis');
+  }
   if (t.dataset.fivemsrv) return openFivemServers();
   if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
   if (t.dataset.hjoin) { const r = await api.friendJoin(t.dataset.hjoin); return toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); }
@@ -1628,6 +1644,7 @@ async function load() {
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
 api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(); });
 api.settings().then(showKeys);
+api.boost?.().then((b) => { boostGames = b?.games ?? {}; }).catch(() => {});
 say('Salut ! 👋 Dis-moi ce que tu veux : « lance Rocket League », « ferme Discord », « monte le son », « trie par taille »… Tu peux aussi activer « Hey History » en bas pour me parler.');
 load().then(() => {
   renderStats().catch(() => {});
@@ -1685,7 +1702,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.11.1',
+    version: async () => '0.11.2',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

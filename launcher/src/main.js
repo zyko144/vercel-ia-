@@ -11,7 +11,7 @@ import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend, createRemo
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
-import { heatAlerts, snapshot } from './core/monitor.js';
+import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
 import { deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, orphanGameFolders, recycleBinSize, removeOrphan, scoreLabel, setStartup, setTweak, startupApps, steamJunk, tweakStates } from './core/optimize.js';
 import { steamLibraries } from './core/steam.js';
@@ -323,7 +323,8 @@ async function enrichInBackground() {
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
 const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
-const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
+const isDriverLink = (u) => DRIVER_LINKS.includes(u);
+const openLink = (url) => (SAFE_LINK.test(url) || isDriverLink(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
 // Confirmation dans une fenêtre du launcher (même style que le reste), réponse renvoyée par l'interface
 let askSeq = 0;
@@ -385,7 +386,9 @@ function notify(title, body) {
 }
 async function startBoost(item) {
   const b = boostSettings();
-  if (!b.enabled || boosted || process.platform !== 'win32') return;
+  // Réglage par jeu : « toujours » (même si l'opti auto est coupée) ou « jamais » pour ce jeu
+  const perGame = b.games?.[item.id];
+  if (perGame === false || (!b.enabled && perGame !== true) || boosted || process.platform !== 'win32') return;
   const scheme = b.power ? await activeScheme() : null;
   if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(HIGH_PERFORMANCE);
   const closed = await closeApps(boostPlan(await runningPaths(), b.close));
@@ -415,6 +418,12 @@ ipcMain.handle('boost:set', (_e, patch) => {
   for (const k of ['enabled', 'power', 'restore']) if (k in patch) b[k] = Boolean(patch[k]);
   if (Array.isArray(patch.close)) b.close = patch.close.map(String).filter((id) => BOOST_APPS.some((a) => a.id === id));
   if ('heatAlerts' in patch) store.data.settings.heatAlerts = Boolean(patch.heatAlerts);
+  if (patch.game && typeof patch.game.id === 'string' && items.some((i) => i.id === patch.game.id)) {
+    b.games = { ...(b.games ?? {}) };
+    if (patch.game.mode === 'on') b.games[patch.game.id] = true;
+    else if (patch.game.mode === 'off') b.games[patch.game.id] = false;
+    else delete b.games[patch.game.id];
+  }
   store.data.settings.boost = b;
   store.save();
   return b;
@@ -532,6 +541,24 @@ setInterval(async () => {
   if (store.data.settings.heatAlerts === false || !(currentSession() || overlay)) return;
   for (const a of heatAlerts(await snapshot().catch(() => ({})), lastHeat)) notify('Ton PC chauffe', `${a.text}. Pense à aérer ou à baisser les graphismes.`);
 }, 60_000);
+
+// ---------- Pilote graphique trop vieux : rappel au plus une fois par mois (clic = page officielle du pilote) ----------
+let driverInfo = null;
+async function checkDriver() {
+  driverInfo = oldDriver(await gpuDrivers().catch(() => []));
+  if (!driverInfo || !Notification.isSupported()) return;
+  const last = store.data.driverAlertAt ?? 0;
+  if (Date.now() - last < 30 * 86_400_000) return;
+  store.data.driverAlertAt = Date.now();
+  store.save();
+  const months = Math.round(driverInfo.age / 30);
+  const n = new Notification({ title: 'Pilote graphique à mettre à jour', body: `Ton pilote ${driverInfo.name} a ${months} mois : les jeux récents tournent souvent mieux avec le dernier. Clique pour le télécharger.`, icon: ICON });
+  n.on('click', () => openLink(driverInfo.link).catch(() => {}));
+  n.show();
+}
+ipcMain.handle('pc:driver', () => driverInfo);
+setTimeout(() => checkDriver().catch(() => {}), 3 * 60_000);
+setInterval(() => checkDriver().catch(() => {}), 24 * 3_600_000);
 
 // ---------- Écran d'infos en jeu (Ctrl+Alt+O) : par-dessus les jeux en « plein écran fenêtré » ----------
 let overlay = null;
@@ -1572,7 +1599,7 @@ async function start() {
   startTracker(() => items, store, (ids) => {
     lastActive = { ids, at: Date.now() };
     const g = items.find((i) => ids.includes(i.id) && i.kind === 'game');
-    if (g && detected?.id !== g.id) detected = { id: g.id, name: g.name, start: Date.now() - 60_000 };
+    if (g && detected?.id !== g.id) { detected = { id: g.id, name: g.name, start: Date.now() - 60_000 }; if (!playSession) startBoost(g).catch(() => {}); } // lancé hors du launcher : opti quand même
     win?.webContents.send('lib:active', ids);
   }, 60_000, accountFor, () => pcAway);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
