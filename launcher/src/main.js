@@ -31,6 +31,8 @@ import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { captureDir, captureName } from './core/capture.js';
+import { analyze, defenderRemove, defenderScan, pcDiagnostic, processes } from './core/pcdiag.js';
+import { cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
 import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
 import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
 import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
@@ -435,6 +437,122 @@ ipcMain.handle('boost:set', (_e, patch) => {
 
 // ---------- Mon PC : surveillance et nettoyage ----------
 ipcMain.handle('pc:snapshot', () => snapshot());
+
+// ---------- Mon PC : diagnostic complet, processus, antivirus, benchmark, rapport ----------
+let diagCache = null;
+async function runDiag(force = false) {
+  if (!force && diagCache && Date.now() - diagCache.at < 120_000) return diagCache.data;
+  const [raw, snap] = await Promise.all([pcDiagnostic(), snapshot().catch(() => null)]);
+  if (!raw) return { error: 'Diagnostic disponible sur Windows seulement.' };
+  const data = { ...raw, ...analyze(raw, { snap }), snap, at: Date.now() };
+  diagCache = { at: Date.now(), data };
+  return data;
+}
+ipcMain.handle('pc:diag', (_e, force) => runDiag(Boolean(force)).catch((err) => ({ error: err.message })));
+ipcMain.handle('pc:procs', () => processes().catch((err) => ({ error: err.message })));
+ipcMain.handle('pc:kill', async (_e, pid, pathHint) => {
+  const id = Number(pid);
+  if (!Number.isInteger(id) || id <= 4 || id === process.pid) return { ok: false, error: 'Processus protégé.' };
+  if (/\\windows\\/i.test(String(pathHint ?? ''))) return { ok: false, error: 'Processus de Windows : on n’y touche pas.' };
+  const name = String(pathHint ?? '').split(/[\\/]/).pop();
+  if (!(await confirm(`Fermer ${name || 'ce programme'} ?`, 'Il se ferme comme avec la croix ; un travail non enregistré peut être perdu.', { ok: 'Fermer', danger: true, icon: '🧠' }))) return { ok: false, cancelled: true };
+  try { process.kill(id); return { ok: true }; } catch (err) { return { ok: false, error: err.code === 'EPERM' ? 'Il faut les droits administrateur pour celui-ci.' : err.message }; }
+});
+ipcMain.handle('pc:defscan', async (_e, type) => { send('pc:progress', { step: 'defender', label: type === 'full' ? 'Analyse antivirus complète (peut durer une heure)…' : 'Analyse antivirus rapide…' }); const r = await defenderScan(type === 'full' ? 'full' : 'quick'); diagCache = null; return r; });
+ipcMain.handle('pc:defremove', async () => { const r = await defenderRemove(); diagCache = null; return r; });
+
+async function runBench() {
+  const step = (s, pct, label) => send('pc:progress', { step: s, pct, label });
+  step('cpu', 5, 'Processeur (1 cœur puis tous les cœurs)…');
+  const cpu = await cpuBench(3000);
+  step('ram', 35, 'Mémoire vive…');
+  const ram = ramBench(2500);
+  step('disk', 50, 'Disque (écriture et lecture de 1 Go)…');
+  const disk = await diskBench(app.getPath('temp')).catch(() => null);
+  step('gpu', 75, 'Carte graphique (scène 3D pendant 8 s)…');
+  const gpu = await gpuBench().catch(() => null);
+  const r = { at: Date.now(), cpu, ram, disk, gpu, cpuName: os.cpus()[0]?.model?.trim() ?? null };
+  r.scores = scores(r);
+  r.tier = tier(r.scores.total);
+  store.data.bench = [r, ...(store.data.bench ?? [])].slice(0, 12);
+  store.save();
+  step('done', 100, 'Terminé');
+  return r;
+}
+function gpuBench() {
+  return new Promise((resolve) => {
+    const w = new BrowserWindow({ width: 1280, height: 720, title: 'Benchmark History', backgroundColor: '#07060a', autoHideMenuBar: true, icon: ICON,
+      webPreferences: { preload: path.join(here, 'bench.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+    w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    w.webContents.on('will-navigate', (e) => e.preventDefault());
+    let done = false;
+    const finish = (r) => { if (done) return; done = true; ipcMain.removeListener('bench:gpu', onRes); if (!w.isDestroyed()) w.close(); resolve(r); };
+    const onRes = (e, r) => { if (e.sender === w.webContents) finish({ fps: Number(r?.fps) || null, width: r?.width, height: r?.height, error: r?.error }); };
+    ipcMain.on('bench:gpu', onRes);
+    w.on('closed', () => finish({ fps: null, error: 'fenêtre fermée' }));
+    setTimeout(() => finish({ fps: null, error: 'trop long' }), 25_000);
+    w.loadFile(path.join(here, 'ui', 'bench-gpu.html'));
+  });
+}
+let benchRunning = false;
+ipcMain.handle('pc:bench', async () => {
+  if (benchRunning) return { error: 'Benchmark déjà en cours.' };
+  benchRunning = true;
+  try { return await runBench(); } catch (err) { return { error: err.message }; } finally { benchRunning = false; }
+});
+ipcMain.handle('pc:benchHistory', () => store.data.bench ?? []);
+
+/** Rapport détaillé écrit par l'IA à partir des vraies mesures (sans IA : rapport automatique). */
+async function pcReport(diag, procs, bench, extra = '') {
+  const facts = [
+    `Processeur : ${diag.cpu.name} (${diag.cpu.cores} cœurs)`, `Cartes graphiques : ${diag.gpus.map((g) => g.name).join(', ')}`,
+    `Mémoire : ${diag.ramGb} Go en ${diag.ram.length} barrette(s), ${diag.ram.map((m) => `${m.configured}/${m.speed} MHz`).join(', ')}`,
+    ...diag.components.filter((c) => c.key.startsWith('disk') || c.key === 'bat').map((c) => `${c.title} ${c.name} : ${c.specs.join(', ')} ; ${c.life?.text}`),
+    `Windows : ${diag.os.name} ${diag.os.build}, allumé depuis ${diag.os.uptimeDays} jours`,
+    `Score de santé : ${diag.score}/100`, `Conseils : ${diag.advice.map((a) => a.title).join(' ; ') || 'aucun'}`,
+    procs?.length ? `Plus gros programmes : ${procs.slice(0, 8).map((p) => `${p.name} (${p.cpu} % CPU, ${Math.round(p.ram / 1e6)} Mo)`).join(', ')}` : '',
+    procs?.some((p) => p.suspect) ? `Programmes louches (non signés, dossier temporaire) : ${procs.filter((p) => p.suspect).map((p) => p.path).join(', ')}` : '',
+    bench ? `Benchmark History : total ${bench.scores.total} (${bench.tier}) ; processeur 1 cœur ${bench.scores.cpu1}, multi ${bench.scores.cpuN}, mémoire ${bench.scores.ram}, disque ${bench.scores.disk}, graphique ${bench.scores.gpu} (1000 = PC de jeu milieu de gamme)` : '',
+    extra,
+  ].filter(Boolean).join('\n');
+  const ai = await getAi().catch(() => null);
+  if (ai) {
+    const text = await ai.ask({
+      system: 'Tu es un technicien PC gamer expert. Tu écris en français, en tutoyant, un rapport clair et concret. Uniquement à partir des mesures fournies : n’invente aucun chiffre. Structure : « Verdict » (2 phrases), « Points forts », « Points faibles », « À faire en priorité » (liste numérotée, avec le gain attendu), « Durée de vie des composants ». Pas de markdown gras, juste des titres suivis de deux-points et des tirets.',
+      text: facts,
+    }).catch(() => null);
+    if (text) return { ai: true, text };
+  }
+  return { ai: false, text: `Verdict : score de santé ${diag.score}/100.\n\nÀ faire en priorité :\n${diag.advice.map((a, i) => `${i + 1}. ${a.title} : ${a.text}${a.gain ? ` (${a.gain})` : ''}`).join('\n') || 'Rien d’urgent, ton PC est en forme.'}\n\nDurée de vie :\n${diag.components.filter((c) => c.life?.pct != null).map((c) => `- ${c.title} ${c.name} : ${c.life.text}`).join('\n') || '- Pas de composant qui s’use détecté.'}` };
+}
+ipcMain.handle('pc:report', async () => {
+  const diag = await runDiag();
+  if (diag.error) return diag;
+  const procs = await processes().catch(() => []);
+  return pcReport(diag, procs, store.data.bench?.[0] ?? null);
+});
+// Analyse complète : diagnostic + processus + fichiers inutiles + antivirus complet + benchmark + rapport IA
+ipcMain.handle('pc:deep', async () => {
+  if (benchRunning) return { error: 'Une analyse est déjà en cours.' };
+  const step = (s, pct, label) => send('pc:progress', { step: s, pct, label, deep: true });
+  try {
+    step('diag', 3, 'Inventaire et santé des composants…');
+    const diag = await runDiag(true);
+    if (diag.error) return diag;
+    step('procs', 10, 'Programmes qui tournent et signatures…');
+    const procs = await processes().catch(() => []);
+    step('junk', 16, 'Fichiers inutiles…');
+    const junk = await optiScan().catch(() => null);
+    step('defender', 22, 'Analyse antivirus complète de Windows (c’est l’étape la plus longue)…');
+    const av = await defenderScan('full');
+    benchRunning = true;
+    const bench = await runBench().finally(() => { benchRunning = false; });
+    step('report', 96, 'Rédaction du rapport…');
+    const report = await pcReport(await runDiag(true), procs, bench, junk ? `Fichiers inutiles récupérables : ${Math.round((junk.junk ?? []).reduce((n, j) => n + (j.bytes ?? 0), 0) / 1e9 * 10) / 10} Go` : '');
+    step('done', 100, 'Analyse terminée');
+    return { diag: await runDiag(), procs, bench, av, report, junkBytes: (junk?.junk ?? []).reduce((n, j) => n + (j.bytes ?? 0), 0) };
+  } catch (err) { return { error: err.message }; }
+});
 let cleanList = [];
 ipcMain.handle('clean:scan', async () => {
   cleanList = await measureTargets(cleanTargets(process.env, await steamPath()));
