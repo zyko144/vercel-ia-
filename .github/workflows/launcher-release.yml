@@ -6,7 +6,7 @@ name: Launcher - publier une nouvelle version
 on:
   push:
     branches: [main]
-    paths: ['launcher/**']
+    paths: ['launcher/**', '.github/workflows/launcher-release.yml']
   workflow_dispatch:
 
 permissions:
@@ -49,8 +49,18 @@ jobs:
         if: steps.exists.outputs.yes == 'false'
         run: npm ci --no-audit --no-fund
 
-      - name: Construction et publication de l'installateur
+      - name: Construction de l'installateur
         if: steps.exists.outputs.yes == 'false'
+        run: npx electron-builder --win --publish never
+
+      - name: Publication (tag + release avec latest.yml pour la mise à jour auto)
+        if: steps.exists.outputs.yes == 'false'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --publish always
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          git tag "v$V" "$GITHUB_SHA" 2>/dev/null || true
+          git push origin "v$V" || true
+          gh release create "v$V" --verify-tag --title "History Launcher $V" --notes "Mise à jour automatique de History Launcher." \
+            dist/*.exe dist/*.exe.blockmap dist/latest.yml
