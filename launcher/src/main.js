@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library.js';
-import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend } from './core/ai.js';
+import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend, createRemoteAi } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
@@ -30,7 +30,8 @@ import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
-import { scanFivem } from './core/fivem.js';
+import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
+import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { findItem as findByName, similarity, stripWake, understand } from './core/commands.js';
@@ -217,10 +218,17 @@ function accountFor(item) {
   return 'principal';
 }
 const timeOptions = () => ({ total: Boolean(store.data.settings.totalTime), steamAccount: chosenSteam(), accountFor });
+// IA : clé perso si elle existe (anciens réglages ou version développeur), sinon via le serveur History (compte connecté)
 let aiCache = { key: null, ai: null };
 async function getAi() {
   const key = secret('gemini') ?? await geminiKeyFromEnv(path.join(here, '..'));
-  if (key !== aiCache.key) aiCache = { key, ai: await createAi(key) };
+  if (key) {
+    if (key !== aiCache.key) aiCache = { key, ai: await createAi(key) };
+    return aiCache.ai;
+  }
+  const token = secret('account');
+  if (!token) return null;
+  if (aiCache.key !== `compte:${token}`) aiCache = { key: `compte:${token}`, ai: createRemoteAi((body) => api('/api/compte/ia', { method: 'POST', token, body })) };
   return aiCache.ai;
 }
 const send = (channel, payload) => win?.webContents.send(channel, payload);
@@ -234,6 +242,7 @@ async function scan() {
   await refreshAccounts();
   const [found, xbox, fivem] = await Promise.all([scanAll({}, { steamApiKey: secret('steam') }), scanXbox().catch(() => []), scanFivem(undefined, store.data.fivemSessions ?? []).catch(() => ({ item: null }))]);
   if (fivem.item) store.data.fivemSessions = fivem.sessions; // sessions gardées même quand FiveM efface ses vieux journaux
+  if (fivem.item) store.data.fivemLogs = await fivemServerLogs(fivemDir(), store.data.fivemLogs ?? {}).catch(() => store.data.fivemLogs ?? {});
   raw = [...found.filter((i) => !(fivem.item && /^fivem$/i.test(i.name ?? ''))), ...xbox, ...(fivem.item ? [fivem.item] : []), ...Object.values(store.data.custom ?? {}).map(customItem)];
   await fillSteamNames(raw).catch(() => {});
   await remerge();
@@ -311,7 +320,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|fivem:\/\/connect\/cfx\.re\/join\/[a-z0-9]{4,10}|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
 // Confirmation dans une fenêtre du launcher (même style que le reste), réponse renvoyée par l'interface
@@ -736,6 +745,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
+  if ('friendNotifs' in patch) store.data.settings.friendNotifs = Boolean(patch.friendNotifs);
   if ('dailyLimit' in patch) store.data.settings.dailyLimit = Math.max(0, Math.min(1440, Number(patch.dailyLimit) || 0));
   if ('breakEvery' in patch) store.data.settings.breakEvery = Math.max(0, Math.min(600, Number(patch.breakEvery) || 0));
   if ('theme' in patch && ['bleu', 'violet', 'rouge', 'vert', 'orange', 'rose', 'auto'].includes(patch.theme)) store.data.settings.theme = patch.theme;
@@ -847,6 +857,7 @@ ipcMain.handle('deals:open', (_e, appid) => (/^\d{1,8}$/.test(String(appid)) ? o
 // ---------- Fin de partie, statut Discord et présence pour les amis History (toutes les 30 s) ----------
 const rpc = new DiscordPresence();
 let lastPresence = 0;
+let lastPresenceName = null;
 setInterval(async () => {
   if (playSession && Date.now() - playSession.start > 90_000) {
     const it = items.find((i) => i.id === playSession.id);
@@ -857,7 +868,8 @@ setInterval(async () => {
   const s = currentSession();
   if (store.data.settings.discordStatus !== false) await rpc.set(s ? activityFor(s, items.find((i) => i.id === s.id)) : null).catch(() => {});
   else if (rpc.ready) await rpc.set(null).catch(() => {});
-  if (Date.now() - lastPresence > 55_000) { lastPresence = Date.now(); sendPresence(s).catch(() => {}); }
+  const nowName = s?.name ?? null;
+  if (Date.now() - lastPresence > 55_000 || nowName !== lastPresenceName) { lastPresence = Date.now(); lastPresenceName = nowName; sendPresence(s).catch(() => {}); }
   // Limite du jour et pauses
   const set = store.data.settings;
   if (set.dailyLimit > 0 || set.breakEvery > 0) {
@@ -874,8 +886,110 @@ async function sendPresence(s) {
   const week = periodItems(store.data.days, 7);
   const games = Object.entries(week).map(([id, m]) => [items.find((i) => i.id === id), m]).filter(([i]) => i?.kind === 'game');
   const top = games.sort((a, b) => b[1] - a[1])[0]?.[0]?.name ?? null;
-  await api('/api/compte/presence', { method: 'POST', token, body: { playing: share && s ? s.name : null, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
+  const item = s ? items.find((i) => i.id === s.id) : null;
+  const join = share && s ? joinFor(item, item?.source === 'fivem' ? lastFivemServer(store.data.fivemLogs, store.data.fivemLast ?? null) : null) : null;
+  await api('/api/compte/presence', { method: 'POST', token, body: { playing: share && s ? s.name : null, join, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
 }
+
+// ---------- Amis en direct : notifications en bas à gauche (comme Steam), messages, « on joue ? », rejoindre ----------
+let notifWin = null;
+let notifCards = [];
+let notifHover = false;
+const notifTimers = new Map();
+function notifSync() {
+  if (!notifCards.length) { if (notifWin && !notifWin.isDestroyed()) notifWin.hide(); return; }
+  const area = screen.getPrimaryDisplay().workArea;
+  const h = Math.min(4, notifCards.length) * 118 + 24;
+  if (!notifWin || notifWin.isDestroyed()) {
+    notifWin = new BrowserWindow({
+      width: 360, height: h, x: area.x + 8, y: area.y + area.height - h - 8, frame: false, transparent: true, resizable: false,
+      alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
+      webPreferences: { preload: path.join(here, 'notif.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    });
+    notifWin.setAlwaysOnTop(true, 'screen-saver');
+    notifWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    notifWin.webContents.on('will-navigate', (e) => e.preventDefault());
+    notifWin.loadFile(path.join(here, 'ui', 'notif.html'));
+    notifWin.webContents.once('did-finish-load', () => notifSync());
+    return;
+  }
+  notifWin.setBounds({ x: area.x + 8, y: area.y + area.height - h - 8, width: 360, height: h });
+  notifWin.webContents.send('notif:cards', notifCards.slice(-4));
+  if (!notifWin.isVisible()) notifWin.showInactive();
+}
+function dropCard(id) {
+  clearTimeout(notifTimers.get(id));
+  notifTimers.delete(id);
+  notifCards = notifCards.filter((c) => c.id !== id);
+  notifSync();
+}
+function armCard(c) {
+  clearTimeout(notifTimers.get(c.id));
+  notifTimers.set(c.id, setTimeout(() => (notifHover ? armCard({ ...c, ttl: 3000 }) : dropCard(c.id)), c.ttl ?? 10_000));
+}
+function pushCard(c) {
+  if (!c || notifCards.some((x) => x.id === c.id)) return;
+  if (store.data.settings.friendNotifs === false) return;
+  notifCards.push(c);
+  armCard(c);
+  notifSync();
+}
+ipcMain.on('notif:hover', (_e, on) => { notifHover = Boolean(on); });
+ipcMain.on('notif:act', async (_e, id, action) => {
+  const c = notifCards.find((x) => x.id === id);
+  if (!c) return;
+  dropCard(id);
+  if (action === 'close') return;
+  if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
+  if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }
+  if (action === 'join') { await joinGame(c.join, c.game); return; }
+  if (action === 'accept' || action === 'decline') {
+    const r = await social('/api/compte/inviter/repondre', { id: c.id, oui: action === 'accept' });
+    if (action === 'accept' && c.kind === 'invite') await joinGame(r.join, c.game);
+  }
+});
+
+/** Rejoindre un ami : serveur FiveM, jeu Steam, sinon le même jeu s'il est installé ici. */
+async function joinGame(join, game) {
+  if (join?.fivem && serverCode(join.fivem)) { store.data.fivemLast = serverCode(join.fivem); return openLink(joinLink(serverCode(join.fivem))); }
+  const byName = game ? items.find((i) => i.installed && norm(i.name) === norm(game)) : null;
+  const bySteam = join?.steam ? items.find((i) => i.steamId === join.steam && i.installed) : null;
+  const it = bySteam ?? byName;
+  if (it) return doAction(it.id, 'launch');
+  if (join?.steam && /^\d{1,10}$/.test(join.steam)) return openLink(`steam://rungameid/${join.steam}`);
+  notify('Impossible de rejoindre', game ? `${game} n’est pas installé sur ce PC.` : 'Aucune partie à rejoindre.');
+  return null;
+}
+
+// Synchro toutes les 15 s : boîte de réception + qui vient de lancer un jeu (la liste d'amis se met à jour en direct)
+let socialPrev = null;
+let socialLive = null;
+async function socialTick() {
+  const token = secret('account');
+  if (!token) { socialPrev = null; return; }
+  const after = store.data.inboxAt ?? Date.now() - 60_000;
+  const r = await api(`/api/compte/boite?apres=${after}`, { token }).catch(() => null);
+  if (!r || r.status !== 200) return;
+  store.data.inboxAt = r.now ?? Date.now();
+  socialLive = r;
+  for (const x of r.items ?? []) pushCard(cardFor(x));
+  for (const f of newlyPlaying(socialPrev, r.amis)) pushCard(playingCard(f, canJoin(f, items)));
+  socialPrev = playingMap(r.amis);
+  if ((r.items ?? []).length || socialPrev) send('social:live', { amis: r.amis, demandes: r.demandes, code: r.code, moi: r.moi, messages: (r.items ?? []).filter((x) => x.type === 'msg') });
+}
+setInterval(() => socialTick().catch(() => {}), 15_000);
+setTimeout(() => socialTick().catch(() => {}), 5_000);
+
+const FID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
+ipcMain.handle('chat:thread', (_e, fid) => social(`/api/compte/messages?avec=${encodeURIComponent(FID(fid))}`));
+ipcMain.handle('chat:send', (_e, fid, text) => social('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500) }));
+ipcMain.handle('friend:invite', (_e, fid, type) => social('/api/compte/inviter', { to: FID(fid), type: type === 'invite' ? 'invite' : 'ask', ...(type === 'invite' ? { game: currentSession()?.name ?? undefined } : {}) }));
+ipcMain.handle('friend:join', async (_e, fid) => {
+  const f = (socialLive?.amis ?? (await social('/api/compte/amis')).amis ?? []).find((a) => a.id === FID(fid));
+  if (!f?.playing) return { ok: false, error: 'Cet ami ne joue pas en ce moment.' };
+  await joinGame(f.join, f.playing);
+  return { ok: true };
+});
 
 // ---------- Amis History (comptes du launcher) et soirées jeu ----------
 async function social(pathname, body) {
@@ -1326,7 +1440,40 @@ ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; s
 
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
-ipcMain.handle('fivem:join', (_e, code) => { const c = String(code ?? '').trim().toLowerCase().replace(/^(https?:\/\/)?(cfx\.re\/join\/)?/, ''); return /^[a-z0-9]{4,10}$/.test(c) ? openLink(`fivem://connect/cfx.re/join/${c}`).then(() => ({ ok: true })) : { ok: false, error: 'Code de serveur invalide (ex. cfx.re/join/abc123).' }; });
+ipcMain.handle('fivem:join', async (_e, code) => {
+  const c = serverCode(code);
+  if (!c) return { ok: false, error: 'Code de serveur invalide (ex. cfx.re/join/abc123).' };
+  store.data.fivemLast = c; // pour « Rejoindre » côté amis
+  await openLink(joinLink(c));
+  return { ok: true };
+});
+// Serveurs FiveM : favoris (joueurs en ligne via l'annuaire FiveM) + heures par serveur tirées des journaux
+const fivemInfoCache = new Map(); // code -> { at, info }
+async function serverInfoCached(code) {
+  const c = fivemInfoCache.get(code);
+  if (c && Date.now() - c.at < 60_000) return c.info;
+  const info = await fivemServerInfo(code).catch(() => ({ online: null }));
+  fivemInfoCache.set(code, { at: Date.now(), info });
+  if (info.name) (store.data.fivemNames ??= {})[code] = info.name;
+  return info;
+}
+ipcMain.handle('fivem:servers', async () => {
+  const mins = serverMinutes(store.data.fivemLogs);
+  const favs = store.data.fivemFavs ?? [];
+  const codes = [...new Set([...favs, ...Object.entries(mins).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k]) => k)])];
+  const list = await Promise.all(codes.map(async (code) => { const info = await serverInfoCached(code); return { code, fav: favs.includes(code), minutes: mins[code] ?? 0, ...info, name: info.name ?? store.data.fivemNames?.[code] ?? null }; }));
+  const known = Object.values(store.data.fivemLogs ?? {}).length;
+  return { list, logs: known, unknownMinutes: Math.max(0, (items.find((i) => i.id === 'fivem:client')?.minutes ?? 0) - Object.values(mins).reduce((a, b) => a + b, 0)) };
+});
+ipcMain.handle('fivem:fav', (_e, code, on) => {
+  const c = serverCode(code);
+  if (!c) return { ok: false, error: 'Code de serveur invalide.' };
+  const favs = new Set(store.data.fivemFavs ?? []);
+  if (on) favs.add(c); else favs.delete(c);
+  store.data.fivemFavs = [...favs].slice(0, 30);
+  store.save();
+  return { ok: true };
+});
 ipcMain.handle('stats:game', (_e, id) => itemHistory(store.data.days, String(id), 30));
 ipcMain.handle('app:version', () => app.getVersion());
 

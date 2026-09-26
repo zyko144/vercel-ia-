@@ -49,6 +49,21 @@ export async function createAi(key) {
   return { ask, transcribe };
 }
 
+/** Même IA, mais passée par le serveur History (compte connecté) : aucune clé à mettre dans l'appli. */
+export function createRemoteAi(call) {
+  const req = async (body) => {
+    const r = await call(body);
+    if (r?.status !== 200) throw new Error(r?.error ?? 'IA injoignable');
+    return String(r.text ?? '');
+  };
+  const ask = async ({ system, text, schema, web = false }) => {
+    const out = (await req({ system, text, schema, web })).trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+    return schema ? JSON.parse(out) : out;
+  };
+  const transcribe = async (base64, mime) => (await req({ audio: { data: base64, mime } })).trim();
+  return { ask, transcribe, remote: true };
+}
+
 // ===================== Images trouvées par l'IA =====================
 
 const ART_SCHEMA = {
@@ -131,7 +146,7 @@ const ASSIST_SCHEMA = {
 
 /** Comprend une demande et choisit UNE action parmi la liste (le launcher l'exécute, avec confirmation si besoin). */
 export async function assistant(ai, message, context) {
-  if (!ai) return { reply: 'Ajoute ta clé Gemini dans les réglages pour me parler (ou lance-moi depuis le dossier du bot).', action: 'none', target: '', value: '' };
+  if (!ai) return { reply: 'Connecte-toi à ton compte History pour discuter avec moi.', action: 'none', target: '', value: '' };
   return ai.ask({
     schema: ASSIST_SCHEMA,
     system: `Tu es « History », l'assistant du launcher de jeux History Launcher. Tu parles français, en tutoyant, en 1 à 3 phrases courtes et utiles.

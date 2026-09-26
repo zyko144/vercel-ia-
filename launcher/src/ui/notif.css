@@ -1,0 +1,18 @@
+html, body { margin: 0; background: transparent; overflow: hidden; font: 13px/1.4 "Segoe UI", system-ui, sans-serif; color: #f4f1f6; user-select: none; }
+#stack { position: fixed; left: 8px; bottom: 8px; width: 344px; display: flex; flex-direction: column-reverse; gap: 8px; }
+.card { display: flex; gap: 12px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(160deg, rgba(34, 30, 44, .96), rgba(18, 15, 24, .96)); border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 14px 30px -10px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .08), 0 0 24px -12px #2f8bff; animation: in .35s cubic-bezier(.2, .9, .3, 1.2); cursor: default; position: relative; overflow: hidden; }
+.card.out { animation: out .25s ease forwards; }
+.card::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: linear-gradient(90deg, #2f8bff, #22d3ee); transform-origin: left; animation: life var(--ttl, 10s) linear forwards; }
+.card:hover::after { animation-play-state: paused; }
+.ico { font-size: 22px; width: 30px; text-align: center; flex: none; }
+.txt { flex: 1; min-width: 0; }
+.txt b { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.txt p { margin: 2px 0 0; color: #c9c2d2; word-wrap: break-word; }
+.acts { display: flex; gap: 6px; margin-top: 8px; }
+.acts button { border: 0; border-radius: 8px; padding: 5px 12px; font: inherit; font-weight: 600; color: #fff; cursor: pointer; background: rgba(255, 255, 255, .1); }
+.acts button.main { background: linear-gradient(90deg, #2f8bff, #1554d1); }
+.acts button:hover { filter: brightness(1.15); }
+.x { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: #948d9c; cursor: pointer; font-size: 14px; }
+@keyframes in { from { transform: translateX(-110%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes out { to { transform: translateX(-110%); opacity: 0; } }
+@keyframes life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
