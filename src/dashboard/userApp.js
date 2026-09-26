@@ -236,6 +236,7 @@ async function serverDetail(guild) {
     tickets: {
       panels: panels.map((p) => ({ id: p.id, title: p.title, channel: guild.channels.cache.get(p.channelId)?.name ?? null, at: p.at })),
       open: open.map((t) => ({ channel: guild.channels.cache.get(t.channelId)?.name ?? null, user: t.userId ? client.users.cache.get(t.userId)?.username ?? t.userId : null, at: t.at ?? null })),
+      automations: await (await import('../features/ticketAutomations.js')).rulesOf(guild.id),
     },
   };
 }
@@ -392,6 +393,14 @@ const routes = {
     if (m.error) return json(res, m.status, { error: m.error });
     const { removeTicketPanel } = await import('../features/tickets.js');
     return (await removeTicketPanel(client, m.guild.id, String(body.panelId ?? ''))) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'Panneau introuvable.' });
+  },
+
+  // ---------- Automatisations des tickets ----------
+  'POST server/tickets/automations': async (req, res, s, url, body) => {
+    const m = await manageable(s, body.guildId);
+    if (m.error) return json(res, m.status, { error: m.error });
+    const { saveRules } = await import('../features/ticketAutomations.js');
+    return json(res, 200, { ok: true, rules: await saveRules(m.guild.id, body.rules) });
   },
 
   // ---------- Mes souvenirs dans l'IA (idée 56) ----------

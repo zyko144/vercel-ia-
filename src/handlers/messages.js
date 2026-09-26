@@ -21,6 +21,7 @@ import { routeGameMessage } from '../games/index.js';
 import { blindTestActive, handleBlindTestMessage, handleJukeboxMessage } from '../music/handlers.js';
 import { attachmentsToContent, displayName, fetchBase64, inChannelList, isAllowedChannel, truncate } from '../utils/discord.js';
 import { prefixCommand } from '../features/prefixCommands.js';
+import { onTicketMessage } from '../features/ticketAutomations.js';
 
 // "génère une image de...", "dessine-moi un logo...", "fais une photo de..."
 const IMAGE_INTENT = /^(?:(?:est-ce que\s+)?(?:tu\s+peux|peux[- ]tu|stp|svp|vas-y)\s+)?(?:me\s+)?(?:g[ée]n[èeé]rer?|cr[ée]er?|dessiner?|fais|fait|faire|imaginer?)(?:[- ]moi)?\s+(?:une?|des|l[ae']|ma|mon)?\s*(?:image|dessin|photo|illustration|logo|wallpaper|fond d'[ée]cran|affiche|banni[èe]re|avatar|pp|pdp)\b/i;
@@ -34,6 +35,8 @@ export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
   // Sécurité : arnaques, liens interdits, spam (le message supprimé ne va pas plus loin)
   if (message.inGuild() && await guardMessage(message).catch(() => false)) return;
+  // Tickets : automatisations (mots-clés, suivi des réponses du staff)
+  if (message.inGuild()) onTicketMessage(message).catch((err) => console.warn('[tickets auto]', err.message));
   // Commandes rapides en « !! » (!!clear 20, !!ban, !!close, !!roles, !!play…)
   if (message.inGuild() && message.content.startsWith('!!') && await prefixCommand(message).catch((err) => { console.warn('[!!]', err.message); return false; })) return;
   // Rapport de la semaine : on compte (juste un nombre par membre et par salon)

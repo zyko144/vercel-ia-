@@ -97,6 +97,7 @@ client.once(Events.ClientReady, async (c) => {
   startAssistant(c);
   startModeration(c);
   startServerTools(c);
+  import('./features/ticketAutomations.js').then((m) => m.startTicketAutomations(c)).catch((err) => console.warn('[tickets auto]', err.message));
   startVoicePlus(c);
   autoInstallBotChannels(c).catch((err) => console.warn('[salons] installation :', err.message));
   startVoiceExtras(c);
