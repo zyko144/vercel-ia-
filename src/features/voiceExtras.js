@@ -124,21 +124,43 @@ const sampling = new Set();
 const clipped = new Map(); // guild:user -> dates des paquets saturés
 const advised = new Map(); // guild:user -> dernier conseil
 let OpusScript = null;
+let NativeOpus = null;
+
+/**
+ * Décodeur Opus : le natif (@discordjs/opus) s'il est installé, sinon opusscript (WebAssembly).
+ * opusscript corrompt sa mémoire si on décode après l'avoir libéré, ou si on le libère deux fois
+ * (erreur « memory access out of bounds ») : chaque décodeur n'est donc libéré qu'une seule fois, et plus jamais utilisé après.
+ */
+function makeDecoder() {
+  try {
+    NativeOpus ??= require('@discordjs/opus').OpusEncoder;
+    const native = new NativeOpus(48_000, 2);
+    return { decode: (packet) => native.decode(packet), free: () => {} };
+  } catch {
+    OpusScript ??= require('opusscript');
+    const wasm = new OpusScript(48_000, 2, OpusScript.Application.AUDIO);
+    return { decode: (packet) => wasm.decode(packet), free: () => wasm.delete() };
+  }
+}
 
 function attachLoudMic(client, guild, connection) {
   connection.receiver.speaking.on('start', (userId) => {
     if (!cfg(guild.id, 'loudMic.enabled') || sampling.has(userId) || userId === client.user.id) return;
     sampling.add(userId);
-    OpusScript ??= require('opusscript');
-    const decoder = new OpusScript(48_000, 2, OpusScript.Application.AUDIO);
+    let decoder;
+    try { decoder = makeDecoder(); } catch { sampling.delete(userId); return; }
     const stream = connection.receiver.subscribe(userId, { end: { behavior: EndBehaviorType.AfterSilence, duration: 800 } });
     let n = 0;
+    let closed = false;
     const done = () => {
+      if (closed) return; // « end » puis « close » : une seule libération
+      closed = true;
       sampling.delete(userId);
-      try { decoder.delete(); } catch { /* déjà libéré */ }
+      stream.removeListener('data', onData);
+      try { decoder.free(); } catch { /* déjà libéré */ }
     };
-    stream.on('data', (packet) => {
-      if (n++ % 10 || packet.length <= 3) return; // 1 paquet sur 10 seulement
+    const onData = (packet) => {
+      if (closed || n++ % 10 || packet.length <= 3) return; // 1 paquet sur 10 seulement
       try {
         const pcm = decoder.decode(packet);
         const samples = pcm.length / 2;
@@ -146,9 +168,11 @@ function attachLoudMic(client, guild, connection) {
         for (let i = 0; i < samples; i++) if (Math.abs(pcm.readInt16LE(i * 2)) >= CLIP) hot++;
         if (hot / samples > 0.02) noteClip(client, guild, userId);
       } catch {
-        // paquet illisible : on ignore
+        // paquet illisible : on arrête d'analyser ce flux (le décodeur n'est plus fiable)
+        done();
       }
-    });
+    };
+    stream.on('data', onData);
     stream.once('end', done);
     stream.once('close', done);
     stream.on('error', () => {});
