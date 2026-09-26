@@ -22,6 +22,7 @@
     <button data-view="classement"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>Classement</button>
     <button data-view="amis"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Amis<em class="navcount" id="friendsOnline"></em></button>
     <button data-view="pc"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Mon PC</button>
+    <button data-view="optimisation"><svg viewBox="0 0 24 24"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg>Optimisation<em class="navcount warnc" id="optiBadge"></em></button>
     <button data-view="ia"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M6 6l2 2m8 8 2 2M6 18l2-2m8-8 2-2"/><circle cx="12" cy="12" r="3"/></svg>IA Assistant</button>
   </nav>
   <h5>Plateformes</h5>
@@ -61,6 +62,7 @@
     <div class="list-head">
       <h2 id="listTitle">Bibliothèque</h2><span id="count"></span>
       <div class="seg" id="installed"><button data-inst="tout" class="on" title="Jeux installés ou joués, applis connues ou utilisées">Principaux</button><button data-inst="oui" title="Tout ce qui est installé">Tous les installés</button><button data-inst="non">Non installés</button></div>
+      <button class="btn ghost" id="showHidden" type="button" title="Éléments masqués">👁 Masqués</button>
       <button class="btn" id="addGame" type="button" title="Ajouter un jeu (ou glisse son .exe dans la fenêtre)">+ Ajouter un jeu</button>
       <select id="sort"><option value="joues">Les plus joués</option><option value="recents">Joués récemment</option><option value="nom">Nom (A → Z)</option><option value="taille">Taille</option></select>
     </div>
@@ -119,13 +121,26 @@
         <b class="sub">Fermer pendant la partie</b>
         <div class="checks" id="boostApps"></div>
       </div>
-      <div class="panel">
+      <div class="panel optilink" data-view="optimisation">
         <h3>🚀 Optimisation complète</h3>
-        <p class="hint">Analyse tout le PC : fichiers inutiles, restes de jeux désinstallés, programmes au démarrage, réglages Windows pour les jeux. Rien n’est touché sans ton accord ; tes jeux, sauvegardes, mots de passe et fichiers perso restent intacts.</p>
-        <button class="btn play big" id="optiScan" type="button">Analyser mon PC</button>
-        <div id="optiBody"></div>
+        <p class="hint">Fichiers inutiles, restes de jeux, démarrage de Windows, réglages pour les jeux, nettoyage profond : tout est dans la page Optimisation, avec un score de santé de ton PC.</p>
+        <button class="btn play big" type="button" data-view="optimisation">Ouvrir l’optimisation</button>
       </div>
     </div>
+  </section>
+
+  <section id="view-optimisation" class="view">
+    <div class="optihero">
+      <div class="ring" id="optiRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="val" id="ringVal"/></svg><div><b id="ringNum">–</b><small id="ringLabel">Pas encore analysé</small></div></div>
+      <div class="optiinfo">
+        <h2>Optimisation du PC</h2>
+        <p class="hint" id="optiIntro">Une vraie analyse de tout le PC : fichiers inutiles, restes de jeux désinstallés, programmes au démarrage et réglages Windows pour les jeux. Rien n’est touché sans ton accord.</p>
+        <div class="optisum" id="optiSum"></div>
+        <div class="row optibtns"><button class="btn play big" id="optiScan" type="button">Analyser mon PC</button><button class="btn big" id="optiRun" type="button" hidden>⚡ Tout optimiser</button><label class="toggle"><input type="checkbox" id="optiAuto"><span></span>Optimisation automatique chaque semaine</label></div>
+      </div>
+    </div>
+    <div id="optiProgress" hidden></div>
+    <div class="opticats" id="optiBody"><div class="empty">Lance l’analyse pour voir ce qui peut être optimisé.</div></div>
   </section>
 
   <section id="view-classement" class="view">
@@ -197,6 +212,10 @@
   </form>
 </dialog>
 
+<div id="ctx" class="ctxmenu" hidden></div>
+
+<dialog id="modal" class="mdl"><form method="dialog" class="dlg modern" id="modalBox"></form></dialog>
+
 <div id="dropzone" hidden><div>Lâche le fichier .exe pour ajouter le jeu</div></div>
 
 <dialog id="recapDlg">
@@ -214,9 +233,10 @@
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>H</kbd></span><span>Afficher / ranger le launcher (partout, même en jeu)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>O</kbd></span><span>Infos par-dessus le jeu (PC, musique, amis)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>F</kbd></span><span>Rechercher (ou <kbd>/</kbd>)</span></div>
+      <div class="krow"><span class="kk"><kbd>Clic droit</kbd></span><span>Sur un jeu ou une appli : jouer, favori, masquer, désinstaller…</span></div>
       <div class="krow"><span class="kk"><kbd>Entrée</kbd></span><span>Lancer le jeu sélectionné</span></div>
       <div class="krow"><span class="kk"><kbd>←</kbd><kbd>→</kbd></span><span>Jeu précédent / suivant</span></div>
-      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>1</kbd>…<kbd>9</kbd></span><span>Accueil, Bibliothèque, Jeux, Applis, Favoris, Stats, Classement, Amis (<kbd>9</kbd> : Mon PC)</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>1</kbd>…<kbd>9</kbd></span><span>Accueil, Bibliothèque, Jeux, Applis, Favoris, Stats, Classement, Amis, Mon PC (<kbd>0</kbd> : Optimisation)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>K</kbd></span><span>Ouvrir l’assistant IA</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>D</kbd></span><span>Ajouter / retirer des favoris</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>,</kbd></span><span>Paramètres</span></div>

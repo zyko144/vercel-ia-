@@ -116,7 +116,7 @@ export async function recommend(ai, played, owned) {
 
 // ===================== Assistant =====================
 
-export const ACTIONS = ['launch', 'install', 'verify', 'uninstall', 'folder', 'store', 'show', 'sort', 'music', 'none'];
+export const ACTIONS = ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store', 'show', 'sort', 'music', 'optimize', 'none'];
 const ASSIST_SCHEMA = {
   type: 'object',
   properties: {
@@ -133,14 +133,17 @@ export async function assistant(ai, message, context) {
   if (!ai) return { reply: 'Ajoute ta clé Gemini dans les réglages pour me parler (ou lance-moi depuis le dossier du bot).', action: 'none', target: '', value: '' };
   return ai.ask({
     schema: ASSIST_SCHEMA,
-    system: `Tu es l'assistant du launcher de jeux « History Launcher ». Tu parles français, en tutoyant, en 1 à 3 phrases.
+    system: `Tu es « History », l'assistant du launcher de jeux History Launcher. Tu parles français, en tutoyant, en 1 à 3 phrases courtes et utiles.
+La demande peut venir de la voix : elle peut contenir des fautes de reconnaissance (« rocket ligue » = Rocket League, « conteur strike » = Counter-Strike). Devine le jeu le plus proche dans la bibliothèque.
 Actions possibles (une seule) :
-- launch / install / verify / uninstall / folder / store : sur un jeu ou une appli (target = son nom exact dans la bibliothèque) ;
-- show : afficher une vue (value = jeux | applis | favoris | stats | bibliotheque) ;
+- launch / close / install / verify / uninstall / folder / store : sur un jeu ou une appli (target = son nom EXACT dans la bibliothèque) ;
+- show : afficher une vue (value = accueil | bibliotheque | jeux | applis | favoris | stats | classement | amis | pc | optimisation | parametres) ;
 - sort : trier (value = joues | recents | nom | taille) ;
 - music : lecteur (value = play | pause | next | previous) ;
-- none : juste répondre (questions, conseils, statistiques).
+- optimize : ouvrir l'optimisation du PC et lancer l'analyse (PC lent, lag, manque de place, nettoyage) ;
+- none : juste répondre (questions, conseils, statistiques, recommandations).
+Pour les questions (« à quoi je joue le plus », « quel jeu lancer ce soir », « combien d'heures sur X »), réponds avec les vrais chiffres de la bibliothèque.
 N'invente jamais un jeu qui n'est pas dans la bibliothèque. Pour désinstaller, précise qu'une confirmation va s'afficher.`,
-    text: `Bibliothèque (nom · source · installé · heures) :\n${context.items}\n\nMusique en cours : ${context.music || 'rien'}\n\nDemande : ${message}`,
+    text: `Date : ${new Date().toLocaleString('fr-FR')}\nBibliothèque (nom · source · installé · heures) :\n${context.items}\n\nMusique en cours : ${context.music || 'rien'}${context.extra ? `\n${context.extra}` : ''}\n\nDemande : ${message}`,
   });
 }

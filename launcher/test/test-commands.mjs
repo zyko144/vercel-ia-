@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { findItem, stripWake, understand } from '../src/core/commands.js';
+import { parseHeard, speakableNames } from '../src/core/voice.js';
 
 let passed = 0;
 const check = (name, fn) => { fn(); passed += 1; console.log('✅', name); };
@@ -64,6 +65,24 @@ check('vues, tri, recherche et questions', () => {
   assert.match(u('combien d’heures sur rocket league ?').reply, /Rocket League : 198 heures/);
   assert.match(u('quel jeu je pourrais désinstaller ?').reply, /Red Dead Redemption 2/);
   assert.equal(u('raconte-moi une blague').action, 'unknown', 'le reste va à Gemini');
+});
+
+check('dictée approximative et demandes naturelles', () => {
+  assert.equal(findItem(items, 'rocket ligue').id, 'rl', 'faute de dictée');
+  assert.equal(findItem(items, 'discorde').id, 'disc');
+  assert.equal(findItem(items, 'conteur strike').id, 'cs2');
+  assert.equal(u('je veux jouer à rocket league').itemId, 'rl');
+  assert.equal(u('tu peux me lancer GTA s’il te plaît').action, 'launch');
+  assert.equal(u('est-ce que tu peux ouvrir discord').itemId, 'disc');
+  assert.equal(u('on joue à league of legends').itemId, 'lol');
+  assert.equal(u('fermer spotify').action, 'close');
+  assert.equal(findItem(items, 'minecraft'), null, 'pas de faux positif');
+});
+
+check('écoute guidée : noms prononçables et phrases reçues', () => {
+  assert.deepEqual(speakableNames(['Counter-Strike 2', 'Grand Theft Auto V']), ['Counter Strike 2', 'Counter Strike deux', 'Grand Theft Auto V', 'Grand Theft Auto cinq']);
+  assert.deepEqual(parseHeard('cmd|0,83|hey history lance rocket league'), { grammar: 'cmd', confidence: 0.83, text: 'hey history lance rocket league' });
+  assert.equal(u(stripWake('hey history lance Counter Strike deux')).itemId, 'cs2', 'chiffre dit en lettres');
 });
 
 console.log(`\n${passed} vérifications passées.`);

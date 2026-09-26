@@ -28,6 +28,12 @@ export async function extraTargets(env = process.env) {
     t('amd-install', 'Restes d’installation AMD', path.join(system, 'AMD'), 'Anciens pilotes décompressés'),
     t('nv-downloader', 'Pilotes NVIDIA déjà installés', path.join(programData, 'NVIDIA Corporation', 'Downloader')),
     t('epic-vault', 'Cache de téléchargement Epic', path.join(programData, 'Epic', 'EpicGamesLauncher', 'VaultCache')),
+    t('epic-crashes', 'Rapports de plantage d’Epic', path.join(local, 'EpicGamesLauncher', 'Saved', 'Crashes')),
+    t('riot-logs', 'Journaux de Riot Client', path.join(local, 'Riot Games', 'Riot Client', 'Logs')),
+    t('inetcache', 'Cache Internet de Windows', path.join(local, 'Microsoft', 'Windows', 'INetCache')),
+    t('discord-code', 'Cache de code de Discord', path.join(roaming, 'discord', 'Code Cache')),
+    t('discord-gpu', 'Cache graphique de Discord', path.join(roaming, 'discord', 'GPUCache')),
+    t('amd-dxc', 'Cache AMD (DXC)', path.join(local, 'AMD', 'DxcCache')),
   ];
   // Navigateurs : cache de chaque profil
   const chromium = [
@@ -49,6 +55,36 @@ export async function extraTargets(env = process.env) {
   }
   return list.filter((x) => path.isAbsolute(x.dir));
 }
+
+/** Steam : journaux et rapports de plantage (se recréent). */
+export function steamJunk(steamRoot) {
+  if (!steamRoot) return [];
+  return [
+    { id: 'steam-logs', label: 'Journaux de Steam', dir: path.join(steamRoot, 'logs'), note: '' },
+    { id: 'steam-dumps', label: 'Rapports de plantage de Steam', dir: path.join(steamRoot, 'dumps'), note: '' },
+  ];
+}
+
+/** Catégorie d'un fichier inutile (pour ranger l'affichage). */
+export function groupOf(id) {
+  if (/^(chrome|edge|brave|opera|operagx|firefox)/.test(id)) return 'navigateurs';
+  if (/^(steam|epic|riot|discord|crashclient|dumps)/.test(id)) return 'jeux';
+  if (/^(nv|amd|d3d)/.test(id)) return 'pilotes';
+  return 'systeme';
+}
+
+/** Score de santé du PC (0 à 100) : fichiers inutiles, restes de jeux, démarrage, réglages, place libre. */
+export function healthScore({ junkBytes = 0, orphanBytes = 0, heavyStartup = 0, tweaksOff = 0, freeRatio = null }) {
+  const gb = (b) => b / 1e9;
+  let score = 100;
+  score -= Math.min(25, gb(junkBytes) * 2.5);
+  score -= Math.min(15, gb(orphanBytes));
+  score -= Math.min(20, heavyStartup * 4);
+  score -= Math.min(24, tweaksOff * 6);
+  if (freeRatio != null) score -= freeRatio < 0.1 ? 16 : freeRatio < 0.2 ? 8 : 0;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+export const scoreLabel = (n) => (n >= 90 ? 'Excellent' : n >= 75 ? 'Bon' : n >= 55 ? 'Moyen' : 'À optimiser');
 
 // ===================== Corbeille =====================
 
@@ -128,7 +164,11 @@ export async function setStartup(name, enabled) {
 export const GAME_TWEAKS = [
   { id: 'gamemode', label: 'Mode Jeu de Windows activé', help: 'Windows donne la priorité au jeu en cours.', key: 'HKCU\\Software\\Microsoft\\GameBar', values: { AutoGameModeEnabled: 1 }, off: { AutoGameModeEnabled: 0 } },
   { id: 'dvr', label: 'Enregistrement en arrière-plan de la Xbox Game Bar coupé', help: 'Évite que Windows filme en continu pendant les parties (gain de FPS).', key: 'HKCU\\System\\GameConfigStore', values: { GameDVR_Enabled: 0 }, off: { GameDVR_Enabled: 1 }, extra: { key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR', values: { AppCaptureEnabled: 0 }, off: { AppCaptureEnabled: 1 } } },
-  { id: 'mouse', label: 'Accélération de la souris coupée', help: 'Visée plus précise (effet après reconnexion à Windows).', key: 'HKCU\\Control Panel\\Mouse', values: { MouseSpeed: '0', MouseThreshold1: '0', MouseThreshold2: '0' }, off: { MouseSpeed: '1', MouseThreshold1: '6', MouseThreshold2: '10' } },
+  { id: 'background', label: 'Applis Windows en arrière-plan coupées', help: 'Moins de programmes qui tournent pour rien (mémoire et processeur).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications', values: { GlobalUserDisabled: 1 }, off: { GlobalUserDisabled: 0 } },
+  { id: 'ads', label: 'Pubs et suggestions de Windows coupées', help: 'Plus d’applis installées toutes seules ni de suggestions dans le menu Démarrer.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager', values: { SilentInstalledAppsEnabled: 0, SystemPaneSuggestionsEnabled: 0, 'SubscribedContent-338388Enabled': 0, 'SubscribedContent-338389Enabled': 0 }, off: { SilentInstalledAppsEnabled: 1, SystemPaneSuggestionsEnabled: 1, 'SubscribedContent-338388Enabled': 1, 'SubscribedContent-338389Enabled': 1 } },
+  { id: 'transparency', label: 'Effets de transparence coupés', help: 'Un peu moins de travail pour la carte graphique (look plus simple).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', values: { EnableTransparency: 0 }, off: { EnableTransparency: 1 }, optional: true },
+  { id: 'visualfx', label: 'Animations de Windows réduites', help: 'Windows plus réactif sur les petits PC (look plus simple).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects', values: { VisualFXSetting: 2 }, off: { VisualFXSetting: 0 }, optional: true },
+  { id: 'mouse', label: 'Accélération de la souris coupée', help: 'Visée plus précise (effet après reconnexion à Windows).', optional: true, key: 'HKCU\\Control Panel\\Mouse', values: { MouseSpeed: '0', MouseThreshold1: '0', MouseThreshold2: '0' }, off: { MouseSpeed: '1', MouseThreshold1: '6', MouseThreshold2: '10' } },
 ];
 export function tweakApplied(tweak, current) {
   return Object.entries(tweak.values).every(([k, v]) => String(current?.[k] ?? '') === String(v));
@@ -138,9 +178,9 @@ async function readKey(key) {
   return parseRegQuery(r?.stdout ?? '')[0]?.values ?? {};
 }
 export async function tweakStates() {
-  if (!win) return GAME_TWEAKS.map((t) => ({ id: t.id, label: t.label, help: t.help, on: false }));
+  if (!win) return GAME_TWEAKS.map((t) => ({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on: false }));
   const out = [];
-  for (const t of GAME_TWEAKS) out.push({ id: t.id, label: t.label, help: t.help, on: tweakApplied(t, await readKey(t.key)) });
+  for (const t of GAME_TWEAKS) out.push({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on: tweakApplied(t, await readKey(t.key)) });
   return out;
 }
 export async function setTweak(id, on) {
@@ -166,12 +206,18 @@ export const DEEP_CLEAN_SCRIPT = [
   'Stop-Service wuauserv -Force; Remove-Item "$env:windir\\SoftwareDistribution\\Download\\*" -Recurse -Force; Start-Service wuauserv',
   'Delete-DeliveryOptimizationCache -Force',
   "Remove-Item \"$env:ProgramData\\Microsoft\\Windows\\WER\\*\" -Recurse -Force",
+  'Clear-DnsClientCache',
+  'Get-Volume -DriveLetter ($env:SystemDrive.TrimEnd(\':\')) | Optimize-Volume -ReTrim',
   'Dism.exe /Online /Cleanup-Image /StartComponentCleanup /Quiet',
 ].join('; ');
 
 export async function freeSpace(drive = (process.env.SystemDrive ?? 'C:') + '\\') {
   const s = await statfs(drive).catch(() => null);
   return s ? s.bavail * s.bsize : null;
+}
+export async function diskSize(drive = (process.env.SystemDrive ?? 'C:') + '\\') {
+  const s = await statfs(drive).catch(() => null);
+  return s ? s.blocks * s.bsize : null;
 }
 /** Lance le nettoyage profond en administrateur (Windows demande l'autorisation) et attend la fin. */
 export function deepClean() {
