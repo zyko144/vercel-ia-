@@ -11,6 +11,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 $o = [ordered]@{}
 $o.cpu = @(Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed,LoadPercentage)
 $o.gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,DriverDate,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate)
+$o.vram = @(Get-ItemProperty 'HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' | Select-Object DriverDesc,'HardwareInformation.qwMemorySize')
 $o.ram = @(Get-CimInstance Win32_PhysicalMemory | Select-Object Capacity,Speed,ConfiguredClockSpeed,Manufacturer,PartNumber,SMBIOSMemoryType)
 $o.board = @(Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product)
 $o.os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,LastBootUpTime
@@ -58,7 +59,8 @@ export function parseDiag(raw, now = Date.now()) {
   return {
     cpu: { name: String(cpu.Name ?? '').replace(/\s+/g, ' ').trim(), cores: num(cpu.NumberOfCores), threads: num(cpu.NumberOfLogicalProcessors), maxMhz: num(cpu.MaxClockSpeed), load: num(cpu.LoadPercentage), temp: thermal.length ? Math.max(...thermal) : null },
     gpus: arr(j.gpu).filter((g) => !/basic|virtual|parsec|remote|meta/i.test(g.Name ?? '')).map((g) => ({
-      name: String(g.Name ?? ''), vram: num(g.AdapterRAM), driver: String(g.DriverVersion ?? ''), driverDate: psDate(g.DriverDate),
+      // AdapterRAM plafonne à 4 Go (champ 32 bits) : la vraie taille est dans le registre du pilote
+      name: String(g.Name ?? ''), vram: num(arr(j.vram).find((v) => String(v.DriverDesc ?? '') === String(g.Name ?? ''))?.['HardwareInformation.qwMemorySize']) ?? (num(g.AdapterRAM) >= 4293918720 ? null : num(g.AdapterRAM)), driver: String(g.DriverVersion ?? ''), driverDate: psDate(g.DriverDate),
       width: num(g.CurrentHorizontalResolution), height: num(g.CurrentVerticalResolution), hz: num(g.CurrentRefreshRate),
     })),
     ram: arr(j.ram).map((m) => ({ size: num(m.Capacity), speed: num(m.Speed), configured: num(m.ConfiguredClockSpeed), maker: String(m.Manufacturer ?? '').trim(), part: String(m.PartNumber ?? '').trim(), type: { 26: 'DDR4', 34: 'DDR5', 24: 'DDR3' }[m.SMBIOSMemoryType] ?? null })),

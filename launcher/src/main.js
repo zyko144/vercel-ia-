@@ -31,7 +31,7 @@ import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { captureDir, captureName } from './core/capture.js';
-import { analyze, defenderRemove, defenderScan, pcDiagnostic, processes } from './core/pcdiag.js';
+import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
 import { cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
 import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
 import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
@@ -442,7 +442,9 @@ ipcMain.handle('pc:snapshot', () => snapshot());
 let diagCache = null;
 async function runDiag(force = false) {
   if (!force && diagCache && Date.now() - diagCache.at < 120_000) return diagCache.data;
-  const [raw, snap] = await Promise.all([pcDiagnostic(), snapshot().catch(() => null)]);
+  // LAUNCHER_DEMO_DIAG : PC d'exemple pour les captures de démonstration (bancs d'essai, site)
+  const demo = process.env.LAUNCHER_DEMO_DIAG ? (await import('node:fs/promises')).readFile(process.env.LAUNCHER_DEMO_DIAG, 'utf8').then((t) => parseDiag(t)) : null;
+  const [raw, snap] = await Promise.all([demo ?? pcDiagnostic(), snapshot().catch(() => null)]);
   if (!raw) return { error: 'Diagnostic disponible sur Windows seulement.' };
   const data = { ...raw, ...analyze(raw, { snap }), snap, at: Date.now() };
   diagCache = { at: Date.now(), data };

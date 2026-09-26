@@ -584,6 +584,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.14.1': [
+    ['🎮', 'Mémoire vidéo exacte', 'Mon PC affiche la vraie mémoire des cartes graphiques de plus de 4 Go (Windows la tronquait).', ['[data-view=pc]']],
+    ['🌐', 'Site du launcher', 'Toutes les fonctions expliquées avec des captures, et la dernière version à télécharger : vercelia.vercel.app/launcher'],
+  ],
   '0.14.0': [
     ['🔬', 'Analyse complète du PC', 'Mon PC › Analyse complète : composants, antivirus complet, programmes louches, fichiers inutiles, benchmark et rapport détaillé.', ['[data-view=pc]']],
     ['⏳', 'Durée de vie des composants', 'Usure réelle des SSD, heures des disques durs, santé de la batterie : avec une estimation en années.'],
@@ -884,8 +888,8 @@ function renderDiag(d) {
   if (!d || d.error) { $('pcComps').innerHTML = `<div class="empty">${esc(d?.error ?? 'Diagnostic impossible.')}</div>`; return; }
   const col = d.score >= 85 ? '#2ee07a' : d.score >= 65 ? '#22d3ee' : d.score >= 45 ? '#f59e0b' : '#ef4444';
   $('pcScore').hidden = false;
-  $('pcScore').innerHTML = `<b class="big" style="color:${col}">${d.score}</b><div><b>Score de santé du PC</b><small class="hint">${esc(d.os.name)} · build ${esc(d.os.build)} · allumé depuis ${d.os.uptimeDays ?? '?'} j${d.board ? ` · carte mère ${esc(d.board)}` : ''}</small></div>`;
-  $('pcComps').innerHTML = d.components.map((c) => `<div class="comp ${c.status}">
+  $('pcScore').innerHTML = `<b class="big" style="color:${col}">${d.score}</b><div><b>Score de santé du PC</b><small class="hint" style="display:block">${esc(d.os.name)} · build ${esc(d.os.build)} · allumé depuis ${d.os.uptimeDays ?? '?'} j${d.board ? ` · carte mère ${esc(d.board)}` : ''}</small></div>`;
+  $('pcComps').innerHTML = d.components.map((c) => `<div class="comp st-${c.status}">
     <div class="ch"><span>${c.icon}</span><div><small>${esc(c.title)}</small><b>${esc(c.name)}</b></div><em class="chip">${STATUS[c.status]}</em></div>
     <ul>${c.specs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
     ${c.life?.pct != null ? `<div class="lifebar"><i style="width:${c.life.pct}%;background-position:${100 - c.life.pct}% 0"></i></div>` : ''}
@@ -1948,7 +1952,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.14.0',
+    version: async () => '0.14.1',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
