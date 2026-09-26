@@ -5,7 +5,6 @@
 // Rien n'est inventé ni dessiné : chaque image proposée est vérifiée avant d'être affichée.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { GoogleGenAI } from '@google/genai';
 import { sameName, steamImages, steamMatch } from './art.js';
 
 export const MODELS = { chat: process.env.GEMINI_CHAT_MODEL || 'gemini-3.5-flash-lite', search: process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.8-flash' };
@@ -22,8 +21,11 @@ export async function geminiKeyFromEnv(dir) {
   return null;
 }
 
-export function createAi(key) {
+export async function createAi(key) {
   if (!key) return null;
+  // Chargé seulement si besoin : sans ce module, le launcher marche quand même (sans IA)
+  const { GoogleGenAI } = await import('@google/genai').catch(() => ({}));
+  if (!GoogleGenAI) return null;
   const ai = new GoogleGenAI({ apiKey: key });
   const ask = async ({ system, text, schema, web = false, model = MODELS.chat }) => {
     const r = await ai.interactions.create({
