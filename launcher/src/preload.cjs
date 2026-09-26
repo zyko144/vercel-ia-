@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('launcher', {
   openLink: (which) => ipcRenderer.invoke('open:link', which),
   reco: () => ipcRenderer.invoke('reco:get'),
   openReco: (steamId) => ipcRenderer.invoke('reco:open', steamId),
+  freeGames: () => ipcRenderer.invoke('free:get'),
+  openFree: (slug) => ipcRenderer.invoke('free:open', slug),
   stats: (period) => ipcRenderer.invoke('stats:get', period),
   nowPlaying: () => ipcRenderer.invoke('media:now'),
   mediaKey: (name) => ipcRenderer.invoke('media:key', name),

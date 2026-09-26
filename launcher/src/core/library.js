@@ -87,7 +87,7 @@ export function playtimeOf(i, store, { total = false, steamAccount = null, accou
     const recent = chosen.reduce((n, t) => n + (t?.recent ?? 0), 0);
     const tracked = store.timeBy?.[i.id] ?? {};
     const seen = Math.max(...Object.values(tracked).map((t) => t.lastPlayed ?? 0), store.time?.[i.id]?.lastPlayed ?? 0, 0);
-    return { minutes: steam.minutes, lastPlayed: Math.max(steam.lastPlayed, seen), recent };
+    return { minutes: steam.minutes + (store.offSteam?.[i.id] ?? 0), lastPlayed: Math.max(steam.lastPlayed, seen), recent };
   }
   const by = store.timeBy?.[i.id] ?? {};
   const legacy = store.time?.[i.id];

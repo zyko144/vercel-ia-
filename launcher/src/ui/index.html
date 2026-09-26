@@ -41,6 +41,8 @@
     <div class="cards" id="topGames"></div>
     <div class="row-head"><h2>Tes applications</h2><small class="hint">Double-clic pour ouvrir</small><button class="seeall" data-go="applis">Voir tout ›</button></div>
     <div class="apps" id="topApps"></div>
+    <div id="freeBlock" hidden><div class="row-head"><h2>Jeux gratuits de la semaine</h2><small class="hint">Epic Games Store · à récupérer, gardés pour toujours</small></div>
+    <div class="recos" id="freeGames"></div></div>
     <div id="recoBlock" hidden><div class="row-head"><h2 id="recoTitle">Recommandés pour toi</h2><small class="hint">Proposés par l’IA d’après tes jeux</small></div>
     <div class="recos" id="recos"></div></div>
   </section>
@@ -127,6 +129,7 @@
     <h2>Paramètres</h2>
     <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
     <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
+    <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher pendant que je joue</label>
     <div class="keybox">
       <b>👤 Comptes de jeu</b>
       <p>Le temps de jeu affiché est celui d’un seul compte. Choisis le tien (les autres comptes du PC ne sont pas comptés).</p>

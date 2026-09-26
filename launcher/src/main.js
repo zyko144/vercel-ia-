@@ -21,6 +21,7 @@ import { steamActions } from './core/steam.js';
 import { createStore } from './core/store.js';
 import { safeGameDir, uninstallFiles } from './core/manage.js';
 import { verifyGame } from './core/verify.js';
+import { epicFreeGames } from './core/freegames.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
@@ -273,7 +274,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
 async function confirm(message, detail) {
@@ -291,6 +292,11 @@ async function runSilentSteam(args) {
   if (!exe || process.platform !== 'win32') return false;
   spawn(exe, ['-silent', ...args], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   return true;
+}
+// Mode jeu : le launcher se range dans la barre des tâches pendant la partie (rien ne tourne à l'écran, zéro gêne)
+function gameMode(item) {
+  if (item.kind !== 'game' || store.data.settings.gameMode === false) return;
+  setTimeout(() => win?.hide(), 1500);
 }
 function remember(id, how) {
   const entry = (store.data.items[id] ??= {});
@@ -338,14 +344,15 @@ async function doAction(id, action) {
         if (!item.source || !['steam', 'epic'].includes(item.source)) {
           const err = await shell.openPath(exe);
           if (err) throw new Error(err);
+          gameMode(item);
           return { ok: true };
         }
-        if (await startDirect(item, exe)) { remember(item.id, 'direct'); return { ok: true, direct: true }; }
+        if (await startDirect(item, exe)) { remember(item.id, 'direct'); gameMode(item); return { ok: true, direct: true }; }
         remember(item.id, 'client'); // ce jeu a besoin de sa plateforme : on ne réessaiera plus en direct
         continue;
       }
-      if (item.source === 'steam' && await runSilentSteam(['-applaunch', item.steamId])) return { ok: true };
-      if (item.source === 'epic') return openLink(epicActions(item.epicKey).launch).then(() => ({ ok: true }));
+      if (item.source === 'steam' && await runSilentSteam(['-applaunch', item.steamId])) { gameMode(item); return { ok: true }; }
+      if (item.source === 'epic') return openLink(epicActions(item.epicKey).launch).then(() => { gameMode(item); return { ok: true }; });
     }
     throw new Error('exécutable introuvable');
   }
@@ -461,6 +468,7 @@ ipcMain.handle('accounts:set', async (_e, patch) => {
 });
 ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
+  if ('gameMode' in patch) store.data.settings.gameMode = Boolean(patch.gameMode);
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   try {
     if ('steamKey' in patch) setSecret('steam', patch.steamKey);
@@ -508,6 +516,16 @@ ipcMain.handle('reco:get', async () => {
 });
 const steamArtUrls = (id) => ({ cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_600x900.jpg`, hero: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_hero.jpg`, header: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`, logo: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/logo.png` });
 ipcMain.handle('reco:open', (_e, steamId) => (/^\d{1,8}$/.test(String(steamId)) ? openLink(`https://store.steampowered.com/app/${steamId}`) : null));
+
+// ---------- Jeux gratuits de la semaine (Epic) : gardés 6 h ----------
+ipcMain.handle('free:get', async () => {
+  const c = store.data.free;
+  if (c && Date.now() - c.at < 6 * 3_600_000 && c.list.length) return c.list;
+  const list = await epicFreeGames().catch(() => []);
+  if (list.length) { store.data.free = { at: Date.now(), list }; store.save(); }
+  return list.length ? list : c?.list ?? [];
+});
+ipcMain.handle('free:open', (_e, slug) => (/^[\w-]{1,120}$/.test(String(slug)) ? openLink(`https://store.epicgames.com/fr/p/${slug}`) : null));
 
 // ---------- Statistiques ----------
 ipcMain.handle('stats:get', (_e, period) => {
