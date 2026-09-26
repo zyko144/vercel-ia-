@@ -31,10 +31,11 @@ import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { captureDir, captureName } from './core/capture.js';
+import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
 import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
 import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
-import { directEnv, insideDir, launchPlan } from './core/direct.js';
+import { directEnv, insideDir, launchPlan, hasAntiCheat } from './core/direct.js';
 import { findItem as findByName, similarity, stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
 import { session } from 'electron';
@@ -42,6 +43,8 @@ import { enrich } from './core/art.js';
 import { startTracker } from './core/tracker.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// Sons des notifications (fenêtre en bas à gauche) : jouables sans clic préalable
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const ICON = path.join(here, 'ui', 'icon.png');
 let win = null;
 let tray = null;
@@ -638,7 +641,9 @@ async function doAction(id, action) {
   if (action === 'launch') {
     // Le jeu seul d'abord (sans Steam / Epic) ; s'il a besoin de sa plateforme, elle est démarrée en arrière-plan
     const memo = store.data.items[item.id]?.launch ?? null;
-    for (const way of launchPlan(item, { direct: store.data.settings.directLaunch !== false, memo })) {
+    const { readdir } = await import('node:fs/promises');
+    const antiCheat = ['steam', 'epic'].includes(item.source) && await hasAntiCheat(item.installDir, readdir);
+    for (const way of launchPlan(item, { direct: store.data.settings.directLaunch !== false, memo, antiCheat })) {
       if (way === 'exe') {
         const exe = item.exe ?? await findExe(item.installDir);
         if (!exe) continue;
@@ -776,6 +781,8 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
   if ('friendNotifs' in patch) store.data.settings.friendNotifs = Boolean(patch.friendNotifs);
+  for (const k of ['sfxOn', 'sfxNotif']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
+  if ('sfxVol' in patch) store.data.settings.sfxVol = Math.max(0, Math.min(100, Math.round(Number(patch.sfxVol) || 0)));
   if ('replay' in patch) { store.data.settings.replay = Boolean(patch.replay); setReplay(store.data.settings.replay).catch(() => {}); }
   if ('sidebar' in patch) {
     const sb = patch.sidebar ?? {};
@@ -950,7 +957,7 @@ function notifSync() {
     return;
   }
   notifWin.setBounds({ x: area.x + 8, y: area.y + area.height - h - 8, width: 360, height: h });
-  notifWin.webContents.send('notif:cards', notifCards.slice(-4));
+  notifWin.webContents.send('notif:cards', notifCards.slice(-4), { sound: store.data.settings.sfxNotif !== false, vol: (store.data.settings.sfxVol ?? 60) / 100 });
   if (!notifWin.isVisible()) notifWin.showInactive();
 }
 function dropCard(id) {
@@ -1516,10 +1523,57 @@ for (const kind of ['inscription', 'connexion']) {
   ipcMain.handle(`account:${kind}`, async (_e, body) => {
     const clean = { pseudo: String(body?.pseudo ?? '').slice(0, 40), email: String(body?.email ?? '').slice(0, 254), motDePasse: String(body?.motDePasse ?? '').slice(0, 128) };
     const r = await api(`/api/compte/${kind}`, { method: 'POST', body: clean }).catch(() => ({ status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }));
-    if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); }
+    if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); setTimeout(() => autoRestore().catch(() => {}), 1500); }
     return { ok: Boolean(r.token), compte: r.compte ?? null, error: r.token ? null : r.error ?? 'Erreur.' };
   });
 }
+// ---------- Sauvegarde en ligne (compte History) : toutes les 30 min, à la fermeture, et restauration sur un nouveau PC ----------
+let lastBackupHash = null;
+async function backupNow(force = false) {
+  const token = secret('account');
+  if (!token) return { ok: false, error: 'Connecte-toi à ton compte History.' };
+  const data = pickBackup(store.data);
+  const json = JSON.stringify(data);
+  const hash = `${json.length}:${json.slice(0, 64)}:${json.slice(-256)}`;
+  if (!force && hash === lastBackupHash) return { ok: true, same: true, at: store.data.backupAt ?? null };
+  const r = await api('/api/compte/sauvegarde', { method: 'POST', token, body: { pc: os.hostname(), data } }).catch(() => ({ status: 0, error: 'Serveur injoignable.' }));
+  if (!r.ok) return { ok: false, error: r.error ?? 'Sauvegarde impossible.' };
+  lastBackupHash = hash;
+  store.data.backupAt = r.at;
+  store.save();
+  return { ok: true, at: r.at };
+}
+async function applyRemote(remote) {
+  const merged = mergeBackup(store.data, remote);
+  for (const [k, v] of Object.entries(merged)) store.data[k] = v;
+  store.save();
+  await remerge();
+  send('lib:update', library());
+  send('cols:update', store.data.collections ?? {});
+}
+async function restoreNow() {
+  const token = secret('account');
+  if (!token) return { ok: false, error: 'Connecte-toi à ton compte History.' };
+  const r = await api('/api/compte/sauvegarde', { token }).catch(() => ({ status: 0 }));
+  if (r.status !== 200) return { ok: false, error: r.error ?? 'Serveur injoignable.' };
+  if (!r.data) return { ok: false, error: 'Aucune sauvegarde sur ton compte pour l’instant.' };
+  await applyRemote(r.data);
+  return { ok: true, at: r.at, pc: r.pc };
+}
+/** Premier lancement (ou réinstallation) : on remet tout de suite la sauvegarde du compte. */
+async function autoRestore() {
+  if (!isFresh(store.data) || store.data.restoredOnce) return;
+  const r = await restoreNow();
+  store.data.restoredOnce = true;
+  store.save();
+  if (r.ok) notify('Sauvegarde retrouvée ☁', `Tes collections, favoris, réglages et heures${r.pc ? ` (depuis ${r.pc})` : ''} sont de retour.`);
+}
+ipcMain.handle('backup:get', () => ({ at: store.data.backupAt ?? null, logged: Boolean(secret('account')) }));
+ipcMain.handle('backup:now', () => backupNow(true));
+ipcMain.handle('backup:restore', () => restoreNow());
+setInterval(() => backupNow().catch(() => {}), 30 * 60_000);
+setTimeout(() => autoRestore().then(() => backupNow()).catch(() => {}), 20_000);
+
 ipcMain.handle('account:logout', async () => {
   const token = secret('account');
   if (token) await api('/api/compte/deconnexion', { method: 'POST', token }).catch(() => {});
@@ -1665,6 +1719,6 @@ async function start() {
   }, 60_000, accountFor, () => pcAway);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
-app.on('before-quit', () => { quitting = true; endBoost({ silent: true }).catch(() => {}); rpc.reset(); });
+app.on('before-quit', () => { quitting = true; backupNow().catch(() => {}); endBoost({ silent: true }).catch(() => {}); rpc.reset(); });
 app.on('window-all-closed', (e) => e.preventDefault());
 

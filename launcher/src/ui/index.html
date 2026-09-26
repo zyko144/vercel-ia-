@@ -14,7 +14,6 @@
   <div class="brandmark"><img src="logo.png" alt="History Launcher"></div>
   <nav id="nav">
     <button data-view="accueil" class="on"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Accueil</button>
-    <button data-view="bibliotheque"><svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 4.5l3.8 1-4 15.4-3.8-1z"/></svg>Bibliothèque</button>
     <button data-view="jeux"><svg viewBox="0 0 24 24"><path d="M7 8h10a5 5 0 0 1 4.6 6.9l-.8 2a2.5 2.5 0 0 1-4.3.6L15 16H9l-1.5 1.5a2.5 2.5 0 0 1-4.3-.6l-.8-2A5 5 0 0 1 7 8zm0 3v2m-1-1h2m7-.5h.01m2 1.5h.01"/></svg>Jeux</button>
     <button data-view="applis"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Applications</button>
     <button data-view="favoris"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9a4.8 4.8 0 0 1 9-3 4.8 4.8 0 0 1 9 3c-2 4.6-9 9-9 9z"/></svg>Favoris</button>
@@ -23,7 +22,6 @@
     <button data-view="amis"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Amis<em class="navcount" id="friendsOnline"></em></button>
     <button data-view="pc"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Mon PC</button>
     <button data-view="optimisation"><svg viewBox="0 0 24 24"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg>Optimisation<em class="navcount warnc" id="optiBadge"></em></button>
-    <button data-view="ia"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M6 6l2 2m8 8 2 2M6 18l2-2m8-8 2-2"/><circle cx="12" cy="12" r="3"/></svg>IA Assistant</button>
   </nav>
   <h5>Plateformes</h5>
   <nav id="platforms" class="platforms"></nav>
@@ -39,6 +37,7 @@
   <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
 
+<div id="ambient" aria-hidden="true"></div>
 <main id="main">
   <section id="view-accueil" class="view on">
     <div class="hero" id="hero"></div>
@@ -222,6 +221,7 @@
   </div>
 </div>
 
+<div id="updScreen" class="updscreen" hidden><div class="updcard"><img src="logo.png" alt=""><h2 id="updTitle">Mise à jour</h2><p id="updText">Téléchargement…</p><div class="updbar"><i id="updFill"></i></div><small id="updPct">0 %</small></div></div>
 <dialog id="chatDlg" class="mdl"><div class="dlg modern chatbox"><div class="mhead"><span class="micon">💬</span><h2 id="chatWho">Message</h2><button type="button" class="fold" id="chatClose" title="Fermer">✕</button></div><div class="chatfil" id="chatFil"></div><form class="chatin" id="chatForm"><input id="chatText" maxlength="500" placeholder="Écris un message…" autocomplete="off"><button class="btn play">Envoyer</button></form></div></dialog>
 <dialog id="modal" class="mdl"><form method="dialog" class="dlg modern" id="modalBox"></form></dialog>
 
@@ -263,25 +263,61 @@
   </form>
 </dialog>
 
-<dialog id="settings">
-  <form method="dialog" class="dlg">
-    <h2>Paramètres</h2>
-    <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
-    <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
-    <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher une fois un jeu lancé (jamais pour les applis)</label>
-    <label class="toggle"><input type="checkbox" id="discordStatus"><span></span>Afficher le jeu en cours sur mon profil Discord</label>
-    <label class="toggle"><input type="checkbox" id="shareActivity"><span></span>Montrer à mes amis History à quoi je joue et mon temps de la semaine</label>
-    <label class="toggle"><input type="checkbox" id="friendNotifs"><span></span>Notifications des amis en bas à gauche (messages, « on joue ? », qui lance un jeu)</label>
-    <label class="toggle"><input type="checkbox" id="replay"><span></span>Replay : garder les 30 dernières secondes avec <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd> (enregistre l’écran en continu, utilise un peu la carte graphique)</label>
-    <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option></select></div>
-    <div class="setrow"><span>Limite de jeu par jour</span><select id="dailyLimit"><option value="0">Aucune</option><option value="60">1 h</option><option value="120">2 h</option><option value="180">3 h</option><option value="240">4 h</option><option value="360">6 h</option></select></div>
-    <div class="setrow"><span>Rappel de pause</span><select id="breakEvery"><option value="0">Jamais</option><option value="45">Toutes les 45 min</option><option value="60">Toutes les heures</option><option value="90">Toutes les 1 h 30</option><option value="120">Toutes les 2 h</option></select></div>
-    <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
-    <div class="row"><button type="button" class="btn" id="openKeys">⌨ Raccourcis clavier</button><button type="button" class="btn ghost" id="openNews2">✨ Quoi de neuf</button></div>
-    <div class="row updrow"><button type="button" class="btn" id="checkUpd">⬆ Rechercher une mise à jour</button><small class="hint" id="updStatus"></small></div>
-    <div class="row end"><button class="btn play">Fermer</button></div>
+<dialog id="settings" class="setdlg">
+  <form method="dialog" class="dlg setbox">
+    <aside class="setnav">
+      <h2>Paramètres</h2>
+      <button type="button" data-pane="general" class="on">⚙ Général</button>
+      <button type="button" data-pane="jeux">🎮 Jeux</button>
+      <button type="button" data-pane="social">👥 Amis & partage</button>
+      <button type="button" data-pane="sons">🔊 Sons</button>
+      <button type="button" data-pane="compte">☁ Compte & sauvegarde</button>
+      <button type="button" data-pane="about">✨ À propos</button>
+      <button class="btn play setclose">Fermer</button>
+    </aside>
+    <div class="setbody">
+    <section class="setpane" data-pane="general">
+      <h3>⚙ Général</h3>
+      <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
+      <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option></select></div>
+      <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
+    </section>
+    <section class="setpane" data-pane="jeux" hidden>
+      <h3>🎮 Jeux</h3>
+      <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
+      <p class="hint sethint">Les jeux avec anti-triche (Rocket League, Rainbow Six…) passent toujours par Steam / Epic.</p>
+      <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher une fois un jeu lancé (jamais pour les applis)</label>
+      <label class="toggle"><input type="checkbox" id="replay"><span></span>Replay : garder les 30 dernières secondes avec <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd> (enregistre l’écran en continu, utilise un peu la carte graphique)</label>
+      <div class="setrow"><span>Limite de jeu par jour</span><select id="dailyLimit"><option value="0">Aucune</option><option value="60">1 h</option><option value="120">2 h</option><option value="180">3 h</option><option value="240">4 h</option><option value="360">6 h</option></select></div>
+      <div class="setrow"><span>Rappel de pause</span><select id="breakEvery"><option value="0">Jamais</option><option value="45">Toutes les 45 min</option><option value="60">Toutes les heures</option><option value="90">Toutes les 1 h 30</option><option value="120">Toutes les 2 h</option></select></div>
+    </section>
+    <section class="setpane" data-pane="social" hidden>
+      <h3>👥 Amis & partage</h3>
+      <label class="toggle"><input type="checkbox" id="shareActivity"><span></span>Montrer à mes amis History à quoi je joue et mon temps de la semaine</label>
+      <label class="toggle"><input type="checkbox" id="friendNotifs"><span></span>Notifications des amis en bas à gauche (messages, « on joue ? », qui lance un jeu)</label>
+      <label class="toggle"><input type="checkbox" id="discordStatus"><span></span>Afficher le jeu en cours sur mon profil Discord</label>
+    </section>
+    <section class="setpane" data-pane="sons" hidden>
+      <h3>🔊 Sons</h3>
+      <label class="toggle"><input type="checkbox" id="sfxOn"><span></span>Sons de l’interface (navigation, lancement d’un jeu, validations)</label>
+      <label class="toggle"><input type="checkbox" id="sfxNotif"><span></span>Son des notifications et des appels</label>
+      <div class="setrow"><span>Volume</span><input type="range" id="sfxVol" min="0" max="100" step="5"></div>
+      <div class="row"><button type="button" class="btn ghost" data-sfxtry="launch">▶ Lancement</button><button type="button" class="btn ghost" data-sfxtry="notif">▶ Notification</button><button type="button" class="btn ghost" data-sfxtry="call">▶ Appel</button></div>
+    </section>
+    <section class="setpane" data-pane="compte" hidden>
+      <h3>☁ Compte & sauvegarde</h3>
+      <p class="hint sethint">Tes collections, favoris, réglages et heures sont sauvegardés sur ton compte History toutes les 30 min et à la fermeture.</p>
+      <div class="row updrow"><button type="button" class="btn" id="backupNow">☁ Sauvegarder maintenant</button><button type="button" class="btn ghost" id="backupRestore">Restaurer</button><small class="hint" id="backupStatus"></small></div>
+    </section>
+    <section class="setpane" data-pane="about" hidden>
+      <h3>✨ À propos</h3>
+      <div class="row updrow"><button type="button" class="btn" id="checkUpd">⬆ Rechercher une mise à jour</button><small class="hint" id="updStatus"></small></div>
+      <div class="row"><button type="button" class="btn" id="openKeys">⌨ Raccourcis clavier</button><button type="button" class="btn ghost" id="openNews2">✨ Quoi de neuf</button></div>
+    </section>
+    </div>
   </form>
 </dialog>
+<script src="sfx.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

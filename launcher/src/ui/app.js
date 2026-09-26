@@ -100,6 +100,9 @@ function renderHero() {
   const a = i.art ?? {};
   const bg = i.details?.background ?? a.hero ?? a.header ?? a.cover ?? null;
   const isApp = i.kind !== 'game';
+  const amb = i.brand?.bg ?? bg ?? a.cover ?? null;
+  $('ambient').style.setProperty('--amb', amb ? url(amb) : 'none');
+  $('ambient').classList.toggle('on', Boolean(amb) && document.body.dataset.ambient !== 'off');
   document.body.dataset.theme = isApp && i.category === 'musique' ? 'musique' : 'jeu';
   const title = i.brand && isApp && brandMark(i, 'happicon') ? brandMark(i, 'happicon') : a.logo ? `<img class="hlogo" src="${esc(a.logo)}" alt="${esc(i.name)}">`
     : isApp && (a.icon || i.iconData) ? `<img class="happicon" src="${esc(a.icon ?? i.iconData)}" alt="">` : `<h1 class="htitle">${esc(i.name)}</h1>`;
@@ -186,6 +189,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx();
 // Fenêtres du launcher (confirmation, saisie) : même style partout, jamais les fenêtres grises de Windows
 const ui = {
   confirm({ title, text = '', ok = 'Confirmer', cancel = 'Annuler', danger = false, icon = '⚠️', list = [] }) {
+    window.sfx?.play('pop');
     return new Promise((resolve) => {
       $('modalBox').innerHTML = `<div class="mhead"><span class="micon ${danger ? 'danger' : ''}">${esc(icon)}</span><h2>${esc(title)}</h2></div>
         ${text ? `<p class="mtext">${esc(text).replace(/\n/g, '<br>')}</p>` : ''}
@@ -435,6 +439,7 @@ $('chatClose').addEventListener('click', () => { $('chatDlg').close(); chatWith 
 $('chatDlg').addEventListener('close', () => { chatWith = null; });
 api.onChatOpen?.((d) => { go('amis'); showFriendTab('history'); setTimeout(() => openChat(d.id), 300); });
 api.onSocial?.((d) => {
+  if ((d.messages ?? []).length && document.hasFocus()) window.sfx?.play('notif');
   for (const m of d.messages ?? []) { if (chatWith?.id === m.from) refreshChat(); else unread[m.from] = (unread[m.from] ?? 0) + 1; }
   if (state.hist && !state.hist.error && d.amis) { state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes }; if (state.view === 'amis' && state.ftab === 'history') renderHistory(); }
   const online = (d.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
@@ -579,6 +584,14 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.12.1': [
+    ['🔊', 'Sons premium', 'Navigation, lancement de jeu, notifications et appels ont leur son (réglable dans Paramètres › Sons).'],
+    ['⚙', 'Paramètres rangés', 'Tout est classé par catégories : Général, Jeux, Amis, Sons, Compte, À propos.'],
+    ['🛡', 'Anti-triche respecté', 'Rocket League, Rainbow Six et les jeux avec Easy Anti-Cheat ou BattlEye passent toujours par Steam / Epic.'],
+    ['⬆', 'Écran de mise à jour', 'La mise à jour s’affiche dans notre fenêtre avec la progression, puis le launcher redémarre tout seul.'],
+    ['☁', 'Sauvegarde en ligne', 'Collections, favoris, réglages et heures sauvegardés sur ton compte, retrouvés sur un autre PC.'],
+    ['🖼', 'Fond animé', 'Le fond prend doucement les couleurs du jeu sélectionné.'],
+  ],
   '0.12.0': [
     ['📸', 'Captures d’écran', 'Ctrl+Alt+S (ou « fais une capture » à l’IA) : rangées dans Vidéos › nom du jeu et visibles dans la fiche du jeu.'],
     ['🎬', 'Replay 30 secondes', 'Active-le dans les Paramètres, puis Ctrl+Alt+R (ou « clip ça ») garde les 30 dernières secondes.'],
@@ -692,11 +705,20 @@ api.onAppUpdate?.((u) => {
     ui.confirm({ title: `Nouvelle version v${u.version} disponible`, text: 'Mettre à jour maintenant ? Le launcher se télécharge puis redémarre tout seul (moins d’une minute). Sinon, elle s’installera à la prochaine fermeture.', ok: '⬆ Mettre à jour maintenant', cancel: 'Plus tard', icon: '⬆' })
       .then((yes) => { api.downloadUpdate(yes); toast(yes ? '⬆ Téléchargement de la mise à jour…' : 'OK : elle s’installera à la prochaine fermeture'); });
   }
-  if (u.state === 'ready' && u.installNow) toast('✓ Mise à jour prête : redémarrage…');
+  // Notre écran de progression (plein écran, verre) quand on a choisi « Mettre à jour maintenant »
+  if (u.installNow && ['progress', 'ready'].includes(u.state)) {
+    $('updScreen').hidden = false;
+    $('updTitle').textContent = `Mise à jour v${u.version ?? ''}`.trim();
+    const pct = u.state === 'ready' ? 100 : u.percent ?? 0;
+    $('updFill').style.width = `${pct}%`;
+    $('updPct').textContent = `${pct} %`;
+    $('updText').textContent = u.state === 'ready' ? 'Installation… le launcher redémarre tout seul.' : 'Téléchargement de la nouvelle version…';
+  }
+  if (u.state === 'error' && u.installNow) $('updScreen').hidden = true;
   if (u.state === 'ready' && !u.installNow && updAsked !== `ready-${u.version}`) {
     updAsked = `ready-${u.version}`;
     ui.confirm({ title: `Mise à jour v${u.version} prête`, text: 'Redémarrer maintenant pour l’installer ? Sinon, elle s’installera toute seule à la prochaine fermeture.', ok: '⬆ Redémarrer maintenant', cancel: 'Plus tard', icon: '⬆' })
-      .then((yes) => { if (yes) api.installUpdate(); });
+      .then((yes) => { if (yes) { $('updScreen').hidden = false; $('updFill').style.width = '100%'; $('updPct').textContent = '100 %'; $('updText').textContent = 'Installation… le launcher redémarre tout seul.'; setTimeout(() => api.installUpdate(), 600); } });
   }
   if (u.state === 'error' && u.installNow) toast(`Mise à jour impossible : ${u.error ?? 'réessaie plus tard'}`);
 });
@@ -1166,6 +1188,7 @@ function showView(name) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === `view-${name}`));
 }
 function go(view) {
+  if (view !== state.view) window.sfx?.play('nav');
   const lists = { bibliotheque: 'tout', jeux: 'jeux', applis: 'applis', favoris: 'favoris' };
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
   if (view === 'ia') { openAssistant(true); document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === state.view || (state.view === 'liste' && false))); return; }
@@ -1309,8 +1332,10 @@ async function act(action) {
   if (!item) return;
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
   const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
+  if (action === 'launch') window.sfx?.play('launch');
   const r = await api.action(item.id, action);
   if (r?.ok) toast(labels[action]);
+  else if (action === 'launch') window.sfx?.play('error');
   else if (r?.error) toast(`Impossible : ${r.error}`);
 }
 
@@ -1456,10 +1481,23 @@ function showKeys(s) {
   $('shareActivity').checked = s.shareActivity !== false;
   $('friendNotifs').checked = s.friendNotifs !== false;
   $('replay').checked = Boolean(s.replay);
+  window.sfx?.set({ on: s.sfxOn !== false, notif: s.sfxNotif !== false, vol: (s.sfxVol ?? 60) / 100 });
+  $('sfxOn').checked = s.sfxOn !== false;
+  $('sfxNotif').checked = s.sfxNotif !== false;
+  $('sfxVol').value = String(s.sfxVol ?? 60);
   $('aiState').textContent = s.gemini ? '● en ligne' : '● hors ligne';
   $('aiState').classList.toggle('on', Boolean(s.gemini));
 }
-$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); $('settings').showModal(); });
+const backupTxt = (at) => (at ? `Dernière sauvegarde : ${new Date(at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Pas encore sauvegardé');
+function showBackup() { api.backupInfo?.().then((b) => { $('backupStatus').textContent = b?.logged ? backupTxt(b.at) : 'Connecte-toi pour sauvegarder en ligne'; }).catch(() => {}); }
+$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); showBackup(); $('settings').showModal(); });
+$('backupNow').addEventListener('click', async () => { const r = await api.backupNow(); toast(r?.ok ? '☁ Sauvegardé sur ton compte' : r?.error ?? 'Impossible'); showBackup(); });
+$('backupRestore').addEventListener('click', async () => {
+  if (!(await ui.confirm({ title: 'Restaurer la sauvegarde ?', text: 'Collections, favoris, réglages et heures de ton compte sont remis sur ce PC (tes heures actuelles sont gardées si elles sont plus grandes).', ok: '☁ Restaurer', icon: '☁' }))) return;
+  const r = await api.backupRestore();
+  toast(r?.ok ? 'Sauvegarde restaurée ✓' : r?.error ?? 'Impossible');
+  if (r?.ok) api.settings().then(showKeys);
+});
 document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); api.openLink?.(b.dataset.link); }));
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
@@ -1468,6 +1506,15 @@ $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: 
 $('discordStatus').addEventListener('change', (e) => api.setSettings({ discordStatus: e.target.checked }));
 $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActivity: e.target.checked }));
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
+document.querySelectorAll('.setnav [data-pane]').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.setnav [data-pane]').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.setpane').forEach((p) => { p.hidden = p.dataset.pane !== b.dataset.pane; });
+  window.sfx?.play('nav');
+}));
+const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxNotif').checked, sfxVol: Number($('sfxVol').value) }; window.sfx?.set({ on: c.sfxOn, notif: c.sfxNotif, vol: c.sfxVol / 100 }); api.setSettings(c); };
+['sfxOn', 'sfxNotif'].forEach((id) => $(id).addEventListener('change', sfxSave));
+$('sfxVol').addEventListener('change', () => { sfxSave(); window.sfx?.play('success'); });
+document.querySelectorAll('[data-sfxtry]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const was = window.sfx.get(); window.sfx.set({ on: true, notif: true }); window.sfx.play(b.dataset.sfxtry); window.sfx.set(was); }));
 $('replay').addEventListener('change', (e) => api.setSettings({ replay: e.target.checked }).then(() => toast(e.target.checked ? '🎬 Replay activé : Ctrl+Alt+R garde les 30 dernières secondes' : 'Replay désactivé')));
 
 // Assistant : bulle en bas à droite, qui s'ouvre et se referme
@@ -1708,7 +1755,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.12.0',
+    version: async () => '0.12.1',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
