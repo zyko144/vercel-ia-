@@ -21,6 +21,7 @@
     <button data-view="stats"><svg viewBox="0 0 24 24"><path d="M5 20V10m5 10V4m5 16v-8m5 8V7"/></svg>Statistiques</button>
     <button data-view="classement"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>Classement</button>
     <button data-view="amis"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Amis<em class="navcount" id="friendsOnline"></em></button>
+    <button data-view="pc"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Mon PC</button>
     <button data-view="ia"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M6 6l2 2m8 8 2 2M6 18l2-2m8-8 2-2"/><circle cx="12" cy="12" r="3"/></svg>IA Assistant</button>
   </nav>
   <h5>Plateformes</h5>
@@ -70,6 +71,30 @@
   <section id="view-amis" class="view">
     <div class="list-head"><h2>Amis Steam</h2><span id="friendsCount"></span><button class="btn" id="friendsRefresh" type="button">↻ Actualiser</button></div>
     <div id="friendsBody"></div>
+  </section>
+
+  <section id="view-pc" class="view">
+    <div class="list-head"><h2>Mon PC</h2><small class="hint">Surveillance en direct · Ctrl+Alt+O : infos par-dessus le jeu</small></div>
+    <div class="gauges" id="pcGauges"></div>
+    <div class="pcgrid">
+      <div class="panel">
+        <h3>⚡ Boost de jeu</h3>
+        <p class="hint">Pendant une partie lancée ici : Windows en « Performances élevées » et les applis cochées sont fermées. Tout est remis à la fin.</p>
+        <label class="toggle"><input type="checkbox" id="boostOn"><span></span>Activer le boost</label>
+        <label class="toggle"><input type="checkbox" id="boostPower"><span></span>Mode d’alimentation « Performances élevées »</label>
+        <label class="toggle"><input type="checkbox" id="boostRestore"><span></span>Rouvrir les applis fermées après la partie</label>
+        <label class="toggle"><input type="checkbox" id="heatAlerts"><span></span>M’alerter si le PC chauffe trop</label>
+        <b class="sub">Fermer pendant la partie</b>
+        <div class="checks" id="boostApps"></div>
+      </div>
+      <div class="panel">
+        <h3>🧹 Nettoyage</h3>
+        <p class="hint">Caches qui se recréent tout seuls. Tes jeux, sauvegardes et réglages ne sont jamais touchés.</p>
+        <button class="btn" id="cleanScan" type="button">Analyser</button>
+        <div class="checks" id="cleanList"></div>
+        <div class="row end"><span id="cleanTotal" class="hint"></span><button class="btn play" id="cleanRun" type="button" hidden>Nettoyer</button></div>
+      </div>
+    </div>
   </section>
 
   <section id="view-classement" class="view">
@@ -137,10 +162,11 @@
     <h2>Raccourcis clavier</h2>
     <div class="keylist">
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>H</kbd></span><span>Afficher / ranger le launcher (partout, même en jeu)</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>O</kbd></span><span>Infos par-dessus le jeu (PC, musique, amis)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>F</kbd></span><span>Rechercher (ou <kbd>/</kbd>)</span></div>
       <div class="krow"><span class="kk"><kbd>Entrée</kbd></span><span>Lancer le jeu sélectionné</span></div>
       <div class="krow"><span class="kk"><kbd>←</kbd><kbd>→</kbd></span><span>Jeu précédent / suivant</span></div>
-      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>1</kbd>…<kbd>8</kbd></span><span>Accueil, Bibliothèque, Jeux, Applis, Favoris, Stats, Classement, Amis</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>1</kbd>…<kbd>9</kbd></span><span>Accueil, Bibliothèque, Jeux, Applis, Favoris, Stats, Classement, Amis (<kbd>9</kbd> : Mon PC)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>K</kbd></span><span>Ouvrir l’assistant IA</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>D</kbd></span><span>Ajouter / retirer des favoris</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>,</kbd></span><span>Paramètres</span></div>

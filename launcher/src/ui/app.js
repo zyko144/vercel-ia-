@@ -201,6 +201,55 @@ function renderFriends() {
 $('friendsRefresh').addEventListener('click', () => loadFriends(true).then(() => toast('Amis actualisés')));
 setInterval(() => { if (state.view === 'amis') loadFriends(); }, 60_000);
 
+// ---------- Mon PC : jauges en direct, boost, nettoyage ----------
+const gb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.round(b / 1e6)} Mo`);
+const gaugeHtml = (label, value, pct, sub = '', hot = false) => `<div class="gauge ${hot ? 'hot' : ''}"><small>${label}</small><b>${value}</b>${pct != null ? `<div class="gbar"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>` : ''}<small>${sub}</small></div>`;
+async function renderPc() {
+  const p = await api.pc?.().catch(() => null);
+  if (!p || state.view !== 'pc') return;
+  const ram = Math.round((100 * p.ram.used) / p.ram.total);
+  $('pcGauges').innerHTML = [
+    gaugeHtml('Processeur', p.cpu.usage != null ? `${p.cpu.usage} %` : '…', p.cpu.usage, esc(p.cpu.temp ? `${p.cpu.temp} °C` : 'Température : lance en admin'), (p.cpu.temp ?? 0) >= 90),
+    gaugeHtml('Mémoire', `${ram} %`, ram, `${gb(p.ram.used)} / ${gb(p.ram.total)}`),
+    gaugeHtml('Carte graphique', p.gpu?.usage != null ? `${p.gpu.usage} %` : 'n/d', p.gpu?.usage, esc(p.gpu?.name ?? '')),
+    gaugeHtml('Temp. graphique', p.gpu?.temp != null ? `${p.gpu.temp} °C` : 'n/d', p.gpu?.temp, p.gpu?.vramTotal ? `Mémoire vidéo ${(p.gpu.vramUsed / 1024).toFixed(1).replace('.', ',')} / ${Math.round(p.gpu.vramTotal / 1024)} Go` : 'NVIDIA seulement', (p.gpu?.temp ?? 0) >= 85),
+  ].join('');
+}
+let pcTimer = null;
+async function openPc() {
+  renderPc();
+  clearInterval(pcTimer);
+  pcTimer = setInterval(() => (state.view === 'pc' ? renderPc() : clearInterval(pcTimer)), 2500);
+  const b = await api.boost?.().catch(() => null);
+  if (!b) return;
+  $('boostOn').checked = b.enabled; $('boostPower').checked = b.power; $('boostRestore').checked = b.restore; $('heatAlerts').checked = b.heatAlerts;
+  $('boostApps').innerHTML = b.apps.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}" ${b.close.includes(a.id) ? 'checked' : ''}>${esc(a.label)}</label>`).join('');
+}
+for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boostRestore', 'restore'], ['heatAlerts', 'heatAlerts']]) {
+  $(id).addEventListener('change', (e) => api.setBoost({ [key]: e.target.checked }).then(() => key === 'enabled' && toast(e.target.checked ? 'Boost activé pour les prochaines parties' : 'Boost désactivé')));
+}
+$('boostApps').addEventListener('change', () => api.setBoost({ close: [...document.querySelectorAll('#boostApps input:checked')].map((i) => i.value) }));
+let cleanItems = [];
+function cleanSum() {
+  const ids = [...document.querySelectorAll('#cleanList input:checked')].map((i) => i.value);
+  const total = cleanItems.filter((c) => ids.includes(c.id)).reduce((n, c) => n + c.bytes, 0);
+  $('cleanTotal').textContent = ids.length ? `${gb(total)} à libérer` : '';
+  $('cleanRun').hidden = !ids.length;
+}
+$('cleanScan').addEventListener('click', async () => {
+  $('cleanScan').textContent = 'Analyse…';
+  cleanItems = (await api.cleanScan?.().catch(() => [])) ?? [];
+  $('cleanScan').textContent = 'Analyser à nouveau';
+  const found = cleanItems.filter((c) => c.bytes > 0).sort((a, b) => b.bytes - a.bytes);
+  $('cleanList').innerHTML = found.length ? found.map((c) => `<label class="check"><input type="checkbox" value="${esc(c.id)}" checked><span>${esc(c.label)}${c.note ? ` <small class="hint">· ${esc(c.note)}</small>` : ''}</span><em>${gb(c.bytes)}</em></label>`).join('') : '<div class="empty">Rien à nettoyer, tout est propre.</div>';
+  cleanSum();
+});
+$('cleanList').addEventListener('change', cleanSum);
+$('cleanRun').addEventListener('click', async () => {
+  const r = await api.cleanRun([...document.querySelectorAll('#cleanList input:checked')].map((i) => i.value));
+  if (r?.ok) { toast(`${gb(r.freed)} libérés`); $('cleanScan').click(); }
+});
+
 function renderFree() {
   const list = state.free.slice(0, 5);
   $('freeBlock').hidden = !list.length;
@@ -372,6 +421,7 @@ function go(view) {
   if (state.view === 'stats') renderStats();
   if (state.view === 'classement') renderRanking();
   if (state.view === 'amis') { renderFriends(); loadFriends(); }
+  if (state.view === 'pc') openPc();
   $('main').scrollTop = 0;
 }
 
@@ -517,7 +567,7 @@ $('q').addEventListener('input', (e) => {
 });
 document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => api.win(b.dataset.win)));
 // ---------- Raccourcis clavier (liste complète : touche « ? ») ----------
-const VIEW_KEYS = ['accueil', 'bibliotheque', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis'];
+const VIEW_KEYS = ['accueil', 'bibliotheque', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis', 'pc'];
 function visibleItems() {
   return [...document.querySelectorAll(state.view === 'liste' ? '#grid [data-id]' : '#topGames [data-id], #topApps [data-id]')].map((el) => state.items.find((i) => i.id === el.dataset.id)).filter(Boolean);
 }
@@ -527,7 +577,7 @@ document.addEventListener('keydown', (e) => {
   if (ctrl && e.key.toLowerCase() === 'f') { e.preventDefault(); $('q').focus(); return; }
   if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); openAssistant(true); return; }
   if (ctrl && e.key === ',') { e.preventDefault(); $('openSettings').click(); return; }
-  if (ctrl && /^[1-8]$/.test(e.key)) { e.preventDefault(); go(VIEW_KEYS[Number(e.key) - 1]); return; }
+  if (ctrl && /^[1-9]$/.test(e.key)) { e.preventDefault(); go(VIEW_KEYS[Number(e.key) - 1]); return; }
   if (ctrl && e.key.toLowerCase() === 'd' && state.sel) {
     e.preventDefault();
     const on = !state.sel.favorite;
@@ -751,6 +801,10 @@ function demoApi() {
       { id64: '76561198000000003', name: 'Sam', avatar: null, online: true, status: 'En ligne', game: null },
       { id64: '76561198000000004', name: 'Zoé', avatar: null, online: false, status: 'Hors ligne', game: null }] }),
     friendAction: async () => ({ ok: true }), openDeal: async () => {},
+    pc: async () => ({ cpu: { usage: 37, temp: null, name: 'AMD Ryzen 7 5800X' }, ram: { used: 11.2e9, total: 32e9 }, gpu: { name: 'NVIDIA GeForce RTX 3070', usage: 92, temp: 71, vramUsed: 6200, vramTotal: 8192 } }),
+    boost: async () => ({ enabled: true, power: true, restore: true, heatAlerts: true, close: ['chrome'], apps: [{ id: 'chrome', label: 'Google Chrome' }, { id: 'edge', label: 'Microsoft Edge' }, { id: 'onedrive', label: 'OneDrive' }, { id: 'office', label: 'Word / Excel / PowerPoint' }] }),
+    setBoost: async (b) => b, cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
+    cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
