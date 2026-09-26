@@ -36,7 +36,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "v${{ steps.v.outputs.version }}" >/dev/null 2>&1; then echo "yes=true" >> "$GITHUB_OUTPUT"; else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
+          if gh release view "v${{ steps.v.outputs.version }}" --json assets -q '.assets[].name' 2>/dev/null | grep -qx latest.yml; then echo "yes=true" >> "$GITHUB_OUTPUT"; else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
 
       - uses: actions/setup-node@v4
         if: steps.exists.outputs.yes == 'false'
@@ -62,5 +62,9 @@ jobs:
           V="${{ steps.v.outputs.version }}"
           git tag "v$V" "$GITHUB_SHA" 2>/dev/null || true
           git push origin "v$V" || true
-          gh release create "v$V" --verify-tag --title "History Launcher $V" --notes "Mise à jour automatique de History Launcher." \
-            dist/*.exe dist/*.exe.blockmap dist/latest.yml
+          FILES=(dist/*.exe dist/*.exe.blockmap dist/latest.yml)
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" "${FILES[@]}" --clobber
+          else
+            gh release create "v$V" --verify-tag --title "History Launcher $V" --notes "Mise à jour automatique de History Launcher." "${FILES[@]}"
+          fi
