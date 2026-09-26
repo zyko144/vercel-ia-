@@ -85,7 +85,7 @@ export function programsFromRegistry(entries) {
     const publisher = String(v.Publisher ?? '');
     const launcher = LAUNCHERS.test(name);
     const game = !launcher && (GAME_PUBLISHERS.test(publisher) || GAME_PATHS.test(`${installDir}\\`) || /^Riot Game /i.test(key.split('\\').pop()));
-    const source = /riot/i.test(publisher) ? 'riot' : /ubisoft/i.test(publisher) ? 'ubisoft' : /electronic arts/i.test(publisher) ? 'ea' : /blizzard/i.test(publisher) ? 'battlenet' : /gog/i.test(publisher) ? 'gog' : 'pc';
+    const source = /rockstar/i.test(publisher) ? 'rockstar' : /riot/i.test(publisher) ? 'riot' : /ubisoft/i.test(publisher) ? 'ubisoft' : /electronic arts/i.test(publisher) ? 'ea' : /blizzard/i.test(publisher) ? 'battlenet' : /gog/i.test(publisher) ? 'gog' : 'pc';
     const item = {
       id: `reg:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, source, kind: launcher ? 'launcher' : game ? 'game' : 'app',
       category: game ? 'jeu' : categoryOf(name), name, publisher, installed: true, installDir,

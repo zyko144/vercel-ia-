@@ -1,29 +1,31 @@
-// Interface du launcher : grille 3D, fiche de l'élément sélectionné, thème qui suit ce qu'on regarde.
+// Interface du launcher : accueil (bannière, plus joués, applis, recommandations), bibliothèque, statistiques,
+// assistant IA et lecteur de musique. Toutes les images sont les images officielles trouvées par le launcher.
 import { filterSort } from '../core/sort.js';
 
 const $ = (id) => document.getElementById(id);
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
-const state = { items: [], sources: {}, sel: null, active: new Set(), view: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' } };
+const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', profile: 'Joueur', music: null, recos: [] };
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Adresse d'image pour un attribut style="…" : entre apostrophes, sans aucun guillemet (rien ne peut sortir de l'attribut)
+const url = (u) => `url('${String(u).replace(/["'\\\n<>]/g, '')}')`;
 const hours = (min) => (min < 60 ? `${Math.round(min)} min` : `${Math.round(min / 60).toLocaleString('fr-FR')} h`);
-const size = (b) => (!b ? '—' : b >= 1e9 ? `${(b / 1e9).toFixed(b >= 1e10 ? 0 : 1).replace('.', ',')} Go` : `${Math.max(1, Math.round(b / 1e6))} Mo`);
+const size = (b) => (!b ? '—' : b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.max(1, Math.round(b / 1e6))} Mo`);
 function ago(t) {
-  if (!t) return 'jamais';
+  if (!t) return 'Jamais';
   const d = (Date.now() - t) / 86_400_000;
-  if (d < 1 / 24) return 'à l’instant';
-  if (d < 1) return `il y a ${Math.round(d * 24)} h`;
-  if (d < 30) return `il y a ${Math.round(d)} j`;
-  if (d < 365) return `il y a ${Math.round(d / 30)} mois`;
-  return `il y a ${Math.round(d / 365)} an${d >= 730 ? 's' : ''}`;
+  if (d < 1 && new Date(t).getDate() === new Date().getDate()) return 'Aujourd’hui';
+  if (d < 2) return 'Hier';
+  if (d < 30) return `Il y a ${Math.round(d)} j`;
+  if (d < 365) return `Il y a ${Math.round(d / 30)} mois`;
+  return `Il y a ${Math.round(d / 365)} an${d >= 730 ? 's' : ''}`;
 }
-// Couleur d'un élément : celle du launcher pour un jeu, celle de la marque ou de la catégorie pour une appli
-const BRANDS = { spotify: '#1ed760', deezer: '#a238ff', discord: '#5865f2', 'obs studio': '#8f7cff', netflix: '#e50914', steam: '#66c0f4', twitch: '#9146ff', whatsapp: '#25d366', telegram: '#2aabee', vlc: '#ff8800' };
+const CLOCK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const BRANDS = { spotify: '#1ed760', deezer: '#a238ff', discord: '#5865f2', 'google chrome': '#fbbc04', chrome: '#fbbc04', 'obs studio': '#8f7cff', netflix: '#e50914', twitch: '#9146ff', whatsapp: '#25d366', telegram: '#2aabee', vlc: '#ff8800', capcut: '#ffffff' };
 const CATEGORY_COLORS = { musique: '#b36bff', video: '#ff4d5e', discussion: '#7b86ff', appli: '#5fe0c8' };
-const colorOf = (item) => (item.kind === 'game' ? state.sources[item.source]?.color : BRANDS[String(item.name).toLowerCase()] ?? CATEGORY_COLORS[item.category]) ?? '#9aa0aa';
-const themeOf = (item) => (item?.kind === 'game' ? 'jeu' : ['musique', 'video', 'discussion'].includes(item?.category) ? item.category : 'appli');
-const KIND_LABEL = { game: 'Jeu', app: 'Application', launcher: 'Launcher' };
+const colorOf = (i) => (i.kind === 'game' ? state.sources[i.source]?.color : BRANDS[String(i.name).toLowerCase()] ?? CATEGORY_COLORS[i.category]) ?? '#9aa0aa';
+const srcIcon = (i) => state.sources[i.source]?.icon;
 
 function toast(text) {
   const t = $('toast');
@@ -33,278 +35,391 @@ function toast(text) {
   toast.timer = setTimeout(() => t.classList.remove('on'), 2600);
 }
 
-// ---------- Images : chaque carte a un fond et le vrai logo ----------
-const url = (u) => `url("${String(u).replace(/["\\\n]/g, '')}")`;
-/**
- * Face d'une carte : jaquette verticale si elle existe ; sinon grand fond flou (image du jeu ou logo de l'appli)
- * avec, par-dessus, le logo officiel du jeu, la bannière ou l'icône de l'appli en grand.
- */
-function face(item, big = false) {
+// ---------- Images officielles : jaquette, sinon logo sur fond, sinon icône de l'appli ----------
+function art(item) {
   const a = item.art ?? {};
-  const bg = a.hero ?? a.header ?? a.cover ?? item.iconData ?? null;
+  const bg = a.hero ?? a.header ?? a.cover ?? null;
   const back = bg ? `<div class="bgl" style="background-image:${url(bg)}"></div>` : '<div class="bgl none"></div>';
-  if (a.cover) {
-    return `${back}<img class="cov" src="${esc(a.cover)}" alt="" loading="${big ? 'eager' : 'lazy'}" data-fallback="1">${fallbackFront(item)}`;
-  }
-  return `${back}${fallbackFront(item, true)}`;
-}
-/** Ce qu'on montre sans jaquette : logo du jeu, sinon bannière, sinon icône de l'appli, sinon initiale. */
-function fallbackFront(item, visible = false) {
-  const a = item.art ?? {};
   const inner = a.logo ? `<img class="logo" src="${esc(a.logo)}" alt="">`
     : a.header ? `<img class="banner" src="${esc(a.header)}" alt="">`
-      : item.iconData || a.icon ? `<img class="appicon" src="${esc(a.icon ?? item.iconData)}" alt="">`
+      : a.icon || item.iconData ? `<img class="appicon" src="${esc(a.icon ?? item.iconData)}" alt="">`
         : `<span class="letter">${esc((item.name ?? '?')[0].toUpperCase())}</span>`;
-  return `<div class="front ${visible ? 'show' : ''}">${inner}</div>`;
+  const cover = a.cover ? `<img class="cov" src="${esc(a.cover)}" alt="" loading="lazy">` : '';
+  return `<div class="art">${back}${cover}<div class="front ${a.cover ? '' : 'show'}">${inner}</div></div>`;
 }
-// Une image qui ne se charge pas : on montre le plan suivant (logo, bannière, icône, initiale)
+// Image introuvable : on passe au plan suivant (logo → bannière → icône → initiale)
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (img.tagName !== 'IMG') return;
-  if (img.classList.contains('cov')) { img.remove(); img.parentElement?.querySelector('.front')?.classList.add('show'); return; }
-  const item = state.items.find((i) => i.id === img.closest('[data-id]')?.dataset.id) ?? state.sel;
-  if (img.classList.contains('herologo')) { img.replaceWith(Object.assign(document.createElement('h1'), { textContent: item?.name ?? '' })); return; }
-  const next = img.classList.contains('logo') && item?.art?.header ? `<img class="banner" src="${esc(item.art.header)}" alt="">`
-    : (img.classList.contains('logo') || img.classList.contains('banner')) && (item?.iconData || item?.art?.icon) ? `<img class="appicon" src="${esc(item.art?.icon ?? item.iconData)}" alt="">`
-      : `<span class="letter">${esc((item?.name ?? '?')[0].toUpperCase())}</span>`;
+  const host = img.closest('[data-id]');
+  const item = state.items.find((i) => i.id === host?.dataset.id) ?? (img.closest('#hero') ? state.sel : null);
+  if (img.classList.contains('cov')) { img.parentElement.querySelector('.front')?.classList.add('show'); img.remove(); return; }
+  if (img.classList.contains('hlogo')) { img.replaceWith(Object.assign(document.createElement('h1'), { className: 'htitle', textContent: item?.name ?? '' })); return; }
+  if (!item || !img.closest('.front')) { img.removeAttribute('src'); img.style.visibility = 'hidden'; return; }
+  const next = img.classList.contains('logo') && item.art?.header ? `<img class="banner" src="${esc(item.art.header)}" alt="">`
+    : (img.classList.contains('logo') || img.classList.contains('banner')) && (item.iconData || item.art?.icon) ? `<img class="appicon" src="${esc(item.art?.icon ?? item.iconData)}" alt="">`
+      : `<span class="letter">${esc((item.name ?? '?')[0].toUpperCase())}</span>`;
   img.outerHTML = next;
 }, true);
 
-// ---------- Rendu ----------
-function renderSources() {
+// ---------- Barre de gauche ----------
+function renderPlatforms() {
   const counts = {};
-  for (const i of state.items) if (!i.hidden) counts[i.source] = (counts[i.source] ?? 0) + 1;
-  $('sources').innerHTML = [`<button data-source="tout" class="${state.view.source === 'tout' ? 'on' : ''}"><i>◈</i>Toutes<em>${state.items.filter((i) => !i.hidden).length}</em></button>`,
-    ...Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<button data-source="${esc(k)}" class="${state.view.source === k ? 'on' : ''}"><i><span class="dot" style="color:${esc(state.sources[k]?.color)};background:${esc(state.sources[k]?.color)}"></span></i>${esc(state.sources[k]?.label ?? k)}<em>${n}</em></button>`)].join('');
+  for (const i of state.items) if (!i.hidden && i.kind === 'game') counts[i.source] = (counts[i.source] ?? 0) + 1;
+  $('platforms').innerHTML = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => {
+    const s = state.sources[k] ?? { label: k, color: '#999' };
+    const logo = s.icon ? `<img src="${esc(s.icon)}" alt="">` : `<span class="pdot" style="background:${esc(s.color)}">${esc(s.label[0])}</span>`;
+    return `<button data-platform="${esc(k)}" class="${state.view === 'liste' && state.list.source === k ? 'on' : ''}">${logo}${esc(s.label)}<em>${n}</em></button>`;
+  }).join('');
 }
 
-function renderGrid() {
-  const list = filterSort(state.items, state.view);
-  const titles = { joues: 'Les plus joués', recents: 'Joués récemment', nom: 'De A à Z', taille: 'Les plus lourds' };
-  $('shelfTitle').textContent = state.view.q ? `Résultats pour « ${state.view.q} »` : titles[state.view.sort];
-  $('count').textContent = `${list.length} élément${list.length > 1 ? 's' : ''}`;
-  $('grid').innerHTML = list.length ? list.map((i, n) => `
-    <div class="card ${i.installed ? '' : 'off'} ${state.sel?.id === i.id ? 'sel' : ''}" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))};animation-delay:${Math.min(n, 30) * 18}ms">
-      <div class="face">${face(i)}</div>
-      <span class="src"></span>${i.favorite ? '<span class="fav">★</span>' : ''}
-      ${state.active.has(i.id) ? '<span class="live livebadge">En cours</span>' : ''}
-      <div class="shade"><b>${esc(i.name)}</b><span>${i.minutes ? hours(i.minutes) : KIND_LABEL[i.kind] ?? ''}</span></div>
-      <div class="shine"></div>
-    </div>`).join('') : '<div class="empty">Rien ici. Change les filtres ou lance une recherche.</div>';
-  if (!state.sel || !list.some((i) => i.id === state.sel.id)) select(list[0] ?? null, false);
-}
+// ---------- Accueil ----------
+const games = () => state.items.filter((i) => i.kind === 'game' && !i.hidden);
+const apps = () => state.items.filter((i) => i.kind !== 'game' && !i.hidden);
 
 function renderHero() {
   const i = state.sel;
   const hero = $('hero');
-  if (!i) { hero.innerHTML = '<div></div><div><h1>Ta bibliothèque est vide</h1><p>Clique sur « Actualiser » pour rechercher tes jeux et tes applis.</p></div>'; return; }
-  const src = state.sources[i.source]?.label ?? 'PC';
-  const playing = state.active.has(i.id);
-  const btn = (action, label, cls = '') => `<button class="btn ${cls}" data-action="${action}">${label}</button>`;
-  const actions = [];
-  if (i.installed) actions.push(btn('launch', i.kind === 'game' ? '▶ Jouer' : '▶ Ouvrir', 'play'));
-  else if (['steam', 'epic'].includes(i.source)) actions.push(btn('install', '⤓ Installer', 'play'));
-  if (i.installed && ['steam', 'epic'].includes(i.source)) actions.push(btn('verify', '✓ Vérifier les fichiers'));
-  if (i.installDir && i.installed) actions.push(btn('folder', '📁 Dossier'));
-  if (i.source === 'steam') actions.push(btn('store', '🛈 Page Steam'));
-  actions.push(`<button class="btn ${i.favorite ? 'on' : ''}" data-set="favorite">${i.favorite ? '★ Favori' : '☆ Favori'}</button>`);
-  actions.push(`<button class="btn" data-set="hidden">${i.hidden ? '◉ Afficher' : '◌ Masquer'}</button>`);
-  if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) actions.push(btn('uninstall', '🗑 Désinstaller', 'danger'));
-  const d = i.details;
-  const title = i.art?.logo ? `<img class="herologo" src="${esc(i.art.logo)}" alt="${esc(i.name)}">` : `<h1>${esc(i.name)}</h1>`;
+  if (!i) { hero.innerHTML = '<h1 class="htitle">Ta bibliothèque se remplit…</h1>'; return; }
+  const a = i.art ?? {};
+  const bg = i.details?.background ?? a.hero ?? a.header ?? a.cover ?? null;
+  const isApp = i.kind !== 'game';
+  document.body.dataset.theme = isApp && i.category === 'musique' ? 'musique' : 'jeu';
+  const title = a.logo ? `<img class="hlogo" src="${esc(a.logo)}" alt="${esc(i.name)}">`
+    : isApp && (a.icon || i.iconData) ? `<img class="happicon" src="${esc(a.icon ?? i.iconData)}" alt="">` : `<h1 class="htitle">${esc(i.name)}</h1>`;
+  const src = state.sources[i.source];
+  const d = i.details ?? {};
+  const ach = d.achievements ? `<dt>Succès</dt><dd>${d.achievements.done} / ${d.achievements.total}</dd>` : '';
+  const menu = [];
+  if (i.installed && ['steam', 'epic'].includes(i.source)) menu.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
+  if (i.installed && i.installDir) menu.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
+  if (i.source === 'steam') menu.push('<button data-action="store">🛈 Page du magasin</button>');
+  menu.push(`<button data-set="favorite">${i.favorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}</button>`);
+  menu.push(`<button data-set="hidden">${i.hidden ? '◉ Afficher' : '◌ Masquer'}</button>`);
+  menu.push('<button data-sheet="1">≡ Fiche complète</button>');
+  if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) menu.push('<button data-action="uninstall" class="danger">🗑 Désinstaller</button>');
+  const main = i.installed ? (isApp ? 'Ouvrir' : 'Jouer') : 'Installer';
   hero.innerHTML = `
-    <div class="cover" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${face(i, true)}</div>
-    <div class="info">
-      <div class="kicker"><span class="dot" style="color:${esc(colorOf(i))};background:${esc(colorOf(i))}"></span>${esc(src)} · ${esc(KIND_LABEL[i.kind] ?? '')}${i.installed ? '' : ' · non installé'}${i.alsoOn?.length ? ` · aussi sur ${i.alsoOn.map((o) => esc(state.sources[o.source]?.label ?? o.source)).join(', ')}` : ''}${playing ? ' · <span class="live">En cours</span>' : ''}</div>
-      ${title}
-      ${d?.genres?.length ? `<div class="chips">${d.genres.map((g) => `<span>${esc(g)}</span>`).join('')}</div>` : ''}
-      ${d?.description ? `<p class="desc">${esc(d.description)}</p>` : ''}
-      <div class="stats">
-        <div class="stat"><b>${hours(i.minutes)}</b><span>${i.kind === 'game' ? 'de jeu' : 'd’utilisation'}</span></div>
-        <div class="stat"><b>${ago(i.lastPlayed)}</b><span>dernière fois</span></div>
-        <div class="stat"><b>${size(i.size)}</b><span>sur le disque</span></div>
-        ${d?.score ? `<div class="stat score"><b>${esc(d.score)}</b><span>Metacritic</span></div>` : ''}
-        ${d?.released ? `<div class="stat"><b>${esc(d.released)}</b><span>sortie</span></div>` : ''}
-        ${d?.developers?.length ? `<div class="stat"><b>${esc(d.developers[0])}</b><span>studio</span></div>` : ''}
-        ${i.version ? `<div class="stat"><b>${esc(i.version)}</b><span>version</span></div>` : ''}
-      </div>
-      <div class="actions">${actions.join('')}</div>
-      ${d?.screenshots?.length ? `<div class="shots">${d.screenshots.map((u) => `<img src="${esc(u)}" alt="" loading="lazy">`).join('')}</div>` : ''}
+    ${bg ? `<div class="hbg" style="background-image:${url(bg)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
+    ${title}
+    <div class="hbottom">
+      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button><div class="menu" id="heroMenu">${menu.join('')}</div></div>
+      <div class="hstat"><small>${CLOCK}${isApp ? 'Temps d’utilisation' : 'Temps de jeu'}</small><b>${hours(i.minutes)}</b></div>
+      <div class="hstat"><small>${CLOCK}Dernière session</small><b>${state.active.has(i.id) ? '<span class="ok">En cours</span>' : ago(i.lastPlayed)}</b></div>
+    </div>
+    <div class="hinfo">
+      <dl>
+        <dt>Plateforme</dt><dd>${src?.icon ? `<img src="${esc(src.icon)}" alt="">` : ''}${esc(src?.label ?? 'PC')}</dd>
+        <dt>Statut</dt><dd>${i.installed ? '<span class="ok">● Installé</span>' : 'Non installé'}</dd>
+        <dt>Taille</dt><dd>${size(i.size)}</dd>
+        ${ach}
+        ${d.developers?.[0] ? `<dt>Studio</dt><dd>${esc(d.developers[0])}</dd>` : ''}
+      </dl>
+      <div class="thumbs">${(d.screenshots ?? []).slice(0, 3).map((s) => `<img src="${esc(s)}" alt="">`).join('')}<button data-sheet="1" title="Fiche complète">•••</button></div>
     </div>`;
-  hero.style.animation = 'none';
-  void hero.offsetWidth; // relance l'animation d'apparition
-  hero.style.animation = '';
 }
 
-function select(item, scroll = true) {
-  state.sel = item;
-  document.body.dataset.theme = themeOf(item);
-  // Couleur du thème : celle du launcher du jeu (bleu Steam, rouge Riot…), celle de la catégorie pour les applis
-  if (item?.kind === 'game') { document.body.style.setProperty('--accent', colorOf(item)); document.body.style.setProperty('--accent-2', shade(colorOf(item))); }
-  else { document.body.style.removeProperty('--accent'); document.body.style.removeProperty('--accent-2'); }
-  const bg = $('bgimg');
-  // Grand fond flou : seulement une vraie image du jeu (une icône d'appli étalée noierait tout dans sa couleur)
-  const img = item?.details?.background ?? item?.art?.hero ?? item?.art?.cover ?? null;
-  bg.classList.toggle('on', Boolean(img));
-  if (img) bg.style.backgroundImage = `url("${img.replace(/"/g, '%22')}")`;
-  renderHero();
-  document.querySelectorAll('.card.sel').forEach((c) => c.classList.remove('sel'));
-  document.querySelector(`.card[data-id="${CSS.escape(item?.id ?? '')}"]`)?.classList.add('sel');
-  if (scroll && item) $('hero').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  // Fiche complète (description, genres, captures…) chargée à la demande
-  if (item?.kind === 'game' && !item.details && api.details && !item.detailsAsked) {
-    item.detailsAsked = true;
-    api.details(item.id).then((d) => {
-      if (!d) return;
-      item.details = d;
-      if (state.sel?.id === item.id) { renderHero(); select(item, false); }
-    }).catch(() => {});
+function card(i, cls = 'gcard') {
+  const live = state.active.has(i.id);
+  const icon = srcIcon(i);
+  return `<div class="${cls} ${i.installed ? '' : 'off'} ${state.sel?.id === i.id ? 'sel' : ''}" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">
+    ${art(i)}${icon ? `<img class="srcicon" src="${esc(icon)}" alt="">` : ''}
+    ${live ? '<span class="badge live">En cours</span>' : i.installed ? '' : '<span class="badge">Non installé</span>'}
+    <div class="meta"><b>${esc(i.name)}</b><small>${CLOCK}${hours(i.minutes)}</small></div></div>`;
+}
+
+function renderHome() {
+  const top = filterSort(games(), { sort: 'joues' }).slice(0, 6);
+  $('topGames').innerHTML = top.length ? top.map((i) => card(i)).join('') : '<div class="empty">Aucun jeu trouvé pour l’instant.</div>';
+  const a = filterSort(apps().filter((i) => i.kind === 'app'), { sort: 'joues' }).slice(0, 6);
+  $('topApps').innerHTML = a.length ? a.map((i) => {
+    const icon = i.art?.icon ?? i.iconData;
+    const status = state.active.has(i.id) ? '<small class="inuse">En cours</small>' : `<small>${i.minutes ? hours(i.minutes) : ago(i.lastPlayed)}</small>`;
+    return `<div class="atile" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${icon ? `<img src="${esc(icon)}" alt="">` : `<span class="ai">${esc(i.name[0])}</span>`}<div><b>${esc(i.name)}</b>${status}</div></div>`;
+  }).join('') : '<div class="empty">Aucune application trouvée.</div>';
+  renderRecos();
+}
+
+function renderRecos() {
+  const list = state.recos;
+  $('recoTitle').textContent = list.some((r) => r.steamId) ? 'Recommandés pour vous' : 'Dans ta bibliothèque';
+  $('recos').innerHTML = list.length ? list.slice(0, 5).map((r, n) => `
+    <div class="rcard" data-reco="${n}">
+      <img src="${esc(r.art?.header ?? r.art?.hero ?? r.art?.cover ?? '')}" alt="">
+      <div class="meta"><b>${esc(r.name)}</b><small>${esc(r.why ?? '')}</small></div>
+    </div>`).join('') : '<div class="empty">Les recommandations arrivent dès que l’IA est disponible.</div>';
+}
+
+// ---------- Bibliothèque ----------
+const TITLES = { bibliotheque: 'Bibliothèque', jeux: 'Jeux', applis: 'Applications', favoris: 'Favoris' };
+function renderList() {
+  const list = filterSort(state.items, state.list);
+  $('listTitle').textContent = state.list.q ? `Résultats pour « ${state.list.q} »` : state.list.source !== 'tout' ? state.sources[state.list.source]?.label ?? 'Plateforme' : TITLES[state.list.kind === 'tout' ? 'bibliotheque' : state.list.kind] ?? 'Bibliothèque';
+  $('count').textContent = `${list.length} élément${list.length > 1 ? 's' : ''}`;
+  $('grid').innerHTML = list.length ? list.map((i) => card(i, 'gridcard')).join('') : '<div class="empty">Rien ici.</div>';
+}
+
+// ---------- Statistiques ----------
+const CATS = [['jeux', 'Jeux', '#ff3d86'], ['applis', 'Applications', '#a855f7'], ['musique', 'Musique', '#6d7cff'], ['autres', 'Autres', '#2ee07a']];
+async function renderStats() {
+  const s = await api.stats(state.period);
+  const total = Object.values(s.split).reduce((a, b) => a + b, 0);
+  let offset = 0;
+  const R = 46;
+  const C = 2 * Math.PI * R;
+  const arcs = CATS.map(([k, , color]) => {
+    const part = total ? s.split[k] / total : 0;
+    const arc = `<circle cx="60" cy="60" r="${R}" stroke="${color}" stroke-width="11" stroke-dasharray="${Math.max(0, part * C - 3)} ${C}" stroke-dashoffset="${-offset * C}" transform="rotate(-90 60 60)" stroke-linecap="round"/>`;
+    offset += part;
+    return part ? arc : '';
+  }).join('');
+  $('donut').innerHTML = `<circle cx="60" cy="60" r="${R}" stroke="rgba(255,255,255,.06)" stroke-width="11"/>${arcs}<text x="60" y="62" text-anchor="middle">${hours(total)}</text><text class="s" x="60" y="76" text-anchor="middle">Temps total</text>`;
+  $('legend').innerHTML = CATS.map(([k, label, color]) => `<div><i style="background:${color}"></i>${label}<span>${total ? Math.round((s.split[k] / total) * 100) : 0} %</span></div>`).join('');
+  state.profile = s.profile || state.profile;
+  $('profileName').textContent = state.profile;
+  $('avatar').textContent = state.profile[0]?.toUpperCase() ?? '?';
+  if (state.view === 'stats') {
+    const max = Math.max(1, ...s.top.map((t) => t.minutes));
+    $('statsBig').innerHTML = s.top.map((t) => `<div class="bar"><b>${esc(t.name)}</b><i style="width:${Math.max(2, (t.minutes / max) * 100)}%"></i><span>${hours(t.minutes)}</span></div>`).join('') || '<div class="empty">Pas encore de temps enregistré.</div>';
   }
 }
-function shade(hex) {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const f = (v) => Math.max(0, Math.round(v * 0.45)).toString(16).padStart(2, '0');
-  return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`;
+
+// ---------- Assistant ----------
+function say(text, who = 'bot') {
+  const div = Object.assign(document.createElement('div'), { className: `msg ${who === 'me' ? 'me' : who === 'wait' ? 'wait' : ''}` });
+  div.textContent = text;
+  $('chat').append(div);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  return div;
+}
+function renderChips() {
+  const top = filterSort(games().filter((i) => i.installed), { sort: 'recents' })[0];
+  const notInstalled = games().find((i) => !i.installed);
+  const chips = [
+    top && ['▶', `Lance ${top.name}`],
+    notInstalled && ['⤓', `Installe ${notInstalled.name}`],
+    top && ['✓', `Vérifie les fichiers de ${top.name}`],
+    ['🗑', 'Quel jeu je pourrais désinstaller ?'],
+    ['▦', 'Montre mes jeux les plus joués'],
+    ['♫', 'Qu’est-ce que j’écoute en ce moment ?'],
+    ['⇅', 'Trie mes jeux par taille'],
+    ['⏸', 'Mets la musique en pause'],
+  ].filter(Boolean);
+  $('chips').innerHTML = chips.map(([ico, t]) => `<button data-ask="${esc(t)}"><i>${ico}</i>${esc(t)}</button>`).join('');
+}
+async function ask(text) {
+  if (!text.trim()) return;
+  say(text, 'me');
+  const wait = say('…', 'wait');
+  const r = await api.ask(text).catch((err) => ({ reply: `Erreur : ${err.message}` }));
+  wait.remove();
+  say(r.reply || 'D’accord.');
+  if (r.action === 'show') go({ jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', bibliotheque: 'bibliotheque' }[r.value] ?? 'bibliotheque');
+  if (r.action === 'sort') { state.list.sort = r.value; $('sort').value = r.value; go('bibliotheque'); }
+  if (r.itemId) { const it = state.items.find((i) => i.id === r.itemId); if (it) select(it); }
+  if (r.action === 'music') setTimeout(refreshMusic, 800);
 }
 
-// ---------- Interactions ----------
-$('grid').addEventListener('click', (e) => {
-  const card = e.target.closest('.card');
-  if (card) select(state.items.find((i) => i.id === card.dataset.id));
-});
-$('grid').addEventListener('dblclick', (e) => {
-  const card = e.target.closest('.card');
-  const item = card && state.items.find((i) => i.id === card.dataset.id);
-  if (item?.installed) act('launch');
-});
-// Inclinaison 3D des cartes sous la souris
-$('grid').addEventListener('mousemove', (e) => {
-  const card = e.target.closest('.card');
-  if (!card) return;
-  const r = card.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width;
-  const y = (e.clientY - r.top) / r.height;
-  card.style.transform = `translateY(-6px) rotateX(${(0.5 - y) * 14}deg) rotateY(${(x - 0.5) * 16}deg) scale(1.04)`;
-  card.style.setProperty('--mx', `${x * 100}%`);
-  card.style.setProperty('--my', `${y * 100}%`);
-});
-$('grid').addEventListener('mouseout', (e) => {
-  const card = e.target.closest('.card');
-  if (card && !card.contains(e.relatedTarget)) card.style.transform = '';
-});
+// ---------- Musique ----------
+async function refreshMusic() {
+  const m = await api.nowPlaying().catch(() => null);
+  state.music = m;
+  $('pTitle').textContent = m?.title ?? (m ? `${m.player} en pause` : 'Aucune musique');
+  $('pArtist').textContent = m?.artist ?? (m ? 'Appuie sur lecture' : 'Lance Spotify ou Deezer');
+  $('pPlay').textContent = m?.playing ? '⏸' : '▶';
+  if (m?.cover) { $('pCover').src = m.cover; $('pCover').style.visibility = ''; } else $('pCover').removeAttribute('src');
+  $('player').classList.toggle('music', Boolean(m?.playing));
+}
+
+// ---------- Navigation ----------
+function showView(name) {
+  state.view = name;
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === `view-${name}`));
+}
+function go(view) {
+  const lists = { bibliotheque: 'tout', jeux: 'jeux', applis: 'applis', favoris: 'favoris' };
+  document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
+  if (view === 'ia') { $('askInput').focus(); return; }
+  if (view in lists) { state.list.kind = lists[view]; state.list.source = 'tout'; showView('liste'); } else showView(view);
+  renderPlatforms();
+  if (state.view === 'liste') renderList();
+  if (state.view === 'stats') renderStats();
+  $('main').scrollTop = 0;
+}
+
+function select(item) {
+  if (!item) return;
+  state.sel = item;
+  if (state.view !== 'accueil') go('accueil');
+  renderHero();
+  renderHome();
+  $('main').scrollTo({ top: 0, behavior: 'smooth' });
+  if (item.kind === 'game' && !item.detailsAsked && api.details) {
+    item.detailsAsked = true;
+    api.details(item.id).then((d) => { if (d) { item.details = d; if (state.sel?.id === item.id) renderHero(); } }).catch(() => {});
+  }
+}
+
+function openSheet(i) {
+  const d = i.details ?? {};
+  const a = i.art ?? {};
+  const bg = d.background ?? a.hero ?? a.header ?? a.cover;
+  $('sheetBody').innerHTML = `
+    <div class="shero" style="background-image:${bg ? url(bg) : 'none'}"></div>
+    <h2>${esc(i.name)}</h2>
+    ${d.genres?.length ? `<div class="chipsline">${d.genres.map((g) => `<span>${esc(g)}</span>`).join('')}</div>` : ''}
+    ${d.description ? `<p>${esc(d.description)}</p>` : '<p class="fine">Pas de description disponible.</p>'}
+    <p class="fine">${[d.developers?.[0] && `Studio : ${esc(d.developers[0])}`, d.released && `Sortie : ${esc(d.released)}`, d.score && `Metacritic : ${esc(d.score)}`, `Temps : ${hours(i.minutes)}`, `Taille : ${size(i.size)}`].filter(Boolean).join(' · ')}</p>
+    ${d.screenshots?.length ? `<div class="shots">${d.screenshots.map((s) => `<img src="${esc(s)}" alt="">`).join('')}</div>` : ''}
+    <div class="acts"><button class="btn" data-close="1">Fermer</button></div>`;
+  $('sheet').showModal();
+}
 
 async function act(action) {
   const item = state.sel;
   if (!item) return;
-  const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name} dans ${item.source === 'epic' ? 'Epic' : 'Steam'}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page Steam ouverte' };
-  if (action === 'store') return api.action(item.id, 'store').then(() => toast(labels.store));
+  const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
   const r = await api.action(item.id, action);
   if (r?.ok) toast(labels[action]);
   else if (r?.error) toast(`Impossible : ${r.error}`);
 }
-$('hero').addEventListener('click', async (e) => {
-  const b = e.target.closest('button');
-  if (!b || !state.sel) return;
-  if (b.dataset.action) return act(b.dataset.action);
-  if (b.dataset.set) {
-    const key = b.dataset.set;
+
+// ---------- Événements ----------
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('button, [data-id], [data-reco]');
+  if (!t) { $('heroMenu')?.classList.remove('on'); return; }
+  if (t.id === 'moreBtn') { $('heroMenu').classList.toggle('on'); return; }
+  $('heroMenu')?.classList.remove('on');
+  if (t.dataset.view) return go(t.dataset.view);
+  if (t.dataset.go) return go(t.dataset.go);
+  if (t.dataset.platform) {
+    document.querySelectorAll('#nav button').forEach((b) => b.classList.remove('on'));
+    state.list = { ...state.list, kind: 'tout', source: t.dataset.platform };
+    showView('liste');
+    renderPlatforms();
+    return renderList();
+  }
+  if (t.dataset.action) return act(t.dataset.action);
+  if (t.dataset.sheet && state.sel) return openSheet(state.sel);
+  if (t.dataset.close) return $('sheet').close();
+  if (t.dataset.set && state.sel) {
+    const key = t.dataset.set;
     const value = !state.sel[key];
     await api.setItem(state.sel.id, { [key]: value });
     state.sel[key] = value;
-    toast(key === 'favorite' ? (value ? 'Ajouté aux favoris' : 'Retiré des favoris') : value ? 'Masqué (visible dans « Masqués »)' : 'De nouveau visible');
-    renderSources();
-    renderGrid();
-    renderHero();
+    toast(key === 'favorite' ? (value ? 'Ajouté aux favoris' : 'Retiré des favoris') : value ? 'Masqué' : 'De nouveau visible');
+    return renderAll();
   }
+  if (t.dataset.ask) return ask(t.dataset.ask);
+  if (t.dataset.key) { await api.mediaKey(t.dataset.key); setTimeout(refreshMusic, 700); return; }
+  if (t.dataset.inst) { document.querySelectorAll('#installed button').forEach((x) => x.classList.toggle('on', x === t)); state.list.installed = t.dataset.inst; return renderList(); }
+  if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
+  if (t.dataset.reco !== undefined) {
+    const r = state.recos[Number(t.dataset.reco)];
+    if (r?.itemId) return select(state.items.find((i) => i.id === r.itemId));
+    if (r?.steamId) return api.openReco(r.steamId).then(() => toast('Page Steam ouverte'));
+  }
+  if (t.dataset.id) select(state.items.find((i) => i.id === t.dataset.id));
+});
+document.addEventListener('dblclick', (e) => {
+  const t = e.target.closest('[data-id]');
+  const item = t && state.items.find((i) => i.id === t.dataset.id);
+  if (item?.installed) { state.sel = item; act('launch'); }
+});
+$('askForm').addEventListener('submit', (e) => { e.preventDefault(); const v = $('askInput').value; $('askInput').value = ''; ask(v); });
+$('sort').addEventListener('change', (e) => { state.list.sort = e.target.value; renderList(); });
+$('q').addEventListener('input', (e) => {
+  state.list.q = e.target.value.trim();
+  if (state.list.q && state.view !== 'liste') { state.list.kind = 'tout'; state.list.source = 'tout'; showView('liste'); }
+  renderList();
+});
+document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => api.win(b.dataset.win)));
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'f') { e.preventDefault(); $('q').focus(); }
+  if (e.key === 'Enter' && document.activeElement.tagName !== 'INPUT' && state.sel?.installed) act('launch');
 });
 
-const setView = (patch) => { Object.assign(state.view, patch); renderSources(); renderGrid(); };
-$('kinds').addEventListener('click', (e) => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  document.querySelectorAll('#kinds button').forEach((x) => x.classList.toggle('on', x === b));
-  setView({ kind: b.dataset.kind });
-});
-$('sources').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setView({ source: b.dataset.source }); });
-$('installed').addEventListener('click', (e) => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  document.querySelectorAll('#installed button').forEach((x) => x.classList.toggle('on', x === b));
-  setView({ installed: b.dataset.inst });
-});
-$('sort').addEventListener('change', (e) => setView({ sort: e.target.value }));
-$('q').addEventListener('input', (e) => setView({ q: e.target.value.trim() }));
-document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => api.win(b.dataset.win)));
-$('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }).then(() => toast(e.target.checked ? 'S’ouvrira au démarrage du PC' : 'Ne s’ouvrira plus au démarrage')));
+// Réglages
 function showKeys(s) {
   $('autostart').checked = Boolean(s.autostart);
-  $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée : tous tes jeux Steam sont affichés.' : 'Pas de clé : seuls les jeux installés ou déjà joués sont affichés.';
-  $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée : les images arrivent en arrière-plan.' : '';
+  $('geminiState').textContent = s.gemini ? '✅ IA active.' : 'Pas de clé trouvée : l’assistant et la recherche d’images par l’IA sont en pause.';
+  $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée.' : 'Sans clé : jeux installés ou déjà joués seulement.';
+  $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée.' : 'Facultatif : l’IA cherche déjà les images manquantes.';
+  $('aiState').textContent = s.gemini ? '● en ligne' : '● hors ligne';
+  $('aiState').classList.toggle('on', Boolean(s.gemini));
 }
 $('openSettings').addEventListener('click', () => { api.settings().then(showKeys); $('settings').showModal(); });
-document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', () => api.openLink?.(b.dataset.link)));
-$('saveKeys').addEventListener('click', async () => {
+document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); api.openLink?.(b.dataset.link); }));
+$('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
+$('saveKeys').addEventListener('click', async (e) => {
+  e.stopPropagation();
   const patch = {};
-  if ($('steamKey').value.trim()) patch.steamKey = $('steamKey').value.trim();
-  if ($('gridKey').value.trim()) patch.gridKey = $('gridKey').value.trim();
+  for (const id of ['steamKey', 'gridKey', 'geminiKey']) if ($(id).value.trim()) patch[id] = $(id).value.trim();
   if (!Object.keys(patch).length) return toast('Colle une clé d’abord');
   const s = await api.setSettings(patch);
-  $('steamKey').value = '';
-  $('gridKey').value = '';
+  ['steamKey', 'gridKey', 'geminiKey'].forEach((id) => { $(id).value = ''; });
   showKeys(s);
   if (s.error) return toast(`Clé refusée : ${s.error}`);
-  toast('Clés enregistrées, recherche en cours…');
-  load(true);
-});
-api.onUpdate?.(({ items, sources }) => {
-  const sel = state.sel?.id;
-  const details = new Map(state.items.filter((i) => i.details).map((i) => [i.id, i.details]));
-  state.items = items.map((i) => ({ ...i, details: i.details ?? details.get(i.id) ?? null }));
-  state.sources = sources;
-  state.sel = state.items.find((i) => i.id === sel) ?? state.sel;
-  renderSources();
-  renderGrid();
-  renderHero();
-});
-$('rescan').addEventListener('click', () => load(true));
-// Raccourcis : Ctrl+F pour chercher, Entrée pour lancer
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey && e.key === 'f') || (e.key === '/' && document.activeElement !== $('q'))) { e.preventDefault(); $('q').focus(); }
-  if (e.key === 'Enter' && document.activeElement !== $('q') && state.sel?.installed) act('launch');
+  toast('Clés enregistrées');
+  load();
 });
 
-api.onActive?.((ids) => {
-  state.active = new Set(ids);
-  for (const i of state.items) if (state.active.has(i.id)) { i.minutes += 1; i.lastPlayed = Date.now(); }
-  renderGrid();
+// ---------- Données ----------
+function renderAll() {
+  renderPlatforms();
   renderHero();
-});
-
-async function load(again = false) {
-  if (again) toast('Recherche des jeux et applis…');
-  const { items, sources } = await api.scan();
-  state.items = items;
+  renderHome();
+  renderChips();
+  if (state.view === 'liste') renderList();
+}
+function applyLibrary({ items, sources }) {
+  const keep = new Map(state.items.map((i) => [i.id, i]));
+  state.items = items.map((i) => ({ ...i, details: i.details ?? keep.get(i.id)?.details ?? null, detailsAsked: keep.get(i.id)?.detailsAsked }));
   state.sources = sources;
-  renderSources();
-  renderGrid();
-  if (again) toast(`${items.length} éléments trouvés`);
+  const selId = state.sel?.id;
+  state.sel = state.items.find((i) => i.id === selId) ?? filterSort(games().filter((i) => i.installed), { sort: 'recents' })[0] ?? filterSort(games(), { sort: 'joues' })[0] ?? null;
+}
+async function load() {
+  applyLibrary(await api.scan());
+  renderAll();
+  if (state.sel && !state.sel.detailsAsked) select(state.sel);
+  api.reco?.().then((r) => { state.recos = r ?? []; renderRecos(); }).catch(() => {});
+}
+api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
+api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(); });
+api.settings().then(showKeys);
+say('Salut ! 👋\nJe peux lancer un jeu, en installer un, vérifier ses fichiers, trier ta bibliothèque, piloter ta musique et répondre à tes questions.');
+load().then(() => {
+  renderStats();
   // Aperçu : #sel=Nom pour ouvrir directement un élément
   const wanted = !window.launcher && decodeURIComponent(location.hash.replace(/^#sel=/, ''));
-  if (wanted) select(state.items.find((i) => i.name === wanted) ?? state.sel, false);
-}
+  if (wanted) select(state.items.find((i) => i.name === wanted) ?? state.sel);
+});
+refreshMusic();
+setInterval(refreshMusic, 5000);
+setInterval(renderStats, 60_000);
 
-api.settings().then(showKeys);
-load();
-
-// ---------- Aperçu hors Electron ----------
+// ---------- Aperçu hors Electron (données d'exemple, images locales du dossier demo/) ----------
 function demoApi() {
-  const steam = (id, name, minutes, days, gb) => ({ id: `steam:${id}`, source: 'steam', kind: 'game', name, installed: gb > 0, installDir: 'C:\\Steam', size: gb * 1e9, minutes, lastPlayed: Date.now() - days * 86_400_000, steamId: String(id),
-    art: { cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_600x900.jpg`, hero: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_hero.jpg`, header: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg` } });
-  const app = (name, category, minutes, source = 'pc', kind = 'app') => ({ id: `reg:${name}`, source, kind, category, name, installed: true, installDir: 'C:\\Apps', size: 3e8, minutes, lastPlayed: Date.now() - 3_600_000, art: {}, uninstallCmd: 'x' });
-  const items = [steam(730, 'Counter-Strike 2', 12000, 0.2, 35), steam(1086940, "Baldur's Gate 3", 4300, 3, 150), steam(1245620, 'ELDEN RING', 6100, 12, 60), steam(271590, 'Grand Theft Auto V', 900, 400, 0), steam(1091500, 'Cyberpunk 2077', 2500, 40, 70), steam(252490, 'Rust', 800, 90, 30),
-    app('Spotify', 'musique', 20000), app('Discord', 'discussion', 15000), app('VALORANT', 'jeu', 7000, 'riot', 'game'), app('OBS Studio', 'video', 600), app('Deezer', 'musique', 300)];
+  const img = (n) => `demo/${n}`;
+  const game = (id, name, source, minutes, days, gb, a) => ({ id, source, kind: 'game', name, installed: gb > 0, installDir: 'C:\\Jeux', size: gb * 1e9, minutes, lastPlayed: Date.now() - days * 86_400_000, art: a });
+  const app = (name, category, minutes, icon) => ({ id: `reg:${name}`, source: 'pc', kind: 'app', category, name, installed: true, installDir: 'C:\\Apps', size: 3e8, minutes, lastPlayed: Date.now() - 3_600_000, art: {}, iconData: icon, uninstallCmd: 'x' });
+  const items = [
+    game('steam:271590', 'Grand Theft Auto V', 'steam', 25680, 0, 108.7, { cover: img('c1.jpg'), hero: img('h1.jpg'), logo: img('l1.png') }),
+    game('epic:Fortnite', 'Fortnite', 'epic', 18720, 1, 40, { cover: img('c2.jpg'), hero: img('h2.jpg') }),
+    game('reg:cod', 'Call of Duty', 'pc', 17040, 3, 120, { cover: img('c3.jpg') }),
+    game('epic:rl', 'Rocket League', 'epic', 11880, 6, 25, { cover: img('c4.jpg') }),
+    game('reg:valorant', 'VALORANT', 'riot', 10560, 2, 30, { hero: img('h2.jpg'), logo: img('l1.png') }),
+    game('steam:359550', 'Rainbow Six Siege', 'steam', 9600, 9, 60, { cover: img('c1.jpg') }),
+    app('Spotify', 'musique', 2418, img('i1.png')), app('Discord', 'discussion', 900, img('i2.png')), app('Google Chrome', 'appli', 600, img('i3.png')), app('OBS Studio', 'video', 480, null),
+  ];
   return {
-    scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4' }, riot: { label: 'Riot', color: '#ff4655' }, pc: { label: 'PC', color: '#9aa0aa' } } }),
-    action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true }), setSettings: async (s) => s, win: () => {},
+    scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', icon: img('i2.png') }, epic: { label: 'Epic Games', color: '#e6e6e6' }, riot: { label: 'Riot', color: '#ff4655' }, pc: { label: 'PC', color: '#9aa0aa' } } }),
+    action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
+    details: async () => ({ developers: ['Rockstar North'], screenshots: [img('h1.jpg'), img('c2.jpg'), img('h2.jpg')], achievements: { done: 45, total: 77 } }),
+    reco: async () => [1, 2, 3, 4, 5].map((n) => ({ name: `Jeu recommandé ${n}`, why: 'Même style que GTA V', steamId: String(n), art: { header: img(n % 2 ? 'h1.jpg' : 'h2.jpg') } })),
+    stats: async () => ({ split: { jeux: 1814, applis: 454, musique: 151, autres: 101 }, top: items.map((i) => ({ name: i.name, minutes: i.minutes })), profile: 'Noam' }),
+    nowPlaying: async () => ({ player: 'Spotify', artist: 'Bir Hakeim', title: 'Cherry Pie', playing: true, cover: img('c4.jpg') }),
+    mediaKey: async () => true, ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }

@@ -12,6 +12,9 @@ import { parseRegQuery, programsFromRegistry } from '../src/core/registry.js';
 import { filterSort, findExe, merge, scanAll } from '../src/core/library.js';
 import { activeItems } from '../src/core/tracker.js';
 import { enrich, sameName } from '../src/core/art.js';
+import { aiFindArt, geminiKeyFromEnv } from '../src/core/ai.js';
+import { parseTitle } from '../src/core/media.js';
+import { dayKey, periodStats, statCategory } from '../src/core/tracker.js';
 import { ownedSteamGames, steamDetails } from '../src/core/steam.js';
 
 let passed = 0;
@@ -218,6 +221,47 @@ await check('Steam : jeux possédés via la clé d’API, fiche complète nettoy
   const d = await steamDetails('359550', web);
   assert.deepEqual(d.genres, ['Action']);
   assert.deepEqual(d.screenshots, ['s1.jpg']);
+});
+
+await check('IA images : numéro Steam accepté seulement si Steam confirme le jeu', async () => {
+  const fakeAi = (answer) => ({ ask: async () => answer });
+  const good = await aiFindArt(fakeAi({ steamAppId: '359550', officialName: 'Rainbow Six Siege', cover: '', hero: '', logo: '' }), 'Rainbow Six Siege', web);
+  assert.equal(good.steamId, '359550');
+  assert.match(good.art.logo, /359550\/logo\.png/);
+  const wrong = await aiFindArt(fakeAi({ steamAppId: '999', officialName: 'Jeu inventé', cover: 'https://exemple.test/pas-une-image.html', hero: '', logo: '' }), 'Jeu inventé', async (u) => (u.includes('storesearch') ? { ok: true, json: async () => ({ items: [] }) } : { ok: true, status: 200, headers: new Map([['content-type', 'text/html']]) }));
+  assert.equal(wrong, null, 'numéro non confirmé et adresse qui n’est pas une image : rien');
+});
+
+await check('IA images : adresses gardées seulement si ce sont de vraies images', async () => {
+  const fakeAi = { ask: async () => ({ steamAppId: '', officialName: 'VALORANT', cover: 'https://cdn.exemple/valo.jpg', hero: 'http://pas-https/x.jpg', logo: 'https://cdn.exemple/logo.png' }) };
+  const r = await aiFindArt(fakeAi, 'VALORANT', async (u) => ({ ok: true, status: 206, headers: new Map([['content-type', u.endsWith('.jpg') ? 'image/jpeg' : 'image/png']]) }));
+  assert.equal(r.art.cover, 'https://cdn.exemple/valo.jpg');
+  assert.equal(r.art.logo, 'https://cdn.exemple/logo.png');
+  assert.equal(r.art.hero, undefined, 'http refusé');
+});
+
+await check('clé Gemini lue dans le .env du bot (jamais le token Discord)', async () => {
+  const d = path.join(T, 'bot', 'launcher');
+  put(path.join(T, 'bot', '.env'), `DISCORD_TOKEN=abc\nGEMINI_API_KEY=${'T'.repeat(24)}.abcdef.${'x'.repeat(27)},AIzaCleGemini1234567890123456789012345\n`);
+  mkdirSync(d, { recursive: true });
+  assert.equal(await geminiKeyFromEnv(d), 'AIzaCleGemini1234567890123456789012345');
+});
+
+await check('musique : titre de la fenêtre Spotify / Deezer, pause reconnue', async () => {
+  assert.deepEqual(parseTitle('Spotify', 'Bir Hakeim - Cherry Pie'), { artist: 'Bir Hakeim', title: 'Cherry Pie' });
+  assert.deepEqual(parseTitle('Deezer', 'Djadja - Aya Nakamura'), { title: 'Djadja', artist: 'Aya Nakamura' });
+  assert.equal(parseTitle('Spotify', 'Spotify Premium'), null);
+});
+
+await check('statistiques : jeux / applis / musique / autres, sur 7, 30 ou 365 jours', async () => {
+  assert.equal(statCategory({ kind: 'game' }), 'jeux');
+  assert.equal(statCategory({ kind: 'app', category: 'musique' }), 'musique');
+  assert.equal(statCategory({ kind: 'app', category: 'appli' }), 'applis');
+  assert.equal(statCategory({ kind: 'app', category: 'discussion' }), 'autres');
+  const now = Date.parse('2026-09-26T12:00:00Z');
+  const days = { [dayKey(now)]: { jeux: 60, musique: 30 }, [dayKey(now - 10 * 86_400_000)]: { jeux: 100 } };
+  assert.deepEqual(periodStats(days, 7, now), { jeux: 60, applis: 0, musique: 30, autres: 0 });
+  assert.equal(periodStats(days, 30, now).jeux, 160);
 });
 
 console.log(`\n${passed} vérifications passées.`);

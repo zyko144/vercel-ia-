@@ -18,8 +18,18 @@
   "build": {
     "appId": "fr.historyia.launcher",
     "productName": "History Launcher",
-    "files": ["src/**/*"],
-    "win": { "target": "nsis" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+    "files": [
+      "src/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "@google/genai": "^2.22.0"
   }
 }
