@@ -1,5 +1,5 @@
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, screen, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -30,6 +30,7 @@ import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
+import { scanFivem } from './core/fivem.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { findItem as findByName, similarity, stripWake, understand } from './core/commands.js';
@@ -231,8 +232,9 @@ async function remerge() {
 
 async function scan() {
   await refreshAccounts();
-  const [found, xbox] = await Promise.all([scanAll({}, { steamApiKey: secret('steam') }), scanXbox().catch(() => [])]);
-  raw = [...found, ...xbox, ...Object.values(store.data.custom ?? {}).map(customItem)];
+  const [found, xbox, fivem] = await Promise.all([scanAll({}, { steamApiKey: secret('steam') }), scanXbox().catch(() => []), scanFivem(undefined, store.data.fivemSessions ?? []).catch(() => ({ item: null }))]);
+  if (fivem.item) store.data.fivemSessions = fivem.sessions; // sessions gardées même quand FiveM efface ses vieux journaux
+  raw = [...found.filter((i) => !(fivem.item && /^fivem$/i.test(i.name ?? ''))), ...xbox, ...(fivem.item ? [fivem.item] : []), ...Object.values(store.data.custom ?? {}).map(customItem)];
   await fillSteamNames(raw).catch(() => {});
   await remerge();
   enrichInBackground().catch(() => {});
@@ -309,7 +311,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|fivem:\/\/connect\/cfx\.re\/join\/[a-z0-9]{4,10}|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
 // Confirmation dans une fenêtre du launcher (même style que le reste), réponse renvoyée par l'interface
@@ -359,6 +361,7 @@ function hideWhenPlaying(item) {
 }
 
 // ---------- Boost : performances élevées + applis choisies fermées pendant la partie, puis tout est remis ----------
+let pcAway = false;
 let playSession = null;
 let lastActive = { ids: [], at: 0 };
 // Partie en cours : lancée par le launcher, sinon repérée par le suivi du temps (dans les 2 dernières minutes)
@@ -1316,8 +1319,31 @@ ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; s
 
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
+ipcMain.handle('fivem:join', (_e, code) => { const c = String(code ?? '').trim().toLowerCase().replace(/^(https?:\/\/)?(cfx\.re\/join\/)?/, ''); return /^[a-z0-9]{4,10}$/.test(c) ? openLink(`fivem://connect/cfx.re/join/${c}`).then(() => ({ ok: true })) : { ok: false, error: 'Code de serveur invalide (ex. cfx.re/join/abc123).' }; });
 ipcMain.handle('stats:game', (_e, id) => itemHistory(store.data.days, String(id), 30));
 ipcMain.handle('app:version', () => app.getVersion());
+
+// ---------- Mises à jour automatiques (version installée) : téléchargées en fond depuis les versions publiées sur GitHub ----------
+let updater = null;
+let updateReady = null;
+async function startUpdater() {
+  if (!app.isPackaged) return; // version « développeur » (.bat) : c'est git qui met à jour
+  const mod = await import('electron-updater').catch(() => null);
+  updater = mod?.default?.autoUpdater ?? mod?.autoUpdater ?? null;
+  if (!updater) return;
+  updater.autoDownload = true;
+  updater.autoInstallOnAppQuit = true; // « Plus tard » : installée toute seule à la fermeture
+  updater.logger = null;
+  updater.on('update-available', (info) => send('update:state', { state: 'download', version: info.version }));
+  updater.on('download-progress', (p) => send('update:state', { state: 'progress', percent: Math.round(p.percent) }));
+  updater.on('update-downloaded', (info) => { updateReady = info.version; send('update:state', { state: 'ready', version: info.version }); });
+  updater.on('error', (err) => fatalLog(err));
+  const check = () => updater.checkForUpdates().catch((err) => fatalLog(err));
+  setTimeout(check, 20_000);
+  setInterval(check, 3 * 3_600_000);
+}
+ipcMain.handle('update:get', () => ({ ready: updateReady, packaged: app.isPackaged }));
+ipcMain.handle('update:install', () => { if (updater && updateReady) { quitting = true; updater.quitAndInstall(false, true); return true; } return false; });
 ipcMain.handle('app:log', async () => {
   const file = path.join(app.getPath('userData'), 'erreurs.log');
   const { stat } = await import('node:fs/promises');
@@ -1345,6 +1371,12 @@ async function start() {
   applyAutostart();
   createWindow();
   createTray();
+  startUpdater().catch((err) => fatalLog(err));
+  // Temps de jeu réel : rien n'est compté quand le PC est verrouillé ou en veille
+  powerMonitor.on('lock-screen', () => { pcAway = true; });
+  powerMonitor.on('unlock-screen', () => { pcAway = false; });
+  powerMonitor.on('suspend', () => { pcAway = true; });
+  powerMonitor.on('resume', () => { pcAway = false; });
   // Raccourci global : Ctrl+Alt+H affiche ou range le launcher, même en jeu
   globalShortcut.register('CommandOrControl+Alt+O', toggleOverlay);
   // Recherche rapide depuis n'importe où : le launcher s'ouvre directement sur la barre de recherche
@@ -1357,7 +1389,7 @@ async function start() {
     const g = items.find((i) => ids.includes(i.id) && i.kind === 'game');
     if (g && detected?.id !== g.id) detected = { id: g.id, name: g.name, start: Date.now() - 60_000 };
     win?.webContents.send('lib:active', ids);
-  }, 60_000, accountFor);
+  }, 60_000, accountFor, () => pcAway);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
 app.on('before-quit', () => { quitting = true; endBoost({ silent: true }).catch(() => {}); rpc.reset(); });

@@ -23,6 +23,7 @@ export const SOURCES = {
   gog: { label: 'GOG', color: '#b44fe0', logo: 'brands/gogdotcom.svg', bg: '#86328a' },
   roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' },
   rockstar: { label: 'Rockstar', color: '#fcaf17', logo: 'brands/rockstargames.svg', bg: '#e59a00' },
+  fivem: { label: 'FiveM', color: '#f40552', logo: 'brands/fivem.svg', bg: '#f40552' },
   xbox: { label: 'Xbox', color: '#107c10', bg: '#107c10' },
   custom: { label: 'Ajoutés', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#3a4150' },
   pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' },
@@ -90,6 +91,11 @@ export function playtimeOf(i, store, { total = false, steamAccount = null, accou
     const tracked = store.timeBy?.[i.id] ?? {};
     const seen = Math.max(...Object.values(tracked).map((t) => t.lastPlayed ?? 0), store.time?.[i.id]?.lastPlayed ?? 0, 0);
     return { minutes: steam.minutes + (store.offSteam?.[i.id] ?? 0), lastPlayed: Math.max(steam.lastPlayed, seen), recent };
+  }
+  // FiveM : temps tiré de ses journaux de session (déjà complet, on n'ajoute pas le suivi pour ne rien compter deux fois)
+  if (i.timeFromLogs) {
+    const seen = Math.max(...Object.values(store.timeBy?.[i.id] ?? {}).map((t) => t.lastPlayed ?? 0), 0);
+    return { minutes: i.minutes ?? 0, lastPlayed: Math.max(i.lastPlayed ?? 0, seen) };
   }
   const by = store.timeBy?.[i.id] ?? {};
   const legacy = store.time?.[i.id];

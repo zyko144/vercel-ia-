@@ -21,13 +21,22 @@ export async function runningPaths(maxAgeMs = 8000) {
 
 /** Les éléments en cours d'utilisation (id), d'après la liste des exécutables ouverts. */
 export function activeItems(items, paths) {
-  const active = new Set();
-  for (const item of items) {
+  // Chaque programme ouvert compte pour UN seul élément : l'exécutable exact, sinon le dossier le plus précis
+  // (ex. un jeu installé dans le dossier d'un launcher ne crédite pas aussi le launcher).
+  const prepared = items.map((item) => {
     const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
-    const exe = String(item.exe ?? '').toLowerCase();
     // Un dossier trop court (C:\, Program Files) toucherait tout : on l'ignore
-    const dirOk = dir.split('\\').filter(Boolean).length >= 3;
-    if (paths.some((p) => (exe && p === exe) || (dirOk && p.startsWith(`${dir}\\`)))) active.add(item.id);
+    return { id: item.id, exe: String(item.exe ?? '').toLowerCase(), dir: dir.split('\\').filter(Boolean).length >= 3 ? `${dir}\\` : null };
+  });
+  const active = new Set();
+  for (const p of paths) {
+    let best = null;
+    let bestLen = -1;
+    for (const it of prepared) {
+      if (it.exe && p === it.exe) { best = it; bestLen = Infinity; break; }
+      if (it.dir && p.startsWith(it.dir) && it.dir.length > bestLen) { best = it; bestLen = it.dir.length; }
+    }
+    if (best) active.add(best.id);
   }
   return active;
 }
@@ -55,8 +64,10 @@ export function periodItems(days, n, now = Date.now()) {
   return out;
 }
 
-export function startTracker(getItems, store, onChange, everyMs = 60_000, accountFor = () => 'principal') {
+export function startTracker(getItems, store, onChange, everyMs = 60_000, accountFor = () => 'principal', isPaused = () => false) {
   const tick = async () => {
+    // PC verrouillé ou en veille : personne ne joue, rien n'est compté
+    if (isPaused()) return;
     const items = getItems();
     const paths = await runningPaths();
     const active = activeItems(items, paths);

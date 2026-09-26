@@ -1,0 +1,56 @@
+# Publie l'installateur de History Launcher sur GitHub (Releases) à chaque nouvelle version du launcher.
+# L'appli installée vérifie ces versions et se met à jour toute seule (electron-updater).
+# Une version n'est publiée qu'une fois : il suffit d'augmenter "version" dans launcher/package.json.
+name: Launcher - publier une nouvelle version
+
+on:
+  push:
+    branches: [main]
+    paths: ['launcher/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: launcher-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: launcher
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version du launcher
+        id: v
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Déjà publiée ?
+        id: exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.v.outputs.version }}" >/dev/null 2>&1; then echo "yes=true" >> "$GITHUB_OUTPUT"; else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.exists.outputs.yes == 'false'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - name: Installation
+        if: steps.exists.outputs.yes == 'false'
+        run: npm ci --no-audit --no-fund
+
+      - name: Construction et publication de l'installateur
+        if: steps.exists.outputs.yes == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always

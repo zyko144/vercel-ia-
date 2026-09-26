@@ -66,6 +66,19 @@ await check('déconnexion : le jeton ne marche plus ; faux jeton refusé', async
   assert.equal((await meOf('x'.repeat(43))).status, 401);
 });
 
+await check('mot de passe : règle claire, accents et symboles acceptés, trop faciles refusés', async () => {
+  const { passwordProblem } = await import('../src/features/launcherAccounts.js');
+  assert.equal(passwordProblem('motdepassesecret'), null, 'que des lettres mais 10+ caractères');
+  assert.equal(passwordProblem('Élodie2024'), null, 'accents acceptés');
+  assert.equal(passwordProblem('chat!noir'), null, 'lettres + symbole');
+  assert.equal(passwordProblem('Soleil7'), 'Le mot de passe doit faire au moins 8 caractères.');
+  assert.match(passwordProblem('12345678'), /trop facile/);
+  assert.match(passwordProblem('aaaaaaaaaa'), /trop facile/);
+  assert.match(passwordProblem('soleilbl'), /chiffre ou un symbole/);
+  const r = await post('inscription', { pseudo: 'Léa', email: 'lea@exemple.fr', motDePasse: 'Élodie2024' }, '4.4.4.4');
+  assert.equal(r.status, 201, 'inscription avec un mot de passe accentué');
+});
+
 server.close();
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);

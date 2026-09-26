@@ -107,7 +107,7 @@ function renderHero() {
     ${title}
     <div class="hbottom">
       <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>
-      <div class="hstat"><small>${CLOCK}${isApp ? 'Temps d’utilisation' : 'Temps de jeu'}</small><b>${hours(i.minutes)}</b></div>
+      <div class="hstat"><small>${CLOCK}${isApp ? 'Temps d’utilisation' : 'Temps de jeu'}</small><b>${hours(i.minutes)}</b><em class="tsrc" title="D’où vient ce temps">${esc(timeSource(i))}</em></div>
       <div class="hstat"><small>${CLOCK}Dernière session</small><b>${state.active.has(i.id) ? '<span class="ok">En cours</span>' : ago(i.lastPlayed)}</b></div>
     </div>
     <div class="hinfo">
@@ -136,6 +136,7 @@ function menuFor(i) {
   if (i.installed && i.installDir) m.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
   if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
   if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
+  if (i.source === 'fivem') m.push('<button data-fivem="1">🔗 Rejoindre un serveur…</button>');
   if (i.custom) m.push('<button data-rename="1">✏ Renommer</button>');
   m.push('<hr>');
   m.push(`<button data-set="hidden">${i.hidden ? '◉ Afficher dans la bibliothèque' : '◌ Masquer de la bibliothèque'}</button>`);
@@ -210,6 +211,13 @@ api.onAppError?.((m) => toast(`⚠️ ${m}`));
 api.onCols?.((c) => { state.cols = c ?? {}; renderCollections(); });
 if (!window.launcher) window.hlui = ui; // aperçu dans un navigateur (bancs d'essai)
 
+// D'où vient le temps affiché (pour savoir qu'il est réel)
+function timeSource(i) {
+  if (i.steamTimes && Object.keys(i.steamTimes).length) return 'Steam (officiel)';
+  if (i.timeFromLogs) return `journaux FiveM · ${i.sessionsCount ?? 0} session${(i.sessionsCount ?? 0) > 1 ? 's' : ''}`;
+  if (!i.minutes) return '';
+  return 'suivi par History';
+}
 function card(i, cls = 'gcard') {
   const live = state.active.has(i.id);
   const icon = srcIcon(i);
@@ -456,27 +464,48 @@ window.addEventListener('gamepaddisconnected', () => { if (![...(navigator.getGa
 requestAnimationFrame(padLoop);
 
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
-const WHATS_NEW = [
-  ['⚡', 'Page Optimisation', 'Score de santé du PC, catégories rangées, avancement en direct et optimisation automatique chaque semaine.'],
-  ['🔎', 'Recherche rapide', 'Ctrl+Espace (ou Ctrl+Alt+Espace depuis Windows) : lance n’importe quel jeu en 2 touches.'],
-  ['🖱', 'Clic droit partout', 'Jouer, favori, collections, masquer, désinstaller… sur chaque jeu et appli.'],
-  ['🎙', 'Voix améliorée', 'Windows écoute tes jeux par leur nom ; « Hey History » seul = écoute par Gemini.'],
-  ['📺', 'Mode grand écran', 'F11 : tout en grand, idéal avec une manette sur la TV.'],
-  ['🚀', 'Plus rapide et plus léger', 'Bibliothèque affichée tout de suite au démarrage, beaucoup moins de tâches en fond.'],
-  ['🌐', 'Actus en français', 'Les nouvelles de tes jeux sont traduites automatiquement.'],
-];
+// Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
+const CHANGELOG = {
+  '0.10.0': [
+    ['🎮', 'Tes vraies heures FiveM', 'Lues dans les journaux de FiveM, même celles d’avant le launcher. Clic droit › Rejoindre un serveur.'],
+    ['⏱', 'Heures de jeu plus fiables', 'Un programme ne compte que pour un seul jeu, rien n’est compté PC verrouillé ou en veille, et la source du temps est affichée.'],
+    ['🔐', 'Création de compte corrigée', 'Règle de mot de passe plus simple, indication pendant la saisie et bouton 👁.'],
+    ['⬆', 'Mises à jour automatiques', 'Plus besoin de réinstaller : le launcher se met à jour tout seul et te prévient.'],
+  ],
+  '0.9.0': [
+    ['⚡', 'Page Optimisation', 'Score de santé du PC, catégories rangées, avancement en direct et optimisation automatique chaque semaine.'],
+    ['🔎', 'Recherche rapide', 'Ctrl+Espace (ou Ctrl+Alt+Espace depuis Windows) : lance n’importe quel jeu en 2 touches.'],
+    ['🖱', 'Clic droit partout', 'Jouer, favori, collections, masquer, désinstaller… sur chaque jeu et appli.'],
+    ['🎙', 'Voix améliorée', 'Windows écoute tes jeux par leur nom ; « Hey History » seul = écoute par Gemini.'],
+    ['📺', 'Mode grand écran', 'F11 : tout en grand, idéal avec une manette sur la TV.'],
+    ['🤖', 'L’IA agit à ta place', 'Ajoute des amis, organise des soirées, optimise le PC, change les réglages…'],
+  ],
+};
+const vnum = (v) => String(v ?? '0').split('.').map((n) => Number(n) || 0).reduce((a, n) => a * 1000 + n, 0);
 async function showWhatsNew(force = false) {
   const v = await api.version?.().catch(() => null);
   let seen = null;
   try { seen = localStorage.getItem('hl-seen-version'); } catch { /* rien */ }
   if (!force && (!v || seen === v)) return;
   try { localStorage.setItem('hl-seen-version', v ?? ''); } catch { /* rien */ }
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✨</span><h2>Quoi de neuf${v ? ` · v${esc(v)}` : ''}</h2></div>
-    <div class="wnew">${WHATS_NEW.map(([ic, t, d]) => `<div><span>${ic}</span><div><b>${esc(t)}</b><small>${esc(d)}</small></div></div>`).join('')}</div>
+  // Après une mise à jour : seulement les versions pas encore vues, en titres courts ; depuis Paramètres : tout, détaillé
+  const versions = Object.keys(CHANGELOG).filter((k) => force || vnum(k) > vnum(seen)).sort((a, b) => vnum(b) - vnum(a));
+  const list = versions.flatMap((k) => CHANGELOG[k]).slice(0, force ? 20 : 6);
+  if (!list.length) return;
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✨</span><h2>${force ? 'Quoi de neuf' : 'Mise à jour installée'}${v ? ` · v${esc(v)}` : ''}</h2></div>
+    <div class="wnew ${force ? '' : 'short'}">${list.map(([ic, t, d]) => `<div><span>${ic}</span><div><b>${esc(t)}</b>${force ? `<small>${esc(d)}</small>` : ''}</div></div>`).join('')}</div>
     <div class="row end"><button type="button" class="btn play" data-m="1">C’est parti</button></div>`;
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); };
   $('modal').showModal();
 }
+// Mise à jour prête (version installée) : on propose de redémarrer tout de suite, sinon elle s'installe à la fermeture
+api.onUpdate?.((u) => {
+  if (u.state === 'download') toast(`⬆ Mise à jour v${u.version} en cours de téléchargement…`);
+  if (u.state === 'ready') {
+    ui.confirm({ title: `Mise à jour v${u.version} prête`, text: 'Redémarre le launcher pour l’installer (quelques secondes). Sinon, elle s’installera toute seule à la prochaine fermeture.', ok: '⬆ Redémarrer maintenant', cancel: 'Plus tard', icon: '⬆' })
+      .then((yes) => { if (yes) api.installUpdate(); });
+  }
+});
 $('openNews2').addEventListener('click', () => { $('settings').close(); showWhatsNew(true); });
 $('openLog').addEventListener('click', () => api.openLog?.().then((r) => toast(r?.ok ? 'Journal ouvert : envoie-le si un bug revient' : 'Aucune erreur enregistrée 👍')));
 
@@ -1118,6 +1147,12 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
   if (t.dataset.upd) { const r = await api.action(t.dataset.upd, 'update'); return toast(r?.ok ? 'Steam fait la mise à jour puis lance le jeu' : r?.error ?? 'Impossible pour l’instant'); }
   if (t.dataset.news) return api.openNews(t.dataset.news, t.dataset.gid).then(() => toast('Article ouvert'));
+  if (t.dataset.fivem) {
+    const code = await ui.prompt({ title: 'Rejoindre un serveur FiveM', text: 'Colle le lien ou le code du serveur (ex. cfx.re/join/abc123).', placeholder: 'cfx.re/join/…', ok: 'Rejoindre', icon: '🔗' });
+    if (!code) return;
+    const r = await api.fivemJoin(code);
+    return toast(r?.ok ? 'Connexion au serveur…' : r?.error ?? 'Impossible');
+  }
   if (t.dataset.cap) return api.openCapture(t.dataset.cap);
   if (t.dataset.capdir) return api.captureFolder(t.dataset.capdir);
   if (t.dataset.cols && state.sel) return openCollections(state.sel);
@@ -1344,11 +1379,32 @@ $('authTabs').addEventListener('click', (e) => {
   $('aPass').autocomplete = authMode === 'inscription' ? 'new-password' : 'current-password';
   $('authErr').textContent = '';
 });
+// Même règle que le serveur : affichée pendant la saisie (inscription)
+function passwordProblem(p) {
+  if (p.length < 8) return `Encore ${8 - p.length} caractère${8 - p.length > 1 ? 's' : ''} minimum`;
+  if (/^(.)\1+$/.test(p) || ['12345678', '123456789', 'password', 'motdepasse', 'azertyui', 'azertyuiop', 'azerty123', 'abcd1234'].includes(p.toLowerCase())) return 'Trop facile à deviner';
+  const kinds = [/\p{L}/u, /\d/, /[^\p{L}\d]/u].filter((re) => re.test(p)).length;
+  if (kinds < 2 && p.length < 10) return 'Ajoute un chiffre ou un symbole (ou fais 10 caractères)';
+  return null;
+}
+$('aPass').addEventListener('input', () => {
+  const p = $('aPass').value;
+  if (authMode !== 'inscription' || !p) { $('passHint').textContent = ''; return; }
+  const bad = passwordProblem(p);
+  const strong = !bad && p.length >= 12 && /\d/.test(p) && /[^\p{L}\d]/u.test(p);
+  $('passHint').textContent = bad ?? (strong ? '✅ Mot de passe solide' : '✅ Mot de passe valide');
+  $('passHint').className = `passhint ${bad ? 'bad' : 'good'}`;
+});
+$('aEye').addEventListener('click', () => { const a = $('aPass'); a.type = a.type === 'password' ? 'text' : 'password'; $('aEye').textContent = a.type === 'password' ? '👁' : '🙈'; });
 $('authForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('authErr').textContent = '';
   $('authGo').disabled = true;
   const body = { pseudo: $('aPseudo').value.trim(), email: $('aEmail').value.trim(), motDePasse: $('aPass').value };
+  if (authMode === 'inscription') {
+    const bad = body.pseudo.length < 3 ? 'Le pseudo doit faire au moins 3 caractères.' : passwordProblem(body.motDePasse);
+    if (bad) { $('authErr').textContent = bad; $('authGo').disabled = false; return; }
+  }
   const r = await (authMode === 'inscription' ? api.register(body) : api.login(body)).catch(() => ({ error: 'Erreur réseau.' }));
   $('authGo').disabled = false;
   if (!r.ok) { $('authErr').textContent = r.error ?? 'Erreur.'; return; }
@@ -1458,7 +1514,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.9.0',
+    version: async () => '0.10.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
