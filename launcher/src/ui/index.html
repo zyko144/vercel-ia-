@@ -181,7 +181,7 @@
     <form id="authForm" autocomplete="on">
       <label class="field" id="pseudoField" hidden><span>Pseudo</span><input id="aPseudo" autocomplete="nickname" maxlength="20" placeholder="Ton pseudo"></label>
       <label class="field"><span>E-mail</span><input id="aEmail" type="email" autocomplete="email" maxlength="254" placeholder="toi@exemple.fr" required></label>
-      <label class="field"><span>Mot de passe</span><input id="aPass" type="password" autocomplete="current-password" maxlength="128" placeholder="8 caractères, une lettre et un chiffre" required></label>
+      <label class="field"><span>Mot de passe</span><div class="passwrap"><input id="aPass" type="password" autocomplete="current-password" maxlength="128" placeholder="8 caractères minimum" required><button type="button" id="aEye" title="Afficher le mot de passe">👁</button></div><small class="passhint" id="passHint"></small></label>
       <p class="autherr" id="authErr"></p>
       <button class="btn play big" id="authGo">Se connecter</button>
     </form>

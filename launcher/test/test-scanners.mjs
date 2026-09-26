@@ -160,6 +160,10 @@ await check('suivi du temps : bon jeu repéré par son dossier, jamais par un do
   ];
   const on = activeItems(items, ['c:\\riot games\\valorant\\live\\shootergame\\binaries\\win64\\valorant-win64-shipping.exe', 'c:\\users\\noam\\appdata\\roaming\\spotify\\spotify.exe']);
   assert.deepEqual([...on].sort(), ['a', 'c']);
+  // Dossiers imbriqués : le jeu dans le dossier du launcher ne crédite pas aussi le launcher
+  const nested = [{ id: 'launcher', installDir: 'D:\\Jeux\\Riot Games' }, { id: 'valo', installDir: 'D:\\Jeux\\Riot Games\\VALORANT' }];
+  assert.deepEqual([...activeItems(nested, ['d:\\jeux\\riot games\\valorant\\live\\valorant.exe'])], ['valo']);
+  assert.deepEqual([...activeItems(nested, ['d:\\jeux\\riot games\\riot client\\riotclientservices.exe'])], ['launcher']);
 });
 
 await check('exécutable principal : le plus gros .exe, pas l’installeur', async () => {

@@ -633,3 +633,14 @@ body.big .gcard:hover, body.big .gridcard:hover { transform: translateY(-6px) sc
 .histo rect { fill: rgba(255, 255, 255, .07); stroke: none; }
 .histo rect.on { fill: var(--blue); opacity: .85; }
 .histo rect.on:hover { opacity: 1; fill: var(--cyan); }
+
+/* Mot de passe : bouton afficher + indication pendant l'inscription */
+.passwrap { position: relative; display: block; }
+.passwrap input { width: 100%; padding-right: 44px !important; }
+.passwrap button { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-size: 16px; }
+.passwrap button:hover { background: rgba(255, 255, 255, .06); }
+.passhint { display: block; min-height: 16px; margin-top: 4px; font-size: 12px; }
+.passhint.bad { color: #ffb44d; }
+.passhint.good { color: #2ee07a; }
+.hstat .tsrc { display: block; font-style: normal; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.wnew.short > div { padding: 8px 12px; align-items: center; }

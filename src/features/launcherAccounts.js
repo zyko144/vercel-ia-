@@ -25,9 +25,19 @@ const cleanEmail = (e) => String(e ?? '').trim().toLowerCase();
 export function validate({ pseudo, email, motDePasse }) {
   if (!/^[\p{L}\p{N} ._-]{3,20}$/u.test(String(pseudo ?? '').trim())) return 'Le pseudo doit faire 3 à 20 caractères (lettres, chiffres, espace, . _ -).';
   if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i.test(cleanEmail(email))) return 'Adresse e-mail invalide.';
+  return passwordProblem(motDePasse);
+}
+
+// Mots de passe beaucoup trop courants (refusés même s'ils font 8 caractères)
+const TOO_COMMON = new Set(['12345678', '123456789', '1234567890', 'password', 'motdepasse', 'azertyui', 'azertyuiop', 'qwertyui', 'qwertyuiop', '00000000', '11111111', 'password1', 'motdepasse1', 'azerty123', 'abcd1234', 'iloveyou', 'baseball', 'football']);
+/** Règle simple et claire : 8 caractères minimum ; s'il n'y a que des lettres (ou que des chiffres), 10 minimum. */
+export function passwordProblem(motDePasse) {
   const p = String(motDePasse ?? '');
-  if (p.length < 8 || p.length > 128) return 'Le mot de passe doit faire entre 8 et 128 caractères.';
-  if (!/[a-zA-Z]/.test(p) || !/\d/.test(p)) return 'Le mot de passe doit contenir au moins une lettre et un chiffre.';
+  if (p.length < 8) return 'Le mot de passe doit faire au moins 8 caractères.';
+  if (p.length > 128) return 'Le mot de passe doit faire moins de 128 caractères.';
+  if (TOO_COMMON.has(p.toLowerCase()) || /^(.)\1+$/.test(p)) return 'Ce mot de passe est trop facile à deviner, choisis-en un autre.';
+  const kinds = [/\p{L}/u, /\d/, /[^\p{L}\d]/u].filter((re) => re.test(p)).length;
+  if (kinds < 2 && p.length < 10) return 'Ajoute un chiffre ou un symbole (ou fais au moins 10 caractères).';
   return null;
 }
 
