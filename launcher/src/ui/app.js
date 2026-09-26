@@ -148,6 +148,7 @@ function menuFor(i) {
     const g = boostGames[i.id];
     m.push(`<button data-boostgame="${g === true ? 'off' : g === false ? 'auto' : 'on'}">${g === true ? '⚡ Opti auto : toujours (changer → jamais)' : g === false ? '⚡ Opti auto : jamais (changer → par défaut)' : '⚡ Toujours optimiser ce jeu'}</button>`);
   }
+  if (i.source === 'steam' && String(i.steamId) === '4000') m.push('<button data-gmod="1">🧩 Addons Garry’s Mod</button>');
   if (i.source === 'fivem') m.push('<button data-fivemsrv="1">🌐 Mes serveurs FiveM</button><button data-fivem="1">🔗 Rejoindre un serveur…</button>');
   if (i.custom) m.push('<button data-rename="1">✏ Renommer</button>');
   m.push('<hr>');
@@ -340,6 +341,7 @@ function renderHistory() {
         ${joinable(a) ? `<button class="btn play sm" data-hjoin="${esc(a.id)}">Rejoindre</button>` : ''}
         ${a.playing ? `<button class="btn sm" data-hask="${esc(a.id)}" title="Lui demander de jouer ensemble">🎮 On joue ?</button>` : ''}
         ${playingNow && a.online && !a.playing ? `<button class="btn sm" data-hinv="${esc(a.id)}" title="L’inviter dans ta partie">📨 Inviter</button>` : ''}
+        ${a.online ? `<button class="btn sm" data-hcall="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Appel vocal">📞</button>` : ''}
         <button class="btn sm" data-hchat="${esc(a.id)}" data-name="${esc(a.pseudo)}">💬 Message</button>
         <button class="btn ghost sm" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer">✕</button>
       </div></div>`).join('') : '<div class="empty">Pas encore d’amis : donne ton code à tes potes, ou ajoute le leur.</div>';
@@ -445,6 +447,93 @@ api.onSocial?.((d) => {
   const online = (d.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
   const n = Object.values(unread).reduce((a, b) => a + b, 0);
   $('friendsOnline').textContent = n ? `${n} ✉` : online || '';
+});
+// ---------- Appels vocaux (WebRTC pair à pair, micro avec suppression du bruit et de l'écho) ----------
+let callS = null;
+const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+function callUi(state, extra = '') {
+  $('callBar').hidden = !callS;
+  if (!callS) return;
+  $('callWho').textContent = callS.name;
+  $('callAv').textContent = callS.name[0]?.toUpperCase() ?? '?';
+  $('callBar').classList.toggle('live', state === 'live');
+  $('callState').textContent = extra || { ringing: 'Sonnerie…', connecting: 'Connexion…', live: 'En appel' }[state] || state;
+}
+async function callSetup(id, role, name) {
+  if (callS) return toast('Un appel est déjà en cours');
+  let mic;
+  try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); } catch { toast('Micro inaccessible : autorise-le dans Windows (Confidentialité › Microphone)'); if (role === 'callee') api.callAnswer(id, false); else api.callEnd(id); return; }
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  callS = { id, role, name, pc, mic, after: -1, offered: false, start: null, timer: null, poll: null };
+  mic.getTracks().forEach((t) => pc.addTrack(t, mic));
+  pc.ontrack = (e) => { $('callAudio').srcObject = e.streams[0]; $('callAudio').play().catch(() => {}); };
+  pc.onicecandidate = (e) => { if (e.candidate) api.callSignal(id, { ice: e.candidate.toJSON() }); };
+  pc.onconnectionstatechange = () => {
+    if (!callS) return;
+    if (pc.connectionState === 'connected' && !callS.start) {
+      callS.start = Date.now();
+      window.sfx?.play('success');
+      callS.timer = setInterval(() => { const s = Math.floor((Date.now() - callS.start) / 1000); callUi('live', `En appel · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`); }, 1000);
+    }
+    if (pc.connectionState === 'failed') callEnd('La connexion a échoué (réseau trop protégé ?)');
+  };
+  callUi(role === 'caller' ? 'ringing' : 'connecting');
+  const tick = async () => {
+    if (!callS || callS.id !== id) return;
+    const r = await api.callPoll(id, callS.after).catch(() => null);
+    if (!callS || callS.id !== id) return;
+    if (r?.state && ['ended', 'declined', 'missed'].includes(r.state)) return callEnd({ ended: 'Appel terminé', declined: `${name} a refusé`, missed: `${name} n’a pas répondu` }[r.state]);
+    if (r?.state === 'live' && role === 'caller' && !callS.offered) {
+      callS.offered = true;
+      callUi('connecting');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      api.callSignal(id, { sdp: pc.localDescription.toJSON() });
+    }
+    for (const sig of r?.signals ?? []) {
+      callS.after = Math.max(callS.after, sig.n);
+      const d = sig.data ?? {};
+      try {
+        if (d.sdp) {
+          await pc.setRemoteDescription(d.sdp);
+          if (d.sdp.type === 'offer') { const ans = await pc.createAnswer(); await pc.setLocalDescription(ans); api.callSignal(id, { sdp: pc.localDescription.toJSON() }); }
+        } else if (d.ice) await pc.addIceCandidate(d.ice);
+      } catch { /* signal en double ou arrivé trop tôt */ }
+    }
+    callS.poll = setTimeout(tick, callS.start ? 3000 : 800);
+  };
+  tick();
+}
+function callEnd(msg = 'Appel terminé', notify = true) {
+  if (!callS) return;
+  const { id, pc, mic, timer, poll } = callS;
+  clearInterval(timer); clearTimeout(poll);
+  try { pc.close(); } catch { /* déjà fermé */ }
+  mic.getTracks().forEach((t) => t.stop());
+  callS = null;
+  callUi();
+  $('callAudio').srcObject = null;
+  if (notify) api.callEnd(id).catch(() => {});
+  toast(`📞 ${msg}`);
+}
+async function startCall(fid, name) {
+  const r = await api.callStart(fid);
+  if (r?.error || !r?.id) return toast(r?.error ?? 'Appel impossible');
+  window.sfx?.play('call');
+  callSetup(r.id, 'caller', name ?? r.avec ?? 'Ami');
+}
+api.onIncomingCall?.(async (d) => {
+  const r = await api.callAnswer(d.callId, true);
+  if (r?.error) return toast(r.error);
+  callSetup(d.callId, 'callee', r.avec ?? 'Ami');
+});
+$('callHang').addEventListener('click', () => callEnd('Tu as raccroché'));
+$('callMute').addEventListener('click', () => {
+  if (!callS) return;
+  const on = callS.mic.getAudioTracks()[0];
+  on.enabled = !on.enabled;
+  $('callMute').classList.toggle('off', !on.enabled);
+  $('callMute').textContent = on.enabled ? '🎙' : '🔇';
 });
 function renderEvents() {
   const when = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
@@ -584,6 +673,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.15.0': [
+    ['📞', 'Appels entre amis', 'Bouton 📞 sur un ami en ligne : appel vocal direct (micro avec suppression du bruit), sonnerie en bas à gauche.', ['[data-view=amis]']],
+    ['🧩', 'Addons Garry’s Mod', 'Clic droit sur Garry’s Mod : tes addons installés, et colle un lien du Workshop pour en ajouter.'],
+    ['⚡', 'Installation en un clic', 'Plus d’assistant Windows : l’installation se lance directement puis History s’ouvre tout seul.'],
+  ],
   '0.14.1': [
     ['🎮', 'Mémoire vidéo exacte', 'Mon PC affiche la vraie mémoire des cartes graphiques de plus de 4 Go (Windows la tronquait).', ['[data-view=pc]']],
     ['🌐', 'Site du launcher', 'Toutes les fonctions expliquées avec des captures, et la dernière version à télécharger : vercelia.vercel.app/launcher'],
@@ -659,6 +753,28 @@ const CHANGELOG = {
 };
 const vnum = (v) => String(v ?? '0').split('.').map((n) => Number(n) || 0).reduce((a, n) => a * 1000 + n, 0);
 // Serveurs FiveM : favoris avec joueurs en ligne, heures par serveur (tirées des journaux de FiveM), rejoindre en un clic
+// Garry's Mod : addons installés + ajout depuis un lien du Workshop (installé par Steam, tenu à jour tout seul)
+async function openGmod(found = null) {
+  hideCtx();
+  const r = await api.gmodAddons?.().catch(() => null);
+  const list = r?.list ?? [];
+  const card = found && !found.error ? `<div class="wscard">${found.preview ? `<img src="${esc(found.preview)}" alt="">` : ''}<div><b>${esc(found.title)}</b><small>${found.size ? `${(found.size / 1e6).toFixed(1).replace('.', ',')} Mo · ` : ''}${found.subs.toLocaleString('fr-FR')} abonnés${found.tags.length ? ` · ${esc(found.tags.join(', '))}` : ''}</small><button type="button" class="btn play sm" data-gminst="${esc(found.id)}">⬇ Installer (via Steam)</button></div></div>` : found?.error ? `<p class="autherr">${esc(found.error)}</p>` : '';
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🧩</span><h2>Addons Garry’s Mod</h2></div>
+    <div class="row"><input id="wsLink" class="wsin" placeholder="Colle le lien d’un addon du Workshop" value="${esc(found?.id ?? '')}"><button type="button" class="btn" id="wsGo">Voir</button></div>
+    ${card}
+    <p class="hint">Steam télécharge l’addon et le garde à jour ; il est disponible au prochain lancement de Garry’s Mod.</p>
+    <b class="sub">Installés (${list.length})</b>
+    <div class="wslist">${r?.error ? `<p class="hint">${esc(r.error)}</p>` : list.length ? list.slice(0, 60).map((a) => `<span>${a.where === 'workshop' ? '☁' : '📦'} ${esc(a.name)}</span>`).join('') : '<p class="hint">Aucun addon pour l’instant.</p>'}</div>
+    <div class="row end"><button type="button" class="btn ghost" id="wsBrowse">Parcourir le Workshop</button><button type="button" class="btn" data-m="1">Fermer</button></div>`;
+  if (!$('modal').open) $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.m) return $('modal').close();
+    if (b.id === 'wsBrowse') return api.gmodBrowse();
+    if (b.id === 'wsGo') { const d = await api.gmodDetails($('wsLink').value); return openGmod(d?.error ? d : d); }
+    if (b.dataset.gminst) { await api.gmodInstall(b.dataset.gminst); toast('Steam s’ouvre sur l’addon : clique sur « S’abonner » pour l’installer'); }
+  };
+}
 async function openFivemServers() {
   hideCtx();
   $('modalBox').innerHTML = '<div class="mhead"><span class="micon">🌐</span><h2>Mes serveurs FiveM</h2></div><p class="hint">Chargement…</p>';
@@ -1482,8 +1598,10 @@ document.addEventListener('click', async (e) => {
     boostGames = r?.games ?? {};
     return toast(t.dataset.boostgame === 'on' ? `⚡ ${state.sel.name} sera toujours optimisé au lancement` : t.dataset.boostgame === 'off' ? `${state.sel.name} ne sera jamais optimisé` : 'Réglage par défaut remis');
   }
+  if (t.dataset.gmod) return openGmod();
   if (t.dataset.fivemsrv) return openFivemServers();
   if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
+  if (t.dataset.hcall) return startCall(t.dataset.hcall, t.dataset.name);
   if (t.dataset.hjoin) { const r = await api.friendJoin(t.dataset.hjoin); return toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); }
   if (t.dataset.hask || t.dataset.hinv) { const r = await api.friendInvite(t.dataset.hask ?? t.dataset.hinv, t.dataset.hask ? 'ask' : 'invite'); return toast(r?.ok ? (t.dataset.hask ? 'Demande envoyée 🎮' : 'Invitation envoyée 📨') : r?.error ?? 'Impossible'); }
   if (t.dataset.fivem) {
@@ -1952,7 +2070,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.14.1',
+    version: async () => '0.15.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

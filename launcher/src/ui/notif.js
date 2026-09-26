@@ -9,7 +9,7 @@ window.notif.onCards((cards, opts) => {
   for (const c of cards) {
     if (shown.has(c.id)) continue;
     shown.add(c.id);
-    window.sfx?.play(c.kind === 'ask' || c.kind === 'invite' ? 'call' : 'notif');
+    window.sfx?.play(['ask', 'invite', 'call'].includes(c.kind) ? 'call' : 'notif');
     const el = document.createElement('div');
     el.className = 'card';
     el.dataset.id = c.id;
