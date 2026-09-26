@@ -450,6 +450,75 @@ window.addEventListener('gamepadconnected', () => { document.body.classList.add(
 window.addEventListener('gamepaddisconnected', () => { if (![...(navigator.getGamepads?.() ?? [])].some(Boolean)) document.body.classList.remove('pad'); });
 requestAnimationFrame(padLoop);
 
+// ---------- Recherche rapide (Ctrl+Espace, ou Ctrl+Alt+Espace depuis Windows) ----------
+const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']];
+const PAL_ACTIONS = [
+  ['Optimiser mon PC', '🚀', () => { go('optimisation'); setTimeout(() => $('optiScan').click(), 300); }],
+  ['Paramètres', '⚙', () => $('openSettings').click()],
+  ['Ajouter un jeu', '➕', () => $('addGame').click()],
+  ['Mode grand écran', '📺', () => toggleBig()],
+  ['Raccourcis clavier', '⌨', () => $('keys').showModal()],
+  ['Résumé de la semaine', '📅', () => $('openRecap').click()],
+  ['Infos par-dessus le jeu (Ctrl+Alt+O)', '🎯', () => toast('Appuie sur Ctrl+Alt+O pendant une partie')],
+];
+let palSel = 0;
+let palList = [];
+function palScore(name, q) {
+  const n = name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  if (!q) return 1;
+  if (n.startsWith(q)) return 100 - n.length / 100;
+  if (n.split(/[\s:-]+/).some((w) => w.startsWith(q))) return 80;
+  if (n.includes(q)) return 60;
+  const initials = n.split(/[\s:-]+/).map((w) => w[0]).join('');
+  if (initials.startsWith(q)) return 50;
+  let i = 0;
+  for (const c of n) if (c === q[i]) i++;
+  return i === q.length ? 20 : 0;
+}
+function renderPalette() {
+  const q = $('palQ').value.trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  const items = state.items.filter((i) => !i.hidden).map((i) => ({ i, s: palScore(i.name, q) + (i.installed ? 5 : 0) + Math.min(5, i.minutes / 3000) })).filter((x) => x.s > 5).sort((a, b) => b.s - a.s).slice(0, q ? 8 : 6);
+  const views = PAL_VIEWS.map(([v, l, ic]) => ({ v, l, ic, s: palScore(l, q) })).filter((x) => x.s > 0 && q).slice(0, 3);
+  const acts = PAL_ACTIONS.map(([l, ic, fn]) => ({ l, ic, fn, s: palScore(l, q) })).filter((x) => x.s > 0 && (q || true)).sort((a, b) => b.s - a.s).slice(0, q ? 3 : 4);
+  palList = [
+    ...items.map(({ i }) => ({ kind: 'item', i, html: `${i.art?.icon || i.iconData || i.brand?.logo ? `<img src="${esc(i.art?.icon ?? i.iconData ?? i.brand.logo)}" alt="" style="${i.brand ? `background:${esc(i.brand.color)}` : ''}">` : `<span class="pl">${esc(i.name[0])}</span>`}<div><b>${esc(i.name)}</b><small>${esc(state.sources[i.source]?.label ?? 'PC')} · ${i.installed ? hours(i.minutes) : 'non installé'}</small></div><em>${state.active.has(i.id) ? 'En cours' : i.installed ? (i.kind === 'game' ? 'Jouer' : 'Ouvrir') : 'Installer'}</em>` })),
+    ...views.map((x) => ({ kind: 'view', v: x.v, html: `<span class="pl">${x.ic}</span><div><b>${esc(x.l)}</b><small>Aller à la page</small></div><em>Ouvrir</em>` })),
+    ...acts.map((x) => ({ kind: 'act', fn: x.fn, html: `<span class="pl">${x.ic}</span><div><b>${esc(x.l)}</b><small>Action</small></div><em>Faire</em>` })),
+  ];
+  if (q.length > 2) palList.push({ kind: 'ask', text: $('palQ').value.trim(), html: `<span class="pl">✨</span><div><b>Demander à l’IA : « ${esc($('palQ').value.trim())} »</b><small>L’assistant comprend et agit (lancer, fermer, conseiller…)</small></div><em>Demander</em>` });
+  palSel = Math.min(palSel, Math.max(0, palList.length - 1));
+  $('palRes').innerHTML = palList.map((r, n) => `<div class="palrow ${n === palSel ? 'on' : ''}" data-pal="${n}">${r.html}</div>`).join('') || '<div class="empty">Rien trouvé.</div>';
+}
+function openPalette() { hideCtx(); $('palette').hidden = false; $('palQ').value = ''; palSel = 0; renderPalette(); setTimeout(() => $('palQ').focus(), 20); }
+function closePalette() { $('palette').hidden = true; }
+async function runPal(n, sheet = false) {
+  const r = palList[n];
+  if (!r) return;
+  closePalette();
+  if (r.kind === 'item') { select(r.i); if (sheet) return openSheet(r.i); if (r.i.kind === 'game' || r.i.installed) return act(r.i.installed ? 'launch' : 'install'); }
+  if (r.kind === 'view') return go(r.v);
+  if (r.kind === 'act') return r.fn();
+  if (r.kind === 'ask') { openAssistant(true); return ask(r.text); }
+}
+$('palQ').addEventListener('input', () => { palSel = 0; renderPalette(); });
+$('palQ').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palList.length - 1, palSel + 1); renderPalette(); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(0, palSel - 1); renderPalette(); }
+  if (e.key === 'Enter') { e.preventDefault(); runPal(palSel, e.shiftKey); }
+  if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+});
+$('palRes').addEventListener('click', (e) => { const r = e.target.closest('[data-pal]'); if (r) runPal(Number(r.dataset.pal)); });
+$('palette').addEventListener('mousedown', (e) => { if (e.target.id === 'palette') closePalette(); });
+api.onPalette?.(openPalette);
+
+// ---------- Mode grand écran (TV, manette) ----------
+async function toggleBig(on) {
+  const full = await api.fullscreen?.(on).catch(() => null);
+  const big = full ?? !document.body.classList.contains('big');
+  document.body.classList.toggle('big', big);
+  toast(big ? '📺 Mode grand écran (F11 pour sortir)' : 'Mode normal');
+}
+
 // ---------- Collections ----------
 function renderCollections() {
   const entries = Object.entries(state.cols);
@@ -1048,6 +1117,8 @@ function visibleItems() {
 document.addEventListener('keydown', (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
   const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && e.code === 'Space') { e.preventDefault(); if ($('palette').hidden) openPalette(); else closePalette(); return; }
+  if (e.key === 'F11') { e.preventDefault(); toggleBig(); return; }
   if (ctrl && e.key.toLowerCase() === 'f') { e.preventDefault(); $('q').focus(); return; }
   if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); openAssistant(true); return; }
   if (ctrl && e.key === ',') { e.preventDefault(); $('openSettings').click(); return; }
@@ -1059,7 +1130,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'F5') { e.preventDefault(); toast('Recherche de nouveaux jeux…'); api.rescan?.().then((lib) => lib && applyLibrary(lib)); return; }
-  if (typing || document.querySelector('dialog[open]')) return;
+  if (typing || document.querySelector('dialog[open]') || !$('palette').hidden) return;
   if (e.key === '/') { e.preventDefault(); $('q').focus(); return; }
   if (e.key === '?') { $('keys').showModal(); return; }
   if (e.key === ' ') { e.preventDefault(); api.mediaKey?.('toggle').then(() => setTimeout(refreshMusic, 700)); return; }
@@ -1261,6 +1332,9 @@ function applyLibrary({ items, sources }) {
   state.sel = state.items.find((i) => i.id === selId) ?? filterSort(games().filter((i) => i.installed), { sort: 'recents' })[0] ?? filterSort(games(), { sort: 'joues' })[0] ?? null;
 }
 async function load() {
+  // Démarrage instantané : la dernière bibliothèque connue d'abord, le scan complet ensuite
+  const cached = await api.cachedLibrary?.().catch(() => null);
+  if (cached) { applyLibrary(cached); renderAll(); }
   applyLibrary(await api.scan());
   renderAll();
   if (state.sel && !state.sel.detailsAsked) select(state.sel);

@@ -598,3 +598,25 @@ dialog[open] > .dlg, dialog[open] > .sheet { animation: popIn .22s cubic-bezier(
 /* Fonds illustrés des grosses applis */
 .art .bgl.brandimg, .hero .hbg.brandimg { inset: 0; background-size: cover; background-position: center; filter: none; transform: none; image-rendering: auto; }
 .hero .hbg.brandimg { filter: saturate(1.1) brightness(.85); }
+
+/* ===== Recherche rapide ===== */
+#palette { position: fixed; inset: 0; z-index: 90; display: grid; justify-items: center; align-items: start; padding-top: 12vh; background: rgba(4, 7, 14, .55); backdrop-filter: blur(5px); animation: fadeIn .12s; }
+#palette[hidden] { display: none; }
+@keyframes fadeIn { from { opacity: 0; } }
+.palbox { width: min(640px, 92vw); border-radius: 18px; overflow: hidden; background: linear-gradient(180deg, rgba(28, 33, 46, .98), rgba(15, 17, 24, .98)) padding-box, linear-gradient(140deg, color-mix(in srgb, var(--blue) 70%, transparent), rgba(255, 255, 255, .06) 40%, color-mix(in srgb, var(--cyan) 45%, transparent)) border-box; border: 1px solid transparent; box-shadow: 0 30px 80px rgba(0, 0, 0, .7), 0 0 60px -20px var(--blue); animation: popIn .16s ease-out; }
+.palin { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line-2); }
+.palin svg { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; flex: none; }
+.palin input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: inherit; font-size: 17px; }
+.palres { max-height: 52vh; overflow-y: auto; padding: 6px; scrollbar-width: none; }
+.palrow { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 11px; cursor: pointer; }
+.palrow.on, .palrow:hover { background: color-mix(in srgb, var(--blue) 20%, transparent); }
+.palrow img, .palrow .pl { width: 36px; height: 36px; border-radius: 9px; object-fit: contain; flex: none; display: grid; place-items: center; background: var(--panel-2); font-weight: 800; padding: 3px; }
+.palrow div { flex: 1; min-width: 0; }
+.palrow b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palrow small { color: var(--muted); font-size: 12px; }
+.palrow em { font-style: normal; font-size: 12px; color: var(--muted); }
+.palrow.on em { color: #fff; font-weight: 700; }
+.palfoot { display: flex; gap: 16px; padding: 9px 16px; border-top: 1px solid var(--line-2); color: var(--muted); font-size: 12px; }
+/* ===== Mode grand écran ===== */
+body.big { zoom: 1.28; }
+body.big .gcard:hover, body.big .gridcard:hover { transform: translateY(-6px) scale(1.03); }
