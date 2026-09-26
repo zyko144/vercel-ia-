@@ -124,6 +124,27 @@ await check('sauvegarde en ligne : par compte, retrouvée, taille plafonnée', a
   assert.equal((await call('sauvegarde', noam, { data: { gros: 'x'.repeat(1_600_000) } })).status, 413);
 });
 
+await check('appel vocal : sonnerie, réponse, signaux dans les deux sens, fin', async () => {
+  const maxId = (await call('amis', noam)).amis[0].id;
+  await call('presence', max, { week: 1 });
+  const c = await call('appel', noam, { to: maxId });
+  assert.equal(c.state, 'ringing');
+  assert.equal((await call('appel', noam, { to: maxId })).status, 409, 'déjà en appel');
+  const inbox = (await call('boite', max)).items.find((x) => x.type === 'call');
+  assert.equal(inbox.callId, c.id);
+  assert.equal((await call('appel/repondre', noam, { call: c.id, oui: true })).status, 409, 'seul l’appelé répond');
+  assert.equal((await call('appel/repondre', max, { call: c.id, oui: true })).state, 'live');
+  await call('appel/signal', noam, { call: c.id, data: { sdp: 'offre' } });
+  await call('appel/signal', max, { call: c.id, data: { sdp: 'réponse' } });
+  const forMax = await call(`appel/signal?call=${c.id}&apres=-1`, max);
+  assert.deepEqual(forMax.signals.map((s) => s.data.sdp), ['offre']);
+  const forNoam = await call(`appel/signal?call=${c.id}&apres=-1`, noam);
+  assert.deepEqual(forNoam.signals.map((s) => s.data.sdp), ['réponse']);
+  assert.equal((await call(`appel/signal?call=${c.id}&apres=0`, max)).signals.length, 0, 'déjà lus');
+  assert.equal((await call(`appel/signal?call=${c.id}`, zoe)).status, 404, 'personne d’autre ne voit l’appel');
+  assert.equal((await call('appel/fin', max, { call: c.id })).state, 'ended');
+});
+
 await check('retirer un ami : des deux côtés', async () => {
   const maxId = (await call('amis', noam)).amis[0].id;
   await call('amis/retirer', noam, { id: maxId });

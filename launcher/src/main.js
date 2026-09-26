@@ -31,6 +31,7 @@ import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { captureDir, captureName } from './core/capture.js';
+import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core/gmod.js';
 import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
 import { cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
 import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
@@ -328,7 +329,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|steam:\/\/url\/(CommunityFilePage\/\d{6,12}|SteamWorkshopPage\/4000)|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const isDriverLink = (u) => DRIVER_LINKS.includes(u);
 const openLink = (url) => (SAFE_LINK.test(url) || isDriverLink(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
@@ -1107,6 +1108,11 @@ ipcMain.on('notif:act', async (_e, id, action) => {
   if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
   if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }
   if (action === 'join') { await joinGame(c.join, c.game); return; }
+  if (c.kind === 'call') {
+    if (action === 'answer') { showWindow(); send('call:incoming', { callId: c.callId, from: c.from }); }
+    else social('/api/compte/appel/repondre', { call: c.callId, oui: false }).catch(() => {});
+    return;
+  }
   if (action === 'accept' || action === 'decline') {
     const r = await social('/api/compte/inviter/repondre', { id: c.id, oui: action === 'accept' });
     if (action === 'accept' && c.kind === 'invite') await joinGame(r.join, c.game);
@@ -1198,6 +1204,13 @@ setInterval(() => socialTick().catch(() => {}), 15_000);
 setTimeout(() => socialTick().catch(() => {}), 5_000);
 
 const FID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
+// Appels vocaux : le launcher relaie les signaux (le son passe directement entre les deux PC)
+const CID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
+ipcMain.handle('call:start', (_e, fid) => social('/api/compte/appel', { to: FID(fid) }));
+ipcMain.handle('call:answer', (_e, id, oui) => social('/api/compte/appel/repondre', { call: CID(id), oui: Boolean(oui) }));
+ipcMain.handle('call:signal', (_e, id, data) => social('/api/compte/appel/signal', { call: CID(id), data }));
+ipcMain.handle('call:poll', (_e, id, after) => social(`/api/compte/appel/signal?call=${CID(id)}&apres=${Number(after) || -1}`));
+ipcMain.handle('call:end', (_e, id) => social('/api/compte/appel/fin', { call: CID(id) }));
 ipcMain.handle('chat:thread', (_e, fid) => social(`/api/compte/messages?avec=${encodeURIComponent(FID(fid))}`));
 ipcMain.handle('chat:send', (_e, fid, text) => social('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500) }));
 ipcMain.handle('friend:invite', (_e, fid, type) => social('/api/compte/inviter', { to: FID(fid), type: type === 'invite' ? 'invite' : 'ask', ...(type === 'invite' ? { game: currentSession()?.name ?? undefined } : {}) }));
@@ -1749,6 +1762,22 @@ async function serverInfoCached(code) {
   if (info.name) (store.data.fivemNames ??= {})[code] = info.name;
   return info;
 }
+// Garry's Mod : addons installés, fiche Workshop, installation par Steam
+ipcMain.handle('gmod:addons', async () => {
+  const g = items.find((i) => i.source === 'steam' && String(i.steamId) === GMOD_APPID);
+  if (!g?.installDir) return { error: 'Garry’s Mod n’est pas installé.' };
+  return { list: await installedAddons(g.installDir, path.resolve(g.installDir, '..', '..')) };
+});
+ipcMain.handle('gmod:details', async (_e, input) => {
+  const id = workshopId(input);
+  if (!id) return { error: 'Colle le lien d’un addon du Workshop (…/filedetails/?id=…).' };
+  const d = await workshopDetails(id).catch(() => null);
+  if (!d) return { error: 'Addon introuvable (il est peut-être privé).' };
+  if (!d.gmod) return { error: 'Cet élément du Workshop n’est pas pour Garry’s Mod.' };
+  return d;
+});
+ipcMain.handle('gmod:install', (_e, id) => (/^\d{6,12}$/.test(String(id)) ? openLink(`steam://url/CommunityFilePage/${id}`).then(() => ({ ok: true })) : { ok: false }));
+ipcMain.handle('gmod:browse', () => openLink('steam://url/SteamWorkshopPage/4000').then(() => ({ ok: true })));
 ipcMain.handle('fivem:servers', async () => {
   const mins = serverMinutes(store.data.fivemLogs);
   const favs = store.data.fivemFavs ?? [];

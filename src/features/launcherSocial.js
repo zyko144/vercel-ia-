@@ -69,13 +69,74 @@ function eventsFor(d, accs, id) {
   }));
 }
 
+// ---------- Appels vocaux entre amis (WebRTC pair à pair ; le serveur ne fait que passer les signaux) ----------
+const calls = new Map(); // id appel -> { id, from, to, at, state, signals: { [compte]: [..] }, endedBy }
+const CALL_RING_MS = 45_000;
+function sweepCalls() {
+  const now = Date.now();
+  for (const [k, c] of calls) {
+    if (c.state === 'ringing' && now - c.at > CALL_RING_MS) { c.state = 'missed'; c.endAt = now; }
+    if (c.endAt && now - c.endAt > 60_000) calls.delete(k);
+    else if (now - c.at > 6 * 3_600_000) calls.delete(k);
+  }
+}
+async function callRoute(req, res, url, route, id, { readJson, send }) {
+  sweepCalls();
+  const body = req.method === 'POST' ? await readJson(req) : {};
+  const d = await data();
+  const accs = await accounts();
+  const other = (c) => (c.from === id ? c.to : c.from);
+  const view = (c) => ({ id: c.id, state: c.state, from: c.from, to: c.to, avec: accs[other(c)]?.pseudo ?? '?', moi: c.from === id ? 'appelant' : 'appele', since: c.acceptedAt ?? null });
+  if (route === 'POST /api/compte/appel') {
+    const to = String(body.to ?? '');
+    if (!listOf(d.friends, id).includes(to) || !accs[to]) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
+    if (Date.now() - (d.presence[to]?.seen ?? 0) > ONLINE_MS) return send(res, 409, { error: `${accs[to].pseudo} n’est pas en ligne.` });
+    for (const c of calls.values()) if ([c.from, c.to].includes(to) && ['ringing', 'live'].includes(c.state)) return send(res, 409, { error: `${accs[to].pseudo} est déjà en appel.` });
+    const c = { id: randomUUID(), from: id, to, at: Date.now(), state: 'ringing', signals: { [id]: [], [to]: [] } };
+    calls.set(c.id, c);
+    pushInbox(d, to, { type: 'call', from: id, callId: c.id });
+    save(KEY, d);
+    return send(res, 201, view(c));
+  }
+  const c = calls.get(String(body.call ?? url.searchParams.get('call') ?? ''));
+  if (!c || (c.from !== id && c.to !== id)) return send(res, 404, { error: 'Appel introuvable ou terminé.' });
+  if (route === 'POST /api/compte/appel/repondre') {
+    if (c.to !== id || c.state !== 'ringing') return send(res, 409, { error: 'Cet appel n’attend plus de réponse.' });
+    c.state = body.oui ? 'live' : 'declined';
+    if (body.oui) c.acceptedAt = Date.now(); else c.endAt = Date.now();
+    return send(res, 200, view(c));
+  }
+  if (route === 'POST /api/compte/appel/signal') {
+    const raw = JSON.stringify(body.data ?? null);
+    if (!['ringing', 'live'].includes(c.state) || raw.length > 20_000) return send(res, 400, { error: 'Signal refusé.' });
+    const q = c.signals[other(c)];
+    if (q.length >= 300) return send(res, 429, { error: 'Trop de signaux.' });
+    q.push({ n: q.length, data: body.data });
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'GET /api/compte/appel/signal') {
+    const after = Number(url.searchParams.get('apres') ?? -1);
+    return send(res, 200, { ...view(c), signals: c.signals[id].filter((x) => x.n > after) });
+  }
+  if (route === 'POST /api/compte/appel/fin') {
+    if (['ringing', 'live'].includes(c.state)) { c.state = 'ended'; c.endAt = Date.now(); c.endedBy = id; }
+    return send(res, 200, view(c));
+  }
+  return send(res, 404, { error: 'route inconnue' });
+}
+
 export async function handleSocialApi(req, res, url, { readJson, send }) {
   const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
   const compte = await me(token);
   if (!compte) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
   const id = compte.id;
-  if (!allowAttempt('compte-social', id, 900, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
   const route = `${req.method} ${url.pathname}`;
+  // Appels : la mise en relation (signaux WebRTC) est interrogée chaque seconde pendant un appel, plafond à part
+  if (url.pathname.startsWith('/api/compte/appel')) {
+    if (!allowAttempt('compte-appel', id, 4000, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
+    return callRoute(req, res, url, route, id, { readJson, send });
+  }
+  if (!allowAttempt('compte-social', id, 900, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
   const body = req.method === 'POST' ? await readJson(req) : {};
   const d = await data();
   const accs = await accounts();

@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { installedAddons, parseDetails, workshopId } from '../src/core/gmod.js';
+
+assert.equal(workshopId('https://steamcommunity.com/sharedfiles/filedetails/?id=104691717&searchtext='), '104691717');
+assert.equal(workshopId('104691717'), '104691717');
+assert.equal(workshopId('https://evil.example/?x=1'), null);
+const T = mkdtempSync(path.join(os.tmpdir(), 'gmod-'));
+const game = path.join(T, 'steamapps', 'common', 'GarrysMod');
+mkdirSync(path.join(game, 'garrysmod', 'addons', 'wiremod'), { recursive: true });
+writeFileSync(path.join(game, 'garrysmod', 'addons', 'm9k.gma'), 'x');
+mkdirSync(path.join(T, 'steamapps', 'workshop', 'content', '4000', '104691717'), { recursive: true });
+const list = await installedAddons(game, path.join(T, 'steamapps'));
+assert.deepEqual(list.map((a) => a.name).sort(), ['Workshop 104691717', 'm9k', 'wiremod']);
+const d = parseDetails({ response: { publishedfiledetails: [{ result: 1, publishedfileid: '104691717', title: 'Wiremod', preview_url: 'https://x/p.jpg', file_size: '5000000', lifetime_subscriptions: 1200000, consumer_app_id: 4000, tags: [{ tag: 'Addon' }] }] } });
+assert.equal(d.title, 'Wiremod');
+assert.equal(d.gmod, true);
+assert.equal(parseDetails({ response: { publishedfiledetails: [{ result: 9 }] } }), null);
+assert.equal(parseDetails({ response: { publishedfiledetails: [{ result: 1, publishedfileid: '1', preview_url: 'javascript:x', consumer_app_id: 730 }] } }).preview, null, 'aperçu non https ignoré');
+console.log('✅ Addons Garry’s Mod : 9 vérifications');
