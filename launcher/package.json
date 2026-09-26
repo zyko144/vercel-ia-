@@ -1,0 +1,25 @@
+{
+  "name": "history-launcher",
+  "productName": "History Launcher",
+  "version": "0.1.0",
+  "description": "Toute la bibliothèque du PC (Steam, Epic, applis) au même endroit, triée par temps de jeu",
+  "main": "src/main.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/test-scanners.mjs",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "fr.historyia.launcher",
+    "productName": "History Launcher",
+    "files": ["src/**/*"],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}
