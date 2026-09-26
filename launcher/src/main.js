@@ -1,5 +1,5 @@
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -9,7 +9,10 @@ import os from 'node:os';
 import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library.js';
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
-import { periodItems, periodStats, statCategory } from './core/tracker.js';
+import { activeItems, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
+import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
+import { heatAlerts, snapshot } from './core/monitor.js';
+import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
 import { readRegValue } from './core/registry.js';
@@ -296,9 +299,111 @@ async function runSilentSteam(args) {
 }
 // Mode jeu : le launcher se range dans la barre des tâches pendant la partie (rien ne tourne à l'écran, zéro gêne)
 function gameMode(item) {
-  if (item.kind !== 'game' || store.data.settings.gameMode === false) return;
-  setTimeout(() => win?.hide(), 1500);
+  if (item.kind !== 'game') return;
+  playSession = { id: item.id, name: item.name, start: Date.now() };
+  startBoost(item).catch(() => {});
+  if (store.data.settings.gameMode !== false) setTimeout(() => win?.hide(), 1500);
 }
+
+// ---------- Boost : performances élevées + applis choisies fermées pendant la partie, puis tout est remis ----------
+let playSession = null;
+let lastActive = { ids: [], at: 0 };
+// Partie en cours : lancée par le launcher, sinon repérée par le suivi du temps (dans les 2 dernières minutes)
+const currentSession = () => playSession ?? (Date.now() - lastActive.at < 120_000 ? (() => { const g = items.find((i) => lastActive.ids.includes(i.id) && i.kind === 'game'); return g ? { id: g.id, name: g.name, start: null } : null; })() : null);
+let boosted = null;
+const boostSettings = () => ({ enabled: false, power: true, close: [], restore: true, ...(store.data.settings.boost ?? {}) });
+function notify(title, body) {
+  if (Notification.isSupported()) new Notification({ title, body, icon: ICON, silent: true }).show();
+}
+async function startBoost(item) {
+  const b = boostSettings();
+  if (!b.enabled || boosted || process.platform !== 'win32') return;
+  const scheme = b.power ? await activeScheme() : null;
+  if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(HIGH_PERFORMANCE);
+  const closed = await closeApps(boostPlan(await runningPaths(), b.close));
+  boosted = { item, scheme, closed, start: Date.now(), misses: 0 };
+  notify('Boost activé', `${item.name} : performances élevées${closed.length ? `, ${closed.length} appli(s) fermée(s)` : ''}.`);
+  boosted.timer = setInterval(async () => {
+    if (Date.now() - boosted.start < 90_000) return; // le jeu a le temps de démarrer
+    const running = activeItems([item], await runningPaths()).size > 0;
+    boosted.misses = running ? 0 : boosted.misses + 1;
+    if (boosted.misses >= 2) endBoost().catch(() => {});
+  }, 20_000);
+}
+async function endBoost() {
+  if (!boosted) return;
+  const { scheme, closed, timer } = boosted;
+  clearInterval(timer);
+  boosted = null;
+  playSession = null;
+  if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(scheme);
+  if (boostSettings().restore) for (const c of closed) spawn(c.path, [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  notify('Boost terminé', 'Ton PC est revenu à ses réglages habituels.');
+}
+ipcMain.handle('boost:get', () => ({ ...boostSettings(), heatAlerts: store.data.settings.heatAlerts !== false, apps: BOOST_APPS.map(({ id, label }) => ({ id, label })) }));
+ipcMain.handle('boost:set', (_e, patch) => {
+  const b = boostSettings();
+  for (const k of ['enabled', 'power', 'restore']) if (k in patch) b[k] = Boolean(patch[k]);
+  if (Array.isArray(patch.close)) b.close = patch.close.map(String).filter((id) => BOOST_APPS.some((a) => a.id === id));
+  if ('heatAlerts' in patch) store.data.settings.heatAlerts = Boolean(patch.heatAlerts);
+  store.data.settings.boost = b;
+  store.save();
+  return b;
+});
+
+// ---------- Mon PC : surveillance et nettoyage ----------
+ipcMain.handle('pc:snapshot', () => snapshot());
+let cleanList = [];
+ipcMain.handle('clean:scan', async () => {
+  cleanList = await measureTargets(cleanTargets(process.env, await steamPath()));
+  return cleanList.map(({ id, label, bytes, note }) => ({ id, label, bytes, note }));
+});
+ipcMain.handle('clean:run', async (_e, ids) => {
+  const chosen = cleanList.filter((t) => Array.isArray(ids) && ids.includes(t.id)); // seulement les dossiers de notre liste
+  if (!chosen.length || !(await confirm(`Vider ${chosen.length} cache(s) ?`, 'Ces fichiers se recréent tout seuls. Les fichiers ouverts sont sautés.'))) return { ok: false };
+  let freed = 0;
+  for (const t of chosen) freed += await cleanTarget(t).catch(() => 0);
+  return { ok: true, freed };
+});
+
+// Alertes de chauffe (toutes les minutes)
+const lastHeat = {};
+setInterval(async () => {
+  if (store.data.settings.heatAlerts === false) return;
+  for (const a of heatAlerts(await snapshot().catch(() => ({})), lastHeat)) notify('Ton PC chauffe', `${a.text}. Pense à aérer ou à baisser les graphismes.`);
+}, 60_000);
+
+// ---------- Écran d'infos en jeu (Ctrl+Alt+O) : par-dessus les jeux en « plein écran fenêtré » ----------
+let overlay = null;
+let overlayTimer = null;
+function toggleOverlay() {
+  if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
+  const area = screen.getPrimaryDisplay().workArea;
+  overlay = new BrowserWindow({
+    width: 320, height: 420, x: area.x + area.width - 336, y: area.y + 16, frame: false, transparent: true, resizable: false,
+    alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
+    webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  overlay.setAlwaysOnTop(true, 'screen-saver');
+  overlay.setIgnoreMouseEvents(true);
+  overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  overlay.webContents.on('will-navigate', (e) => e.preventDefault());
+  overlay.loadFile(path.join(here, 'ui', 'overlay.html'));
+  overlay.once('ready-to-show', () => overlay?.showInactive());
+  const push = async () => {
+    if (!overlay || overlay.isDestroyed()) return;
+    const [pc, music] = await Promise.all([snapshot().catch(() => null), nowPlaying().catch(() => null)]);
+    const friends = friendsCache.data?.friends ?? [];
+    overlay.webContents.send('overlay:data', {
+      session: currentSession(), pc, music: music?.title ? { title: music.title, artist: music.artist } : null,
+      friends: { online: friends.filter((f) => f.online).length, playing: friends.filter((f) => f.game).slice(0, 3).map((f) => ({ name: f.name, game: f.game })) },
+      boost: Boolean(boosted),
+    });
+  };
+  push();
+  overlayTimer = setInterval(push, 2000);
+}
+
 function remember(id, how) {
   const entry = (store.data.items[id] ??= {});
   if (entry.launch !== how) { entry.launch = how; store.save(); }
@@ -429,7 +534,6 @@ ipcMain.handle('verify:repair', async (_e, id) => {
 });
 
 async function closeItem(item) {
-  const { runningPaths } = await import('./core/tracker.js');
   const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
   if (!dir || dir.split('\\').filter(Boolean).length < 3) return false;
   const targets = (await runningPaths()).filter((p) => p.startsWith(`${dir}\\`) && p.endsWith('.exe'));
@@ -737,12 +841,13 @@ async function start() {
   createWindow();
   createTray();
   // Raccourci global : Ctrl+Alt+H affiche ou range le launcher, même en jeu
+  globalShortcut.register('CommandOrControl+Alt+O', toggleOverlay);
   globalShortcut.register('CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
   setTimeout(() => checkDeals().catch(() => {}), 60_000);
   setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);
-  startTracker(() => items, store, (ids) => win?.webContents.send('lib:active', ids), 60_000, accountFor);
+  startTracker(() => items, store, (ids) => { lastActive = { ids, at: Date.now() }; win?.webContents.send('lib:active', ids); }, 60_000, accountFor);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => { quitting = true; endBoost().catch(() => {}); });
 app.on('window-all-closed', (e) => e.preventDefault());
 
