@@ -584,6 +584,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.13.0': [
+    ['🛡', 'Double authentification', 'Paramètres › Compte : scanne le QR code avec Google Authenticator, Authy ou 2FAS. 8 codes de secours fournis.'],
+    ['✉', 'Vérification de l’e-mail', 'Un code est envoyé à l’inscription pour confirmer ton adresse.'],
+    ['🔑', 'Mot de passe oublié', 'Reçois un code par e-mail pour choisir un nouveau mot de passe (toutes les sessions sont déconnectées).'],
+  ],
   '0.12.1': [
     ['🔊', 'Sons premium', 'Navigation, lancement de jeu, notifications et appels ont leur son (réglable dans Paramètres › Sons).'],
     ['⚙', 'Paramètres rangés', 'Tout est classé par catégories : Général, Jeux, Amis, Sons, Compte, À propos.'],
@@ -1490,7 +1495,7 @@ function showKeys(s) {
 }
 const backupTxt = (at) => (at ? `Dernière sauvegarde : ${new Date(at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Pas encore sauvegardé');
 function showBackup() { api.backupInfo?.().then((b) => { $('backupStatus').textContent = b?.logged ? backupTxt(b.at) : 'Connecte-toi pour sauvegarder en ligne'; }).catch(() => {}); }
-$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); showBackup(); $('settings').showModal(); });
+$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); showBackup(); showSecurity(); $('settings').showModal(); });
 $('backupNow').addEventListener('click', async () => { const r = await api.backupNow(); toast(r?.ok ? '☁ Sauvegardé sur ton compte' : r?.error ?? 'Impossible'); showBackup(); });
 $('backupRestore').addEventListener('click', async () => {
   if (!(await ui.confirm({ title: 'Restaurer la sauvegarde ?', text: 'Collections, favoris, réglages et heures de ton compte sont remis sur ce PC (tes heures actuelles sont gardées si elles sont plus grandes).', ok: '☁ Restaurer', icon: '☁' }))) return;
@@ -1647,11 +1652,107 @@ $('authForm').addEventListener('submit', async (e) => {
   }
   const r = await (authMode === 'inscription' ? api.register(body) : api.login(body)).catch(() => ({ error: 'Erreur réseau.' }));
   $('authGo').disabled = false;
-  if (!r.ok) { $('authErr').textContent = r.error ?? 'Erreur.'; return; }
+  if (r.need2fa) { $('aPass').value = ''; return openStep('2fa', { ticket: r.ticket }); }
+  if (!r.ok) { $('authErr').textContent = r.error ?? 'Erreur.'; window.sfx?.play('error'); return; }
   $('aPass').value = '';
+  loggedInUi(r, authMode === 'inscription');
+});
+function loggedInUi(r, isNew) {
   setAccount(r.compte);
+  window.sfx?.play('success');
+  if (r.compte && r.compte.verified === false) return openStep('verif');
   showAuth(false);
-  toast(authMode === 'inscription' ? `Bienvenue ${r.compte.pseudo} ! 🎉` : `Content de te revoir, ${r.compte.pseudo} !`);
+  toast(isNew ? `Bienvenue ${r.compte.pseudo} ! 🎉` : `Content de te revoir, ${r.compte.pseudo} !`);
+  if (r.recoveryLeft != null) toast(`Code de secours utilisé : il t’en reste ${r.recoveryLeft}`);
+}
+// Étapes : code de double authentification, vérification de l'e-mail, mot de passe oublié
+let step = null;
+const STEPS = {
+  '2fa': { title: '🛡 Double authentification', text: 'Entre le code à 6 chiffres de ton application d’authentification (ou un code de secours).', go: 'Se connecter', resend: false },
+  verif: { title: '✉ Vérifie ton e-mail', text: 'On t’a envoyé un code à 6 chiffres par e-mail (regarde aussi les spams).', go: 'Valider mon e-mail', resend: true },
+  oubli: { title: '🔑 Mot de passe oublié', text: 'Entre ton e-mail : on t’envoie un code pour choisir un nouveau mot de passe.', go: 'Recevoir le code', resend: false, email: true, nocode: true },
+  reset: { title: '🔑 Nouveau mot de passe', text: 'Entre le code reçu par e-mail et ton nouveau mot de passe.', go: 'Changer le mot de passe', resend: false, pass: true },
+};
+function openStep(kind, data = {}) {
+  step = { kind, ...data };
+  const d = STEPS[kind];
+  showAuth(true);
+  $('authForm').hidden = true; $('authTabs').hidden = true; $('authForgot').hidden = true;
+  $('authStep').hidden = false;
+  $('stepTitle').textContent = d.title; $('stepText').textContent = d.text; $('stepGo').textContent = d.go;
+  $('stepEmailF').hidden = !d.email; $('stepPassF').hidden = !d.pass; $('stepCode').hidden = Boolean(d.nocode);
+  $('stepResend').hidden = !d.resend; $('stepErr').textContent = ''; $('stepCode').value = ''; $('stepPass').value = '';
+  if (d.email) $('stepEmail').value = $('aEmail').value;
+  setTimeout(() => (d.email ? $('stepEmail') : $('stepCode')).focus(), 50);
+}
+function closeStep() {
+  step = null;
+  $('authStep').hidden = true; $('authForm').hidden = false; $('authTabs').hidden = false; $('authForgot').hidden = false;
+}
+$('authForgot').addEventListener('click', () => openStep('oubli'));
+$('stepBack').addEventListener('click', () => { if (step?.kind === 'verif') { closeStep(); showAuth(false); toast('Tu pourras vérifier ton e-mail dans Paramètres › Compte'); } else closeStep(); });
+$('stepResend').addEventListener('click', async () => { const r = await api.verifyResend(); toast(r?.ok ? 'Nouveau code envoyé ✉' : r?.error ?? 'Impossible'); });
+$('authStep').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!step) return;
+  $('stepGo').disabled = true; $('stepErr').textContent = '';
+  const code = $('stepCode').value.trim();
+  let r;
+  if (step.kind === '2fa') r = await api.login2fa(step.ticket, code);
+  if (step.kind === 'verif') r = await api.verifyEmail(code);
+  if (step.kind === 'oubli') r = await api.forgotPassword($('stepEmail').value.trim());
+  if (step.kind === 'reset') {
+    const bad = passwordProblem($('stepPass').value);
+    r = bad ? { ok: false, error: bad } : await api.resetPassword(step.email, code, $('stepPass').value);
+  }
+  $('stepGo').disabled = false;
+  if (!r?.ok) { $('stepErr').textContent = r?.error ?? 'Erreur.'; window.sfx?.play('error'); return; }
+  if (step.kind === '2fa') { closeStep(); return loggedInUi(r, false); }
+  if (step.kind === 'verif') { closeStep(); setAccount(r.compte); showAuth(false); window.sfx?.play('success'); return toast('E-mail vérifié ✓'); }
+  if (step.kind === 'oubli') { if (r.mail === false) { $('stepErr').textContent = 'L’envoi d’e-mails n’est pas encore activé sur le serveur.'; return; } return openStep('reset', { email: $('stepEmail').value.trim() }); }
+  if (step.kind === 'reset') { const mail = step.email; closeStep(); window.sfx?.play('success'); $('aEmail').value = mail; toast('Mot de passe changé : connecte-toi avec le nouveau'); }
+});
+// Paramètres › Compte : état et double authentification
+function showSecurity() {
+  const c = state.account;
+  $('secState').textContent = !c ? 'Connecte-toi pour gérer la sécurité.' : `${c.email} · ${c.verified === false ? '✉ e-mail à vérifier' : '✓ e-mail vérifié'} · ${c.twoFactor ? '🛡 double authentification activée' : 'double authentification désactivée'}`;
+  $('secVerify').hidden = !c || c.verified !== false;
+  $('sec2fa').hidden = !c;
+  $('sec2fa').textContent = c?.twoFactor ? '🛡 Désactiver la double authentification' : '🛡 Activer la double authentification';
+}
+$('secVerify').addEventListener('click', async () => { $('settings').close(); await api.verifyResend(); openStep('verif'); });
+$('sec2fa').addEventListener('click', async () => {
+  $('settings').close();
+  if (state.account?.twoFactor) {
+    const pw = await ui.prompt({ title: 'Désactiver la double authentification', text: 'Ton mot de passe :', placeholder: 'Mot de passe', ok: 'Continuer', icon: '🛡' });
+    if (!pw) return;
+    const code = await ui.prompt({ title: 'Code de l’application', text: 'Le code à 6 chiffres (ou un code de secours) :', placeholder: '000000', ok: 'Désactiver', icon: '🛡' });
+    if (!code) return;
+    const r = await api.twoFaOff(pw, code);
+    if (r?.compte) setAccount(r.compte);
+    return toast(r?.ok ? 'Double authentification désactivée' : r?.error ?? 'Impossible');
+  }
+  const s = await api.twoFaStart();
+  if (!s?.ok) return toast(s?.error ?? 'Impossible');
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🛡</span><h2>Double authentification</h2></div>
+    <div class="qrwrap"><img src="${esc(s.qr)}" alt="QR code"><div><p>1. Ouvre ton application d’authentification (Google Authenticator, Microsoft Authenticator, Authy, 2FAS…).</p><p>2. Scanne ce QR code, ou entre la clé :</p><code>${esc(s.secret.replace(/(.{4})/g, '$1 ').trim())}</code></div></div>
+    <p>3. Entre le code à 6 chiffres affiché :</p><input id="tfCode" class="codein" inputmode="numeric" maxlength="6" placeholder="000000"><p class="autherr" id="tfErr"></p>
+    <div class="row end"><button type="button" class="btn ghost" data-m="1">Annuler</button><button type="button" class="btn play" id="tfGo">Activer</button></div>`;
+  $('modal').showModal();
+  setTimeout(() => $('tfCode')?.focus(), 50);
+  $('modalBox').onclick = async (e) => {
+    if (e.target.closest('[data-m]')) return $('modal').close();
+    if (!e.target.closest('#tfGo')) return;
+    const r = await api.twoFaOn($('tfCode').value.trim());
+    if (!r?.ok) { $('tfErr').textContent = r?.error ?? 'Code incorrect'; window.sfx?.play('error'); return; }
+    setAccount(r.compte);
+    window.sfx?.play('success');
+    $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>Double authentification activée</h2></div>
+      <p>Garde ces <b>codes de secours</b> en lieu sûr : chacun marche une seule fois si tu perds ton téléphone.</p>
+      <div class="recov">${r.recovery.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
+      <div class="row end"><button type="button" class="btn" id="tfCopy">Copier</button><button type="button" class="btn play" data-m="1">J’ai noté mes codes</button></div>`;
+    $('tfCopy').onclick = () => { navigator.clipboard?.writeText(r.recovery.join('\n')); toast('Codes copiés'); };
+  };
 });
 $('authSkip').addEventListener('click', async () => { await api.skipAccount?.(); showAuth(false); });
 $('profileBtn').addEventListener('click', async () => {
@@ -1755,7 +1856,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.12.1',
+    version: async () => '0.13.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

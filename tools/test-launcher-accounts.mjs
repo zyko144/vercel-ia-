@@ -79,6 +79,62 @@ await check('mot de passe : règle claire, accents et symboles acceptés, trop f
   assert.equal(r.status, 201, 'inscription avec un mot de passe accentué');
 });
 
+// E-mails simulés : on intercepte l'appel à Resend (rien n'est envoyé) pour lire le code
+const mails = [];
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (u, o) => {
+  if (String(u).startsWith('https://api.resend.com/')) { mails.push(JSON.parse(o.body)); return new Response('{}', { status: 200 }); }
+  return realFetch(u, o);
+};
+process.env.RESEND_API_KEY = 'cle-de-test';
+const codeFrom = (m) => m.subject.match(/^(\d{6})/)[1];
+const { totp } = await import('../src/features/launcherSecurity.js');
+
+await check('vérification de l’e-mail : code envoyé, mauvais code refusé, bon code accepté', async () => {
+  const r = await post('inscription', { pseudo: 'Zoe', email: 'zoe@exemple.fr', motDePasse: 'Zoe-2026!' }, '5.5.5.5');
+  assert.equal(r.compte.verified, false);
+  await new Promise((ok) => setTimeout(ok, 50));
+  assert.equal(mails.at(-1).to[0], 'zoe@exemple.fr');
+  assert.ok(!JSON.stringify(await load('launcher-comptes', {})).includes(codeFrom(mails.at(-1))), 'code jamais gardé en clair');
+  assert.equal((await post('verif', { code: '000000' }, '5.5.5.5', r.token)).status, 400);
+  const ok = await post('verif', { code: codeFrom(mails.at(-1)) }, '5.5.5.5', r.token);
+  assert.equal(ok.compte.verified, true);
+});
+
+await check('mot de passe oublié : même réponse sans compte, code par e-mail, sessions coupées', async () => {
+  const n = mails.length;
+  assert.equal((await post('mdp/oubli', { email: 'personne@exemple.fr' }, '6.6.6.6')).ok, true);
+  assert.equal(mails.length, n, 'aucun e-mail pour un compte inexistant');
+  await post('mdp/oubli', { email: 'zoe@exemple.fr' }, '6.6.6.6');
+  const code = codeFrom(mails.at(-1));
+  assert.equal((await post('mdp/nouveau', { email: 'zoe@exemple.fr', code, motDePasse: 'court' }, '6.6.6.6')).status, 400);
+  assert.equal((await post('mdp/nouveau', { email: 'zoe@exemple.fr', code, motDePasse: 'Nouveau-2026!' }, '6.6.6.6')).ok, true);
+  assert.equal((await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Zoe-2026!' }, '6.6.6.6')).status, 401);
+  assert.equal((await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '6.6.6.6')).status, 200);
+});
+
+await check('double authentification : QR, activation, connexion en 2 étapes, code de secours', async () => {
+  const login = await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '7.7.7.7');
+  const t = login.token;
+  const start = await post('2fa/debut', {}, '7.7.7.7', t);
+  assert.match(start.url, /^otpauth:\/\/totp\/History%3Azoe%40exemple\.fr\?secret=[A-Z2-7]+&issuer=History/);
+  assert.equal((await post('2fa/activer', { code: '123456' }, '7.7.7.7', t)).status, 400);
+  const on = await post('2fa/activer', { code: totp(start.secret) }, '7.7.7.7', t);
+  assert.equal(on.compte.twoFactor, true);
+  assert.equal(on.recovery.length, 8);
+  const step1 = await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '7.7.7.7');
+  assert.equal(step1.need2fa, true);
+  assert.equal(step1.token, undefined, 'pas de session avant le code');
+  assert.equal((await post('connexion/2fa', { ticket: step1.ticket, code: '000000' }, '7.7.7.7')).status, 401);
+  const step2 = await post('connexion/2fa', { ticket: step1.ticket, code: on.recovery[0] }, '7.7.7.7');
+  assert.ok(step2.token);
+  assert.equal(step2.recoveryLeft, 7, 'code de secours à usage unique');
+  const again = await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '7.7.7.7');
+  assert.equal((await post('connexion/2fa', { ticket: again.ticket, code: on.recovery[0] }, '7.7.7.7')).status, 401, 'code de secours déjà utilisé');
+  assert.equal((await post('2fa/desactiver', { motDePasse: 'faux', code: on.recovery[1] }, '7.7.7.7', step2.token)).status, 401);
+  assert.equal((await post('2fa/desactiver', { motDePasse: 'Nouveau-2026!', code: on.recovery[1] }, '7.7.7.7', step2.token)).compte.twoFactor, false);
+});
+
 server.close();
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);

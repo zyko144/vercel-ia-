@@ -1523,10 +1523,36 @@ for (const kind of ['inscription', 'connexion']) {
   ipcMain.handle(`account:${kind}`, async (_e, body) => {
     const clean = { pseudo: String(body?.pseudo ?? '').slice(0, 40), email: String(body?.email ?? '').slice(0, 254), motDePasse: String(body?.motDePasse ?? '').slice(0, 128) };
     const r = await api(`/api/compte/${kind}`, { method: 'POST', body: clean }).catch(() => ({ status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }));
-    if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); setTimeout(() => autoRestore().catch(() => {}), 1500); }
-    return { ok: Boolean(r.token), compte: r.compte ?? null, error: r.token ? null : r.error ?? 'Erreur.' };
+    if (r.need2fa) return { ok: false, need2fa: true, ticket: r.ticket };
+    return loggedIn(r);
   });
 }
+function loggedIn(r) {
+  if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); setTimeout(() => autoRestore().catch(() => {}), 1500); }
+  return { ok: Boolean(r.token), compte: r.compte ?? null, error: r.token ? null : r.error ?? 'Erreur.', recoveryLeft: r.recoveryLeft };
+}
+// Sécurité du compte : double authentification (QR code), vérification de l'e-mail, mot de passe oublié
+const code6 = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 20);
+const secu = async (pathname, body, auth = true) => {
+  const token = auth ? secret('account') : undefined;
+  if (auth && !token) return { ok: false, error: 'Connecte-toi d’abord.' };
+  const r = await api(pathname, { method: 'POST', token, body }).catch(() => ({ status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }));
+  return { ...r, ok: r.status === 200 && r.ok !== false };
+};
+ipcMain.handle('account:2fa', async (_e, ticket, code) => loggedIn(await api('/api/compte/connexion/2fa', { method: 'POST', body: { ticket: String(ticket ?? '').slice(0, 64), code: code6(code) } }).catch(() => ({ status: 0, error: 'Serveur injoignable.' }))));
+ipcMain.handle('account:verif', async (_e, code) => { const r = await secu('/api/compte/verif', { code: code6(code) }); if (r.compte) { store.data.settings.lastAccount = r.compte; store.save(); } return r; });
+ipcMain.handle('account:verifResend', () => secu('/api/compte/verif/envoyer', {}));
+ipcMain.handle('account:forgot', (_e, email) => secu('/api/compte/mdp/oubli', { email: String(email ?? '').slice(0, 254) }, false));
+ipcMain.handle('account:reset', (_e, email, code, motDePasse) => secu('/api/compte/mdp/nouveau', { email: String(email ?? '').slice(0, 254), code: code6(code), motDePasse: String(motDePasse ?? '').slice(0, 128) }, false));
+ipcMain.handle('account:2faStart', async () => {
+  const r = await secu('/api/compte/2fa/debut', {});
+  if (!r.url) return r;
+  const QR = (await import('qrcode')).default;
+  const qr = await QR.toDataURL(r.url, { margin: 1, width: 240, color: { dark: '#0b0910', light: '#ffffff' } });
+  return { ok: true, qr, secret: r.secret };
+});
+ipcMain.handle('account:2faOn', (_e, code) => secu('/api/compte/2fa/activer', { code: code6(code) }));
+ipcMain.handle('account:2faOff', (_e, motDePasse, code) => secu('/api/compte/2fa/desactiver', { motDePasse: String(motDePasse ?? '').slice(0, 128), code: code6(code) }));
 // ---------- Sauvegarde en ligne (compte History) : toutes les 30 min, à la fermeture, et restauration sur un nouveau PC ----------
 let lastBackupHash = null;
 async function backupNow(force = false) {
