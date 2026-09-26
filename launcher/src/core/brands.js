@@ -2,6 +2,8 @@
 // Chaque appli a sa couleur de marque (fond de sa carte) et, si on l'a, son logo officiel en vectoriel (net à toutes
 // les tailles, fichiers dans ui/brands). Sinon on prend l'icône de l'appli en 256 px sur le même fond.
 const B = (re, color, slug = null) => ({ re: new RegExp(`^(?:${re})(?![a-z0-9])`, 'i'), color, slug });
+// Fonds illustrés (ui/brands/bg) : l'image remplit la carte de l'appli
+const BACKGROUNDS = { spotify: 'spotify', discord: 'discord', ubisoft: 'ubisoft', avast: 'avast', winrar: 'winrar' };
 
 export const BRANDS = [
   // Musique
@@ -37,5 +39,7 @@ export const BRANDS = [
 /** La marque d'une appli (null si ce n'est pas une grosse appli). */
 export function brandOf(name) {
   const b = BRANDS.find((x) => x.re.test(String(name ?? '').trim()));
-  return b ? { color: b.color, logo: b.slug ? `brands/${b.slug}.svg` : null } : null;
+  if (!b) return null;
+  const key = Object.keys(BACKGROUNDS).find((k) => b.slug === k || b.re.test(k));
+  return { color: b.color, logo: b.slug ? `brands/${b.slug}.svg` : null, bg: key ? `brands/bg/${BACKGROUNDS[key]}.png` : null };
 }

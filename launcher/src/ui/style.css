@@ -594,3 +594,7 @@ dialog[open] > .dlg, dialog[open] > .sheet { animation: popIn .22s cubic-bezier(
 .optilink { cursor: default; }
 #showHidden.on { border-color: var(--blue); color: #fff; }
 @media (max-width: 1250px) { .optihero { grid-template-columns: 1fr; justify-items: center; text-align: center; } .optibtns { justify-content: center; } .optibtns .toggle { margin-left: 0; } .obody { padding-left: 16px; } }
+
+/* Fonds illustrés des grosses applis */
+.art .bgl.brandimg, .hero .hbg.brandimg { inset: 0; background-size: cover; background-position: center; filter: none; transform: none; image-rendering: auto; }
+.hero .hbg.brandimg { filter: saturate(1.1) brightness(.85); }
