@@ -404,7 +404,6 @@ body { background:
     </div>
   </section>
 
-  <section class="live-wrap"><div class="container"><div class="live" id="live" hidden></div></div></section>
 
   <section id="fonctionnalites">
     <div class="container">
@@ -787,17 +786,6 @@ body { background:
       renderPricing();
     });
   });
-
-  // Chiffres en direct
-  fetch('/api/public', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
-    if (!s) return;
-    var box = document.getElementById('live');
-    if (!box) return;
-    var n = function (v) { return Number(v || 0).toLocaleString('fr-FR'); };
-    box.innerHTML = [['Serveurs', s.servers], ['Membres', s.members], ['Messages cette semaine', s.messagesWeek], ['Parties jouées cette semaine', s.gamesWeek]]
-      .map(function (x) { return '<div class="live-item"><b>' + n(x[1]) + '</b><span>' + x[0] + '</span></div>'; }).join('');
-    box.hidden = false;
-  }).catch(function () {});
 
   route();
 

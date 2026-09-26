@@ -22,6 +22,8 @@ export const SECTIONS = {
 export const SCHEMA = [
   // ---------- Sécurité ----------
   { key: 'logs.channelId', section: 'securite', type: 'channel', label: 'Salon du journal', help: 'Messages supprimés ou modifiés, arrivées, départs, rôles, salons, sanctions.' },
+  { key: 'antiNuke.enabled', section: 'securite', type: 'bool', label: 'Anti-nuke', def: true, help: 'Quelqu’un supprime des salons ou des rôles, bannit ou crée des webhooks à la chaîne : ses rôles sont retirés, il est exclu 24 h et le chef est prévenu. Il me faut la permission « Voir les logs du serveur ».' },
+  { key: 'antiNuke.limit', section: 'securite', type: 'int', min: 2, max: 20, label: 'Actions destructrices tolérées par minute', def: 4 },
   { key: 'antiRaid.enabled', section: 'securite', type: 'bool', label: 'Anti-raid', def: true, help: 'Beaucoup d’arrivées d’un coup : le serveur se verrouille et le staff est prévenu.' },
   { key: 'antiRaid.joins', section: 'securite', type: 'int', min: 3, max: 50, label: 'Arrivées pour déclencher', def: 8 },
   { key: 'antiRaid.seconds', section: 'securite', type: 'int', min: 5, max: 300, label: 'En combien de secondes', def: 15 },

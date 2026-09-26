@@ -120,6 +120,7 @@ client.once(Events.ClientReady, async (c) => {
 });
 
 attachSecurityEvents(client);
+import('./features/antiNuke.js').then((m) => m.attachAntiNuke(client)).catch((err) => console.warn('[anti-nuke]', err.message));
 
 client.on(Events.MessageCreate, (message) => {
   onMessage(client, message).catch((err) => console.error('[messageCreate]', err));

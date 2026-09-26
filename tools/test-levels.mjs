@@ -30,7 +30,7 @@ const sent = [];
 const roles = new Collection([['777777777777777777', { id: '777777777777777777', members: new Collection() }]]);
 const user = { id: U, username: 'lina', bot: false, displayAvatarURL: () => 'https://cdn.invalid/avatar.png', toString: () => `<@${U}>`, send: async () => {} };
 const member = { id: U, user, displayName: 'Lina', roles: { cache: new Collection(), add: async (ids) => { for (const r of [ids].flat()) member.roles.cache.set(r.id ?? r, {}); } }, setNickname: async (n) => { member.displayName = n; }, toString: () => `<@${U}>` };
-const channel = { id: 'c', isTextBased: () => true, send: async (p) => { sent.push(p); } };
+const channel = { id: 'c', name: '📈・niveaux', isTextBased: () => true, send: async (p) => { sent.push(p); } };
 const guild = { id: G, name: 'Serveur', roles: { cache: roles }, channels: { cache: new Collection([['c', channel]]) }, members: { cache: new Collection([[U, member]]) } };
 setGuildSettings(G, { 'levels.roles': ['2 = 777777777777777777'] });
 const message = () => ({ inGuild: () => true, guildId: G, guild, member, author: { id: U, bot: false }, channel, content: 'un message normal' });

@@ -109,12 +109,8 @@ async function levelUp(guild, member, level, where, gained = 1) {
   const rewards = parseLevelRoles(cfg(guild.id, 'levels.roles'));
   const earned = rewards.filter((r) => r.level <= level).map((r) => r.roleId).filter((id) => guild.roles.cache.has(id) && !member.roles.cache.has(id));
   if (earned.length) await member.roles.add(earned, `Niveau ${level}`).catch(() => {});
-  const channelId = cfg(guild.id, 'levels.channelId');
-  // Sans réglage : le salon « niveau(x) » du serveur s'il existe, sinon celui où le membre vient d'écrire.
-  const levelRoom = guild.channels.cache.find((c) => c.isTextBased?.() && !c.isThread?.() && /niveau|level/i.test(c.name));
-  const forced = config.levelsChannelId && guild.channels.cache.get(config.levelsChannelId);
-  const channel = forced || (channelId && guild.channels.cache.get(channelId)) || levelRoom || where;
-  if (!channel?.isTextBased?.()) return;
+  const channel = await levelChannel(guild);
+  if (!channel) return; // jamais dans le salon de discussion : pas de salon des niveaux, pas d'annonce
   // Mention (notification) seulement tous les 5 niveaux ; sinon le nom, sans ping
   const every = cfg(guild.id, 'levels.pingEvery') || 5;
   const ping = level % every === 0;
@@ -126,7 +122,19 @@ async function levelUp(guild, member, level, where, gained = 1) {
     content: `${ping ? '🏴‍☠️🎉' : '🎉'} ${ping ? `${member}` : `**${member.displayName ?? member.user?.username}**`} passe **niveau ${level}** ! **+🪙 ${reward.toLocaleString('fr-FR')} pièces d’or** (bourse : ${gold.toLocaleString('fr-FR')})${chests ? ` · **📦 ${chests > 1 ? `${chests} coffres` : 'un coffre au trésor'}** dans ta cale` : ''}${newTitle ? ` · nouveau titre : **${newTitle}**` : ''}${level >= PRESTIGE_LEVEL && level - gained < PRESTIGE_LEVEL ? ' · ⭐ **le prestige est débloqué** (/serveur › Prestige)' : ''}${earned.length ? ` · nouveau rôle : ${earned.map((id) => `<@&${id}>`).join(', ')}` : ''}`,
     files: card ? [card] : [],
     allowedMentions: { users: ping ? [member.id] : [], roles: [] },
-  }).catch(() => {});
+  }).catch((err) => console.warn(`[niveaux] carte impossible dans #${channel.name} :`, err.message));
+}
+
+/**
+ * Le salon des cartes de niveau : LEVELS_CHANNEL_ID (s'il est sur ce serveur), sinon le réglage du serveur,
+ * sinon un salon dont le nom contient « niveau » ou « level ». Jamais le salon où le membre vient d'écrire.
+ */
+export async function levelChannel(guild) {
+  const usable = (c) => c?.isTextBased?.() && !c.isThread?.() && !c.isVoiceBased?.() && c.permissionsFor?.(guild.members.me)?.has?.(['ViewChannel', 'SendMessages']) !== false ? c : null;
+  const byId = async (id) => (id ? usable(guild.channels.cache.get(id) ?? await Promise.resolve(guild.channels.fetch?.(id)).catch(() => null)) : null);
+  return await byId(config.levelsChannelId)
+    ?? await byId(cfg(guild.id, 'levels.channelId'))
+    ?? usable(guild.channels.cache.find((c) => c.isTextBased?.() && !c.isThread?.() && !c.isVoiceBased?.() && /niveau|level/i.test(c.name)));
 }
 
 /** Toutes les minutes : XP pour le vocal (au moins 2 personnes, pas en sourdine). */
@@ -137,11 +145,14 @@ export function startLevelLoops(client) {
       if (!cfg(guild.id, 'levels.enabled')) continue;
       const perMinute = cfg(guild.id, 'levels.voiceXp');
       for (const channel of guild.channels.cache.filter((c) => c.isVoiceBased?.()).values()) {
+        if (channel.id === guild.afkChannelId) continue;
         const humans = channel.members.filter((m) => !m.user.bot);
-        if (humans.size < 2) continue;
+        // L'XP demande au moins 2 personnes qui écoutent (pas de farm seul) ; le temps de vocal, lui, compte toujours
+        const listening = humans.filter((m) => !m.voice.selfDeaf && !m.voice.serverDeaf);
         for (const member of humans.values()) {
-          if (member.voice.selfDeaf || member.voice.serverDeaf) continue;
           me(guild.id, member.id).voiceMin += 1;
+          dirty = true;
+          if (listening.size < 2 || !listening.has(member.id)) continue;
           questProgress(guild.id, member.id, 'voc').catch(() => {});
           if (perMinute && !noXp(guild.id, channel)) await addXp(guild, member, perMinute, null);
         }
