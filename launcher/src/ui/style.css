@@ -648,3 +648,31 @@ body.big .gcard:hover, body.big .gridcard:hover { transform: translateY(-6px) sc
 .passhint.good { color: #2ee07a; }
 .hstat .tsrc { display: block; font-style: normal; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .wnew.short > div { padding: 8px 12px; align-items: center; }
+
+/* Serveurs FiveM */
+.fsrvs { display: grid; gap: 8px; max-height: 52vh; overflow-y: auto; }
+.fsrv { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .06); }
+.fsrv .fmeta { flex: 1; min-width: 0; }
+.fsrv .fmeta b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fsrv small { color: var(--muted); }
+.fsrv code { font-size: 11px; opacity: .7; }
+.fsrv .off { color: #ff6b81; }
+.fsrv .star { border: 0; background: none; cursor: pointer; font-size: 20px; color: var(--muted); }
+.fsrv .star.on { color: #ffc940; }
+.btn.sm { padding: 6px 14px; font-size: 13px; }
+
+/* Amis History : actions et messages */
+.hfriend .factions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.hfriend .unread { color: var(--accent); font-weight: 700; }
+.chatbox { width: min(520px, 92vw); height: min(620px, 80vh); }
+.chatbox .mhead { position: relative; }
+.chatbox .fold { position: absolute; right: 0; top: 0; }
+.chatfil { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 6px 2px; }
+.cmsg { max-width: 78%; display: flex; flex-direction: column; }
+.cmsg span { padding: 8px 12px; border-radius: 14px; background: rgba(255, 255, 255, .07); white-space: pre-wrap; word-wrap: break-word; user-select: text; }
+.cmsg small { font-size: 10.5px; color: var(--muted); margin: 2px 6px 0; }
+.cmsg.me { align-self: flex-end; align-items: flex-end; }
+.cmsg.me span { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.chatin { display: flex; gap: 8px; }
+.chatin input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, .04); outline: none; }
+.chatin input:focus { border-color: var(--accent); }

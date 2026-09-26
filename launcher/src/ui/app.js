@@ -6,6 +6,8 @@ const $ = (id) => document.getElementById(id);
 let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
 const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], cols: {}, friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
+const unread = {}; // messages d'amis non lus (id -> nombre)
+let chatWith = null; // discussion ouverte
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -136,7 +138,7 @@ function menuFor(i) {
   if (i.installed && i.installDir) m.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
   if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
   if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
-  if (i.source === 'fivem') m.push('<button data-fivem="1">🔗 Rejoindre un serveur…</button>');
+  if (i.source === 'fivem') m.push('<button data-fivemsrv="1">🌐 Mes serveurs FiveM</button><button data-fivem="1">🔗 Rejoindre un serveur…</button>');
   if (i.custom) m.push('<button data-rename="1">✏ Renommer</button>');
   m.push('<hr>');
   m.push(`<button data-set="hidden">${i.hidden ? '◉ Afficher dans la bibliothèque' : '◌ Masquer de la bibliothèque'}</button>`);
@@ -267,9 +269,9 @@ function renderDeals() {
 
 // ---------- Amis Steam ----------
 const FRIEND_HELP = {
-  cle: 'Ajoute ta clé d’API Steam dans Paramètres pour voir tes amis (gratuit, 1 minute).',
+  cle: 'La liste d’amis Steam n’est pas disponible ici : ajoute tes potes dans l’onglet History (code ami) pour voir à quoi ils jouent, les rejoindre et leur écrire.',
   prive: 'Ta liste d’amis Steam est privée : Steam › Profil › Modifier › Confidentialité › « Liste d’amis » en Public.',
-  compte: 'Aucun compte Steam trouvé sur ce PC. Choisis-le dans Paramètres › Comptes de jeu.',
+  compte: 'Aucun compte Steam trouvé sur ce PC.',
   erreur: 'Steam ne répond pas pour l’instant. Réessaie dans un moment.',
 };
 async function loadFriends(force = false) {
@@ -318,16 +320,62 @@ function renderHistory() {
   $('myCode').textContent = r.code;
   $('hRequests').innerHTML = r.demandes.length ? `<div class="reqbox"><b class="sub">Demandes d’ami</b>${r.demandes.map((d) => `
     <div class="hfriend"><div class="finfo"><b>${esc(d.pseudo)}</b><small>${esc(d.code)}</small></div><button class="btn play" data-hacc="${esc(d.id)}">Accepter</button><button class="btn" data-hrem="${esc(d.id)}">Refuser</button></div>`).join('')}</div>` : '';
+  const playingNow = state.active.size > 0;
+  const joinable = (a) => a.playing && (a.join?.steam || (a.join?.fivem && state.items.some((i) => i.source === 'fivem')) || state.items.some((i) => i.installed && i.name.toLowerCase() === a.playing.toLowerCase()));
   $('hFriends').innerHTML = r.amis.length ? r.amis.map((a) => `
     <div class="hfriend ${a.playing ? 'ingame' : a.online ? 'on' : ''}"><span class="dot"></span>
-      <div class="finfo"><b>${esc(a.pseudo)}</b><small>${a.playing ? `Joue à ${esc(a.playing)}` : a.online ? 'En ligne' : 'Hors ligne'}${a.week ? ` · ${hours(a.week)} cette semaine` : ''}</small></div>
-      <button class="btn ghost" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer">✕</button></div>`).join('') : '<div class="empty">Pas encore d’amis : donne ton code à tes potes, ou ajoute le leur.</div>';
+      <div class="finfo"><b>${esc(a.pseudo)}</b><small>${a.playing ? `Joue à ${esc(a.playing)}${a.since ? ` · depuis ${hours(Math.max(1, (Date.now() - a.since) / 60_000))}` : ''}` : a.online ? 'En ligne' : 'Hors ligne'}${a.week ? ` · ${hours(a.week)} cette semaine` : ''}${unread[a.id] ? ` · <span class="unread">${unread[a.id]} nouveau${unread[a.id] > 1 ? 'x' : ''} message${unread[a.id] > 1 ? 's' : ''}</span>` : ''}</small></div>
+      <div class="factions">
+        ${joinable(a) ? `<button class="btn play sm" data-hjoin="${esc(a.id)}">Rejoindre</button>` : ''}
+        ${a.playing ? `<button class="btn sm" data-hask="${esc(a.id)}" title="Lui demander de jouer ensemble">🎮 On joue ?</button>` : ''}
+        ${playingNow && a.online && !a.playing ? `<button class="btn sm" data-hinv="${esc(a.id)}" title="L’inviter dans ta partie">📨 Inviter</button>` : ''}
+        <button class="btn sm" data-hchat="${esc(a.id)}" data-name="${esc(a.pseudo)}">💬 Message</button>
+        <button class="btn ghost sm" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer">✕</button>
+      </div></div>`).join('') : '<div class="empty">Pas encore d’amis : donne ton code à tes potes, ou ajoute le leur.</div>';
   renderEvents();
   $('eInvites').innerHTML = r.amis.length ? r.amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}">${esc(a.pseudo)}</label>`).join('') : '<small class="hint">Ajoute d’abord des amis.</small>';
   const list = games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes);
   $('eGame').innerHTML = list.map((i) => `<option>${esc(i.name)}</option>`).join('');
   if (!$('eAt').value) { const d = new Date(Date.now() + 3_600_000); d.setMinutes(0, 0, 0); $('eAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
 }
+// ---------- Messages entre amis + synchro en direct ----------
+async function openChat(id, name) {
+  const f = state.hist?.amis?.find((a) => a.id === id);
+  chatWith = { id, name: name ?? f?.pseudo ?? 'Ami' };
+  delete unread[id];
+  $('chatWho').textContent = chatWith.name;
+  $('chatFil').innerHTML = '<p class="hint">Chargement…</p>';
+  if (!$('chatDlg').open) $('chatDlg').showModal();
+  $('chatText').focus();
+  await refreshChat();
+  if (state.hist) renderHistory();
+}
+async function refreshChat() {
+  if (!chatWith) return;
+  const r = await api.chatThread(chatWith.id).catch(() => null);
+  if (!r?.fil) { $('chatFil').innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible de charger la discussion.')}</p>`; return; }
+  $('chatFil').innerHTML = r.fil.length ? r.fil.map((m) => `<div class="cmsg ${m.from === chatWith.id ? 'them' : 'me'}"><span>${esc(m.text)}</span><small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="hint">Pas encore de message : dis bonjour 👋</p>';
+  $('chatFil').scrollTop = $('chatFil').scrollHeight;
+}
+$('chatForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('chatText').value.trim();
+  if (!text || !chatWith) return;
+  $('chatText').value = '';
+  const r = await api.chatSend(chatWith.id, text);
+  if (r?.error) return toast(r.error);
+  refreshChat();
+});
+$('chatClose').addEventListener('click', () => { $('chatDlg').close(); chatWith = null; });
+$('chatDlg').addEventListener('close', () => { chatWith = null; });
+api.onChatOpen?.((d) => { go('amis'); showFriendTab('history'); setTimeout(() => openChat(d.id), 300); });
+api.onSocial?.((d) => {
+  for (const m of d.messages ?? []) { if (chatWith?.id === m.from) refreshChat(); else unread[m.from] = (unread[m.from] ?? 0) + 1; }
+  if (state.hist && !state.hist.error && d.amis) { state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes }; if (state.view === 'amis' && state.ftab === 'history') renderHistory(); }
+  const online = (d.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
+  const n = Object.values(unread).reduce((a, b) => a + b, 0);
+  $('friendsOnline').textContent = n ? `${n} ✉` : online || '';
+});
 function renderEvents() {
   const when = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   $('eventsList').innerHTML = state.events.length ? state.events.map((e) => {
@@ -466,6 +514,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.11.0': [
+    ['👥', 'Amis en direct', 'Quand un ami lance un jeu, une notification apparaît en bas à gauche : Rejoindre ou « On joue ? ».'],
+    ['💬', 'Messages entre amis', 'Écris à tes amis History : ils reçoivent le message en bas à gauche de leur écran, même en jeu.'],
+    ['🌐', 'Serveurs FiveM', 'Clic droit sur FiveM › Mes serveurs : favoris, joueurs en ligne, tes heures par serveur, rejoindre en un clic.'],
+    ['🤖', 'IA sans clé', 'L’assistant marche directement avec ton compte History : plus besoin de clé dans les Paramètres.'],
+  ],
   '0.10.4': [
     ['⬆', 'Mises à jour propres', 'Le launcher demande « Mettre à jour maintenant ? » puis s’installe en silence, sans réinstallation. Tu peux aussi dire à l’IA « fais la mise à jour ».'],
     ['🛠', 'Bibliothèque en direct réparée', 'La liste des jeux se met de nouveau à jour toute seule.'],
@@ -495,6 +549,34 @@ const CHANGELOG = {
   ],
 };
 const vnum = (v) => String(v ?? '0').split('.').map((n) => Number(n) || 0).reduce((a, n) => a * 1000 + n, 0);
+// Serveurs FiveM : favoris avec joueurs en ligne, heures par serveur (tirées des journaux de FiveM), rejoindre en un clic
+async function openFivemServers() {
+  hideCtx();
+  $('modalBox').innerHTML = '<div class="mhead"><span class="micon">🌐</span><h2>Mes serveurs FiveM</h2></div><p class="hint">Chargement…</p>';
+  if (!$('modal').open) $('modal').showModal();
+  const r = await api.fivemServers?.().catch(() => null);
+  const list = (r?.list ?? []).sort((a, b) => (b.fav - a.fav) || (b.minutes - a.minutes));
+  const row = (x) => `<div class="fsrv">
+      <button type="button" class="star ${x.fav ? 'on' : ''}" data-ffav="${esc(x.code)}" data-on="${x.fav ? '' : '1'}" title="${x.fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${x.fav ? '★' : '☆'}</button>
+      <div class="fmeta"><b>${esc(x.name ?? x.code)}</b><small>${x.online === false ? '<span class="off">● Hors ligne</span>' : x.online ? `<span class="ok">● ${x.players}${x.max ? ` / ${x.max}` : ''} joueurs</span>` : '● ?'} · ${x.minutes ? `${hours(x.minutes)} de jeu` : 'pas encore joué'} · <code>${esc(x.code)}</code></small></div>
+      <button type="button" class="btn play sm" data-fjoin="${esc(x.code)}">Rejoindre</button></div>`;
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🌐</span><h2>Mes serveurs FiveM</h2></div>
+    <div class="fsrvs">${list.length ? list.map(row).join('') : '<p class="hint">Aucun serveur pour l’instant : ajoute un favori ou joue une partie, tes serveurs apparaîtront ici avec tes heures.</p>'}</div>
+    ${r?.unknownMinutes > 30 ? `<p class="hint">${hours(r.unknownMinutes)} de jeu sans serveur reconnu (vieux journaux ou connexion directe).</p>` : ''}
+    <div class="row end"><button type="button" class="btn ghost" data-fadd="1">＋ Ajouter un favori</button><button type="button" class="btn" data-m="1">Fermer</button></div>`;
+  $('modalBox').onclick = async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.m) return $('modal').close();
+    if (b.dataset.fjoin) { const j = await api.fivemJoin(b.dataset.fjoin); $('modal').close(); return toast(j?.ok ? 'Connexion au serveur…' : j?.error ?? 'Impossible'); }
+    if (b.dataset.ffav) { await api.fivemFav(b.dataset.ffav, Boolean(b.dataset.on)); return openFivemServers(); }
+    if (b.dataset.fadd) {
+      $('modal').close();
+      const code = await ui.prompt({ title: 'Ajouter un serveur favori', text: 'Colle le lien ou le code du serveur (ex. cfx.re/join/abc123).', placeholder: 'cfx.re/join/…', ok: 'Ajouter', icon: '★' });
+      if (code) { const f = await api.fivemFav(code, true); if (!f?.ok) toast(f?.error ?? 'Impossible'); }
+      return openFivemServers();
+    }
+  };
+}
 async function showWhatsNew(force = false) {
   const v = await api.version?.().catch(() => null);
   let seen = null;
@@ -1081,7 +1163,7 @@ async function loadSheetExtras(i) {
   }).catch(() => {});
   api.achievements?.(i.id).then((a) => {
     if (!$('sxAch') || !a) return;
-    if (a.none) { if (a.none === 'cle' && i.source === 'steam') $('sxAch').innerHTML = '<p class="fine">🏆 Ajoute ta clé Steam dans Paramètres pour voir tes succès.</p>'; return; }
+    if (a.none) return;
     const row = (x) => `<div class="achi ${x.done ? 'done' : ''}">${x.icon ? `<img src="${esc(x.icon)}" alt="">` : '<span class="noic">🏆</span>'}<div><b>${esc(x.name)}</b><small>${esc(x.desc || (x.hidden ? 'Succès caché' : ''))}</small></div>${x.pct != null ? `<em>${x.pct.toFixed(1).replace('.', ',')} %</em>` : ''}</div>`;
     $('sxAch').innerHTML = `<h3>🏆 Succès <small class="hint">${a.done} / ${a.total}</small></h3>
       <div class="gbar big"><i style="width:${(100 * a.done) / a.total}%"></i></div>
@@ -1190,6 +1272,10 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
   if (t.dataset.upd) { const r = await api.action(t.dataset.upd, 'update'); return toast(r?.ok ? 'Steam fait la mise à jour puis lance le jeu' : r?.error ?? 'Impossible pour l’instant'); }
   if (t.dataset.news) return api.openNews(t.dataset.news, t.dataset.gid).then(() => toast('Article ouvert'));
+  if (t.dataset.fivemsrv) return openFivemServers();
+  if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
+  if (t.dataset.hjoin) { const r = await api.friendJoin(t.dataset.hjoin); return toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); }
+  if (t.dataset.hask || t.dataset.hinv) { const r = await api.friendInvite(t.dataset.hask ?? t.dataset.hinv, t.dataset.hask ? 'ask' : 'invite'); return toast(r?.ok ? (t.dataset.hask ? 'Demande envoyée 🎮' : 'Invitation envoyée 📨') : r?.error ?? 'Impossible'); }
   if (t.dataset.fivem) {
     const code = await ui.prompt({ title: 'Rejoindre un serveur FiveM', text: 'Colle le lien ou le code du serveur (ex. cfx.re/join/abc123).', placeholder: 'cfx.re/join/…', ok: 'Rejoindre', icon: '🔗' });
     if (!code) return;
@@ -1282,24 +1368,11 @@ function showKeys(s) {
   $('dealAlerts').checked = s.dealAlerts !== false;
   $('discordStatus').checked = s.discordStatus !== false;
   $('shareActivity').checked = s.shareActivity !== false;
-  $('geminiState').textContent = s.gemini ? '✅ IA active.' : 'Pas de clé trouvée : l’assistant et la recherche d’images par l’IA sont en pause.';
-  $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée.' : 'Sans clé : jeux installés ou déjà joués seulement.';
-  $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée.' : 'Facultatif : l’IA cherche déjà les images manquantes.';
+  $('friendNotifs').checked = s.friendNotifs !== false;
   $('aiState').textContent = s.gemini ? '● en ligne' : '● hors ligne';
   $('aiState').classList.toggle('on', Boolean(s.gemini));
 }
-async function loadAccounts() {
-  const a = await api.platformAccounts?.().catch(() => null);
-  if (!a) return;
-  const opts = (list, chosen, empty) => (list.length ? list.map((x) => `<option value="${esc(x.id)}" ${x.id === chosen ? 'selected' : ''}>${esc(x.name)}${x.recent ? ' (dernier connecté)' : ''}</option>`).join('') : `<option value="">${empty}</option>`);
-  $('accSteam').innerHTML = opts(a.steam, a.chosen.steam, 'Aucun compte Steam trouvé');
-  $('accEpic').innerHTML = opts(a.epic, a.chosen.epic, 'Compte Epic de ce PC');
-  $('totalTime').checked = a.total;
-}
-$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); loadAccounts(); $('settings').showModal(); });
-$('accSteam').addEventListener('change', (e) => e.target.value && api.setPlatformAccounts({ steam: e.target.value }).then(() => toast('Temps de jeu : compte Steam changé')));
-$('accEpic').addEventListener('change', (e) => api.setPlatformAccounts({ epic: e.target.value || null }).then(() => toast('Compte Epic changé')));
-$('totalTime').addEventListener('change', (e) => api.setPlatformAccounts({ total: e.target.checked }).then(() => toast(e.target.checked ? 'Temps total de tous les comptes' : 'Temps d’un seul compte')));
+$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); $('settings').showModal(); });
 document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); api.openLink?.(b.dataset.link); }));
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
@@ -1307,18 +1380,7 @@ $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.ta
 $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: e.target.checked }));
 $('discordStatus').addEventListener('change', (e) => api.setSettings({ discordStatus: e.target.checked }));
 $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActivity: e.target.checked }));
-$('saveKeys').addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const patch = {};
-  for (const id of ['steamKey', 'gridKey', 'geminiKey']) if ($(id).value.trim()) patch[id] = $(id).value.trim();
-  if (!Object.keys(patch).length) return toast('Colle une clé d’abord');
-  const s = await api.setSettings(patch);
-  ['steamKey', 'gridKey', 'geminiKey'].forEach((id) => { $(id).value = ''; });
-  showKeys(s);
-  if (s.error) return toast(`Clé refusée : ${s.error}`);
-  toast('Clés enregistrées');
-  load();
-});
+$('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
 
 // Assistant : bulle en bas à droite, qui s'ouvre et se referme
 function openAssistant(open = !$('aipop').classList.contains('open')) {
@@ -1504,7 +1566,7 @@ say('Salut ! 👋 Dis-moi ce que tu veux : « lance Rocket League », « ferme D
 load().then(() => {
   renderStats().catch(() => {});
   // Aperçu : #vue=classement ou #sel=Nom
-  const h = !window.launcher && decodeURIComponent(location.hash.slice(1));
+  const h = window.launcher ? '' : decodeURIComponent(location.hash.slice(1));
   if (h?.startsWith('vue=')) go(h.slice(4));
   else if (h?.startsWith('sel=')) select(state.items.find((i) => i.name === h.slice(4)) ?? state.sel);
   if (h?.includes('assistant')) openAssistant(true);
@@ -1557,7 +1619,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.10.4',
+    version: async () => '0.11.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

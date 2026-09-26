@@ -1,14 +1,14 @@
 {
   "name": "history-launcher",
   "productName": "History Launcher",
-  "version": "0.10.4",
+  "version": "0.11.0",
   "description": "Toute la bibliothèque du PC (Steam, Epic, applis) au même endroit, triée par temps de jeu",
   "main": "src/main.js",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-scanners.mjs && node test/test-commands.mjs && node test/test-verify.mjs && node test/test-direct.mjs && node test/test-free.mjs && node test/test-social.mjs && node test/test-perf.mjs && node test/test-discord.mjs && node test/test-extras.mjs && node test/test-optimize.mjs && node test/test-daily.mjs && node test/test-fivem.mjs",
+    "test": "node test/test-scanners.mjs && node test/test-commands.mjs && node test/test-verify.mjs && node test/test-direct.mjs && node test/test-free.mjs && node test/test-social.mjs && node test/test-perf.mjs && node test/test-discord.mjs && node test/test-extras.mjs && node test/test-optimize.mjs && node test/test-daily.mjs && node test/test-fivem.mjs && node test/test-friendsync.mjs",
     "dist": "electron-builder --win"
   },
   "devDependencies": {

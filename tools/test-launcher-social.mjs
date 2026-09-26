@@ -22,7 +22,7 @@ const server = startHttpServer(() => ({ discord: 'ready' }));
 await new Promise((r) => server.once('listening', r));
 const base = `http://127.0.0.1:${process.env.PORT}/api/compte`;
 const call = (p, token, body) => fetch(`${base}/${p}`, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
-const signup = async (pseudo, n) => (await call('inscription', null, { pseudo, email: `${pseudo.toLowerCase()}@exemple.fr`, motDePasse: `motdepasse${n}` })).token;
+const signup = async (pseudo, n) => (await call('inscription', null, { pseudo, email: `${pseudo.toLowerCase()}@exemple.fr`, motDePasse: `Jeu-${pseudo}-${n}x` })).token;
 
 const noam = await signup('Noam', 1);
 const max = await signup('Max', 2);
@@ -74,6 +74,41 @@ await check('soirée jeu : seulement des amis invités, réponse, annulation par
   assert.equal((await call('soirees/annuler', max, { id: evId })).status, 404, 'seul l’organisateur annule');
   await call('soirees/annuler', noam, { id: evId });
   assert.equal((await call('soirees', max)).soirees.length, 0);
+});
+
+await check('messages, « on joue ? », invitation et réponse avec de quoi rejoindre', async () => {
+  const maxId = (await call('amis', noam)).amis[0].id;
+  const noamId = (await call('amis', max)).amis[0].id;
+  const zoeId = (await call('boite', zoe)).code;
+  assert.equal((await call('messages', noam, { to: zoeId, text: 'salut' })).status, 404, 'pas amis');
+  assert.equal((await call('messages', noam, { to: maxId, text: '   ' })).status, 400);
+  const t0 = Date.now() - 1;
+  assert.equal((await call('messages', noam, { to: maxId, text: 'On lance une partie ?' })).fil.length, 1);
+  const box = await call(`boite?apres=${t0}`, max);
+  assert.equal(box.items[0].type, 'msg');
+  assert.equal(box.items[0].pseudo, 'Noam');
+  assert.equal(box.items[0].text, 'On lance une partie ?');
+  assert.equal((await call(`messages?avec=${noamId}`, max)).fil[0].text, 'On lance une partie ?');
+  // Max joue sur un serveur FiveM : Noam voit de quoi rejoindre, demande à jouer, Max accepte
+  await call('presence', max, { playing: 'FiveM', join: { fivem: 'abc123' }, week: 10 });
+  const f = (await call('amis', noam)).amis[0];
+  assert.deepEqual(f.join, { fivem: 'abc123' });
+  assert.ok(f.since > 0);
+  await call('presence', max, { playing: 'FiveM', join: { fivem: '<script>' }, week: 10 });
+  assert.equal((await call('amis', noam)).amis[0].join, null, 'lien invalide ignoré');
+  await call('presence', max, { playing: 'FiveM', join: { fivem: 'abc123' }, week: 10 });
+  assert.equal((await call('inviter', noam, { to: maxId, type: 'ask' })).ok, true);
+  assert.equal((await call('inviter', noam, { to: maxId, type: 'ask' })).status, 429, 'pas de spam');
+  const ask = (await call('boite', max)).items.find((x) => x.type === 'ask');
+  assert.equal(ask.game, 'FiveM');
+  await call('inviter/repondre', max, { id: ask.id, oui: true });
+  const reply = (await call('boite', noam)).items.find((x) => x.type === 'reply');
+  assert.equal(reply.oui, true);
+  assert.deepEqual(reply.join, { fivem: 'abc123' });
+  // Invitation de Noam (Steam) → Max accepte et reçoit le lien
+  await call('inviter', noam, { to: maxId, type: 'invite', game: 'Rocket League', join: { steam: '252950' } });
+  const inv = (await call('boite', max)).items.find((x) => x.type === 'invite');
+  assert.deepEqual((await call('inviter/repondre', max, { id: inv.id, oui: true })).join, { steam: '252950' });
 });
 
 await check('retirer un ami : des deux côtés', async () => {
