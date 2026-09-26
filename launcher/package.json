@@ -2,13 +2,13 @@
   "name": "history-launcher",
   "productName": "History Launcher",
   "version": "0.1.0",
-  "description": "Toute la bibliothèque du PC (Steam, Epic, applis) au même endroit, triée par temps de jeu",
+  "description": "Toute la biblioth\u00e8que du PC (Steam, Epic, applis) au m\u00eame endroit, tri\u00e9e par temps de jeu",
   "main": "src/main.js",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-scanners.mjs",
+    "test": "node test/test-scanners.mjs && node test/test-commands.mjs",
     "dist": "electron-builder --win"
   },
   "devDependencies": {

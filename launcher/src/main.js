@@ -17,6 +17,10 @@ import { steamPath } from './core/library.js';
 import { epicActions } from './core/epic.js';
 import { steamActions } from './core/steam.js';
 import { createStore } from './core/store.js';
+import { quickVerify, safeGameDir, uninstallFiles } from './core/manage.js';
+import { stripWake, understand } from './core/commands.js';
+import { speak, startListening } from './core/voice.js';
+import { session } from 'electron';
 import { enrich } from './core/art.js';
 import { startTracker } from './core/tracker.js';
 
@@ -125,8 +129,7 @@ function setSecret(name, value) {
 
 // Logos des applis : l'icône du .exe en haute définition (256 px), gardée en mémoire
 const icons = new Map();
-async function iconOf(item) {
-  const file = item.exe || item.icon;
+async function fileIcon(file) {
   if (!file || !/\.(exe|ico)$/i.test(file)) return null;
   if (!icons.has(file)) {
     let img = null;
@@ -135,6 +138,17 @@ async function iconOf(item) {
     icons.set(file, img && !img.isEmpty() ? img.toDataURL() : null);
   }
   return icons.get(file);
+}
+/** Le logo d'une appli : son .exe, sinon l'icône indiquée par Windows, sinon le programme principal de son dossier. */
+const exeFound = new Map();
+async function iconOf(item) {
+  for (const file of [item.exe, item.icon]) {
+    const icon = await fileIcon(file);
+    if (icon) return icon;
+  }
+  if (!item.installDir || !item.installed) return null;
+  if (!exeFound.has(item.installDir)) exeFound.set(item.installDir, await findExe(item.installDir, 1).catch(() => null));
+  return fileIcon(exeFound.get(item.installDir));
 }
 
 // Noms des jeux Steam désinstallés (le fichier local ne garde que leur numéro)
@@ -232,33 +246,92 @@ async function confirm(message, detail) {
   return r.response === 1;
 }
 
+// Steam en arrière-plan : steam.exe -silent lance le jeu sans ouvrir la fenêtre de Steam
+async function steamExe() {
+  const dir = await steamPath();
+  return dir ? path.join(dir, 'steam.exe') : null;
+}
+async function runSilentSteam(args) {
+  const exe = await steamExe();
+  if (!exe || process.platform !== 'win32') return false;
+  spawn(exe, ['-silent', ...args], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  return true;
+}
+const epicLauncherInstalled = () => path.join(process.env.ProgramData ?? 'C:\\ProgramData', 'Epic', 'UnrealEngineLauncher', 'LauncherInstalled.dat');
+
 async function doAction(id, action) {
   const item = items.find((i) => i.id === id); // jamais une commande venue de l'interface : seulement nos éléments
   if (!item) throw new Error('élément inconnu');
-  if (item.source === 'steam') {
-    const links = steamActions(item.steamId);
-    if (action === 'uninstall' && !await confirm(`Désinstaller ${item.name} ?`, 'Steam va demander une dernière confirmation.')) return { ok: false };
-    if (links[action]) return openLink(links[action]).then(() => ({ ok: true }));
-  }
-  if (item.source === 'epic') {
-    const links = epicActions(item.epicKey);
-    if (links[action]) return openLink(links[action]).then(() => ({ ok: true }));
-  }
   if (action === 'folder' && item.installDir) return shell.openPath(item.installDir).then(() => ({ ok: true }));
+  if (action === 'store' && item.source === 'steam') return openLink(steamActions(item.steamId).store).then(() => ({ ok: true }));
+
   if (action === 'launch') {
+    // Steam : sans ouvrir Steam (il tourne en fond, invisible) ; Epic : lien silencieux ; autres : l'exécutable
+    if (item.source === 'steam' && await runSilentSteam(['-applaunch', item.steamId])) return { ok: true };
+    if (item.source === 'epic') return openLink(epicActions(item.epicKey).launch).then(() => ({ ok: true }));
     const exe = item.exe ?? await findExe(item.installDir);
     if (!exe) throw new Error('exécutable introuvable');
     const err = await shell.openPath(exe);
     if (err) throw new Error(err);
     return { ok: true };
   }
-  if (action === 'uninstall' && item.uninstallCmd) {
-    if (!await confirm(`Désinstaller ${item.name} ?`, 'Le programme de désinstallation va s’ouvrir.')) return { ok: false };
-    // La commande vient du registre de Windows (et non de l'interface) : c'est celle que Windows lancerait
-    spawn(item.uninstallCmd, { shell: true, detached: true, windowsHide: false, stdio: 'ignore' }).unref();
-    return { ok: true };
+
+  if (action === 'verify') {
+    // Vérification par le launcher (fichiers présents, taille attendue) ; réparation officielle proposée si besoin
+    const r = await quickVerify(item);
+    if (!r.ok && ['steam', 'epic'].includes(item.source)) {
+      const fix = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Plus tard', 'Réparer'], defaultId: 1, cancelId: 0, message: `${item.name} : problème détecté`, detail: `${r.problems.join('\n')}\n\nLa réparation télécharge les fichiers manquants depuis ${item.source === 'steam' ? 'Steam' : 'Epic'}, en arrière-plan.` });
+      if (fix.response === 1) {
+        if (item.source === 'steam') await runSilentSteam([`steam://validate/${item.steamId}`]);
+        else await openLink(epicActions(item.epicKey).verify);
+      }
+    }
+    return { ok: true, verify: r };
+  }
+
+  if (action === 'install') {
+    // Le téléchargement passe forcément par les serveurs de Steam / Epic (compte et licence) : lancé en arrière-plan
+    if (item.source === 'steam' && await runSilentSteam([`steam://install/${item.steamId}`])) return { ok: true };
+    if (item.source === 'epic') return openLink(epicActions(item.epicKey).install).then(() => ({ ok: true }));
+    throw new Error('installation impossible pour cet élément');
+  }
+
+  if (action === 'uninstall') {
+    if (['steam', 'epic'].includes(item.source)) {
+      const check = safeGameDir(item);
+      if (!check.ok) throw new Error(check.why);
+      const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Annuler', 'Supprimer définitivement'], defaultId: 0, cancelId: 0, message: `Désinstaller ${item.name} ?`, detail: `Le dossier suivant sera supprimé définitivement (${(item.size / 1e9).toFixed(1).replace('.', ',')} Go) :\n${check.dir}\n\n${item.source === 'steam' ? 'Steam' : 'Epic'} n’a pas besoin d’être ouvert.` });
+      if (r.response !== 1) return { ok: false };
+      await uninstallFiles(item, { launcherInstalled: epicLauncherInstalled() });
+      scan().then((lib) => send('lib:update', lib)).catch(() => {});
+      return { ok: true };
+    }
+    if (item.uninstallCmd) {
+      if (!await confirm(`Désinstaller ${item.name} ?`, 'Le programme de désinstallation de l’éditeur va s’ouvrir.')) return { ok: false };
+      // La commande vient du registre de Windows (et non de l'interface) : c'est celle que Windows lancerait
+      spawn(item.uninstallCmd, { shell: true, detached: true, windowsHide: false, stdio: 'ignore' }).unref();
+      return { ok: true };
+    }
+  }
+
+  if (action === 'close') {
+    // Fermer un jeu ou une appli : seulement les programmes situés dans son propre dossier
+    const closed = await closeItem(item);
+    return closed ? { ok: true } : { ok: false, error: 'rien à fermer' };
   }
   throw new Error('action impossible pour cet élément');
+}
+
+async function closeItem(item) {
+  const { runningPaths } = await import('./core/tracker.js');
+  const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
+  if (!dir || dir.split('\\').filter(Boolean).length < 3) return false;
+  const targets = (await runningPaths()).filter((p) => p.startsWith(`${dir}\\`) && p.endsWith('.exe'));
+  // Chemin exact transmis par variable d'environnement : rien n'est collé dans la commande PowerShell
+  for (const exe of targets) {
+    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Process | Where-Object { $_.Path -and $_.Path.ToLower() -eq $env:HL_CLOSE } | Stop-Process -Force'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, HL_CLOSE: exe } });
+  }
+  return targets.length > 0;
 }
 
 ipcMain.handle('lib:scan', () => scan());
@@ -312,9 +385,9 @@ ipcMain.handle('reco:get', async () => {
     const id = await steamMatch(r.name).catch(() => null);
     if (id) list.push({ name: r.name, why: r.why, steamId: id, art: steamArtUrls(id) });
   }
-  // Sans IA : les jeux possédés mais pas installés
-  const fallback = games.filter((i) => !i.installed).sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((i) => ({ name: i.name, why: 'Dans ta bibliothèque', itemId: i.id, art: i.art }));
-  store.data.reco = { at: Date.now(), list: list.length ? list : fallback };
+  // Sans IA : pas de recommandation (on n'affiche jamais un jeu au hasard)
+  if (!list.length) return [];
+  store.data.reco = { at: Date.now(), list };
   store.save();
   return store.data.reco.list;
 });
@@ -345,28 +418,120 @@ const findItem = (name) => {
   if (!n) return null;
   return items.find((i) => norm(i.name) === n) ?? items.find((i) => norm(i.name).includes(n) || n.includes(norm(i.name)));
 };
-ipcMain.handle('ai:ask', async (_e, message) => {
-  const text = String(message ?? '').slice(0, 500);
-  if (!text.trim()) return { reply: '…' };
-  const ai = await getAi();
+// ---------- Assistant : commandes gratuites d'abord, Gemini pour le reste ----------
+async function runCommand(text, { voice = false } = {}) {
+  const clean = String(text ?? '').slice(0, 500).trim();
+  if (!clean) return { reply: '…', action: 'none' };
   const np = await nowPlaying().catch(() => null);
-  const context = {
-    items: [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 200).map((i) => `${i.name} · ${SOURCES[i.source]?.label ?? i.source} · ${i.installed ? 'oui' : 'non'} · ${Math.round(i.minutes / 60)} h`).join('\n'),
-    music: np?.artist ? `${np.artist} - ${np.title}` : '',
-  };
-  let r;
-  try { r = await assistant(ai, text, context); } catch (err) { return { reply: `Je n’arrive pas à joindre l’IA (${err.message}).`, action: 'none' }; }
-  const out = { reply: r.reply, action: r.action, value: r.value };
-  if (['launch', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) {
-    const item = findItem(r.target);
-    if (!item) return { reply: `Je ne trouve pas « ${r.target} » dans ta bibliothèque.`, action: 'none' };
-    out.itemId = item.id;
-    const done = await doAction(item.id, r.action).catch((err) => ({ ok: false, error: err.message }));
-    if (!done.ok && done.error) out.reply += ` (impossible : ${done.error})`;
+  const c = understand(stripWake(clean) ?? clean, items, { music: np });
+  let out = { reply: c.reply, action: c.action, value: c.value, itemId: c.itemId };
+  if (['launch', 'install', 'verify', 'uninstall', 'folder', 'close'].includes(c.action)) {
+    const done = await doAction(c.itemId, c.action).catch((err) => ({ ok: false, error: err.message }));
+    if (done.ok === false && done.error) out.reply = `${c.reply.replace(/\.$/, '')} : impossible (${done.error}).`;
+    if (done.ok === false && !done.error) out.reply = 'D’accord, j’annule.';
+  } else if (c.action === 'music') {
+    await mediaKey(c.value === 'pause' || c.value === 'play' ? 'toggle' : c.value);
+  } else if (c.action === 'volume') {
+    for (let n = 0; n < (c.value === 'mute' ? 1 : 5); n++) await mediaKey(c.value);
+  } else if (c.action === 'favorite' || c.action === 'hide') {
+    ((store.data.items[c.itemId] ??= {})[c.action === 'favorite' ? 'favorite' : 'hidden'] = true);
+    store.save();
+    await remerge();
+    send('lib:update', library());
+  } else if (c.action === 'unknown') {
+    // Pas une commande connue : question libre pour Gemini (si une clé est disponible)
+    const ai = await getAi();
+    if (!ai) out = { reply: 'Je n’ai pas compris. Essaie « lance Rocket League », « ferme Discord », « monte le son » ou « trie par taille ».', action: 'none' };
+    else {
+      try {
+        const context = {
+          items: [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 200).map((i) => `${i.name} · ${SOURCES[i.source]?.label ?? i.source} · ${i.installed ? 'installé' : 'non installé'} · ${Math.round(i.minutes / 60)} h`).join('\n'),
+          music: np?.artist ? `${np.artist} - ${np.title}` : '',
+        };
+        const r = await assistant(ai, clean, context);
+        out = { reply: r.reply, action: r.action, value: r.value };
+        const item = r.target ? items.find((i) => norm(i.name) === norm(r.target)) : null;
+        if (item && ['launch', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) { out.itemId = item.id; await doAction(item.id, r.action).catch(() => {}); }
+      } catch (err) {
+        out = { reply: `Je n’arrive pas à joindre l’IA (${err.message}).`, action: 'none' };
+      }
+    }
   }
-  if (r.action === 'music') await mediaKey({ play: 'play', pause: 'pause', next: 'next', previous: 'previous' }[r.value] ?? 'toggle');
+  if (voice) speak(out.reply);
   return out;
+}
+ipcMain.handle('ai:ask', (_e, message) => runCommand(message));
+
+// ---------- Voix : « Hey History … » (écoute Windows) et bouton micro (transcription Gemini) ----------
+let stopListening = null;
+let awaitingCommandUntil = 0;
+function setVoice(on) {
+  stopListening?.();
+  stopListening = null;
+  if (!on) return send('voice:state', { state: 'off' });
+  stopListening = startListening(async (heard) => {
+    const after = stripWake(heard);
+    let command = null;
+    if (after !== null) {
+      if (after) command = after;
+      else { awaitingCommandUntil = Date.now() + 7000; speak('Oui ?'); send('voice:state', { state: 'ecoute' }); return; }
+    } else if (Date.now() < awaitingCommandUntil) command = heard;
+    if (!command) return;
+    awaitingCommandUntil = 0;
+    send('voice:heard', { text: command });
+    const r = await runCommand(command, { voice: true });
+    send('voice:reply', r);
+  }, (state, message) => send('voice:state', { state, message }));
+}
+ipcMain.handle('voice:set', (_e, on) => { store.data.settings.voice = Boolean(on); store.save(); setVoice(Boolean(on)); return { ok: true }; });
+ipcMain.handle('voice:transcribe', async (_e, audio, mime) => {
+  const ai = await getAi();
+  if (!ai?.transcribe) return { reply: 'Le micro a besoin de la clé Gemini (celle du bot ou dans Paramètres).', action: 'none' };
+  if (!(audio instanceof Uint8Array) && !(audio instanceof ArrayBuffer)) return { reply: 'Enregistrement illisible.', action: 'none' };
+  const buf = Buffer.from(audio);
+  if (buf.length > 3 * 1024 * 1024) return { reply: 'Enregistrement trop long.', action: 'none' };
+  const text = await ai.transcribe(buf.toString('base64'), /^audio\/(webm|ogg|wav|mp4)/.test(String(mime)) ? String(mime).split(';')[0] : 'audio/webm').catch(() => '');
+  if (!text) return { reply: 'Je n’ai rien entendu.', action: 'none' };
+  return { heard: text, ...(await runCommand(text, { voice: true })) };
 });
+
+// ---------- Compte History (hébergé par le bot) ----------
+const API = (process.env.HL_API || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
+async function api(pathname, { method = 'GET', body, token } = {}) {
+  const res = await fetch(`${API}${pathname}`, {
+    method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20_000),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { status: res.status, ...data };
+}
+ipcMain.handle('account:get', async () => {
+  const token = secret('account');
+  if (!token) return { compte: null, skipped: Boolean(store.data.settings.skipAccount) };
+  const r = await api('/api/compte/moi', { token }).catch(() => ({ status: 0 }));
+  if (r.status === 401) { setSecret('account', ''); return { compte: null }; }
+  if (r.compte) { store.data.settings.lastAccount = r.compte; store.save(); }
+  // Hors ligne : on garde le dernier profil connu
+  return { compte: r.compte ?? store.data.settings.lastAccount ?? null, offline: r.status === 0 };
+});
+for (const kind of ['inscription', 'connexion']) {
+  ipcMain.handle(`account:${kind}`, async (_e, body) => {
+    const clean = { pseudo: String(body?.pseudo ?? '').slice(0, 40), email: String(body?.email ?? '').slice(0, 254), motDePasse: String(body?.motDePasse ?? '').slice(0, 128) };
+    const r = await api(`/api/compte/${kind}`, { method: 'POST', body: clean }).catch(() => ({ status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }));
+    if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); }
+    return { ok: Boolean(r.token), compte: r.compte ?? null, error: r.token ? null : r.error ?? 'Erreur.' };
+  });
+}
+ipcMain.handle('account:logout', async () => {
+  const token = secret('account');
+  if (token) await api('/api/compte/deconnexion', { method: 'POST', token }).catch(() => {});
+  setSecret('account', '');
+  store.data.settings.lastAccount = null;
+  store.save();
+  return { ok: true };
+});
+ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; store.save(); return { ok: true }; });
+
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 ipcMain.on('win', (_e, what) => {
   if (what === 'min') win?.minimize();
@@ -381,11 +546,14 @@ async function start() {
     const file = localFiles.get(token);
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response('introuvable', { status: 404 });
   });
+  // Micro : autorisé seulement pour la fenêtre du launcher (bouton micro de l'assistant)
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media' && wc === win?.webContents));
   await store.load();
   applyAutostart();
   createWindow();
   createTray();
   startTracker(() => items, store, (ids) => win?.webContents.send('lib:active', ids));
+  if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
 app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', (e) => e.preventDefault());
