@@ -161,7 +161,7 @@ function renderList() {
 }
 
 // ---------- Statistiques ----------
-const CATS = [['jeux', 'Jeux', '#ff3d86'], ['applis', 'Applications', '#a855f7'], ['musique', 'Musique', '#6d7cff'], ['autres', 'Autres', '#2ee07a']];
+const CATS = [['jeux', 'Jeux', '#2f8bff'], ['applis', 'Applications', '#22d3ee'], ['musique', 'Musique', '#6d7cff'], ['autres', 'Autres', '#2ee07a']];
 async function renderStats() {
   const s = await api.stats(state.period);
   const total = Object.values(s.split).reduce((a, b) => a + b, 0);
