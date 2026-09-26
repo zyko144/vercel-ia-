@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld('launcher', {
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
   win: (what) => ipcRenderer.send('win', what),
   onActive: (fn) => ipcRenderer.on('lib:active', (_e, ids) => fn(ids)),
+  onUpdate: (fn) => ipcRenderer.on('lib:update', (_e, lib) => fn(lib)),
+  details: (id) => ipcRenderer.invoke('item:details', id),
+  openLink: (which) => ipcRenderer.invoke('open:link', which),
 });

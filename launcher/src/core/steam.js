@@ -6,11 +6,14 @@ import { parseVdf, pick } from './vdf.js';
 
 // Outils Steam qui ne sont pas des jeux
 const NOT_GAMES = new Set(['228980', '1070560', '1391110', '1628350', '1493710', '2180100', '250820', '1826330']);
-const art = (id) => ({
+/** Images officielles d'un jeu Steam : jaquette, grand fond, bannière et logo détouré. */
+export const steamArt = (id) => ({
   cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_600x900.jpg`,
   hero: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_hero.jpg`,
   header: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`,
+  logo: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/logo.png`,
 });
+const art = steamArt;
 
 async function libraries(steamPath) {
   const text = await readFile(path.join(steamPath, 'steamapps', 'libraryfolders.vdf'), 'utf8').catch(() => null);
@@ -66,6 +69,7 @@ export async function scanSteam(steamPath) {
   const installed = new Set(items.map((i) => i.steamId));
   for (const [id, t] of Object.entries(times)) {
     if (installed.has(id) || NOT_GAMES.has(id) || t.minutes < 5) continue;
+    installed.add(id);
     items.push({ id: `steam:${id}`, source: 'steam', kind: 'game', name: null, installed: false, size: 0, minutes: t.minutes, lastPlayed: t.lastPlayed, art: art(id), steamId: id });
   }
   return items;
@@ -79,3 +83,37 @@ export const steamActions = (id) => ({
   verify: `steam://validate/${id}`,
   store: `https://store.steampowered.com/app/${id}`,
 });
+
+/** Le compte Steam utilisé en dernier (SteamID64), pour lister tous les jeux possédés avec une clé d'API. */
+export async function lastSteamUser(steamPath) {
+  const text = await readFile(path.join(steamPath ?? '', 'config', 'loginusers.vdf'), 'utf8').catch(() => null);
+  const users = text ? pick(parseVdf(text), 'users') ?? {} : {};
+  const ids = Object.keys(users);
+  return ids.find((id) => pick(users[id], 'MostRecent') === '1') ?? ids[0] ?? null;
+}
+
+/** Tous les jeux possédés (même jamais installés), avec la clé d'API Steam de l'utilisateur. */
+export async function ownedSteamGames(apiKey, steamId, fetchImpl = fetch) {
+  if (!apiKey || !steamId) return [];
+  const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&include_appinfo=1&include_played_free_games=1&format=json`;
+  const data = await fetchImpl(url, { signal: AbortSignal.timeout(15_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return (data?.response?.games ?? []).map((g) => ({
+    id: `steam:${g.appid}`, source: 'steam', kind: 'game', name: g.name ?? null, installed: false, size: 0,
+    minutes: g.playtime_forever ?? 0, lastPlayed: (g.rtime_last_played ?? 0) * 1000, art: art(g.appid), steamId: String(g.appid),
+  }));
+}
+
+/** Fiche complète d'un jeu Steam (description, genres, studio, date, note, captures). */
+export async function steamDetails(appid, fetchImpl = fetch) {
+  const data = await fetchImpl(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=french&cc=FR`, { signal: AbortSignal.timeout(10_000) })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const d = data?.[appid]?.success ? data[appid].data : null;
+  if (!d) return null;
+  return {
+    name: d.name, description: stripHtml(d.short_description ?? ''), developers: d.developers ?? [], publishers: d.publishers ?? [],
+    genres: (d.genres ?? []).map((g) => g.description).slice(0, 5), released: d.release_date?.date ?? null,
+    score: d.metacritic?.score ?? null, screenshots: (d.screenshots ?? []).slice(0, 8).map((s) => s.path_thumbnail),
+    background: d.background_raw ?? d.background ?? null, website: d.website ?? null,
+  };
+}
+const stripHtml = (t) => String(t).replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();

@@ -1,5 +1,5 @@
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, safeStorage, shell, Tray } from 'electron';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +7,7 @@ import { SOURCES, findExe, merge, scanAll } from './core/library.js';
 import { epicActions } from './core/epic.js';
 import { steamActions } from './core/steam.js';
 import { createStore } from './core/store.js';
+import { enrich } from './core/art.js';
 import { startTracker } from './core/tracker.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -67,18 +68,38 @@ function applyAutostart() {
   app.setLoginItemSettings({ openAtLogin: Boolean(store.data.settings.autostart), args: ['--au-demarrage'] });
 }
 
-// Icônes des applis (tirées de leur .exe), gardées en mémoire
+// Clés d'API (Steam, SteamGridDB) : chiffrées par Windows (safeStorage), jamais renvoyées à l'interface
+function secret(name) {
+  const box = store.data.secrets?.[name];
+  if (!box) return null;
+  try { return safeStorage.decryptString(Buffer.from(box, 'base64')); } catch { return null; }
+}
+function setSecret(name, value) {
+  store.data.secrets ??= {};
+  const v = String(value ?? '').trim();
+  if (!v) delete store.data.secrets[name];
+  else if (/^[A-Za-z0-9_-]{16,80}$/.test(v) && safeStorage.isEncryptionAvailable()) store.data.secrets[name] = safeStorage.encryptString(v).toString('base64');
+  else throw new Error('clé invalide');
+  store.save();
+}
+
+// Logos des applis : l'icône du .exe en haute définition (256 px), gardée en mémoire
 const icons = new Map();
 async function iconOf(item) {
   const file = item.exe || item.icon;
   if (!file || !/\.(exe|ico)$/i.test(file)) return null;
-  if (!icons.has(file)) icons.set(file, await app.getFileIcon(file, { size: 'large' }).then((i) => i.toDataURL()).catch(() => null));
+  if (!icons.has(file)) {
+    let img = null;
+    if (process.platform === 'win32') img = await nativeImage.createThumbnailFromPath(file, { width: 256, height: 256 }).catch(() => null);
+    if (!img || img.isEmpty()) img = await app.getFileIcon(file, { size: 'large' }).catch(() => null);
+    icons.set(file, img && !img.isEmpty() ? img.toDataURL() : null);
+  }
   return icons.get(file);
 }
 
 // Noms des jeux Steam désinstallés (le fichier local ne garde que leur numéro)
 async function fillSteamNames(list) {
-  const missing = list.filter((i) => i.source === 'steam' && !i.installed && !store.data.names[i.steamId]).slice(0, 25);
+  const missing = list.filter((i) => i.source === 'steam' && !i.name && !store.data.names[i.steamId]).slice(0, 25);
   for (const i of missing) {
     const data = await fetch(`https://store.steampowered.com/api/appdetails?appids=${i.steamId}&filters=basic&l=french`, { signal: AbortSignal.timeout(6000) }).then((r) => r.json()).catch(() => null);
     const name = data?.[i.steamId]?.data?.name;
@@ -87,16 +108,46 @@ async function fillSteamNames(list) {
   if (missing.length) store.save();
 }
 
-async function scan() {
-  const raw = await scanAll();
-  await fillSteamNames(raw).catch(() => {});
+let raw = [];
+const send = (channel, payload) => win?.webContents.send(channel, payload);
+async function remerge() {
   items = merge(raw, store.data);
-  await Promise.all(items.map(async (i) => { if (i.kind !== 'game' || !i.art?.cover) i.iconData = await iconOf(i); }));
+  await Promise.all(items.map(async (i) => { i.iconData = await iconOf(i); }));
+  return items;
+}
+
+async function scan() {
+  raw = await scanAll({}, { steamApiKey: secret('steam') });
+  await fillSteamNames(raw).catch(() => {});
+  await remerge();
+  enrichInBackground().catch(() => {});
   return { items, sources: SOURCES };
 }
 
+// En arrière-plan : images des jeux et applis qui n'en ont pas (4 à la fois), puis mise à jour de l'interface
+let enriching = false;
+async function enrichInBackground() {
+  if (enriching) return;
+  enriching = true;
+  try {
+    store.data.art ??= {};
+    const todo = raw.filter((i) => !(i.art?.cover || i.art?.hero));
+    const gridKey = secret('grid');
+    for (let n = 0; n < todo.length; n += 4) {
+      await Promise.all(todo.slice(n, n + 4).map(async (i) => {
+        store.data.art[i.id] = await enrich(i, { cache: store.data.art[i.id], gridKey });
+      }));
+      store.save();
+      await remerge();
+      send('lib:update', { items, sources: SOURCES });
+    }
+  } finally {
+    enriching = false;
+  }
+}
+
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+)$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
 async function confirm(message, detail) {
@@ -142,13 +193,30 @@ ipcMain.handle('item:set', (_e, id, patch) => {
   store.save();
   return entry;
 });
-ipcMain.handle('settings:get', () => store.data.settings);
-ipcMain.handle('settings:set', (_e, patch) => {
+const publicSettings = () => ({ ...store.data.settings, steamKey: Boolean(secret('steam')), gridKey: Boolean(secret('grid')) });
+ipcMain.handle('settings:get', () => publicSettings());
+ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
+  try {
+    if ('steamKey' in patch) setSecret('steam', patch.steamKey);
+    if ('gridKey' in patch) { setSecret('grid', patch.gridKey); store.data.art = {}; }
+  } catch (err) {
+    return { ...publicSettings(), error: err.message };
+  }
   store.save();
   applyAutostart();
-  return store.data.settings;
+  return publicSettings();
 });
+// Fiche complète d'un jeu, chargée quand on le sélectionne
+ipcMain.handle('item:details', async (_e, id) => {
+  const item = raw.find((i) => i.id === String(id));
+  if (!item || item.kind !== 'game') return null;
+  store.data.art ??= {};
+  store.data.art[item.id] = await enrich(item, { cache: store.data.art[item.id], gridKey: secret('grid'), details: true });
+  store.save();
+  return store.data.art[item.id].details ?? item.details ?? null;
+});
+ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 ipcMain.on('win', (_e, what) => {
   if (what === 'min') win?.minimize();
   else if (what === 'max') win?.isMaximized() ? win.unmaximize() : win?.maximize();
