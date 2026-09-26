@@ -32,7 +32,8 @@
     "test:outils": "node tools/test-outils.mjs",
     "integrity": "node tools/integrity.mjs",
     "backup": "node tools/backup.mjs",
-    "test:hardening": "node tools/test-hardening.mjs"
+    "test:hardening": "node tools/test-hardening.mjs",
+    "backup:setup": "node tools/backup-setup.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
