@@ -455,6 +455,19 @@ async function serverName(guildId, id) {
   return name;
 }
 
+// Limites de débit : personne ne peut saturer l'arcade ni faire exploser la facture de l'IA vocale
+const hits = new Map(); // clé -> { n, until }
+function limited(key, max, ms) {
+  const now = Date.now();
+  const h = hits.get(key);
+  if (!h || now > h.until) { hits.set(key, { n: 1, until: now + ms }); return false; }
+  h.n += 1;
+  return h.n > max;
+}
+setInterval(() => { const now = Date.now(); for (const [k, h] of hits) if (now > h.until) hits.delete(k); }, 60_000).unref();
+const ipOf = (req) => String(req.headers['x-forwarded-for'] ?? req.socket?.remoteAddress ?? '').split(',')[0].trim();
+const tooMany = (res) => json(res, 429, { error: 'Doucement ! Trop de demandes, réessaie dans un instant.' });
+
 /** Répond aux adresses de l'arcade ; false si ce n'est pas pour elle. */
 export async function handleArcadeWeb(req, res, url) {
   const pathname = url.pathname.startsWith('/.proxy/') ? url.pathname.slice('/.proxy'.length) : url.pathname;
@@ -484,6 +497,7 @@ export async function handleArcadeWeb(req, res, url) {
   }
   // Cartes de rôle (loup-garou…), extraits audio et images des jeux de soirée
   if (/^jeux\/[a-z]+\.gif$/.test(rest)) { await serve(res, path.resolve('assets', rest), 'image/gif', 'public, max-age=604800'); return true; }
+  if ((/^api\/(audio|img|pimg)\b/.test(rest) || rest.startsWith('fond/')) && limited(`ip:${ipOf(req)}`, 240, 60_000)) return tooMany(res), true;
   if (/^api\/audio\/\d{1,15}\.mp3$/.test(rest)) {
     const buf = await previewAudio(rest.slice(10, -4)).catch(() => null);
     if (!buf) return json(res, 404, { error: 'extrait introuvable' }), true;
@@ -530,6 +544,7 @@ export async function handleArcadeWeb(req, res, url) {
     const nick = await serverName(r.guildId, user.id);
     if (nick) user.name = nick;
     if (route === 'tts' && req.method === 'POST') {
+      if (limited(`tts:${user.id}`, 30, 60_000)) return tooMany(res), true;
       const body = await readBody(req);
       // La voix du narrateur : celle choisie par le serveur (premium), sinon la voix de base
       const wav = await speech(String(body.text ?? ''), voiceOf(r.guildId, 'Charon'));
@@ -539,6 +554,7 @@ export async function handleArcadeWeb(req, res, url) {
       return true;
     }
     if (route === 'poll' && req.method === 'GET') {
+      if (limited(`poll:${user.id}`, 250, 10_000)) return tooMany(res), true;
       join(r, user);
       const since = Number(url.searchParams.get('since')) || 0;
       const opts = { epoch: url.searchParams.get('epoch'), ops: url.searchParams.get('ops') };
@@ -553,6 +569,7 @@ export async function handleArcadeWeb(req, res, url) {
       return true;
     }
     if (route === 'act' && req.method === 'POST') {
+      if (limited(`act:${user.id}`, 150, 5_000)) return tooMany(res), true;
       join(r, user);
       const body = await readBody(req);
       const out = await act(r, user.id, body);
@@ -568,4 +585,4 @@ export async function handleArcadeWeb(req, res, url) {
   }
 }
 
-export const _test = { rooms, roomOf, join, act, stateFor, GAMES, bump, levenshtein, norm };
+export const _test = { rooms, roomOf, join, act, stateFor, GAMES, bump, levenshtein, norm, hits };

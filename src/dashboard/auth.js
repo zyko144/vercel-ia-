@@ -207,10 +207,19 @@ export function sameOriginWrite(req) {
   if (req.headers['x-dashboard'] !== '1') return false;
   const origin = req.headers.origin;
   if (!origin) return true;
-  const expected = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host}`;
-  const a = Buffer.from(origin);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return trustedOrigin(req, origin);
+}
+
+/**
+ * Origines acceptées : l'adresse vue par le serveur, plus le site public (SITE_URL, APP_URL, PUBLIC_URL)
+ * quand le site passe par un relais (Vercel envoie les requêtes à Render).
+ */
+export function trustedOrigin(req, origin) {
+  const own = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host}`;
+  const allowed = [own, config.publicUrl, config.site.url, process.env.APP_URL]
+    .filter(Boolean).map((u) => { try { return new URL(u).origin; } catch { return null; } }).filter(Boolean);
+  const a = Buffer.from(String(origin));
+  return allowed.some((o) => { const b = Buffer.from(o); return a.length === b.length && timingSafeEqual(a, b); });
 }
 
 // ===================== Limites de tentatives =====================
