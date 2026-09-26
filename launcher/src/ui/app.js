@@ -5,7 +5,7 @@ import { filterSort } from '../core/sort.js';
 const $ = (id) => document.getElementById(id);
 let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
-const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], song: null, account: null };
+const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], friends: null, song: null, account: null };
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -150,6 +150,56 @@ function renderHome() {
   }).join('') : '<div class="empty">Aucune application trouvée.</div>';
   renderRecos();
 }
+
+function renderDeals() {
+  const list = state.deals.slice(0, 5);
+  $('dealBlock').hidden = !list.length;
+  $('deals').innerHTML = list.map((d) => `
+    <div class="rcard free now" data-deal="${esc(d.appid)}">
+      ${d.image ? `<img src="${esc(d.image)}" alt="" loading="lazy">` : ''}
+      <span class="badge live">-${esc(d.pct)} %</span>
+      <div class="meta"><b>${esc(d.name)}</b><small>${d.price ? `${esc(d.price)}${d.before ? ` <s>${esc(d.before)}</s>` : ''}` : 'En promo'}</small></div>
+    </div>`).join('');
+}
+
+// ---------- Amis Steam ----------
+const FRIEND_HELP = {
+  cle: 'Ajoute ta clé d’API Steam dans Paramètres pour voir tes amis (gratuit, 1 minute).',
+  prive: 'Ta liste d’amis Steam est privée : Steam › Profil › Modifier › Confidentialité › « Liste d’amis » en Public.',
+  compte: 'Aucun compte Steam trouvé sur ce PC. Choisis-le dans Paramètres › Comptes de jeu.',
+  erreur: 'Steam ne répond pas pour l’instant. Réessaie dans un moment.',
+};
+async function loadFriends(force = false) {
+  const r = await api.friends?.(force).catch(() => null);
+  if (!r) return;
+  state.friends = r;
+  const online = r.friends.filter((f) => f.online).length;
+  $('friendsOnline').textContent = online || '';
+  if (state.view === 'amis') renderFriends();
+}
+function renderFriends() {
+  const r = state.friends;
+  if (!r) { $('friendsBody').innerHTML = '<div class="empty">Chargement…</div>'; return; }
+  if (!r.ok) { $('friendsCount').textContent = ''; $('friendsBody').innerHTML = `<div class="empty">${esc(FRIEND_HELP[r.reason] ?? FRIEND_HELP.erreur)}</div>`; return; }
+  const groups = [['En jeu', r.friends.filter((f) => f.game)], ['En ligne', r.friends.filter((f) => f.online && !f.game)], ['Hors ligne', r.friends.filter((f) => !f.online)]];
+  $('friendsCount').textContent = `${r.friends.filter((f) => f.online).length} en ligne sur ${r.friends.length}`;
+  const mine = (f) => f.appid && state.items.find((i) => i.steamId === f.appid && i.installed);
+  $('friendsBody').innerHTML = groups.filter(([, l]) => l.length).map(([title, l]) => `
+    <h3 class="fgroup">${title} <em>${l.length}</em></h3>
+    <div class="friends">${l.map((f) => `
+      <div class="friend ${f.game ? 'ingame' : f.online ? 'on' : ''}">
+        ${f.avatar ? `<img src="${esc(f.avatar)}" alt="">` : `<span class="fav">${esc(f.name[0])}</span>`}
+        <div class="finfo"><b>${esc(f.name)}</b><small>${f.game ? `Joue à ${esc(f.game)}` : esc(f.status)}</small></div>
+        <div class="factions">
+          ${f.game ? `<button class="btn play" data-friend="join" data-fid="${esc(f.id64)}" ${f.lobby ? '' : 'disabled title="Pas de partie ouverte à rejoindre"'}>Rejoindre</button>` : ''}
+          ${f.game && !f.lobby && mine(f) ? `<button class="btn" data-id="${esc(mine(f).id)}" title="Lancer le même jeu">Lancer ${esc(f.game)}</button>` : ''}
+          ${f.online ? `<button class="btn" data-friend="message" data-fid="${esc(f.id64)}">Message</button>` : ''}
+          <button class="btn ghost" data-friend="profile" data-fid="${esc(f.id64)}" title="Profil Steam">Profil</button>
+        </div>
+      </div>`).join('')}</div>`).join('') || '<div class="empty">Aucun ami Steam pour l’instant.</div>';
+}
+$('friendsRefresh').addEventListener('click', () => loadFriends(true).then(() => toast('Amis actualisés')));
+setInterval(() => { if (state.view === 'amis') loadFriends(); }, 60_000);
 
 function renderFree() {
   const list = state.free.slice(0, 5);
@@ -321,6 +371,7 @@ function go(view) {
   if (state.view === 'liste') renderList();
   if (state.view === 'stats') renderStats();
   if (state.view === 'classement') renderRanking();
+  if (state.view === 'amis') { renderFriends(); loadFriends(); }
   $('main').scrollTop = 0;
 }
 
@@ -410,7 +461,7 @@ async function act(action) {
 
 // ---------- Événements ----------
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('button, [data-id], [data-reco], [data-free]');
+  const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal]');
   if (!t) { $('heroMenu')?.classList.remove('on'); return; }
   if (t.id === 'moreBtn') { $('heroMenu').classList.toggle('on'); return; }
   $('heroMenu')?.classList.remove('on');
@@ -439,6 +490,11 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.inst) { document.querySelectorAll('#installed button').forEach((x) => x.classList.toggle('on', x === t)); state.list.installed = t.dataset.inst; return renderList(); }
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
+  if (t.dataset.friend) {
+    const r = await api.friendAction(t.dataset.friend, t.dataset.fid);
+    return toast(r?.ok ? { join: 'Connexion à la partie…', message: 'Discussion Steam ouverte', profile: 'Profil ouvert' }[t.dataset.friend] : r?.error ?? 'Impossible pour l’instant');
+  }
+  if (t.dataset.deal) return api.openDeal?.(t.dataset.deal).then(() => toast('Page Steam ouverte'));
   if (t.dataset.free) return api.openFree?.(t.dataset.free).then(() => toast('Page Epic ouverte'));
   if (t.dataset.reco !== undefined) {
     const r = state.recos[Number(t.dataset.reco)];
@@ -460,16 +516,46 @@ $('q').addEventListener('input', (e) => {
   renderList();
 });
 document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => api.win(b.dataset.win)));
+// ---------- Raccourcis clavier (liste complète : touche « ? ») ----------
+const VIEW_KEYS = ['accueil', 'bibliotheque', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis'];
+function visibleItems() {
+  return [...document.querySelectorAll(state.view === 'liste' ? '#grid [data-id]' : '#topGames [data-id], #topApps [data-id]')].map((el) => state.items.find((i) => i.id === el.dataset.id)).filter(Boolean);
+}
 document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.key === 'f') { e.preventDefault(); $('q').focus(); }
-  if (e.key === 'Enter' && document.activeElement.tagName !== 'INPUT' && state.sel?.installed) act('launch');
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && e.key.toLowerCase() === 'f') { e.preventDefault(); $('q').focus(); return; }
+  if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); openAssistant(true); return; }
+  if (ctrl && e.key === ',') { e.preventDefault(); $('openSettings').click(); return; }
+  if (ctrl && /^[1-8]$/.test(e.key)) { e.preventDefault(); go(VIEW_KEYS[Number(e.key) - 1]); return; }
+  if (ctrl && e.key.toLowerCase() === 'd' && state.sel) {
+    e.preventDefault();
+    const on = !state.sel.favorite;
+    api.setItem(state.sel.id, { favorite: on }).then(() => { state.sel.favorite = on; renderHero(); toast(on ? 'Ajouté aux favoris' : 'Retiré des favoris'); });
+    return;
+  }
+  if (e.key === 'F5') { e.preventDefault(); toast('Recherche de nouveaux jeux…'); api.rescan?.().then((lib) => lib && applyLibrary(lib)); return; }
+  if (typing || document.querySelector('dialog[open]')) return;
+  if (e.key === '/') { e.preventDefault(); $('q').focus(); return; }
+  if (e.key === '?') { $('keys').showModal(); return; }
+  if (e.key === ' ') { e.preventDefault(); api.mediaKey?.('toggle').then(() => setTimeout(refreshMusic, 700)); return; }
+  if (e.key === 'Enter' && state.sel?.installed) { act('launch'); return; }
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    const list = visibleItems();
+    if (!list.length) return;
+    const at = list.findIndex((i) => i.id === state.sel?.id);
+    const next = list[(at + (e.key === 'ArrowRight' ? 1 : -1) + list.length) % list.length];
+    if (state.view === 'liste') { state.sel = next; renderList(); document.querySelector(`#grid [data-id="${CSS.escape(next.id)}"]`)?.scrollIntoView({ block: 'nearest' }); toast(next.name); } else select(next);
+  }
 });
+$('openKeys').addEventListener('click', (e) => { e.preventDefault(); $('settings').close(); $('keys').showModal(); });
 
 // Réglages
 function showKeys(s) {
   $('autostart').checked = Boolean(s.autostart);
   $('directLaunch').checked = s.directLaunch !== false;
   $('gameMode').checked = s.gameMode !== false;
+  $('dealAlerts').checked = s.dealAlerts !== false;
   $('geminiState').textContent = s.gemini ? '✅ IA active.' : 'Pas de clé trouvée : l’assistant et la recherche d’images par l’IA sont en pause.';
   $('steamState').textContent = s.steamKey ? '✅ Clé enregistrée.' : 'Sans clé : jeux installés ou déjà joués seulement.';
   $('gridState').textContent = s.gridKey ? '✅ Clé enregistrée.' : 'Facultatif : l’IA cherche déjà les images manquantes.';
@@ -492,6 +578,7 @@ document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('clic
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
+$('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: e.target.checked }));
 $('saveKeys').addEventListener('click', async (e) => {
   e.stopPropagation();
   const patch = {};
@@ -621,6 +708,8 @@ async function load() {
   if (state.sel && !state.sel.detailsAsked) select(state.sel);
   api.reco?.().then((r) => { state.recos = r ?? []; renderRecos(); }).catch(() => {});
   api.freeGames?.().then((f) => { state.free = f ?? []; renderFree(); }).catch(() => {});
+  api.deals?.().then((d) => { state.deals = d ?? []; renderDeals(); }).catch(() => {});
+  loadFriends();
 }
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
 api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(); });
@@ -656,6 +745,13 @@ function demoApi() {
     app('Spotify', 'musique', 2418, img('i1.png')), app('Discord', 'discussion', 900, img('i2.png')), app('Google Chrome', 'appli', 600, img('i3.png')), app('OBS Studio', 'video', 480, null),
   ];
   return {
+    friends: async () => ({ ok: true, friends: [
+      { id64: '76561198000000001', name: 'Max', avatar: null, online: true, status: 'En jeu', game: 'Rocket League', appid: '252950', lobby: '109775241000000000' },
+      { id64: '76561198000000002', name: 'Léa', avatar: null, online: true, status: 'En jeu', game: 'Counter-Strike 2', appid: '730', lobby: null },
+      { id64: '76561198000000003', name: 'Sam', avatar: null, online: true, status: 'En ligne', game: null },
+      { id64: '76561198000000004', name: 'Zoé', avatar: null, online: false, status: 'Hors ligne', game: null }] }),
+    friendAction: async () => ({ ok: true }), openDeal: async () => {},
+    deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

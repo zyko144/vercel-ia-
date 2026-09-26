@@ -346,3 +346,34 @@ body.listening .aifab .pulse { animation: ring 1.8s ease-out infinite; }
 
 /* Jeux gratuits Epic */
 .rcard.free.now { border-color: color-mix(in srgb, #2ee07a 45%, var(--line)); }
+
+/* Amis Steam */
+.navcount { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 800; color: #04210f; background: #2ee07a; border-radius: 9px; padding: 1px 7px; }
+.navcount:empty { display: none; }
+.fgroup { margin: 18px 0 10px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.fgroup em { font-style: normal; opacity: .7; }
+.friends { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 10px; }
+.friend { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--panel); border: 1px solid var(--line); }
+.friend img, .friend .fav { width: 46px; height: 46px; border-radius: 12px; flex: none; object-fit: cover; outline: 2px solid #4b5563; outline-offset: 2px; }
+.friend .fav { display: grid; place-items: center; font-weight: 900; background: #1b2230; }
+.friend.on img, .friend.on .fav { outline-color: #57cbde; }
+.friend.ingame { border-color: color-mix(in srgb, #90ba3c 45%, var(--line)); }
+.friend.ingame img, .friend.ingame .fav { outline-color: #90ba3c; }
+.friend:not(.on):not(.ingame) { opacity: .6; }
+.finfo { min-width: 0; flex: 1; }
+.finfo b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.finfo small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend.ingame .finfo small { color: #a4d04a; }
+.factions { display: flex; gap: 6px; flex: none; }
+.factions .btn { height: 32px; padding: 0 10px; font-size: 12px; }
+.factions .btn[disabled] { opacity: .45; cursor: not-allowed; }
+#view-amis .list-head #friendsRefresh { margin-left: auto; }
+.rcard s { opacity: .6; margin-left: 4px; }
+
+/* Aide des raccourcis */
+.keylist { display: grid; gap: 8px; margin: 8px 0 16px; }
+.krow { display: flex; align-items: center; gap: 12px; }
+.krow .kk { flex: none; width: 150px; display: flex; align-items: center; gap: 4px; color: var(--muted); }
+.krow > span:last-child { color: var(--muted); font-size: 13px; }
+kbd { display: inline-block; min-width: 22px; padding: 2px 7px; border-radius: 6px; background: #1a2130; border: 1px solid #2c3648; border-bottom-width: 2px; font: 700 12px/1.4 inherit; text-align: center; color: #dbe6ff; }
+.keylist span kbd { font-size: 11px; }

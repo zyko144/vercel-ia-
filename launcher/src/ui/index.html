@@ -20,6 +20,7 @@
     <button data-view="favoris"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9a4.8 4.8 0 0 1 9-3 4.8 4.8 0 0 1 9 3c-2 4.6-9 9-9 9z"/></svg>Favoris</button>
     <button data-view="stats"><svg viewBox="0 0 24 24"><path d="M5 20V10m5 10V4m5 16v-8m5 8V7"/></svg>Statistiques</button>
     <button data-view="classement"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>Classement</button>
+    <button data-view="amis"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Amis<em class="navcount" id="friendsOnline"></em></button>
     <button data-view="ia"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M6 6l2 2m8 8 2 2M6 18l2-2m8-8 2-2"/><circle cx="12" cy="12" r="3"/></svg>IA Assistant</button>
   </nav>
   <h5>Plateformes</h5>
@@ -41,6 +42,8 @@
     <div class="cards" id="topGames"></div>
     <div class="row-head"><h2>Tes applications</h2><small class="hint">Double-clic pour ouvrir</small><button class="seeall" data-go="applis">Voir tout ›</button></div>
     <div class="apps" id="topApps"></div>
+    <div id="dealBlock" hidden><div class="row-head"><h2>En promo dans ta liste de souhaits</h2><small class="hint">Steam · tu es prévenu dès qu’une promo commence</small></div>
+    <div class="recos" id="deals"></div></div>
     <div id="freeBlock" hidden><div class="row-head"><h2>Jeux gratuits de la semaine</h2><small class="hint">Epic Games Store · à récupérer, gardés pour toujours</small></div>
     <div class="recos" id="freeGames"></div></div>
     <div id="recoBlock" hidden><div class="row-head"><h2 id="recoTitle">Recommandés pour toi</h2><small class="hint">Proposés par l’IA d’après tes jeux</small></div>
@@ -62,6 +65,11 @@
       <div class="panel donutCard"><h3>Répartition du temps</h3><div class="donutWrap"><svg id="donut" viewBox="0 0 120 120"></svg><div class="legend" id="legend"></div></div></div>
       <div class="panel"><h3>Les plus utilisés (temps total)</h3><div class="statsbig" id="statsBig"></div></div>
     </div>
+  </section>
+
+  <section id="view-amis" class="view">
+    <div class="list-head"><h2>Amis Steam</h2><span id="friendsCount"></span><button class="btn" id="friendsRefresh" type="button">↻ Actualiser</button></div>
+    <div id="friendsBody"></div>
   </section>
 
   <section id="view-classement" class="view">
@@ -124,12 +132,35 @@
 
 <dialog id="sheet"><div class="sheet" id="sheetBody"></div></dialog>
 
+<dialog id="keys">
+  <form method="dialog" class="dlg">
+    <h2>Raccourcis clavier</h2>
+    <div class="keylist">
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>H</kbd></span><span>Afficher / ranger le launcher (partout, même en jeu)</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>F</kbd></span><span>Rechercher (ou <kbd>/</kbd>)</span></div>
+      <div class="krow"><span class="kk"><kbd>Entrée</kbd></span><span>Lancer le jeu sélectionné</span></div>
+      <div class="krow"><span class="kk"><kbd>←</kbd><kbd>→</kbd></span><span>Jeu précédent / suivant</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>1</kbd>…<kbd>8</kbd></span><span>Accueil, Bibliothèque, Jeux, Applis, Favoris, Stats, Classement, Amis</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>K</kbd></span><span>Ouvrir l’assistant IA</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>D</kbd></span><span>Ajouter / retirer des favoris</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>,</kbd></span><span>Paramètres</span></div>
+      <div class="krow"><span class="kk"><kbd>F5</kbd></span><span>Rechercher de nouveaux jeux et applis</span></div>
+      <div class="krow"><span class="kk"><kbd>Espace</kbd></span><span>Musique : lecture / pause</span></div>
+      <div class="krow"><span class="kk"><kbd>Échap</kbd></span><span>Fermer</span></div>
+      <div class="krow"><span class="kk"><kbd>?</kbd></span><span>Cette aide</span></div>
+    </div>
+    <div class="row end"><button class="btn play">Fermer</button></div>
+  </form>
+</dialog>
+
 <dialog id="settings">
   <form method="dialog" class="dlg">
     <h2>Paramètres</h2>
     <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
     <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
     <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher pendant que je joue</label>
+    <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
+    <button type="button" class="btn" id="openKeys">⌨ Raccourcis clavier</button>
     <div class="keybox">
       <b>👤 Comptes de jeu</b>
       <p>Le temps de jeu affiché est celui d’un seul compte. Choisis le tien (les autres comptes du PC ne sont pas comptés).</p>
