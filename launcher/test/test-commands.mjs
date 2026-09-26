@@ -85,4 +85,25 @@ check('écoute guidée : noms prononçables et phrases reçues', () => {
   assert.equal(u(stripWake('hey history lance Counter Strike deux')).itemId, 'cs2', 'chiffre dit en lettres');
 });
 
+check('actions du launcher : amis, optimisation, réglages', () => {
+  assert.deepEqual([u('ajoute Max#3F9A2C en ami').action, u('ajoute Max#3F9A2C en ami').value], ['add_friend', 'Max#3F9A2C']);
+  assert.equal(u('accepte mes demandes d’amis').action, 'accept_friends');
+  assert.equal(u('qui joue en ce moment parmi mes amis').action, 'friends_status');
+  assert.equal(u('optimise mon pc').value, 'run');
+  assert.equal(u('fais une opti').action, 'optimize');
+  assert.equal(u('mon pc rame').action, 'optimize');
+  assert.equal(u('lance le nettoyage profond').action, 'deep_clean');
+  assert.equal(u('vide la corbeille').action, 'empty_bin');
+  assert.equal(u('coupe le boost').value, 'off', 'pas confondu avec « coupe le son »');
+  assert.equal(u('coupe le son').action, 'volume');
+  assert.equal(u('combien de place il me reste').action, 'disk_status');
+  assert.equal(u('mets le thème rouge').value, 'rouge');
+  assert.equal(u('mets une limite de 2h').value, '120');
+  assert.equal(u('désactive discord au démarrage').target, 'discord');
+  assert.equal(u('ajoute rocket league à la collection avec les potes').itemId, 'rl');
+  assert.equal(u('rejoins Max').target, 'max');
+  assert.equal(u('retire GTA des favoris').action, 'unfavorite');
+  assert.equal(u('lance rocket league').action, 'launch', 'les commandes de base marchent toujours');
+});
+
 console.log(`\n${passed} vérifications passées.`);

@@ -116,7 +116,7 @@ export async function recommend(ai, played, owned) {
 
 // ===================== Assistant =====================
 
-export const ACTIONS = ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store', 'show', 'sort', 'music', 'optimize', 'none'];
+export const ACTIONS = ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store', 'show', 'sort', 'music', 'optimize', 'deep_clean', 'empty_bin', 'add_friend', 'accept_friends', 'friends_status', 'event', 'steam_join', 'steam_message', 'boost', 'tweak', 'startup_off', 'collection_add', 'unfavorite', 'theme', 'fullscreen', 'overlay', 'recap', 'daily_limit', 'disk_status', 'pc_status', 'none'];
 const ASSIST_SCHEMA = {
   type: 'object',
   properties: {
@@ -124,8 +124,9 @@ const ASSIST_SCHEMA = {
     action: { type: 'string', enum: ACTIONS },
     target: { type: 'string' },
     value: { type: 'string' },
+    extra: { type: 'string' },
   },
-  required: ['reply', 'action', 'target', 'value'],
+  required: ['reply', 'action', 'target', 'value', 'extra'],
 };
 
 /** Comprend une demande et choisit UNE action parmi la liste (le launcher l'exécute, avec confirmation si besoin). */
@@ -140,8 +141,18 @@ Actions possibles (une seule) :
 - show : afficher une vue (value = accueil | bibliotheque | jeux | applis | favoris | stats | classement | amis | pc | optimisation | parametres) ;
 - sort : trier (value = joues | recents | nom | taille) ;
 - music : lecteur (value = play | pause | next | previous) ;
-- optimize : ouvrir l'optimisation du PC et lancer l'analyse (PC lent, lag, manque de place, nettoyage) ;
+- optimize : optimisation complète du PC (value = run) : PC lent, lag, manque de place, nettoyage ;
+- deep_clean : nettoyage profond de Windows (admin) ; empty_bin : vider la corbeille ;
+- add_friend : ajouter un ami History (value = son code ami exact, ex. Max#3F9A2C) ; accept_friends : accepter les demandes ; friends_status : dire qui est en ligne / qui joue ;
+- event : organiser une soirée jeu (target = jeu, son jeu le plus joué s'il n'est pas précisé, value = date et heure ISO 8601 complète avec fuseau, extra = pseudos invités séparés par des virgules, vide = tous les amis) ;
+- steam_join / steam_message : rejoindre la partie d'un ami Steam / lui écrire (target = son pseudo) ;
+- boost : value = on | off ; tweak : réglage Windows (value = gamemode | dvr | background | ads | transparency | visualfx | mouse) ;
+- startup_off : empêcher une appli de se lancer au démarrage (target = son nom) ;
+- collection_add : ranger un jeu (target) dans une collection (value = nom de la collection) ; unfavorite : retirer des favoris (target) ;
+- theme : value = bleu | violet | rouge | vert | orange | rose | auto ; fullscreen : mode grand écran ; overlay : infos par-dessus le jeu ; recap : résumé de la semaine ;
+- daily_limit : limite de jeu par jour (value = minutes, 0 = aucune) ; disk_status : place libre ; pc_status : état du PC (processeur, carte graphique, températures) ;
 - none : juste répondre (questions, conseils, statistiques, recommandations).
+Laisse « extra » vide si tu ne t'en sers pas. Tu peux faire ces actions à la place de l'utilisateur : fais-le directement, sans lui demander de le faire lui-même.
 Pour les questions (« à quoi je joue le plus », « quel jeu lancer ce soir », « combien d'heures sur X »), réponds avec les vrais chiffres de la bibliothèque.
 N'invente jamais un jeu qui n'est pas dans la bibliothèque. Pour désinstaller, précise qu'une confirmation va s'afficher.`,
     text: `Date : ${new Date().toLocaleString('fr-FR')}\nBibliothèque (nom · source · installé · heures) :\n${context.items}\n\nMusique en cours : ${context.music || 'rien'}${context.extra ? `\n${context.extra}` : ''}\n\nDemande : ${message}`,
