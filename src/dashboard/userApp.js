@@ -20,7 +20,7 @@ import {
   PLANS, TRIAL_DAYS, VOICES, allServers, planOf, rawBranding, rawGuardOptions, setBranding, setGuardOptions, setReportWanted, setVoice, startTrial,
 } from '../features/premium.js';
 import { COLORS, openTickets, publishFromWeb, ticketPanels } from '../features/tickets.js';
-import { allowAttempt, clientIp, isSecure } from './auth.js';
+import { allowAttempt, clientIp, isSecure, trustedOrigin } from './auth.js';
 import { topLevels } from '../features/levels.js';
 import { referralStats } from '../features/payments.js';
 
@@ -37,7 +37,8 @@ export const setAppClient = (c) => { client = c; };
 
 const sha = (v) => createHash('sha256').update(v).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
-const base = () => (config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
+// APP_URL : l'adresse publique du tableau de bord (ex. https://vercelia.vercel.app), sinon celle de Render
+const base = () => (process.env.APP_URL || config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
 const redirectUri = () => `${base()}/app/callback`;
 const clientSecret = () => (process.env.DISCORD_CLIENT_SECRET ?? '').trim();
 const inviteUrl = (guildId) => `https://discord.com/oauth2/authorize?client_id=${client?.user?.id ?? ''}&scope=bot%20applications.commands&permissions=8${guildId ? `&guild_id=${guildId}&disable_guild_select=true` : ''}`;
@@ -126,7 +127,7 @@ function readBody(req) {
 function sameOrigin(req) {
   if (req.method !== 'POST' || !String(req.headers['content-type'] ?? '').startsWith('application/json') || req.headers['x-app'] !== '1') return false;
   const origin = req.headers.origin;
-  return !origin || origin === `${isSecure(req) ? 'https' : 'http'}://${req.headers.host}`;
+  return !origin || trustedOrigin(req, origin);
 }
 
 // ===================== Connexion Discord =====================
@@ -167,6 +168,8 @@ async function callback(req, res, url) {
       userId: user.id, name: user.global_name ?? user.username,
       avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64` : null,
       guilds: guilds.filter(manage).map((g) => ({ id: g.id, name: g.name, icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null })),
+      // Tous ses serveurs où le bot est : chacun peut y jouer à l'arcade depuis le site
+      playable: guilds.filter((g) => client.guilds.cache.has(g.id)).map((g) => ({ id: g.id, name: g.name, icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null })),
       createdAt: now, lastSeen: now,
     });
     persist();
@@ -270,6 +273,19 @@ const routes = {
       return { ...g, botIn, plan: botIn ? planOf(g.id).label : null, invite: botIn ? null : inviteUrl(g.id) };
     }).sort((a, b) => Number(b.botIn) - Number(a.botIn) || a.name.localeCompare(b.name)),
   }),
+  // ---------- Jouer à l'arcade depuis le site (tous les membres) ----------
+  'GET arcade': async (req, res, s) => {
+    const { arcadeLink } = await import('../arcade/server.js');
+    const list = (s.playable ?? s.guilds).filter((g) => client.guilds.cache.has(g.id));
+    return json(res, 200, {
+      servers: list.map((g) => {
+        const guild = client.guilds.cache.get(g.id);
+        const name = guild.members?.cache?.get(s.userId)?.displayName ?? s.name;
+        // Une salle « site » par serveur : tous ceux qui jouent depuis le navigateur se retrouvent ensemble
+        return { id: g.id, name: guild.name, icon: g.icon, link: arcadeLink({ id: s.userId, name }, g.id, g.id).replace(/^https?:\/\/[^/]+/, '') };
+      }),
+    });
+  },
   'GET server': async (req, res, s, url) => {
     const m = await manageable(s, url.searchParams.get('id'));
     return m.error ? json(res, m.status, { error: m.error }) : json(res, 200, await serverDetail(m.guild));

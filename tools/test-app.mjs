@@ -126,6 +126,14 @@ if (serve) {
     assert.equal((await call('POST', 'server/publish', { guildId: G, kind: 'ticket', channelId: '999999999999999999', title: 'x', message: 'y' })).status, 400);
   });
 
+  await check('jouer depuis le site : un lien personnel vers l’arcade du serveur (salle « site »)', async () => {
+    const r = await call('GET', 'arcade');
+    const body = await r.json();
+    assert.equal(r.status, 200, JSON.stringify(body));
+    const { servers } = body;
+    assert.equal(servers[0].id, G);
+    assert.match(servers[0].link, new RegExp(`^/arcade/\\?room=${G}&guild=${G}#s=`));
+  });
   console.log(`\n${passed} vérifications passées.`);
   process.exit(0);
 }

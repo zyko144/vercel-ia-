@@ -1,0 +1,127 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "echo \"Site statique : rien à installer\"",
+  "buildCommand": "echo \"Site statique : rien à construire\"",
+  "outputDirectory": "site",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/site",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://vercel-ia.onrender.com/api/:path*"
+    },
+    {
+      "source": "/app",
+      "destination": "https://vercel-ia.onrender.com/app"
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "https://vercel-ia.onrender.com/app/:path*"
+    },
+    {
+      "source": "/arcade",
+      "destination": "https://vercel-ia.onrender.com/arcade/"
+    },
+    {
+      "source": "/arcade/:path*",
+      "destination": "https://vercel-ia.onrender.com/arcade/:path*"
+    },
+    {
+      "source": "/.proxy/:path*",
+      "destination": "https://vercel-ia.onrender.com/.proxy/:path*"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "https://vercel-ia.onrender.com/dashboard"
+    },
+    {
+      "source": "/dashboard/:path*",
+      "destination": "https://vercel-ia.onrender.com/dashboard/:path*"
+    },
+    {
+      "source": "/salle/:path*",
+      "destination": "https://vercel-ia.onrender.com/salle/:path*"
+    },
+    {
+      "source": "/payer",
+      "destination": "https://vercel-ia.onrender.com/payer"
+    },
+    {
+      "source": "/merci",
+      "destination": "https://vercel-ia.onrender.com/merci"
+    },
+    {
+      "source": "/statut",
+      "destination": "https://vercel-ia.onrender.com/statut"
+    },
+    {
+      "source": "/paypal/:path*",
+      "destination": "https://vercel-ia.onrender.com/paypal/:path*"
+    },
+    {
+      "source": "/avatar.png",
+      "destination": "https://vercel-ia.onrender.com/avatar.png"
+    },
+    {
+      "source": "/logo/:path*",
+      "destination": "https://vercel-ia.onrender.com/logo/:path*"
+    },
+    {
+      "source": "/casino/:path*",
+      "destination": "https://vercel-ia.onrender.com/casino/:path*"
+    },
+    {
+      "source": "/jeux/:path*",
+      "destination": "https://vercel-ia.onrender.com/jeux/:path*"
+    },
+    {
+      "source": "/panneaux/:path*",
+      "destination": "https://vercel-ia.onrender.com/panneaux/:path*"
+    },
+    {
+      "source": "/sanction/:path*",
+      "destination": "https://vercel-ia.onrender.com/sanction/:path*"
+    },
+    {
+      "source": "/roulette",
+      "destination": "https://vercel-ia.onrender.com/roulette"
+    },
+    {
+      "source": "/health",
+      "destination": "https://vercel-ia.onrender.com/health"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(cartes|images)/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/((?!api|app|arcade|dashboard|salle|payer|merci|statut|paypal|health).*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), geolocation=()"
+        }
+      ]
+    }
+  ]
+}

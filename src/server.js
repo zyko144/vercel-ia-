@@ -177,7 +177,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     }
 
     // Le site vitrine : la page, puis ses images (cartes/, images/ et images/nuit/, en .webp seulement).
-    const PAGES = { '/': 'index.html', '/site': 'index.html', '/demo': 'demo.html', '/nouveautes': 'nouveautes.html', '/classement': 'classement.html' };
+    const PAGES = { '/': 'index.html', '/site': 'index.html', '/demo': 'demo.html', '/nouveautes': 'nouveautes.html', '/classement': 'classement.html', '/conditions': 'conditions.html', '/confidentialite': 'confidentialite.html', '/mentions': 'mentions.html' };
     const sitePath = PAGES[url.pathname] ?? (/^\/(?:cartes|images(?:\/nuit)?)\/[a-z0-9-]+\.webp$/.test(url.pathname) ? url.pathname.slice(1) : null);
     if (sitePath && req.method === 'GET') {
       try {

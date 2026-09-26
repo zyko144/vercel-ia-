@@ -105,11 +105,15 @@
   async function serversView() {
     crumbs({ text: 'Mes serveurs' });
     view().replaceChildren(h('p', { class: 'loading', text: 'Chargement de tes serveurs…' }));
-    const { servers } = await api('GET', 'servers');
+    const [{ servers }, play] = await Promise.all([api('GET', 'servers'), api('GET', 'arcade').catch(() => ({ servers: [] }))]);
+    const playCards = play.servers.map((g) => h('div', { class: 'server on' },
+      h('div', { class: 'top-line' }, icon(g.icon, g.name), h('div', {}, h('b', { text: g.name }), h('small', { text: 'Dessin, quiz, duels, loup-garou, blind test…' }))),
+      h('a', { class: 'btn primary', href: g.link, target: '_blank', rel: 'noopener', text: '🕹️ Jouer dans le navigateur' })));
     const cards = servers.map((s) => h('div', { class: `server${s.botIn ? ' on' : ''}` },
       h('div', { class: 'top-line' }, icon(s.icon, s.name), h('div', {}, h('b', { text: s.name }), h('small', { text: s.botIn ? `Offre ${s.plan}` : 'Le bot n’est pas encore sur ce serveur' }))),
       s.botIn ? h('a', { class: 'btn primary', href: `#serveur/${s.id}`, text: 'Gérer le serveur' }) : h('a', { class: 'btn', href: s.invite, target: '_blank', rel: 'noopener', text: 'Ajouter le bot' })));
     view().replaceChildren(
+      ...(playCards.length ? [h('div', { class: 'head' }, h('h1', { text: '🕹️ Jouer à l’arcade' }), h('p', { text: 'Tous les jeux du bot, dans ton navigateur, avec les autres membres de ton serveur qui jouent depuis le site.' })), h('div', { class: 'servers' }, playCards)] : []),
       h('div', { class: 'head' }, h('h1', { text: 'Choisis un serveur' }), h('p', { text: 'Les serveurs où tu as la permission « Gérer le serveur ».' })),
       cards.length ? h('div', { class: 'servers' }, cards) : h('div', { class: 'empty', text: 'Aucun serveur où tu peux gérer. Il faut la permission « Gérer le serveur ».' }),
     );
