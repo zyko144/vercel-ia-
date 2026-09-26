@@ -36,7 +36,7 @@ export function findItem(items, query) {
 }
 
 const VIEWS = [
-  [/classement|podium|meilleurs jeux/, 'classement'], [/stat/, 'stats'], [/favori/, 'favoris'],
+  [/amis|potes|copains/, 'amis'], [/classement|podium|meilleurs jeux/, 'classement'], [/stat/, 'stats'], [/favori/, 'favoris'],
   [/appli|logiciel|programme/, 'applis'], [/jeux|jeu/, 'jeux'], [/biblioth|tout/, 'bibliotheque'], [/accueil/, 'accueil'], [/param|r[ée]glage/, 'parametres'],
 ];
 const SORTS = [[/taille|lourd|place/, 'taille'], [/nom|alpha/, 'nom'], [/r[ée]cent|dernier/, 'recents'], [/jou[ée]|temps|heure/, 'joues']];
@@ -68,7 +68,7 @@ export function understand(text, items, { music = null } = {}) {
   }
 
   // Vues, tri, recherche
-  if (/^(montre|affiche|ouvre|va (dans|sur|a)|voir)\b.*\b(mes |les |la |le |l )?(classement|podium|stat|favori|appli|logiciel|jeux|biblioth|accueil|param|reglage)/.test(t) && !findItem(items, rest(/(montre|affiche|ouvre|voir)/))) {
+  if (/^(montre|affiche|ouvre|va (dans|sur|a)|voir)\b.*\b(mes |les |la |le |l )?(amis|potes|classement|podium|stat|favori|appli|logiciel|jeux|biblioth|accueil|param|reglage)/.test(t) && !findItem(items, rest(/(montre|affiche|ouvre|voir)/))) {
     const v = VIEWS.find(([re]) => re.test(t));
     return { action: 'show', value: v?.[1] ?? 'bibliotheque', reply: 'Voilà.' };
   }

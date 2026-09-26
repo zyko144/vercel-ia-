@@ -1,5 +1,5 @@
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, safeStorage, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -22,6 +22,7 @@ import { createStore } from './core/store.js';
 import { safeGameDir, uninstallFiles } from './core/manage.js';
 import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
+import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
@@ -274,7 +275,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
 async function confirm(message, detail) {
@@ -468,6 +469,7 @@ ipcMain.handle('accounts:set', async (_e, patch) => {
 });
 ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
+  if ('dealAlerts' in patch) store.data.settings.dealAlerts = Boolean(patch.dealAlerts);
   if ('gameMode' in patch) store.data.settings.gameMode = Boolean(patch.gameMode);
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   try {
@@ -526,6 +528,51 @@ ipcMain.handle('free:get', async () => {
   return list.length ? list : c?.list ?? [];
 });
 ipcMain.handle('free:open', (_e, slug) => (/^[\w-]{1,120}$/.test(String(slug)) ? openLink(`https://store.epicgames.com/fr/p/${slug}`) : null));
+
+// ---------- Amis Steam : statut, jeu en cours, rejoindre la partie ----------
+const myId64 = () => steamAccounts.find((a) => a.id === chosenSteam())?.id64 ?? null;
+let friendsCache = { at: 0, data: null };
+ipcMain.handle('friends:get', async (_e, force) => {
+  if (!force && friendsCache.data && Date.now() - friendsCache.at < 30_000) return friendsCache.data;
+  if (!steamAccounts.length) await refreshAccounts();
+  const data = await steamFriends(secret('steam'), myId64()).catch(() => ({ ok: false, reason: 'erreur', friends: [] }));
+  friendsCache = { at: Date.now(), data };
+  return data;
+});
+ipcMain.handle('friends:open', async (_e, action, id64) => {
+  const f = friendsCache.data?.friends?.find((x) => x.id64 === String(id64)); // seulement un ami de la liste
+  const link = f && friendLink(String(action), f);
+  if (!link) return { ok: false, error: action === 'join' ? 'Pas de partie à rejoindre pour l’instant' : 'action impossible' };
+  if (link.startsWith('https:')) { await openLink(link); return { ok: true }; }
+  return { ok: await runSilentSteam([link]) };
+});
+
+// ---------- Promos de la liste de souhaits Steam (vérifiées toutes les 6 h, alerte pour chaque nouvelle promo) ----------
+async function checkDeals(notify = true) {
+  const id64 = myId64();
+  if (!id64) return [];
+  const deals = await wishlistDeals(id64).catch(() => []);
+  const seen = (store.data.dealsSeen ??= {});
+  const fresh = newDeals(deals, seen);
+  if (notify && store.data.settings.dealAlerts !== false && Notification.isSupported()) {
+    for (const d of fresh.slice(0, 3)) {
+      const n = new Notification({ title: `${d.name} : -${d.pct} %`, body: `En promo sur Steam${d.price ? ` à ${d.price}` : ''} (dans ta liste de souhaits)`, icon: ICON });
+      n.on('click', () => openLink(`https://store.steampowered.com/app/${d.appid}`).catch(() => {}));
+      n.show();
+    }
+  }
+  for (const d of deals) seen[d.appid] = d.pct;
+  for (const id of Object.keys(seen)) if (!deals.some((d) => d.appid === id)) delete seen[id]; // promo finie : la prochaine sera annoncée
+  store.data.deals = { at: Date.now(), list: deals };
+  store.save();
+  return deals;
+}
+ipcMain.handle('deals:get', async () => {
+  const c = store.data.deals;
+  if (c && Date.now() - c.at < 6 * 3_600_000) return c.list;
+  return checkDeals(false);
+});
+ipcMain.handle('deals:open', (_e, appid) => (/^\d{1,8}$/.test(String(appid)) ? openLink(`https://store.steampowered.com/app/${appid}`) : null));
 
 // ---------- Statistiques ----------
 ipcMain.handle('stats:get', (_e, period) => {
@@ -669,6 +716,7 @@ ipcMain.handle('account:logout', async () => {
 ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; store.save(); return { ok: true }; });
 
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
+app.on('will-quit', () => globalShortcut.unregisterAll());
 ipcMain.on('win', (_e, what) => {
   if (what === 'min') win?.minimize();
   else if (what === 'max') win?.isMaximized() ? win.unmaximize() : win?.maximize();
@@ -688,6 +736,10 @@ async function start() {
   applyAutostart();
   createWindow();
   createTray();
+  // Raccourci global : Ctrl+Alt+H affiche ou range le launcher, même en jeu
+  globalShortcut.register('CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
+  setTimeout(() => checkDeals().catch(() => {}), 60_000);
+  setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);
   startTracker(() => items, store, (ids) => win?.webContents.send('lib:active', ids), 60_000, accountFor);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
