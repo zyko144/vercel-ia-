@@ -1,5 +1,6 @@
 // Programmes installés sous Windows : les clés « Uninstall » du registre (lues avec reg.exe, sans module natif).
 // On y trouve les applis (Spotify, Discord…) et les jeux des autres launchers (Riot, Ubisoft, EA, GOG, Battle.net…).
+import { brandOf } from './brands.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -60,21 +61,6 @@ const LAUNCHERS = /^(steam|epic games launcher|ubisoft connect|ea app|ea desktop
 const GAME_PUBLISHERS = /riot games|ubisoft|electronic arts|blizzard|gog\.com|rockstar games|mojang|bethesda|cd projekt|square enix|bandai namco|capcom|sega|2k|activision|valve|hoyoverse|mihoyo|cognosphere|wargaming|bungie|embark|kuro games|epic games(?!.*launcher)/i;
 const GAME_PATHS = /\\(games|riot games|gog galaxy\\games|ubisoft game launcher\\games|ea games|origin games|battle\.net|rockstar games|xboxgames)\\/i;
 
-// Applis connues et utiles : affichées par défaut (les autres seulement si on s'en sert, ou dans « Installés »)
-export const KNOWN_APPS = new RegExp('^(' + [
-  'spotify', 'deezer', 'apple music', 'itunes', 'tidal', 'soundcloud', 'amazon music', 'youtube music',
-  'discord', 'whatsapp', 'telegram', 'signal', 'teamspeak', 'skype', 'zoom', 'slack', 'microsoft teams', 'messenger', 'guilded',
-  'steam', 'epic games launcher', 'ubisoft connect', 'ea app', 'ea desktop', 'origin', 'battle\\.net', 'riot client', 'gog galaxy', 'rockstar games launcher', 'xbox', 'amazon games', 'playnite', 'heroic',
-  'google chrome', 'mozilla firefox', 'firefox', 'opera', 'opera gx', 'brave', 'microsoft edge', 'vivaldi', 'arc',
-  'ccleaner', 'malwarebytes', 'avast', 'avg', 'kaspersky', 'bitdefender', 'norton', 'eset', 'revo uninstaller', 'wise', 'iobit', 'glary',
-  'obs studio', 'streamlabs', 'medal', 'overwolf', 'outplayed', 'nvidia app', 'geforce experience', 'msi afterburner', 'rivatuner', 'razer synapse', 'logitech g hub', 'lghub', 'corsair icue', 'icue', 'steelseries gg', 'hyperx ngenuity', 'wallpaper engine', 'parsec', 'moonlight',
-  'vlc', 'netflix', 'plex', 'kodi', 'twitch', 'mpc', 'potplayer', 'handbrake',
-  'adobe', 'photoshop', 'premiere', 'after effects', 'lightroom', 'illustrator', 'capcut', 'davinci resolve', 'blender', 'audacity', 'fl studio', 'ableton', 'paint\\.net', 'gimp', 'krita', 'canva', 'figma', 'clip studio',
-  'microsoft office', 'microsoft 365', 'office', 'libreoffice', 'notion', 'obsidian', 'evernote', 'onenote', 'acrobat', 'adobe acrobat',
-  'microsoft visual studio code', 'visual studio code', 'notepad\\+\\+', 'git', 'github desktop', 'python', 'node\\.js', 'docker desktop', 'postman', 'android studio', 'jetbrains', 'intellij', 'pycharm', 'unity hub', 'unreal',
-  '7-zip', 'winrar', 'powertoys', 'everything', 'sharex', 'lightshot', 'greenshot', 'qbittorrent', 'utorrent', 'bittorrent', 'anydesk', 'teamviewer', 'nordvpn', 'protonvpn', 'surfshark', 'expressvpn', 'dropbox', 'google drive', 'onedrive', 'icloud', 'mega', 'minecraft launcher', 'curseforge', 'modrinth', 'lunar client', 'badlion',
-].join('|') + ')(?![a-z0-9])', 'i');
-
 export function categoryOf(name) {
   if (MUSIC.test(name)) return 'musique';
   if (VIDEO.test(name)) return 'video';
@@ -106,7 +92,7 @@ export function programsFromRegistry(entries) {
       category: game ? 'jeu' : categoryOf(name), name, publisher, installed: true, installDir,
       exe: exeFrom(v.DisplayIcon), icon: String(v.DisplayIcon ?? '').replace(/"?,\s*-?\d+$/, '').replace(/^"|"$/g, '') || null,
       size: Number(v.EstimatedSize ?? 0) * 1024, minutes: 0, lastPlayed: 0, art: {},
-      uninstallCmd: uninstall || null, version: v.DisplayVersion ?? null, known: launcher || game || KNOWN_APPS.test(name),
+      uninstallCmd: uninstall || null, version: v.DisplayVersion ?? null, known: launcher || game || Boolean(brandOf(name)), brand: game ? null : brandOf(name),
     };
     // Même programme listé en 32 et 64 bits : on garde l'entrée la plus complète
     const prev = seen.get(item.id);

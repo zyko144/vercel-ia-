@@ -25,7 +25,7 @@ function ago(t) {
 const CLOCK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 const BRANDS = { spotify: '#1ed760', deezer: '#a238ff', discord: '#5865f2', 'google chrome': '#fbbc04', chrome: '#fbbc04', 'obs studio': '#8f7cff', netflix: '#e50914', twitch: '#9146ff', whatsapp: '#25d366', telegram: '#2aabee', vlc: '#ff8800', capcut: '#ffffff' };
 const CATEGORY_COLORS = { musique: '#b36bff', video: '#ff4d5e', discussion: '#7b86ff', appli: '#5fe0c8' };
-const colorOf = (i) => (i.kind === 'game' ? state.sources[i.source]?.color : BRANDS[String(i.name).toLowerCase()] ?? CATEGORY_COLORS[i.category]) ?? '#9aa0aa';
+const colorOf = (i) => (i.brand?.color ?? (i.kind === 'game' ? state.sources[i.source]?.color : BRANDS[String(i.name).toLowerCase()] ?? CATEGORY_COLORS[i.category])) ?? '#9aa0aa';
 const srcIcon = (i) => state.sources[i.source]?.icon;
 
 function toast(text) {
@@ -37,7 +37,13 @@ function toast(text) {
 }
 
 // ---------- Images officielles : jaquette, sinon logo sur fond, sinon icône de l'appli ----------
+// Grosse appli : fond aux couleurs de la marque et logo officiel net (sinon son icône en grand)
+const brandMark = (item, cls) => (item.brand?.logo ? `<img class="${cls} brandlogo" src="${esc(item.brand.logo)}" alt="">`
+  : item.art?.icon || item.iconData ? `<img class="${cls}" src="${esc(item.art?.icon ?? item.iconData)}" alt="">` : null);
 function art(item) {
+  if (item.brand && item.kind !== 'game') {
+    return `<div class="art"><div class="bgl brandbg" style="--b:${esc(item.brand.color)}"></div><div class="front show">${brandMark(item, 'appicon') ?? `<span class="letter">${esc((item.name ?? '?')[0].toUpperCase())}</span>`}</div></div>`;
+  }
   const a = item.art ?? {};
   const bg = a.hero ?? a.header ?? a.cover ?? null;
   const back = bg ? `<div class="bgl" style="background-image:${url(bg)}"></div>` : '<div class="bgl none"></div>';
@@ -86,7 +92,7 @@ function renderHero() {
   const bg = i.details?.background ?? a.hero ?? a.header ?? a.cover ?? null;
   const isApp = i.kind !== 'game';
   document.body.dataset.theme = isApp && i.category === 'musique' ? 'musique' : 'jeu';
-  const title = a.logo ? `<img class="hlogo" src="${esc(a.logo)}" alt="${esc(i.name)}">`
+  const title = i.brand && isApp && brandMark(i, 'happicon') ? brandMark(i, 'happicon') : a.logo ? `<img class="hlogo" src="${esc(a.logo)}" alt="${esc(i.name)}">`
     : isApp && (a.icon || i.iconData) ? `<img class="happicon" src="${esc(a.icon ?? i.iconData)}" alt="">` : `<h1 class="htitle">${esc(i.name)}</h1>`;
   const src = state.sources[i.source];
   const d = i.details ?? {};
@@ -101,7 +107,7 @@ function renderHero() {
   if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) menu.push('<button data-action="uninstall" class="danger">🗑 Désinstaller</button>');
   const main = i.installed ? (isApp ? 'Ouvrir' : 'Jouer') : 'Installer';
   hero.innerHTML = `
-    ${bg ? `<div class="hbg" style="background-image:${url(bg)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
+    ${i.brand && isApp ? `<div class="hbg brandbg" style="--b:${esc(i.brand.color)}"></div>` : bg ? `<div class="hbg" style="background-image:${url(bg)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
     ${title}
     <div class="hbottom">
       <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button><div class="menu" id="heroMenu">${menu.join('')}</div></div>
@@ -137,7 +143,8 @@ function renderHome() {
   $('topApps').innerHTML = a.length ? a.map((i) => {
     const icon = i.art?.icon ?? i.iconData;
     const status = state.active.has(i.id) ? '<small class="inuse">En cours</small>' : `<small>${i.minutes ? hours(i.minutes) : ago(i.lastPlayed)}</small>`;
-    return `<div class="atile" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${icon ? `<img src="${esc(icon)}" alt="">` : `<span class="ai">${esc(i.name[0])}</span>`}<div><b>${esc(i.name)}</b>${status}</div></div>`;
+    const mark = i.brand ? `<span class="ai brandbg" style="--b:${esc(i.brand.color)}">${brandMark(i, 'aimg') ?? esc(i.name[0])}</span>` : null;
+    return `<div class="atile" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">${mark ?? (icon ? `<img src="${esc(icon)}" alt="">` : `<span class="ai">${esc(i.name[0])}</span>`)}<div><b>${esc(i.name)}</b>${status}</div></div>`;
   }).join('') : '<div class="empty">Aucune application trouvée.</div>';
   renderRecos();
 }
@@ -619,7 +626,7 @@ setInterval(() => { if (state.view === 'stats') renderStats(); if (state.view ==
 function demoApi() {
   const img = (n) => `demo/${n}`;
   const game = (id, name, source, minutes, days, gb, a) => ({ id, source, kind: 'game', name, installed: gb > 0, installDir: 'C:\\Jeux', size: gb * 1e9, minutes, lastPlayed: Date.now() - days * 86_400_000, art: a });
-  const app = (name, category, minutes, icon) => ({ id: `reg:${name}`, source: 'pc', kind: 'app', category, name, installed: true, installDir: 'C:\\Apps', size: 3e8, minutes, lastPlayed: Date.now() - 3_600_000, art: {}, iconData: icon, uninstallCmd: 'x' });
+  const app = (name, category, minutes, icon) => ({ id: `reg:${name}`, source: 'pc', kind: 'app', category, name, installed: true, installDir: 'C:\\Apps', size: 3e8, minutes, lastPlayed: Date.now() - 3_600_000, art: {}, iconData: icon, uninstallCmd: 'x', brand: { Spotify: { color: '#1ed760', logo: 'brands/spotify.svg' }, Discord: { color: '#5865f2', logo: 'brands/discord.svg' }, 'Google Chrome': { color: '#4285f4', logo: 'brands/googlechrome.svg' }, 'OBS Studio': { color: '#302e31', logo: 'brands/obsstudio.svg' } }[name] ?? null });
   const items = [
     game('steam:271590', 'Grand Theft Auto V', 'steam', 25680, 0, 108.7, { cover: img('c1.jpg'), hero: img('h1.jpg'), logo: img('l1.png') }),
     game('epic:Fortnite', 'Fortnite', 'epic', 18720, 1, 40, { cover: img('c2.jpg'), hero: img('h2.jpg') }),
