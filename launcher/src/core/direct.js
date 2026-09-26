@@ -6,7 +6,8 @@
 export function launchPlan(item, { direct = true, memo = null } = {}) {
   const hasClient = item.source === 'steam' || item.source === 'epic';
   if (!hasClient) return ['exe'];
-  if (!direct || memo === 'client') return ['client'];
+  // Mise à jour en attente : Steam doit la faire avant de lancer le jeu
+  if (!direct || memo === 'client' || item.updatePending) return ['client'];
   return ['exe', 'client'];
 }
 
