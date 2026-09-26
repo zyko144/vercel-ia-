@@ -22,7 +22,8 @@
       "src/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "src/ui/icon.png"
     },
     "nsis": {
       "oneClick": false,
