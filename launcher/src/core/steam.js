@@ -225,3 +225,65 @@ export async function steamStoreAssets(appids, fetchImpl = fetch) {
   }
   return out;
 }
+
+// ===== Cache local de Steam (appcache/appinfo.vdf) : nom et type de TOUTES les applis que Steam connaît =====
+// Utile pour les jeux retirés du magasin (l'API ne donne plus leur nom) et pour écarter les outils (serveurs, redistribuables…).
+const APPINFO_MAGICS = { 0x07564427: 27, 0x07564428: 28, 0x07564429: 29 };
+
+/** Lit un bloc clé-valeur binaire et renvoie { name, type } de la section « common ». */
+function appCommon(buf, start, end, keyAt) {
+  let pos = start;
+  const path = [];
+  const out = {};
+  const cstr = () => { const z = buf.indexOf(0, pos); const s = buf.toString('utf8', pos, z); pos = z + 1; return s; };
+  while (pos < end) {
+    const t = buf[pos++];
+    if (t === 0x08 || t === 0x0b) { if (!path.length) break; path.pop(); continue; }
+    const key = keyAt ? keyAt(buf.readUInt32LE((pos += 4) - 4)) : cstr();
+    if (t === 0x00) { path.push(key); continue; }
+    if (t === 0x01) {
+      const v = cstr();
+      if (path.length === 2 && path[1] === 'common' && (key === 'name' || key === 'type')) out[key] = v;
+    } else if (t === 0x02 || t === 0x03 || t === 0x04 || t === 0x06) pos += 4;
+    else if (t === 0x07 || t === 0x0a) pos += 8;
+    else break; // format inconnu : on s'arrête proprement
+    if (out.name && out.type) break;
+  }
+  return out;
+}
+
+/** Nom et type (game, tool, dlc, application…) des applis demandées, lus dans le cache de Steam. */
+export function parseAppInfo(buf, wanted = null) {
+  const version = APPINFO_MAGICS[buf.readUInt32LE(0)];
+  if (!version) return {};
+  let pos = 8;
+  let keyAt = null;
+  if (version >= 29) {
+    const tableAt = Number(buf.readBigInt64LE(pos)); pos += 8;
+    const count = buf.readUInt32LE(tableAt);
+    const strings = [];
+    let p = tableAt + 4;
+    for (let n = 0; n < count; n++) { const z = buf.indexOf(0, p); strings.push(buf.toString('utf8', p, z)); p = z + 1; }
+    keyAt = (i) => strings[i] ?? '';
+  }
+  const head = version >= 28 ? 60 : 40; // champs fixes après la taille
+  const out = {};
+  while (pos + 8 <= buf.length) {
+    const appid = buf.readUInt32LE(pos);
+    if (!appid) break;
+    const size = buf.readUInt32LE(pos + 4);
+    const end = pos + 8 + size;
+    if (!wanted || wanted.has(String(appid))) {
+      const info = appCommon(buf, pos + 8 + head, end, keyAt);
+      if (info.name) out[String(appid)] = { name: info.name, type: String(info.type ?? '').toLowerCase() };
+    }
+    pos = end;
+  }
+  return out;
+}
+
+export async function steamAppInfo(steamPath, appids) {
+  const buf = await readFile(path.join(steamPath, 'appcache', 'appinfo.vdf')).catch(() => null);
+  if (!buf || buf.length < 16) return {};
+  try { return parseAppInfo(buf, new Set(appids.map(String))); } catch { return {}; }
+}
