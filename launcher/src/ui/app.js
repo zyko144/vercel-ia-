@@ -466,6 +466,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.10.4': [
+    ['⬆', 'Mises à jour propres', 'Le launcher demande « Mettre à jour maintenant ? » puis s’installe en silence, sans réinstallation. Tu peux aussi dire à l’IA « fais la mise à jour ».'],
+    ['🛠', 'Bibliothèque en direct réparée', 'La liste des jeux se met de nouveau à jour toute seule.'],
+  ],
   '0.10.3': [
     ['🪟', 'Logo sans fond partout', 'L’icône de l’app sur Windows (barre des tâches, bureau, notifications) n’a plus de fond noir.'],
   ],
@@ -507,16 +511,46 @@ async function showWhatsNew(force = false) {
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); };
   $('modal').showModal();
 }
-// Mise à jour prête (version installée) : on propose de redémarrer tout de suite, sinon elle s'installe à la fermeture
-api.onUpdate?.((u) => {
-  if (u.state === 'download') toast(`⬆ Mise à jour v${u.version} en cours de téléchargement…`);
-  if (u.state === 'ready') {
-    ui.confirm({ title: `Mise à jour v${u.version} prête`, text: 'Redémarre le launcher pour l’installer (quelques secondes). Sinon, elle s’installera toute seule à la prochaine fermeture.', ok: '⬆ Redémarrer maintenant', cancel: 'Plus tard', icon: '⬆' })
+// Mises à jour : « Mettre à jour maintenant ? » dès qu'une version sort (Oui → téléchargée puis redémarrage auto ;
+// Plus tard → téléchargée en fond, installée à la prochaine fermeture). Bouton dans les Paramètres + commande IA.
+let updAsked = null;
+let appVersion = '';
+function renderUpdateRow(u) {
+  const el = $('updStatus'); if (!el || !u) return;
+  const cur = u.current ? `Version ${u.current}` : '';
+  el.textContent = !u.packaged && u.packaged !== undefined ? `${cur} · version développeur (mise à jour par le .bat)`
+    : u.state === 'checking' ? `${cur} · recherche…`
+    : u.state === 'available' ? `${cur} · v${u.version} disponible`
+    : u.state === 'progress' ? `${cur} · téléchargement ${u.percent ?? 0} %`
+    : u.state === 'ready' || u.ready ? `${cur} · v${u.version ?? u.ready} prête`
+    : u.state === 'uptodate' ? `${cur} · à jour ✓`
+    : u.state === 'error' ? `${cur} · erreur : ${u.error ?? '?'}` : cur;
+}
+api.onAppUpdate?.((u) => {
+  renderUpdateRow({ ...u, packaged: true, current: appVersion });
+  if (u.state === 'available' && updAsked !== u.version && !u.installNow) {
+    updAsked = u.version;
+    ui.confirm({ title: `Nouvelle version v${u.version} disponible`, text: 'Mettre à jour maintenant ? Le launcher se télécharge puis redémarre tout seul (moins d’une minute). Sinon, elle s’installera à la prochaine fermeture.', ok: '⬆ Mettre à jour maintenant', cancel: 'Plus tard', icon: '⬆' })
+      .then((yes) => { api.downloadUpdate(yes); toast(yes ? '⬆ Téléchargement de la mise à jour…' : 'OK : elle s’installera à la prochaine fermeture'); });
+  }
+  if (u.state === 'ready' && u.installNow) toast('✓ Mise à jour prête : redémarrage…');
+  if (u.state === 'ready' && !u.installNow && updAsked !== `ready-${u.version}`) {
+    updAsked = `ready-${u.version}`;
+    ui.confirm({ title: `Mise à jour v${u.version} prête`, text: 'Redémarrer maintenant pour l’installer ? Sinon, elle s’installera toute seule à la prochaine fermeture.', ok: '⬆ Redémarrer maintenant', cancel: 'Plus tard', icon: '⬆' })
       .then((yes) => { if (yes) api.installUpdate(); });
   }
+  if (u.state === 'error' && u.installNow) toast(`Mise à jour impossible : ${u.error ?? 'réessaie plus tard'}`);
+});
+api.updateInfo?.().then((u) => { appVersion = u?.current ?? ''; renderUpdateRow(u); }).catch(() => {});
+$('checkUpd').addEventListener('click', async () => {
+  const r = await api.checkUpdate?.(false);
+  if (!r) return;
+  if (r.dev) return toast('Version développeur : lance « restaurer-launcher.bat » pour la mettre à jour');
+  if (r.error) return toast(`Vérification impossible : ${r.error}`);
+  if (r.uptodate) return toast(`Tu as la dernière version (${r.current}) 👍`);
+  if (r.ready) return api.installUpdate();
 });
 $('openNews2').addEventListener('click', () => { $('settings').close(); showWhatsNew(true); });
-$('openLog').addEventListener('click', () => api.openLog?.().then((r) => toast(r?.ok ? 'Journal ouvert : envoie-le si un bug revient' : 'Aucune erreur enregistrée 👍')));
 
 // ---------- Recherche rapide (Ctrl+Espace, ou Ctrl+Alt+Espace depuis Windows) ----------
 const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']];
@@ -1523,7 +1557,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.10.3',
+    version: async () => '0.10.4',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
