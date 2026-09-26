@@ -9,7 +9,7 @@ export const SORTS = {
 };
 
 /**
- * Par défaut (« Tous ») : ce qui est installé, ce qui a vraiment été joué, et les favoris. Un jeu seulement
+ * Par défaut (« Tous ») : les jeux installés ou joués, les applis connues ou utilisées, et les favoris. Un jeu seulement
  * possédé (jeu gratuit récupéré, jamais lancé) n'apparaît que dans « Non installés ».
  * Les jeux installés passent toujours en premier, puis les favoris, puis le tri choisi.
  */
@@ -21,7 +21,8 @@ export function filterSort(items, { sort = 'joues', kind = 'tout', source = 'tou
     .filter((i) => kind === 'tout' || kind === 'caches' ? true : kind === 'favoris' ? i.favorite : kind === 'jeux' ? i.kind === 'game' : kind === 'applis' ? i.kind !== 'game' : true)
     .filter((i) => kind !== 'caches' || i.hidden)
     .filter((i) => source === 'tout' || i.source === source)
-    .filter((i) => (installed === 'oui' ? i.installed : installed === 'non' ? !i.installed : i.installed || played(i) || i.favorite || Boolean(words)))
+    // Applis : par défaut seulement les connues (Spotify, Discord, CCleaner…) ou celles qu'on utilise vraiment
+    .filter((i) => (installed === 'oui' ? i.installed : installed === 'non' ? !i.installed : (i.kind === 'game' ? i.installed || played(i) : i.known !== false || played(i)) || i.favorite || Boolean(words)))
     .filter((i) => !words || norm(i.name).includes(words))
     .sort((a, b) => (b.installed - a.installed) || (b.favorite - a.favorite) || (SORTS[sort] ?? SORTS.joues)(a, b));
 }

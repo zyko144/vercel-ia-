@@ -341,4 +341,20 @@ await check('vérification rapide : exécutable manquant et fichiers manquants d
   assert.equal(bad.problems.length, 2);
 });
 
+await check('applis : seulement les connues ou utilisées par défaut, toutes dans « Tous les installés »', async () => {
+  const reg = parseRegQuery(`
+HKEY_LOCAL_MACHINE\\X\\CCleaner
+    DisplayName    REG_SZ    CCleaner
+HKEY_LOCAL_MACHINE\\X\\HPSmart
+    DisplayName    REG_SZ    HP Smart
+HKEY_LOCAL_MACHINE\\X\\Realtek
+    DisplayName    REG_SZ    Realtek Audio Console
+HKEY_LOCAL_MACHINE\\X\\Outil
+    DisplayName    REG_SZ    Outil Pro Rare
+`);
+  const apps = merge(programsFromRegistry(reg), { time: { 'reg:outil-pro-rare': { minutes: 30, lastPlayed: 1 } }, items: {}, names: {} });
+  assert.deepEqual(filterSort(apps, {}).map((i) => i.name).sort(), ['CCleaner', 'Outil Pro Rare'], 'connue + utilisée');
+  assert.equal(filterSort(apps, { installed: 'oui' }).length, 3, 'le reste accessible (le pilote Realtek, lui, est écarté comme composant système)');
+});
+
 console.log(`\n${passed} vérifications passées.`);
