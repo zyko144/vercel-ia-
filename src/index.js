@@ -149,6 +149,11 @@ process.on('unhandledRejection', (err) => {
   console.error('[unhandledRejection]', err);
   reportProblem({ what: 'erreur interne', error: err, ping: false }).catch(() => {});
 });
+// Une erreur imprévue ne fait plus tomber tout le bot (et le site avec) : on la note et on continue
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+  reportProblem({ what: 'erreur interne (non rattrapée)', error: err, ping: false }).catch(() => {});
+});
 
 // Render arrête l'ancienne version à chaque mise à jour : on coupe proprement ses lecteurs audio
 let stopping = false;
@@ -200,10 +205,21 @@ async function privilegedIntents() {
   if (allowed.members) intents.push(GatewayIntentBits.GuildMembers);
   else console.warn("⚠️ Anti-raid, vérification, bienvenue et journal des arrivées désactivés : active « Server Members Intent » dans le portail Discord (Developer Portal › Bot), puis redémarre.");
   client.options.intents = new IntentsBitField(intents);
-  await client.login(config.discordToken).catch((err) => {
-    console.error('❌ Connexion à Discord impossible (token invalide ou intents pas activés ?) :', err.message);
-    process.exit(1);
-  });
+  // Discord refuse la connexion (limite de connexions, panne, token) : on ne s'arrête pas.
+  // Le site reste en ligne et le bot retente, de plus en plus espacé (30 s, 1 min, 2 min… jusqu'à 10 min).
+  let wait = 30_000;
+  for (;;) {
+    try {
+      await client.login(config.discordToken);
+      break;
+    } catch (err) {
+      const fatal = /TokenInvalid|invalid token|disallowed intents/i.test(`${err.code ?? ''} ${err.message}`);
+      console.error(`❌ Connexion à Discord impossible${fatal ? ' (token invalide ou intents pas activés ?)' : ''} : ${err.message}. Nouvel essai dans ${Math.round(wait / 1000)} s (le site reste en ligne).`);
+      reportProblem({ what: 'connexion à Discord', error: err, ping: false }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      wait = Math.min(wait * 2, 600_000);
+    }
+  }
   // Le casino a son propre bot : il se connecte à côté, et son absence ne gêne pas le reste.
   startCasinho().catch((err) => console.error('🎰 Casinho :', err.message));
 })();
