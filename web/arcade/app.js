@@ -96,7 +96,8 @@ function render() {
     ({ lobby: mountLobby, dessin: mountDraw, morpion: mountDuel, puissance4: mountDuel, fin: mountEnd, duel: mountBoard, quiz: mountBoard, pendu: mountBoard, nombre: mountBoard, party: mountParty })[kind]?.();
   }
   ({ lobby: updateLobby, dessin: updateDraw, morpion: updateDuel, puissance4: updateDuel, fin: updateEnd, duel: updateNewDuel, quiz: updateQuiz, pendu: updatePendu, nombre: updateNombre, party: updateParty })[kind]?.();
-  if (kind !== 'party') stopPartyAudio();
+  // Hors d'une partie de soirée (salle, fin, autre jeu) : ni extrait ni voix de l'IA
+  if (kind !== 'party') { stopPartyAudio(); Sound.hush(); }
   updateChat();
   if ($('soloBox')) renderSolo($('soloBox'));
   if (!$('drawer').hidden) renderSolo($('drawerBody'));
@@ -713,7 +714,9 @@ const Sound = (() => {
     $(id).value = prefs[k];
     $(id).oninput = () => setVol(k, Number($(id).value));
   }
-  return { playFx, stopFx, say, fxSrc: () => fx?.src ?? null, fxPlaying: () => Boolean(fx?.node) };
+  // On quitte la page (Activité fermée) : plus un bruit
+  window.addEventListener('pagehide', () => { hush(); stopFx(); try { ctx?.suspend(); } catch { /* déjà arrêté */ } });
+  return { playFx, stopFx, say, hush: () => { hush(); lastSaid = ''; }, fxSrc: () => fx?.src ?? null, fxPlaying: () => Boolean(fx?.node) };
 })();
 
 // ------------------------------------------------------------------ Jeux de soirée (écrans décrits par le serveur)

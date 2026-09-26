@@ -277,6 +277,8 @@ async function openTicket(client, interaction, panelId, categoryIndex = null) {
     embeds: [welcome], files: gif.files, components: [ticketButtons()],
     allowedMentions: { users: [interaction.user.id], roles: panel.staffRoleId ? [panel.staffRoleId] : [] },
   });
+  // Automatisations « ticket ouvert » (tableau de bord)
+  import('./ticketAutomations.js').then((m) => m.onTicketOpened(client, channel)).catch((err) => console.warn('[tickets auto]', err.message));
   return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x3dff9a).setDescription(`✅ Ton ticket est ouvert : ${channel}`)] });
 }
 
@@ -370,41 +372,7 @@ async function handleTicket(client, interaction) {
   if (what === 'closeno') return interaction.update({ embeds: [new EmbedBuilder().setColor(0x2b2d31).setDescription('👌 Le ticket reste ouvert.')], components: [] });
   if (what === 'closeyes') {
     await interaction.update({ embeds: [new EmbedBuilder().setColor(0xff3355).setDescription('🔒 Fermeture dans 5 secondes…')], components: [] });
-    const channel = interaction.channel;
-    const file = await transcript(channel);
-    const summary = new EmbedBuilder()
-      .setColor(0xff3355)
-      .setTitle(`🗄️ Ticket n°${ticket.number} fermé`)
-      .addFields(
-        { name: 'Ouvert par', value: `<@${ticket.userId}>`, inline: true },
-        { name: 'Fermé par', value: `${interaction.user}`, inline: true },
-        { name: 'Pris en charge', value: ticket.claimedBy ? `<@${ticket.claimedBy}>` : '—', inline: true },
-        { name: 'Durée', value: `<t:${Math.round(ticket.openedAt / 1000)}:R> → maintenant`, inline: false },
-      )
-      .setTimestamp();
-    if (ticket.topic) summary.addFields({ name: 'Motif', value: cut(ticket.topic, 200), inline: true });
-    // Résumé du ticket par l'IA (idée 55)
-    const { summarizeTicket } = await import('./assistant.js');
-    const resume = await summarizeTicket(file.toString('utf8'));
-    if (resume) summary.addFields({ name: '🧠 Résumé', value: resume });
-    staffStats(g, interaction.user.id).closed += 1;
-    const attach = () => new AttachmentBuilder(file, { name: `ticket-${ticket.number}.txt` });
-    const logs = panel?.logChannelId ? client.channels.cache.get(panel.logChannelId) : null;
-    await logs?.send({ embeds: [summary], files: [attach()], allowedMentions: { parse: [] } }).catch(() => {});
-    const author = await client.users.fetch(ticket.userId).catch(() => null);
-    await author?.send({ embeds: [summary.setDescription(`Ton ticket sur **${interaction.guild.name}** est fermé. Voici la transcription.`)], files: [attach()] }).catch(() => {});
-    // Note de satisfaction (idée 67)
-    const { cfg } = await import('./guildConfig.js');
-    if (author && cfg(interaction.guildId, 'tickets.rating')) {
-      const helper = ticket.claimedBy ?? (interaction.user.id !== ticket.userId ? interaction.user.id : 'x');
-      await author.send({
-        embeds: [new EmbedBuilder().setColor(0xc9a978).setDescription(`⭐ Comment s’est passé ton ticket sur **${interaction.guild.name}** ?`)],
-        components: [new ActionRowBuilder().addComponents([1, 2, 3, 4, 5].map((n) => new ButtonBuilder().setCustomId(`tk:rate:${interaction.guildId}:${n}:${helper}`).setLabel('⭐'.repeat(n)).setStyle(n >= 4 ? ButtonStyle.Success : ButtonStyle.Secondary)))],
-      }).catch(() => {});
-    }
-    delete g.open[channel.id];
-    persist();
-    setTimeout(() => channel.delete(`Ticket fermé par ${interaction.user.username}`).catch(() => {}), 5_000);
+    await closeTicket(client, interaction.channel, interaction.user, interaction.guild);
   }
   return undefined;
 }
@@ -486,3 +454,52 @@ export async function openTickets(guildId) {
   const g = await guildData(guildId);
   return Object.entries(g.open).map(([channelId, t]) => ({ channelId, ...t }));
 }
+
+/** Ferme un ticket : transcription (archives + MP de l'auteur), résumé de l'IA, note de satisfaction, puis suppression. */
+export async function closeTicket(client, channel, closer, guild = channel.guild) {
+  const guildId = channel.guildId ?? guild?.id;
+  const g = await guildData(guildId);
+  const ticket = g.open[channel.id];
+  if (!ticket) return false;
+  const panel = g.panels[ticket.panelId];
+  const file = await transcript(channel);
+  const summary = new EmbedBuilder()
+    .setColor(0xff3355)
+    .setTitle(`🗄️ Ticket n°${ticket.number} fermé`)
+    .addFields(
+      { name: 'Ouvert par', value: `<@${ticket.userId}>`, inline: true },
+      { name: 'Fermé par', value: `${closer}`, inline: true },
+      { name: 'Pris en charge', value: ticket.claimedBy ? `<@${ticket.claimedBy}>` : '—', inline: true },
+      { name: 'Durée', value: `<t:${Math.round(ticket.openedAt / 1000)}:R> → maintenant`, inline: false },
+    )
+    .setTimestamp();
+  if (ticket.topic) summary.addFields({ name: 'Motif', value: cut(ticket.topic, 200), inline: true });
+  // Résumé du ticket par l'IA (idée 55)
+  const { summarizeTicket } = await import('./assistant.js');
+  const resume = await summarizeTicket(file.toString('utf8'));
+  if (resume) summary.addFields({ name: '🧠 Résumé', value: resume });
+  staffStats(g, closer.id).closed += 1;
+  const attach = () => new AttachmentBuilder(file, { name: `ticket-${ticket.number}.txt` });
+  const logs = panel?.logChannelId ? client.channels.cache.get(panel.logChannelId) : null;
+  await logs?.send({ embeds: [summary], files: [attach()], allowedMentions: { parse: [] } }).catch(() => {});
+  const author = await client.users.fetch(ticket.userId).catch(() => null);
+  await author?.send({ embeds: [summary.setDescription(`Ton ticket sur **${guild.name}** est fermé. Voici la transcription.`)], files: [attach()] }).catch(() => {});
+  // Note de satisfaction (idée 67)
+  const { cfg } = await import('./guildConfig.js');
+  if (author && cfg(guildId, 'tickets.rating')) {
+    const helper = ticket.claimedBy ?? (closer.id !== ticket.userId ? closer.id : 'x');
+    await author.send({
+      embeds: [new EmbedBuilder().setColor(0xc9a978).setDescription(`⭐ Comment s’est passé ton ticket sur **${guild.name}** ?`)],
+      components: [new ActionRowBuilder().addComponents([1, 2, 3, 4, 5].map((n) => new ButtonBuilder().setCustomId(`tk:rate:${guildId}:${n}:${helper}`).setLabel('⭐'.repeat(n)).setStyle(n >= 4 ? ButtonStyle.Success : ButtonStyle.Secondary)))],
+    }).catch(() => {});
+  }
+  delete g.open[channel.id];
+  persist();
+  setTimeout(() => channel.delete(`Ticket fermé par ${closer.username}`).catch(() => {}), 5_000);
+
+  return true;
+}
+
+/** Données des tickets d'un serveur (automatisations). */
+export const ticketData = guildData;
+export const saveTickets = () => persist();

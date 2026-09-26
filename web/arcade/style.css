@@ -1,6 +1,6 @@
 @font-face { font-family: 'Cinzel'; src: url('fonts/cinzel.ttf') format('truetype'); font-weight: 700; font-display: swap; }
 :root {
-  --bg: #100d09; --bg2: #1b150e; --paper: #e8d6ae; --paper2: #d4b98a; --ink: #2a1606; --ink2: #5a3b1c;
+  --bg: #100d09; --bg2: #1b150e; --paper: #26262b; --paper2: #1c1c20; --ink: #ececf1; --ink2: #a9a9b4;
   --text: #eadcc0; --muted: #a8977a; --accent: #c9a978; --gold: #f2c14e;
   --sea: #1fb5b0; --blood: #e0433a; --emerald: #3fbf6a; --amber: #ff9f2e; --royal: #7c6cff; --rose: #ff5fa2; --sky: #4aa8ff;
   --torn: polygon(0% 2%, 6% 0%, 13% 2%, 21% 0%, 30% 3%, 38% 0%, 47% 2%, 55% 0%, 64% 3%, 72% 1%, 81% 3%, 89% 0%, 96% 2%, 100% 0%, 99% 20%, 100% 41%, 98% 62%, 100% 83%, 99% 100%, 91% 98%, 83% 100%, 74% 97%, 66% 100%, 57% 98%, 49% 100%, 40% 97%, 31% 100%, 22% 98%, 13% 100%, 5% 97%, 0% 100%, 1% 79%, 0% 58%, 2% 37%, 0% 18%);
@@ -28,7 +28,7 @@ button:active { transform: translateY(2px); box-shadow: 0 1px 0 #7a5418; }
 button:disabled { filter: grayscale(.7) brightness(.7); cursor: default; transform: none; }
 button.ghost { background: #2a2014; color: var(--text); box-shadow: 0 2px 0 #0008; border: 1px solid #4a3620; }
 button.small { padding: 6px 10px; font-size: 12px; }
-.parchment { background: radial-gradient(ellipse at 40% 30%, #f3e4bf, var(--paper) 55%, var(--paper2) 85%, #a47a45); color: var(--ink); clip-path: var(--torn); padding: 22px 24px; filter: drop-shadow(0 8px 18px #000a); }
+.parchment { background: radial-gradient(ellipse at 40% 30%, #303036, var(--paper) 55%, var(--paper2) 85%, #111114); color: var(--ink); clip-path: var(--torn); padding: 22px 24px; filter: drop-shadow(0 8px 18px #000a); }
 .parchment h2, .parchment h3 { margin: 0 0 6px; color: var(--ink); }
 .loading, .fatal { height: 100%; display: grid; place-content: center; text-align: center; color: var(--muted); }
 .spin { font-size: 46px; animation: sway 1.4s ease-in-out infinite; }
@@ -91,7 +91,7 @@ canvas.mine { cursor: crosshair; }
 .seat { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: #1c150d; border: 2px solid #3b2a17; }
 .seat.turn { border-color: var(--gold); box-shadow: 0 0 18px #f2c14e55; }
 .ttt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: min(360px, 90vw); margin: 0 auto; }
-.ttt button { aspect-ratio: 1; font-size: 54px; padding: 0; background: radial-gradient(#f3e4bf, var(--paper2)); color: var(--ink); box-shadow: 0 4px 0 #6e4520; }
+.ttt button { aspect-ratio: 1; font-size: 54px; padding: 0; background: radial-gradient(#303036, var(--paper2)); color: var(--ink); box-shadow: 0 4px 0 #6e4520; }
 .ttt button.x { color: var(--blood); } .ttt button.o { color: #1f5f5a; }
 .ttt button.win { background: radial-gradient(#fff3c4, var(--gold)); animation: pop .4s; }
 .ttt button span { display: inline-block; animation: pop .3s; }
@@ -146,7 +146,7 @@ canvas.mine { cursor: crosshair; }
 .big { text-align: center; font: 700 22px 'Cinzel', serif; color: var(--gold); margin: 10px 0; }
 .memo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: min(380px, 92vw); margin: 0 auto; }
 .memo button { aspect-ratio: 1; font-size: 32px; padding: 0; background: radial-gradient(#3b2a17, #1c150d); color: var(--accent); }
-.memo button.up { background: radial-gradient(#f3e4bf, var(--paper2)); animation: pop .25s; }
+.memo button.up { background: radial-gradient(#303036, var(--paper2)); animation: pop .25s; }
 .memo button.found { background: radial-gradient(#d8f5e2, #3fbf6a); }
 .ships { display: flex; flex-direction: column; gap: 10px; max-width: 520px; margin: 0 auto 14px; }
 .hp { display: grid; grid-template-columns: 140px 1fr 60px; gap: 10px; align-items: center; }
@@ -182,7 +182,7 @@ canvas.mine { cursor: crosshair; }
 .card.red { color: #c0392b; }
 .mines { display: grid; gap: 3px; max-width: 420px; margin: 10px auto; }
 .mines button { aspect-ratio: 1; padding: 0; font-size: 15px; background: #8a6a3e; box-shadow: inset 0 -3px 0 #5a3b1c; border-radius: 4px; color: #1b1208; }
-.mines button.open { background: #f3e4bf; box-shadow: none; } .mines button.boom { background: #e0433a; }
+.mines button.open { background: #303036; box-shadow: none; } .mines button.boom { background: #e0433a; }
 .mines .n1 { color: #1f5f9a; } .mines .n2 { color: #1d7a3f; } .mines .n3 { color: #c0392b; } .mines .n4 { color: #5a2a8a; } .mines .n5 { color: #8c1c13; }
 .drawer { position: fixed; top: 56px; right: 0; bottom: 0; width: min(560px, 100%); background: #140f09f2; border-left: 1px solid #3b2a17; z-index: 8; overflow-y: auto; padding: 14px; box-shadow: -10px 0 30px #000a; }
 .drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: var(--gold); font-family: 'Cinzel', serif; }
@@ -193,7 +193,7 @@ canvas.mine { cursor: crosshair; }
 
 /* Jeux de soirée */
 .section { color: var(--gold); margin: 18px 0 8px; }
-.game select.choice { width: 100%; margin: 4px 0 8px; padding: 7px; border-radius: 8px; border: 1px solid #a47a45; background: #fbf1d8; color: var(--ink); font: inherit; }
+.game select.choice { width: 100%; margin: 4px 0 8px; padding: 7px; border-radius: 8px; border: 1px solid #111114; background: #1c1c20; color: var(--ink); font: inherit; }
 .game .bots { display: flex; gap: 6px; align-items: center; font-size: 13px; margin-bottom: 8px; color: var(--ink2); }
 .botav { display: inline-grid; place-content: center; font-size: 17px; }
 .party { max-width: 760px; margin: 0 auto; }
@@ -207,7 +207,7 @@ canvas.mine { cursor: crosshair; }
 .pt.huge { font-size: clamp(34px, 9vw, 64px); line-height: 1.2; }
 .pt.small { color: var(--muted); font-size: 14px; }
 .pt.mono { font-family: ui-monospace, Menlo, monospace; letter-spacing: .12em; color: var(--gold); }
-.pt.quote { background: radial-gradient(ellipse at 40% 30%, #f3e4bf, var(--paper) 60%, var(--paper2)); color: var(--ink); border-radius: 10px; padding: 16px 18px; text-align: left; font-size: 16px; line-height: 1.55; }
+.pt.quote { background: radial-gradient(ellipse at 40% 30%, #303036, var(--paper) 60%, var(--paper2)); color: var(--ink); border-radius: 10px; padding: 16px 18px; text-align: left; font-size: 16px; line-height: 1.55; }
 .pimg { display: block; margin: 0 auto; max-width: 100%; max-height: 300px; border-radius: 12px; border: 3px solid var(--accent); }
 .pimg.photo { width: min(320px, 100%); aspect-ratio: 1; object-fit: cover; }
 .paudio { display: flex; gap: 10px; align-items: center; justify-content: center; }
@@ -289,3 +289,10 @@ button.red { background: linear-gradient(#ff6b5f, #b8322a); color: #fff; }
 .lobby .hint { font-size: 15px; line-height: 1.5; color: var(--text); opacity: .85; }
 .game p { line-height: 1.4; }
 .premium-tag { background: linear-gradient(90deg, #f2c14e, #ff9f2e); color: #1b1208; font-weight: 700; font-size: 12px; padding: 4px 10px; border-radius: 99px; white-space: nowrap; }
+
+/* Cartes des jeux en gris-noir (au lieu du parchemin beige) */
+.parchment { border: 1px solid #3a3a42; filter: drop-shadow(0 8px 18px #000c); }
+.game .tag { color: #fff; }
+.game select.choice { color: var(--ink); border-color: #3a3a42; }
+.pt.quote { border: 1px solid #3a3a42; }
+.cross .cell.key { background: var(--gold); color: #1b1208; }

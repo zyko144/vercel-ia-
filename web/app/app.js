@@ -438,7 +438,92 @@
           } })))) : h('p', { class: 'sub', text: 'Aucun pour l’instant.' })),
       h('div', { class: 'card' }, h('h2', { text: `Tickets ouverts (${t.open.length})` }),
         t.open.length ? h('div', { class: 'list' }, t.open.map((o) => h('div', { class: 'item' }, h('span', { text: o.channel ? `# ${o.channel}` : 'Ticket' }), h('small', { text: o.user ?? '' })))) : h('p', { class: 'sub', text: 'Aucun ticket ouvert.' }))));
+    panel.append(automationsCard());
   }
+  // ---------------- Automatisations des tickets ----------------
+  const TRIGGERS = { open: '🎫 Ticket ouvert', keyword: '🔑 Le membre écrit un mot-clé', no_staff: '⏳ Le staff ne répond pas depuis…', inactive: '💤 Ticket inactif depuis…' };
+  const ACTIONS = { reply: '💬 Envoyer un message', ai: '🤖 Réponse de l’IA (selon tes consignes)', ping: '🔔 Prévenir le staff', close: '🔒 Fermer le ticket' };
+  const EXAMPLES = [
+    { name: 'Accueil', trigger: 'open', action: 'reply', text: 'Merci {membre} ! Décris ton problème en détail (captures bienvenues), le staff arrive.' },
+    { name: 'Remboursement', trigger: 'keyword', words: 'rembourse,remboursement,paiement', action: 'reply', text: 'Pour un souci de paiement, donne ton identifiant de commande et la date. {staff} va vérifier.' },
+    { name: 'Réponse IA', trigger: 'keyword', words: 'comment,pourquoi,aide', action: 'ai', text: 'Réponds aux questions sur les règles et les rôles du serveur. Pour les sanctions, dis que le staff s’en occupe.' },
+    { name: 'Relance du staff', trigger: 'no_staff', minutes: 30, action: 'ping', text: 'Le ticket {ticket} attend une réponse depuis 30 min.' },
+    { name: 'Fermeture auto', trigger: 'inactive', minutes: 1440, action: 'close', text: 'Pas de nouvelles depuis 24 h : je ferme le ticket. Tu peux en rouvrir un quand tu veux.' },
+  ];
+  function automationsCard() {
+    let rules = (data.tickets.automations ?? []).map((r) => ({ ...r }));
+    const card = h('div', { class: 'card' });
+    const panels = data.tickets.panels;
+    async function persist(msg) {
+      try {
+        const out = await api('POST', 'server/tickets/automations', { guildId: data.id, rules });
+        rules = out.rules;
+        data.tickets.automations = out.rules;
+        toast(msg);
+        draw();
+      } catch (err) { toast(err.message, true); }
+    }
+    const describe = (r) => `${TRIGGERS[r.trigger]}${r.trigger === 'keyword' ? ` « ${r.words.join(', ')} »` : ''}${r.minutes ? ` ${r.minutes >= 60 && r.minutes % 60 === 0 ? `${r.minutes / 60} h` : `${r.minutes} min`}` : ''} → ${ACTIONS[r.action]}${r.panelId ? ` · ${panels.find((p) => p.id === r.panelId)?.title ?? 'panneau supprimé'}` : ''}`;
+    function editor(rule = null) {
+      const r = rule ?? { trigger: 'keyword', action: 'reply', once: true, on: true, words: [], minutes: 30, text: '' };
+      const form = h('form', { class: 'fields auto-editor' });
+      const name = h('input', { type: 'text', maxlength: 60, value: r.name ?? '', placeholder: 'Ex : Réponse remboursement' });
+      const trigger = h('select', {}, Object.entries(TRIGGERS).map(([k, l]) => h('option', { value: k, text: l, selected: k === r.trigger })));
+      const words = h('input', { type: 'text', maxlength: 400, value: (r.words ?? []).join(', '), placeholder: 'rembourse, paiement, bug' });
+      const minutes = h('input', { type: 'number', min: 1, max: 10080, value: r.minutes ?? 30 });
+      const action = h('select', {}, Object.entries(ACTIONS).map(([k, l]) => h('option', { value: k, text: l, selected: k === r.action })));
+      const panel = h('select', {}, [h('option', { value: '', text: 'Tous les panneaux' }), ...panels.map((p) => h('option', { value: p.id, text: p.title, selected: p.id === r.panelId }))]);
+      const text = h('textarea', { maxlength: 1500, placeholder: '' });
+      text.value = r.text ?? '';
+      const once = h('input', { type: 'checkbox', checked: r.once !== false });
+      const wordsField = field('Mots-clés (séparés par des virgules)', words, 'Le membre doit écrire au moins un de ces mots (majuscules et accents ignorés).');
+      const minField = field('Délai en minutes', minutes, '60 = 1 h · 1440 = 1 jour');
+      const textField = field('Message', text, 'Variables : {membre} {staff} {ticket} {serveur} {motif}');
+      function sync() {
+        wordsField.hidden = trigger.value !== 'keyword';
+        minField.hidden = !['no_staff', 'inactive'].includes(trigger.value);
+        textField.querySelector('span').textContent = action.value === 'ai' ? 'Consignes pour l’IA' : action.value === 'close' ? 'Dernier message avant fermeture (facultatif)' : 'Message';
+        text.placeholder = action.value === 'ai' ? 'Ex : Réponds aux questions sur les rôles et les règles. Pour les sanctions, dis que le staff arrive.' : 'Ex : Merci {membre}, le staff arrive !';
+      }
+      trigger.addEventListener('change', sync);
+      action.addEventListener('change', sync);
+      sync();
+      form.append(
+        field('Nom', name),
+        h('div', { class: 'grid2' }, field('Quand…', trigger), field('Alors…', action)),
+        wordsField, minField, textField,
+        h('div', { class: 'grid2' }, field('Pour quel panneau ?', panel),
+          h('label', { class: 'switch' }, h('span', { class: 't' }, h('b', { text: 'Une seule fois par ticket' }), h('small', { text: 'Sinon à chaque fois que ça se produit.' })), once)),
+        h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'submit', text: rule ? 'Enregistrer' : 'Ajouter l’automatisation' }), h('button', { class: 'btn', type: 'button', text: 'Annuler', onclick: () => draw() })),
+      );
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (trigger.value === 'keyword' && !words.value.trim()) return toast('Ajoute au moins un mot-clé.', true);
+        if (action.value === 'reply' && !text.value.trim()) return toast('Écris le message à envoyer.', true);
+        const next = { ...r, name: name.value, trigger: trigger.value, action: action.value, words: words.value, minutes: Number(minutes.value), panelId: panel.value || null, text: text.value, once: once.checked };
+        rules = rule ? rules.map((x) => (x === rule ? next : x)) : [...rules, next];
+        persist(rule ? 'Automatisation enregistrée.' : 'Automatisation ajoutée.');
+      });
+      return form;
+    }
+    function draw(openEditor = null) {
+      card.replaceChildren(...[
+        h('h2', { text: `⚙️ Automatisations (${rules.length})` }),
+        h('p', { class: 'sub', text: 'Le bot agit tout seul dans les tickets : répondre à un mot-clé, relancer le staff, fermer les tickets oubliés…' }),
+        rules.length ? h('div', { class: 'list' }, rules.map((r) => h('div', { class: `item auto ${r.on ? '' : 'off'}` },
+          h('span', {}, h('b', { text: r.name }), h('small', { text: describe(r) })),
+          h('label', { class: 'mini-switch', title: r.on ? 'Activée' : 'Désactivée' }, h('input', { type: 'checkbox', checked: r.on, onchange: (e) => { r.on = e.target.checked; persist(r.on ? 'Activée.' : 'Désactivée.'); } })),
+          h('button', { class: 'btn small', text: 'Modifier', onclick: () => draw(r) }),
+          h('button', { class: 'btn small', text: 'Supprimer', onclick: () => { if (confirm(`Supprimer « ${r.name} » ?`)) { rules = rules.filter((x) => x !== r); persist('Automatisation supprimée.'); } } }),
+        ))) : h('p', { class: 'sub', text: 'Aucune automatisation pour l’instant. Pars d’un exemple :' }),
+        rules.length ? null : h('div', { class: 'row wrap' }, EXAMPLES.map((ex) => h('button', { class: 'btn small', type: 'button', text: `+ ${ex.name}`, onclick: () => { rules = [...rules, { ...ex, on: true, once: true }]; persist(`Exemple « ${ex.name} » ajouté : modifie-le à ta guise.`); } }))),
+        openEditor ? editor(openEditor === true ? null : openEditor) : h('button', { class: 'btn primary', type: 'button', text: '+ Nouvelle automatisation', onclick: () => draw(true) }),
+      ].filter(Boolean));
+    }
+    draw();
+    return card;
+  }
+
   function announcePage(panel) {
     panel.append(pageHead('📣', 'Annonces', 'Un message mis en forme, publié par le bot dans le salon choisi.'));
     publishPage(panel, 'annonce');
