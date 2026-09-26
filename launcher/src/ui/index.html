@@ -184,6 +184,17 @@
       <p class="autherr" id="authErr"></p>
       <button class="btn play big" id="authGo">Se connecter</button>
     </form>
+    <form id="authStep" class="authstep" hidden autocomplete="off">
+      <h2 id="stepTitle"></h2>
+      <p class="sub" id="stepText"></p>
+      <label class="field" id="stepEmailF" hidden><span>E-mail</span><input id="stepEmail" type="email" maxlength="254"></label>
+      <input id="stepCode" class="codein" inputmode="numeric" maxlength="11" placeholder="000000" autocomplete="one-time-code">
+      <label class="field" id="stepPassF" hidden><span>Nouveau mot de passe</span><input id="stepPass" type="password" maxlength="128" autocomplete="new-password"></label>
+      <p class="autherr" id="stepErr"></p>
+      <button class="btn play big" id="stepGo">Valider</button>
+      <div class="steplinks"><button type="button" class="linkbtn" id="stepResend">Renvoyer le code</button><button type="button" class="linkbtn" id="stepBack">Retour</button></div>
+    </form>
+    <button class="linkbtn" id="authForgot">Mot de passe oublié ?</button>
     <button class="linkbtn" id="authSkip">Continuer sans compte</button>
   </div>
 </section>
@@ -306,6 +317,7 @@
     </section>
     <section class="setpane" data-pane="compte" hidden>
       <h3>☁ Compte & sauvegarde</h3>
+      <div class="secbox"><div><b>🔐 Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">✉ Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">🛡 Double authentification</button></div></div>
       <p class="hint sethint">Tes collections, favoris, réglages et heures sont sauvegardés sur ton compte History toutes les 30 min et à la fermeture.</p>
       <div class="row updrow"><button type="button" class="btn" id="backupNow">☁ Sauvegarder maintenant</button><button type="button" class="btn ghost" id="backupRestore">Restaurer</button><small class="hint" id="backupStatus"></small></div>
     </section>

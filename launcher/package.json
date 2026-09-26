@@ -1,7 +1,7 @@
 {
   "name": "history-launcher",
   "productName": "History Launcher",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "Toute la bibliothèque du PC (Steam, Epic, applis) au même endroit, triée par temps de jeu",
   "main": "src/main.js",
   "type": "module",
@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.22.0",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "qrcode": "^1.5.4"
   }
 }
