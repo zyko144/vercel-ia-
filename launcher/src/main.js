@@ -3,7 +3,15 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, safeStorage, sh
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SOURCES, findExe, merge, scanAll } from './core/library.js';
+import os from 'node:os';
+import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library.js';
+import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend } from './core/ai.js';
+import { coverOf, mediaKey, nowPlaying } from './core/media.js';
+import { periodStats, statCategory } from './core/tracker.js';
+import { steamAchievements, lastSteamUser } from './core/steam.js';
+import { steamMatch } from './core/art.js';
+import { norm } from './core/sort.js';
+import { steamPath } from './core/library.js';
 import { epicActions } from './core/epic.js';
 import { steamActions } from './core/steam.js';
 import { createStore } from './core/store.js';
@@ -109,6 +117,12 @@ async function fillSteamNames(list) {
 }
 
 let raw = [];
+let aiCache = { key: null, ai: null };
+async function getAi() {
+  const key = secret('gemini') ?? await geminiKeyFromEnv(path.join(here, '..'));
+  if (key !== aiCache.key) aiCache = { key, ai: createAi(key) };
+  return aiCache.ai;
+}
 const send = (channel, payload) => win?.webContents.send(channel, payload);
 async function remerge() {
   items = merge(raw, store.data);
@@ -121,11 +135,20 @@ async function scan() {
   await fillSteamNames(raw).catch(() => {});
   await remerge();
   enrichInBackground().catch(() => {});
-  return { items, sources: SOURCES };
+  return library();
+}
+/** Bibliothèque envoyée à l'interface, avec le logo officiel de chaque launcher installé. */
+function library() {
+  const sources = Object.fromEntries(Object.entries(SOURCES).map(([k, v]) => {
+    const launcher = items.find((i) => i.kind === 'launcher' && LAUNCHER_NAMES[k]?.test(i.name));
+    return [k, { ...v, icon: launcher?.iconData ?? null }];
+  }));
+  return { items, sources };
 }
 
 // En arrière-plan : images des jeux et applis qui n'en ont pas (4 à la fois), puis mise à jour de l'interface
 let enriching = false;
+let aiBudget = 40; // recherches d'images par l'IA par lancement (coût maîtrisé)
 async function enrichInBackground() {
   if (enriching) return;
   enriching = true;
@@ -135,11 +158,19 @@ async function enrichInBackground() {
     const gridKey = secret('grid');
     for (let n = 0; n < todo.length; n += 4) {
       await Promise.all(todo.slice(n, n + 4).map(async (i) => {
-        store.data.art[i.id] = await enrich(i, { cache: store.data.art[i.id], gridKey });
+        const entry = await enrich(i, { cache: store.data.art[i.id], gridKey });
+        // Rien sur Steam, Epic ni SteamGridDB : l'IA cherche les images officielles sur internet (une fois par mois)
+        if (i.kind === 'game' && !entry.art?.cover && !entry.art?.hero && !entry.aiAt && aiBudget-- > 0) {
+          const ai = await getAi();
+          const found = ai ? await aiFindArt(ai, i.name).catch(() => null) : null;
+          entry.aiAt = Date.now();
+          if (found) { entry.art = { ...entry.art, ...found.art }; entry.steamId = found.steamId ?? entry.steamId; entry.via = 'ia'; }
+        }
+        store.data.art[i.id] = entry;
       }));
       store.save();
       await remerge();
-      send('lib:update', { items, sources: SOURCES });
+      send('lib:update', library());
     }
   } finally {
     enriching = false;
@@ -193,15 +224,16 @@ ipcMain.handle('item:set', (_e, id, patch) => {
   store.save();
   return entry;
 });
-const publicSettings = () => ({ ...store.data.settings, steamKey: Boolean(secret('steam')), gridKey: Boolean(secret('grid')) });
+const publicSettings = async () => ({ ...store.data.settings, steamKey: Boolean(secret('steam')), gridKey: Boolean(secret('grid')), gemini: Boolean(await getAi()) });
 ipcMain.handle('settings:get', () => publicSettings());
 ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
   try {
     if ('steamKey' in patch) setSecret('steam', patch.steamKey);
     if ('gridKey' in patch) { setSecret('grid', patch.gridKey); store.data.art = {}; }
+    if ('geminiKey' in patch) setSecret('gemini', patch.geminiKey);
   } catch (err) {
-    return { ...publicSettings(), error: err.message };
+    return { ...(await publicSettings()), error: err.message };
   }
   store.save();
   applyAutostart();
@@ -214,7 +246,78 @@ ipcMain.handle('item:details', async (_e, id) => {
   store.data.art ??= {};
   store.data.art[item.id] = await enrich(item, { cache: store.data.art[item.id], gridKey: secret('grid'), details: true });
   store.save();
-  return store.data.art[item.id].details ?? item.details ?? null;
+  const details = { ...(store.data.art[item.id].details ?? item.details ?? {}) };
+  const appid = store.data.art[item.id].steamId ?? item.steamId;
+  if (appid && secret('steam')) details.achievements = await steamAchievements(appid, secret('steam'), await lastSteamUser(await steamPath())).catch(() => null);
+  return details;
+});
+
+// ---------- Recommandations (IA), vérifiées sur Steam, gardées 24 h ----------
+ipcMain.handle('reco:get', async () => {
+  const cached = store.data.reco;
+  if (cached && Date.now() - cached.at < 86_400_000 && cached.list.length) return cached.list;
+  const ai = await getAi();
+  const games = items.filter((i) => i.kind === 'game');
+  const played = [...games].sort((a, b) => b.minutes - a.minutes).map((i) => i.name);
+  const owned = new Set(games.map((i) => norm(i.name)));
+  const list = [];
+  for (const r of await recommend(ai, played, games.map((i) => i.name))) {
+    if (owned.has(norm(r.name))) continue;
+    const id = await steamMatch(r.name).catch(() => null);
+    if (id) list.push({ name: r.name, why: r.why, steamId: id, art: steamArtUrls(id) });
+  }
+  // Sans IA : les jeux possédés mais pas installés
+  const fallback = games.filter((i) => !i.installed).sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((i) => ({ name: i.name, why: 'Dans ta bibliothèque', itemId: i.id, art: i.art }));
+  store.data.reco = { at: Date.now(), list: list.length ? list : fallback };
+  store.save();
+  return store.data.reco.list;
+});
+const steamArtUrls = (id) => ({ cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_600x900.jpg`, hero: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_hero.jpg`, header: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`, logo: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/logo.png` });
+ipcMain.handle('reco:open', (_e, steamId) => (/^\d{1,8}$/.test(String(steamId)) ? openLink(`https://store.steampowered.com/app/${steamId}`) : null));
+
+// ---------- Statistiques ----------
+ipcMain.handle('stats:get', (_e, period) => {
+  const n = { semaine: 7, mois: 30, annee: 365 }[period] ?? 7;
+  const split = periodStats(store.data.days, n);
+  const top = [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((i) => ({ id: i.id, name: i.name, minutes: i.minutes, cat: statCategory(i) }));
+  return { split, top, profile: os.userInfo().username };
+});
+
+// ---------- Musique ----------
+ipcMain.handle('media:now', async () => {
+  const np = await nowPlaying();
+  if (np?.artist) np.cover = await coverOf(np.artist, np.title).catch(() => null);
+  return np;
+});
+ipcMain.handle('media:key', (_e, name) => mediaKey(String(name)));
+
+// ---------- Assistant ----------
+const findItem = (name) => {
+  const n = norm(name);
+  if (!n) return null;
+  return items.find((i) => norm(i.name) === n) ?? items.find((i) => norm(i.name).includes(n) || n.includes(norm(i.name)));
+};
+ipcMain.handle('ai:ask', async (_e, message) => {
+  const text = String(message ?? '').slice(0, 500);
+  if (!text.trim()) return { reply: '…' };
+  const ai = await getAi();
+  const np = await nowPlaying().catch(() => null);
+  const context = {
+    items: [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 200).map((i) => `${i.name} · ${SOURCES[i.source]?.label ?? i.source} · ${i.installed ? 'oui' : 'non'} · ${Math.round(i.minutes / 60)} h`).join('\n'),
+    music: np?.artist ? `${np.artist} - ${np.title}` : '',
+  };
+  let r;
+  try { r = await assistant(ai, text, context); } catch (err) { return { reply: `Je n’arrive pas à joindre l’IA (${err.message}).`, action: 'none' }; }
+  const out = { reply: r.reply, action: r.action, value: r.value };
+  if (['launch', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) {
+    const item = findItem(r.target);
+    if (!item) return { reply: `Je ne trouve pas « ${r.target} » dans ta bibliothèque.`, action: 'none' };
+    out.itemId = item.id;
+    const done = await doAction(item.id, r.action).catch((err) => ({ ok: false, error: err.message }));
+    if (!done.ok && done.error) out.reply += ` (impossible : ${done.error})`;
+  }
+  if (r.action === 'music') await mediaKey({ play: 'play', pause: 'pause', next: 'next', previous: 'previous' }[r.value] ?? 'toggle');
+  return out;
 });
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 ipcMain.on('win', (_e, what) => {

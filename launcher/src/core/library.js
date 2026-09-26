@@ -9,6 +9,9 @@ import { norm } from './sort.js';
 
 export { SORTS, filterSort } from './sort.js';
 
+// Le nom du launcher dans Windows : son icône sert de logo officiel dans la barre de gauche
+export const LAUNCHER_NAMES = { steam: /^steam$/i, epic: /^epic games launcher$/i, ubisoft: /^ubisoft connect$/i, ea: /^(ea app|ea desktop|origin)$/i, battlenet: /^battle\.net$/i, gog: /^gog galaxy$/i, riot: /^riot client$/i, rockstar: /^rockstar games launcher$/i };
+
 export const SOURCES = {
   steam: { label: 'Steam', color: '#66c0f4' },
   epic: { label: 'Epic Games', color: '#e6e6e6' },
@@ -17,6 +20,7 @@ export const SOURCES = {
   ea: { label: 'EA', color: '#ff4747' },
   battlenet: { label: 'Battle.net', color: '#148eff' },
   gog: { label: 'GOG', color: '#b44fe0' },
+  rockstar: { label: 'Rockstar', color: '#fcaf17' },
   pc: { label: 'PC', color: '#9aa0aa' },
 };
 

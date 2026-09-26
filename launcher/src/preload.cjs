@@ -12,4 +12,10 @@ contextBridge.exposeInMainWorld('launcher', {
   onUpdate: (fn) => ipcRenderer.on('lib:update', (_e, lib) => fn(lib)),
   details: (id) => ipcRenderer.invoke('item:details', id),
   openLink: (which) => ipcRenderer.invoke('open:link', which),
+  reco: () => ipcRenderer.invoke('reco:get'),
+  openReco: (steamId) => ipcRenderer.invoke('reco:open', steamId),
+  stats: (period) => ipcRenderer.invoke('stats:get', period),
+  nowPlaying: () => ipcRenderer.invoke('media:now'),
+  mediaKey: (name) => ipcRenderer.invoke('media:key', name),
+  ask: (message) => ipcRenderer.invoke('ai:ask', message),
 });

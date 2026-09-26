@@ -28,16 +28,36 @@ export function activeItems(items, paths) {
   return active;
 }
 
+/** Catégorie des statistiques : jeux, applications, musique, autres. */
+export const statCategory = (item) => (item?.kind === 'game' ? 'jeux' : item?.category === 'musique' ? 'musique' : item?.kind === 'app' && item?.category === 'appli' ? 'applis' : 'autres');
+export const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+
+/** Minutes par catégorie sur les N derniers jours (semaine = 7, mois = 30, année = 365). */
+export function periodStats(days, n, now = Date.now()) {
+  const out = { jeux: 0, applis: 0, musique: 0, autres: 0 };
+  for (let i = 0; i < n; i++) {
+    const d = days?.[dayKey(now - i * 86_400_000)];
+    if (d) for (const k of Object.keys(out)) out[k] += d[k] ?? 0;
+  }
+  return out;
+}
+
 export function startTracker(getItems, store, onChange, everyMs = 60_000) {
   const tick = async () => {
-    const active = activeItems(getItems(), await runningPaths());
+    const items = getItems();
+    const active = activeItems(items, await runningPaths());
     if (!active.size) return;
     const now = Date.now();
+    const day = ((store.data.days ??= {})[dayKey(now)] ??= {});
     for (const id of active) {
       const t = (store.data.time[id] ??= { minutes: 0, lastPlayed: 0 });
       t.minutes += everyMs / 60_000;
       t.lastPlayed = now;
+      const cat = statCategory(items.find((i) => i.id === id));
+      day[cat] = (day[cat] ?? 0) + everyMs / 60_000;
     }
+    // On garde un an d'historique
+    for (const k of Object.keys(store.data.days)) if (k < dayKey(now - 400 * 86_400_000)) delete store.data.days[k];
     store.save();
     onChange?.([...active]);
   };

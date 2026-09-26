@@ -117,3 +117,12 @@ export async function steamDetails(appid, fetchImpl = fetch) {
   };
 }
 const stripHtml = (t) => String(t).replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+
+/** Succès débloqués / total pour un jeu (clé d'API Steam et profil public). */
+export async function steamAchievements(appid, apiKey, steamId, fetchImpl = fetch) {
+  if (!apiKey || !steamId) return null;
+  const data = await fetchImpl(`https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?appid=${appid}&key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}`, { signal: AbortSignal.timeout(8000) })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const list = data?.playerstats?.achievements;
+  return Array.isArray(list) && list.length ? { done: list.filter((a) => a.achieved).length, total: list.length } : null;
+}
