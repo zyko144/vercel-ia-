@@ -46,12 +46,14 @@ L'installeur est créé dans `dist\`. Une fois installée, l'appli s'ouvre au d�
   - rangées « Jeux les plus joués », « Applications » et « Recommandés pour vous ».
 - **Plateformes** à gauche : le vrai logo de chaque launcher installé (tiré de son programme dans Windows).
 - **Assistant IA** à droite : « Lance GTA V », « Vérifie les fichiers de Valorant », « Trie mes jeux par taille », « Mets la musique en pause »… Il utilise Gemini, avec la clé du bot trouvée automatiquement dans le `.env` du dossier parent, ou celle des Paramètres.
-- **Statistiques globales** : temps par semaine, mois ou année, réparti entre jeux, applications, musique et autres.
-- **Lecteur** en bas : titre en cours sur Spotify ou Deezer, vraie pochette (Deezer), précédent, lecture/pause et suivant, volume.
+- **Classement** (menu à gauche) : podium et classement de tes meilleurs jeux, depuis toujours, cette semaine ou ce mois.
+- **Statistiques** (menu à gauche) : temps par semaine, mois ou année, réparti entre jeux, applications, musique et autres.
+- L'assistant IA se replie avec le bouton ⟩ (le choix est gardé).
+- **Lecteur** en bas : titre en cours sur Spotify ou Deezer, vraie pochette et durée (Deezer), barre de progression, précédent, lecture/pause et suivant, volume.
 
 ## Images : toujours les vraies
 Dans cet ordre, sans jamais rien dessiner :
-1. Steam (jaquette, grand fond, logo) ;
+1. Steam : d'abord les images que Steam garde sur ton PC (`appcache\librarycache`, exactement celles de ta bibliothèque Steam), puis l'API officielle du magasin (les nouvelles adresses d'images de 2025) ;
 2. catalogue Epic ;
 3. magasin Steam pour les jeux des autres launchers ;
 4. SteamGridDB (avec une clé) ;

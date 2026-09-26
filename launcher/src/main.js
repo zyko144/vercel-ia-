@@ -1,5 +1,7 @@
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, safeStorage, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, safeStorage, shell, Tray } from 'electron';
+import { pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,8 +9,8 @@ import os from 'node:os';
 import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library.js';
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
-import { periodStats, statCategory } from './core/tracker.js';
-import { steamAchievements, lastSteamUser } from './core/steam.js';
+import { periodItems, periodStats, statCategory } from './core/tracker.js';
+import { steamAchievements, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { steamMatch } from './core/art.js';
 import { norm } from './core/sort.js';
 import { steamPath } from './core/library.js';
@@ -27,6 +29,22 @@ let quitting = false;
 const store = createStore(app.getPath('userData'));
 
 if (!app.requestSingleInstanceLock()) app.quit();
+
+// Images de la bibliothèque Steam sur le PC, servies par « libimg:// » : seulement les fichiers que le scan a trouvés
+// (une liste blanche de jetons), jamais un chemin choisi par l'interface.
+protocol.registerSchemesAsPrivileged([{ scheme: 'libimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+const localFiles = new Map(); // jeton -> chemin
+function localUrls(art) {
+  if (!art) return {};
+  const out = {};
+  for (const [k, file] of Object.entries(art)) {
+    if (!file) continue;
+    const token = createHash('sha1').update(file).digest('hex').slice(0, 24);
+    localFiles.set(token, file);
+    out[k] = `libimg://img/${token}${/\.png$/i.test(file) ? '.png' : '.jpg'}`;
+  }
+  return out;
+}
 app.on('second-instance', () => showWindow());
 
 function showWindow() {
@@ -125,7 +143,7 @@ async function getAi() {
 }
 const send = (channel, payload) => win?.webContents.send(channel, payload);
 async function remerge() {
-  items = merge(raw, store.data);
+  items = merge(raw, store.data, localUrls);
   await Promise.all(items.map(async (i) => { i.iconData = await iconOf(i); }));
   return items;
 }
@@ -154,7 +172,21 @@ async function enrichInBackground() {
   enriching = true;
   try {
     store.data.art ??= {};
-    const todo = raw.filter((i) => !(i.art?.cover || i.art?.hero));
+    // 1. Jeux Steam sans images sur le PC : adresses officielles actuelles, par lots de 50 (une seule demande)
+    const fresh = (i) => store.data.art[i.id] && Date.now() - store.data.art[i.id].at < 14 * 86_400_000;
+    const steamTodo = raw.filter((i) => i.source === 'steam' && i.steamId && !(i.localArt?.cover && i.localArt?.hero && i.localArt?.logo) && !fresh(i));
+    if (steamTodo.length) {
+      const assets = await steamStoreAssets(steamTodo.map((i) => i.steamId)).catch(() => ({}));
+      for (const i of steamTodo) {
+        const a = Object.fromEntries(Object.entries(assets[i.steamId] ?? {}).filter(([, v]) => v));
+        if (Object.keys(a).length) store.data.art[i.id] = { at: Date.now(), gridKey: secret('grid') ? 'oui' : null, art: a, steamId: i.steamId, details: store.data.art[i.id]?.details ?? null };
+      }
+      store.save();
+      await remerge();
+      send('lib:update', library());
+    }
+    // 2. Le reste : jeux des autres launchers et applis sans image (magasin Steam, SteamGridDB, puis l'IA)
+    const todo = raw.filter((i) => i.source !== 'steam' && !(i.art?.cover || i.art?.hero));
     const gridKey = secret('grid');
     for (let n = 0; n < todo.length; n += 4) {
       await Promise.all(todo.slice(n, n + 4).map(async (i) => {
@@ -280,13 +312,15 @@ ipcMain.handle('stats:get', (_e, period) => {
   const n = { semaine: 7, mois: 30, annee: 365 }[period] ?? 7;
   const split = periodStats(store.data.days, n);
   const top = [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((i) => ({ id: i.id, name: i.name, minutes: i.minutes, cat: statCategory(i) }));
-  return { split, top, profile: os.userInfo().username };
+  // Classement de la période (temps suivi par le launcher), en plus du temps total
+  const recent = periodItems(store.data.days, n);
+  return { split, top, recent, profile: os.userInfo().username };
 });
 
 // ---------- Musique ----------
 ipcMain.handle('media:now', async () => {
   const np = await nowPlaying();
-  if (np?.artist) np.cover = await coverOf(np.artist, np.title).catch(() => null);
+  if (np?.artist) Object.assign(np, await coverOf(np.artist, np.title).catch(() => ({})));
   return np;
 });
 ipcMain.handle('media:key', (_e, name) => mediaKey(String(name)));
@@ -327,6 +361,11 @@ ipcMain.on('win', (_e, what) => {
 });
 
 app.whenReady().then(async () => {
+  protocol.handle('libimg', (req) => {
+    const token = new URL(req.url).pathname.replace(/^\//, '').replace(/\.(png|jpg)$/, '');
+    const file = localFiles.get(token);
+    return file ? net.fetch(pathToFileURL(file).toString()) : new Response('introuvable', { status: 404 });
+  });
   await store.load();
   applyAutostart();
   createWindow();

@@ -60,12 +60,14 @@ export async function scanAll(paths = {}, { steamApiKey = null, fetchImpl = fetc
 }
 
 /** Ajoute le temps suivi par le launcher, les images et fiches trouvées en ligne, et les réglages de l'utilisateur. */
-export function merge(items, store) {
+export function merge(items, store, localUrls = null) {
   return dedupe(items.map((i) => {
     const t = store.time?.[i.id] ?? { minutes: 0, lastPlayed: 0 };
     const extra = store.items?.[i.id] ?? {};
     const found = store.art?.[i.id] ?? {};
-    const art = { ...Object.fromEntries(Object.entries(found.art ?? {}).filter(([, v]) => v)), ...Object.fromEntries(Object.entries(i.art ?? {}).filter(([, v]) => v)) };
+    const ok = (o) => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v));
+    // Du moins sûr au plus sûr : ancienne adresse Steam < trouvées en ligne < images du launcher (Epic) < images sur le PC
+    const art = { ...ok(i.cdnArt), ...ok(found.art), ...ok(i.art), ...ok(localUrls?.(i.localArt)) };
     return {
       ...i, name: i.name ?? extra.name ?? store.names?.[i.steamId] ?? `Jeu Steam ${i.steamId}`,
       art, details: found.details ?? i.details ?? null, matchSteamId: found.steamId ?? i.steamId ?? null,

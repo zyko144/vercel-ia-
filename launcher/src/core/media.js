@@ -35,17 +35,17 @@ export async function nowPlaying() {
 }
 
 const covers = new Map();
-/** La vraie pochette de l'album (API publique de Deezer, sans clé). */
+/** La vraie pochette de l'album et la durée du titre (API publique de Deezer, sans clé). */
 export async function coverOf(artist, title, fetchImpl = fetch) {
   const key = `${artist}|${title}`;
   if (covers.has(key)) return covers.get(key);
   const data = await fetchImpl(`https://api.deezer.com/search?q=${encodeURIComponent(`artist:"${artist}" track:"${title}"`)}&limit=1`, { signal: AbortSignal.timeout(6000) })
     .then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const hit = data?.data?.[0];
-  const cover = hit?.album?.cover_big ?? hit?.album?.cover_medium ?? null;
-  covers.set(key, cover);
+  const info = { cover: hit?.album?.cover_big ?? hit?.album?.cover_medium ?? null, duration: Number(hit?.duration ?? 0) || null };
+  covers.set(key, info);
   if (covers.size > 200) covers.delete(covers.keys().next().value);
-  return cover;
+  return info;
 }
 
 // Touches multimédia de Windows (codes fixes : aucune donnée de l'interface n'entre dans la commande)
