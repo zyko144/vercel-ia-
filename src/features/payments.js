@@ -15,7 +15,7 @@ import { load, save } from '../storage.js';
 import { PLANS, planOf, setPlan } from './premium.js';
 
 // Offres au mois (31 jours) ou à l'année (365 jours, 2 mois offerts)
-const PRICES = { veilleur: '4.99', gardien: '9.99', 'veilleur-an': '49.90', 'gardien-an': '99.90' };
+const PRICES = { veilleur: '6.99', gardien: '14.99', 'veilleur-an': '69.90', 'gardien-an': '149.90' };
 const DAYS = 31;
 const baseOf = (offer) => String(offer).replace(/-an$/, '');
 const daysOf = (offer) => (String(offer).endsWith('-an') ? 365 : DAYS);
@@ -92,7 +92,7 @@ export function paymentPage(url) {
 <p>Pour ${guildName ? `le serveur <b>${esc(guildName)}</b>` : `le serveur <code>${esc(guildId)}</code>`}, pendant ${daysOf(plan)} jours. Activation automatique après le paiement.</p>
 <form id="pp" method="post" action="https://www.paypal.com/cgi-bin/webscr">
 <input type="hidden" name="cmd" value="_xclick"><input type="hidden" name="business" value="${esc(PAYPAL_EMAIL)}">
-<input type="hidden" name="item_name" value="AI Vercel ${esc(PLANS[baseOf(plan)].label)} (${daysOf(plan)} jours)"><input type="hidden" name="amount" value="${PRICES[plan]}">
+<input type="hidden" name="item_name" value="History IA ${esc(PLANS[baseOf(plan)].label)} (${daysOf(plan)} jours)"><input type="hidden" name="amount" value="${PRICES[plan]}">
 <input type="hidden" name="currency_code" value="EUR"><input type="hidden" name="no_shipping" value="1">
 <input type="hidden" name="custom" value="${esc(`${guildId}|${plan}`)}"><input type="hidden" name="notify_url" value="${esc(`${base()}/paypal/ipn`)}">
 <input type="hidden" name="return" value="${esc(`${base()}/merci`)}"><input type="hidden" name="cancel_return" value="${esc(`${base()}/#offres`)}">
@@ -109,7 +109,7 @@ export function thanksPage() {
 }
 
 function page(title, body) {
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · AI Vercel</title>
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · History IA</title>
 <style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07060d;color:#e9e3ff;font:16px/1.5 system-ui,sans-serif;padding:24px}
 main{max-width:560px;padding:32px;border-radius:18px;background:#120d1c;box-shadow:0 0 0 1px #5ff0ff66,0 0 40px #5ff0ff22}
 h1{margin:0 0 12px;font-size:26px}code{background:#1f1830;padding:2px 6px;border-radius:6px}
@@ -162,7 +162,7 @@ export const paymentLink = (guildId, plan) => `${base()}/payer?serveur=${guildId
 
 let avatarCache = { at: 0, png: null };
 const FALLBACK_AVATAR = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#5865f2"/><path d="M18 18h7l7 20 7-20h7L36 48h-8z" fill="#fff"/></svg>');
-/** La photo de profil d'AI Vercel, servie par le bot lui-même (le site et le tableau de bord l'affichent partout). */
+/** La photo de profil de History IA, servie par le bot lui-même (le site et le tableau de bord l'affichent partout). */
 export async function botAvatar() {
   if (avatarCache.png && Date.now() - avatarCache.at < 3_600_000) return { type: 'image/png', body: avatarCache.png };
   const url = client?.user?.displayAvatarURL({ extension: 'png', size: 256, forceStatic: true });
@@ -181,7 +181,7 @@ export function statusJson() {
   const ready = Boolean(client?.isReady());
   return {
     enLigne: ready,
-    nom: client?.user?.username ?? 'AI Vercel',
+    nom: client?.user?.username ?? 'History IA',
     avatar: client?.user?.displayAvatarURL({ size: 256 }) ?? null,
     latenceMs: ready ? Math.round(client.ws.ping) : null,
     serveurs: client?.guilds.cache.size ?? 0,

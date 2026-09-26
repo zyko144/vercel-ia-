@@ -87,7 +87,7 @@ export async function buildReport(guild, { week = weekOf() } = {}) {
       { name: '⭐ Offre', value: `${planOf(guild.id).emoji} ${planOf(guild.id).label}${planOf(guild.id).trial ? ' (essai)' : ''}`, inline: true },
     )
     .setImage(gif.url)
-    .setFooter({ text: 'Rapport de la semaine · AI Vercel · que des nombres, jamais le contenu des messages' });
+    .setFooter({ text: 'Rapport de la semaine · History IA · que des nombres, jamais le contenu des messages' });
   return { embeds: [embed], files: gif.files };
 }
 

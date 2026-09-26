@@ -122,9 +122,9 @@
   // ---------------- Menus ----------------
   const PREMIUM = {
     couleurs: { feature: 'branding', label: 'Couleurs du serveur', emoji: '🎨', desc: 'Ton nom et ta couleur sur les messages du bot',
-      perks: ['Ton nom à la place de « AI Vercel » en bas des messages', 'La couleur de ton serveur sur tous les embeds', 'Ton logo sur les panneaux, tickets et annonces'] },
+      perks: ['Ton nom à la place de « History IA » en bas des messages', 'La couleur de ton serveur sur tous les embeds', 'Ton logo sur les panneaux, tickets et annonces'] },
     voix: { feature: 'voices', label: 'Voix de l’IA', emoji: '🗣️', desc: 'Choisis comment l’IA parle en vocal',
-      perks: ['Plusieurs voix au choix pour l’IA vocale', '600 min d’IA vocale par mois (illimité en Gardien)', 'Le narrateur des jeux avec la même voix'] },
+      perks: ['Plusieurs voix au choix pour l’IA vocale', '150 min d’IA vocale par mois (400 en Gardien)', 'Le narrateur des jeux avec la même voix'] },
     rapport: { feature: 'report', label: 'Rapport de la semaine', emoji: '📊', desc: 'Le résumé de ton serveur en MP',
       perks: ['Chaque dimanche à 20 h, en message privé', 'Messages, membres actifs, arrivées et départs', 'Sanctions et moments forts de la semaine'] },
     gardien: { feature: 'guard', label: 'Surveillance Gardien', emoji: '🛡️', desc: 'Protège ton staff en vocal',
@@ -207,7 +207,7 @@
     return h('div', { class: 'msg' },
       bot ? botAv() : h('div', { class: 'av', text: initials(author) }),
       h('div', {},
-        h('div', { class: 'who' }, bot ? (data?.premium.branding.name && data.plan.features.branding ? data.premium.branding.name : me.bot?.name ?? 'AI Vercel') : author, bot ? h('span', { class: 'app', text: 'APP' }) : null, h('time', { text: nowTime() })),
+        h('div', { class: 'who' }, bot ? (data?.premium.branding.name && data.plan.features.branding ? data.premium.branding.name : me.bot?.name ?? 'History IA') : author, bot ? h('span', { class: 'app', text: 'APP' }) : null, h('time', { text: nowTime() })),
         content ? h('div', { class: 'txt' }, typeof content === 'string' ? md(content) : content) : null,
         embed ? embed : null,
         extra ?? null,
@@ -222,7 +222,7 @@
     return e;
   }
   const previewBox = (...children) => h('div', { class: 'card sticky torn' }, h('div', { class: 'preview-label', text: 'Aperçu en direct' }), h('div', { class: 'dc' }, ...children));
-  const footerName = () => (data.plan.features.branding && data.premium.branding.name ? `${data.premium.branding.name} · propulsé par AI Vercel` : data.name);
+  const footerName = () => (data.plan.features.branding && data.premium.branding.name ? `${data.premium.branding.name} · propulsé par History IA` : data.name);
 
   // ---------------- Vue d'ensemble ----------------
   function overview(panel) {
@@ -359,7 +359,7 @@
       h('div', { class: 'card' }, h('div', { class: 'cmds' }, COMMANDS.map(([c, t, list]) => h('div', { class: 'cmd' }, h('code', { text: c }), h('p', { text: t }), h('ul', {}, list.map((x) => h('li', { text: x }))))))),
       h('div', { class: 'split' },
         h('div', { class: 'card' }, h('h2', { text: 'Demander à l’IA' }), h('p', { class: 'sub', text: 'Écris par exemple « @bot lance un undercover » : l’IA répond avec un bouton « Lancer », et tes permissions sont vérifiées au clic.' })),
-        previewBox(dcMessage({ bot: false, author: me.user.name, content: '@AI Vercel lance un undercover' }), dcMessage({ content: 'C’est parti, clique pour ouvrir la salle d’attente.', buttons: [{ label: 'Lancer : Undercover' }] }))));
+        previewBox(dcMessage({ bot: false, author: me.user.name, content: '@History IA lance un undercover' }), dcMessage({ content: 'C’est parti, clique pour ouvrir la salle d’attente.', buttons: [{ label: 'Lancer : Undercover' }] }))));
   }
 
   // ---------------- Tickets et annonces (avec aperçu) ----------------
@@ -671,7 +671,7 @@
     securite: (values) => [dcMessage({ embed: dcEmbed({ color: '#ed4245', title: '🚨 Raid détecté', text: `${values['antiRaid.joins'] ?? 8} arrivées en ${values['antiRaid.seconds'] ?? 15} secondes.\nLe serveur est protégé pendant 10 minutes.`, footer: 'Journal du serveur' }) })],
     boutique: () => [dcMessage({ embed: dcEmbed({ color: '#d9a441', title: '🏴‍☠️ Le comptoir du capitaine', text: 'Ta bourse : **🪙 4 250 pièces d’or**\nTu gagnes **200 pièces** à chaque niveau.', fields: [['🛡️ Immunité 24 h', '6 000'], ['⚡ XP ×2 24 h', '2 500'], ['📦 Coffre au trésor', '750'], ['🎨 Rôle perso', '20 000']], image: '/panneaux/boutique.gif', footer: footerName() }), buttons: [{ label: '🪙 Acheter' }, { label: '🤝 Donner des pièces', grey: true }] })],
     vocal: () => [dcMessage({ embed: dcEmbed({ color: '#3ba55d', title: '➕ Ton salon est prêt', text: `Tu es chef de 🎮 Salon de ${me.user.name}. Renomme-le, limite les places ou verrouille-le.` }), buttons: [{ label: 'Renommer', grey: true }, { label: '🔒 Verrouiller', grey: true }] })],
-    ia: () => [dcMessage({ bot: false, author: me.user.name, content: '@AI Vercel tu te rappelles à quoi je joue ?' }), dcMessage({ content: 'Évidemment 😏 Valorant, sous ton pseudo habituel. Une partie ce soir ?' })],
+    ia: () => [dcMessage({ bot: false, author: me.user.name, content: '@History IA tu te rappelles à quoi je joue ?' }), dcMessage({ content: 'Évidemment 😏 Valorant, sous ton pseudo habituel. Une partie ce soir ?' })],
   };
   function sectionPage(panel, key) {
     const sec = data.sections[key];
@@ -722,10 +722,10 @@
   const PLAN_DETAILS = [
     { key: 'gratuit', emoji: '🌱', name: 'Gratuit', price: '0 €', per: 'pour toujours', pitch: 'Tout le nécessaire pour faire vivre un serveur.',
       items: ['Tous les modules : sécurité, niveaux, boutique, accueil, vocal, IA', 'Tickets, annonces, classement, sanctions', 'Tous les jeux et la musique', 'IA vocale : 60 min par mois'], off: ['Couleurs du serveur', 'Voix de l’IA au choix', 'Rapport de la semaine', 'Surveillance Gardien'] },
-    { key: 'veilleur', emoji: '🌙', name: 'Veilleur', price: '4,99 €', per: '/ 31 jours', pitch: 'Pour les serveurs actifs qui veulent leur propre style.',
-      items: ['Tout le gratuit', 'IA vocale : 600 min par mois', 'Ton nom et ta couleur sur tous les messages du bot', 'Ton logo sur les panneaux, tickets et annonces', 'Voix de l’IA au choix (plusieurs voix)', 'Rapport de la semaine en MP, chaque dimanche'], off: ['Surveillance Gardien'] },
-    { key: 'gardien', emoji: '🛡️', name: 'Gardien', price: '9,99 €', per: '/ 31 jours', pitch: 'Pour les grandes communautés et leur staff.',
-      items: ['Tout Veilleur', 'IA vocale illimitée', 'Surveillance Gardien : staff protégé en vocal', 'Tes propres mots interdits en vocal', 'Avertissement puis exclusion automatique au 3e'], off: [] },
+    { key: 'veilleur', emoji: '🌙', name: 'Veilleur', price: '6,99 €', per: '/ 31 jours', pitch: 'Pour les serveurs actifs qui veulent leur propre style.',
+      items: ['Tout le gratuit', 'IA vocale : 150 min par mois', 'IA : 500 questions par jour', 'Ton nom et ta couleur sur tous les messages du bot', 'Ton logo sur les panneaux, tickets et annonces', 'Voix de l’IA au choix (plusieurs voix)', 'Rapport de la semaine en MP, chaque dimanche'], off: ['Surveillance Gardien'] },
+    { key: 'gardien', emoji: '🛡️', name: 'Gardien', price: '14,99 €', per: '/ 31 jours', pitch: 'Pour les grandes communautés et leur staff.',
+      items: ['Tout Veilleur', 'IA vocale : 400 min par mois', 'IA : 1 000 questions par jour', 'Surveillance Gardien : staff protégé en vocal', 'Tes propres mots interdits en vocal', 'Avertissement puis exclusion automatique au 3e'], off: [] },
   ];
   const PREMIUM_FAQ = [
     ['Comment marche l’essai de 7 jours ?', 'Un clic, une fois par serveur, sans paiement : tout le Gardien est débloqué pendant 7 jours. À la fin, le serveur repasse en gratuit tout seul, rien n’est prélevé.'],
@@ -746,7 +746,7 @@
     const timer = setInterval(() => (document.body.contains(countdown) ? tick() : clearInterval(timer)), 30000);
     const rows = [
       ['Tous les modules gratuits', 'y', 'y', 'y'], ['Tickets, annonces, classement', 'y', 'y', 'y'],
-      ['IA vocale', '60 min', '600 min', 'Illimitée'], ['Couleurs du serveur', 'n', 'y', 'y'], ['Voix de l’IA au choix', 'n', 'y', 'y'],
+      ['IA vocale', '30 min', '150 min', '400 min'], ['Questions à l’IA', '60 / jour', '500 / jour', '1 000 / jour'], ['Couleurs du serveur', 'n', 'y', 'y'], ['Voix de l’IA au choix', 'n', 'y', 'y'],
       ['Rapport de la semaine', 'n', 'y', 'y'], ['Surveillance Gardien', 'n', 'n', 'y'],
     ];
     const cell = (v) => h('td', { class: v === 'y' ? 'y' : v === 'n' ? 'n' : '', text: v === 'y' ? '✓' : v === 'n' ? '—' : v });
@@ -766,7 +766,7 @@
         pl.key === 'gratuit' ? null : h('a', { class: `btn${pl.key === 'veilleur' ? ' gold' : ''}`, href: p.offers.find((o) => o.key === pl.key)?.pay, target: '_blank', rel: 'noopener', text: `Prendre ${pl.name}` })))),
       h('div', { class: 'card' }, h('h2', { text: 'Comparer les offres' }),
         h('div', { class: 'table-wrap' }, h('table', { class: 'compare' },
-          h('thead', {}, h('tr', {}, h('th', { text: '' }), h('th', { text: 'Gratuit' }), h('th', { class: 'gold', text: 'Veilleur · 4,99 €' }), h('th', { class: 'gold', text: 'Gardien · 9,99 €' }))),
+          h('thead', {}, h('tr', {}, h('th', { text: '' }), h('th', { text: 'Gratuit' }), h('th', { class: 'gold', text: 'Veilleur · 6,99 €' }), h('th', { class: 'gold', text: 'Gardien · 14,99 €' }))),
           h('tbody', {}, rows.map(([label, ...v]) => h('tr', {}, h('td', { text: label }), ...v.map(cell))))))),
       h('div', { class: 'card' }, h('h2', { text: 'Questions sur le premium' }), h('div', { class: 'faq' }, PREMIUM_FAQ.map(([q, a]) => h('details', {}, h('summary', { text: q }), h('p', { text: a }))))));
   }
@@ -782,9 +782,9 @@
     if (page.feature === 'branding') {
       const name = h('input', { type: 'text', maxlength: 60, value: pr.branding.name, placeholder: data.name });
       const color = h('input', { type: 'color', value: pr.branding.color || '#5865f2' });
-      fields = [field('Nom affiché sur les messages du bot', name, 'Remplace « AI Vercel » en bas des embeds.'), field('Couleur des embeds', color), h('p', { class: 'sub', text: 'Le logo se change dans Discord : /serveur › Cartes aux couleurs du serveur.' })];
+      fields = [field('Nom affiché sur les messages du bot', name, 'Remplace « History IA » en bas des embeds.'), field('Couleur des embeds', color), h('p', { class: 'sub', text: 'Le logo se change dans Discord : /serveur › Cartes aux couleurs du serveur.' })];
       read = () => ({ name: name.value, color: color.value });
-      refresh = () => preview.replaceChildren(dcMessage({ embed: dcEmbed({ color: color.value, title: '🎫 Besoin d’aide ?', text: 'Clique sur le bouton pour ouvrir un ticket.', footer: `${name.value || data.name} · propulsé par AI Vercel` }), buttons: [{ label: '🎫 Ouvrir un ticket' }] }));
+      refresh = () => preview.replaceChildren(dcMessage({ embed: dcEmbed({ color: color.value, title: '🎫 Besoin d’aide ?', text: 'Clique sur le bouton pour ouvrir un ticket.', footer: `${name.value || data.name} · propulsé par History IA` }), buttons: [{ label: '🎫 Ouvrir un ticket' }] }));
     } else if (page.feature === 'voices') {
       const sel = h('select', {}, pr.voice.voices.map((v) => h('option', { value: v.key, text: `${v.key} · ${v.label}`, selected: v.key === pr.voice.current })));
       fields = [field('Voix de l’IA vocale', sel, 'Utilisée à la prochaine conversation vocale.')];
@@ -816,7 +816,7 @@
           h('h3', { text: 'Débloqué avec Premium' }),
           h('p', { text: `« ${page.label} » fait partie du premium. Dès que ton serveur a l’offre (ou l’essai), ce menu s’ouvre ici.` }),
           h('ul', { class: 'checks' }, page.perks.map((x) => h('li', { text: x }))),
-          h('p', { class: 'incl', text: page.feature === 'guard' ? 'Inclus dans : Gardien (9,99 €) et l’essai gratuit' : 'Inclus dans : Veilleur (4,99 €), Gardien (9,99 €) et l’essai gratuit' }),
+          h('p', { class: 'incl', text: page.feature === 'guard' ? 'Inclus dans : Gardien (14,99 €) et l’essai gratuit' : 'Inclus dans : Veilleur (6,99 €), Gardien (14,99 €) et l’essai gratuit' }),
           h('div', { class: 'row' }, trialButton(), h('a', { class: `btn${p.trialUsed ? ' gold' : ''}`, href: `#serveur/${data.id}/premium`, text: 'Voir les offres' }))))));
       return;
     }

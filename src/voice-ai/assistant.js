@@ -1,4 +1,4 @@
-// IA vocale, intégrée au bot principal AI Vercel (il n'y a plus de 2e bot).
+// IA vocale, intégrée au bot principal History IA (il n'y a plus de 2e bot).
 // Avec /ia › Parler à l'IA en vocal, le bot écoute la personne dans SON salon vocal et répond à voix haute
 // en direct (Gemini Live). Il partage la connexion vocale du bot : pendant qu'il parle, la musique locale
 // est coupée puis reprend à la fin. Pour certains jeux (freestyle), il va dans un autre salon puis revient.
@@ -149,7 +149,7 @@ function giveBackSpeaker(conn = connection()) {
 const restDeaf = () => !config.voiceGuard.enabled;
 
 export async function startVoiceAssistant(mainClient) {
-  if (config.voiceAi.token) console.log('🎙️ IA vocale : le token du 2e bot est ignoré, tout passe maintenant par AI Vercel (tu peux supprimer l’ancien bot vocal).');
+  if (config.voiceAi.token) console.log('🎙️ IA vocale : le token du 2e bot est ignoré, tout passe maintenant par History IA (tu peux supprimer l’ancien bot vocal).');
   console.log(`🎙️ IA vocale intégrée à ${mainClient.user.tag} · ${generateDependencyReport().split('\n').filter((line) => /opus/i.test(line)).map((line) => line.trim()).join(' ')}`);
   state.mainClient = mainClient;
   state.client = mainClient;
@@ -176,7 +176,7 @@ export function voiceAssistantState() {
   const s = state.session;
   return {
     enabled: true,
-    tokenSource: 'bot principal (AI Vercel)',
+    tokenSource: 'bot principal (History IA)',
     bot: state.client?.user?.tag ?? null,
     voice: conn?.state.status ?? 'déconnecté',
     model: config.voiceAi.model,
@@ -190,7 +190,7 @@ export function voiceAssistantState() {
 function systemPrompt(session, artists = []) {
   const date = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
   return [
-    `Tu es « AI Vercel », l'assistante vocale du serveur Discord DDV. Tu parles en direct avec ${session.userName} dans le salon vocal.`,
+    `Tu es « History IA », l'assistante vocale du serveur Discord DDV. Tu parles en direct avec ${session.userName} dans le salon vocal.`,
     'Réponds TOUJOURS en français, à l\'oral : phrases courtes et naturelles, une à trois phrases, sans liste, sans émoji, sans markdown.',
     'Style jeune et détendu, tutoiement, quelques expressions courantes mais sans en faire trop.',
     'Si tu ne sais pas quelque chose, dis-le franchement au lieu d\'inventer.',

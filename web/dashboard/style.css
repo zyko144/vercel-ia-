@@ -1,26 +1,26 @@
 /* Tableau de bord de l'IA. Aucune ressource externe : la politique de sécurité (CSP) n'autorise
    que les fichiers du bot lui-même. Clair ou sombre selon le réglage de l'appareil. */
 :root {
-  color-scheme: light;
-  --bg: #f3f4f8;
-  --surface: #ffffff;
-  --surface-2: #eef0f6;
-  --line: #dde1ea;
-  --text: #151a28;
-  --mute: #5b6378;
-  --accent: #d9a441;
-  --accent-strong: #b98524;
-  --accent-ink: #7a5410;
-  --accent-soft: rgba(217, 164, 65, 0.16);
-  --ok: #1d8a4e;
-  --ok-soft: rgba(29, 138, 78, 0.12);
-  --warn: #a8690f;
-  --warn-soft: rgba(214, 144, 30, 0.14);
-  --bad: #c0392b;
-  --bad-soft: rgba(192, 57, 43, 0.12);
-  --info: #2f64c9;
-  --info-soft: rgba(47, 100, 201, 0.12);
-  --shadow: 0 1px 2px rgba(20, 26, 40, 0.06), 0 8px 24px -12px rgba(20, 26, 40, 0.18);
+  color-scheme: dark;
+  --bg: #0e0e10;
+  --surface: #17171a;
+  --surface-2: #1e1e22;
+  --line: #2c2c31;
+  --text: #e8e8ec;
+  --mute: #9a9aa3;
+  --accent: #f2c46d;
+  --accent-strong: #ffd98f;
+  --accent-ink: #f2c46d;
+  --accent-soft: rgba(242, 196, 109, 0.14);
+  --ok: #3fcf80;
+  --ok-soft: rgba(63, 207, 128, 0.14);
+  --warn: #f1b54f;
+  --warn-soft: rgba(241, 181, 79, 0.14);
+  --bad: #ff6b6b;
+  --bad-soft: rgba(255, 107, 107, 0.14);
+  --info: #6ea6ff;
+  --info-soft: rgba(110, 166, 255, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px -14px rgba(0, 0, 0, 0.6);
   --radius: 12px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
@@ -28,7 +28,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0b0e18; --surface: #131a2a; --surface-2: #1a2236; --line: #263049; --text: #e8ebf4; --mute: #97a0b9;
+    --bg: #0e0e10; --surface: #17171a; --surface-2: #1e1e22; --line: #2c2c31; --text: #e8e8ec; --mute: #9a9aa3;
     --accent: #f2c46d; --accent-strong: #ffd98f; --accent-ink: #f2c46d; --accent-soft: rgba(242, 196, 109, 0.14);
     --ok: #3fcf80; --ok-soft: rgba(63, 207, 128, 0.14); --warn: #f1b54f; --warn-soft: rgba(241, 181, 79, 0.14);
     --bad: #ff6b6b; --bad-soft: rgba(255, 107, 107, 0.14); --info: #6ea6ff; --info-soft: rgba(110, 166, 255, 0.14);
@@ -37,7 +37,7 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0b0e18; --surface: #131a2a; --surface-2: #1a2236; --line: #263049; --text: #e8ebf4; --mute: #97a0b9;
+  --bg: #0e0e10; --surface: #17171a; --surface-2: #1e1e22; --line: #2c2c31; --text: #e8e8ec; --mute: #9a9aa3;
   --accent: #f2c46d; --accent-strong: #ffd98f; --accent-ink: #f2c46d; --accent-soft: rgba(242, 196, 109, 0.14);
   --ok: #3fcf80; --ok-soft: rgba(63, 207, 128, 0.14); --warn: #f1b54f; --warn-soft: rgba(241, 181, 79, 0.14);
   --bad: #ff6b6b; --bad-soft: rgba(255, 107, 107, 0.14); --info: #6ea6ff; --info-soft: rgba(110, 166, 255, 0.14);

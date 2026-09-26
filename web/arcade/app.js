@@ -1,4 +1,4 @@
-// L'arcade d'AI Vercel : connexion (Activité Discord ou lien personnel), salle commune du salon,
+// L'arcade de History IA : connexion (Activité Discord ou lien personnel), salle commune du salon,
 // et trois jeux multijoueurs. Le serveur décide de tout ; ici on affiche et on envoie les actions.
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

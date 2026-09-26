@@ -71,7 +71,7 @@ await check('valeurs : membre par pseudo, choix par libellé, nombre dans les li
   assert.equal(ban.messages, '86400');
 });
 
-const client = { user: { id: '1', username: 'AI Vercel' } };
+const client = { user: { id: '1', username: 'History IA' } };
 const user = { id: '222222222222222222', username: 'lina' };
 
 await check('l’IA répond et ajoute le bouton « Lancer »', async () => {

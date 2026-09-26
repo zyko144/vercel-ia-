@@ -158,7 +158,7 @@ export function styleReply(payload, interaction, { panel, action }) {
     .setColor(failed ? 0xed4245 : brand?.color ?? panel.color)
     .setAuthor({ name: `${action.emoji} ${action.label}` })
     .setDescription(cut(p.content, 4000))
-    .setFooter({ text: brand?.name ? `${brand.name} · AI Vercel` : `AI Vercel · /${panel.command}` });
+    .setFooter({ text: brand?.name ? `${brand.name} · History IA` : `History IA · /${panel.command}` });
   // Les sanctions montrent le tampon en grand ; le reste, la bannière en petit
   if (action.stamp && !failed) embed.setImage(gif.url);
   else embed.setThumbnail(gif.url);

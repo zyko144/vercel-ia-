@@ -88,6 +88,10 @@ client.once(Events.ClientReady, async (c) => {
   // Résumé des commandes « !! » dans le salon agora (une fois par version)
   import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));
 
+  // Le nom du bot (History IA) : Discord n'autorise que 2 changements par heure, on ne le fait que s'il diffère
+  if (config.botName && c.user.username !== config.botName) {
+    c.user.setUsername(config.botName).then(() => console.log(`🏷️ Nom du bot : ${config.botName}`)).catch((err) => console.warn('[nom du bot]', err.message));
+  }
   putSiteInBio(c, { tag: 'bot' });
   lavalink.init(c);
   startVoiceGuard(c);
@@ -99,6 +103,7 @@ client.once(Events.ClientReady, async (c) => {
   startServerTools(c);
   import('./features/ticketAutomations.js').then((m) => m.startTicketAutomations(c)).catch((err) => console.warn('[tickets auto]', err.message));
   startVoicePlus(c);
+  import('./features/aiStatus.js').then((m) => m.startAiStatus(c)).catch(() => {});
   autoInstallBotChannels(c).catch((err) => console.warn('[salons] installation :', err.message));
   startVoiceExtras(c);
   startWeeklyReports(c).catch((err) => console.warn('[rapport] démarrage :', err.message));

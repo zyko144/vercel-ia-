@@ -12,9 +12,9 @@ const DAY = 86_400_000;
 export const TRIAL_DAYS = 7;
 
 export const PLANS = {
-  gratuit: { label: 'Gratuit', emoji: '🌱', price: '0 €', voiceMinutes: 60, voices: false, branding: false, report: false, guard: false },
-  veilleur: { label: 'Veilleur', emoji: '🌙', price: '4,99 €/mois', voiceMinutes: 600, voices: true, branding: true, report: true, guard: false },
-  gardien: { label: 'Gardien', emoji: '🛡️', price: '9,99 €/mois', voiceMinutes: Infinity, voices: true, branding: true, report: true, guard: true },
+  gratuit: { label: 'Gratuit', emoji: '🌱', price: '0 €', voiceMinutes: 30, aiPerDay: 60, voices: false, branding: false, report: false, guard: false },
+  veilleur: { label: 'Veilleur', emoji: '🌙', price: '6,99 €/mois', voiceMinutes: 150, aiPerDay: 500, voices: true, branding: true, report: true, guard: false },
+  gardien: { label: 'Gardien', emoji: '🛡️', price: '14,99 €/mois', voiceMinutes: 400, aiPerDay: 1000, voices: true, branding: true, report: true, guard: true },
 };
 
 // Voix de Gemini Live proposées aux serveurs premium (le gratuit garde la voix de base)
@@ -133,6 +133,24 @@ export function addVoiceMinutes(guildId, minutes) {
   s.voiceMinutes = (s.voiceMinutes ?? 0) + minutes;
   persist();
 }
+
+// ===================== Questions à l'IA : plafond par jour =====================
+// Compté en mémoire (remis à zéro chaque jour) : par serveur, ou par personne en MP.
+const aiDay = new Map(); // serveur ou « mp:membre » -> { day, n }
+const dayOf = () => new Date().toISOString().slice(0, 10);
+
+/** Compte une question à l'IA. { ok, used, limit } ; ok = false quand le plafond du jour est atteint. */
+export function takeAiQuestion(guildId, userId) {
+  const key = guildId ?? `mp:${userId}`;
+  const limit = guildId ? planOf(guildId).aiPerDay : PLANS.gratuit.aiPerDay;
+  const today = dayOf();
+  const c = aiDay.get(key);
+  const used = c?.day === today ? c.n : 0;
+  if (used >= limit) return { ok: false, used, limit };
+  aiDay.set(key, { day: today, n: used + 1 });
+  return { ok: true, used: used + 1, limit };
+}
+export const aiUsage = (guildId) => { const c = aiDay.get(guildId); return { used: c?.day === dayOf() ? c.n : 0, limit: planOf(guildId).aiPerDay }; };
 
 /** La voix choisie par le serveur (premium), sinon celle par défaut. */
 export function voiceOf(guildId, fallback) {

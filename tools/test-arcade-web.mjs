@@ -32,7 +32,7 @@ const B = { id: '333333333333333333', name: 'Sami' };
 const C = { id: '666666666666666666', name: 'Noa' };
 const members = new Collection([[A.id, {}], [B.id, {}], [C.id, {}]]);
 arcade.setArcadeClient({
-  user: { id: '999999999999999999', username: 'AI Vercel' },
+  user: { id: '999999999999999999', username: 'History IA' },
   guilds: { cache: new Collection([[G, { id: G, members: { fetch: async (id) => members.get(id) ?? null } }]]) },
   users: { fetch: async () => null },
 });

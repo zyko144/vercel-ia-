@@ -24,9 +24,9 @@ let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };
 const G = '444444444444444444';
 
-await check('gratuit : 60 min d’IA vocale, pas de couleurs, pas de voix au choix', async () => {
+await check('gratuit : 30 min d’IA vocale, pas de couleurs, pas de voix au choix', async () => {
   assert.equal(premium.planOf(G).key, 'gratuit');
-  assert.equal(premium.voiceUsage(G).limit, 60);
+  assert.equal(premium.voiceUsage(G).limit, 30);
   premium.setBranding(G, { name: 'Dictature', color: 0xff0000 });
   assert.equal(premium.brandingOf(G), null, 'les couleurs attendent une offre');
   premium.setVoice(G, 'Kore');
@@ -48,8 +48,8 @@ await check('minutes d’IA vocale : comptées au mois', async () => {
   premium.addVoiceMinutes(G, 12.4);
   const usage = premium.voiceUsage(G);
   assert.equal(usage.used, 12);
-  assert.equal(usage.limit, 600);
-  assert.equal(usage.left, 588);
+  assert.equal(usage.limit, 150);
+  assert.equal(usage.left, 138);
 });
 
 await check('Gardien : options réservées à l’offre Gardien', async () => {
@@ -81,6 +81,16 @@ await check('rapport de la semaine : messages, membres, salons et événements',
   assert.match(field('Les plus actifs'), /🥇 <@1> · 5 msg/);
   assert.equal(field('Parties'), '2');
   assert.equal(field('Tickets'), '1');
+});
+
+await check('plafond de questions à l’IA : 60 par jour en gratuit, puis refus ; 1 000 en Gardien', async () => {
+  const { takeAiQuestion, PLANS } = await import('../src/features/premium.js');
+  let last;
+  for (let i = 0; i < 61; i++) last = takeAiQuestion('123456789012345670', 'u');
+  assert.equal(last.ok, false);
+  assert.equal(last.limit, 60);
+  assert.equal(PLANS.gardien.aiPerDay, 1000);
+  assert.equal(PLANS.veilleur.voiceMinutes, 150);
 });
 
 console.log(`\n${passed} vérifications passées.`);

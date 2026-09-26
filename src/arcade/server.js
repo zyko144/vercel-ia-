@@ -1,4 +1,4 @@
-// L'arcade d'AI Vercel : des jeux multijoueurs dans une Activité Discord (ou un lien personnel).
+// L'arcade de History IA : des jeux multijoueurs dans une Activité Discord (ou un lien personnel).
 // Une « salle » par salon Discord : tous ceux qui ouvrent l'arcade dans ce salon jouent ensemble.
 // Jeux : Dessine et devine (façon Pictionary), Morpion, Puissance 4, les duels, la taverne (games.js)
 // et les jeux de soirée joués entièrement ici (party.js, party-roles.js, party-sound.js).
@@ -529,7 +529,7 @@ export async function handleArcadeWeb(req, res, url) {
   if (!rest.startsWith('api/')) { json(res, 404, { error: 'introuvable' }); return true; }
   const route = rest.slice(4);
   try {
-    if (route === 'config' && req.method === 'GET') return json(res, 200, { clientId: client?.user?.id ?? null, name: client?.user?.username ?? 'AI Vercel' }), true;
+    if (route === 'config' && req.method === 'GET') return json(res, 200, { clientId: client?.user?.id ?? null, name: client?.user?.username ?? 'History IA' }), true;
     if (route === 'discord' && req.method === 'POST') {
       const body = await readBody(req);
       return json(res, 200, await discordLogin(body.code)), true;

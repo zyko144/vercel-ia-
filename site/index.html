@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Vercel · Le bot Discord tout-en-un</title>
+<title>History IA · Le bot Discord tout-en-un</title>
 <meta name="description" content="Assistant IA, jeux, musique, modération, tickets et niveaux dans un seul bot Discord. Gratuit pour commencer.">
 <link rel="icon" href="/avatar.png">
 <meta name="theme-color" content="#120f0b">
@@ -208,15 +208,15 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
 
 /* ===================== Thème « histoire » (beige, brun, noir) ===================== */
 :root {
-  --bg: #100d09; --surface: #1c160f; --surface-2: #241c13; --border: #3a2f22; --border-strong: #4d3e2c;
+  --bg: #0e0e10; --surface: #17171a; --surface-2: #1e1e22; --border: #2c2c31; --border-strong: #3a3a40;
   --text: #eadcc0; --muted: #b8a684; --faint: #8a7a5e;
   --accent: #c9a978; --accent-hover: #d8bb8d; --accent-soft: rgba(201, 169, 120, .14);
   --ok: #8fae6b; --gold: #f2c14e;
   --font: 'Crimson Pro', Georgia, serif; --title: 'Cinzel', Georgia, serif;
 }
-html { background: #0a0806; scrollbar-width: none; }
+html { background: #0a0a0b; scrollbar-width: none; }
 html::-webkit-scrollbar { display: none; }
-body { font-size: 18px; background: radial-gradient(1400px 900px at 15% -15%, rgba(214, 186, 140, .28), transparent 60%), linear-gradient(165deg, #4a3b27 0%, #2a2117 22%, #16110c 50%, #0a0806 100%) fixed; }
+body { font-size: 18px; background: radial-gradient(1400px 900px at 15% -15%, rgba(255, 255, 255, .06), transparent 60%), linear-gradient(165deg, #26262a 0%, #18181b 22%, #111113 50%, #0a0a0b 100%) fixed; }
 h1, h2, h3, .logo span, .price .amount, .detail-head h1 { font-family: var(--title); letter-spacing: .02em; }
 .hero h1 { font-weight: 800; }
 .btn { font-family: var(--font); font-size: 17px; font-weight: 600; position: relative; overflow: hidden; }
@@ -224,7 +224,7 @@ h1, h2, h3, .logo span, .price .amount, .detail-head h1 { font-family: var(--tit
 .btn-primary:hover { background: linear-gradient(180deg, #ecd3a9, #c4a276); }
 .btn::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .3), transparent); transform: translateX(-300%) skewX(-20deg); pointer-events: none; }
 .btn:hover::after { animation: shine .7s ease; }
-.nav { background: rgba(16, 13, 9, .85); }
+.nav { background: rgba(14, 14, 16, .85); }
 .logo .mark, .logo svg rect { fill: var(--accent); }
 .card, .step, .feature, .details-link { transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s, border-color .2s; }
 .card:hover { transform: translateY(-5px); box-shadow: 0 18px 34px -20px rgba(0, 0, 0, .9), 0 0 0 1px var(--accent); }
@@ -287,10 +287,10 @@ main, header, footer { position: relative; z-index: 1; }
 /* ===================== Plus de couleurs (palette pirate : or, rouge sang, bleu océan, émeraude, pourpre) ===================== */
 :root { --sea: #1fb5b0; --blood: #e0433a; --emerald: #3fbf6a; --royal: #7c6cff; --amber: #ff9f2e; }
 body { background:
-  radial-gradient(900px 600px at 85% 10%, rgba(31, 181, 176, .18), transparent 60%),
-  radial-gradient(800px 600px at 5% 60%, rgba(224, 67, 58, .14), transparent 60%),
-  radial-gradient(1400px 900px at 15% -15%, rgba(242, 193, 78, .30), transparent 60%),
-  linear-gradient(165deg, #4a3b27 0%, #2a2117 22%, #16110c 50%, #0a0806 100%) fixed; }
+  radial-gradient(900px 600px at 85% 10%, rgba(31, 181, 176, .07), transparent 60%),
+  radial-gradient(800px 600px at 5% 60%, rgba(224, 67, 58, .05), transparent 60%),
+  radial-gradient(1400px 900px at 15% -15%, rgba(255, 255, 255, .06), transparent 60%),
+  linear-gradient(165deg, #26262a 0%, #18181b 22%, #111113 50%, #0a0a0b 100%) fixed; }
 .btn-primary { background: linear-gradient(135deg, #ffd36b, #ff9f2e 55%, #e0433a); color: #1a0f05; box-shadow: 0 8px 24px -10px rgba(255, 159, 46, .7); }
 .btn-primary:hover { background: linear-gradient(135deg, #ffe08a, #ffb04a 55%, #ef5a4f); }
 .btn-secondary { border-color: rgba(31, 181, 176, .6); color: #bff3ef; }
@@ -347,7 +347,7 @@ body { background:
   <div class="container">
     <a class="logo" href="#top" aria-label="Accueil">
       <img class="bot-avatar" src="/avatar.png" alt="" width="28" height="28">
-      <span class="bot-name">AI Vercel</span>
+      <span class="bot-name">History IA</span>
     </a>
     <nav class="nav-links" aria-label="Navigation">
       <a href="#fonctionnalites">Fonctionnalités</a>
@@ -383,12 +383,12 @@ body { background:
         <div class="msgs">
           <div class="msg">
             <div class="avatar">L</div>
-            <div><div class="name">Lina</div><div class="body"><span class="mention">@<span class="bot-name">AI Vercel</span></span> lance un undercover, on est cinq</div></div>
+            <div><div class="name">Lina</div><div class="body"><span class="mention">@<span class="bot-name">History IA</span></span> lance un undercover, on est cinq</div></div>
           </div>
           <div class="msg">
             <img class="avatar bot-avatar-msg" src="/avatar.png" alt="">
             <div>
-              <div class="name"><span class="bot-name">AI Vercel</span> <span class="tag">APP</span></div>
+              <div class="name"><span class="bot-name">History IA</span> <span class="tag">APP</span></div>
               <div class="body">C’est parti. Cliquez pour ouvrir la salle d’attente, la partie démarre dès que tout le monde a rejoint.</div>
               <span class="button">Lancer : Undercover</span>
             </div>
@@ -489,7 +489,7 @@ body { background:
 
 <footer>
   <div class="container">
-    <span>© <span id="year"></span> <span class="bot-name">AI Vercel</span></span>
+    <span>© <span id="year"></span> <span class="bot-name">History IA</span></span>
     <nav aria-label="Liens"><a href="#tarifs">Tarifs</a><a href="/app">Jouer</a><a href="/statut">Statut</a><a href="/app">Tableau de bord</a><a href="/conditions">Conditions</a><a href="/confidentialite">Confidentialité</a><a href="/mentions">Mentions légales</a></nav>
   </div>
 </footer>
@@ -545,11 +545,11 @@ body { background:
 
   var PLANS = [
     { id: 'gratuit', name: 'Gratuit', desc: 'Tout le nécessaire pour faire vivre un serveur.', amount: '0 €', per: '', billing: 'Pour toujours', cta: 'Ajouter à Discord',
-      items: ['Tous les modules inclus', 'IA vocale : 60 min par mois', 'Tableau de bord complet'], off: ['Gains de l’arcade ×2', 'Choix de la voix de l’IA', 'Embeds aux couleurs du serveur', 'Rapport hebdomadaire', 'Surveillance vocale avancée'] },
-    { id: 'veilleur', name: 'Veilleur', desc: 'Pour les serveurs actifs qui veulent leur propre style.', amount: '4,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Veilleur', featured: true,
-      items: ['Tout le plan Gratuit', 'Quêtes, récompense du jour et gains de l’arcade ×2', 'IA vocale : 600 min par mois', 'Choix de la voix de l’IA (et du narrateur des jeux)', 'Embeds à vos couleurs et logo', 'Rapport hebdomadaire en MP'], off: ['Surveillance vocale avancée'] },
-    { id: 'gardien', name: 'Gardien', desc: 'Pour les grandes communautés et leur équipe de staff.', amount: '9,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Gardien',
-      items: ['Tout le plan Veilleur', 'IA vocale illimitée', 'Surveillance vocale avancée', 'Staff protégé et mots interdits'], off: [] },
+      items: ['Tous les modules inclus', 'IA vocale : 30 min par mois', 'IA : 60 questions par jour', 'Tableau de bord complet'], off: ['Gains de l’arcade ×2', 'Choix de la voix de l’IA', 'Embeds aux couleurs du serveur', 'Rapport hebdomadaire', 'Surveillance vocale avancée'] },
+    { id: 'veilleur', name: 'Veilleur', desc: 'Pour les serveurs actifs qui veulent leur propre style.', amount: '6,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Veilleur', featured: true,
+      items: ['Tout le plan Gratuit', 'Quêtes, récompense du jour et gains de l’arcade ×2', 'IA vocale : 150 min par mois', 'IA : 500 questions par jour', 'Choix de la voix de l’IA (et du narrateur des jeux)', 'Embeds à vos couleurs et logo', 'Rapport hebdomadaire en MP'], off: ['Surveillance vocale avancée'] },
+    { id: 'gardien', name: 'Gardien', desc: 'Pour les grandes communautés et leur équipe de staff.', amount: '14,99 €', per: '/ mois', billing: 'Facturé 31 jours à la fois, sans engagement', cta: 'Choisir Gardien',
+      items: ['Tout le plan Veilleur', 'IA vocale : 400 min par mois', 'IA : 1 000 questions par jour', 'Surveillance vocale avancée', 'Staff protégé et mots interdits'], off: [] },
   ];
 
 
@@ -742,7 +742,7 @@ body { background:
       '<div class="detail-nav"><a class="btn btn-secondary" href="#details/' + prev.id + '">← ' + esc(prev.title) + '</a>' +
       '<a class="btn btn-primary invite" href="' + INVITE + '" target="_blank" rel="noopener">Ajouter à Discord</a>' +
       '<a class="btn btn-secondary" href="#details/' + next.id + '">' + esc(next.title) + ' →</a></div>';
-    document.title = f.title + ' · ' + (document.querySelector('.bot-name').textContent || 'AI Vercel');
+    document.title = f.title + ' · ' + (document.querySelector('.bot-name').textContent || 'History IA');
     return true;
   }
 
@@ -765,7 +765,7 @@ body { background:
     return '<article class="card"><div class="icon">' + icon(f.icon) + '</div><h3>' + esc(f.title) + '</h3><p>' + esc(f.text) + '</p>' + checkList(f.items) + '<div class="card-foot"><span class="cmd">' + f.cmd + '</span><a class="details-link" href="#details/' + f.id + '">Détails ' + arrow + '</a></div></article>';
   }).join('');
 
-  var YEAR = { veilleur: '49,90 €', gardien: '99,90 €' };
+  var YEAR = { veilleur: '69,90 €', gardien: '149,90 €' };
   var period = 'mois';
   function renderPricing() {
   document.getElementById('pricing').innerHTML = PLANS.map(function (p) {

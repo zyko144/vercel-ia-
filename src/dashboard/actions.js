@@ -473,7 +473,7 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
       for (const guild of client.guilds.cache.values()) {
         const channel = guild.channels.cache.get(cfg(guild.id, 'announce.channelId') ?? '') ?? guild.systemChannel;
         const ok = channel?.isTextBased?.() && channel.permissionsFor(guild.members.me)?.has([P.SendMessages, P.EmbedLinks])
-          && await channel.send({ embeds: [new EmbedBuilder().setColor(0xc9a978).setTitle(title).setDescription(message).setFooter({ text: 'Message de l’équipe d’AI Vercel' }).setTimestamp()], allowedMentions: { parse: [] } }).then(() => true, () => false);
+          && await channel.send({ embeds: [new EmbedBuilder().setColor(0xc9a978).setTitle(title).setDescription(message).setFooter({ text: 'Message de l’équipe de History IA' }).setTimestamp()], allowedMentions: { parse: [] } }).then(() => true, () => false);
         if (ok) sent += 1; else skipped += 1;
       }
       audit({ userId: session.userId, action: 'Message à tous les serveurs', detail: `${title} (${sent} envoyés)`, req });

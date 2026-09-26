@@ -23,7 +23,7 @@ export function panelEmbed(guildId, panel, { title, description, image = true, t
   const gif = art('panneaux', panel.art ?? panel.key);
   const embed = new EmbedBuilder()
     .setColor(brand?.color ?? panel.color)
-    .setFooter({ text: brand?.name ? `${brand.name} · propulsé par AI Vercel` : 'AI Vercel', iconURL: brand?.logo ?? undefined });
+    .setFooter({ text: brand?.name ? `${brand.name} · propulsé par History IA` : 'History IA', iconURL: brand?.logo ?? undefined });
   if (title) embed.setTitle(title);
   if (description) embed.setDescription(description);
   if (image) embed.setImage(gif.url);
