@@ -64,7 +64,7 @@ footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15
 <main>
 
 <section class="hero container rise"><h1>🏆 Les serveurs les plus vivants</h1><p>Les serveurs qui utilisent History IA et ont choisi d’apparaître ici, classés par activité de la semaine. Pour y figurer : tableau de bord › Outils du serveur › Apparaître dans le classement public.</p></section>
-<section class="container"><div class="live" id="live"></div><div class="rank" id="rank"><p class="empty">Chargement du classement…</p></div></section>
+<section class="container"><div class="rank" id="rank"><p class="empty">Chargement du classement…</p></div></section>
 
 </main>
 <footer>History IA · <a href="/">Accueil</a> · <a href="/statut">Statut</a> · <a href="/app">Tableau de bord</a> · <a href="/conditions">Conditions</a> · <a href="/confidentialite">Confidentialité</a> · <a href="/mentions">Mentions légales</a></footer>
@@ -72,10 +72,6 @@ footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15
 (function () {
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function n(v) { return Number(v || 0).toLocaleString('fr-FR'); }
-  fetch('/api/public').then(function (r) { return r.json(); }).then(function (s) {
-    document.getElementById('live').innerHTML = [['Serveurs', s.servers], ['Membres', s.members], ['Messages cette semaine', s.messagesWeek], ['Parties cette semaine', s.gamesWeek]]
-      .map(function (x) { return '<div><b>' + n(x[1]) + '</b><span>' + x[0] + '</span></div>'; }).join('');
-  }).catch(function () {});
   fetch('/api/classement').then(function (r) { return r.json(); }).then(function (d) {
     var box = document.getElementById('rank');
     if (!d.servers.length) { box.innerHTML = '<p class="empty">Aucun serveur n’apparaît encore. Soyez le premier : activez « Apparaître dans le classement public » dans le tableau de bord.</p>'; return; }

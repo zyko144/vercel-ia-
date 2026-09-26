@@ -8,6 +8,7 @@ import { hitCooldown } from '../features/limits.js';
 import { protectOwner } from '../features/protectOwner.js';
 import { countMessage } from '../features/weekly.js';
 import { guardMessage } from '../features/security.js';
+import { guardSecrets } from '../features/antiNuke.js';
 import { recordMessage } from '../features/assistant.js';
 import { maintenance } from '../features/maintenance.js';
 import { watchBurst } from '../features/moderation.js';
@@ -34,6 +35,7 @@ const plainName = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036
 export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
   // Sécurité : arnaques, liens interdits, spam (le message supprimé ne va pas plus loin)
+  if (message.inGuild() && await guardSecrets(message).catch(() => false)) return;
   if (message.inGuild() && await guardMessage(message).catch(() => false)) return;
   // Tickets : automatisations (mots-clés, suivi des réponses du staff)
   if (message.inGuild()) onTicketMessage(message).catch((err) => console.warn('[tickets auto]', err.message));
