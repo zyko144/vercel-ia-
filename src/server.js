@@ -11,7 +11,7 @@ const KEEP_ALIVE_MS = 10 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // Images préparées à l'avance (tools/make-casino-gifs.mjs, tools/make-jeux-gifs.mjs).
 // Elles sont servies telles quelles : Discord les récupère une fois puis les garde en cache.
-const PUBLIC_ASSETS = { '/casino/': path.resolve('assets/casinho'), '/jeux/': path.resolve('assets/jeux'), '/panneaux/': path.resolve('assets/panneaux'), '/sanction/': path.resolve('assets/sanction') };
+const PUBLIC_ASSETS = { '/casino/': path.resolve('assets/casinho'), '/jeux/': path.resolve('assets/jeux'), '/panneaux/': path.resolve('assets/panneaux'), '/sanction/': path.resolve('assets/sanction'), '/iastatus/': path.resolve('assets/iastatus') };
 // Le site vitrine (site/index.html) : servi à l'adresse principale du bot, avec les images des cartes.
 const SITE_DIR = path.resolve('site');
 const SITE_TYPES = { '.html': 'text/html; charset=utf-8', '.webp': 'image/webp' };

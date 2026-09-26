@@ -208,15 +208,15 @@ dialog p { color: var(--muted); font-size: 14.5px; margin-top: 8px; }
 
 /* ===================== Thème « histoire » (beige, brun, noir) ===================== */
 :root {
-  --bg: #100d09; --surface: #1c160f; --surface-2: #241c13; --border: #3a2f22; --border-strong: #4d3e2c;
+  --bg: #0e0e10; --surface: #17171a; --surface-2: #1e1e22; --border: #2c2c31; --border-strong: #3a3a40;
   --text: #eadcc0; --muted: #b8a684; --faint: #8a7a5e;
   --accent: #c9a978; --accent-hover: #d8bb8d; --accent-soft: rgba(201, 169, 120, .14);
   --ok: #8fae6b; --gold: #f2c14e;
   --font: 'Crimson Pro', Georgia, serif; --title: 'Cinzel', Georgia, serif;
 }
-html { background: #0a0806; scrollbar-width: none; }
+html { background: #0a0a0b; scrollbar-width: none; }
 html::-webkit-scrollbar { display: none; }
-body { font-size: 18px; background: radial-gradient(1400px 900px at 15% -15%, rgba(214, 186, 140, .28), transparent 60%), linear-gradient(165deg, #4a3b27 0%, #2a2117 22%, #16110c 50%, #0a0806 100%) fixed; }
+body { font-size: 18px; background: radial-gradient(1400px 900px at 15% -15%, rgba(255, 255, 255, .06), transparent 60%), linear-gradient(165deg, #26262a 0%, #18181b 22%, #111113 50%, #0a0a0b 100%) fixed; }
 h1, h2, h3, .logo span, .price .amount, .detail-head h1 { font-family: var(--title); letter-spacing: .02em; }
 .hero h1 { font-weight: 800; }
 .btn { font-family: var(--font); font-size: 17px; font-weight: 600; position: relative; overflow: hidden; }
@@ -224,7 +224,7 @@ h1, h2, h3, .logo span, .price .amount, .detail-head h1 { font-family: var(--tit
 .btn-primary:hover { background: linear-gradient(180deg, #ecd3a9, #c4a276); }
 .btn::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .3), transparent); transform: translateX(-300%) skewX(-20deg); pointer-events: none; }
 .btn:hover::after { animation: shine .7s ease; }
-.nav { background: rgba(16, 13, 9, .85); }
+.nav { background: rgba(14, 14, 16, .85); }
 .logo .mark, .logo svg rect { fill: var(--accent); }
 .card, .step, .feature, .details-link { transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s, border-color .2s; }
 .card:hover { transform: translateY(-5px); box-shadow: 0 18px 34px -20px rgba(0, 0, 0, .9), 0 0 0 1px var(--accent); }
@@ -287,10 +287,10 @@ main, header, footer { position: relative; z-index: 1; }
 /* ===================== Plus de couleurs (palette pirate : or, rouge sang, bleu océan, émeraude, pourpre) ===================== */
 :root { --sea: #1fb5b0; --blood: #e0433a; --emerald: #3fbf6a; --royal: #7c6cff; --amber: #ff9f2e; }
 body { background:
-  radial-gradient(900px 600px at 85% 10%, rgba(31, 181, 176, .18), transparent 60%),
-  radial-gradient(800px 600px at 5% 60%, rgba(224, 67, 58, .14), transparent 60%),
-  radial-gradient(1400px 900px at 15% -15%, rgba(242, 193, 78, .30), transparent 60%),
-  linear-gradient(165deg, #4a3b27 0%, #2a2117 22%, #16110c 50%, #0a0806 100%) fixed; }
+  radial-gradient(900px 600px at 85% 10%, rgba(31, 181, 176, .07), transparent 60%),
+  radial-gradient(800px 600px at 5% 60%, rgba(224, 67, 58, .05), transparent 60%),
+  radial-gradient(1400px 900px at 15% -15%, rgba(255, 255, 255, .06), transparent 60%),
+  linear-gradient(165deg, #26262a 0%, #18181b 22%, #111113 50%, #0a0a0b 100%) fixed; }
 .btn-primary { background: linear-gradient(135deg, #ffd36b, #ff9f2e 55%, #e0433a); color: #1a0f05; box-shadow: 0 8px 24px -10px rgba(255, 159, 46, .7); }
 .btn-primary:hover { background: linear-gradient(135deg, #ffe08a, #ffb04a 55%, #ef5a4f); }
 .btn-secondary { border-color: rgba(31, 181, 176, .6); color: #bff3ef; }

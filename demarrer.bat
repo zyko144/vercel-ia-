@@ -2,7 +2,7 @@
 rem Lance le bot sur ton PC (Windows). Double-clique sur ce fichier.
 rem 1re fois : installe les dependances et cree le fichier .env a remplir.
 chcp 65001 >nul
-title AI Vercel
+title History IA
 cd /d "%~dp0"
 
 where node >nul 2>nul

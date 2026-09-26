@@ -103,6 +103,7 @@ client.once(Events.ClientReady, async (c) => {
   startServerTools(c);
   import('./features/ticketAutomations.js').then((m) => m.startTicketAutomations(c)).catch((err) => console.warn('[tickets auto]', err.message));
   startVoicePlus(c);
+  import('./features/aiStatus.js').then((m) => m.startAiStatus(c)).catch(() => {});
   autoInstallBotChannels(c).catch((err) => console.warn('[salons] installation :', err.message));
   startVoiceExtras(c);
   startWeeklyReports(c).catch((err) => console.warn('[rapport] démarrage :', err.message));

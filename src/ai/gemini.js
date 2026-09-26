@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { config } from '../config.js';
 import { recordAi } from '../dashboard/metrics.js';
+import { noteAiResult } from '../features/aiStatus.js';
 
 const ai = new GoogleGenAI({ apiKey: config.geminiKey });
 
@@ -128,9 +129,11 @@ export async function chat(opts) {
   try {
     const { text, sources, model, fallback } = await chatOnce(opts);
     recordAi({ tag, ms: Date.now() - started, ok: true, model, fallback });
+    noteAiResult(true);
     return { text, sources };
   } catch (err) {
     recordAi({ tag, ms: Date.now() - started, ok: false, error: errorDetail(err) });
+    noteAiResult(false, statusOf(err));
     throw err;
   }
 }
