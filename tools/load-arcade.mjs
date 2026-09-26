@@ -20,7 +20,7 @@ globalThis.fetch = async () => ({ ok: false, status: 500, json: async () => ({})
 const arcade = await import('../src/arcade/server.js');
 const { Collection } = await import('discord.js');
 const G = '444444444444444444';
-arcade.setArcadeClient({ user: { id: '999999999999999999', username: 'AI Vercel' }, guilds: { cache: new Collection([[G, { id: G, members: { fetch: async () => ({}) } }]]) }, users: { fetch: async () => null } });
+arcade.setArcadeClient({ user: { id: '999999999999999999', username: 'History IA' }, guilds: { cache: new Collection([[G, { id: G, members: { fetch: async () => ({}) } }]]) }, users: { fetch: async () => null } });
 
 const server = http.createServer(async (req, res) => { if (!(await arcade.handleArcadeWeb(req, res, new URL(req.url, 'http://x')))) { res.writeHead(404); res.end(); } });
 server.maxConnections = 100_000;

@@ -110,7 +110,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       }
     }
 
-    // L'arcade multijoueur d'AI Vercel (Activité Discord ou lien personnel)
+    // L'arcade multijoueur de History IA (Activité Discord ou lien personnel)
     if (url.pathname.startsWith('/arcade') || url.pathname.startsWith('/.proxy/arcade')) {
       const { handleArcadeWeb } = await import('./arcade/server.js');
       if (await handleArcadeWeb(req, res, url)) return undefined;

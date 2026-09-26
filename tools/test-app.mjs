@@ -50,7 +50,7 @@ const guild = {
 };
 channel.guild = guild;
 const client = {
-  isReady: () => true, user: { id: '1549507270193193071', username: 'AI Vercel', displayAvatarURL: () => null },
+  isReady: () => true, user: { id: '1549507270193193071', username: 'History IA', displayAvatarURL: () => null },
   guilds: { cache: new Collection([[G, guild]]) }, channels: { cache: new Collection([[channel.id, channel]]) }, users: { cache: new Collection() },
 };
 setAppClient(client);

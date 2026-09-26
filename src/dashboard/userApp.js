@@ -37,7 +37,7 @@ export const setAppClient = (c) => { client = c; };
 
 const sha = (v) => createHash('sha256').update(v).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
-// APP_URL : l'adresse publique du tableau de bord (ex. https://vercelia.vercel.app), sinon celle de Render
+// APP_URL : l'adresse publique du tableau de bord (ex. https://historyia.vercel.app), sinon celle de Render
 const base = () => (process.env.APP_URL || config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
 const redirectUri = () => `${base()}/app/callback`;
 const clientSecret = () => (process.env.DISCORD_CLIENT_SECRET ?? '').trim();
@@ -199,7 +199,7 @@ function planInfo(guildId) {
     features: { voices: plan.voices, branding: plan.branding, report: plan.report, guard: plan.guard, voiceMinutes: plan.voiceMinutes === Infinity ? 'illimitée' : plan.voiceMinutes },
     offers: Object.entries(PLANS).filter(([k]) => k !== 'gratuit').flatMap(([k, p]) => [
       { key: k, label: p.label, price: p.price, pay: `${base()}/payer?serveur=${guildId}&offre=${k}` },
-      { key: `${k}-an`, label: `${p.label} · 1 an`, price: k === 'veilleur' ? '49,90 €/an' : '99,90 €/an', pay: `${base()}/payer?serveur=${guildId}&offre=${k}-an` },
+      { key: `${k}-an`, label: `${p.label} · 1 an`, price: k === 'veilleur' ? '69,90 €/an' : '149,90 €/an', pay: `${base()}/payer?serveur=${guildId}&offre=${k}-an` },
     ]),
   };
 }
@@ -265,7 +265,7 @@ const routes = {
   'GET me': async (req, res, s) => json(res, 200, {
     connected: Boolean(s), oauth: Boolean(clientSecret()),
     user: s ? { id: s.userId, name: s.name, avatar: s.avatar } : null,
-    bot: { name: client.user?.username ?? 'AI Vercel', avatar: client.user?.displayAvatarURL({ size: 64 }) ?? null },
+    bot: { name: client.user?.username ?? 'History IA', avatar: client.user?.displayAvatarURL({ size: 64 }) ?? null },
   }),
   'GET servers': async (req, res, s) => json(res, 200, {
     servers: s.guilds.map((g) => {

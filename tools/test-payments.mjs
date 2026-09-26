@@ -40,7 +40,7 @@ const fakeGuild = (id, name) => ({ id, name, fetchOwner: async () => ({ send: as
 const guilds = new Collection([[A, fakeGuild(A, 'Parrain')], [B, fakeGuild(B, 'Filleul')]]);
 pay.setPaymentsClient({
   guilds: { cache: guilds }, users: { fetch: async () => ({ send: async (t) => dms.push(t) }) },
-  isReady: () => true, ws: { ping: 42 }, user: { username: 'AI Vercel', displayAvatarURL: () => 'https://cdn/x.png' },
+  isReady: () => true, ws: { ping: 42 }, user: { username: 'History IA', displayAvatarURL: () => 'https://cdn/x.png' },
 });
 
 await check('parrainage : code stable, pas soi-même, une seule fois', async () => {
@@ -58,12 +58,12 @@ await check('page de paiement : formulaire PayPal avec le serveur et l’offre',
   const html = pay.paymentPage(new URL(`http://x/payer?serveur=${B}&offre=gardien`));
   assert.match(html, /name="business" value="caisse@exemple.fr"/);
   assert.match(html, new RegExp(`value="${B}\\|gardien"`));
-  assert.match(html, /value="9.99"/);
+  assert.match(html, /value="14.99"/);
   assert.match(pay.paymentPage(new URL('http://x/payer?serveur=abc&offre=gardien')), /Lien incomplet/);
 });
 
 const ipn = (extra = {}) => new URLSearchParams({
-  payment_status: 'Completed', receiver_email: 'caisse@exemple.fr', custom: `${B}|gardien`, mc_currency: 'EUR', mc_gross: '9.99', txn_id: 'T1', ...extra,
+  payment_status: 'Completed', receiver_email: 'caisse@exemple.fr', custom: `${B}|gardien`, mc_currency: 'EUR', mc_gross: '14.99', txn_id: 'T1', ...extra,
 }).toString();
 
 await check('IPN : refusé si PayPal ne confirme pas, si le montant est faux', async () => {

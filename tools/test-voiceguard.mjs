@@ -55,7 +55,7 @@ const agoraSent = [];
 const agora = { id: 'a', name: '│・𝐚𝐠𝐨𝐫𝐚', type: 0, isTextBased: () => true, send: async (p) => { agoraSent.push(p); } };
 const guild = { id: 'g', name: 'Serveur', channels: { cache: new Collection([['v', voice], ['a', agora]]) }, members: { cache: members, fetch: async (id) => members.get(id) } };
 const client = {
-  user: { id: BOT, username: 'AI Vercel', toString: () => `<@${BOT}>` },
+  user: { id: BOT, username: 'History IA', toString: () => `<@${BOT}>` },
   users: { fetch: async () => ({ send: async () => {} }), cache: new Collection() },
   isReady: () => true,
 };

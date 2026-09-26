@@ -73,7 +73,7 @@ const guild = {
   channels: { cache: new Collection([[ROOM, { id: ROOM, name: 'général', isTextBased: () => true, isThread: () => false, viewable: true, lastMessageId: '9', messages: { fetch: async () => messages } }]]) },
 };
 arcade.setArcadeClient({
-  user: { id: '999999999999999999', username: 'AI Vercel' },
+  user: { id: '999999999999999999', username: 'History IA' },
   guilds: { cache: new Collection([[G, guild]]) },
   users: { fetch: async () => null },
 });

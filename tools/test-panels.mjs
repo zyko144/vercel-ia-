@@ -42,7 +42,7 @@ const makeInteraction = (extra = {}) => ({
   guild: null,
   channelId: '555555555555555555',
   channel: { id: '555555555555555555' },
-  client: { user: { username: 'AI Vercel' }, ws: { ping: 42 }, channels: { cache: new Collection() } },
+  client: { user: { username: 'History IA' }, ws: { ping: 42 }, channels: { cache: new Collection() } },
   memberPermissions: new PermissionsBitField(PermissionsBitField.All),
   replied: false,
   deferred: false,

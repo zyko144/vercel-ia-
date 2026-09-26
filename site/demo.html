@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Démo · AI Vercel</title>
-<meta name="description" content="Le bot AI Vercel en action : IA, arcade, niveaux, boutique, duels, tickets et modération.">
+<title>Démo · History IA</title>
+<meta name="description" content="Le bot History IA en action : IA, arcade, niveaux, boutique, duels, tickets et modération.">
 <link rel="icon" href="/avatar.png">
 <meta name="theme-color" content="#120f0b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -66,7 +66,7 @@ footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15
 </head>
 <body>
 <header class="nav"><div class="container">
-  <a class="brand" href="/"><img src="/avatar.png" alt="">AI Vercel</a>
+  <a class="brand" href="/"><img src="/avatar.png" alt="">History IA</a>
   <nav class="links"><a href="/#fonctionnalites">Fonctionnalités</a><a href="/demo" class="on">Démo</a><a href="/nouveautes">Nouveautés</a><a href="/classement">Classement</a><a href="/app">🕹️ Jouer</a><a href="/#tarifs">Tarifs</a></nav>
   <a class="btn" href="/app">Tableau de bord</a>
 </div></header>
@@ -80,7 +80,7 @@ footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15
 <section class="container" style="text-align:center;margin-bottom:30px"><a class="btn" href="/#tarifs">Voir les offres</a></section>
 
 </main>
-<footer>AI Vercel · <a href="/">Accueil</a> · <a href="/statut">Statut</a> · <a href="/app">Tableau de bord</a> · <a href="/conditions">Conditions</a> · <a href="/confidentialite">Confidentialité</a> · <a href="/mentions">Mentions légales</a></footer>
+<footer>History IA · <a href="/">Accueil</a> · <a href="/statut">Statut</a> · <a href="/app">Tableau de bord</a> · <a href="/conditions">Conditions</a> · <a href="/confidentialite">Confidentialité</a> · <a href="/mentions">Mentions légales</a></footer>
 <script>
 (function () {
   var ME = 'Lina';
@@ -88,7 +88,7 @@ footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   var SCENES = [
     { id: 'ia', emoji: '🧠', title: 'Parler à l’IA', text: 'Elle répond, se souvient, lance les jeux', chan: 'général', msgs: [
-      { who: ME, text: '@AI Vercel tu peux lancer un quiz sur le rap FR pour ce soir ?' },
+      { who: ME, text: '@History IA tu peux lancer un quiz sur le rap FR pour ce soir ?' },
       { bot: true, text: 'Avec plaisir ! 🎤 Tournoi de quiz « rap FR », 10 questions, podium payé en pièces d’or. Clique pour ouvrir la salle d’attente.', btns: [['🏆 Lancer : Tournoi de quiz', 'g']] },
       { who: 'Sami', text: 'jsuis chaud 🔥' } ] },
     { id: 'arcade', emoji: '🕹️', title: 'L’arcade', text: 'Dessin, morpion, puissance 4 en Activité', chan: 'jeux', msgs: [
@@ -115,7 +115,7 @@ footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15
   var run = 0;
   function msgHtml(m) {
     var av = m.bot ? '<img class="av" src="/avatar.png" alt="">' : '<div class="av">' + esc(m.who[0]) + '</div>';
-    var who = m.bot ? 'AI Vercel<span class="app">APP</span>' : esc(m.who);
+    var who = m.bot ? 'History IA<span class="app">APP</span>' : esc(m.who);
     var text = m.text ? '<div>' + esc(m.text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') + '</div>' : '';
     var embed = m.embed ? '<div class="embed" style="--c:' + m.embed.c + '"><div class="t">' + esc(m.embed.t) + '</div><div>' + esc(m.embed.d).replace(/\n/g, '<br>') + '</div>' + (m.embed.img ? '<img src="' + m.embed.img + '" alt="">' : '') + '</div>' : '';
     var btns = m.btns ? '<div class="btns">' + m.btns.map(function (b) { return '<span class="' + b[1] + '">' + esc(b[0]) + '</span>'; }).join('') + '</div>' : '';
@@ -130,7 +130,7 @@ footer { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15
     (function next() {
       if (id !== run || i >= scene.msgs.length) { document.getElementById('typing').textContent = ''; return; }
       var m = scene.msgs[i++];
-      document.getElementById('typing').textContent = (m.bot ? 'AI Vercel' : m.who) + ' est en train d’écrire…';
+      document.getElementById('typing').textContent = (m.bot ? 'History IA' : m.who) + ' est en train d’écrire…';
       setTimeout(function () { if (id !== run) return; box.insertAdjacentHTML('beforeend', msgHtml(m)); next(); }, 900);
     })();
   }

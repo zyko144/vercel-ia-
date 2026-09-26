@@ -132,6 +132,8 @@ export const config = {
     allowedUsers: list('VOICE_AI_USERS', '855176142096039997,734865069904756766,923551925113323542'),
   },
   ownerId: str('OWNER_ID', '1543726919168557087'),
+  // Nom du bot sur Discord : appliqué au démarrage s'il est différent (vide pour ne pas y toucher)
+  botName: str('BOT_NAME', 'History IA'),
   // Salon des cartes de niveau sur le serveur principal (passe avant le réglage du tableau de bord)
   levelsChannelId: str('LEVELS_CHANNEL_ID', '1550186798611959921'),
   // Membres protégés contre les insultes, en plus du chef (warn puis exclusion 1 min)

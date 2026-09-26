@@ -1,4 +1,4 @@
-# AI Vercel : bot Discord propulsé par Gemini
+# History IA : bot Discord propulsé par Gemini
 
 Assistant IA du serveur. Réponses claires et bien expliquées avec des liens utiles, lecture des images, PDF, fichiers et liens envoyés, aide en code, quiz, rappels, sondages et résumés de salon. En plus, il reste **24h/24 dans le vocal** `│・𝐃𝐢𝐜𝐭𝐚𝐭𝐮𝐫𝐞`.
 
@@ -165,9 +165,9 @@ encodé pendant une partie, l'offre gratuite de Render n'y survivrait pas.
 
 ---
 
-## 7 bis. Un seul bot : l'IA vocale est dans AI Vercel 🎙️
+## 7 bis. Un seul bot : l'IA vocale est dans History IA 🎙️
 
-L'ancien bot « AI Vocal Vercel » n'est plus utilisé : **tout passe par AI Vercel** (musique, surveillance vocale,
+L'ancien bot « AI Vocal Vercel » n'est plus utilisé : **tout passe par History IA** (musique, surveillance vocale,
 IA vocale, narrateur des jeux). Pour parler à l'IA : rejoins le salon vocal du bot, puis **/ia › Parler à l'IA en
 vocal**. Pendant qu'elle parle, la musique locale est mise de côté puis reprend à la fin ; si la musique passe par
 le serveur audio (Lavalink), il faut l'arrêter avant. Un ancien `VOICE_BOT_TOKEN` (ou 2e token dans `DISCORD_TOKEN`)
@@ -323,9 +323,10 @@ pour un rôle) → **Construire**. Tests : `npm run test:tickets`.
 
 ## 12. Les offres premium ⭐
 
-| | Gratuit | Veilleur (4,99 €) | Gardien (9,99 €) |
+| | Gratuit | Veilleur (6,99 €) | Gardien (14,99 €) |
 |---|---|---|---|
-| IA vocale | 60 min/mois | 600 min/mois | illimitée |
+| IA vocale | 30 min/mois | 150 min/mois | 400 min/mois |
+| Questions à l'IA | 60/jour | 500/jour | 1 000/jour |
 | Voix de l'IA au choix | ❌ | ✅ | ✅ |
 | Embeds aux couleurs du serveur (logo, couleur, nom) | ❌ | ✅ | ✅ |
 | Rapport de la semaine en MP au propriétaire (dimanche 20 h) | ❌ | ✅ | ✅ |
@@ -405,6 +406,6 @@ vérification, bienvenue, journal des rôles) et **Message Content Intent**.
 | Musique | `/play`, `/playlist`, `/skip`, `/previous`, `/pause`, `/resume`, `/stop`, `/queue`, `/nowplaying`, `/volume`, `/loop`, `/shuffle`, `/seek`, `/remove`, `/move`, `/clearqueue`, `/filter`, `/autoplay`, `/lyrics`, `/radio`, `/karaoke`, `/blindtest`, `/topsons`, `/join`, `/leave` |
 
 Toutes les commandes marchent dans tous les salons (variable `ALLOWED_CHANNEL_IDS` pour restreindre).
-⚠️ Pour que `/kick`, `/ban`, `/mute` et `/role` marchent, le **rôle du bot doit être au-dessus** des rôles des membres (Paramètres du serveur › Rôles › glisser « AI Vercel » vers le haut).
+⚠️ Pour que `/kick`, `/ban`, `/mute` et `/role` marchent, le **rôle du bot doit être au-dessus** des rôles des membres (Paramètres du serveur › Rôles › glisser « History IA » vers le haut).
 
 **Anti-abus** : 3 s entre deux messages, aucun @everyone possible, le chef ne peut être pingé qu'une fois toutes les 10 min par la même personne.

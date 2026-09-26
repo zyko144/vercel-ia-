@@ -1,9 +1,9 @@
-// Salons dédiés du bot : une catégorie « AI Vercel » avec un salon par usage (niveaux, trésor, jeux,
+// Salons dédiés du bot : une catégorie « History IA » avec un salon par usage (niveaux, trésor, jeux,
 // annonces, demandes et journal du staff), pour ne pas encombrer les salons de discussion.
 import { ChannelType, EmbedBuilder, PermissionFlagsBits as P } from 'discord.js';
 import { cfg, setGuildSettings, setInternal } from './guildConfig.js';
 
-const CATEGORY = '🏴‍☠️ AI Vercel';
+const CATEGORY = '🏴‍☠️ History IA';
 // staff : visible seulement du staff ; readOnly : les membres lisent, le bot écrit ; keys : réglages remplis
 export const BOT_CHANNELS = [
   { name: '📈・niveaux', topic: 'Montées de niveau, cartes d’XP et membre de la semaine.', readOnly: true, keys: ['levels.channelId', 'weekMember.channelId'] },

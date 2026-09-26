@@ -44,7 +44,7 @@ const users = new Collection([[OWNER, makeUser(OWNER, 'Chef')], [ADMIN, makeUser
 const client = {
   isReady: () => true,
   once() {},
-  user: { username: 'AI Vercel', displayAvatarURL: () => null, setPresence() {} },
+  user: { username: 'History IA', displayAvatarURL: () => null, setPresence() {} },
   ws: { ping: 42 },
   guilds: { cache: new Collection() },
   users: { cache: users, fetch: async (id) => { if (!users.has(id)) throw new Error('inconnu'); return users.get(id); } },
@@ -208,7 +208,7 @@ await check('la connexion pose un cookie HttpOnly et SameSite strict', async () 
 await check('la vue d’ensemble ne contient aucun secret', async () => {
   const r = await request('/dashboard/api/apercu');
   assert.equal(r.status, 200);
-  assert.equal(r.json.bot.name, 'AI Vercel');
+  assert.equal(r.json.bot.name, 'History IA');
   assert.ok(!r.text.includes(config.geminiKey), 'la clé Gemini ne sort jamais');
   assert.ok(!r.text.includes(config.discordToken), 'le token Discord ne sort jamais');
   assert.equal(r.json.services.gemini, true, 'on dit seulement qu’elle est configurée');

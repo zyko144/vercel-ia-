@@ -19,6 +19,7 @@ const fail = (text) => ({ embeds: [new EmbedBuilder().setColor(0xed4245).setDesc
 
 const FEATURES = [
   ['voiceMinutes', (v) => `🎙️ IA vocale : **${v === Infinity ? 'illimitée' : `${v} min/mois`}**`],
+  ['aiPerDay', (v) => `🧠 Questions à l’IA : **${v.toLocaleString('fr-FR')} par jour**`],
   ['voices', (v) => `${v ? '✅' : '❌'} Choix de la voix de l’IA`],
   ['branding', (v) => `${v ? '✅' : '❌'} Cartes et embeds aux couleurs du serveur (logo, couleur, nom)`],
   ['report', (v) => `${v ? '✅' : '❌'} Rapport de la semaine en MP au propriétaire`],
@@ -82,14 +83,14 @@ addActions('serveur', 'Premium', [
       f.text('nom', 'Nom affiché (vide = garder)', { max: 60 }),
       f.choice('couleur', 'Couleur', Object.entries(COLORS).map(([value, c]) => ({ label: c.label, value, emoji: c.emoji }))),
       f.file('logo', 'Logo (image carrée conseillée)'),
-      f.bool('effacer', 'Tout effacer (revenir au style AI Vercel) ?'),
+      f.bool('effacer', 'Tout effacer (revenir au style History IA) ?'),
     ],
     run: async (client, interaction, values) => {
       const blocked = needs('branding', 'Les cartes aux couleurs du serveur')(interaction);
       if (blocked) return interaction.reply(blocked);
       if (values.effacer) {
         clearBranding(interaction.guildId);
-        return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x3dff9a).setDescription('✅ Style AI Vercel rétabli.')], ...PRIVATE });
+        return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x3dff9a).setDescription('✅ Style History IA rétabli.')], ...PRIVATE });
       }
       let logoPng;
       if (values.logo) {
@@ -110,7 +111,7 @@ addActions('serveur', 'Premium', [
         .setDescription(`Les panneaux, tickets, annonces et rapports prennent maintenant ces couleurs.${brand?.logo ? '' : values.logo ? '\n-# Le logo apparaîtra une fois le bot en ligne sur Render (il est servi par le bot).' : ''}`)
         .setThumbnail(brand?.logo ?? null)
         .setImage(gif.url)
-        .setFooter({ text: brand?.name ? `${brand.name} · propulsé par AI Vercel` : 'AI Vercel' });
+        .setFooter({ text: brand?.name ? `${brand.name} · propulsé par History IA` : 'History IA' });
       const payload = { embeds: [preview], files: gif.files };
       return interaction.deferred ? interaction.editReply(payload) : interaction.reply({ ...payload, ...PRIVATE });
     },

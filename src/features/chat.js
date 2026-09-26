@@ -37,6 +37,15 @@ export async function askAI({
   const userText = `${who} : ${prompt || '(pas de texte)'}${notes.length ? ` ${notes.join(' ')}` : ''}`;
   const paused = pausedAnswer(user.id);
   if (paused) return paused;
+  // Plafond de questions par jour (selon l'offre du serveur) ; le chef n'est pas limité
+  if (user.id !== config.ownerId) {
+    const { takeAiQuestion, planOf } = await import('./premium.js');
+    const quota = takeAiQuestion(guild?.id ?? null, user.id);
+    if (!quota.ok) {
+      const plan = guild ? planOf(guild.id) : null;
+      return { content: `🌙 L’IA a répondu à **${quota.limit} questions** aujourd’hui${guild ? ` sur ce serveur (offre ${plan.label})` : ''}, c’est le maximum. Elle revient demain !${plan?.key !== 'gardien' ? ' Plus de questions avec l’offre premium : **/serveur** › Offre du serveur.' : ''}` };
+    }
+  }
   const history = historyKey ? getHistory(historyKey) : [];
 
   let system = systemPrompt({ botName: client.user.username, guildName: guild?.name });

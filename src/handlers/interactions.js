@@ -385,7 +385,7 @@ const SLASH_HANDLERS = {
         { name: '🖱️ Clic droit sur un message', value: 'Applications › **Expliquer ce message** / **Traduire en français** / **Signaler au staff**' },
         { name: '🆘 Besoin du chef ?', value: `**/serveur** › Contacter le chef, ou demande à l'IA : si elle sait pas, elle prévient <@${config.ownerId}>.` },
       )
-      .setFooter({ text: 'AI Vercel · chaque réponse arrive dans un embed, visible que par toi' });
+      .setFooter({ text: 'History IA · chaque réponse arrive dans un embed, visible que par toi' });
     await interaction.reply({ embeds: [embed], ...PRIVATE });
   },
 
