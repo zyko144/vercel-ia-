@@ -107,6 +107,7 @@ client.once(Events.ClientReady, async (c) => {
   startVoiceGuard(c);
   startLevelLoops(c);
   startTreasury(c);
+  (await import('./features/launcherReleases.js')).startLauncherReleases(c);
   loadMaintenance().catch(() => {});
   startAssistant(c);
   startModeration(c);

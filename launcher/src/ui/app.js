@@ -584,8 +584,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.13.1': [
+    ['📣', 'Nouveautés annoncées sur Discord', 'Chaque nouvelle version est postée sur le serveur Discord avec une capture de la nouveauté.', ['#openSettings', '.setnav [data-pane=about]']],
+  ],
   '0.13.0': [
-    ['🛡', 'Double authentification', 'Paramètres › Compte : scanne le QR code avec Google Authenticator, Authy ou 2FAS. 8 codes de secours fournis.'],
+    ['🛡', 'Double authentification', 'Paramètres › Compte : scanne le QR code avec Google Authenticator, Authy ou 2FAS. 8 codes de secours fournis.', ['#openSettings', '.setnav [data-pane=compte]']],
     ['✉', 'Vérification de l’e-mail', 'Un code est envoyé à l’inscription pour confirmer ton adresse.'],
     ['🔑', 'Mot de passe oublié', 'Reçois un code par e-mail pour choisir un nouveau mot de passe (toutes les sessions sont déconnectées).'],
   ],
@@ -1856,7 +1859,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.13.0',
+    version: async () => '0.13.1',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
