@@ -63,7 +63,7 @@
   </section>
 
   <section id="view-classement" class="view">
-    <div class="list-head"><h2>Classement des meilleurs jeux</h2><div class="tabs" id="rankTabs"><button data-rank="tout" class="on">Depuis toujours</button><button data-rank="semaine">Cette semaine</button><button data-rank="mois">Ce mois</button></div></div>
+    <div class="list-head"><h2>Classement des meilleurs jeux</h2><div class="tabs" id="rankTabs"><button data-rank="tout" class="on">Depuis toujours</button><button data-rank="deux">2 dernières semaines</button></div></div>
     <div class="podium" id="podium"></div>
     <div class="ranklist" id="ranklist"></div>
   </section>
@@ -108,12 +108,31 @@
   </div>
 </section>
 
+<dialog id="verifyDlg">
+  <div class="dlg verify">
+    <h2 id="vTitle">Vérification</h2>
+    <p class="fine" id="vMode"></p>
+    <div class="vbar"><i id="vFill"></i></div>
+    <div class="vstats"><b id="vPct">0 %</b><span id="vCount"></span></div>
+    <small class="vfile" id="vFile"></small>
+    <div id="vResult"></div>
+    <div class="row end"><button class="btn" id="vCancel">Annuler</button><button class="btn play" id="vRepair" hidden>Réparer les fichiers abîmés</button><button class="btn" id="vClose" hidden>Fermer</button></div>
+  </div>
+</dialog>
+
 <dialog id="sheet"><div class="sheet" id="sheetBody"></div></dialog>
 
 <dialog id="settings">
   <form method="dialog" class="dlg">
     <h2>Paramètres</h2>
     <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
+    <div class="keybox">
+      <b>👤 Comptes de jeu</b>
+      <p>Le temps de jeu affiché est celui d’un seul compte. Choisis le tien (les autres comptes du PC ne sont pas comptés).</p>
+      <div class="accrow"><span>Steam</span><select id="accSteam"></select></div>
+      <div class="accrow"><span>Epic Games</span><select id="accEpic"></select></div>
+      <label class="toggle"><input type="checkbox" id="totalTime"><span></span>Afficher le temps total de tous les comptes</label>
+    </div>
     <div class="keybox">
       <b>🤖 Clé Gemini (assistant IA, recherche d’images, recommandations)</b>
       <p id="geminiState">Si le launcher est dans le dossier du bot, la clé du bot est utilisée automatiquement.</p>

@@ -10,14 +10,17 @@ import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { periodItems, periodStats, statCategory } from './core/tracker.js';
-import { steamAchievements, lastSteamUser, steamStoreAssets } from './core/steam.js';
+import { listSteamAccounts, steamAchievements, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
+import { listEpicAccounts } from './core/epic.js';
+import { readRegValue } from './core/registry.js';
 import { steamMatch } from './core/art.js';
 import { norm } from './core/sort.js';
 import { steamPath } from './core/library.js';
 import { epicActions } from './core/epic.js';
 import { steamActions } from './core/steam.js';
 import { createStore } from './core/store.js';
-import { quickVerify, safeGameDir, uninstallFiles } from './core/manage.js';
+import { safeGameDir, uninstallFiles } from './core/manage.js';
+import { verifyGame } from './core/verify.js';
 import { stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
 import { session } from 'electron';
@@ -151,18 +154,38 @@ async function iconOf(item) {
   return fileIcon(exeFound.get(item.installDir));
 }
 
-// Noms des jeux Steam désinstallés (le fichier local ne garde que leur numéro)
+// Noms des jeux Steam désinstallés (le fichier local ne garde que leur numéro) : API officielle, par lots de 50.
+// Un nom provisoire (« Jeu Steam 123 ») n'est jamais enregistré : il sera redemandé au prochain lancement.
 async function fillSteamNames(list) {
-  const missing = list.filter((i) => i.source === 'steam' && !i.name && !store.data.names[i.steamId]).slice(0, 25);
+  const missing = list.filter((i) => i.source === 'steam' && !i.name && !/\D/.test(i.steamId) && (!store.data.names[i.steamId] || /^Jeu Steam \d+$/.test(store.data.names[i.steamId])));
+  if (!missing.length) return;
+  const names = await steamNames(missing.map((i) => i.steamId)).catch(() => ({}));
   for (const i of missing) {
-    const data = await fetch(`https://store.steampowered.com/api/appdetails?appids=${i.steamId}&filters=basic&l=french`, { signal: AbortSignal.timeout(6000) }).then((r) => r.json()).catch(() => null);
-    const name = data?.[i.steamId]?.data?.name;
-    store.data.names[i.steamId] = name ?? `Jeu Steam ${i.steamId}`;
+    if (names[i.steamId]) store.data.names[i.steamId] = names[i.steamId];
+    else delete store.data.names[i.steamId];
   }
-  if (missing.length) store.save();
+  store.save();
 }
 
 let raw = [];
+// ---------- Comptes : le temps de jeu n'est compté que pour le compte choisi (ou tous, si « temps total ») ----------
+let steamAccounts = [];
+let epicAccounts = [];
+let activeSteam = null;
+async function refreshAccounts() {
+  const dir = await steamPath();
+  steamAccounts = await listSteamAccounts(dir).catch(() => []);
+  epicAccounts = await listEpicAccounts().catch(() => []);
+  const active = Number(await readRegValue('HKCU\\Software\\Valve\\Steam\\ActiveProcess', 'ActiveUser').catch(() => 0));
+  activeSteam = active > 0 ? String(active) : null;
+}
+const chosenSteam = () => store.data.settings.steamAccount ?? steamAccounts.find((a) => a.recent)?.id ?? steamAccounts[0]?.id ?? null;
+function accountFor(item) {
+  if (item?.source === 'steam') return activeSteam ?? chosenSteam() ?? 'principal';
+  if (item?.source === 'epic') return store.data.settings.epicAccount ?? epicAccounts[0]?.id ?? 'principal';
+  return 'principal';
+}
+const timeOptions = () => ({ total: Boolean(store.data.settings.totalTime), steamAccount: chosenSteam(), accountFor });
 let aiCache = { key: null, ai: null };
 async function getAi() {
   const key = secret('gemini') ?? await geminiKeyFromEnv(path.join(here, '..'));
@@ -171,12 +194,13 @@ async function getAi() {
 }
 const send = (channel, payload) => win?.webContents.send(channel, payload);
 async function remerge() {
-  items = merge(raw, store.data, localUrls);
+  items = merge(raw, store.data, localUrls, timeOptions());
   await Promise.all(items.map(async (i) => { i.iconData = await iconOf(i); }));
   return items;
 }
 
 async function scan() {
+  await refreshAccounts();
   raw = await scanAll({}, { steamApiKey: secret('steam') });
   await fillSteamNames(raw).catch(() => {});
   await remerge();
@@ -277,16 +301,8 @@ async function doAction(id, action) {
   }
 
   if (action === 'verify') {
-    // Vérification par le launcher (fichiers présents, taille attendue) ; réparation officielle proposée si besoin
-    const r = await quickVerify(item);
-    if (!r.ok && ['steam', 'epic'].includes(item.source)) {
-      const fix = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Plus tard', 'Réparer'], defaultId: 1, cancelId: 0, message: `${item.name} : problème détecté`, detail: `${r.problems.join('\n')}\n\nLa réparation télécharge les fichiers manquants depuis ${item.source === 'steam' ? 'Steam' : 'Epic'}, en arrière-plan.` });
-      if (fix.response === 1) {
-        if (item.source === 'steam') await runSilentSteam([`steam://validate/${item.steamId}`]);
-        else await openLink(epicActions(item.epicKey).verify);
-      }
-    }
-    return { ok: true, verify: r };
+    const result = await startVerify(item.id);
+    return { ok: true, verify: result };
   }
 
   if (action === 'install') {
@@ -322,6 +338,38 @@ async function doAction(id, action) {
   throw new Error('action impossible pour cet élément');
 }
 
+// ---------- Vérification des fichiers (avancement en direct, réparation ciblée) ----------
+let verifyJob = null;
+async function startVerify(id) {
+  const item = items.find((i) => i.id === id);
+  if (!item) throw new Error('élément inconnu');
+  if (!item.installed) throw new Error('le jeu n’est pas installé');
+  if (verifyJob) throw new Error(`une vérification est déjà en cours (${verifyJob.name})`);
+  const controller = new AbortController();
+  verifyJob = { id, name: item.name, controller };
+  send('verify:progress', { id, name: item.name, phase: 'start' });
+  try {
+    const result = await verifyGame(item, { signal: controller.signal, onProgress: (p) => send('verify:progress', { id, name: item.name, phase: 'run', ...p }) });
+    send('verify:progress', { id, name: item.name, phase: 'done', result, canRepair: ['steam', 'epic'].includes(item.source) });
+    return result;
+  } catch (err) {
+    send('verify:progress', { id, name: item.name, phase: err.message === 'annulé' ? 'cancel' : 'error', error: err.message });
+    return { ok: false, error: err.message };
+  } finally {
+    verifyJob = null;
+  }
+}
+ipcMain.handle('verify:start', (_e, id) => startVerify(String(id)).catch((err) => ({ ok: false, error: err.message })));
+ipcMain.handle('verify:cancel', () => { verifyJob?.controller.abort(); return { ok: true }; });
+// Réparation : Steam (en fond) ou Epic re-téléchargent SEULEMENT les fichiers abîmés ou manquants
+ipcMain.handle('verify:repair', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item) return { ok: false, error: 'élément inconnu' };
+  if (item.source === 'steam' && await runSilentSteam([`steam://validate/${item.steamId}`])) return { ok: true };
+  if (item.source === 'epic') return openLink(epicActions(item.epicKey).verify).then(() => ({ ok: true }));
+  return { ok: false, error: 'réparation automatique impossible pour ce jeu : réinstalle-le depuis son launcher' };
+});
+
 async function closeItem(item) {
   const { runningPaths } = await import('./core/tracker.js');
   const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
@@ -345,6 +393,22 @@ ipcMain.handle('item:set', (_e, id, patch) => {
 });
 const publicSettings = async () => ({ ...store.data.settings, steamKey: Boolean(secret('steam')), gridKey: Boolean(secret('grid')), gemini: Boolean(await getAi()) });
 ipcMain.handle('settings:get', () => publicSettings());
+ipcMain.handle('accounts:get', async () => {
+  await refreshAccounts();
+  return {
+    steam: steamAccounts.map((a) => ({ id: a.id, name: a.name, recent: a.recent })), epic: epicAccounts,
+    chosen: { steam: chosenSteam(), epic: store.data.settings.epicAccount ?? epicAccounts[0]?.id ?? null }, total: Boolean(store.data.settings.totalTime),
+  };
+});
+ipcMain.handle('accounts:set', async (_e, patch) => {
+  if ('steam' in patch && steamAccounts.some((a) => a.id === String(patch.steam))) store.data.settings.steamAccount = String(patch.steam);
+  if ('epic' in patch && (patch.epic === null || epicAccounts.some((a) => a.id === String(patch.epic)))) store.data.settings.epicAccount = patch.epic ? String(patch.epic) : null;
+  if ('total' in patch) store.data.settings.totalTime = Boolean(patch.total);
+  store.save();
+  await remerge();
+  send('lib:update', library());
+  return { ok: true };
+});
 ipcMain.handle('settings:set', async (_e, patch) => {
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
   try {
@@ -401,7 +465,10 @@ ipcMain.handle('stats:get', (_e, period) => {
   const top = [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((i) => ({ id: i.id, name: i.name, minutes: i.minutes, cat: statCategory(i) }));
   // Classement de la période (temps suivi par le launcher), en plus du temps total
   const recent = periodItems(store.data.days, n);
-  return { split, top, recent, profile: os.userInfo().username };
+  // Classement « 2 dernières semaines » : chiffres officiels de Steam pour ses jeux, chronomètre du launcher pour les autres
+  const tracked14 = periodItems(store.data.days, 14);
+  const twoWeeks = Object.fromEntries(items.filter((i) => i.kind === 'game').map((i) => [i.id, i.recent2w ?? tracked14[i.id] ?? 0]).filter(([, m]) => m > 0));
+  return { split, top, recent, twoWeeks, profile: os.userInfo().username };
 });
 
 // ---------- Musique ----------
@@ -552,7 +619,7 @@ async function start() {
   applyAutostart();
   createWindow();
   createTray();
-  startTracker(() => items, store, (ids) => win?.webContents.send('lib:active', ids));
+  startTracker(() => items, store, (ids) => win?.webContents.send('lib:active', ids), 60_000, accountFor);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
 app.on('before-quit', () => { quitting = true; });

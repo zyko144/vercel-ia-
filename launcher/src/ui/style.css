@@ -313,3 +313,18 @@ body.listening .aifab .pulse { animation: ring 1.8s ease-out infinite; }
 .linkbtn:hover { color: #fff; }
 .fold { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line-2); background: none; cursor: pointer; color: var(--muted); }
 .fold:hover { color: #fff; border-color: var(--accent); }
+
+/* Comptes et vérification */
+.accrow { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; margin: 8px 0; }
+.accrow select { height: 38px; padding: 0 10px; border-radius: 10px; background: #0f0c12; border: 1px solid var(--line-2); outline: 0; }
+.accrow select option { background: #16121a; }
+.verify { width: min(560px, 92vw); }
+.vbar { height: 12px; border-radius: 12px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+.vbar i { display: block; height: 100%; width: 0; border-radius: 12px; background: linear-gradient(90deg, var(--accent), var(--cyan)); box-shadow: 0 0 16px var(--accent); transition: width .3s; }
+.vstats { display: flex; justify-content: space-between; align-items: baseline; }
+.vstats b { font-size: 22px; }
+.vstats span, .vfile { color: var(--muted); }
+.vfile { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 16px; }
+.vok { padding: 12px 14px; border-radius: 12px; background: rgba(46, 224, 122, .1); border: 1px solid rgba(46, 224, 122, .35); color: #9ff0c1; }
+.vbad { padding: 12px 14px; border-radius: 12px; background: rgba(224, 35, 58, .1); border: 1px solid rgba(224, 35, 58, .35); }
+.vbad ul { margin: 8px 0 0; padding-left: 18px; color: #ffc4cc; font-size: 12.5px; max-height: 140px; overflow-y: auto; }

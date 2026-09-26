@@ -75,3 +75,17 @@ export const epicActions = (key) => ({
   // Epic ne propose pas de lien de désinstallation : on ouvre la bibliothèque du launcher
   uninstall: 'com.epicgames.launcher://store/library',
 });
+
+/**
+ * Comptes Epic connus sur ce PC : identifiants (32 caractères hexadécimaux) trouvés dans la configuration du
+ * launcher Epic. Epic ne garde pas le pseudo en clair : on les nomme « Compte Epic 1 », « Compte Epic 2 »…
+ */
+export async function listEpicAccounts(localAppData = process.env.LOCALAPPDATA) {
+  if (!localAppData) return [];
+  const ids = new Set();
+  for (const sub of ['Windows', 'WindowsEditor']) {
+    const text = await readFile(path.join(localAppData, 'EpicGamesLauncher', 'Saved', 'Config', sub, 'GameUserSettings.ini'), 'utf8').catch(() => '');
+    for (const m of text.matchAll(/\b[0-9a-f]{32}\b/gi)) ids.add(m[0].toLowerCase());
+  }
+  return [...ids].map((id, n) => ({ id, name: `Compte Epic ${n + 1} (…${id.slice(-4)})` }));
+}

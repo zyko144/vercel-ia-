@@ -64,8 +64,15 @@ Les applis gardent leur icône officielle, celle de Windows.
 ## Sans ouvrir Steam ni Epic
 - **Jouer** : les jeux Steam se lancent avec `steam.exe -silent -applaunch`. Steam tourne en fond, sans fenêtre. Les jeux Epic passent par le lien silencieux d'Epic.
 - **Désinstaller** : le launcher supprime lui-même le dossier du jeu et sa fiche d'installation (`appmanifest` pour Steam ; `.item` et `LauncherInstalled.dat` pour Epic), après confirmation, et seulement si le dossier est bien celui du jeu, dans une bibliothèque connue.
-- **Vérifier** : le launcher contrôle lui-même que l'exécutable est présent et que la taille sur le disque est celle attendue. En cas de problème, il propose la réparation officielle, lancée en arrière-plan.
+- **Vérifier** : le launcher lit la liste officielle des fichiers que Steam (`depotcache\*.manifest`) et Epic (`.egstore\*.manifest`) gardent sur le PC, puis contrôle chaque fichier : présent, bonne taille, bonne empreinte SHA-1. L'avancement s'affiche en direct (pourcentage, fichiers, Go, fichier en cours) et on peut annuler. En cas de problème, il affiche la liste des fichiers manquants ou abîmés, et « Réparer » ne re-télécharge qu'eux, en arrière-plan. Sans liste officielle (autres launchers), il contrôle la présence des fichiers et la taille totale.
 - **Installer** et **réparer** passent forcément par les serveurs de Steam ou d'Epic (compte, licence, téléchargement) : ils sont lancés en arrière-plan.
+
+## Temps de jeu par compte
+- **Paramètres › Comptes de jeu** : choisis ton compte Steam (liste des comptes du PC) et ton compte Epic. Le temps affiché est celui de ce compte seulement. La case « Afficher le temps total de tous les comptes » additionne tous les comptes.
+- Jeux Steam : c'est le temps officiel de Steam, jamais additionné au chronomètre du launcher (plus de temps compté deux fois).
+- Autres jeux et applis : chronomètre du launcher, rangé par compte.
+- **Classement** : depuis toujours, ou les 2 dernières semaines (chiffres officiels de Steam pour ses jeux).
+- Les noms des jeux Steam désinstallés viennent de l'API officielle de Steam (plus de « Jeu Steam 1248130 »).
 
 ## Compte History
 Page d'inscription et de connexion au premier lancement (« Continuer sans compte » possible). Les comptes sont gardés par le serveur du bot : mot de passe chiffré (scrypt), sessions de 90 jours, tentatives limitées.
