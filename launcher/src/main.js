@@ -1084,9 +1084,16 @@ const findItem = (name) => {
 // ---------- Actions que l'assistant peut faire à ta place (en plus de lancer / fermer les jeux) ----------
 const gbTxt = (b) => `${(b / 1e9).toFixed(1).replace('.', ',')} Go`;
 const bestMatch = (list, name, key = (x) => x.name) => list.map((x) => ({ x, s: similarity(name, key(x)) + (norm(key(x)).startsWith(norm(name)) ? 0.3 : 0) })).sort((a, b) => b.s - a.s).find((m) => m.s >= 0.55)?.x ?? null;
-const LAUNCHER_ACTIONS = ['add_friend', 'accept_friends', 'friends_status', 'empty_bin', 'boost', 'disk_status', 'pc_status', 'daily_limit', 'startup_off', 'collection_add', 'steam_join', 'steam_message', 'unfavorite', 'overlay', 'theme', 'event', 'tweak'];
+const LAUNCHER_ACTIONS = ['add_friend', 'accept_friends', 'friends_status', 'empty_bin', 'boost', 'disk_status', 'pc_status', 'daily_limit', 'startup_off', 'collection_add', 'steam_join', 'steam_message', 'unfavorite', 'overlay', 'theme', 'event', 'tweak', 'update'];
 async function execAction(c) {
   const a = c.action;
+  if (a === 'update') {
+    const r = await checkUpdate(true);
+    if (r.dev) return `Tu utilises la version développeur (${r.current}) : lance « restaurer-launcher.bat » ou « demarrer-launcher.bat » pour la mettre à jour.`;
+    if (r.error) return `Je n’arrive pas à vérifier les mises à jour (${r.error}).`;
+    if (r.uptodate) return `Tu as déjà la dernière version (${r.current}) 👍`;
+    return `Je télécharge la version ${r.version} : le launcher redémarre tout seul dès qu’elle est prête.`;
+  }
   if (a === 'add_friend') {
     const r = await social('/api/compte/amis/ajouter', { code: String(c.value ?? '').slice(0, 40) });
     return r.amis ? `C’est fait : vous êtes maintenant amis 🎉` : r.envoye ? `Demande d’ami envoyée à ${c.value}.` : r.error ?? 'Impossible pour l’instant.';
@@ -1326,31 +1333,55 @@ ipcMain.handle('app:version', () => app.getVersion());
 // ---------- Mises à jour automatiques (version installée) : téléchargées en fond depuis les versions publiées sur GitHub ----------
 let updater = null;
 let updateReady = null;
+// Mises à jour : l'appli demande « Mettre à jour maintenant ? ». Oui → téléchargement puis redémarrage automatique.
+// Non → téléchargée en fond et installée à la prochaine fermeture. L'IA peut aussi la lancer (« mets à jour l'appli »).
+let updateInfo = { state: 'idle', version: null, percent: 0, installNow: false, error: null };
+const updateState = (patch) => { updateInfo = { ...updateInfo, ...patch }; send('update:state', updateInfo); };
 async function startUpdater() {
   if (!app.isPackaged) return; // version « développeur » (.bat) : c'est git qui met à jour
   const mod = await import('electron-updater').catch(() => null);
   updater = mod?.default?.autoUpdater ?? mod?.autoUpdater ?? null;
   if (!updater) return;
-  updater.autoDownload = true;
-  updater.autoInstallOnAppQuit = true; // « Plus tard » : installée toute seule à la fermeture
+  updater.autoDownload = false;
+  updater.autoInstallOnAppQuit = true;
   updater.logger = null;
-  updater.on('update-available', (info) => send('update:state', { state: 'download', version: info.version }));
-  updater.on('download-progress', (p) => send('update:state', { state: 'progress', percent: Math.round(p.percent) }));
-  updater.on('update-downloaded', (info) => { updateReady = info.version; send('update:state', { state: 'ready', version: info.version }); });
-  updater.on('error', (err) => fatalLog(err));
-  const check = () => updater.checkForUpdates().catch((err) => fatalLog(err));
-  setTimeout(check, 20_000);
+  updater.on('update-available', (info) => updateState({ state: 'available', version: info.version, error: null }));
+  updater.on('update-not-available', () => { if (updateInfo.state === 'checking') updateState({ state: 'uptodate' }); });
+  updater.on('download-progress', (p) => updateState({ state: 'progress', percent: Math.round(p.percent) }));
+  updater.on('update-downloaded', (info) => {
+    updateReady = info.version;
+    updateState({ state: 'ready', version: info.version });
+    if (updateInfo.installNow) setTimeout(() => { quitting = true; updater.quitAndInstall(true, true); }, 1500);
+  });
+  updater.on('error', (err) => { fatalLog(err); if (['checking', 'progress'].includes(updateInfo.state)) updateState({ state: 'error', error: String(err?.message ?? err).slice(0, 160) }); });
+  const check = () => { if (!['progress', 'ready'].includes(updateInfo.state)) updater.checkForUpdates().catch((err) => fatalLog(err)); };
+  setTimeout(check, 15_000);
   setInterval(check, 3 * 3_600_000);
 }
-ipcMain.handle('update:get', () => ({ ready: updateReady, packaged: app.isPackaged }));
-ipcMain.handle('update:install', () => { if (updater && updateReady) { quitting = true; updater.quitAndInstall(false, true); return true; } return false; });
-ipcMain.handle('app:log', async () => {
-  const file = path.join(app.getPath('userData'), 'erreurs.log');
-  const { stat } = await import('node:fs/promises');
-  if (!(await stat(file).catch(() => null))) return { ok: false };
-  await shell.openPath(file);
-  return { ok: true };
-});
+/** Cherche une mise à jour maintenant ; now = installer tout de suite si elle existe. */
+async function checkUpdate(now = false) {
+  if (!app.isPackaged) return { ok: false, dev: true, current: app.getVersion() };
+  if (!updater) return { ok: false, current: app.getVersion(), error: 'module de mise à jour indisponible' };
+  if (updateReady) { if (now) { quitting = true; updater.quitAndInstall(true, true); } return { ok: true, version: updateReady, ready: true, current: app.getVersion() }; }
+  updateState({ state: 'checking', installNow: now || updateInfo.installNow });
+  const r = await updater.checkForUpdates().catch((err) => ({ err }));
+  if (r?.err) { updateState({ state: 'error', error: String(r.err.message ?? r.err).slice(0, 160) }); return { ok: false, current: app.getVersion(), error: updateInfo.error }; }
+  const v = r?.updateInfo?.version;
+  const newer = v && r?.isUpdateAvailable !== false && v !== app.getVersion();
+  if (!newer) { updateState({ state: 'uptodate' }); return { ok: true, uptodate: true, current: app.getVersion() }; }
+  if (now) await downloadUpdate(true);
+  return { ok: true, version: v, current: app.getVersion() };
+}
+async function downloadUpdate(installNow) {
+  if (!updater) return false;
+  updateState({ installNow: Boolean(installNow) || updateInfo.installNow, state: 'progress', percent: 0 });
+  updater.downloadUpdate().catch((err) => { fatalLog(err); updateState({ state: 'error', error: String(err?.message ?? err).slice(0, 160) }); });
+  return true;
+}
+ipcMain.handle('update:get', () => ({ ...updateInfo, ready: updateReady, packaged: app.isPackaged, current: app.getVersion() }));
+ipcMain.handle('update:check', (_e, now) => checkUpdate(Boolean(now)));
+ipcMain.handle('update:download', (_e, now) => downloadUpdate(Boolean(now)));
+ipcMain.handle('update:install', () => { if (updater && updateReady) { quitting = true; updater.quitAndInstall(true, true); return true; } return false; });
 ipcMain.handle('win:fullscreen', (_e, on) => { if (!win) return false; win.setFullScreen(on === undefined ? !win.isFullScreen() : Boolean(on)); return win.isFullScreen(); });
 ipcMain.on('win', (_e, what) => {
   if (what === 'min') win?.minimize();

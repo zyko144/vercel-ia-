@@ -116,7 +116,7 @@ export async function recommend(ai, played, owned) {
 
 // ===================== Assistant =====================
 
-export const ACTIONS = ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store', 'show', 'sort', 'music', 'optimize', 'deep_clean', 'empty_bin', 'add_friend', 'accept_friends', 'friends_status', 'event', 'steam_join', 'steam_message', 'boost', 'tweak', 'startup_off', 'collection_add', 'unfavorite', 'theme', 'fullscreen', 'overlay', 'recap', 'daily_limit', 'disk_status', 'pc_status', 'none'];
+export const ACTIONS = ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store', 'show', 'sort', 'music', 'optimize', 'deep_clean', 'empty_bin', 'add_friend', 'accept_friends', 'friends_status', 'event', 'steam_join', 'steam_message', 'boost', 'tweak', 'startup_off', 'collection_add', 'unfavorite', 'theme', 'fullscreen', 'overlay', 'recap', 'daily_limit', 'disk_status', 'pc_status', 'update', 'none'];
 const ASSIST_SCHEMA = {
   type: 'object',
   properties: {
@@ -142,6 +142,7 @@ Actions possibles (une seule) :
 - sort : trier (value = joues | recents | nom | taille) ;
 - music : lecteur (value = play | pause | next | previous) ;
 - optimize : optimisation complète du PC (value = run) : PC lent, lag, manque de place, nettoyage ;
+- update : mettre à jour le launcher History lui-même (« fais la mise à jour », « mets à jour l’appli ») ;
 - deep_clean : nettoyage profond de Windows (admin) ; empty_bin : vider la corbeille ;
 - add_friend : ajouter un ami History (value = son code ami exact, ex. Max#3F9A2C) ; accept_friends : accepter les demandes ; friends_status : dire qui est en ligne / qui joue ;
 - event : organiser une soirée jeu (target = jeu, son jeu le plus joué s'il n'est pas précisé, value = date et heure ISO 8601 complète avec fuseau, extra = pseudos invités séparés par des virgules, vide = tous les amis) ;
