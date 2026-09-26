@@ -20,6 +20,7 @@ import { handleSonMessage } from '../features/tribunal.js';
 import { routeGameMessage } from '../games/index.js';
 import { blindTestActive, handleBlindTestMessage, handleJukeboxMessage } from '../music/handlers.js';
 import { attachmentsToContent, displayName, fetchBase64, inChannelList, isAllowedChannel, truncate } from '../utils/discord.js';
+import { prefixCommand } from '../features/prefixCommands.js';
 
 // "génère une image de...", "dessine-moi un logo...", "fais une photo de..."
 const IMAGE_INTENT = /^(?:(?:est-ce que\s+)?(?:tu\s+peux|peux[- ]tu|stp|svp|vas-y)\s+)?(?:me\s+)?(?:g[ée]n[èeé]rer?|cr[ée]er?|dessiner?|fais|fait|faire|imaginer?)(?:[- ]moi)?\s+(?:une?|des|l[ae']|ma|mon)?\s*(?:image|dessin|photo|illustration|logo|wallpaper|fond d'[ée]cran|affiche|banni[èe]re|avatar|pp|pdp)\b/i;
@@ -33,6 +34,8 @@ export async function onMessage(client, message) {
   if (message.author.bot || message.system) return;
   // Sécurité : arnaques, liens interdits, spam (le message supprimé ne va pas plus loin)
   if (message.inGuild() && await guardMessage(message).catch(() => false)) return;
+  // Commandes rapides en « ! » (!clear 20)
+  if (message.inGuild() && message.content.startsWith('!') && await prefixCommand(message).catch((err) => { console.warn('[!clear]', err.message); return false; })) return;
   // Rapport de la semaine : on compte (juste un nombre par membre et par salon)
   if (message.inGuild()) countMessage(message);
   // Extraits courts pour le résumé du soir et l'ambiance ; mode lent si le salon s'emballe
