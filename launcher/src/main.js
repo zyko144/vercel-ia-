@@ -1,5 +1,5 @@
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -30,6 +30,7 @@ import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
+import { captureDir, captureName } from './core/capture.js';
 import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
 import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
@@ -775,6 +776,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
   if ('friendNotifs' in patch) store.data.settings.friendNotifs = Boolean(patch.friendNotifs);
+  if ('replay' in patch) { store.data.settings.replay = Boolean(patch.replay); setReplay(store.data.settings.replay).catch(() => {}); }
   if ('sidebar' in patch) {
     const sb = patch.sidebar ?? {};
     const ids = (v, re) => [...new Set((Array.isArray(v) ? v : []).map(String).filter((x) => re.test(x)))].slice(0, 40);
@@ -961,9 +963,9 @@ function armCard(c) {
   clearTimeout(notifTimers.get(c.id));
   notifTimers.set(c.id, setTimeout(() => (notifHover ? armCard({ ...c, ttl: 3000 }) : dropCard(c.id)), c.ttl ?? 10_000));
 }
-function pushCard(c) {
+function pushCard(c, force = false) {
   if (!c || notifCards.some((x) => x.id === c.id)) return;
-  if (store.data.settings.friendNotifs === false) return;
+  if (!force && store.data.settings.friendNotifs === false) return;
   notifCards.push(c);
   armCard(c);
   notifSync();
@@ -974,6 +976,7 @@ ipcMain.on('notif:act', async (_e, id, action) => {
   if (!c) return;
   dropCard(id);
   if (action === 'close') return;
+  if (c.file) { if (action === 'play') shell.openPath(c.file); else shell.showItemInFolder(c.file); return; }
   if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
   if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }
   if (action === 'join') { await joinGame(c.join, c.game); return; }
@@ -982,6 +985,59 @@ ipcMain.on('notif:act', async (_e, id, action) => {
     if (action === 'accept' && c.kind === 'invite') await joinGame(r.join, c.game);
   }
 });
+
+// ---------- Captures (Ctrl+Alt+S) et replay des 30 dernières secondes (Ctrl+Alt+R, à activer) ----------
+async function saveCapture(buf, ext) {
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const game = currentSession()?.name ?? null;
+  const dir = captureDir(game);
+  await mkdir(dir, { recursive: true });
+  const file = path.join(dir, captureName(game, ext));
+  await writeFile(file, buf);
+  return file;
+}
+async function takeScreenshot() {
+  const d = screen.getPrimaryDisplay();
+  const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
+  const src = (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size }))[0];
+  if (!src || src.thumbnail.isEmpty()) throw new Error('écran introuvable');
+  const file = await saveCapture(src.thumbnail.toPNG(), 'png');
+  pushCard({ id: `cap-${Date.now()}`, icon: '📸', title: 'Capture enregistrée', body: path.basename(file), actions: [['folder', 'Ouvrir le dossier']], ttl: 6000, file }, true);
+  return file;
+}
+let recWin = null;
+let recState = 'off';
+async function setReplay(on) {
+  if (!on) {
+    if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); setTimeout(() => recWin?.destroy(), 500); }
+    recWin = null;
+    recState = 'off';
+    return;
+  }
+  if (recWin && !recWin.isDestroyed()) return;
+  recWin = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { preload: path.join(here, 'recorder.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  recWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  recWin.webContents.on('will-navigate', (e) => e.preventDefault());
+  recWin.on('closed', () => { recWin = null; });
+  await recWin.loadFile(path.join(here, 'ui', 'recorder.html'));
+  const src = (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }))[0];
+  if (src) recWin.webContents.send('rec:start', src.id);
+}
+ipcMain.on('rec:state', (_e, st) => { recState = st; if (st.startsWith('error')) notify('Replay indisponible', `L’enregistrement de l’écran n’a pas démarré (${st.slice(6, 120)}).`); });
+ipcMain.on('rec:clip', async (e, buf, mime) => {
+  if (!recWin || e.sender !== recWin.webContents) return;
+  try {
+    const file = await saveCapture(Buffer.from(buf), 'webm');
+    pushCard({ id: `clip-${Date.now()}`, icon: '🎬', title: 'Clip enregistré', body: `${path.basename(file)} · ${(buf.byteLength / 1e6).toFixed(0)} Mo`, actions: [['play', 'Regarder'], ['folder', 'Dossier']], ttl: 8000, file }, true);
+  } catch (err) { notify('Clip non enregistré', err.message); }
+});
+function saveClip() {
+  if (!recWin || recState !== 'on') { notify('Replay désactivé', 'Active « Replay des 30 dernières secondes » dans les Paramètres, puis Ctrl+Alt+R pour garder le clip.'); return false; }
+  recWin.webContents.send('rec:save');
+  return true;
+}
+ipcMain.handle('capture:shot', () => takeScreenshot().then((f) => ({ ok: true, file: path.basename(f) })).catch((err) => ({ ok: false, error: err.message })));
+ipcMain.handle('capture:clip', () => ({ ok: saveClip() }));
 
 /** Rejoindre un ami : serveur FiveM, jeu Steam, sinon le même jeu s'il est installé ici. */
 async function joinGame(join, game) {
@@ -1232,9 +1288,11 @@ const findItem = (name) => {
 // ---------- Actions que l'assistant peut faire à ta place (en plus de lancer / fermer les jeux) ----------
 const gbTxt = (b) => `${(b / 1e9).toFixed(1).replace('.', ',')} Go`;
 const bestMatch = (list, name, key = (x) => x.name) => list.map((x) => ({ x, s: similarity(name, key(x)) + (norm(key(x)).startsWith(norm(name)) ? 0.3 : 0) })).sort((a, b) => b.s - a.s).find((m) => m.s >= 0.55)?.x ?? null;
-const LAUNCHER_ACTIONS = ['add_friend', 'accept_friends', 'friends_status', 'empty_bin', 'boost', 'disk_status', 'pc_status', 'daily_limit', 'startup_off', 'collection_add', 'steam_join', 'steam_message', 'unfavorite', 'overlay', 'theme', 'event', 'tweak', 'update'];
+const LAUNCHER_ACTIONS = ['add_friend', 'accept_friends', 'friends_status', 'empty_bin', 'boost', 'disk_status', 'pc_status', 'daily_limit', 'startup_off', 'collection_add', 'steam_join', 'steam_message', 'unfavorite', 'overlay', 'theme', 'event', 'tweak', 'update', 'screenshot', 'clip'];
 async function execAction(c) {
   const a = c.action;
+  if (a === 'screenshot') { await new Promise((r) => setTimeout(r, 400)); const f = await takeScreenshot(); return `📸 Capture enregistrée : ${path.basename(f)}.`; }
+  if (a === 'clip') return saveClip() ? '🎬 Je garde les 30 dernières secondes.' : 'Le replay est désactivé : active-le dans les Paramètres.';
   if (a === 'update') {
     const r = await checkUpdate(true);
     if (r.dev) return `Tu utilises la version développeur (${r.current}) : lance « restaurer-launcher.bat » ou « demarrer-launcher.bat » pour la mettre à jour.`;
@@ -1593,6 +1651,9 @@ async function start() {
   globalShortcut.register('CommandOrControl+Alt+O', toggleOverlay);
   // Recherche rapide depuis n'importe où : le launcher s'ouvre directement sur la barre de recherche
   globalShortcut.register('CommandOrControl+Alt+Space', () => { showWindow(); send('palette:open', {}); });
+  globalShortcut.register('CommandOrControl+Alt+S', () => { takeScreenshot().catch((err) => notify('Capture impossible', err.message)); });
+  globalShortcut.register('CommandOrControl+Alt+R', () => { saveClip(); });
+  if (store.data.settings.replay) setTimeout(() => setReplay(true).catch(() => {}), 8000);
   globalShortcut.register('CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
   setTimeout(() => checkDeals().catch(() => {}), 60_000);
   setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);
