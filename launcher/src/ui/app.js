@@ -579,6 +579,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.12.0': [
+    ['📸', 'Captures d’écran', 'Ctrl+Alt+S (ou « fais une capture » à l’IA) : rangées dans Vidéos › nom du jeu et visibles dans la fiche du jeu.'],
+    ['🎬', 'Replay 30 secondes', 'Active-le dans les Paramètres, puis Ctrl+Alt+R (ou « clip ça ») garde les 30 dernières secondes.'],
+  ],
   '0.11.2': [
     ['⚡', 'Opti par jeu', 'Clic droit sur un jeu › « Toujours optimiser ce jeu » (ou jamais). Marche aussi quand le jeu est lancé hors du launcher.'],
     ['🖥', 'Alerte pilote graphique', 'Si ton pilote NVIDIA, AMD ou Intel est vieux, un rappel te mène à la page officielle.'],
@@ -1451,6 +1455,7 @@ function showKeys(s) {
   $('discordStatus').checked = s.discordStatus !== false;
   $('shareActivity').checked = s.shareActivity !== false;
   $('friendNotifs').checked = s.friendNotifs !== false;
+  $('replay').checked = Boolean(s.replay);
   $('aiState').textContent = s.gemini ? '● en ligne' : '● hors ligne';
   $('aiState').classList.toggle('on', Boolean(s.gemini));
 }
@@ -1463,6 +1468,7 @@ $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: 
 $('discordStatus').addEventListener('change', (e) => api.setSettings({ discordStatus: e.target.checked }));
 $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActivity: e.target.checked }));
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
+$('replay').addEventListener('change', (e) => api.setSettings({ replay: e.target.checked }).then(() => toast(e.target.checked ? '🎬 Replay activé : Ctrl+Alt+R garde les 30 dernières secondes' : 'Replay désactivé')));
 
 // Assistant : bulle en bas à droite, qui s'ouvre et se referme
 function openAssistant(open = !$('aipop').classList.contains('open')) {
@@ -1702,7 +1708,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.11.2',
+    version: async () => '0.12.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

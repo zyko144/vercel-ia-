@@ -95,6 +95,8 @@ export function understand(text, items, { music = null } = {}) {
   if (/(accepte|valide).*(demande|invitation).*(ami|amis|potes)/.test(t)) return { action: 'accept_friends', reply: 'J’accepte tes demandes d’amis.' };
   if (/(qui|quels? amis?|mes amis?|mes potes?).*(joue|jouent|en ligne|connecte|dispo)/.test(t)) return { action: 'friends_status', reply: '' };
   if (/(mise|mises|met|mets|fais|fait|lance|installe|cherche|verifie)s? ?(a jour|la maj|les maj|la mise a jour|une mise a jour|update)|^(maj|update)\b|mettre a jour (l app|le launcher|history)|nouvelle version/.test(t) && !/(jeu|jeux|steam|epic|pilote|driver)/.test(t)) return { action: 'update', reply: 'Je cherche une mise à jour du launcher.' };
+  if (/(fais|prends?|prendre) (une |un )?(capture|screen|screenshot|photo)|^(capture|screen|screenshot)\b/.test(t)) return { action: 'screenshot', reply: 'Capture !' };
+  if (/(enregistre|garde|sauvegarde|clip).*(clip|replay|30 (dernieres )?secondes|ce moment|ca)|^clip( ca| ça)?$/.test(t)) return { action: 'clip', reply: 'Je garde le clip.' };
   if (/nettoyage profond|nettoie (a fond|en profondeur)|nettoyage complet de windows/.test(t)) return { action: 'deep_clean', reply: 'Je lance le nettoyage profond de Windows : accepte la demande d’autorisation.' };
   if (/(vide|videz|vider) (la |ma )?corbeille/.test(t)) return { action: 'empty_bin', reply: 'Je vide la corbeille.' };
   if (/^(optimise|nettoie|nettoye|accelere|boost(e)?)\b.*\b(pc|ordi|ordinateur)\b|^(mon pc|le pc|l ordi|mon ordi) (rame|lag|lague|est lent|galere)|fais (une |l )?opti/.test(t)) return { action: 'optimize', value: 'run', reply: 'J’analyse ton PC et je te propose l’optimisation complète.' };
