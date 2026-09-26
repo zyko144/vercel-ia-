@@ -167,7 +167,10 @@ document.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   openCtx(item, e.clientX, e.clientY);
 });
-['scroll', 'resize', 'blur'].forEach((ev) => window.addEventListener(ev, hideCtx, true));
+// Fermé quand la fenêtre perd le focus, change de taille ou que la page défile (jamais pendant un clic dans le menu)
+window.addEventListener('blur', hideCtx);
+window.addEventListener('resize', hideCtx);
+$('main').addEventListener('scroll', hideCtx, { passive: true });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx(); });
 
 // Fenêtres du launcher (confirmation, saisie) : même style partout, jamais les fenêtres grises de Windows
@@ -970,7 +973,7 @@ function openSheet(i) {
     ${d.description ? `<p>${esc(d.description)}</p>` : '<p class="fine">Pas de description disponible.</p>'}
     <p class="fine">${[d.developers?.[0] && `Studio : ${esc(d.developers[0])}`, d.released && `Sortie : ${esc(d.released)}`, d.score && `Metacritic : ${esc(d.score)}`, `Temps : ${hours(i.minutes)}`, `Taille : ${size(i.size)}`].filter(Boolean).join(' · ')}</p>
     ${d.screenshots?.length ? `<div class="shots">${d.screenshots.map((s) => `<img src="${esc(s)}" alt="">`).join('')}</div>` : ''}
-    <div id="sxTime"></div><div id="sxPatch"></div><div id="sxAch"></div><div id="sxCaps"></div>
+    <div id="sxHist"></div><div id="sxTime"></div><div id="sxPatch"></div><div id="sxAch"></div><div id="sxCaps"></div>
     <div class="acts"><button class="btn" data-close="1">Fermer</button></div>`;
   $('sheet').showModal();
   loadSheetExtras(i);
@@ -978,6 +981,17 @@ function openSheet(i) {
 
 // Fiche : durée pour finir, succès (les plus faciles d'abord), captures d'écran
 async function loadSheetExtras(i) {
+  api.gameHistory?.(i.id).then((h) => {
+    if (!h || !$('sxHist') || !h.total) return;
+    const max = Math.max(...h.days.map((d) => d.minutes), 1);
+    const W = 560; const H = 90; const bw = W / h.days.length;
+    const bars = h.days.map((d, n) => { const bh = d.minutes ? Math.max(3, (d.minutes / max) * (H - 14)) : 2; return `<rect x="${(n * bw + 1.5).toFixed(1)}" y="${(H - bh).toFixed(1)}" width="${(bw - 3).toFixed(1)}" height="${bh.toFixed(1)}" rx="2" class="${d.minutes ? 'on' : ''}"><title>${new Date(d.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} : ${d.minutes ? hours(d.minutes) : 'pas joué'}</title></rect>`; }).join('');
+    const bestDay = h.best ? new Date(h.best.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+    $('sxHist').innerHTML = `<h3>📈 Tes 30 derniers jours</h3>
+      <svg class="histo" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${bars}</svg>
+      <div class="hltb"><div><small>Temps joué</small><b>${hours(h.total)}</b></div><div><small>Jours joués</small><b>${h.daysPlayed} / 30</b></div><div><small>Moyenne par jour joué</small><b>${hours(h.avg)}</b></div></div>
+      <p class="fine">${h.best ? `Record : ${hours(h.best.minutes)} le ${bestDay}.` : ''}${h.streak > 1 ? ` 🔥 ${h.streak} jours d’affilée !` : ''}</p>`;
+  }).catch(() => {});
   if (i.kind !== 'game') return;
   api.timeToBeat?.(i.id).then((t) => {
     if (!t || !$('sxTime')) return;
@@ -1426,7 +1440,8 @@ function demoApi() {
     friendAction: async () => ({ ok: true }), openDeal: async () => {},
     recap: async () => ({ fresh: true, minutes: 1260, change: 18, count: 5, top: [{ id: 'steam:271590', name: 'Grand Theft Auto V', minutes: 540 }, { id: 'epic:Fortnite', name: 'Fortnite', minutes: 380 }, { id: 'steam:252950', name: 'Rocket League', minutes: 200 }] }),
     news: async () => [{ appid: '252950', gid: '1', game: 'Rocket League', title: 'Saison 18 : nouvelle arène et Rocket Pass', text: 'La saison 18 arrive avec une arène inédite, de nouvelles voitures et le retour du mode Heatseeker.', at: Date.now() - 86_400_000, patch: false, image: img('h1.jpg') }, { appid: '730', gid: '2', game: 'Counter-Strike 2', title: 'Mise à jour du 24 septembre', text: 'Corrections de bugs sur Mirage, amélioration du netcode et nouvelles options pour la vidéo.', at: Date.now() - 2 * 86_400_000, patch: true, image: img('h2.jpg') }],
-    gameNews: async () => [], colorOf: async () => '#e5484d',
+    gameNews: async () => [],
+    gameHistory: async () => ({ total: 1260, daysPlayed: 14, avg: 90, streak: 3, best: { date: '2026-09-20', minutes: 240 }, days: Array.from({ length: 30 }, (_, n) => ({ date: new Date(Date.now() - (29 - n) * 86_400_000).toISOString().slice(0, 10), minutes: [0, 45, 120, 0, 0, 240, 60][n % 7] * (n > 10 ? 1 : 0.5) })) }), colorOf: async () => '#e5484d',
     collections: async () => ({ c1: { name: 'Avec les potes', items: ['epic:Fortnite', 'riot:valorant'] }, c2: { name: 'À finir', items: ['steam:271590'] } }), saveCollections: async (c) => c,
     pickGame: async () => ({ ok: true, name: 'Mon jeu' }), addGameFile: async () => ({ ok: true, name: 'Mon jeu' }),
     timeToBeat: async () => ({ main: 31.5, extra: 48, complete: 82 }),

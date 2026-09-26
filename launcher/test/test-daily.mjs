@@ -33,3 +33,14 @@ const tr = await translateNews(fakeAi, [{ gid: '9', title: 'Update 2.40', text: 
 assert.equal(tr[0].title, 'Mise à jour 2.40');
 assert.ok(cache['9'], 'traduction gardée');
 console.log('✅ résumé, rappels, actus, couleur : 13 vérifications');
+const { itemHistory } = await import('../src/core/tracker.js');
+const { dayKey: dk } = await import('../src/core/tracker.js');
+const nowH = Date.parse('2026-09-28T12:00:00Z');
+const hd = { [dk(nowH)]: { items: { g: 30 } }, [dk(nowH - 86_400_000)]: { items: { g: 90 } }, [dk(nowH - 5 * 86_400_000)]: { items: { g: 10 } } };
+const hist = itemHistory(hd, 'g', 30, nowH);
+assert.equal(hist.days.length, 30);
+assert.equal(hist.total, 130);
+assert.equal(hist.daysPlayed, 3);
+assert.equal(hist.best.minutes, 90);
+assert.equal(hist.streak, 2, 'aujourd’hui et hier');
+console.log('✅ historique par jeu : 5 vérifications');

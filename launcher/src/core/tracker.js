@@ -84,3 +84,18 @@ export function startTracker(getItems, store, onChange, everyMs = 60_000, accoun
   const timer = setInterval(() => tick().catch(() => {}), everyMs);
   return () => clearInterval(timer);
 }
+
+/** Temps d'un élément jour par jour sur les N derniers jours (le plus ancien d'abord), avec quelques chiffres. */
+export function itemHistory(days, id, n = 30, now = Date.now()) {
+  const list = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const key = dayKey(now - i * 86_400_000);
+    list.push({ date: key, minutes: Math.round(days?.[key]?.items?.[id] ?? 0) });
+  }
+  const played = list.filter((d) => d.minutes > 0);
+  const total = played.reduce((s, d) => s + d.minutes, 0);
+  const best = played.reduce((b, d) => (d.minutes > (b?.minutes ?? 0) ? d : b), null);
+  let streak = 0;
+  for (let i = list.length - 1; i >= 0 && list[i].minutes > 0; i--) streak++;
+  return { days: list, total, daysPlayed: played.length, avg: played.length ? Math.round(total / played.length) : 0, best, streak };
+}

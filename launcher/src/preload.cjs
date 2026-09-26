@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('launcher', {
   cachedLibrary: () => ipcRenderer.invoke('lib:cached'),
   onPalette: (fn) => ipcRenderer.on('palette:open', () => fn()),
   fullscreen: (on) => ipcRenderer.invoke('win:fullscreen', on),
+  gameHistory: (id) => ipcRenderer.invoke('stats:game', id),
   version: () => ipcRenderer.invoke('app:version'),
   openLog: () => ipcRenderer.invoke('app:log'),
   onCols: (fn) => ipcRenderer.on('cols:update', (_e, c) => fn(c)),
