@@ -5,14 +5,18 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 
-export async function runningPaths() {
+// Liste des programmes ouverts, partagée : un seul PowerShell même si plusieurs parties du launcher la demandent
+// en même temps, et réutilisée pendant quelques secondes (le launcher reste léger pour le PC).
+let procCache = { at: 0, paths: [], pending: null };
+export async function runningPaths(maxAgeMs = 8000) {
   if (process.platform !== 'win32') return [];
-  try {
-    const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Process | Where-Object Path | ForEach-Object Path'], { windowsHide: true, timeout: 20_000, maxBuffer: 8 * 1024 * 1024 });
-    return [...new Set(stdout.split(/\r?\n/).map((l) => l.trim().toLowerCase()).filter(Boolean))];
-  } catch {
-    return [];
-  }
+  if (Date.now() - procCache.at < maxAgeMs) return procCache.paths;
+  if (procCache.pending) return procCache.pending;
+  procCache.pending = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Process | Where-Object Path | ForEach-Object Path'], { windowsHide: true, timeout: 20_000, maxBuffer: 8 * 1024 * 1024 })
+    .then(({ stdout }) => [...new Set(stdout.split(/\r?\n/).map((l) => l.trim().toLowerCase()).filter(Boolean))])
+    .catch(() => procCache.paths)
+    .then((paths) => { procCache = { at: Date.now(), paths, pending: null }; return paths; });
+  return procCache.pending;
 }
 
 /** Les éléments en cours d'utilisation (id), d'après la liste des exécutables ouverts. */

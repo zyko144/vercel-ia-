@@ -227,8 +227,24 @@ async function scan() {
   await fillSteamNames(raw).catch(() => {});
   await remerge();
   enrichInBackground().catch(() => {});
-  return library();
+  const lib = library();
+  saveLibCache(lib);
+  return lib;
 }
+/** Dernière bibliothèque gardée sur le disque : affichée tout de suite au démarrage, le scan complet suit. */
+function saveLibCache(lib) {
+  store.data.libCache = {
+    at: Date.now(), sources: lib.sources, files: Object.fromEntries(localFiles),
+    items: lib.items.map(({ iconData, ...rest }) => rest), // sans les icônes (lourdes) : elles arrivent avec le scan
+  };
+  store.save();
+}
+ipcMain.handle('lib:cached', () => {
+  const c = store.data.libCache;
+  if (!c?.items?.length) return null;
+  for (const [token, file] of Object.entries(c.files ?? {})) if (!localFiles.has(token)) localFiles.set(token, file);
+  return { items: c.items, sources: c.sources, cached: true };
+});
 /** Bibliothèque envoyée à l'interface, avec le logo officiel de chaque launcher installé. */
 function library() {
   const sources = Object.fromEntries(Object.entries(SOURCES).map(([k, v]) => {
@@ -467,7 +483,8 @@ setInterval(async () => {
 // Alertes de chauffe (toutes les minutes)
 const lastHeat = {};
 setInterval(async () => {
-  if (store.data.settings.heatAlerts === false) return;
+  // Seulement pendant une partie ou avec l'écran d'infos : hors jeu, le launcher ne sollicite pas le PC pour rien
+  if (store.data.settings.heatAlerts === false || !(currentSession() || overlay)) return;
   for (const a of heatAlerts(await snapshot().catch(() => ({})), lastHeat)) notify('Ton PC chauffe', `${a.text}. Pense à aérer ou à baisser les graphismes.`);
 }, 60_000);
 
@@ -1161,6 +1178,7 @@ ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; s
 
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
+ipcMain.handle('win:fullscreen', (_e, on) => { if (!win) return false; win.setFullScreen(on === undefined ? !win.isFullScreen() : Boolean(on)); return win.isFullScreen(); });
 ipcMain.on('win', (_e, what) => {
   if (what === 'min') win?.minimize();
   else if (what === 'max') win?.isMaximized() ? win.unmaximize() : win?.maximize();
@@ -1182,6 +1200,8 @@ async function start() {
   createTray();
   // Raccourci global : Ctrl+Alt+H affiche ou range le launcher, même en jeu
   globalShortcut.register('CommandOrControl+Alt+O', toggleOverlay);
+  // Recherche rapide depuis n'importe où : le launcher s'ouvre directement sur la barre de recherche
+  globalShortcut.register('CommandOrControl+Alt+Space', () => { showWindow(); send('palette:open', {}); });
   globalShortcut.register('CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
   setTimeout(() => checkDeals().catch(() => {}), 60_000);
   setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);

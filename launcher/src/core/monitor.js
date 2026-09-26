@@ -58,7 +58,15 @@ async function cpuTemp() {
   return c > 0 && c < 120 ? c : null;
 }
 
+// Mesures partagées pendant 1,5 s (fenêtre Mon PC, écran en jeu et alertes ne relancent pas les outils chacun)
+let snapCache = { at: 0, value: null, pending: null };
 export async function snapshot() {
+  if (Date.now() - snapCache.at < 1500 && snapCache.value) return snapCache.value;
+  if (snapCache.pending) return snapCache.pending;
+  snapCache.pending = measure().then((value) => { snapCache = { at: Date.now(), value, pending: null }; return value; }).catch((err) => { snapCache.pending = null; throw err; });
+  return snapCache.pending;
+}
+async function measure() {
   const [gpu, cTemp] = await Promise.all([gpuInfo(), cpuTemp()]);
   const total = os.totalmem();
   return {
