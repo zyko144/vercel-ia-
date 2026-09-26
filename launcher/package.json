@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-scanners.mjs && node test/test-commands.mjs && node test/test-verify.mjs",
+    "test": "node test/test-scanners.mjs && node test/test-commands.mjs && node test/test-verify.mjs && node test/test-direct.mjs",
     "dist": "electron-builder --win"
   },
   "devDependencies": {
