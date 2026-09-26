@@ -85,3 +85,43 @@ export function heatAlerts(snap, lastAlert = {}, now = Date.now()) {
   check('cpu', snap.cpu?.temp, 90, 'Processeur');
   return out;
 }
+
+// ---------- Pilote graphique : alerte quand il est vieux (les jeux récents en ont souvent besoin) ----------
+const DRIVER_PAGES = { nvidia: 'https://www.nvidia.com/fr-fr/geforce/drivers/', amd: 'https://www.amd.com/fr/support/download/drivers.html', intel: 'https://www.intel.fr/content/www/fr/fr/support/detect.html' };
+export const DRIVER_LINKS = Object.values(DRIVER_PAGES);
+
+/** Date renvoyée par PowerShell (« /Date(1700000000000)/ », ISO ou « 20240115000000.000000-000 »). */
+export function parseDriverDate(v) {
+  const s = String(v ?? '');
+  const ms = s.match(/\/Date\((\d+)/);
+  if (ms) return Number(ms[1]);
+  const wmi = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (wmi) return Date.UTC(Number(wmi[1]), Number(wmi[2]) - 1, Number(wmi[3]));
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Cartes graphiques dédiées (on ignore les adaptateurs virtuels) avec marque, version et date du pilote. */
+export function parseDrivers(json) {
+  const list = Array.isArray(json) ? json : json ? [json] : [];
+  return list.map((g) => {
+    const name = String(g.Name ?? '');
+    const vendor = /nvidia|geforce|rtx|gtx/i.test(name) ? 'nvidia' : /amd|radeon/i.test(name) ? 'amd' : /intel|arc|iris|uhd/i.test(name) ? 'intel' : null;
+    return { name, vendor, version: String(g.DriverVersion ?? ''), date: parseDriverDate(g.DriverDate) };
+  }).filter((g) => g.vendor && g.date && !/virtual|basic|remote|parsec|meta/i.test(g.name));
+}
+
+/** Pilote de plus de `days` jours : { name, vendor, age (jours), link } (la carte principale d'abord : NVIDIA/AMD avant Intel). */
+export function oldDriver(drivers, now = Date.now(), days = 120) {
+  const g = [...drivers].sort((a, b) => (a.vendor === 'intel') - (b.vendor === 'intel'))[0];
+  if (!g) return null;
+  const age = Math.floor((now - g.date) / 86_400_000);
+  return age >= days ? { name: g.name, vendor: g.vendor, version: g.version, age, link: DRIVER_PAGES[g.vendor] } : null;
+}
+
+export async function gpuDrivers() {
+  if (process.platform !== 'win32') return [];
+  const ps = 'Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,DriverDate | ConvertTo-Json -Compress';
+  const r = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, timeout: 10_000 }).catch(() => null);
+  try { return parseDrivers(JSON.parse(r?.stdout || 'null')); } catch { return []; }
+}
