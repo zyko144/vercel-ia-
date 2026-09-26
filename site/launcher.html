@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>History Launcher · Tous tes jeux, ton PC au top</title>
+<meta name="description" content="Le launcher gratuit qui réunit Steam, Epic, Xbox, FiveM et tes applis, analyse ton PC pour de vrai, mesure ses performances et te connecte à tes amis.">
+<link rel="icon" href="/launcher/logo.png">
+<meta name="theme-color" content="#07060b">
+<meta property="og:title" content="History Launcher">
+<meta property="og:description" content="Tous tes jeux au même endroit, ton PC analysé pour de vrai, tes amis en direct.">
+<meta property="og:image" content="/launcher/accueil.webp">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #07060b;
+  --glass: rgba(255, 255, 255, .06);
+  --glass-2: rgba(255, 255, 255, .1);
+  --line: rgba(255, 255, 255, .1);
+  --text: #f4f1f6;
+  --muted: #a39cab;
+  --blue: #2f8bff;
+  --blue-2: #1554d1;
+  --cyan: #22d3ee;
+  --violet: #9b6bff;
+  --ok: #2ee07a;
+  --font: 'Segoe UI', system-ui, -apple-system, 'Inter', sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+h1, h2, h3 { margin: 0; line-height: 1.1; letter-spacing: -.02em; }
+p { margin: 0; }
+.wrap { width: min(1180px, 100% - 32px); margin-inline: auto; }
+[hidden] { display: none !important; }
+
+/* Fond aurore animé (le même esprit que le menu du launcher) */
+.aurora { position: fixed; inset: -20%; z-index: -2; pointer-events: none; filter: blur(80px) saturate(1.3); opacity: .55; }
+.aurora i { position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%; animation: drift 26s ease-in-out infinite alternate; }
+.aurora i:nth-child(1) { background: radial-gradient(circle, var(--blue), transparent 65%); left: 5%; top: 0; }
+.aurora i:nth-child(2) { background: radial-gradient(circle, var(--cyan), transparent 65%); right: 0; top: 25%; animation-duration: 32s; animation-delay: -8s; opacity: .7; }
+.aurora i:nth-child(3) { background: radial-gradient(circle, var(--violet), transparent 65%); left: 30%; bottom: -10%; animation-duration: 38s; animation-delay: -14s; opacity: .6; }
+@keyframes drift { to { transform: translate(8vmax, -6vmax) scale(1.15); } }
+#stars { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+
+/* Verre liquide */
+.glass { background: linear-gradient(160deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .025) 45%, rgba(255, 255, 255, .06)); border: 1px solid var(--line); border-radius: 22px; backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 30px 60px -30px rgba(0, 0, 0, .8); }
+
+/* Barre du haut */
+.nav { position: sticky; top: 12px; z-index: 20; margin-top: 12px; }
+.nav .wrap { display: flex; align-items: center; gap: 16px; padding: 10px 14px 10px 16px; border-radius: 18px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .02em; }
+.brand img { width: 34px; filter: drop-shadow(0 0 12px rgba(47, 139, 255, .7)); }
+.nav nav { display: flex; gap: 4px; margin-left: auto; }
+.nav nav a { padding: 8px 12px; border-radius: 10px; color: #cfc8d6; font-size: 14.5px; font-weight: 600; }
+.nav nav a:hover { background: var(--glass); color: #fff; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 22px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass); color: #fff; font: 700 15.5px var(--font); cursor: pointer; transition: transform .2s, box-shadow .2s, background .2s; }
+.btn:hover { transform: translateY(-2px); background: var(--glass-2); }
+.btn.main { border: 0; background: linear-gradient(100deg, var(--blue), var(--blue-2)); box-shadow: 0 14px 34px -10px var(--blue), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.btn.main:hover { box-shadow: 0 18px 44px -8px var(--blue), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.btn small { font-weight: 500; opacity: .8; }
+.btn.sm { padding: 9px 14px; font-size: 14px; border-radius: 12px; }
+
+/* Héros */
+.hero { padding: 90px 0 40px; text-align: center; position: relative; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 30px; font-size: 13.5px; font-weight: 600; color: #cfe7ff; }
+.pill b { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+.hero h1 { font-size: clamp(40px, 7vw, 84px); font-weight: 850; margin: 22px auto 18px; max-width: 900px; }
+.grad { background: linear-gradient(90deg, #fff, #9ecbff 35%, var(--cyan) 60%, var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent; background-size: 200% 100%; animation: shine 8s ease-in-out infinite alternate; }
+@keyframes shine { to { background-position: 100% 0; } }
+.hero p.lead { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 680px; margin: 0 auto 30px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.meta { margin-top: 14px; color: var(--muted); font-size: 13.5px; }
+
+/* Capture en 3D qui suit la souris */
+.stage { perspective: 1600px; margin: 64px auto 0; width: min(1120px, 100%); }
+.tilt { transform-style: preserve-3d; transform: rotateX(14deg) rotateY(-8deg) rotateZ(1deg); transition: transform .35s cubic-bezier(.2, .8, .2, 1); border-radius: 20px; position: relative; }
+.tilt img { border-radius: 20px; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 60px 120px -30px rgba(0, 0, 0, .9), 0 0 120px -30px var(--blue); }
+.tilt::after { content: ""; position: absolute; inset: 0; border-radius: 20px; background: linear-gradient(115deg, rgba(255, 255, 255, .18), transparent 30%, transparent 70%, rgba(255, 255, 255, .06)); pointer-events: none; }
+.float { position: absolute; padding: 12px 16px; border-radius: 16px; font-size: 13.5px; font-weight: 600; transform: translateZ(80px); display: flex; align-items: center; gap: 10px; white-space: nowrap; animation: bob 6s ease-in-out infinite; }
+.float span { font-size: 22px; }
+.f1 { left: -3%; top: 18%; } .f2 { right: -4%; top: 38%; animation-delay: -2s; } .f3 { left: 8%; bottom: -5%; animation-delay: -4s; }
+@keyframes bob { 50% { translate: 0 -10px; } }
+
+/* Sections */
+section { padding: 90px 0; }
+.head { text-align: center; max-width: 760px; margin: 0 auto 46px; }
+.kicker { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--cyan); font-weight: 800; }
+.head h2 { font-size: clamp(30px, 4.4vw, 50px); margin: 10px 0 14px; }
+.head p { color: var(--muted); font-size: 17.5px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.card { padding: 24px; transition: transform .35s cubic-bezier(.2, .8, .2, 1), box-shadow .35s; transform-style: preserve-3d; }
+.card:hover { transform: translateY(-6px) rotateX(3deg); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 40px 70px -30px rgba(0, 0, 0, .9), 0 0 50px -24px var(--blue); }
+.card .ic { width: 50px; height: 50px; border-radius: 15px; display: grid; place-items: center; font-size: 25px; margin-bottom: 16px; background: linear-gradient(135deg, rgba(47, 139, 255, .35), rgba(34, 211, 238, .12)); border: 1px solid rgba(255, 255, 255, .12); }
+.card h3 { font-size: 19px; margin-bottom: 8px; }
+.card p { color: var(--muted); font-size: 15px; }
+
+/* Blocs texte + capture */
+.split { display: grid; grid-template-columns: 1fr 1.25fr; gap: 50px; align-items: center; }
+.split.rev { grid-template-columns: 1.25fr 1fr; }
+.split.rev .txt { order: 2; }
+.txt h2 { font-size: clamp(28px, 3.8vw, 44px); margin: 10px 0 16px; }
+.txt p { color: var(--muted); font-size: 17px; margin-bottom: 18px; }
+.txt ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.txt li { display: flex; gap: 12px; align-items: flex-start; }
+.txt li::before { content: "✓"; flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 13px; font-weight: 900; color: #06121f; background: linear-gradient(135deg, var(--cyan), var(--blue)); margin-top: 2px; }
+.shot { padding: 10px; border-radius: 24px; }
+.shot img { border-radius: 16px; }
+.shot figcaption { color: var(--muted); font-size: 13px; text-align: center; padding: 10px 6px 2px; }
+
+/* Benchmark */
+.bench { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.bench .panel { padding: 26px; }
+.bars { display: grid; gap: 14px; margin-top: 18px; }
+.bar { display: grid; grid-template-columns: 150px 1fr 56px; gap: 12px; align-items: center; font-size: 14.5px; }
+.bar .t { height: 12px; border-radius: 10px; background: rgba(255, 255, 255, .08); position: relative; overflow: visible; }
+.bar .t i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 10px; background: linear-gradient(90deg, var(--blue), var(--cyan)); box-shadow: 0 0 18px -2px var(--blue); transition: width 1.6s cubic-bezier(.2, .8, .2, 1); }
+.bar .t b { position: absolute; top: -5px; bottom: -5px; width: 2px; background: rgba(255, 255, 255, .7); border-radius: 2px; }
+.bar em { font-style: normal; font-weight: 800; text-align: right; }
+.steps { counter-reset: s; display: grid; gap: 14px; margin-top: 16px; }
+.steps div { counter-increment: s; padding-left: 44px; position: relative; color: var(--muted); font-size: 15px; }
+.steps div::before { content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--glass-2); border: 1px solid var(--line); }
+.steps b { color: #fff; }
+.note { margin-top: 16px; font-size: 13px; color: var(--muted); }
+
+/* Comparatif */
+.cmp { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; }
+.cmp th, .cmp td { padding: 14px 16px; text-align: center; border-bottom: 1px solid var(--line); font-size: 15px; }
+.cmp th:first-child, .cmp td:first-child { text-align: left; }
+.cmp thead th { font-size: 14px; color: var(--muted); font-weight: 700; }
+.cmp thead th.us { color: #fff; background: linear-gradient(180deg, rgba(47, 139, 255, .28), rgba(47, 139, 255, .06)); }
+.cmp td.us { background: rgba(47, 139, 255, .07); }
+.y { color: var(--ok); font-weight: 900; } .n { color: #6f6878; } .p { color: #f5b041; font-weight: 700; }
+.tablewrap { overflow-x: auto; border-radius: 22px; }
+.chartbox { margin-top: 18px; padding: 24px; }
+.chartbox h3 { font-size: 18px; margin-bottom: 4px; }
+.chartbox .empty { margin-top: 14px; padding: 18px; border-radius: 14px; border: 1px dashed var(--line); color: var(--muted); font-size: 14.5px; text-align: center; }
+
+/* Téléchargement */
+.dl { text-align: center; padding: 56px 24px; position: relative; overflow: hidden; }
+.dl img.logo { width: 110px; margin: 0 auto 18px; filter: drop-shadow(0 0 30px rgba(47, 139, 255, .8)); animation: bob 5s ease-in-out infinite; }
+.dl h2 { font-size: clamp(30px, 4.6vw, 52px); margin-bottom: 12px; }
+.dl p { color: var(--muted); margin-bottom: 26px; }
+.faq { display: grid; gap: 10px; max-width: 860px; margin: 0 auto; }
+.faq details { padding: 18px 20px; border-radius: 16px; }
+.faq summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.faq summary::after { content: "+"; color: var(--cyan); font-size: 22px; line-height: 1; }
+.faq details[open] summary::after { content: "−"; }
+.faq p { color: var(--muted); margin-top: 10px; font-size: 15.5px; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 14px; text-align: center; }
+footer a { color: #cfe7ff; }
+
+/* Apparition au défilement */
+.rv { opacity: 0; transform: translateY(40px) scale(.98); transition: opacity .9s ease, transform .9s cubic-bezier(.2, .8, .2, 1); }
+.rv.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .rv { opacity: 1; transform: none; } }
+@media (max-width: 860px) {
+  .nav nav { display: none; }
+  .split, .split.rev, .bench { grid-template-columns: 1fr; }
+  .split.rev .txt { order: 0; }
+  .float { display: none; }
+  .tilt { transform: none !important; }
+  .bar { grid-template-columns: 110px 1fr 46px; }
+}
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<canvas id="stars" aria-hidden="true"></canvas>
+
+<header class="nav">
+  <div class="wrap glass">
+    <a class="brand" href="#top"><img src="/launcher/logo.png" alt="">History</a>
+    <nav><a href="#fonctions">Fonctions</a><a href="#monpc">Mon PC</a><a href="#benchmark">Benchmark</a><a href="#comparatif">Comparatif</a><a href="#faq">FAQ</a></nav>
+    <a class="btn main sm dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">Télécharger</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero wrap">
+    <span class="pill glass"><b></b><span id="verPill">Nouvelle version disponible</span></span>
+    <h1>Tous tes jeux. <span class="grad">Ton PC au top.</span></h1>
+    <p class="lead">Steam, Epic, Xbox, FiveM, Roblox et tes applis réunis dans un launcher en verre liquide, qui analyse ton PC pour de vrai, mesure ses performances et te connecte à tes amis en direct.</p>
+    <div class="cta">
+      <a class="btn main dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">⬇ Télécharger pour Windows <small id="dlSize"></small></a>
+      <a class="btn" href="#fonctions">Voir ce qu’il sait faire</a>
+    </div>
+    <p class="meta" id="dlMeta">Gratuit · Windows 10 et 11 · mises à jour automatiques</p>
+    <div class="stage">
+      <div class="tilt" id="tilt">
+        <img src="/launcher/accueil.webp" alt="L’accueil de History Launcher : la bibliothèque de jeux avec Rainbow Six Siege en vedette" width="1600" height="858">
+        <div class="float glass f1"><span>🟢</span>Max joue maintenant à FiveM · <b>Rejoindre</b></div>
+        <div class="float glass f2"><span>🔬</span>Score de santé du PC · <b>75/100</b></div>
+        <div class="float glass f3"><span>🛡</span>Double authentification activée</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="fonctions" class="wrap">
+    <div class="head rv"><span class="kicker">Tout-en-un</span><h2>Un seul launcher pour tout</h2><p>Chaque fonction est là pour de vrai dans l’application : rien n’est promis sans être construit.</p></div>
+    <div class="grid">
+      <div class="card glass rv"><div class="ic">🎮</div><h3>Toute ta bibliothèque</h3><p>Steam, Epic, Xbox Game Pass, EA, FiveM, Roblox et tes applis, avec jaquettes, temps de jeu officiel et collections.</p></div>
+      <div class="card glass rv"><div class="ic">👥</div><h3>Amis en direct</h3><p>Vois qui lance un jeu, rejoins sa partie en un clic ou demande « On joue ? ». Les messages arrivent en bas à gauche, même en jeu.</p></div>
+      <div class="card glass rv"><div class="ic">🔬</div><h3>Analyse complète du PC</h3><p>Santé et durée de vie des composants, antivirus, programmes louches, fichiers inutiles et rapport détaillé.</p></div>
+      <div class="card glass rv"><div class="ic">🏁</div><h3>Benchmark maison</h3><p>Processeur, mémoire, disque et carte graphique mesurés par le launcher, avec un score comparable d’un PC à l’autre.</p></div>
+      <div class="card glass rv"><div class="ic">⚡</div><h3>Boost de jeu</h3><p>Performances élevées pendant la partie, applis gourmandes fermées puis rouvertes, réglage par jeu.</p></div>
+      <div class="card glass rv"><div class="ic">🛡</div><h3>Compte sécurisé</h3><p>Double authentification par QR code, vérification de l’e-mail, mot de passe oublié, sauvegarde en ligne.</p></div>
+      <div class="card glass rv"><div class="ic">🎬</div><h3>Captures et replay</h3><p>Ctrl+Alt+S pour une capture, Ctrl+Alt+R pour garder les 30 dernières secondes, rangées par jeu.</p></div>
+      <div class="card glass rv"><div class="ic">🌐</div><h3>FiveM comme il faut</h3><p>Tes vraies heures (depuis les journaux), heures par serveur, favoris avec joueurs en ligne, rejoindre en un clic.</p></div>
+      <div class="card glass rv"><div class="ic">🤖</div><h3>Assistant IA et voix</h3><p>« Lance Rocket League », « fais une opti », « clip ça » : il le fait à ta place, au clavier ou à la voix.</p></div>
+      <div class="card glass rv"><div class="ic">🔊</div><h3>Sons premium</h3><p>Un vrai sound design pour la navigation, les lancements, les notifications et les appels (désactivable).</p></div>
+      <div class="card glass rv"><div class="ic">⬆</div><h3>Mises à jour toutes seules</h3><p>« Mettre à jour maintenant ? » puis installation silencieuse et redémarrage, avec la liste des nouveautés.</p></div>
+      <div class="card glass rv"><div class="ic">🛡</div><h3>Anti-triche respecté</h3><p>Rocket League, Rainbow Six et les jeux avec Easy Anti-Cheat ou BattlEye passent toujours par leur plateforme.</p></div>
+    </div>
+  </section>
+
+  <section id="monpc" class="wrap">
+    <div class="split">
+      <div class="txt rv">
+        <span class="kicker">Mon PC</span>
+        <h2>Ton PC analysé pour de vrai</h2>
+        <p>Le launcher lit directement Windows : pas d’estimation au hasard. Quand une donnée n’est pas disponible, il le dit.</p>
+        <ul>
+          <li>Durée de vie réelle des SSD (usure mesurée), heures des disques durs, santé de la batterie</li>
+          <li>Points faibles détectés : une seule barrette, XMP désactivé, Windows sur disque dur, pilote ancien…</li>
+          <li>Chaque conseil avec le gain attendu, classé du plus urgent au moins urgent</li>
+          <li>Antivirus de Windows : analyse rapide ou complète et suppression des menaces</li>
+          <li>Programmes qui consomment, signature numérique, fichiers louches repérés</li>
+          <li>Rapport détaillé rédigé par l’IA à partir des seules mesures</li>
+        </ul>
+      </div>
+      <figure class="shot glass rv"><img src="/launcher/pc.webp" alt="Mon PC : score de santé, composants et durée de vie, améliorations conseillées" loading="lazy" width="1280" height="860"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="benchmark" class="wrap">
+    <div class="head rv"><span class="kicker">Benchmark History</span><h2>Des mesures, pas des promesses</h2><p>Le benchmark est fait par le launcher lui-même, sans outil externe. Voici exactement ce qu’il mesure.</p></div>
+    <div class="bench">
+      <div class="panel glass rv">
+        <h3>Comment c’est mesuré</h3>
+        <div class="steps">
+          <div><b>Processeur, 1 cœur puis tous</b> : calcul d’empreintes SHA-256 sur des blocs de 1 Mo pendant 3 s, en Mo/s.</div>
+          <div><b>Mémoire</b> : copies de blocs de 128 Mo pendant 2,5 s, en Go/s.</div>
+          <div><b>Disque</b> : écriture puis lecture d’un fichier de 1 Go, et lectures aléatoires de 4 Ko (IOPS).</div>
+          <div><b>Carte graphique</b> : scène 3D de 60 000 formes animées, images par seconde mesurées sans la limite de l’écran.</div>
+          <div><b>Score</b> : chaque épreuve vaut 1000 sur un PC de jeu milieu de gamme, le total est une moyenne géométrique (comme les benchmarks connus).</div>
+        </div>
+      </div>
+      <div class="panel glass rv">
+        <h3>À quoi ressemble un résultat</h3>
+        <p class="note" style="margin-top:4px">Exemple de lecture des scores ; le trait blanc marque le PC de référence (1000).</p>
+        <div class="bars" id="bars">
+          <div class="bar"><span>Processeur (1 cœur)</span><div class="t"><i data-w="62"></i><b style="left:50%"></b></div><em>1240</em></div>
+          <div class="bar"><span>Processeur (tous)</span><div class="t"><i data-w="71"></i><b style="left:50%"></b></div><em>1420</em></div>
+          <div class="bar"><span>Mémoire</span><div class="t"><i data-w="55"></i><b style="left:50%"></b></div><em>1100</em></div>
+          <div class="bar"><span>Disque</span><div class="t"><i data-w="78"></i><b style="left:50%"></b></div><em>1560</em></div>
+          <div class="bar"><span>Carte graphique</span><div class="t"><i data-w="66"></i><b style="left:50%"></b></div><em>1320</em></div>
+        </div>
+        <p class="note">Les tiens s’affichent dans Mon PC › Benchmark, avec l’historique pour voir l’effet d’une amélioration.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="split rev">
+      <div class="txt rv">
+        <span class="kicker">Social</span>
+        <h2>Tes potes, en direct</h2>
+        <p>Quand un ami lance un jeu, tu le sais tout de suite. Les messages, invitations et « On joue ? » arrivent en bas à gauche de l’écran, comme sur Steam, même pendant une partie.</p>
+        <ul><li>Rejoindre en un clic : jeu Steam ou serveur FiveM</li><li>Messages entre amis et invitations</li><li>Soirées jeu organisées avec rappel</li></ul>
+      </div>
+      <figure class="shot glass rv"><img src="/launcher/notifications.webp" alt="Notifications d’amis en bas à gauche : demande de jeu, message, ami qui lance FiveM" loading="lazy" width="360" height="353" style="max-width:420px;margin:auto"></figure>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="split">
+      <div class="txt rv">
+        <span class="kicker">Réglages</span>
+        <h2>Propre, rangé, à ton goût</h2>
+        <p>Paramètres classés par catégories, sons réglables, thème, compte et sauvegarde en ligne pour tout retrouver sur un autre PC.</p>
+      </div>
+      <figure class="shot glass rv"><img src="/launcher/settings.webp" alt="Paramètres de History Launcher, catégorie Sons" loading="lazy" width="1280" height="860"></figure>
+    </div>
+  </section>
+
+  <section id="comparatif" class="wrap">
+    <div class="head rv"><span class="kicker">Comparatif</span><h2>Ce que les autres ne font pas</h2><p>Comparaison des fonctions présentes de base dans chaque application (sans extension).</p></div>
+    <div class="tablewrap glass rv">
+      <table class="cmp">
+        <thead><tr><th>Fonction</th><th class="us">History</th><th>Steam</th><th>Epic Games</th><th>Playnite</th></tr></thead>
+        <tbody>
+          <tr><td>Jeux de plusieurs plateformes réunis</td><td class="us y">✓</td><td class="p">partiel</td><td class="n">—</td><td class="y">✓</td></tr>
+          <tr><td>Analyse de santé et durée de vie du PC</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Benchmark intégré</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Nettoyage et optimisation de Windows</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Heures FiveM réelles et serveurs</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Amis, messages, rejoindre</td><td class="us y">✓</td><td class="y">✓</td><td class="p">partiel</td><td class="n">—</td></tr>
+          <tr><td>Assistant IA et commandes vocales</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Captures et replay</td><td class="us y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="chartbox glass rv">
+      <h3>Consommation mémoire et processeur</h3>
+      <p class="note" style="margin-top:0">Mesurée sur le même PC Windows, launcher au repos après 5 minutes (Gestionnaire des tâches, tous les processus de l’application additionnés).</p>
+      <div id="conso"></div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="dl glass rv">
+      <img class="logo" src="/launcher/logo.png" alt="">
+      <h2>Prêt à essayer ?</h2>
+      <p id="dlLine">Gratuit, sans publicité. L’installation prend moins d’une minute.</p>
+      <a class="btn main dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">⬇ Télécharger History Launcher</a>
+    </div>
+  </section>
+
+  <section id="faq" class="wrap">
+    <div class="head rv"><span class="kicker">Questions</span><h2>Questions fréquentes</h2></div>
+    <div class="faq">
+      <details class="glass rv"><summary>C’est gratuit ?</summary><p>Oui. L’analyse complète du PC sera une option Premium ; tout le reste est gratuit.</p></details>
+      <details class="glass rv"><summary>Mes jeux restent sur Steam et Epic ?</summary><p>Oui : History les trouve là où ils sont installés et les lance. Les jeux avec anti-triche passent toujours par leur plateforme.</p></details>
+      <details class="glass rv"><summary>Le benchmark est-il fiable ?</summary><p>Ce sont de vraies mesures faites sur ton PC. Ferme tes jeux avant de le lancer, et compare surtout tes propres résultats dans le temps.</p></details>
+      <details class="glass rv"><summary>Pourquoi la température du processeur n’apparaît pas toujours ?</summary><p>Windows ne la donne qu’aux applications lancées en administrateur, et pas sur tous les PC. Le launcher l’indique quand c’est le cas.</p></details>
+      <details class="glass rv"><summary>Comment se font les mises à jour ?</summary><p>Le launcher te demande « Mettre à jour maintenant ? », télécharge la nouvelle version et redémarre tout seul. Les nouveautés sont aussi annoncées sur notre Discord.</p></details>
+    </div>
+  </section>
+</main>
+<footer><a href="/">History IA</a> · <a href="/mentions">Mentions légales</a> · <a href="/confidentialite">Confidentialité</a></footer>
+
+<script src="/launcher/site.js" defer></script>
+</body>
+</html>

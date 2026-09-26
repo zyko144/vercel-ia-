@@ -1,0 +1,106 @@
+{
+ "cpu": {
+  "Name": "AMD Ryzen 7 7800X3D 8-Core Processor",
+  "NumberOfCores": 8,
+  "NumberOfLogicalProcessors": 16,
+  "MaxClockSpeed": 4201
+ },
+ "gpu": [
+  {
+   "Name": "NVIDIA GeForce RTX 4070",
+   "AdapterRAM": 4293918720,
+   "DriverVersion": "32.0.15.6094",
+   "DriverDate": "/Date(1788000000000)/",
+   "CurrentHorizontalResolution": 2560,
+   "CurrentVerticalResolution": 1440,
+   "CurrentRefreshRate": 165
+  }
+ ],
+ "ram": [
+  {
+   "Capacity": 17179869184,
+   "Speed": 6000,
+   "ConfiguredClockSpeed": 4800,
+   "SMBIOSMemoryType": 34
+  },
+  {
+   "Capacity": 17179869184,
+   "Speed": 6000,
+   "ConfiguredClockSpeed": 4800,
+   "SMBIOSMemoryType": 34
+  }
+ ],
+ "board": {
+  "Manufacturer": "ASUS",
+  "Product": "TUF GAMING B650-PLUS"
+ },
+ "os": {
+  "Caption": "Microsoft Windows 11 Famille",
+  "BuildNumber": "26100",
+  "LastBootUpTime": "2026-09-25T08:00:00"
+ },
+ "disks": [
+  {
+   "DeviceId": 0,
+   "FriendlyName": "Samsung SSD 990 PRO 2TB",
+   "MediaType": 4,
+   "BusType": 17,
+   "Size": 2000398934016,
+   "HealthStatus": 0
+  },
+  {
+   "DeviceId": 1,
+   "FriendlyName": "ST2000DM008-2FR102",
+   "MediaType": 3,
+   "BusType": 11,
+   "Size": 2000398934016,
+   "HealthStatus": 0
+  }
+ ],
+ "rel": [
+  {
+   "DeviceId": 0,
+   "Wear": 3,
+   "Temperature": 44,
+   "PowerOnHours": 2600,
+   "ReadErrorsTotal": 0
+  },
+  {
+   "DeviceId": 1,
+   "PowerOnHours": 18200,
+   "ReadErrorsTotal": 0,
+   "Temperature": 36
+  }
+ ],
+ "sysdisk": 0,
+ "vols": [
+  {
+   "DriveLetter": "C",
+   "Size": 2000398934016,
+   "SizeRemaining": 612000000000
+  },
+  {
+   "DriveLetter": "D",
+   "Size": 2000398934016,
+   "SizeRemaining": 180000000000
+  }
+ ],
+ "power": "GUID : 381b4222-f694-41f0-9685-ff5bb260df2e  (Utilisation normale)",
+ "gameMode": 1,
+ "hags": 2,
+ "av": {
+  "AntivirusEnabled": true,
+  "RealTimeProtectionEnabled": true,
+  "AntivirusSignatureAge": 0,
+  "QuickScanAge": 1,
+  "FullScanAge": 34
+ },
+ "threats": [],
+ "thermal": [],
+ "vram": [
+  {
+   "DriverDesc": "NVIDIA GeForce RTX 4070",
+   "HardwareInformation.qwMemorySize": 12884901888
+  }
+ ]
+}
