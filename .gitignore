@@ -14,3 +14,4 @@ nightvault/.env
 logos casinho/
 .ai-local/
 backups/
+.env.avant-sauvegarde
