@@ -325,25 +325,64 @@ for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boos
   $(id).addEventListener('change', (e) => api.setBoost({ [key]: e.target.checked }).then(() => key === 'enabled' && toast(e.target.checked ? 'Boost activé pour les prochaines parties' : 'Boost désactivé')));
 }
 $('boostApps').addEventListener('change', () => api.setBoost({ close: [...document.querySelectorAll('#boostApps input:checked')].map((i) => i.value) }));
-let cleanItems = [];
-function cleanSum() {
-  const ids = [...document.querySelectorAll('#cleanList input:checked')].map((i) => i.value);
-  const total = cleanItems.filter((c) => ids.includes(c.id)).reduce((n, c) => n + c.bytes, 0);
-  $('cleanTotal').textContent = ids.length ? `${gb(total)} à libérer` : '';
-  $('cleanRun').hidden = !ids.length;
+// Optimisation complète : analyse puis application de ce qui est coché
+let opti = null;
+const optiRow = (group, x, checked = true) => `<label class="check"><input type="checkbox" data-g="${group}" value="${esc(x.id)}" ${checked ? 'checked' : ''}><span>${esc(x.label)}${x.note ? ` <small class="hint">· ${esc(x.note)}</small>` : ''}</span><em>${gb(x.bytes)}</em></label>`;
+function renderOpti() {
+  const o = opti;
+  const junkTotal = o.junk.reduce((n, x) => n + x.bytes, 0) + o.recycle;
+  const orphanTotal = o.orphans.reduce((n, x) => n + x.bytes, 0);
+  const tweaksOff = o.tweaks.filter((t) => !t.on);
+  const heavyOn = o.startup.filter((x) => x.enabled && x.heavy).length;
+  $('optiBody').innerHTML = `
+    <div class="optisum">
+      <div><b>${gb(junkTotal + orphanTotal)}</b><small>à libérer</small></div>
+      <div><b>${o.startup.filter((x) => x.enabled).length}</b><small>applis au démarrage</small></div>
+      <div><b>${o.tweaks.length - tweaksOff.length}/${o.tweaks.length}</b><small>réglages jeux</small></div>
+      ${o.free != null ? `<div><b>${gb(o.free)}</b><small>libres sur le disque</small></div>` : ''}
+    </div>
+    <details open><summary>🗑 Fichiers inutiles <em>${gb(junkTotal)}</em></summary><div class="checks">
+      ${o.recycle > 0 ? optiRow('recycle', { id: 'recycle', label: 'Corbeille', bytes: o.recycle, note: 'Vidée définitivement' }) : ''}
+      ${o.junk.map((x) => optiRow('junk', x)).join('') || '<small class="hint">Rien à nettoyer.</small>'}
+    </div></details>
+    <details ${o.orphans.length ? 'open' : ''}><summary>🎮 Restes de jeux désinstallés <em>${gb(orphanTotal)}</em></summary><div class="checks">
+      ${o.orphans.map((x) => optiRow('orphans', x, false)).join('') || '<small class="hint">Aucun reste trouvé dans tes bibliothèques Steam.</small>'}
+      ${o.orphans.length ? '<small class="hint">Dossiers de jeux Steam qui ne sont plus installés. Coche ceux à supprimer.</small>' : ''}
+    </div></details>
+    <details><summary>⏻ Démarrage de Windows <em>${heavyOn ? `${heavyOn} lourde${heavyOn > 1 ? 's' : ''}` : 'OK'}</em></summary><div class="checks">
+      ${o.startup.map((x) => `<label class="toggle small"><input type="checkbox" data-startup="${esc(x.name)}" ${x.enabled ? 'checked' : ''}><span></span>${esc(x.name)}${x.heavy ? ' <small class="warn">ralentit le démarrage</small>' : ''}</label>`).join('') || '<small class="hint">Aucune appli lancée au démarrage.</small>'}
+      <small class="hint">Désactiver ne désinstalle rien : l’appli ne s’ouvre simplement plus toute seule (réactivable ici ou dans le Gestionnaire des tâches).</small>
+    </div></details>
+    <details ${tweaksOff.length ? 'open' : ''}><summary>🎯 Réglages Windows pour les jeux <em>${tweaksOff.length ? `${tweaksOff.length} à faire` : 'OK'}</em></summary><div class="checks">
+      ${o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}<small class="hint">${esc(t.help)}</small></div></label>`).join('')}
+    </div></details>
+    <div class="row end optiacts"><button class="btn" id="optiDeep" type="button" title="Demande l’autorisation administrateur">🛡 Nettoyage profond de Windows</button><button class="btn play" id="optiRun" type="button">Tout optimiser</button></div>`;
 }
-$('cleanScan').addEventListener('click', async () => {
-  $('cleanScan').textContent = 'Analyse…';
-  cleanItems = (await api.cleanScan?.().catch(() => [])) ?? [];
-  $('cleanScan').textContent = 'Analyser à nouveau';
-  const found = cleanItems.filter((c) => c.bytes > 0).sort((a, b) => b.bytes - a.bytes);
-  $('cleanList').innerHTML = found.length ? found.map((c) => `<label class="check"><input type="checkbox" value="${esc(c.id)}" checked><span>${esc(c.label)}${c.note ? ` <small class="hint">· ${esc(c.note)}</small>` : ''}</span><em>${gb(c.bytes)}</em></label>`).join('') : '<div class="empty">Rien à nettoyer, tout est propre.</div>';
-  cleanSum();
+$('optiScan').addEventListener('click', async () => {
+  $('optiScan').textContent = 'Analyse en cours…';
+  $('optiScan').disabled = true;
+  opti = await api.optiScan?.().catch(() => null);
+  $('optiScan').disabled = false;
+  $('optiScan').textContent = 'Analyser à nouveau';
+  if (opti) renderOpti(); else toast('Analyse impossible pour l’instant');
 });
-$('cleanList').addEventListener('change', cleanSum);
-$('cleanRun').addEventListener('click', async () => {
-  const r = await api.cleanRun([...document.querySelectorAll('#cleanList input:checked')].map((i) => i.value));
-  if (r?.ok) { toast(`${gb(r.freed)} libérés`); $('cleanScan').click(); }
+$('optiBody').addEventListener('change', async (e) => {
+  const el = e.target;
+  if (el.dataset.startup) { const r = await api.optiStartup(el.dataset.startup, el.checked); if (r?.ok) { opti.startup = r.startup; toast(el.checked ? `${el.dataset.startup} se lancera au démarrage` : `${el.dataset.startup} ne se lancera plus au démarrage`); } }
+  if (el.dataset.tweak) { const r = await api.optiTweak(el.dataset.tweak, el.checked); if (r?.ok) { opti.tweaks = r.tweaks; toast('Réglage appliqué'); } }
+});
+$('optiBody').addEventListener('click', async (e) => {
+  if (e.target.id === 'optiRun') {
+    const ids = (g) => [...document.querySelectorAll(`#optiBody input[data-g="${g}"]:checked`)].map((i) => i.value);
+    const r = await api.optiRun({ junk: ids('junk'), orphans: ids('orphans'), recycle: ids('recycle').length > 0, tweaks: opti.tweaks.filter((t) => !t.on).map((t) => t.id) });
+    if (r?.ok) { toast(`Optimisation terminée : ${gb(r.freed)} libérés${r.tweaks ? `, ${r.tweaks} réglage(s) appliqué(s)` : ''}`); $('optiScan').click(); }
+  }
+  if (e.target.id === 'optiDeep') {
+    e.target.textContent = 'Nettoyage profond en cours…';
+    const r = await api.optiDeep();
+    e.target.textContent = '🛡 Nettoyage profond de Windows';
+    if (r?.ok) toast(r.freed != null ? `Nettoyage profond terminé : ${gb(r.freed)} libérés` : 'Nettoyage profond terminé');
+  }
 });
 
 function renderFree() {
@@ -978,7 +1017,10 @@ function demoApi() {
     events: async () => ({ soirees: [{ id: 'e1', game: 'Rocket League', at: Date.now() + 5 * 3_600_000, mine: true, organisateur: 'Noam', ma: 'oui', invites: [{ pseudo: 'Max', reponse: 'oui' }, { pseudo: 'Léa', reponse: null }] }, { id: 'e2', game: 'VALORANT', at: Date.now() + 26 * 3_600_000, mine: false, organisateur: 'Léa', ma: null, invites: [{ pseudo: 'Noam', reponse: null }] }] }),
     pc: async () => ({ cpu: { usage: 37, temp: null, name: 'AMD Ryzen 7 5800X' }, ram: { used: 11.2e9, total: 32e9 }, gpu: { name: 'NVIDIA GeForce RTX 3070', usage: 92, temp: 71, vramUsed: 6200, vramTotal: 8192 } }),
     boost: async () => ({ enabled: true, power: true, restore: true, heatAlerts: true, close: ['chrome'], apps: [{ id: 'chrome', label: 'Google Chrome' }, { id: 'edge', label: 'Microsoft Edge' }, { id: 'onedrive', label: 'OneDrive' }, { id: 'office', label: 'Word / Excel / PowerPoint' }] }),
-    setBoost: async (b) => b, cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
+    setBoost: async (b) => b,
+    optiScan: async () => ({ free: 84e9, recycle: 2.1e9, junk: [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'chrome-Default', label: 'Cache de Google Chrome', bytes: 1.3e9, note: 'Mots de passe et historique gardés' }, { id: 'nv-install', label: 'Restes d’installation NVIDIA', bytes: 1.9e9, note: 'Anciens pilotes décompressés' }], orphans: [{ id: 'o1', label: 'Apex Legends', bytes: 12.4e9 }], startup: [{ name: 'Discord', enabled: true, heavy: true }, { name: 'Steam', enabled: true, heavy: true }, { name: 'Pilote tablette', enabled: true, heavy: false }], tweaks: [{ id: 'gamemode', label: 'Mode Jeu de Windows activé', help: 'Windows donne la priorité au jeu en cours.', on: true }, { id: 'dvr', label: 'Enregistrement en arrière-plan de la Xbox Game Bar coupé', help: 'Évite que Windows filme en continu pendant les parties (gain de FPS).', on: false }] }),
+    optiRun: async () => ({ ok: true, freed: 20.8e9, tweaks: 1 }), optiStartup: async () => ({ ok: true, startup: [] }), optiTweak: async () => ({ ok: true, tweaks: [] }), optiDeep: async () => ({ ok: true, freed: 6e9 }),
+    cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
