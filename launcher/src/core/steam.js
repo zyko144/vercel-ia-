@@ -26,22 +26,48 @@ async function libraries(steamPath) {
   return [...dirs];
 }
 
-/** Temps de jeu (minutes) et dernière partie, par appid, pour tous les comptes du PC. */
+const STEAM64_BASE = 76561197960265728n;
+
+/** Les comptes Steam de ce PC (config\\loginusers.vdf) : numéro court (dossier userdata), pseudo, compte le plus récent. */
+export async function listSteamAccounts(steamPath) {
+  const text = await readFile(path.join(steamPath ?? '', 'config', 'loginusers.vdf'), 'utf8').catch(() => null);
+  const users = text ? pick(parseVdf(text), 'users') ?? {} : {};
+  const list = Object.entries(users).filter(([id]) => /^\d{17}$/.test(id)).map(([id64, u]) => ({
+    id: String(BigInt(id64) - STEAM64_BASE), id64, name: pick(u, 'PersonaName') || pick(u, 'AccountName') || id64,
+    login: pick(u, 'AccountName') ?? null, recent: pick(u, 'MostRecent') === '1', at: Number(pick(u, 'Timestamp') ?? 0),
+  }));
+  // Comptes présents seulement dans userdata (jamais listés dans loginusers)
+  for (const dir of await readdir(path.join(steamPath ?? '', 'userdata')).catch(() => [])) {
+    if (/^\d+$/.test(dir) && dir !== '0' && !list.some((a) => a.id === dir)) list.push({ id: dir, id64: String(BigInt(dir) + STEAM64_BASE), name: `Compte ${dir}`, login: null, recent: false, at: 0 });
+  }
+  return list.sort((a, b) => (b.recent - a.recent) || (b.at - a.at));
+}
+
+/** Temps de jeu (minutes) et dernière partie, par jeu ET par compte Steam (un fichier localconfig.vdf par compte). */
 async function playtimes(steamPath) {
   const out = {};
   const userdata = path.join(steamPath, 'userdata');
   for (const account of await readdir(userdata).catch(() => [])) {
+    if (!/^\d+$/.test(account)) continue;
     const text = await readFile(path.join(userdata, account, 'config', 'localconfig.vdf'), 'utf8').catch(() => null);
     if (!text) continue;
     const apps = pick(parseVdf(text), 'UserLocalConfigStore', 'Software', 'Valve', 'Steam', 'apps') ?? {};
     for (const [id, a] of Object.entries(apps)) {
       const minutes = Number(pick(a, 'Playtime') ?? 0);
-      const last = Number(pick(a, 'LastPlayed') ?? 0) * 1000;
-      const cur = out[id] ?? { minutes: 0, lastPlayed: 0 };
-      out[id] = { minutes: Math.max(cur.minutes, minutes), lastPlayed: Math.max(cur.lastPlayed, last) };
+      const lastPlayed = Number(pick(a, 'LastPlayed') ?? 0) * 1000;
+      const recent = Number(pick(a, 'Playtime2wks') ?? 0);
+      if (!minutes && !lastPlayed) continue;
+      (out[id] ??= {})[account] = { minutes, lastPlayed, recent };
     }
   }
   return out;
+}
+const best = (byAccount) => Object.values(byAccount ?? {}).reduce((a, t) => ({ minutes: Math.max(a.minutes, t.minutes), lastPlayed: Math.max(a.lastPlayed, t.lastPlayed) }), { minutes: 0, lastPlayed: 0 });
+
+/** Les dépôts installés d'un jeu (pour la vérification des fichiers) : numéro de dépôt et de manifeste. */
+function installedDepots(acf) {
+  const depots = pick(acf, 'InstalledDepots') ?? {};
+  return Object.entries(depots).map(([depot, d]) => ({ depot, manifest: pick(d, 'manifest') ?? null, size: Number(pick(d, 'size') ?? 0) })).filter((d) => d.manifest);
 }
 
 export async function scanSteam(steamPath) {
@@ -56,21 +82,24 @@ export async function scanSteam(steamPath) {
       if (!id || NOT_GAMES.has(id)) continue;
       const name = pick(acf, 'name') ?? `Jeu ${id}`;
       if (/redistributable|steamworks common|proton|steam linux runtime/i.test(name)) continue;
+      const t = best(times[id]);
       items.push({
         id: `steam:${id}`, source: 'steam', kind: 'game', name, installed: true,
         installDir: path.join(dir, 'common', pick(acf, 'installdir') ?? ''), steamLibrary: dir, manifest: path.join(dir, file),
+        steamRoot: steamPath, steamDepots: installedDepots(acf),
         size: Number(pick(acf, 'SizeOnDisk') ?? 0),
-        minutes: times[id]?.minutes ?? 0, lastPlayed: times[id]?.lastPlayed || Number(pick(acf, 'LastPlayed') ?? 0) * 1000 || 0,
+        minutes: t.minutes, lastPlayed: t.lastPlayed || Number(pick(acf, 'LastPlayed') ?? 0) * 1000 || 0, steamTimes: times[id] ?? {},
         art: {}, cdnArt: art(id), localArt: await steamLocalArt(steamPath, id), steamId: id,
       });
     }
   }
   // Jeux déjà joués mais plus installés : on les garde (le temps de jeu reste), le nom viendra de Steam
   const installed = new Set(items.map((i) => i.steamId));
-  for (const [id, t] of Object.entries(times)) {
+  for (const [id, byAccount] of Object.entries(times)) {
+    const t = best(byAccount);
     if (installed.has(id) || NOT_GAMES.has(id) || t.minutes < 5) continue;
     installed.add(id);
-    items.push({ id: `steam:${id}`, source: 'steam', kind: 'game', name: null, installed: false, size: 0, minutes: t.minutes, lastPlayed: t.lastPlayed, art: {}, cdnArt: art(id), localArt: await steamLocalArt(steamPath, id), steamId: id });
+    items.push({ id: `steam:${id}`, source: 'steam', kind: 'game', name: null, installed: false, size: 0, minutes: t.minutes, lastPlayed: t.lastPlayed, steamTimes: byAccount, art: {}, cdnArt: art(id), localArt: await steamLocalArt(steamPath, id), steamId: id });
   }
   return items;
 }
@@ -163,6 +192,19 @@ export async function steamLocalArt(steamPath, appid) {
  * Adresses officielles actuelles des images (le magasin Steam les range depuis 2025 à des adresses avec un code) :
  * API publique IStoreBrowseService, sans clé, jusqu'à 50 jeux par demande.
  */
+/** Les vrais noms des jeux Steam (API officielle du magasin, 50 par demande, sans clé). */
+export async function steamNames(appids, fetchImpl = fetch) {
+  const out = {};
+  const ids = [...new Set(appids.map(String))].filter((id) => /^\d{1,8}$/.test(id));
+  for (let n = 0; n < ids.length; n += 50) {
+    const input = { ids: ids.slice(n, n + 50).map((appid) => ({ appid: Number(appid) })), context: { language: 'french', country_code: 'FR' }, data_request: { include_basic_info: true } };
+    const data = await fetchImpl(`https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${encodeURIComponent(JSON.stringify(input))}`, { signal: AbortSignal.timeout(15_000) })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    for (const item of data?.response?.store_items ?? []) if (item.name) out[String(item.appid ?? item.id)] = item.name;
+  }
+  return out;
+}
+
 export async function steamStoreAssets(appids, fetchImpl = fetch) {
   const out = {};
   const ids = [...new Set(appids.map(String))].filter((id) => /^\d{1,8}$/.test(id));

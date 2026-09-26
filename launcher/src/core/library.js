@@ -60,18 +60,43 @@ export async function scanAll(paths = {}, { steamApiKey = null, fetchImpl = fetc
 }
 
 /** Ajoute le temps suivi par le launcher, les images et fiches trouvées en ligne, et les réglages de l'utilisateur. */
-export function merge(items, store, localUrls = null) {
+/**
+ * Temps de jeu d'un élément, pour le compte choisi (ou tous les comptes si « temps total » est activé) :
+ *  - jeu Steam : le temps officiel de Steam du compte choisi (le chronomètre du launcher n'est pas ajouté :
+ *    ce serait compter deux fois la même partie) ;
+ *  - autres jeux et applis : le chronomètre du launcher, rangé par compte (Epic, EA… : compte choisi dans les paramètres).
+ */
+export function playtimeOf(i, store, { total = false, steamAccount = null, accountFor = () => 'principal' } = {}) {
+  const sum = (list) => list.reduce((a, t) => ({ minutes: a.minutes + (t?.minutes ?? 0), lastPlayed: Math.max(a.lastPlayed, t?.lastPlayed ?? 0) }), { minutes: 0, lastPlayed: 0 });
+  if (i.steamTimes && Object.keys(i.steamTimes).length) {
+    const chosen = total || !steamAccount ? Object.values(i.steamTimes) : [i.steamTimes[steamAccount]];
+    const steam = sum(chosen);
+    const recent = chosen.reduce((n, t) => n + (t?.recent ?? 0), 0);
+    const tracked = store.timeBy?.[i.id] ?? {};
+    const seen = Math.max(...Object.values(tracked).map((t) => t.lastPlayed ?? 0), store.time?.[i.id]?.lastPlayed ?? 0, 0);
+    return { minutes: steam.minutes, lastPlayed: Math.max(steam.lastPlayed, seen), recent };
+  }
+  const by = store.timeBy?.[i.id] ?? {};
+  const legacy = store.time?.[i.id];
+  const mine = total ? Object.values(by) : [by[accountFor(i)]];
+  const tracked = sum([...mine, legacy]);
+  return { minutes: Math.max(i.minutes ?? 0, 0) + tracked.minutes, lastPlayed: Math.max(i.lastPlayed ?? 0, tracked.lastPlayed) };
+}
+
+const realName = (n) => (n && !/^Jeu Steam \d+$/.test(n) ? n : null);
+
+export function merge(items, store, localUrls = null, timeOptions = {}) {
   return dedupe(items.map((i) => {
-    const t = store.time?.[i.id] ?? { minutes: 0, lastPlayed: 0 };
+    const t = playtimeOf(i, store, timeOptions);
     const extra = store.items?.[i.id] ?? {};
     const found = store.art?.[i.id] ?? {};
     const ok = (o) => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v));
     // Du moins sûr au plus sûr : ancienne adresse Steam < trouvées en ligne < images du launcher (Epic) < images sur le PC
     const art = { ...ok(i.cdnArt), ...ok(found.art), ...ok(i.art), ...ok(localUrls?.(i.localArt)) };
     return {
-      ...i, name: i.name ?? extra.name ?? store.names?.[i.steamId] ?? `Jeu Steam ${i.steamId}`,
+      ...i, name: i.name ?? extra.name ?? realName(store.names?.[i.steamId]) ?? `Jeu Steam ${i.steamId}`,
       art, details: found.details ?? i.details ?? null, matchSteamId: found.steamId ?? i.steamId ?? null,
-      minutes: Math.max(i.minutes, 0) + t.minutes, lastPlayed: Math.max(i.lastPlayed, t.lastPlayed),
+      minutes: t.minutes, lastPlayed: t.lastPlayed, recent2w: t.recent ?? null,
       favorite: Boolean(extra.favorite), hidden: Boolean(extra.hidden),
     };
   }));

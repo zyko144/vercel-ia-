@@ -51,7 +51,7 @@ export function periodItems(days, n, now = Date.now()) {
   return out;
 }
 
-export function startTracker(getItems, store, onChange, everyMs = 60_000) {
+export function startTracker(getItems, store, onChange, everyMs = 60_000, accountFor = () => 'principal') {
   const tick = async () => {
     const items = getItems();
     const active = activeItems(items, await runningPaths());
@@ -59,10 +59,12 @@ export function startTracker(getItems, store, onChange, everyMs = 60_000) {
     const now = Date.now();
     const day = ((store.data.days ??= {})[dayKey(now)] ??= {});
     for (const id of active) {
-      const t = (store.data.time[id] ??= { minutes: 0, lastPlayed: 0 });
+      const item = items.find((i) => i.id === id);
+      // Temps rangé par compte (compte Steam actif, compte Epic choisi…), pour ne compter qu'un compte à la fois
+      const t = (((store.data.timeBy ??= {})[id] ??= {})[accountFor(item)] ??= { minutes: 0, lastPlayed: 0 });
       t.minutes += everyMs / 60_000;
       t.lastPlayed = now;
-      const cat = statCategory(items.find((i) => i.id === id));
+      const cat = statCategory(item);
       day[cat] = (day[cat] ?? 0) + everyMs / 60_000;
       (day.items ??= {})[id] = (day.items[id] ?? 0) + everyMs / 60_000;
     }

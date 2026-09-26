@@ -3,6 +3,7 @@
 import { filterSort } from '../core/sort.js';
 
 const $ = (id) => document.getElementById(id);
+let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
 const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], song: null, account: null };
 
@@ -190,14 +191,14 @@ async function renderRanking() {
   let list = games().filter((i) => i.minutes > 0).sort((a, b) => b.minutes - a.minutes);
   let minutesOf = (i) => i.minutes;
   if (state.rank !== 'tout') {
-    const s = await api.stats(state.rank);
-    const recent = s.recent ?? {};
+    const s = await api.stats('semaine');
+    const recent = s.twoWeeks ?? {};
     minutesOf = (i) => recent[i.id] ?? 0;
     list = games().filter((i) => minutesOf(i) > 0).sort((a, b) => minutesOf(b) - minutesOf(a));
   }
   if (!list.length) {
     $('podium').innerHTML = '';
-    $('ranklist').innerHTML = `<div class="empty">${state.rank === 'tout' ? 'Pas encore de temps de jeu.' : 'Aucun jeu lancé sur cette période (le launcher compte le temps dès qu’il est ouvert).'}</div>`;
+    $('ranklist').innerHTML = `<div class="empty">${state.rank === 'tout' ? 'Pas encore de temps de jeu.' : 'Aucun jeu lancé ces 2 dernières semaines sur ce compte.'}</div>`;
     return;
   }
   const pod = (i, n) => i ? `<div class="pod ${['', 'first', 'second', 'third'][n]}" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}"><span class="medal">${MEDALS[n]}</span>${art(i)}<div class="meta"><b>${esc(i.name)}</b><small>${CLOCK}${hours(minutesOf(i))}</small></div></div>` : '<div></div>';
@@ -330,9 +331,56 @@ function openSheet(i) {
   $('sheet').showModal();
 }
 
+const human = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.round(b / 1e6)} Mo`);
+function showVerify(p) {
+  const dlg = $('verifyDlg');
+  if (!dlg.open) dlg.showModal();
+  $('vTitle').textContent = `Vérification de ${p.name}`;
+  if (p.phase === 'start') {
+    $('vMode').textContent = 'Lecture de la liste officielle des fichiers…';
+    $('vFill').style.width = '0'; $('vPct').textContent = '0 %'; $('vCount').textContent = ''; $('vFile').textContent = ''; $('vResult').innerHTML = '';
+    $('vCancel').hidden = false; $('vRepair').hidden = true; $('vClose').hidden = true;
+    state.verifying = p.id;
+  }
+  if (p.phase === 'run') {
+    const pct = p.totalBytes ? Math.min(100, (p.bytes / p.totalBytes) * 100) : p.total ? (p.done / p.total) * 100 : 0;
+    $('vMode').textContent = 'Chaque fichier est comparé à la liste officielle (taille et empreinte).';
+    $('vFill').style.width = `${pct}%`;
+    $('vPct').textContent = `${Math.floor(pct)} %`;
+    $('vCount').textContent = `${p.done ?? 0} / ${p.total ?? '?'} fichiers · ${human(p.bytes ?? 0)} / ${human(p.totalBytes ?? 0)}`;
+    $('vFile').textContent = p.file ?? '';
+  }
+  if (p.phase === 'done') {
+    const r = p.result;
+    $('vFill').style.width = '100%'; $('vPct').textContent = '100 %'; $('vFile').textContent = '';
+    $('vCount').textContent = `${r.checked + r.missing.length + r.corrupt.length + r.sizes.length} fichier(s) contrôlé(s)`;
+    $('vCancel').hidden = true; $('vClose').hidden = false;
+    const list = [...r.missing.map((f) => `Manquant : ${f}`), ...r.corrupt.map((f) => `Abîmé : ${f}`), ...r.sizes.map((f) => `Mauvaise taille : ${f}`)];
+    if (r.mode === 'simple') $('vMode').textContent = 'Pas de liste officielle pour ce jeu : présence des fichiers et taille totale vérifiées.';
+    $('vResult').innerHTML = r.ok
+      ? `<div class="vok">✅ Tout est bon : ${r.checked} fichier${r.checked > 1 ? 's' : ''} vérifié${r.checked > 1 ? 's' : ''}${r.mode === 'complet' ? ', aucun abîmé ni manquant' : ''}.</div>`
+      : `<div class="vbad">❌ ${list.length} problème${list.length > 1 ? 's' : ''} trouvé${list.length > 1 ? 's' : ''}${p.canRepair ? ' : la réparation re-télécharge seulement ces fichiers.' : '.'}<ul>${list.slice(0, 40).map((l) => `<li>${esc(l)}</li>`).join('')}${list.length > 40 ? `<li>… et ${list.length - 40} autres</li>` : ''}</ul></div>`;
+    $('vRepair').hidden = r.ok || !p.canRepair;
+    state.verifying = null;
+  }
+  if (p.phase === 'cancel' || p.phase === 'error') {
+    $('vResult').innerHTML = `<div class="vbad">${p.phase === 'cancel' ? 'Vérification annulée.' : `Erreur : ${esc(p.error)}`}</div>`;
+    $('vCancel').hidden = true; $('vClose').hidden = false; state.verifying = null;
+  }
+}
+api.onVerify?.((p) => { state.verifyItem = p.id; showVerify(p); });
+$('vCancel').addEventListener('click', () => api.cancelVerify());
+$('vClose').addEventListener('click', () => $('verifyDlg').close());
+$('vRepair').addEventListener('click', async () => {
+  const r = await api.repair(state.verifyItem);
+  $('verifyDlg').close();
+  toast(r.ok ? 'Réparation lancée en arrière-plan : seuls les fichiers abîmés sont re-téléchargés.' : `Impossible : ${r.error}`);
+});
+
 async function act(action) {
   const item = state.sel;
   if (!item) return;
+  if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
   const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
   const r = await api.action(item.id, action);
   if (r?.ok) toast(labels[action]);
@@ -404,7 +452,18 @@ function showKeys(s) {
   $('aiState').textContent = s.gemini ? '● en ligne' : '● hors ligne';
   $('aiState').classList.toggle('on', Boolean(s.gemini));
 }
-$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); $('settings').showModal(); });
+async function loadAccounts() {
+  const a = await api.platformAccounts?.().catch(() => null);
+  if (!a) return;
+  const opts = (list, chosen, empty) => (list.length ? list.map((x) => `<option value="${esc(x.id)}" ${x.id === chosen ? 'selected' : ''}>${esc(x.name)}${x.recent ? ' (dernier connecté)' : ''}</option>`).join('') : `<option value="">${empty}</option>`);
+  $('accSteam').innerHTML = opts(a.steam, a.chosen.steam, 'Aucun compte Steam trouvé');
+  $('accEpic').innerHTML = opts(a.epic, a.chosen.epic, 'Compte Epic de ce PC');
+  $('totalTime').checked = a.total;
+}
+$('openSettings').addEventListener('click', () => { api.settings().then(showKeys); loadAccounts(); $('settings').showModal(); });
+$('accSteam').addEventListener('change', (e) => e.target.value && api.setPlatformAccounts({ steam: e.target.value }).then(() => toast('Temps de jeu : compte Steam changé')));
+$('accEpic').addEventListener('change', (e) => api.setPlatformAccounts({ epic: e.target.value || null }).then(() => toast('Compte Epic changé')));
+$('totalTime').addEventListener('change', (e) => api.setPlatformAccounts({ total: e.target.checked }).then(() => toast(e.target.checked ? 'Temps total de tous les comptes' : 'Temps d’un seul compte')));
 document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); api.openLink?.(b.dataset.link); }));
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
 $('saveKeys').addEventListener('click', async (e) => {
@@ -548,6 +607,7 @@ load().then(() => {
   else if (h?.startsWith('sel=')) select(state.items.find((i) => i.name === h.slice(4)) ?? state.sel);
   if (h?.includes('assistant')) openAssistant(true);
   if (h?.includes('compte')) showAuth(true);
+  if (h?.includes('verif')) api.verify(state.items[0].id);
 });
 refreshMusic();
 setInterval(refreshMusic, 5000);
@@ -574,6 +634,15 @@ function demoApi() {
     reco: async () => [1, 2, 3, 4, 5].map((n) => ({ name: `Jeu recommandé ${n}`, why: 'Même style que GTA V', steamId: String(n), art: { header: img(n % 2 ? 'h1.jpg' : 'h2.jpg') } })),
     stats: async () => ({ split: { jeux: 1814, applis: 454, musique: 151, autres: 101 }, top: items.map((i) => ({ name: i.name, minutes: i.minutes })), recent: { 'reg:valorant': 300, 'steam:271590': 240, 'epic:Fortnite': 120, 'epic:rl': 60 }, profile: 'Noam' }),
     nowPlaying: async () => ({ player: 'Spotify', artist: 'Bir Hakeim', title: 'Cherry Pie', playing: true, cover: img('c4.jpg'), duration: 192 }),
-    mediaKey: async () => true, account: async () => ({ compte: null, skipped: true }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
+    mediaKey: async () => true, platformAccounts: async () => ({ steam: [{ id: '1', name: 'Noam', recent: true }, { id: '2', name: 'Petit frère' }], epic: [], chosen: { steam: '1', epic: null }, total: false }), setPlatformAccounts: async () => ({}),
+    onVerify: (fn) => { demoVerify = fn; },
+    verify: async (id) => {
+      const name = items.find((i) => i.id === id)?.name ?? 'Jeu';
+      demoVerify?.({ id, name, phase: 'start' });
+      demoVerify?.({ id, name, phase: 'run', done: 1840, total: 3120, bytes: 64.2e9, totalBytes: 108.7e9, file: 'x64a.rpf' });
+      if (location.hash.includes('fin')) demoVerify?.({ id, name, phase: 'done', canRepair: true, result: { mode: 'complet', ok: false, checked: 3117, missing: ['update/x64/dlcpacks/patchday27ng/dlc.rpf'], corrupt: ['x64a.rpf', 'common.rpf'], sizes: [] } });
+      return {};
+    },
+    account: async () => ({ compte: null, skipped: true }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }

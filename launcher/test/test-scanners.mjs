@@ -17,7 +17,8 @@ import { enrich, sameName } from '../src/core/art.js';
 import { aiFindArt, geminiKeyFromEnv } from '../src/core/ai.js';
 import { parseTitle } from '../src/core/media.js';
 import { dayKey, periodStats, statCategory } from '../src/core/tracker.js';
-import { ownedSteamGames, steamDetails, steamLocalArt, steamStoreAssets } from '../src/core/steam.js';
+import { listSteamAccounts, ownedSteamGames, steamDetails, steamLocalArt, steamNames, steamStoreAssets } from '../src/core/steam.js';
+import { playtimeOf } from '../src/core/library.js';
 
 let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };
@@ -355,6 +356,32 @@ HKEY_LOCAL_MACHINE\\X\\Outil
   const apps = merge(programsFromRegistry(reg), { time: { 'reg:outil-pro-rare': { minutes: 30, lastPlayed: 1 } }, items: {}, names: {} });
   assert.deepEqual(filterSort(apps, {}).map((i) => i.name).sort(), ['CCleaner', 'Outil Pro Rare'], 'connue + utilisée');
   assert.equal(filterSort(apps, { installed: 'oui' }).length, 3, 'le reste accessible (le pilote Realtek, lui, est écarté comme composant système)');
+});
+
+await check('comptes Steam du PC : pseudo, numéro du dossier userdata, dernier connecté', async () => {
+  const root = path.join(T, 'SteamComptes');
+  put(path.join(root, 'config', 'loginusers.vdf'), '"users" { "76561198000000001" { "AccountName" "noam" "PersonaName" "Noam" "MostRecent" "1" } "76561198000000002" { "AccountName" "frere" "PersonaName" "Petit frère" "MostRecent" "0" } }');
+  const list = await listSteamAccounts(root);
+  assert.deepEqual(list.map((a) => [a.id, a.name, a.recent]), [['39734273', 'Noam', true], ['39734274', 'Petit frère', false]]);
+});
+
+await check('temps de jeu : un seul compte (le choisi), ou le total ; jamais compté deux fois pour Steam', async () => {
+  const item = { id: 'steam:730', steamTimes: { 1: { minutes: 600, lastPlayed: 5, recent: 120 }, 2: { minutes: 3000, lastPlayed: 9, recent: 0 } } };
+  const store = { timeBy: { 'steam:730': { 1: { minutes: 50, lastPlayed: 10 } } } };
+  assert.equal(playtimeOf(item, store, { steamAccount: '1' }).minutes, 600, 'compte choisi seulement, chronomètre non ajouté');
+  assert.equal(playtimeOf(item, store, { steamAccount: '1' }).recent, 120);
+  assert.equal(playtimeOf(item, store, { steamAccount: '1', total: true }).minutes, 3600, 'temps total');
+  const epic = { id: 'epic:FN', minutes: 0 };
+  const st = { timeBy: { 'epic:FN': { A: { minutes: 30, lastPlayed: 1 }, B: { minutes: 90, lastPlayed: 2 } } } };
+  assert.equal(playtimeOf(epic, st, { accountFor: () => 'A' }).minutes, 30);
+  assert.equal(playtimeOf(epic, st, { total: true }).minutes, 120);
+});
+
+await check('vrais noms Steam (API officielle, par lots) ; jamais « Jeu Steam 123 » gardé', async () => {
+  const names = await steamNames(['1248130', '730'], async () => ({ ok: true, json: async () => ({ response: { store_items: [{ appid: 1248130, name: 'Farming Simulator 22' }, { appid: 730, name: 'Counter-Strike 2' }] } }) }));
+  assert.deepEqual(names, { 1248130: 'Farming Simulator 22', 730: 'Counter-Strike 2' });
+  const [m] = merge([{ id: 'steam:9', source: 'steam', kind: 'game', name: null, steamId: '9', minutes: 0, lastPlayed: 0 }], { names: { 9: 'Jeu Steam 9' }, items: {}, time: {} });
+  assert.equal(m.name, 'Jeu Steam 9', 'affiché en attendant, mais redemandé (pas considéré comme un vrai nom)');
 });
 
 console.log(`\n${passed} vérifications passées.`);
