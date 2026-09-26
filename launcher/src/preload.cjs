@@ -1,5 +1,5 @@
 // Pont minimal et sûr entre l'interface et Windows : seulement ces fonctions, rien d'autre.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('launcher', {
   scan: () => ipcRenderer.invoke('lib:scan'),
@@ -33,6 +33,17 @@ contextBridge.exposeInMainWorld('launcher', {
   eventCreate: (e) => ipcRenderer.invoke('events:create', e),
   eventRespond: (id, r) => ipcRenderer.invoke('events:respond', id, r),
   eventCancel: (id) => ipcRenderer.invoke('events:cancel', id),
+  captures: (id) => ipcRenderer.invoke('captures:get', id),
+  openCapture: (token) => ipcRenderer.invoke('captures:open', token),
+  captureFolder: (token) => ipcRenderer.invoke('captures:folder', token),
+  achievements: (id) => ipcRenderer.invoke('ach:get', id),
+  timeToBeat: (id) => ipcRenderer.invoke('hltb:get', id),
+  collections: () => ipcRenderer.invoke('col:get'),
+  saveCollections: (c) => ipcRenderer.invoke('col:save', c),
+  addGameFile: (file) => ipcRenderer.invoke('custom:add', webUtils.getPathForFile(file)),
+  pickGame: () => ipcRenderer.invoke('custom:pick'),
+  renameGame: (id, name) => ipcRenderer.invoke('custom:rename', id, name),
+  removeGame: (id) => ipcRenderer.invoke('custom:remove', id),
   onOverlay: (fn) => ipcRenderer.on('overlay:data', (_e, d) => fn(d)),
   openFree: (slug) => ipcRenderer.invoke('free:open', slug),
   stats: (period) => ipcRenderer.invoke('stats:get', period),

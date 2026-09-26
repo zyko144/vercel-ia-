@@ -5,7 +5,7 @@ import { filterSort } from '../core/sort.js';
 const $ = (id) => document.getElementById(id);
 let demoVerify = null; // aperçu hors Electron seulement
 const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
-const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
+const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], cols: {}, friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -80,6 +80,7 @@ function renderPlatforms() {
       : s.icon ? `<img src="${esc(s.icon)}" alt="">` : `<span class="pdot" style="background:${esc(s.color)}">${esc(s.label[0])}</span>`;
     return `<button data-platform="${esc(k)}" class="${state.view === 'liste' && state.list.source === k ? 'on' : ''}">${logo}${esc(s.label)}<em>${n}</em></button>`;
   }).join('');
+  if (typeof renderCollections === 'function') renderCollections();
 }
 
 // ---------- Accueil ----------
@@ -106,6 +107,8 @@ function renderHero() {
   menu.push(`<button data-set="favorite">${i.favorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}</button>`);
   menu.push(`<button data-set="hidden">${i.hidden ? '◉ Afficher' : '◌ Masquer'}</button>`);
   menu.push('<button data-sheet="1">≡ Fiche complète</button>');
+  menu.push('<button data-cols="1">📚 Collections…</button>');
+  if (i.custom) menu.push('<button data-rename="1">✏ Renommer</button>', '<button data-remove="1" class="danger">✕ Retirer de la bibliothèque</button>');
   if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) menu.push('<button data-action="uninstall" class="danger">🗑 Désinstaller</button>');
   const main = i.installed ? (isApp ? 'Ouvrir' : 'Jouer') : 'Installer';
   hero.innerHTML = `
@@ -260,6 +263,40 @@ $('friendsRefresh').addEventListener('click', () => (state.ftab === 'history' ? 
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'history') loadHistory(); }, 60_000);
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'steam') loadFriends(); }, 60_000);
 
+// ---------- Collections ----------
+function renderCollections() {
+  const entries = Object.entries(state.cols);
+  $('collections').innerHTML = entries.map(([id, c]) => `<button data-col="${esc(id)}" class="${state.view === 'liste' && state.list.collection === id ? 'on' : ''}"><span class="pdot" style="background:#2f8bff">📚</span>${esc(c.name)}<em>${c.items.filter((x) => state.items.some((i) => i.id === x)).length}</em></button>`).join('') || '<small class="hint colempty">Range tes jeux : « Avec les potes », « À finir »…</small>';
+}
+async function saveCols() { state.cols = await api.saveCollections(state.cols); renderCollections(); }
+function newColId() { return `c${Date.now().toString(36)}`; }
+function openCollections(item) {
+  $('colTitle').textContent = `Collections · ${item.name}`;
+  const draw = () => {
+    $('colChecks').innerHTML = Object.entries(state.cols).map(([id, c]) => `<label class="check"><input type="checkbox" value="${esc(id)}" ${c.items.includes(item.id) ? 'checked' : ''}>${esc(c.name)}<button type="button" class="btn ghost colx" data-coldel="${esc(id)}" title="Supprimer la collection">✕</button></label>`).join('') || '<small class="hint">Aucune collection : crée la première ci-dessous.</small>';
+  };
+  draw();
+  $('colChecks').onchange = (e) => { const c = state.cols[e.target.value]; if (!c) return; c.items = e.target.checked ? [...new Set([...c.items, item.id])] : c.items.filter((x) => x !== item.id); saveCols(); };
+  $('colChecks').onclick = (e) => { const b = e.target.closest('[data-coldel]'); if (!b) return; e.preventDefault(); if (window.confirm(`Supprimer la collection « ${state.cols[b.dataset.coldel].name} » ? (les jeux restent dans la bibliothèque)`)) { delete state.cols[b.dataset.coldel]; saveCols().then(draw); } };
+  $('colAdd').onclick = () => { const name = $('colName').value.trim(); if (!name) return; state.cols[newColId()] = { name, items: [item.id] }; $('colName').value = ''; saveCols().then(draw); };
+  $('colDlg').showModal();
+}
+$('newCol').addEventListener('click', () => { const name = window.prompt('Nom de la nouvelle collection :'); if (name?.trim()) { state.cols[newColId()] = { name: name.trim(), items: [] }; saveCols(); toast('Collection créée : ajoute des jeux depuis leur menu ▾'); } });
+
+// ---------- Ajouter un jeu : bouton ou .exe glissé dans la fenêtre ----------
+$('addGame').addEventListener('click', () => api.pickGame?.().then((r) => r?.ok && toast(`${r.name} ajouté`)));
+let dragDepth = 0;
+document.addEventListener('dragenter', (e) => { if ([...(e.dataTransfer?.items ?? [])].some((x) => x.kind === 'file')) { dragDepth++; $('dropzone').hidden = false; } });
+document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('dropzone').hidden = true; } });
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dragDepth = 0; $('dropzone').hidden = true;
+  const files = [...(e.dataTransfer?.files ?? [])].filter((f) => /\.exe$/i.test(f.name));
+  if (!files.length) return toast('Glisse le fichier .exe du jeu');
+  for (const f of files) { const r = await api.addGameFile?.(f).catch(() => null); toast(r?.ok ? `${r.name} ajouté` : r?.error ?? 'Impossible d’ajouter ce fichier'); }
+});
+
 // ---------- Mon PC : jauges en direct, boost, nettoyage ----------
 const gb = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.round(b / 1e6)} Mo`);
 const gaugeHtml = (label, value, pct, sub = '', hot = false) => `<div class="gauge ${hot ? 'hot' : ''}"><small>${label}</small><b>${value}</b>${pct != null ? `<div class="gbar"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>` : ''}<small>${sub}</small></div>`;
@@ -334,8 +371,10 @@ function renderRecos() {
 // ---------- Bibliothèque ----------
 const TITLES = { bibliotheque: 'Bibliothèque', jeux: 'Jeux', applis: 'Applications', favoris: 'Favoris' };
 function renderList() {
-  const list = filterSort(state.items, state.list);
-  $('listTitle').textContent = state.list.q ? `Résultats pour « ${state.list.q} »` : state.list.source !== 'tout' ? state.sources[state.list.source]?.label ?? 'Plateforme' : TITLES[state.list.kind === 'tout' ? 'bibliotheque' : state.list.kind] ?? 'Bibliothèque';
+  const col = state.list.collection && state.cols[state.list.collection];
+  // Une collection montre tous ses jeux (même non installés), sauf filtre choisi
+  const list = col ? filterSort(state.items.filter((i) => col.items.includes(i.id)), { ...state.list, kind: 'tout', source: 'tout', installed: state.list.installed === 'tout' ? 'tous' : state.list.installed }) : filterSort(state.items, state.list);
+  $('listTitle').textContent = col ? `📚 ${col.name}` : state.list.q ? `Résultats pour « ${state.list.q} »` : state.list.source !== 'tout' ? state.sources[state.list.source]?.label ?? 'Plateforme' : TITLES[state.list.kind === 'tout' ? 'bibliotheque' : state.list.kind] ?? 'Bibliothèque';
   $('count').textContent = `${list.length} élément${list.length > 1 ? 's' : ''}`;
   $('grid').innerHTML = list.length ? list.map((i) => card(i, 'gridcard')).join('') : '<div class="empty">Rien ici.</div>';
 }
@@ -489,7 +528,7 @@ function go(view) {
   const lists = { bibliotheque: 'tout', jeux: 'jeux', applis: 'applis', favoris: 'favoris' };
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
   if (view === 'ia') { openAssistant(true); document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === state.view || (state.view === 'liste' && false))); return; }
-  if (view in lists) { state.list.kind = lists[view]; state.list.source = 'tout'; showView('liste'); } else showView(view);
+  if (view in lists) { state.list.kind = lists[view]; state.list.source = 'tout'; state.list.collection = null; showView('liste'); } else showView(view);
   renderPlatforms();
   if (state.view === 'liste') renderList();
   if (state.view === 'stats') renderStats();
@@ -523,8 +562,41 @@ function openSheet(i) {
     ${d.description ? `<p>${esc(d.description)}</p>` : '<p class="fine">Pas de description disponible.</p>'}
     <p class="fine">${[d.developers?.[0] && `Studio : ${esc(d.developers[0])}`, d.released && `Sortie : ${esc(d.released)}`, d.score && `Metacritic : ${esc(d.score)}`, `Temps : ${hours(i.minutes)}`, `Taille : ${size(i.size)}`].filter(Boolean).join(' · ')}</p>
     ${d.screenshots?.length ? `<div class="shots">${d.screenshots.map((s) => `<img src="${esc(s)}" alt="">`).join('')}</div>` : ''}
+    <div id="sxTime"></div><div id="sxAch"></div><div id="sxCaps"></div>
     <div class="acts"><button class="btn" data-close="1">Fermer</button></div>`;
   $('sheet').showModal();
+  loadSheetExtras(i);
+}
+
+// Fiche : durée pour finir, succès (les plus faciles d'abord), captures d'écran
+async function loadSheetExtras(i) {
+  if (i.kind !== 'game') return;
+  api.timeToBeat?.(i.id).then((t) => {
+    if (!t || !$('sxTime')) return;
+    const played = i.minutes / 60;
+    const left = t.main ? Math.max(0, t.main - played) : null;
+    const pct = t.main ? Math.min(100, (played / t.main) * 100) : 0;
+    $('sxTime').innerHTML = `<h3>⏱ Durée pour finir <small class="hint">moyennes HowLongToBeat</small></h3>
+      <div class="hltb">${[['Histoire', t.main], ['+ À côtés', t.extra], ['100 %', t.complete]].map(([k, v]) => `<div><small>${k}</small><b>${v ? `${String(v).replace('.', ',')} h` : '—'}</b></div>`).join('')}</div>
+      ${t.main ? `<div class="gbar big"><i style="width:${pct}%"></i></div><p class="fine">${left > 0 ? `Il te reste environ ${hours(left * 60)} pour finir l’histoire.` : 'Tu as déjà dépassé la durée moyenne de l’histoire 🎉'}</p>` : ''}`;
+  }).catch(() => {});
+  api.achievements?.(i.id).then((a) => {
+    if (!$('sxAch') || !a) return;
+    if (a.none) { if (a.none === 'cle' && i.source === 'steam') $('sxAch').innerHTML = '<p class="fine">🏆 Ajoute ta clé Steam dans Paramètres pour voir tes succès.</p>'; return; }
+    const row = (x) => `<div class="achi ${x.done ? 'done' : ''}">${x.icon ? `<img src="${esc(x.icon)}" alt="">` : '<span class="noic">🏆</span>'}<div><b>${esc(x.name)}</b><small>${esc(x.desc || (x.hidden ? 'Succès caché' : ''))}</small></div>${x.pct != null ? `<em>${x.pct.toFixed(1).replace('.', ',')} %</em>` : ''}</div>`;
+    $('sxAch').innerHTML = `<h3>🏆 Succès <small class="hint">${a.done} / ${a.total}</small></h3>
+      <div class="gbar big"><i style="width:${(100 * a.done) / a.total}%"></i></div>
+      ${a.easy.length ? `<b class="sub">Les plus faciles à débloquer</b>${a.easy.map(row).join('')}` : '<p class="fine">Tous les succès sont débloqués 👑</p>'}
+      ${a.recent.length ? `<details><summary>Derniers débloqués</summary>${a.recent.map(row).join('')}</details>` : ''}`;
+  }).catch(() => {});
+  api.captures?.(i.id).then((caps) => {
+    if (!$('sxCaps') || !caps?.length) return;
+    const imgs = caps.filter((c) => !c.video);
+    const vids = caps.filter((c) => c.video).length;
+    $('sxCaps').innerHTML = `<h3>📸 Captures <small class="hint">${imgs.length} image${imgs.length > 1 ? 's' : ''}${vids ? ` · ${vids} vidéo${vids > 1 ? 's' : ''}` : ''}</small></h3>
+      <div class="caps">${imgs.slice(0, 24).map((c) => `<img src="${esc(c.url)}" data-cap="${esc(c.token)}" alt="" loading="lazy">`).join('')}</div>
+      <button class="btn" data-capdir="${esc(caps[0].token)}">Ouvrir le dossier</button>`;
+  }).catch(() => {});
 }
 
 const human = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.round(b / 1e6)} Mo`);
@@ -593,7 +665,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.go) return go(t.dataset.go);
   if (t.dataset.platform) {
     document.querySelectorAll('#nav button').forEach((b) => b.classList.remove('on'));
-    state.list = { ...state.list, kind: 'tout', source: t.dataset.platform };
+    state.list = { ...state.list, kind: 'tout', source: t.dataset.platform, collection: null };
     showView('liste');
     renderPlatforms();
     return renderList();
@@ -615,6 +687,12 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
+  if (t.dataset.cap) return api.openCapture(t.dataset.cap);
+  if (t.dataset.capdir) return api.captureFolder(t.dataset.capdir);
+  if (t.dataset.cols && state.sel) return openCollections(state.sel);
+  if (t.dataset.col) { document.querySelectorAll('#nav button').forEach((b) => b.classList.remove('on')); state.list = { ...state.list, kind: 'tout', source: 'tout', collection: t.dataset.col }; showView('liste'); renderPlatforms(); return renderList(); }
+  if (t.dataset.rename && state.sel) { const n = window.prompt('Nouveau nom du jeu :', state.sel.name); if (n) api.renameGame(state.sel.id, n).then((r) => r?.ok && toast('Jeu renommé')); return; }
+  if (t.dataset.remove && state.sel) { if (window.confirm(`Retirer ${state.sel.name} de la bibliothèque ? (les fichiers du jeu ne sont pas touchés)`)) api.removeGame(state.sel.id).then((r) => { if (r?.ok) { state.sel = null; toast('Jeu retiré'); } }); return; }
   if (t.dataset.login) return showAuth(true);
   if (t.dataset.hacc) { const r = await api.hFriendAccept(t.dataset.hacc); if (r?.amis) { state.hist = r; renderHistory(); toast('Nouvel ami ajouté'); } return; }
   if (t.dataset.hrem) {
@@ -849,6 +927,7 @@ async function load() {
   api.freeGames?.().then((f) => { state.free = f ?? []; renderFree(); }).catch(() => {});
   api.deals?.().then((d) => { state.deals = d ?? []; renderDeals(); }).catch(() => {});
   loadFriends();
+  api.collections?.().then((c) => { state.cols = c ?? {}; renderCollections(); }).catch(() => {});
 }
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
 api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(); });
@@ -890,6 +969,11 @@ function demoApi() {
       { id64: '76561198000000003', name: 'Sam', avatar: null, online: true, status: 'En ligne', game: null },
       { id64: '76561198000000004', name: 'Zoé', avatar: null, online: false, status: 'Hors ligne', game: null }] }),
     friendAction: async () => ({ ok: true }), openDeal: async () => {},
+    collections: async () => ({ c1: { name: 'Avec les potes', items: ['epic:Fortnite', 'riot:valorant'] }, c2: { name: 'À finir', items: ['steam:271590'] } }), saveCollections: async (c) => c,
+    pickGame: async () => ({ ok: true, name: 'Mon jeu' }), addGameFile: async () => ({ ok: true, name: 'Mon jeu' }),
+    timeToBeat: async () => ({ main: 31.5, extra: 48, complete: 82 }),
+    achievements: async () => ({ done: 45, total: 77, easy: [{ name: 'Bienvenue à Los Santos', desc: 'Termine la première mission', pct: 81.2, icon: null }, { name: 'Un peu de sport', desc: 'Joue au tennis', pct: 34.8, icon: null }], recent: [{ name: 'Braquage réussi', desc: 'Termine un braquage', done: true, pct: 22.1, icon: null }] }),
+    captures: async () => [{ token: 'a', url: img('h1.jpg'), video: false }, { token: 'b', url: img('h2.jpg'), video: false }, { token: 'c', video: true }],
     hFriends: async () => ({ code: 'Noam#3F9A2C', moi: { week: 610, top: 'Rocket League' }, demandes: [{ id: 'z', pseudo: 'Zoé', code: 'Zoé#11AA22' }], amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Rocket League', week: 840, top: 'Rocket League' }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT' }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }] }),
     events: async () => ({ soirees: [{ id: 'e1', game: 'Rocket League', at: Date.now() + 5 * 3_600_000, mine: true, organisateur: 'Noam', ma: 'oui', invites: [{ pseudo: 'Max', reponse: 'oui' }, { pseudo: 'Léa', reponse: null }] }, { id: 'e2', game: 'VALORANT', at: Date.now() + 26 * 3_600_000, mine: false, organisateur: 'Léa', ma: null, invites: [{ pseudo: 'Noam', reponse: null }] }] }),
     pc: async () => ({ cpu: { usage: 37, temp: null, name: 'AMD Ryzen 7 5800X' }, ram: { used: 11.2e9, total: 32e9 }, gpu: { name: 'NVIDIA GeForce RTX 3070', usage: 92, temp: 71, vramUsed: 6200, vramTotal: 8192 } }),

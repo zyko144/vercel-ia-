@@ -27,6 +27,7 @@ import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
+import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
 import { stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
@@ -218,7 +219,8 @@ async function remerge() {
 
 async function scan() {
   await refreshAccounts();
-  raw = await scanAll({}, { steamApiKey: secret('steam') });
+  const [found, xbox] = await Promise.all([scanAll({}, { steamApiKey: secret('steam') }), scanXbox().catch(() => [])]);
+  raw = [...found, ...xbox, ...Object.values(store.data.custom ?? {}).map(customItem)];
   await fillSteamNames(raw).catch(() => {});
   await remerge();
   enrichInBackground().catch(() => {});
@@ -442,6 +444,13 @@ async function doAction(id, action) {
   if (action === 'folder' && item.installDir) return shell.openPath(item.installDir).then(() => ({ ok: true }));
   if (action === 'store' && item.source === 'steam') return openLink(steamActions(item.steamId).store).then(() => ({ ok: true }));
 
+  if (action === 'launch' && item.source === 'xbox') {
+    // Jeux Xbox / Game Pass : lancés par Windows (ils ne s'ouvrent pas directement par leur .exe)
+    if (!validAumid(item.aumid)) throw new Error('jeu Xbox introuvable');
+    spawn('explorer.exe', [`shell:AppsFolder\\${item.aumid}`], { detached: true, stdio: 'ignore' }).unref();
+    gameMode(item);
+    return { ok: true };
+  }
   if (action === 'launch') {
     // Le jeu seul d'abord (sans Steam / Epic) ; s'il a besoin de sa plateforme, elle est démarrée en arrière-plan
     const memo = store.data.items[item.id]?.launch ?? null;
@@ -745,6 +754,92 @@ async function checkEvents() {
   store.save();
 }
 setInterval(() => checkEvents().catch(() => {}), 2 * 60_000);
+
+// ---------- Captures, succès, durée pour finir ----------
+const captureFiles = new Map(); // jeton -> fichier (seulement ceux trouvés par capturesOf)
+ipcMain.handle('captures:get', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item) return [];
+  const list = await capturesOf(item, { steamRoot: await steamPath(), accountIds: steamAccounts.map((a) => a.id) }).catch(() => []);
+  return list.map((c) => {
+    const token = createHash('sha1').update(c.file).digest('hex').slice(0, 24);
+    captureFiles.set(token, c.file);
+    return { token, video: c.video, at: c.at, url: c.video ? null : localUrls({ x: c.file }).x };
+  });
+});
+ipcMain.handle('captures:open', (_e, token) => { const f = captureFiles.get(String(token)); return f ? shell.openPath(f) : null; });
+ipcMain.handle('captures:folder', (_e, token) => { const f = captureFiles.get(String(token)); if (f) shell.showItemInFolder(f); });
+ipcMain.handle('ach:get', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  const appid = item?.matchSteamId ?? item?.steamId;
+  if (!appid || !secret('steam')) return { none: !secret('steam') ? 'cle' : 'steam' };
+  return (await achievementsOf(appid, secret('steam'), myId64() ?? await lastSteamUser(await steamPath())).catch(() => null)) ?? { none: 'aucun' };
+});
+ipcMain.handle('hltb:get', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item || item.kind !== 'game') return null;
+  const cache = (store.data.hltb ??= {});
+  const key = norm(item.name);
+  if (cache[key] && Date.now() - cache[key].at < (cache[key].t ? 60 : 7) * 86_400_000) return cache[key].t;
+  const ai = await getAi();
+  if (!ai) return null;
+  const t = await timeToBeat(ai, item.name).catch(() => null);
+  cache[key] = { at: Date.now(), t };
+  store.save();
+  return t;
+});
+
+// ---------- Collections ----------
+ipcMain.handle('col:get', () => store.data.collections ?? {});
+ipcMain.handle('col:save', (_e, cols) => {
+  const clean = {};
+  for (const [id, c] of Object.entries(cols ?? {}).slice(0, 50)) {
+    if (!/^[\w-]{1,40}$/.test(id)) continue;
+    const name = String(c?.name ?? '').replace(/[<>]/g, '').trim().slice(0, 40);
+    if (name) clean[id] = { name, items: [...new Set((Array.isArray(c.items) ? c.items : []).map(String))].slice(0, 2000) };
+  }
+  store.data.collections = clean;
+  store.save();
+  return clean;
+});
+
+// ---------- Jeux ajoutés à la main (.exe glissé dans la fenêtre ou choisi) ----------
+async function addCustom(file) {
+  const exe = String(file ?? '');
+  if (!path.isAbsolute(exe) || !/\.exe$/i.test(exe) || !(await import('node:fs/promises').then((f) => f.stat(exe)).catch(() => null))?.isFile()) return { ok: false, error: 'Choisis le fichier .exe du jeu.' };
+  const id = `custom:${createHash('sha1').update(exe.toLowerCase()).digest('hex').slice(0, 12)}`;
+  (store.data.custom ??= {})[id] = { id, name: nameFromExe(exe), exe };
+  store.save();
+  raw = [...raw.filter((i) => i.id !== id), customItem(store.data.custom[id])];
+  await remerge();
+  send('lib:update', library());
+  return { ok: true, id, name: store.data.custom[id].name };
+}
+ipcMain.handle('custom:add', (_e, file) => addCustom(file));
+ipcMain.handle('custom:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Ajouter un jeu', filters: [{ name: 'Jeux', extensions: ['exe'] }], properties: ['openFile'] });
+  return r.canceled || !r.filePaths[0] ? { ok: false } : addCustom(r.filePaths[0]);
+});
+ipcMain.handle('custom:rename', async (_e, id, name) => {
+  const c = store.data.custom?.[String(id)];
+  const n = String(name ?? '').replace(/[<>]/g, '').trim().slice(0, 80);
+  if (!c || !n) return { ok: false };
+  c.name = n;
+  store.save();
+  raw = raw.map((i) => (i.id === c.id ? customItem(c) : i));
+  await remerge();
+  send('lib:update', library());
+  return { ok: true };
+});
+ipcMain.handle('custom:remove', async (_e, id) => {
+  if (!store.data.custom?.[String(id)]) return { ok: false };
+  delete store.data.custom[String(id)];
+  store.save();
+  raw = raw.filter((i) => i.id !== String(id));
+  await remerge();
+  send('lib:update', library());
+  return { ok: true };
+});
 
 // ---------- Statistiques ----------
 ipcMain.handle('stats:get', (_e, period) => {
