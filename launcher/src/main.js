@@ -13,7 +13,7 @@ import { activeItems, periodItems, periodStats, runningPaths, statCategory } fro
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
 import { heatAlerts, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
-import { deepClean, emptyRecycleBin, extraTargets, freeSpace, orphanGameFolders, recycleBinSize, removeOrphan, setStartup, setTweak, startupApps, tweakStates } from './core/optimize.js';
+import { deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, orphanGameFolders, recycleBinSize, removeOrphan, scoreLabel, setStartup, setTweak, startupApps, steamJunk, tweakStates } from './core/optimize.js';
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
@@ -29,10 +29,10 @@ import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
-import { dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
+import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
 import { directEnv, insideDir, launchPlan } from './core/direct.js';
-import { stripWake, understand } from './core/commands.js';
+import { findItem as findByName, stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
 import { session } from 'electron';
 import { enrich } from './core/art.js';
@@ -287,9 +287,19 @@ async function enrichInBackground() {
 const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey))$/;
 const openLink = (url) => (SAFE_LINK.test(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
-async function confirm(message, detail) {
-  const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Annuler', 'Oui'], defaultId: 0, cancelId: 0, message, detail });
-  return r.response === 1;
+// Confirmation dans une fenêtre du launcher (même style que le reste), réponse renvoyée par l'interface
+let askSeq = 0;
+const asks = new Map();
+ipcMain.on('ui:answer', (_e, id, ok) => { asks.get(id)?.(Boolean(ok)); asks.delete(id); });
+async function confirm(message, detail, opts = {}) {
+  if (!win || win.isDestroyed()) return false;
+  if (!win.isVisible()) showWindow();
+  const id = ++askSeq;
+  return new Promise((resolve) => {
+    asks.set(id, resolve);
+    send('ui:ask', { id, title: message, text: detail, danger: Boolean(opts.danger), ok: opts.ok ?? 'Confirmer', icon: opts.icon ?? '⚠️' });
+    setTimeout(() => { if (asks.has(id)) { asks.delete(id); resolve(false); } }, 5 * 60_000);
+  });
 }
 
 // Steam en arrière-plan : steam.exe -silent lance le jeu sans ouvrir la fenêtre de Steam
@@ -373,39 +383,61 @@ ipcMain.handle('clean:run', async (_e, ids) => {
   return { ok: true, freed };
 });
 
-// ---------- Optimisation complète ----------
+// ---------- Optimisation complète (avancement envoyé en direct à l'interface) ----------
 let orphanList = [];
 let startupList = [];
-ipcMain.handle('opti:scan', async () => {
+let lastScan = null;
+const scoreOf = (r) => healthScore({
+  junkBytes: r.junk.reduce((n, x) => n + x.bytes, 0) + r.recycle, orphanBytes: r.orphans.reduce((n, x) => n + x.bytes, 0),
+  heavyStartup: r.startup.filter((x) => x.enabled && x.heavy).length, tweaksOff: r.tweaks.filter((t) => !t.on && !t.optional).length,
+  freeRatio: r.free && r.disk ? r.free / r.disk : null,
+});
+async function optiScan(progress = () => {}) {
   const root = await steamPath();
   const libs = root ? await steamLibraries(root) : [];
-  const [junk, recycle, orphans, startup, tweaks, free] = await Promise.all([
-    Promise.all([cleanTargets(process.env, root), extraTargets()]).then(([a, b]) => measureTargets([...a, ...b])),
-    recycleBinSize(), orphanGameFolders(libs).catch(() => []), startupApps().catch(() => []), tweakStates().catch(() => []), freeSpace(),
+  const step = (id, p) => p.then((v) => { progress({ step: id }); return v; });
+  const [junk, recycle, orphans, startup, tweaks, free, disk] = await Promise.all([
+    step('junk', Promise.all([cleanTargets(process.env, root), extraTargets(), steamJunk(root)]).then(([a, b, c]) => measureTargets([...a, ...b, ...c]))),
+    step('recycle', recycleBinSize()), step('orphans', orphanGameFolders(libs).catch(() => [])),
+    step('startup', startupApps().catch(() => [])), step('tweaks', tweakStates().catch(() => [])), freeSpace(), diskSize(),
   ]);
   cleanList = junk.filter((t) => t.bytes > 0);
   orphanList = orphans.map((o) => ({ ...o, libs }));
   startupList = startup;
-  return {
-    junk: cleanList.map(({ id, label, bytes, note }) => ({ id, label, bytes, note })).sort((a, b) => b.bytes - a.bytes),
-    recycle, orphans: orphans.map(({ id, label, bytes }) => ({ id, label, bytes })), startup, tweaks, free,
+  const r = {
+    junk: cleanList.map(({ id, label, bytes, note }) => ({ id, label, bytes, note, group: groupOf(id) })).sort((a, b) => b.bytes - a.bytes),
+    recycle, orphans: orphans.map(({ id, label, bytes }) => ({ id, label, bytes })), startup, tweaks, free, disk, at: Date.now(),
   };
-});
-ipcMain.handle('opti:run', async (_e, plan) => {
+  r.score = scoreOf(r);
+  r.label = scoreLabel(r.score);
+  lastScan = r;
+  return r;
+}
+ipcMain.handle('opti:scan', () => optiScan((p) => send('opti:progress', { phase: 'scan', ...p })));
+async function optiApply(plan, progress = () => {}) {
   const junk = cleanList.filter((t) => plan?.junk?.includes(t.id));
   const orphans = orphanList.filter((o) => plan?.orphans?.includes(o.id));
   const tweaks = (plan?.tweaks ?? []).map(String);
-  const parts = [junk.length && `${junk.length} cache(s)`, plan?.recycle && 'la corbeille', orphans.length && `${orphans.length} reste(s) de jeux désinstallés (${orphans.map((o) => o.label).join(', ')})`, tweaks.length && `${tweaks.length} réglage(s) Windows`].filter(Boolean);
-  if (!parts.length) return { ok: false };
-  if (!(await confirm('Lancer l’optimisation ?', `Seront nettoyés ou appliqués : ${parts.join(', ')}.\nTes jeux installés, sauvegardes, mots de passe et fichiers personnels ne sont pas touchés.`))) return { ok: false };
+  const steps = [...junk.map((t) => ({ kind: 'junk', label: t.label, t })), ...(plan?.recycle ? [{ kind: 'recycle', label: 'Corbeille' }] : []), ...orphans.map((o) => ({ kind: 'orphan', label: `Reste de jeu : ${o.label}`, o })), ...tweaks.map((id) => ({ kind: 'tweak', label: `Réglage : ${id}`, id }))];
   const before = await freeSpace();
   let freed = 0;
-  for (const t of junk) freed += await cleanTarget(t).catch(() => 0);
-  for (const o of orphans) freed += await removeOrphan(o, o.libs).catch(() => 0);
-  if (plan?.recycle) await emptyRecycleBin();
-  for (const id of tweaks) await setTweak(id, true).catch(() => {});
+  for (const [i, st] of steps.entries()) {
+    progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'en cours', freed });
+    let got = 0;
+    if (st.kind === 'junk') got = await cleanTarget(st.t).catch(() => 0);
+    if (st.kind === 'orphan') got = await removeOrphan(st.o, st.o.libs).catch(() => 0);
+    if (st.kind === 'recycle') { const size = lastScan?.recycle ?? 0; await emptyRecycleBin(); got = size; }
+    if (st.kind === 'tweak') await setTweak(st.id, true).catch(() => {});
+    freed += got;
+    progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'fait', got, freed });
+  }
   const after = await freeSpace();
-  return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, tweaks: tweaks.length };
+  return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: tweaks.length };
+}
+ipcMain.handle('opti:run', async (_e, plan) => {
+  const r = await optiApply(plan, (p) => send('opti:progress', p));
+  const scan = await optiScan().catch(() => null);
+  return { ...r, score: scan?.score ?? null, scan };
 });
 ipcMain.handle('opti:startup', async (_e, name, enabled) => {
   if (!startupList.some((s) => s.name === String(name))) return { ok: false };
@@ -415,12 +447,22 @@ ipcMain.handle('opti:startup', async (_e, name, enabled) => {
 });
 ipcMain.handle('opti:tweak', async (_e, id, on) => ({ ok: await setTweak(String(id), Boolean(on)).catch(() => false), tweaks: await tweakStates().catch(() => []) }));
 ipcMain.handle('opti:deep', async () => {
-  if (!(await confirm('Nettoyage profond de Windows ?', 'Windows va demander l’autorisation administrateur. Seront vidés : fichiers temporaires de Windows, anciennes mises à jour téléchargées, cache d’optimisation de la distribution, rapports d’erreur, puis nettoyage des composants Windows. Ça peut prendre plusieurs minutes.'))) return { ok: false };
   const before = await freeSpace();
   const ok = await deepClean();
   const after = await freeSpace();
   return { ok, freed: before != null && after != null ? Math.max(0, after - before) : null };
 });
+ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto !== false, last: store.data.optiAutoLast ?? null }; });
+// Optimisation automatique chaque semaine : seulement les caches qui se recréent (système, pilotes, launchers), en silence
+setInterval(async () => {
+  if (store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
+  const scan = await optiScan().catch(() => null);
+  if (!scan) return;
+  const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs').map((j) => j.id) }).catch(() => null);
+  store.data.optiAutoLast = Date.now();
+  store.save();
+  if (r?.freed > 200e6) notify('Optimisation automatique', `${(r.freed / 1e9).toFixed(1).replace('.', ',')} Go libérés cette semaine.`);
+}, 3 * 3_600_000);
 
 // Alertes de chauffe (toutes les minutes)
 const lastHeat = {};
@@ -548,14 +590,13 @@ async function doAction(id, action) {
     if (['steam', 'epic'].includes(item.source)) {
       const check = safeGameDir(item);
       if (!check.ok) throw new Error(check.why);
-      const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Annuler', 'Supprimer définitivement'], defaultId: 0, cancelId: 0, message: `Désinstaller ${item.name} ?`, detail: `Le dossier suivant sera supprimé définitivement (${(item.size / 1e9).toFixed(1).replace('.', ',')} Go) :\n${check.dir}\n\n${item.source === 'steam' ? 'Steam' : 'Epic'} n’a pas besoin d’être ouvert.` });
-      if (r.response !== 1) return { ok: false };
+      if (!(await confirm(`Désinstaller ${item.name} ?`, `Le dossier suivant sera supprimé définitivement (${(item.size / 1e9).toFixed(1).replace('.', ',')} Go) :\n${check.dir}\n\n${item.source === 'steam' ? 'Steam' : 'Epic'} n’a pas besoin d’être ouvert.`, { danger: true, ok: 'Supprimer définitivement', icon: '🗑' }))) return { ok: false };
       await uninstallFiles(item, { launcherInstalled: epicLauncherInstalled() });
       scan().then((lib) => send('lib:update', lib)).catch(() => {});
       return { ok: true };
     }
     if (item.uninstallCmd) {
-      if (!await confirm(`Désinstaller ${item.name} ?`, 'Le programme de désinstallation de l’éditeur va s’ouvrir.')) return { ok: false };
+      if (!await confirm(`Désinstaller ${item.name} ?`, 'Le programme de désinstallation de l’éditeur va s’ouvrir.', { danger: true, ok: 'Désinstaller', icon: '🗑' })) return { ok: false };
       // La commande vient du registre de Windows (et non de l'interface) : c'est celle que Windows lancerait
       spawn(item.uninstallCmd, { shell: true, detached: true, windowsHide: false, stdio: 'ignore' }).unref();
       return { ok: true };
@@ -929,14 +970,18 @@ ipcMain.handle('news:get', async () => {
   if (c && Date.now() - c.at < 3 * 3_600_000) return c.list;
   const games = items.filter((i) => i.source === 'steam' && i.installed && /^\d+$/.test(i.steamId ?? '')).sort((a, b) => b.minutes - a.minutes).slice(0, 6);
   const all = (await Promise.all(games.map((g) => steamNews(g.steamId, 2).then((n) => n.map((x) => ({ ...x, game: g.name, id: g.id, image: g.art?.header ?? g.art?.hero ?? null }))).catch(() => [])))).flat();
-  const list = all.sort((a, b) => b.at - a.at).slice(0, 8);
+  const list = await translateNews(await getAi(), all.sort((a, b) => b.at - a.at).slice(0, 8), (store.data.newsFr ??= {}));
   store.data.news = { at: Date.now(), list };
   store.save();
   return list;
 });
 ipcMain.handle('news:game', async (_e, id) => {
   const item = items.find((i) => i.id === String(id));
-  return item?.source === 'steam' ? steamNews(item.steamId, 3).catch(() => []) : [];
+  if (item?.source !== 'steam') return [];
+  const list = await steamNews(item.steamId, 3).catch(() => []);
+  const out = await translateNews(await getAi(), list, (store.data.newsFr ??= {}));
+  store.save();
+  return out;
 });
 ipcMain.handle('news:open', (_e, appid, gid) => (/^\d{1,8}$/.test(String(appid)) && /^\d{1,25}$/.test(String(gid)) ? openLink(`https://store.steampowered.com/news/app/${appid}/view/${gid}`) : null));
 const colorCache = new Map();
@@ -1013,11 +1058,12 @@ async function runCommand(text, { voice = false } = {}) {
         const context = {
           items: [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 200).map((i) => `${i.name} · ${SOURCES[i.source]?.label ?? i.source} · ${i.installed ? 'installé' : 'non installé'} · ${Math.round(i.minutes / 60)} h`).join('\n'),
           music: np?.artist ? `${np.artist} - ${np.title}` : '',
+          extra: `Jeu en cours : ${currentSession()?.name ?? 'aucun'} · Temps de jeu aujourd'hui : ${todayGameMinutes(store.data.days)} min · Amis Steam en jeu : ${(friendsCache.data?.friends ?? []).filter((f) => f.game).map((f) => `${f.name} (${f.game})`).slice(0, 5).join(', ') || 'aucun'}`,
         };
         const r = await assistant(ai, clean, context);
         out = { reply: r.reply, action: r.action, value: r.value };
-        const item = r.target ? items.find((i) => norm(i.name) === norm(r.target)) : null;
-        if (item && ['launch', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) { out.itemId = item.id; await doAction(item.id, r.action).catch(() => {}); }
+        const item = r.target ? items.find((i) => norm(i.name) === norm(r.target)) ?? findByName(items, r.target) : null;
+        if (item && ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) { out.itemId = item.id; await doAction(item.id, r.action).catch(() => {}); }
       } catch (err) {
         out = { reply: `Je n’arrive pas à joindre l’IA (${err.message}).`, action: 'none' };
       }
@@ -1031,24 +1077,39 @@ ipcMain.handle('ai:ask', (_e, message) => runCommand(message));
 // ---------- Voix : « Hey History … » (écoute Windows) et bouton micro (transcription Gemini) ----------
 let stopListening = null;
 let awaitingCommandUntil = 0;
+let voiceNames = '';
+const listenNames = () => items.filter((i) => i.installed && (i.kind === 'game' || i.brand || i.known)).map((i) => i.name);
 function setVoice(on) {
   stopListening?.();
   stopListening = null;
   if (!on) return send('voice:state', { state: 'off' });
-  stopListening = startListening(async (heard) => {
-    const after = stripWake(heard);
+  voiceNames = listenNames().join('|');
+  stopListening = startListening(async ({ grammar, confidence, text }) => {
     let command = null;
-    if (after !== null) {
+    if (grammar === 'wake') {
+      // « Hey History » seul : Gemini écoute la suite (bien plus fiable), sinon la phrase suivante de Windows
+      speak('Oui ?');
+      if (await getAi()) { send('voice:record', {}); return; }
+      awaitingCommandUntil = Date.now() + 7000;
+      send('voice:state', { state: 'ecoute' });
+      return;
+    }
+    if (grammar === 'cmd' || grammar === 'music' || grammar === 'view') { if (confidence >= 0.45) command = stripWake(text) ?? text; }
+    else {
+      const after = stripWake(text);
       if (after) command = after;
-      else { awaitingCommandUntil = Date.now() + 7000; speak('Oui ?'); send('voice:state', { state: 'ecoute' }); return; }
-    } else if (Date.now() < awaitingCommandUntil) command = heard;
+      else if (after === '' ) { speak('Oui ?'); if (await getAi()) { send('voice:record', {}); return; } awaitingCommandUntil = Date.now() + 7000; send('voice:state', { state: 'ecoute' }); return; }
+      else if (Date.now() < awaitingCommandUntil && confidence >= 0.4) command = text;
+    }
     if (!command) return;
     awaitingCommandUntil = 0;
     send('voice:heard', { text: command });
     const r = await runCommand(command, { voice: true });
     send('voice:reply', r);
-  }, (state, message) => send('voice:state', { state, message }));
+  }, (state, message) => send('voice:state', { state, message }), { names: listenNames() });
 }
+// La liste d'écoute suit la bibliothèque (nouveaux jeux installés)
+setInterval(() => { if (stopListening && listenNames().join('|') !== voiceNames) setVoice(true); }, 60_000);
 ipcMain.handle('voice:set', (_e, on) => { store.data.settings.voice = Boolean(on); store.save(); setVoice(Boolean(on)); return { ok: true }; });
 ipcMain.handle('voice:transcribe', async (_e, audio, mime) => {
   const ai = await getAi();

@@ -83,3 +83,24 @@ export function dominantColor(bgra) {
   const hex = (v) => Math.round(v / w).toString(16).padStart(2, '0');
   return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
+
+/** Traduit en français les actus qui ne le sont pas (IA), en gardant les traductions déjà faites. */
+export async function translateNews(ai, list, cache = {}) {
+  const todo = list.filter((n) => !cache[n.gid] && !looksFrench(`${n.title} ${n.text}`));
+  if (ai && todo.length) {
+    const r = await ai.ask({
+      schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { gid: { type: 'string' }, title: { type: 'string' }, text: { type: 'string' } }, required: ['gid', 'title', 'text'] } } }, required: ['items'] },
+      system: 'Tu traduis en français naturel des actus de jeux vidéo. Garde les noms propres (jeux, cartes, modes). Réponse courte et fidèle, sans rien ajouter.',
+      text: JSON.stringify(todo.slice(0, 12).map(({ gid, title, text }) => ({ gid, title, text }))),
+    }).catch(() => null);
+    for (const t of r?.items ?? []) if (todo.some((n) => n.gid === t.gid) && t.title) cache[t.gid] = { title: cleanNews(t.title, 140), text: cleanNews(t.text, 260) };
+  }
+  return list.map((n) => (cache[n.gid] ? { ...n, ...cache[n.gid], fr: true } : n));
+}
+/** Texte déjà en français ? (mots très fréquents) */
+export function looksFrench(text) {
+  const words = String(text).toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ]+/g) ?? [];
+  if (words.length < 4) return false;
+  const fr = words.filter((w) => /^(le|la|les|des|du|de|et|est|une|un|pour|avec|dans|sur|nous|vous|nouveau|nouvelle|mise|jour|pas|plus|au|aux|ce|cette)$/.test(w)).length;
+  return fr / words.length > 0.12;
+}

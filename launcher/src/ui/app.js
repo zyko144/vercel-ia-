@@ -100,23 +100,12 @@ function renderHero() {
   const src = state.sources[i.source];
   const d = i.details ?? {};
   const ach = d.achievements ? `<dt>Succès</dt><dd>${d.achievements.done} / ${d.achievements.total}</dd>` : '';
-  const menu = [];
-  if (i.updatePending) menu.push('<button data-action="update">⟳ Mettre à jour et jouer</button>');
-  if (i.installed && ['steam', 'epic'].includes(i.source)) menu.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
-  if (i.installed && i.installDir) menu.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
-  if (i.source === 'steam') menu.push('<button data-action="store">🛈 Page du magasin</button>');
-  menu.push(`<button data-set="favorite">${i.favorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}</button>`);
-  menu.push(`<button data-set="hidden">${i.hidden ? '◉ Afficher' : '◌ Masquer'}</button>`);
-  menu.push('<button data-sheet="1">≡ Fiche complète</button>');
-  menu.push('<button data-cols="1">📚 Collections…</button>');
-  if (i.custom) menu.push('<button data-rename="1">✏ Renommer</button>', '<button data-remove="1" class="danger">✕ Retirer de la bibliothèque</button>');
-  if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) menu.push('<button data-action="uninstall" class="danger">🗑 Désinstaller</button>');
   const main = i.installed ? (isApp ? 'Ouvrir' : 'Jouer') : 'Installer';
   hero.innerHTML = `
     ${i.brand && isApp ? `<div class="hbg brandbg" style="--b:${esc(i.brand.color)}"></div>` : bg ? `<div class="hbg" style="background-image:${url(bg)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
     ${title}
     <div class="hbottom">
-      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button><div class="menu" id="heroMenu">${menu.join('')}</div></div>
+      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>
       <div class="hstat"><small>${CLOCK}${isApp ? 'Temps d’utilisation' : 'Temps de jeu'}</small><b>${hours(i.minutes)}</b></div>
       <div class="hstat"><small>${CLOCK}Dernière session</small><b>${state.active.has(i.id) ? '<span class="ok">En cours</span>' : ago(i.lastPlayed)}</b></div>
     </div>
@@ -131,6 +120,89 @@ function renderHero() {
       <div class="thumbs">${(d.screenshots ?? []).slice(0, 3).map((s) => `<img src="${esc(s)}" alt="">`).join('')}<button data-sheet="1" title="Fiche complète">•••</button></div>
     </div>`;
 }
+
+// Menu d'actions d'un jeu ou d'une appli : bouton ▾ du grand bandeau ET clic droit partout
+function menuFor(i) {
+  const isApp = i.kind !== 'game';
+  const m = [];
+  m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (isApp ? '▶ Ouvrir' : '▶ Jouer') : '⬇ Installer'}</button>`);
+  if (state.active.has(i.id)) m.push('<button data-action="close">■ Fermer</button>');
+  if (i.updatePending) m.push('<button data-action="update">⟳ Mettre à jour et jouer</button>');
+  m.push('<hr>');
+  m.push(`<button data-set="favorite">${i.favorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}</button>`);
+  m.push('<button data-cols="1">📚 Collections…</button>');
+  m.push('<button data-sheet="1">≡ Fiche complète</button>');
+  if (i.installed && i.installDir) m.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
+  if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
+  if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
+  if (i.custom) m.push('<button data-rename="1">✏ Renommer</button>');
+  m.push('<hr>');
+  m.push(`<button data-set="hidden">${i.hidden ? '◉ Afficher dans la bibliothèque' : '◌ Masquer de la bibliothèque'}</button>`);
+  if (i.custom) m.push('<button data-remove="1" class="danger">✕ Retirer de la bibliothèque</button>');
+  if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) m.push('<button data-action="uninstall" class="danger">🗑 Désinstaller</button>');
+  return m.join('');
+}
+function openCtx(item, x, y, anchor = null) {
+  if (!item) return;
+  const rect = anchor?.getBoundingClientRect();
+  if (state.sel !== item) { state.sel = item; if (state.view === 'accueil') renderHero(); }
+  const ctx = $('ctx');
+  ctx.innerHTML = `<div class="ctxhead">${esc(item.name)}</div>${menuFor(item)}`;
+  ctx.hidden = false;
+  const w = ctx.offsetWidth; const h = ctx.offsetHeight;
+  const vw = window.innerWidth; const vh = window.innerHeight;
+  let left = x; let top = y;
+  if (rect) { left = rect.left; top = rect.bottom + 8 + h > vh ? rect.top - h - 8 : rect.bottom + 8; }
+  ctx.style.left = `${Math.max(8, Math.min(left, vw - w - 8))}px`;
+  ctx.style.top = `${Math.max(8, Math.min(top, vh - h - 8))}px`;
+  ctx.classList.remove('show'); void ctx.offsetWidth; ctx.classList.add('show');
+}
+const hideCtx = () => { $('ctx').hidden = true; };
+document.addEventListener('contextmenu', (e) => {
+  const el = e.target.closest('[data-id]');
+  if (!el || el.closest('dialog')) return;
+  const item = state.items.find((i) => i.id === el.dataset.id);
+  if (!item) return;
+  e.preventDefault();
+  openCtx(item, e.clientX, e.clientY);
+});
+['scroll', 'resize', 'blur'].forEach((ev) => window.addEventListener(ev, hideCtx, true));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx(); });
+
+// Fenêtres du launcher (confirmation, saisie) : même style partout, jamais les fenêtres grises de Windows
+const ui = {
+  confirm({ title, text = '', ok = 'Confirmer', cancel = 'Annuler', danger = false, icon = '⚠️', list = [] }) {
+    return new Promise((resolve) => {
+      $('modalBox').innerHTML = `<div class="mhead"><span class="micon ${danger ? 'danger' : ''}">${esc(icon)}</span><h2>${esc(title)}</h2></div>
+        ${text ? `<p class="mtext">${esc(text).replace(/\n/g, '<br>')}</p>` : ''}
+        ${list.length ? `<ul class="mlist">${list.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+        <div class="row end"><button type="button" class="btn ghost" data-m="0">${esc(cancel)}</button><button type="button" class="btn ${danger ? 'dangerbtn' : 'play'}" data-m="1">${esc(ok)}</button></div>`;
+      const dlg = $('modal');
+      const done = (v) => { dlg.close(); resolve(v); };
+      $('modalBox').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) done(b.dataset.m === '1'); };
+      dlg.oncancel = (e) => { e.preventDefault(); done(false); };
+      dlg.showModal();
+      $('modalBox').querySelector('[data-m="1"]').focus();
+    });
+  },
+  prompt({ title, text = '', value = '', placeholder = '', ok = 'Valider', icon = '✏️' }) {
+    return new Promise((resolve) => {
+      $('modalBox').innerHTML = `<div class="mhead"><span class="micon">${esc(icon)}</span><h2>${esc(title)}</h2></div>
+        ${text ? `<p class="mtext">${esc(text)}</p>` : ''}
+        <input class="minput" id="mInput" maxlength="80" placeholder="${esc(placeholder)}" value="${esc(value)}">
+        <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">${esc(ok)}</button></div>`;
+      const dlg = $('modal');
+      const done = (v) => { dlg.close(); resolve(v); };
+      $('modalBox').onclick = (e) => { const b = e.target.closest('[data-m]'); if (b) done(b.dataset.m === '1' ? $('mInput').value.trim() || null : null); };
+      $('mInput').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); done($('mInput').value.trim() || null); } };
+      dlg.oncancel = (e) => { e.preventDefault(); done(null); };
+      dlg.showModal();
+      $('mInput').select();
+    });
+  },
+};
+api.onAsk?.(async (q) => api.answer(q.id, await ui.confirm(q)));
+if (!window.launcher) window.hlui = ui; // aperçu dans un navigateur (bancs d'essai)
 
 function card(i, cls = 'gcard') {
   const live = state.active.has(i.id);
@@ -391,13 +463,14 @@ function openCollections(item) {
   };
   draw();
   $('colChecks').onchange = (e) => { const c = state.cols[e.target.value]; if (!c) return; c.items = e.target.checked ? [...new Set([...c.items, item.id])] : c.items.filter((x) => x !== item.id); saveCols(); };
-  $('colChecks').onclick = (e) => { const b = e.target.closest('[data-coldel]'); if (!b) return; e.preventDefault(); if (window.confirm(`Supprimer la collection « ${state.cols[b.dataset.coldel].name} » ? (les jeux restent dans la bibliothèque)`)) { delete state.cols[b.dataset.coldel]; saveCols().then(draw); } };
+  $('colChecks').onclick = (e) => { const b = e.target.closest('[data-coldel]'); if (!b) return; e.preventDefault(); const id = b.dataset.coldel; $('colDlg').close(); ui.confirm({ title: `Supprimer « ${state.cols[id].name} » ?`, text: 'Les jeux restent dans la bibliothèque.', ok: 'Supprimer', danger: true, icon: '📚' }).then((yes) => { if (yes) { delete state.cols[id]; saveCols(); } }); };
   $('colAdd').onclick = () => { const name = $('colName').value.trim(); if (!name) return; state.cols[newColId()] = { name, items: [item.id] }; $('colName').value = ''; saveCols().then(draw); };
   $('colDlg').showModal();
 }
-$('newCol').addEventListener('click', () => { const name = window.prompt('Nom de la nouvelle collection :'); if (name?.trim()) { state.cols[newColId()] = { name: name.trim(), items: [] }; saveCols(); toast('Collection créée : ajoute des jeux depuis leur menu ▾'); } });
+$('newCol').addEventListener('click', async () => { const name = await ui.prompt({ title: 'Nouvelle collection', placeholder: 'Ex. Avec les potes, À finir…', ok: 'Créer', icon: '📚' }); if (name) { state.cols[newColId()] = { name, items: [] }; saveCols(); toast('Collection créée : ajoute des jeux par clic droit › Collections'); } });
 
 // ---------- Ajouter un jeu : bouton ou .exe glissé dans la fenêtre ----------
+$('showHidden').addEventListener('click', () => { state.list = { ...state.list, kind: state.list.kind === 'caches' ? 'tout' : 'caches', source: 'tout', collection: null }; $('showHidden').classList.toggle('on', state.list.kind === 'caches'); showView('liste'); renderList(); });
 $('addGame').addEventListener('click', () => api.pickGame?.().then((r) => r?.ok && toast(`${r.name} ajouté`)));
 let dragDepth = 0;
 document.addEventListener('dragenter', (e) => { if ([...(e.dataTransfer?.items ?? [])].some((x) => x.kind === 'file')) { dragDepth++; $('dropzone').hidden = false; } });
@@ -439,65 +512,137 @@ for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boos
   $(id).addEventListener('change', (e) => api.setBoost({ [key]: e.target.checked }).then(() => key === 'enabled' && toast(e.target.checked ? 'Boost activé pour les prochaines parties' : 'Boost désactivé')));
 }
 $('boostApps').addEventListener('change', () => api.setBoost({ close: [...document.querySelectorAll('#boostApps input:checked')].map((i) => i.value) }));
-// Optimisation complète : analyse puis application de ce qui est coché
+// ---------- Optimisation : score de santé, catégories rangées, avancement en direct ----------
 let opti = null;
-const optiRow = (group, x, checked = true) => `<label class="check"><input type="checkbox" data-g="${group}" value="${esc(x.id)}" ${checked ? 'checked' : ''}><span>${esc(x.label)}${x.note ? ` <small class="hint">· ${esc(x.note)}</small>` : ''}</span><em>${gb(x.bytes)}</em></label>`;
+const GROUPS = [
+  ['systeme', '🗑', 'Fichiers temporaires de Windows', 'Temporaires, rapports d’erreur, cache Internet de Windows.'],
+  ['pilotes', '🖥', 'Pilotes et shaders', 'Anciens pilotes décompressés, caches DirectX / NVIDIA / AMD (recréés au prochain lancement).'],
+  ['jeux', '🎮', 'Launchers et jeux', 'Caches web, journaux et rapports de plantage de Steam, Epic, Riot, Discord…'],
+  ['navigateurs', '🌐', 'Navigateurs', 'Cache de Chrome, Edge, Brave, Opera, Firefox. Mots de passe, historique et cookies gardés.'],
+];
+function setRing(score, label) {
+  const C = 2 * Math.PI * 52;
+  const col = score == null ? 'var(--muted)' : score >= 90 ? '#2ee07a' : score >= 75 ? '#22d3ee' : score >= 55 ? '#f59e0b' : '#ef4444';
+  $('ringVal').style.strokeDasharray = `${score == null ? 0 : (score / 100) * C} ${C}`;
+  $('ringVal').style.stroke = col;
+  $('ringNum').textContent = score ?? '–';
+  $('ringNum').style.color = col;
+  $('ringLabel').textContent = label ?? 'Pas encore analysé';
+  $('optiBadge').textContent = score != null && score < 75 ? '!' : '';
+}
+const catCard = (key, icon, title, desc, total, body, { checked = true, open = false, count = '' } = {}) => `
+  <div class="ocat ${open ? 'open' : ''}" data-cat="${key}">
+    <div class="ohead">
+      ${key ? `<label class="ocheck" title="Inclure dans « Tout optimiser »"><input type="checkbox" data-catcheck="${key}" ${checked ? 'checked' : ''}><span></span></label>` : ''}
+      <span class="oicon">${icon}</span>
+      <div class="otitle"><b>${esc(title)}</b><small>${esc(desc)}</small></div>
+      <div class="ototal"><b>${total}</b><small>${count}</small></div>
+      <button class="btn ghost ocaret" data-toggle="${key || title}">Détails ▾</button>
+    </div>
+    <div class="obody">${body}</div>
+  </div>`;
+const itemRow = (group, x, checked = true) => `<label class="check"><input type="checkbox" data-g="${group}" value="${esc(x.id)}" ${checked ? 'checked' : ''}><span>${esc(x.label)}${x.note ? ` <small class="hint">· ${esc(x.note)}</small>` : ''}</span><em>${gb(x.bytes)}</em></label>`;
 function renderOpti() {
   const o = opti;
-  const junkTotal = o.junk.reduce((n, x) => n + x.bytes, 0) + o.recycle;
+  setRing(o.score, o.label);
+  const junkTotal = o.junk.reduce((n, x) => n + x.bytes, 0);
   const orphanTotal = o.orphans.reduce((n, x) => n + x.bytes, 0);
-  const tweaksOff = o.tweaks.filter((t) => !t.on);
-  const heavyOn = o.startup.filter((x) => x.enabled && x.heavy).length;
-  $('optiBody').innerHTML = `
-    <div class="optisum">
-      <div><b>${gb(junkTotal + orphanTotal)}</b><small>à libérer</small></div>
-      <div><b>${o.startup.filter((x) => x.enabled).length}</b><small>applis au démarrage</small></div>
-      <div><b>${o.tweaks.length - tweaksOff.length}/${o.tweaks.length}</b><small>réglages jeux</small></div>
-      ${o.free != null ? `<div><b>${gb(o.free)}</b><small>libres sur le disque</small></div>` : ''}
-    </div>
-    <details open><summary>🗑 Fichiers inutiles <em>${gb(junkTotal)}</em></summary><div class="checks">
-      ${o.recycle > 0 ? optiRow('recycle', { id: 'recycle', label: 'Corbeille', bytes: o.recycle, note: 'Vidée définitivement' }) : ''}
-      ${o.junk.map((x) => optiRow('junk', x)).join('') || '<small class="hint">Rien à nettoyer.</small>'}
-    </div></details>
-    <details ${o.orphans.length ? 'open' : ''}><summary>🎮 Restes de jeux désinstallés <em>${gb(orphanTotal)}</em></summary><div class="checks">
-      ${o.orphans.map((x) => optiRow('orphans', x, false)).join('') || '<small class="hint">Aucun reste trouvé dans tes bibliothèques Steam.</small>'}
-      ${o.orphans.length ? '<small class="hint">Dossiers de jeux Steam qui ne sont plus installés. Coche ceux à supprimer.</small>' : ''}
-    </div></details>
-    <details><summary>⏻ Démarrage de Windows <em>${heavyOn ? `${heavyOn} lourde${heavyOn > 1 ? 's' : ''}` : 'OK'}</em></summary><div class="checks">
-      ${o.startup.map((x) => `<label class="toggle small"><input type="checkbox" data-startup="${esc(x.name)}" ${x.enabled ? 'checked' : ''}><span></span>${esc(x.name)}${x.heavy ? ' <small class="warn">ralentit le démarrage</small>' : ''}</label>`).join('') || '<small class="hint">Aucune appli lancée au démarrage.</small>'}
-      <small class="hint">Désactiver ne désinstalle rien : l’appli ne s’ouvre simplement plus toute seule (réactivable ici ou dans le Gestionnaire des tâches).</small>
-    </div></details>
-    <details ${tweaksOff.length ? 'open' : ''}><summary>🎯 Réglages Windows pour les jeux <em>${tweaksOff.length ? `${tweaksOff.length} à faire` : 'OK'}</em></summary><div class="checks">
-      ${o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}<small class="hint">${esc(t.help)}</small></div></label>`).join('')}
-    </div></details>
-    <div class="row end optiacts"><button class="btn" id="optiDeep" type="button" title="Demande l’autorisation administrateur">🛡 Nettoyage profond de Windows</button><button class="btn play" id="optiRun" type="button">Tout optimiser</button></div>`;
+  const tweaksOff = o.tweaks.filter((t) => !t.on && !t.optional);
+  const heavyOn = o.startup.filter((x) => x.enabled && x.heavy);
+  $('optiSum').innerHTML = `
+    <div><b>${gb(junkTotal + orphanTotal + o.recycle)}</b><small>à libérer</small></div>
+    <div><b>${heavyOn.length}</b><small>appli${heavyOn.length > 1 ? 's' : ''} lourde${heavyOn.length > 1 ? 's' : ''} au démarrage</small></div>
+    <div><b>${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}</b><small>réglages optimisés</small></div>
+    ${o.free != null ? `<div><b>${gb(o.free)}</b><small>libres${o.disk ? ` sur ${gb(o.disk)}` : ''}</small></div>` : ''}`;
+  $('optiRun').hidden = false;
+  $('optiRun').classList.add('play'); $('optiScan').classList.remove('play');
+  const cards = [];
+  for (const [key, icon, title, desc] of GROUPS) {
+    const list = o.junk.filter((x) => x.group === key);
+    if (!list.length) continue;
+    cards.push(catCard(key, icon, title, desc, gb(list.reduce((n, x) => n + x.bytes, 0)), `<div class="checks">${list.map((x) => itemRow('junk', x)).join('')}</div>`, { count: `${list.length} élément${list.length > 1 ? 's' : ''}` }));
+  }
+  if (o.recycle > 0) cards.push(catCard('recycle', '♻', 'Corbeille', 'Fichiers déjà supprimés qui prennent encore de la place.', gb(o.recycle), '<p class="hint">Elle sera vidée définitivement.</p>'));
+  cards.push(catCard('orphans', '🧩', 'Restes de jeux désinstallés', 'Dossiers de jeux Steam qui ne sont plus installés.', gb(orphanTotal),
+    o.orphans.length ? `<div class="checks">${o.orphans.map((x) => itemRow('orphans', x, false)).join('')}</div><p class="hint">Décochés par défaut : coche ceux que tu veux supprimer.</p>` : '<p class="hint">Aucun reste trouvé 👍</p>', { checked: false, count: `${o.orphans.length} dossier${o.orphans.length > 1 ? 's' : ''}` }));
+  cards.push(catCard('', '⏻', 'Démarrage de Windows', 'Moins d’applis au démarrage = PC prêt plus vite et plus de mémoire libre.', `${o.startup.filter((x) => x.enabled).length}`,
+    `${o.startup.map((x) => `<label class="toggle small"><input type="checkbox" data-startup="${esc(x.name)}" ${x.enabled ? 'checked' : ''}><span></span>${esc(x.name)}${x.heavy ? ' <small class="warn">ralentit le démarrage</small>' : ''}</label>`).join('') || '<p class="hint">Aucune appli lancée au démarrage.</p>'}<p class="hint">Désactiver ne désinstalle rien (réversible ici ou dans le Gestionnaire des tâches).</p>`, { count: 'au démarrage', open: heavyOn.length > 0 }));
+  cards.push(catCard('tweaks', '🎯', 'Réglages Windows pour les jeux', 'Réglages sûrs et réversibles qui donnent des FPS et de la réactivité.', `${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}`,
+    o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.optional ? ' <small class="opt">facultatif</small>' : ''}<small class="hint">${esc(t.help)}</small></div></label>`).join(''), { count: tweaksOff.length ? `${tweaksOff.length} à faire` : 'optimisés', open: tweaksOff.length > 0 }));
+  cards.push(catCard('', '🛡', 'Nettoyage profond de Windows', 'Anciennes mises à jour, fichiers temporaires système, cache de distribution, TRIM du SSD, nettoyage des composants. Demande l’autorisation administrateur.', '',
+    '<button class="btn" id="optiDeep" type="button">Lancer le nettoyage profond</button><p class="hint">Plusieurs minutes. Windows affiche une demande d’autorisation.</p>', { count: 'admin' }));
+  $('optiBody').innerHTML = cards.join('');
 }
-$('optiScan').addEventListener('click', async () => {
+function planFromUi() {
+  const on = (k) => document.querySelector(`[data-catcheck="${k}"]`)?.checked;
+  const ids = (g) => [...document.querySelectorAll(`#optiBody input[data-g="${g}"]:checked`)].filter((i) => on(i.closest('.ocat')?.dataset.cat)).map((i) => i.value);
+  return { junk: ids('junk'), orphans: ids('orphans'), recycle: Boolean(on('recycle')) && opti.recycle > 0, tweaks: on('tweaks') ? opti.tweaks.filter((t) => !t.on && !t.optional).map((t) => t.id) : [] };
+}
+const SCAN_STEPS = [['junk', 'Fichiers inutiles'], ['recycle', 'Corbeille'], ['orphans', 'Restes de jeux'], ['startup', 'Démarrage de Windows'], ['tweaks', 'Réglages pour les jeux']];
+function showProgress(html) { $('optiProgress').hidden = !html; $('optiProgress').innerHTML = html ?? ''; }
+let scanDone = new Set();
+async function optiScanUi() {
+  scanDone = new Set();
+  $('optiScan').disabled = true; $('optiRun').hidden = true;
   $('optiScan').textContent = 'Analyse en cours…';
-  $('optiScan').disabled = true;
+  const draw = () => showProgress(`<div class="oprog"><b>Analyse de ton PC…</b><div class="gbar big"><i style="width:${(scanDone.size / SCAN_STEPS.length) * 100}%"></i></div>
+    <div class="osteps">${SCAN_STEPS.map(([k, l]) => `<span class="${scanDone.has(k) ? 'ok' : 'run'}">${scanDone.has(k) ? '✓' : '<i class="spin"></i>'} ${l}</span>`).join('')}</div></div>`);
+  draw();
+  state.optiDraw = draw;
   opti = await api.optiScan?.().catch(() => null);
-  $('optiScan').disabled = false;
-  $('optiScan').textContent = 'Analyser à nouveau';
+  state.optiDraw = null;
+  showProgress(null);
+  $('optiScan').disabled = false; $('optiScan').textContent = 'Analyser à nouveau';
   if (opti) renderOpti(); else toast('Analyse impossible pour l’instant');
+}
+let runLog = [];
+api.onOpti?.((p) => {
+  if (p.phase === 'scan') { scanDone.add(p.step); state.optiDraw?.(); return; }
+  if (p.phase !== 'run') return;
+  if (p.status === 'fait') runLog[p.index] = { label: p.label, got: p.got };
+  const pct = ((p.index + (p.status === 'fait' ? 1 : 0.5)) / p.total) * 100;
+  showProgress(`<div class="oprog"><b>Optimisation en cours… ${Math.floor(pct)} %</b><span class="ofreed">${gb(p.freed)} libérés</span>
+    <div class="gbar big"><i style="width:${pct}%"></i></div>
+    <div class="olog">${runLog.map((r) => r && `<div class="ok">✓ ${esc(r.label)}${r.got ? ` <em>${gb(r.got)}</em>` : ''}</div>`).filter(Boolean).slice(-6).join('')}${p.status === 'en cours' ? `<div class="run"><i class="spin"></i> ${esc(p.label)}</div>` : ''}</div></div>`);
 });
+$('optiScan').addEventListener('click', optiScanUi);
+$('optiRun').addEventListener('click', async () => {
+  const plan = planFromUi();
+  const list = [plan.junk.length && `${plan.junk.length} cache(s) et fichiers temporaires`, plan.recycle && 'la corbeille', plan.orphans.length && `${plan.orphans.length} reste(s) de jeux désinstallés`, plan.tweaks.length && `${plan.tweaks.length} réglage(s) Windows pour les jeux`].filter(Boolean);
+  if (!list.length) return toast('Rien de coché à optimiser');
+  if (!(await ui.confirm({ title: 'Lancer l’optimisation ?', text: 'Tes jeux installés, sauvegardes, mots de passe et fichiers perso ne sont pas touchés.', list, ok: '⚡ Optimiser', icon: '🚀' }))) return;
+  const before = opti.score;
+  runLog = [];
+  $('optiRun').disabled = true; $('optiScan').disabled = true;
+  const r = await api.optiRun(plan).catch(() => null);
+  $('optiRun').disabled = false; $('optiScan').disabled = false;
+  if (!r?.ok) { showProgress(null); return toast('Optimisation impossible pour l’instant'); }
+  if (r.scan) { opti = r.scan; renderOpti(); }
+  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks}</b><small>réglage${r.tweaks > 1 ? 's' : ''} appliqué${r.tweaks > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>score de santé</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>`);
+});
+$('optiProgress').addEventListener('click', (e) => { if (e.target.closest('[data-closeprog]')) showProgress(null); });
 $('optiBody').addEventListener('change', async (e) => {
   const el = e.target;
   if (el.dataset.startup) { const r = await api.optiStartup(el.dataset.startup, el.checked); if (r?.ok) { opti.startup = r.startup; toast(el.checked ? `${el.dataset.startup} se lancera au démarrage` : `${el.dataset.startup} ne se lancera plus au démarrage`); } }
   if (el.dataset.tweak) { const r = await api.optiTweak(el.dataset.tweak, el.checked); if (r?.ok) { opti.tweaks = r.tweaks; toast('Réglage appliqué'); } }
+  if (el.dataset.catcheck) el.closest('.ocat').classList.toggle('off', !el.checked);
 });
 $('optiBody').addEventListener('click', async (e) => {
-  if (e.target.id === 'optiRun') {
-    const ids = (g) => [...document.querySelectorAll(`#optiBody input[data-g="${g}"]:checked`)].map((i) => i.value);
-    const r = await api.optiRun({ junk: ids('junk'), orphans: ids('orphans'), recycle: ids('recycle').length > 0, tweaks: opti.tweaks.filter((t) => !t.on).map((t) => t.id) });
-    if (r?.ok) { toast(`Optimisation terminée : ${gb(r.freed)} libérés${r.tweaks ? `, ${r.tweaks} réglage(s) appliqué(s)` : ''}`); $('optiScan').click(); }
-  }
+  const tg = e.target.closest('[data-toggle]');
+  if (tg) { tg.closest('.ocat').classList.toggle('open'); return; }
   if (e.target.id === 'optiDeep') {
-    e.target.textContent = 'Nettoyage profond en cours…';
+    if (!(await ui.confirm({ title: 'Nettoyage profond de Windows ?', text: 'Windows va demander l’autorisation administrateur. Ça peut prendre plusieurs minutes.', list: ['Fichiers temporaires de Windows', 'Anciennes mises à jour téléchargées', 'Cache d’optimisation de la distribution', 'Rapports d’erreur système', 'TRIM du SSD et nettoyage des composants Windows'], ok: '🛡 Lancer', icon: '🛡' }))) return;
+    showProgress('<div class="oprog"><b>Nettoyage profond en cours…</b><div class="gbar big indet"><i></i></div><div class="hint">Accepte la demande d’autorisation de Windows. Ça peut prendre plusieurs minutes.</div></div>');
     const r = await api.optiDeep();
-    e.target.textContent = '🛡 Nettoyage profond de Windows';
-    if (r?.ok) toast(r.freed != null ? `Nettoyage profond terminé : ${gb(r.freed)} libérés` : 'Nettoyage profond terminé');
+    showProgress(r?.ok ? `<div class="oprog done"><b>✅ Nettoyage profond terminé</b><div class="odone"><div><b>${r.freed != null ? gb(r.freed) : '—'}</b><small>libérés</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>` : null);
+    if (!r?.ok) toast('Nettoyage profond annulé');
   }
 });
+$('optiAuto').addEventListener('change', (e) => api.optiAuto?.(e.target.checked).then(() => toast(e.target.checked ? 'Optimisation automatique chaque semaine activée' : 'Optimisation automatique désactivée')));
+function openOpti() {
+  api.optiAuto?.().then((a) => { $('optiAuto').checked = a?.on !== false; }).catch(() => {});
+  if (!opti) setRing(null);
+}
 
 function renderFree() {
   const list = state.free.slice(0, 5);
@@ -522,7 +667,7 @@ function renderRecos() {
 }
 
 // ---------- Bibliothèque ----------
-const TITLES = { bibliotheque: 'Bibliothèque', jeux: 'Jeux', applis: 'Applications', favoris: 'Favoris' };
+const TITLES = { bibliotheque: 'Bibliothèque', jeux: 'Jeux', applis: 'Applications', favoris: 'Favoris', caches: '👁 Éléments masqués (clic droit › Afficher)' };
 function renderList() {
   const col = state.list.collection && state.cols[state.list.collection];
   // Une collection montre tous ses jeux (même non installés), sauf filtre choisi
@@ -625,8 +770,9 @@ function renderChips() {
 function applyReply(r) {
   if (!r) return;
   say(r.reply || 'D’accord.');
-  const views = { jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque', accueil: 'accueil' };
+  const views = { jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque', accueil: 'accueil', amis: 'amis', pc: 'pc', optimisation: 'optimisation' };
   if (r.action === 'show') { if (r.value === 'parametres') $('openSettings').click(); else go(views[r.value] ?? 'bibliotheque'); }
+  if (r.action === 'optimize') { go('optimisation'); setTimeout(() => $('optiScan')?.click(), 300); }
   if (r.action === 'sort') { state.list.sort = r.value; $('sort').value = r.value; go('bibliotheque'); }
   if (r.action === 'search') { $('q').value = r.value; $('q').dispatchEvent(new Event('input')); }
   if (r.itemId && !['uninstall'].includes(r.action)) { const it = state.items.find((i) => i.id === r.itemId); if (it) select(it); }
@@ -688,6 +834,7 @@ function go(view) {
   if (state.view === 'classement') renderRanking();
   if (state.view === 'amis') showFriendTab(state.ftab);
   if (state.view === 'pc') openPc();
+  if (state.view === 'optimisation') openOpti();
   $('main').scrollTop = 0;
 }
 
@@ -817,9 +964,11 @@ async function act(action) {
 // ---------- Événements ----------
 document.addEventListener('click', async (e) => {
   const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal], [data-news]');
-  if (!t) { $('heroMenu')?.classList.remove('on'); return; }
-  if (t.id === 'moreBtn') { $('heroMenu').classList.toggle('on'); return; }
-  $('heroMenu')?.classList.remove('on');
+  const inCtx = Boolean(t?.closest('#ctx'));
+  if (!t) { hideCtx(); return; }
+  if (t.id === 'moreBtn') { if ($('ctx').hidden) openCtx(state.sel, 0, 0, t); else hideCtx(); return; }
+  hideCtx();
+  if (inCtx && t.tagName === 'HR') return;
   if (t.dataset.view) return go(t.dataset.view);
   if (t.dataset.go) return go(t.dataset.go);
   if (t.dataset.platform) {
@@ -852,18 +1001,18 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.capdir) return api.captureFolder(t.dataset.capdir);
   if (t.dataset.cols && state.sel) return openCollections(state.sel);
   if (t.dataset.col) { document.querySelectorAll('#nav button').forEach((b) => b.classList.remove('on')); state.list = { ...state.list, kind: 'tout', source: 'tout', collection: t.dataset.col }; showView('liste'); renderPlatforms(); return renderList(); }
-  if (t.dataset.rename && state.sel) { const n = window.prompt('Nouveau nom du jeu :', state.sel.name); if (n) api.renameGame(state.sel.id, n).then((r) => r?.ok && toast('Jeu renommé')); return; }
-  if (t.dataset.remove && state.sel) { if (window.confirm(`Retirer ${state.sel.name} de la bibliothèque ? (les fichiers du jeu ne sont pas touchés)`)) api.removeGame(state.sel.id).then((r) => { if (r?.ok) { state.sel = null; toast('Jeu retiré'); } }); return; }
+  if (t.dataset.rename && state.sel) { const n = await ui.prompt({ title: 'Renommer le jeu', value: state.sel.name, ok: 'Renommer' }); if (n) api.renameGame(state.sel.id, n).then((r) => r?.ok && toast('Jeu renommé')); return; }
+  if (t.dataset.remove && state.sel) { if (await ui.confirm({ title: `Retirer ${state.sel.name} ?`, text: 'Il disparaît du launcher ; les fichiers du jeu ne sont pas touchés.', ok: 'Retirer', danger: true, icon: '✕' })) api.removeGame(state.sel.id).then((r) => { if (r?.ok) { state.sel = null; toast('Jeu retiré'); } }); return; }
   if (t.dataset.login) return showAuth(true);
   if (t.dataset.hacc) { const r = await api.hFriendAccept(t.dataset.hacc); if (r?.amis) { state.hist = r; renderHistory(); toast('Nouvel ami ajouté'); } return; }
   if (t.dataset.hrem) {
-    if (t.dataset.name && !window.confirm(`Retirer ${t.dataset.name} de tes amis ?`)) return;
+    if (t.dataset.name && !(await ui.confirm({ title: `Retirer ${t.dataset.name} de tes amis ?`, ok: 'Retirer', danger: true, icon: '👥' }))) return;
     const r = await api.hFriendRemove(t.dataset.hrem);
     if (r?.amis) { state.hist = r; renderHistory(); }
     return;
   }
   if (t.dataset.eresp) { const r = await api.eventRespond(t.dataset.eresp, t.dataset.r); if (r?.soirees) { state.events = r.soirees; renderEvents(); } return; }
-  if (t.dataset.ecancel) { if (!window.confirm('Annuler cette soirée ?')) return; const r = await api.eventCancel(t.dataset.ecancel); if (r?.soirees) { state.events = r.soirees; renderEvents(); } return; }
+  if (t.dataset.ecancel) { if (!(await ui.confirm({ title: 'Annuler cette soirée ?', text: 'Tes amis invités ne la verront plus.', ok: 'Annuler la soirée', cancel: 'Garder', danger: true, icon: '🎉' }))) return; const r = await api.eventCancel(t.dataset.ecancel); if (r?.soirees) { state.events = r.soirees; renderEvents(); } return; }
   if (t.dataset.friend) {
     const r = await api.friendAction(t.dataset.friend, t.dataset.fid);
     return toast(r?.ok ? { join: 'Connexion à la partie…', message: 'Discussion Steam ouverte', profile: 'Profil ouvert' }[t.dataset.friend] : r?.error ?? 'Impossible pour l’instant');
@@ -891,7 +1040,7 @@ $('q').addEventListener('input', (e) => {
 });
 document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => api.win(b.dataset.win)));
 // ---------- Raccourcis clavier (liste complète : touche « ? ») ----------
-const VIEW_KEYS = ['accueil', 'bibliotheque', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis', 'pc'];
+const VIEW_KEYS = ['accueil', 'bibliotheque', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis', 'pc', 'optimisation'];
 function visibleItems() {
   return [...document.querySelectorAll(state.view === 'liste' ? '#grid [data-id]' : '#topGames [data-id], #topApps [data-id]')].map((el) => state.items.find((i) => i.id === el.dataset.id)).filter(Boolean);
 }
@@ -901,7 +1050,7 @@ document.addEventListener('keydown', (e) => {
   if (ctrl && e.key.toLowerCase() === 'f') { e.preventDefault(); $('q').focus(); return; }
   if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); openAssistant(true); return; }
   if (ctrl && e.key === ',') { e.preventDefault(); $('openSettings').click(); return; }
-  if (ctrl && /^[1-9]$/.test(e.key)) { e.preventDefault(); go(VIEW_KEYS[Number(e.key) - 1]); return; }
+  if (ctrl && /^[0-9]$/.test(e.key)) { e.preventDefault(); go(VIEW_KEYS[e.key === '0' ? 9 : Number(e.key) - 1]); return; }
   if (ctrl && e.key.toLowerCase() === 'd' && state.sel) {
     e.preventDefault();
     const on = !state.sel.favorite;
@@ -994,33 +1143,63 @@ api.onVoice?.((kind, v) => {
   }
   if (kind === 'heard') { openAssistant(true); say(`🎙 ${v.text}`, 'me'); }
   if (kind === 'reply') applyReply(v);
+  if (kind === 'record') recordCommand({ auto: true });
 });
+// Micro : enregistrement puis transcription par Gemini. En automatique (après « Hey History »), l'enregistrement
+// s'arrête tout seul après 1,2 s de silence une fois qu'on a parlé (8 s au maximum).
 let recorder = null;
-$('micBtn').addEventListener('click', async () => {
+async function recordCommand({ auto = false } = {}) {
   if (recorder) { recorder.stop(); return; }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     const chunks = [];
     recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
     recorder.ondataavailable = (e) => chunks.push(e.data);
+    let ctx = null;
     recorder.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
+      ctx?.close();
       $('micBtn').classList.remove('rec');
+      document.body.classList.remove('recording');
       recorder = null;
       const buf = new Uint8Array(await new Blob(chunks, { type: 'audio/webm' }).arrayBuffer());
+      if (buf.length < 2000) return;
       const wait = say('🎙 …', 'wait');
       const r = await api.transcribe(buf, 'audio/webm').catch(() => ({ reply: 'Micro indisponible.' }));
       wait.remove();
       if (r.heard) say(`🎙 ${r.heard}`, 'me');
       applyReply(r);
     };
-    recorder.start();
+    recorder.start(250);
     $('micBtn').classList.add('rec');
-    setTimeout(() => recorder?.state === 'recording' && recorder.stop(), 8000);
+    document.body.classList.add('recording');
+    if (auto) {
+      openAssistant(true);
+      say('🎙 Je t’écoute…', 'wait').classList.add('listen');
+      ctx = new AudioContext();
+      const an = ctx.createAnalyser();
+      an.fftSize = 1024;
+      ctx.createMediaStreamSource(stream).connect(an);
+      const data = new Uint8Array(an.fftSize);
+      let spoke = false; let quietSince = performance.now(); const start = performance.now();
+      const watch = () => {
+        if (!recorder || recorder.state !== 'recording') return;
+        an.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const v of data) sum += (v - 128) ** 2;
+        const level = Math.sqrt(sum / data.length);
+        const now = performance.now();
+        if (level > 6) { spoke = true; quietSince = now; }
+        if ((spoke && now - quietSince > 1200) || now - start > 8000 || (!spoke && now - start > 4000)) { document.querySelectorAll('.msg.listen').forEach((m) => m.remove()); recorder.stop(); return; }
+        requestAnimationFrame(watch);
+      };
+      watch();
+    } else setTimeout(() => recorder?.state === 'recording' && recorder.stop(), 8000);
   } catch {
     toast('Micro inaccessible : autorise-le dans Windows (Paramètres › Confidentialité › Microphone).');
   }
-});
+}
+$('micBtn').addEventListener('click', () => recordCommand());
 
 // ---------- Compte ----------
 let authMode = 'connexion';
@@ -1058,7 +1237,7 @@ $('authForm').addEventListener('submit', async (e) => {
 $('authSkip').addEventListener('click', async () => { await api.skipAccount?.(); showAuth(false); });
 $('profileBtn').addEventListener('click', async () => {
   if (!state.account) return showAuth(true);
-  if (!window.confirm(`Connecté en tant que ${state.account.pseudo} (${state.account.email}).\n\nSe déconnecter ?`)) return;
+  if (!(await ui.confirm({ title: 'Se déconnecter ?', text: `Connecté en tant que ${state.account.pseudo} (${state.account.email}).`, ok: 'Se déconnecter', icon: '👤' }))) return;
   await api.logout();
   setAccount(null);
   showAuth(true);
@@ -1146,8 +1325,9 @@ function demoApi() {
     pc: async () => ({ cpu: { usage: 37, temp: null, name: 'AMD Ryzen 7 5800X' }, ram: { used: 11.2e9, total: 32e9 }, gpu: { name: 'NVIDIA GeForce RTX 3070', usage: 92, temp: 71, vramUsed: 6200, vramTotal: 8192 } }),
     boost: async () => ({ enabled: true, power: true, restore: true, heatAlerts: true, close: ['chrome'], apps: [{ id: 'chrome', label: 'Google Chrome' }, { id: 'edge', label: 'Microsoft Edge' }, { id: 'onedrive', label: 'OneDrive' }, { id: 'office', label: 'Word / Excel / PowerPoint' }] }),
     setBoost: async (b) => b,
-    optiScan: async () => ({ free: 84e9, recycle: 2.1e9, junk: [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'chrome-Default', label: 'Cache de Google Chrome', bytes: 1.3e9, note: 'Mots de passe et historique gardés' }, { id: 'nv-install', label: 'Restes d’installation NVIDIA', bytes: 1.9e9, note: 'Anciens pilotes décompressés' }], orphans: [{ id: 'o1', label: 'Apex Legends', bytes: 12.4e9 }], startup: [{ name: 'Discord', enabled: true, heavy: true }, { name: 'Steam', enabled: true, heavy: true }, { name: 'Pilote tablette', enabled: true, heavy: false }], tweaks: [{ id: 'gamemode', label: 'Mode Jeu de Windows activé', help: 'Windows donne la priorité au jeu en cours.', on: true }, { id: 'dvr', label: 'Enregistrement en arrière-plan de la Xbox Game Bar coupé', help: 'Évite que Windows filme en continu pendant les parties (gain de FPS).', on: false }] }),
-    optiRun: async () => ({ ok: true, freed: 20.8e9, tweaks: 1 }), optiStartup: async () => ({ ok: true, startup: [] }), optiTweak: async () => ({ ok: true, tweaks: [] }), optiDeep: async () => ({ ok: true, freed: 6e9 }),
+    optiAuto: async () => ({ on: true }),
+    optiScan: async () => ({ score: 58, label: 'Moyen', free: 84e9, disk: 512e9, recycle: 2.1e9, junk: [{ id: 'temp', group: 'systeme', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'inetcache', group: 'systeme', label: 'Cache Internet de Windows', bytes: 0.6e9 }, { id: 'chrome-Default', group: 'navigateurs', label: 'Cache de Google Chrome', bytes: 1.3e9, note: 'Mots de passe et historique gardés' }, { id: 'nv-install', group: 'pilotes', label: 'Restes d’installation NVIDIA', bytes: 1.9e9, note: 'Anciens pilotes décompressés' }, { id: 'steam-logs', group: 'jeux', label: 'Journaux de Steam', bytes: 0.2e9 }], orphans: [{ id: 'o1', label: 'Apex Legends', bytes: 12.4e9 }], startup: [{ name: 'Discord', enabled: true, heavy: true }, { name: 'Steam', enabled: true, heavy: true }, { name: 'Pilote tablette', enabled: true, heavy: false }], tweaks: [{ id: 'gamemode', label: 'Mode Jeu de Windows activé', help: 'Windows donne la priorité au jeu en cours.', on: true }, { id: 'dvr', label: 'Enregistrement en arrière-plan de la Xbox Game Bar coupé', help: 'Évite que Windows filme en continu pendant les parties (gain de FPS).', on: false }] }),
+    optiRun: async () => ({ ok: true, freed: 20.8e9, tweaks: 1, score: 93 }), optiStartup: async () => ({ ok: true, startup: [] }), optiTweak: async () => ({ ok: true, tweaks: [] }), optiDeep: async () => ({ ok: true, freed: 6e9 }),
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],

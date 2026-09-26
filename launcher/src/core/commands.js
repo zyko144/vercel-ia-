@@ -12,6 +12,33 @@ export function stripWake(text) {
 
 // Surnoms courants → nom (ou début de nom) du jeu
 const ALIASES = { gta: 'grand theft auto', lol: 'league of legends', cs: 'counter strike', csgo: 'counter strike', r6: 'rainbow six', valo: 'valorant', cod: 'call of duty', mc: 'minecraft', rl: 'rocket league', fifa: 'ea sports fc', fc: 'ea sports fc', ow: 'overwatch', wow: 'world of warcraft', bg3: 'baldurs gate 3', rdr2: 'red dead redemption 2', rdr: 'red dead redemption', apex: 'apex legends', pubg: 'pubg', tlou: 'the last of us', chrome: 'google chrome' };
+// Similarité de deux textes (0 à 1) : tolère les fautes de la dictée (« rocket ligue », « discorde »)
+export function similarity(a, b) {
+  const x = norm(a); const y = norm(b);
+  if (!x || !y) return 0;
+  if (x === y) return 1;
+  const m = x.length; const n = y.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+// Façons polies ou naturelles de demander : retirées avant de comprendre (« tu peux me lancer… », « je veux jouer à… »)
+const POLITE = /^(?:(?:est ce que |est-ce que )?(?:tu peux|peux tu|tu pourrais|pourrais tu|je veux|je voudrais|j aimerais|on va|vas y|allez|stp|s il te plait|s il te plaît|please)\s+(?:me\s+|m\s+)?)+/;
+const TAIL = /\s+(?:s il te pla[iî]t|stp|merci|please)$/;
+/** Réécrit les demandes naturelles en commandes simples (« je veux jouer à X » → « lance X »). */
+export function simplify(t) {
+  let x = t.replace(POLITE, '').replace(TAIL, '').trim();
+  x = x.replace(/^(?:jouer|joue|jouons|on joue|je joue)\s+(?:a|à|au|aux)\s+/, 'lance ');
+  x = x.replace(/^(?:mets|met|mettre)\s+(?:moi\s+)?(?:le jeu|l appli|l application)\s+/, 'lance ');
+  x = x.replace(/^(?:demarre|démarre|ouvre|lance|allume)\s*moi\s+/, 'lance ');
+  x = x.replace(/^(?:lancer|ouvrir|demarrer|démarrer|fermer|quitter|installer|desinstaller|désinstaller|verifier|vérifier)\b/, (v) => ({ lancer: 'lance', ouvrir: 'ouvre', demarrer: 'demarre', démarrer: 'demarre', fermer: 'ferme', quitter: 'quitte', installer: 'installe', desinstaller: 'desinstalle', désinstaller: 'desinstalle', verifier: 'verifie', vérifier: 'verifie' })[v]);
+  return x;
+}
+
 const initials = (name) => String(name).toLowerCase().normalize('NFKD').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).map((w) => (/^\d+$/.test(w) ? w : w[0])).join('');
 
 /** Trouve l'élément de la bibliothèque dont on parle (nom exact, surnom, début de nom, initiales). */
@@ -30,13 +57,20 @@ export function findItem(items, query) {
     else if (q.length >= 3 && n.includes(q)) score = 70;
     else if (q.length >= 2 && initials(i.name) === q) score = 65;
     else if (q.length >= 4 && q.includes(n) && n.length >= 4) score = 60;
+    else if (q.length >= 4) {
+      // Dictée approximative : nom entier ou même nombre de mots au début du nom
+      const words = n.split(' ');
+      const head = words.slice(0, q.split(' ').length).join(' ');
+      const sim = Math.max(similarity(q, n), similarity(q, head) - 0.05);
+      if (sim >= 0.72) score = Math.round(40 + sim * 20);
+    }
     if (score) scored.push({ i, score: score + (i.installed ? 3 : 0) + Math.min(2, i.minutes / 6000) });
   }
   return scored.sort((a, b) => b.score - a.score)[0]?.i ?? null;
 }
 
 const VIEWS = [
-  [/amis|potes|copains/, 'amis'], [/classement|podium|meilleurs jeux/, 'classement'], [/stat/, 'stats'], [/favori/, 'favoris'],
+  [/optimis|nettoi|nettoy|acceler/, 'optimisation'], [/mon pc|\bpc\b|ordi/, 'pc'], [/amis|potes|copains/, 'amis'], [/classement|podium|meilleurs jeux/, 'classement'], [/stat/, 'stats'], [/favori/, 'favoris'],
   [/appli|logiciel|programme/, 'applis'], [/jeux|jeu/, 'jeux'], [/biblioth|tout/, 'bibliotheque'], [/accueil/, 'accueil'], [/param|r[ée]glage/, 'parametres'],
 ];
 const SORTS = [[/taille|lourd|place/, 'taille'], [/nom|alpha/, 'nom'], [/r[ée]cent|dernier/, 'recents'], [/jou[ée]|temps|heure/, 'joues']];
@@ -48,8 +82,8 @@ const hours = (m) => (m < 60 ? `${Math.round(m)} minutes` : `${Math.round(m / 60
  */
 export function understand(text, items, { music = null } = {}) {
   const raw = String(text ?? '').trim();
-  const t = raw.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’'-]/g, ' ').replace(/[?!.]+$/, '').replace(/\s+/g, ' ').trim();
-  const rest = (re) => raw.replace(new RegExp(`^.*?${re.source}\\s*`, 'i'), '').trim();
+  const t = simplify(raw.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’'-]/g, ' ').replace(/[?!.,]+$/, '').replace(/\s+/g, ' ').trim());
+  const rest = (re) => t.replace(new RegExp(`^.*?${re.source}\\s*`, 'i'), '').trim();
   const withItem = (action, re, verb) => {
     const item = findItem(items, rest(re));
     return item ? { action, itemId: item.id, reply: `${verb} ${item.name}.` } : { action: 'answer', reply: `Je ne trouve pas « ${rest(re) || '…'} » dans ta bibliothèque.` };
@@ -67,8 +101,10 @@ export function understand(text, items, { music = null } = {}) {
     return { action: 'answer', reply: music?.title ? `Tu écoutes « ${music.title} » de ${music.artist}.` : 'Aucune musique en cours sur Spotify ou Deezer.' };
   }
 
+  if (/^(optimise|nettoie|nettoye|accelere|boost)\b.*\b(pc|ordi|ordinateur)\b|^(mon pc|le pc) (rame|lag|est lent)/.test(t)) return { action: 'optimize', reply: 'J’analyse ton PC : tu vas voir tout ce qui peut être optimisé.' };
+
   // Vues, tri, recherche
-  if (/^(montre|affiche|ouvre|va (dans|sur|a)|voir)\b.*\b(mes |les |la |le |l )?(amis|potes|classement|podium|stat|favori|appli|logiciel|jeux|biblioth|accueil|param|reglage)/.test(t) && !findItem(items, rest(/(montre|affiche|ouvre|voir)/))) {
+  if (/^(montre|affiche|ouvre|va (dans|sur|a)|voir)\b.*\b(mes |les |la |le |l )?(optimis|nettoy|mon pc|pc|ordi|amis|potes|classement|podium|stat|favori|appli|logiciel|jeux|biblioth|accueil|param|reglage)/.test(t) && !findItem(items, rest(/(montre|affiche|ouvre|voir)/))) {
     const v = VIEWS.find(([re]) => re.test(t));
     return { action: 'show', value: v?.[1] ?? 'bibliotheque', reply: 'Voilà.' };
   }
