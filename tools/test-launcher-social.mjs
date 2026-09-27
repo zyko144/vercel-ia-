@@ -237,6 +237,50 @@ await check('profil : photo (vérifiée), couleur, bio, visibles par les amis', 
   assert.equal(seen2.frame, null); assert.deepEqual(seen2.badges, ['rp', 'nuit', 'fps']); assert.ok(seen2.bannerImg);
 });
 
+await check('messages : renvoi sans doublon, suppression par l’auteur seulement, prévenu en direct', async () => {
+  const maxId = (await call('amis', noam)).amis.find((a) => a.pseudo === 'Max').id;
+  const noamId = (await call('amis', max)).amis.find((a) => a.pseudo === 'Noam').id;
+  const before = (await call(`messages?avec=${maxId}`, noam)).fil.length;
+  const cid = 'essai-renvoi-123456';
+  const a1 = await call('messages', noam, { to: maxId, text: 'une seule fois', cid });
+  const a2 = await call('messages', noam, { to: maxId, text: 'une seule fois', cid });
+  assert.equal(a1.id, cid); assert.equal(a2.id, cid);
+  const fil = (await call(`messages?avec=${maxId}`, noam)).fil;
+  assert.equal(fil.length, before + 1, 'le renvoi ne crée pas de doublon');
+  assert.ok(fil.every((m) => m.id), 'chaque message a un identifiant');
+  const inbox = (await call('boite?apres=0', max)).items.filter((x) => x.msg === cid);
+  assert.equal(inbox.length, 1, 'reçu une seule fois');
+  assert.equal((await call('messages/supprimer', max, { avec: noamId, id: cid })).status, 403, 'pas le message de l’autre');
+  assert.ok((await call('messages/supprimer', noam, { avec: maxId, id: cid })).ok);
+  assert.ok(!(await call(`messages?avec=${noamId}`, max)).fil.some((m) => m.id === cid), 'disparu chez l’ami');
+  assert.ok((await call('boite?apres=0', max)).items.some((x) => x.type === 'msgdel' && x.msg === cid), 'l’ami est prévenu');
+});
+
+await check('discussion de groupe : membres seulement, reçue en direct, suppression', async () => {
+  const maxId = (await call('amis', noam)).amis.find((a) => a.pseudo === 'Max').id;
+  const g = (await call('groupes', noam, { nom: 'Squad', membres: [maxId] })).groupes.find((x) => x.name === 'Squad');
+  const r = await call('groupes/messages', noam, { id: g.id, text: 'Ranked à 21 h ?', cid: 'grp-essai-0001' });
+  assert.ok(r.ok); assert.equal(r.fil.at(-1).text, 'Ranked à 21 h ?');
+  assert.equal((await call('groupes/messages', noam, { id: g.id, text: 'Ranked à 21 h ?', cid: 'grp-essai-0001' })).fil.length, 1, 'pas de doublon');
+  const got = (await call('boite?apres=0', max)).items.find((x) => x.type === 'gmsg' && x.gid === g.id);
+  assert.equal(got.text, 'Ranked à 21 h ?'); assert.equal(got.group, 'Squad');
+  assert.equal((await call(`groupes/messages?id=${g.id}`, max)).fil.length, 1, 'le membre lit le fil');
+  assert.equal((await call(`groupes/messages?id=${g.id}`, zoe)).status, 404, 'pas membre : refusé');
+  assert.equal((await call('groupes/messages', zoe, { id: g.id, text: 'intrus' })).status, 404);
+  await call('groupes/messages', max, { id: g.id, text: 'Go !' });
+  const mine = (await call(`groupes/messages?id=${g.id}`, max)).fil.find((m) => m.text === 'Go !');
+  assert.equal((await call('groupes/messages/supprimer', noam, { id: g.id, msg: mine.id })).status, 403);
+  assert.ok((await call('groupes/messages/supprimer', max, { id: g.id, msg: mine.id })).ok);
+  assert.equal((await call(`groupes/messages?id=${g.id}`, noam)).fil.length, 1);
+});
+
+await check('profil : cadre à sa couleur, liens collés ramenés au pseudo', async () => {
+  const r = await call('profil', noam, { cadre: 'perso', cadreCouleur: '#22C55E', liens: { twitch: 'https://www.twitch.tv/noam_tv', discord: 'https://discord.gg/abcDEF', steam: 'https://steamcommunity.com/profiles/76561198000000000/', youtube: 'https://youtube.com/@Noam.TV', instagram: 'javascript:alert(1)' } });
+  assert.equal(r.compte.profile.frame, 'perso'); assert.equal(r.compte.profile.frameColor, '#22c55e');
+  assert.deepEqual(r.compte.profile.links, { discord: 'gg/abcDEF', twitch: 'noam_tv', youtube: 'Noam.TV', steam: '76561198000000000' });
+  assert.equal((await call('profil', noam, { cadreCouleur: 'red' })).compte.profile.frameColor, null);
+});
+
 server.close();
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);

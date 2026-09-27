@@ -130,6 +130,13 @@
             <div class="chatfil" id="chatFil"></div>
             <form class="chatin" id="chatForm"><textarea id="chatText" rows="1" maxlength="500" placeholder="Écris un message… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form>
           </div>
+          <div class="fxchat" id="fxGroup" hidden>
+            <div class="chathead"><span class="gstack big" id="gAv"></span><div class="chatwho"><b id="gWho">…</b><small id="gSub"></small></div>
+              <div class="chatacts"><button type="button" class="btn sm" id="gNotify" title="Envoie une notification à tout le groupe">🔔 Prévenir</button><button type="button" class="btn sm" id="gParty">Discord</button><button type="button" class="btn sm" id="gMembersBtn">👥 Membres</button><button type="button" class="btn ghost sm" id="gMore" title="Plus">•••</button></div></div>
+            <div class="gmembers" id="gMembers" hidden></div>
+            <div class="chatfil" id="gFil"></div>
+            <form class="chatin" id="gForm"><textarea id="gText" rows="1" maxlength="500" placeholder="Écris au groupe… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form>
+          </div>
           <div class="fxdetail" id="fxDetail" hidden></div>
           <div class="fxdetail" id="fxEventForm" hidden>
             <h3>Organiser une soirée</h3>
@@ -237,7 +244,16 @@
     <div id="pcScore" hidden></div>
   </section>
 
-  <section id="view-optimisation" class="view">
+  <section id="view-optimisation" class="view paused">
+    <div class="maint">
+      <div class="maintsign"><svg viewBox="0 0 64 64"><path d="M32 5 61 57H3Z"/><path d="M32 23v17M32 47v1" class="ln"/></svg></div>
+      <div class="mainttape"></div>
+      <h2>Optimisation en travaux</h2>
+      <p>Nous rencontrons des problèmes avec les optimisations. On les remettra au plus vite, pour que tout soit parfait à leur retour.</p>
+      <small>En attendant, rien n’est modifié sur ton PC. Si un jeu bug depuis une ancienne optimisation, remets les réglages de Windows comme à l’origine :</small>
+      <button class="btn" type="button" id="maintReset">↩ Remettre Windows comme avant</button>
+      <div class="mainttape b"></div>
+    </div>
     <div class="optihero">
       <div class="ring" id="optiRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="val" id="ringVal"/></svg><div><b id="ringNum">–</b><small id="ringLabel">Pas encore analysé</small></div></div>
       <div class="optiinfo">
@@ -351,6 +367,7 @@
 <div id="updScreen" class="updscreen" hidden><div class="updcard"><img src="logo.png" alt=""><h2 id="updTitle">Mise à jour</h2><p id="updText">Téléchargement…</p><div class="updbar"><i id="updFill"></i></div><small id="updPct">0 %</small></div></div>
 
 <dialog id="modal" class="mdl"><form method="dialog" class="dlg modern" id="modalBox"></form></dialog>
+<dialog id="cropDlg" class="mdl"><div class="dlg modern cropbox"><div class="mhead"><h2 id="cropTitle">Ajuste ton image</h2></div><p class="hint">Glisse l’image pour la placer, molette ou curseur pour zoomer.</p><div class="cropstage"><canvas id="cropCv"></canvas></div><label class="cropzoom"><span>－</span><input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1"><span>＋</span></label><div class="row end"><button type="button" class="btn ghost" id="cropCancel">Annuler</button><button type="button" class="btn play" id="cropOk">Valider</button></div></div></dialog>
 
 <div id="dropzone" hidden><div>Lâche le fichier .exe pour ajouter le jeu</div></div>
 
