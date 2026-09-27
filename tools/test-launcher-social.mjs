@@ -164,6 +164,46 @@ await check('statut, ne pas déranger, benchmark visible des amis et classement 
   assert.equal(r.top[1].raw, undefined, 'mesures brutes gardées côté serveur');
 });
 
+await check('envois simultanés : aucun message perdu, curseur inclusif et stockage confirmé', async () => {
+  const maxId = (await call('amis', noam)).amis[0].id;
+  const results = await Promise.all(Array.from({ length: 12 }, (_, i) => call('messages', noam, { to: maxId, text: `Concurrent ${i}` })));
+  assert.ok(results.every((r) => r.ok));
+  const box = await call('boite', max);
+  assert.equal(box.items.filter((x) => x.text?.startsWith('Concurrent ')).length, 12);
+  const last = box.items.at(-1);
+  assert.ok((await call(`boite?apres=${last.at}`, max)).items.some((x) => x.id === last.id));
+  const { readFile } = await import('node:fs/promises');
+  const disk = JSON.parse(await readFile(path.join(process.env.STORAGE_DIR, 'launcher-social.json'), 'utf8'));
+  assert.ok(disk.inbox[maxId].some((x) => x.id === last.id), 'persisté avant la réponse HTTP');
+});
+
+await check('appel retrouvé après rechargement du serveur, signaux persistés et fin visible', async () => {
+  const maxId = (await call('amis', noam)).amis[0].id;
+  const c = await call('appel', noam, { to: maxId });
+  assert.equal(c.state, 'ringing');
+  const first = await call('boite', max);
+  const second = await call(`boite?apres=${first.now + 1}`, max);
+  assert.ok(second.calls.some((x) => x.callId === c.id), 'la sonnerie reste visible après avancement du curseur');
+  const { handleSocialApi } = await import('../src/features/launcherSocial.js?fresh-process');
+  const result = await handleSocialApi({ method: 'GET', headers: { authorization: `Bearer ${max}` } }, null,
+    new URL(`${base}/appel/signal?call=${c.id}&apres=-1`), { readJson: async () => ({}), send: (_res, status, payload) => ({ status, ...payload }) });
+  assert.equal(result.state, 'ringing');
+  await call('appel/fin', noam, { call: c.id });
+  assert.equal((await call('boite', max)).items.find((x) => x.callId === c.id).state, 'ended');
+});
+
+await check('groupes : diffusion aux membres, accès refusé aux tiers, sortie immédiate', async () => {
+  const maxId = (await call('amis', noam)).amis[0].id;
+  const group = await call('groupes', noam, { nom: 'Squad test', membres: [maxId, maxId, 'inconnu'] });
+  const g = group.groupes[0];
+  assert.equal(g.members.length, 2);
+  assert.equal((await call('groupes/prevenir', zoe, { id: g.id, text: 'Intrus' })).status, 404);
+  assert.equal((await call('groupes/prevenir', noam, { id: g.id, text: 'On joue ?' })).sent, 1);
+  assert.ok((await call('boite', max)).items.some((x) => x.type === 'group' && x.text === 'On joue ?'));
+  assert.equal((await call('groupes/quitter', max, { id: g.id })).groupes.length, 0);
+  assert.equal((await call('groupes/prevenir', max, { id: g.id, text: 'Après sortie' })).status, 404);
+});
+
 await check('retirer un ami : des deux côtés', async () => {
   const maxId = (await call('amis', noam)).amis[0].id;
   await call('amis/retirer', noam, { id: maxId });

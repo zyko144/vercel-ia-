@@ -1,0 +1,78 @@
+/* Social surfaces use normal document flow; dialogs use the browser top layer. */
+#view-amis { min-width: 0; padding-bottom: 40px; }
+.social-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 14px 0 26px; }
+.social-eyebrow { font-size: 10px; font-weight: 750; letter-spacing: .16em; color: var(--accent); }
+.social-heading h2 { margin: 7px 0; font-size: clamp(26px, 3vw, 38px); letter-spacing: -.04em; }
+.social-heading p { color: var(--muted); margin: 0; }
+.social-status { border: 1px solid var(--line-2); border-radius: 30px; padding: 7px 12px; font-size: 11px; flex-shrink: 0; }
+.social-status::before { content: '●'; color: #77c6ad; margin-right: 7px; }
+.social-status.offline::before { color: #e2ac6f; }
+.social-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+.social-grid > *, .social-aside, #view-amis .panel { min-width: 0; }
+.social-aside { display: grid; gap: 18px; }
+#view-amis .panel { background: var(--panel); border: 1px solid var(--line-2); border-radius: 18px; padding: 22px; box-shadow: none; }
+#view-amis h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+.social-total { color: var(--muted); font-size: 12px; }
+#view-amis .list-head { flex-wrap: wrap; gap: 12px; }
+#view-amis .codebox { flex-wrap: wrap; gap: 8px; padding: 12px; background: var(--panel-2); }
+#view-amis .codebox b { overflow-wrap: anywhere; min-width: 0; }
+#view-amis .addfriend { flex-wrap: wrap; margin: 10px 0; }
+#view-amis .addfriend input { min-width: 100px; flex: 1 1 150px; }
+.social-toolbar { display: flex; gap: 8px; border-top: 1px solid var(--line); margin: 22px 0 14px; padding-top: 18px; flex-wrap: wrap; }
+.social-toolbar input, .social-toolbar select { min-width: 0; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 9px; }
+.social-toolbar input { flex: 1 1 140px; }
+#view-amis .hfriend { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; padding: 15px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+#view-amis .hfriend > .dot { width: 34px; height: 34px; display: grid; place-items: center; background: #34303b; color: #c5bdcf; font-size: 12px; font-weight: 700; border-radius: 12px; }
+#view-amis .hfriend.on > .dot { background: #1b3b43; color: #85d6e4; }
+#view-amis .hfriend.ingame > .dot { background: #273d32; color: #a2d1b0; box-shadow: none; }
+#view-amis .hfriend .finfo { min-width: 0; width: 100%; overflow: hidden; }
+#view-amis .hfriend .finfo b, #view-amis .hfriend .finfo small { display: block; white-space: normal; overflow-wrap: anywhere; }
+#view-amis .hfriend .finfo small { line-height: 1.6; margin-top: 3px; }
+#view-amis .hfriend .factions { grid-column: 2; justify-content: flex-start; margin: 0; min-width: 0; flex-wrap: wrap; }
+#view-amis .reqbox .hfriend { grid-template-columns: minmax(0, 1fr) auto auto; padding: 10px 0; }
+#view-amis .group { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+#view-amis .group .factions { grid-column: 1; }
+.group-members { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.group-member { max-width: 100%; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 20px; font-size: 11px; overflow-wrap: anywhere; }
+.group-member.member-online::before { content: '● '; color: #81c8aa; }
+#view-amis .eve, #view-amis .eveform, #view-amis .checks { min-width: 0; overflow-wrap: anywhere; }
+#view-amis .checks, #modalBox .checks { max-height: 220px; overflow: auto; }
+#view-amis .eveform input, #view-amis .eveform select { min-width: 0; width: 100%; }
+.notification-toggle { -webkit-app-region: no-drag; height: 32px; margin-left: auto; font-size: 12px; gap: 7px; }
+.notification-toggle b { background: var(--accent); border-radius: 20px; min-width: 18px; padding: 0 4px; }
+.notification-center { width: min(560px, 94vw); height: min(720px, 88vh); display: flex; flex-direction: column; padding: 24px; gap: 18px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 20px; }
+.notification-center header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.notification-center h2 { margin: 6px 0 0; font-size: 26px; }
+.notification-toolbar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.notification-toolbar .tabs { flex-wrap: wrap; }
+.notification-toolbar .tabs button { padding: 7px 10px; font-size: 12px; }
+.notification-list { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.notification-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.notification-item.unread { border-left: 3px solid var(--accent); }
+.notification-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--panel); }
+.notification-item b, .notification-item p { overflow-wrap: anywhere; }
+.notification-item p { margin: 5px 0; color: var(--muted); font-size: 12px; }
+.notification-item time { font-size: 10px; color: var(--muted); }
+.notification-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.notification-center footer { color: var(--muted); font-size: 11px; }
+#chatDlg .chatbox { width: min(620px, 94vw); height: min(700px, 88vh); max-height: 88vh; overflow: hidden; background: var(--panel); }
+#chatDlg .mhead { flex-shrink: 0; padding-right: 36px; }
+#chatWho { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-status { margin: 0; color: var(--muted); font-size: 11px; }
+#chatFil { min-height: 0; padding: 14px 4px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); gap: 12px; }
+#chatFil .cmsg { min-width: 0; max-width: 85%; }
+#chatFil .cmsg span { overflow-wrap: anywhere; }
+#chatForm { flex-shrink: 0; }
+#chatText { min-width: 0; }
+.incoming-call { align-items: center; text-align: center; }
+.incoming-icon { font-size: 28px; padding: 18px; background: #203d35; border-radius: 50%; color: #95dcb9; }
+#incomingName { overflow-wrap: anywhere; max-width: 100%; }
+.notification-list, #chatFil, #modalBox .checks { scrollbar-width: thin; scrollbar-color: #494350 transparent; }
+@media (max-width: 1120px) { .social-grid { grid-template-columns: minmax(0, 1fr); } .social-aside { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 800px) { .social-aside { grid-template-columns: minmax(0, 1fr); } .social-heading { align-items: flex-start; flex-direction: column; gap: 10px; } #view-amis .panel { padding: 15px; } .notification-toggle span { display: none; } }
+
+.social-profile summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 10px 0; }
+.notification-toggle svg { width: 17px; height: 17px; vertical-align: middle; margin-right: 6px; }
+
+#chatCallControls[hidden] { display: none; }
+#chatCallControls { flex-shrink: 0; flex-wrap: wrap; }

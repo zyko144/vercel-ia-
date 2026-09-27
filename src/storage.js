@@ -93,3 +93,39 @@ export async function writeNow(key, value) {
   cache.set(key, value);
   await writeRemote(key, value);
 }
+
+// Serialized locally, optimistic compare-and-swap on Supabase. The callback must
+// have no external side effects: a concurrent writer can make it run again.
+const transactions = new Map();
+export function updateAtomic(key, change) {
+  const task = (transactions.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      let previous, revision;
+      const endpoint = `${config.supabase.url}/rest/v1/bot_kv`;
+      if (useSupabase) {
+        const r = await fetch(`${endpoint}?key=eq.${encodeURIComponent(key)}&select=value,updated_at`, { headers: supabaseHeaders(), signal: AbortSignal.timeout(8000) });
+        if (!r.ok) throw new Error(`Social storage read: ${r.status}`);
+        const row = (await r.json())[0];
+        previous = row?.value; revision = row?.updated_at;
+      } else previous = await readRemote(key);
+      const value = structuredClone(previous ?? {});
+      const result = await change(value);
+      if (JSON.stringify(value) === JSON.stringify(previous ?? {})) return result;
+      if (!useSupabase) { await writeNow(key, value); return result; }
+      const updated_at = new Date(Math.max(Date.now(), (Date.parse(revision) || 0) + 1)).toISOString();
+      const r = await fetch(revision
+        ? `${endpoint}?key=eq.${encodeURIComponent(key)}&updated_at=eq.${encodeURIComponent(revision)}` : endpoint, {
+        method: revision ? 'PATCH' : 'POST', signal: AbortSignal.timeout(8000),
+        headers: { ...supabaseHeaders(), Prefer: 'return=representation' },
+        body: JSON.stringify(revision ? { value, updated_at } : { key, value, updated_at }),
+      });
+      if (r.status === 409) continue;
+      if (!r.ok) throw new Error(`Social storage write: ${r.status}`);
+      if ((await r.json()).length) { cache.set(key, value); return result; }
+    }
+    throw new Error('Social storage busy, retry');
+  });
+  transactions.set(key, task);
+  task.finally(() => { if (transactions.get(key) === task) transactions.delete(key); }).catch(() => {});
+  return task;
+}

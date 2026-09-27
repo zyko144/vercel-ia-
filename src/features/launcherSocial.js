@@ -1,7 +1,7 @@
 // Côté social des comptes History Launcher : amis (par code ami), présence (jeu en cours), classement de la semaine
 // entre amis, soirées jeu. Tout passe par la session du compte ; on ne voit que ses amis, jamais les autres comptes.
 import { randomUUID } from 'node:crypto';
-import { load, save } from '../storage.js';
+import { load, updateAtomic } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
 import { me } from './launcherAccounts.js';
 
@@ -14,14 +14,14 @@ const MAX_INBOX = 60;
 const MAX_THREAD = 100;
 const INBOX_TTL = 3 * 86_400_000;
 
-async function data() {
-  const d = (await load(KEY, null)) ?? {};
+function data(d) {
   d.friends ??= {}; // id -> [ids]
   d.requests ??= {}; // id destinataire -> [ids expéditeurs]
   d.presence ??= {}; // id -> { playing, week, top, seen }
   d.events ??= {}; // id soirée -> { id, owner, game, at, invites: { id: 'oui'|'non'|null } }
   d.inbox ??= {}; // id -> [{ id, type: msg|ask|invite|reply, from, text?, game?, join?, oui?, at }]
   d.threads ??= {}; // « idA:idB » -> [{ from, text, at }]
+  d.calls ??= {};
   d.groups ??= {}; // id groupe -> { id, name, owner, members: [ids], at }
   return d;
 }
@@ -72,20 +72,21 @@ function eventsFor(d, accs, id) {
 }
 
 // ---------- Appels vocaux entre amis (WebRTC pair à pair ; le serveur ne fait que passer les signaux) ----------
-const calls = new Map(); // id appel -> { id, from, to, at, state, signals: { [compte]: [..] }, endedBy }
+// Calls live in the same durable transaction as their inbox notification.
+// id appel -> { id, from, to, at, state, signals: { [compte]: [..] }, endedBy }
 const CALL_RING_MS = 45_000;
-function sweepCalls() {
+function sweepCalls(calls) {
   const now = Date.now();
-  for (const [k, c] of calls) {
+  for (const [k, c] of Object.entries(calls)) {
     if (c.state === 'ringing' && now - c.at > CALL_RING_MS) { c.state = 'missed'; c.endAt = now; }
-    if (c.endAt && now - c.endAt > 60_000) calls.delete(k);
-    else if (now - c.at > 6 * 3_600_000) calls.delete(k);
+    if (c.state === 'live' && now - Math.min(c.seen?.[c.from] ?? c.acceptedAt, c.seen?.[c.to] ?? c.acceptedAt) > 90_000) { c.state = 'ended'; c.endAt = now; }
+    if (c.endAt && now - c.endAt > 60_000) delete calls[k];
+    else if (now - c.at > 6 * 3_600_000) delete calls[k];
   }
 }
-async function callRoute(req, res, url, route, id, { readJson, send }) {
-  sweepCalls();
-  const body = req.method === 'POST' ? await readJson(req) : {};
-  const d = await data();
+async function callRoute(req, res, url, route, id, { send }, d, body) {
+  const calls = d.calls;
+  sweepCalls(calls);
   const accs = await accounts();
   const other = (c) => (c.from === id ? c.to : c.from);
   const view = (c) => ({ id: c.id, state: c.state, from: c.from, to: c.to, avec: accs[other(c)]?.pseudo ?? '?', moi: c.from === id ? 'appelant' : 'appele', since: c.acceptedAt ?? null });
@@ -93,14 +94,13 @@ async function callRoute(req, res, url, route, id, { readJson, send }) {
     const to = String(body.to ?? '');
     if (!listOf(d.friends, id).includes(to) || !accs[to]) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
     if (Date.now() - (d.presence[to]?.seen ?? 0) > ONLINE_MS) return send(res, 409, { error: `${accs[to].pseudo} n’est pas en ligne.` });
-    for (const c of calls.values()) if ([c.from, c.to].includes(to) && ['ringing', 'live'].includes(c.state)) return send(res, 409, { error: `${accs[to].pseudo} est déjà en appel.` });
+    for (const c of Object.values(calls)) if ([c.from, c.to].some((peer) => peer === to || peer === id) && ['ringing', 'live'].includes(c.state)) return send(res, 409, { error: `${accs[to].pseudo} est déjà en appel.` });
     const c = { id: randomUUID(), from: id, to, at: Date.now(), state: 'ringing', signals: { [id]: [], [to]: [] } };
-    calls.set(c.id, c);
+    calls[c.id] = c;
     pushInbox(d, to, { type: 'call', from: id, callId: c.id });
-    save(KEY, d);
     return send(res, 201, view(c));
   }
-  const c = calls.get(String(body.call ?? url.searchParams.get('call') ?? ''));
+  const c = calls[String(body.call ?? url.searchParams.get('call') ?? '')];
   if (!c || (c.from !== id && c.to !== id)) return send(res, 404, { error: 'Appel introuvable ou terminé.' });
   if (route === 'POST /api/compte/appel/repondre') {
     if (c.to !== id || c.state !== 'ringing') return send(res, 409, { error: 'Cet appel n’attend plus de réponse.' });
@@ -117,6 +117,7 @@ async function callRoute(req, res, url, route, id, { readJson, send }) {
     return send(res, 200, { ok: true });
   }
   if (route === 'GET /api/compte/appel/signal') {
+    if (c.state === 'live' && Date.now() - (c.seen?.[id] ?? 0) > 15_000) (c.seen ??= {})[id] = Date.now();
     const after = Number(url.searchParams.get('apres') ?? -1);
     return send(res, 200, { ...view(c), signals: c.signals[id].filter((x) => x.n > after) });
   }
@@ -133,16 +134,23 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
   if (!compte) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
   const id = compte.id;
   const route = `${req.method} ${url.pathname}`;
-  // Appels : la mise en relation (signaux WebRTC) est interrogée chaque seconde pendant un appel, plafond à part
-  if (url.pathname.startsWith('/api/compte/appel')) {
-    if (!allowAttempt('compte-appel', id, 4000, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
-    return callRoute(req, res, url, route, id, { readJson, send });
-  }
-  if (!allowAttempt('compte-social', id, 900, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
+  const started = Date.now();
+  const bucket = url.pathname.startsWith('/api/compte/appel') ? ['compte-appel', 4000] : route === 'GET /api/compte/boite' ? ['compte-inbox', 2400] : ['compte-social', 900];
+  if (!allowAttempt(bucket[0], id, bucket[1], 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
+  if (route === 'POST /api/compte/groupes/prevenir' && !allowAttempt('launcher-groupe', id, 10, 10 * 60_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
   const body = req.method === 'POST' ? await readJson(req) : {};
-  const d = await data();
+  try {
+    const result = await updateAtomic(KEY, async (raw) => handleRoute(req, url, route, id, data(raw), body, started));
+    return send(res, result.status, result.payload);
+  } catch { return send(res, 503, { error: 'Synchronisation indisponible. Réessaie dans un instant.' }); }
+}
+
+async function handleRoute(req, url, route, id, d, body, started) {
+  const res = null;
+  const send = (_res, status, payload) => ({ status, payload });
+  if (url.pathname.startsWith('/api/compte/appel')) return callRoute(req, res, url, route, id, { send }, d, body);
   const accs = await accounts();
-  const done = (status, payload) => { save(KEY, d); return send(res, status, payload); };
+  const done = (status, payload) => send(res, status, payload);
 
   if (route === 'GET /api/compte/amis') return send(res, 200, view(d, accs, id));
 
@@ -164,6 +172,7 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     if (!inbox.includes(id)) {
       if (inbox.length >= MAX_REQUESTS) return send(res, 400, { error: 'Ce joueur a trop de demandes en attente.' });
       inbox.push(id);
+      pushInbox(d, target.id, { type: 'friend', from: id, text: 'Nouvelle demande d’ami' });
     }
     return done(200, { ok: true, envoye: true });
   }
@@ -200,12 +209,15 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     return done(200, { ok: true });
   }
 
-  // Boîte de réception (messages, « on joue ? », invitations) + amis, en un seul appel (interrogé toutes les ~15 s)
+  // Boîte de réception (messages, « on joue ? », invitations) + amis, en un seul appel (interrogé toutes les ~2 s)
   if (route === 'GET /api/compte/boite') {
     const after = Number(url.searchParams.get('apres')) || 0;
-    if (d.presence[id]) d.presence[id].seen = Date.now();
-    const items = listOf(d.inbox, id).filter((x) => x.at > after).map((x) => ({ ...x, pseudo: accs[x.from]?.pseudo ?? '?' }));
-    return done(200, { items, now: Date.now(), ...view(d, accs, id) });
+    const now = Date.now();
+    if (!d.presence[id] || now - d.presence[id].seen > 30_000) d.presence[id] = { ...d.presence[id], seen: now };
+    sweepCalls(d.calls);
+    const items = listOf(d.inbox, id).filter((x) => x.at >= after && Date.now() - x.at < INBOX_TTL).map((x) => ({ ...x, pseudo: accs[x.from]?.pseudo ?? '?', ...(x.type === 'call' ? { state: d.calls[x.callId]?.state ?? 'missed' } : {}) }));
+    const calls = Object.values(d.calls).filter((c) => c.to === id && c.state === 'ringing').map((c) => ({ callId: c.id, from: c.from, pseudo: accs[c.from]?.pseudo ?? 'Ami', at: c.at }));
+    return done(200, { items, calls, now: started, ...view(d, accs, id) });
   }
 
   const friendOf = (fid) => listOf(d.friends, id).includes(fid) && accs[fid];
@@ -243,7 +255,6 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     const g = d.groups[String(body.id ?? '')];
     if (!g || !g.members.includes(id)) return send(res, 404, { error: 'Groupe introuvable.' });
     const msg = text(body.text, 200) || 'On joue ?';
-    if (!allowAttempt('launcher-groupe', id, 10, 10 * 60_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
     for (const m of g.members.filter((x) => x !== id)) pushInbox(d, m, { type: 'group', from: id, group: g.name, text: msg, game: d.presence[id]?.playing ?? null, join: d.presence[id]?.join ?? null });
     return done(200, { ok: true, sent: g.members.length - 1 });
   }

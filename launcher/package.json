@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-scanners.mjs && node test/test-commands.mjs && node test/test-verify.mjs && node test/test-direct.mjs && node test/test-free.mjs && node test/test-social.mjs && node test/test-perf.mjs && node test/test-discord.mjs && node test/test-extras.mjs && node test/test-optimize.mjs && node test/test-daily.mjs && node test/test-fivem.mjs && node test/test-friendsync.mjs && node test/test-driver.mjs && node test/test-capture.mjs && node test/test-backup.mjs && node test/test-pcdiag.mjs && node test/test-gmod.mjs && node test/test-progress.mjs && node test/test-pro.mjs && node test/test-bridge.mjs && node test/test-tools.mjs",
+    "test": "node test/test-scanners.mjs && node test/test-commands.mjs && node test/test-verify.mjs && node test/test-direct.mjs && node test/test-free.mjs && node test/test-social.mjs && node test/test-social-inbox.mjs && node test/test-perf.mjs && node test/test-discord.mjs && node test/test-extras.mjs && node test/test-optimize.mjs && node test/test-daily.mjs && node test/test-fivem.mjs && node test/test-friendsync.mjs && node test/test-driver.mjs && node test/test-capture.mjs && node test/test-backup.mjs && node test/test-pcdiag.mjs && node test/test-gmod.mjs && node test/test-progress.mjs && node test/test-pro.mjs && node test/test-bridge.mjs && node test/test-tools.mjs",
     "dist": "electron-builder --win"
   },
   "devDependencies": {

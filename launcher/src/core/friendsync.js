@@ -35,6 +35,7 @@ const cut = (s, n) => (String(s ?? '').length > n ? `${String(s).slice(0, n - 1)
 /** Carte de notification pour un élément de la boîte de réception. */
 export function cardFor(x) {
   const who = x.pseudo ?? 'Un ami';
+  if (x.type === 'friend') return { id: x.id, kind: 'friend', from: x.from, icon: '👤', title: who, body: 'Nouvelle demande d’ami', actions: [['friends', 'Voir la demande']], ttl: 12_000 };
   if (x.type === 'msg') return { id: x.id, kind: 'msg', from: x.from, icon: '💬', title: who, body: cut(x.text, 140), actions: [['reply', 'Répondre']], ttl: 12_000 };
   if (x.type === 'ask') return { id: x.id, kind: 'ask', from: x.from, icon: '🎮', title: `${who} veut jouer avec toi`, body: x.game ? `Demande à rejoindre ta partie de ${cut(x.game, 40)}.` : 'Demande à jouer avec toi.', actions: [['accept', 'Accepter'], ['decline', 'Refuser']], ttl: 30_000 };
   if (x.type === 'invite') return { id: x.id, kind: 'invite', from: x.from, icon: '📨', title: `${who} t’invite`, body: x.game ? `Rejoins sa partie de ${cut(x.game, 40)} !` : 'Rejoins sa partie !', actions: [['accept', 'Rejoindre'], ['decline', 'Plus tard']], ttl: 30_000 };

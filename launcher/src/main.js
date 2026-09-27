@@ -1,3 +1,4 @@
+import { consumeInbox, appendNotification, markNotificationsRead } from './core/social-inbox.js';
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
 import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
@@ -131,7 +132,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1380, height: 860, minWidth: 980, minHeight: 620, frame: false, backgroundColor: '#0b0b0e', show: false,
     icon: ICON, title: 'History Launcher',
-    webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
+    webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: false },
   });
   win.loadFile(path.join(here, 'ui', 'index.html'));
   win.once('ready-to-show', () => win.show());
@@ -425,6 +426,7 @@ const currentSession = () => playSession ?? (detected && Date.now() - lastActive
 let boosted = null;
 const boostSettings = () => ({ enabled: false, power: true, close: [], restore: true, ...(store.data.settings.boost ?? {}) });
 function notify(title, body) {
+  rememberNotification({ id: randomUUID(), title, body, kind: 'app', icon: '◈', actions: [] });
   if (Notification.isSupported()) new Notification({ title, body, icon: ICON, silent: true }).show();
 }
 async function startBoost(item) {
@@ -1455,6 +1457,27 @@ async function sendPresence(s) {
 }
 
 // ---------- Amis en direct : notifications en bas à gauche (comme Steam), messages, « on joue ? », rejoindre ----------
+function notificationScope() {
+  const token = secret('account');
+  return token ? store.data.settings.lastAccount?.id ?? `session-${createHash('sha256').update(token).digest('hex')}` : 'guest';
+}
+function notificationHistory() {
+  const all = store.data.notificationHistory ??= {};
+  return all[notificationScope()] ??= [];
+}
+function rememberNotification(card) {
+  const rows = notificationHistory();
+  if (!appendNotification(rows, card)) return;
+  store.save();
+  send('notifications:update', rows);
+}
+ipcMain.handle('notifications:get', () => notificationHistory());
+ipcMain.handle('notifications:read', (_e, id) => {
+  markNotificationsRead(notificationHistory(), id);
+  store.save(); send('notifications:update', notificationHistory());
+  return notificationHistory();
+});
+ipcMain.handle('notifications:action', (_e, id, action) => notificationAction(id, action));
 let notifWin = null;
 let notifCards = [];
 let notifHover = false;
@@ -1492,18 +1515,22 @@ function armCard(c) {
 }
 function pushCard(c, force = false) {
   if (!c || notifCards.some((x) => x.id === c.id)) return;
+  rememberNotification(c);
   if (!force && (store.data.settings.friendNotifs === false || store.data.settings.dnd || store.data.settings.tournament || gameDnd())) return;
   notifCards.push(c);
   armCard(c);
   notifSync();
 }
 ipcMain.on('notif:hover', (_e, on) => { notifHover = Boolean(on); });
-ipcMain.on('notif:act', async (_e, id, action) => {
-  const c = notifCards.find((x) => x.id === id);
-  if (!c) return;
+ipcMain.on('notif:act', (_e, id, action) => notificationAction(id, action).catch(() => {}));
+async function notificationAction(id, action) {
+  const c = notificationHistory().find((x) => x.id === id) ?? notifCards.find((x) => x.id === id);
+  if (!c || (action !== 'close' && !c.actions?.some(([key]) => key === action))) return;
+  c.read = true; store.save(); send('notifications:update', notificationHistory());
   dropCard(id);
   if (action === 'close') return;
   if (c.file) { if (action === 'play') shell.openPath(c.file); else shell.showItemInFolder(c.file); return; }
+  if (action === 'friends') { showWindow(); send('friends:open'); return; }
   if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
   if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }
   if (action === 'join') { await joinGame(c.join, c.game); return; }
@@ -1516,7 +1543,7 @@ ipcMain.on('notif:act', async (_e, id, action) => {
     const r = await social('/api/compte/inviter/repondre', { id: c.id, oui: action === 'accept' });
     if (action === 'accept' && c.kind === 'invite') await joinGame(r.join, c.game);
   }
-});
+}
 
 // ---------- Captures (Ctrl+Alt+S) et replay des 30 dernières secondes (Ctrl+Alt+R, à activer) ----------
 async function saveCapture(buf, ext) {
@@ -1583,25 +1610,56 @@ async function joinGame(join, game) {
   return null;
 }
 
-// Synchro toutes les 15 s : boîte de réception + qui vient de lancer un jeu (la liste d'amis se met à jour en direct)
+// A single in-flight poll, independent of the visible tab. Overlap the server
+// cursor and deduplicate IDs so messages at a timestamp boundary aren't lost.
 let socialPrev = null;
 let socialLive = null;
+let socialBusy = false;
+let socialFailures = 0;
 async function socialTick() {
-  if (process.env.LAUNCHER_DEMO) { const r = demoFriends(); socialLive = r; send('social:live', { ...r, messages: [] }); return; }
-  const token = secret('account');
-  if (!token) { socialPrev = null; return; }
-  const after = store.data.inboxAt ?? Date.now() - 60_000;
-  const r = await api(`/api/compte/boite?apres=${after}`, { token }).catch(() => null);
-  if (!r || r.status !== 200) return;
-  store.data.inboxAt = r.now ?? Date.now();
-  socialLive = r;
-  for (const x of r.items ?? []) pushCard(cardFor(x));
-  for (const f of newlyPlaying(socialPrev, r.amis)) pushCard(playingCard(f, canJoin(f, items)));
-  socialPrev = playingMap(r.amis);
-  if ((r.items ?? []).length || socialPrev) send('social:live', { amis: r.amis, demandes: r.demandes, code: r.code, moi: r.moi, messages: (r.items ?? []).filter((x) => x.type === 'msg') });
+  if (socialBusy) return;
+  socialBusy = true;
+  try {
+    if (process.env.LAUNCHER_DEMO) { const r = demoFriends(); socialLive = r; send('social:live', { ...r, messages: [] }); return; }
+    const token = secret('account');
+    if (!token) { socialPrev = null; return; }
+    const scope = notificationScope();
+    const sync = (store.data.socialSync ??= {})[scope] ??= { at: 0, seen: [] };
+    const r = await api(`/api/compte/boite?apres=${Math.max(0, sync.at - 1000)}`, { token });
+    if (token !== secret('account') || scope !== notificationScope()) return;
+    if (r.status !== 200) throw new Error('Social unavailable');
+    socialFailures = 0;
+    const fresh = consumeInbox(sync, r);
+    socialLive = r;
+    for (const x of fresh) {
+      const c = cardFor(x);
+      if (!c) continue;
+      c.at = x.at;
+      if (x.type === 'call' && (x.state !== 'ringing' || Date.now() - x.at > 45_000)) {
+        rememberNotification({ ...c, body: 'Appel terminé ou manqué', actions: [] });
+      } else pushCard(c);
+    }
+    if (r.calls) {
+      let changed = false;
+      for (const n of notificationHistory()) if (n.kind === 'call' && n.actions?.length && !r.calls.some((c) => c.callId === n.callId)) {
+        n.actions = []; n.body = 'Appel terminé ou manqué'; changed = true; dropCard(n.id);
+      }
+      if (changed) { store.save(); send('notifications:update', notificationHistory()); }
+    }
+    for (const f of newlyPlaying(socialPrev, r.amis)) pushCard(playingCard(f, canJoin(f, items)));
+    socialPrev = playingMap(r.amis);
+    send('social:live', { ...r, messages: fresh.filter((x) => x.type === 'msg'),
+      calls: r.calls ?? (r.items ?? []).filter((x) => x.type === 'call' && x.state === 'ringing'),
+      quiet: store.data.settings.dnd || store.data.settings.tournament || store.data.settings.friendNotifs === false || gameDnd() });
+    if (fresh.length || Date.now() - (sync.savedAt ?? 0) > 30_000) { sync.savedAt = Date.now(); store.save(); }
+  } catch { socialFailures++; send('social:status', { offline: true }); }
+  finally { socialBusy = false; }
 }
-setInterval(() => socialTick().catch(() => {}), 15_000);
-setTimeout(() => socialTick().catch(() => {}), 5_000);
+async function socialLoop() {
+  await socialTick();
+  setTimeout(socialLoop, Math.min(30_000, 2000 * 2 ** Math.min(socialFailures, 4)));
+}
+setTimeout(socialLoop, 1000);
 
 const FID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
 // Appels vocaux : le launcher relaie les signaux (le son passe directement entre les deux PC)
@@ -1609,7 +1667,7 @@ const CID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
 ipcMain.handle('call:start', (_e, fid) => social('/api/compte/appel', { to: FID(fid) }));
 ipcMain.handle('call:answer', (_e, id, oui) => social('/api/compte/appel/repondre', { call: CID(id), oui: Boolean(oui) }));
 ipcMain.handle('call:signal', (_e, id, data) => social('/api/compte/appel/signal', { call: CID(id), data }));
-ipcMain.handle('call:poll', (_e, id, after) => social(`/api/compte/appel/signal?call=${CID(id)}&apres=${Number(after) || -1}`));
+ipcMain.handle('call:poll', (_e, id, after) => social(`/api/compte/appel/signal?call=${CID(id)}&apres=${Number.isFinite(Number(after)) ? Number(after) : -1}`));
 ipcMain.handle('call:end', (_e, id) => social('/api/compte/appel/fin', { call: CID(id) }));
 ipcMain.handle('chat:thread', (_e, fid) => social(`/api/compte/messages?avec=${encodeURIComponent(FID(fid))}`));
 ipcMain.handle('chat:send', (_e, fid, text) => social('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500) }));
@@ -2064,7 +2122,7 @@ for (const kind of ['inscription', 'connexion']) {
   });
 }
 function loggedIn(r) {
-  if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); setTimeout(() => autoRestore().catch(() => {}), 1500); }
+  if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); socialPrev = null; socialFailures = 0; socialTick().catch(() => {}); send('notifications:update', notificationHistory()); setTimeout(() => autoRestore().catch(() => {}), 1500); }
   return { ok: Boolean(r.token), compte: r.compte ?? null, error: r.token ? null : r.error ?? 'Erreur.', recoveryLeft: r.recoveryLeft };
 }
 // Sécurité du compte : double authentification (QR code), vérification de l'e-mail, mot de passe oublié
@@ -2147,6 +2205,10 @@ ipcMain.handle('account:logout', async () => {
   if (token) await api('/api/compte/deconnexion', { method: 'POST', token }).catch(() => {});
   setSecret('account', '');
   store.data.settings.lastAccount = null;
+  socialPrev = null; socialLive = null;
+  for (const c of [...notifCards]) dropCard(c.id);
+  send('notifications:update', notificationHistory());
+  send('social:reset');
   store.save();
   return { ok: true };
 });

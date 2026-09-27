@@ -1,3 +1,5 @@
+import { socialDemo } from './social-demo.js';
+import { initNotifications } from './notifications.js';
 import { scamCheck } from '../core/friendsync.js';
 // Interface du launcher : accueil (bannière, plus joués, applis, recommandations), bibliothèque, statistiques,
 // assistant IA et lecteur de musique. Toutes les images sont les images officielles trouvées par le launcher.
@@ -329,8 +331,10 @@ function renderFriends() {
 // ---------- Amis History (comptes du launcher) et soirées jeu ----------
 const needLogin = '<div class="empty">Connecte-toi à ton compte History pour ajouter des amis et organiser des soirées.<br><br><button class="btn play" data-login="1">Se connecter</button></div>';
 function renderGroups(list) {
-  $('hGroups').innerHTML = list.length ? list.map((g) => `<div class="hfriend group"><div class="finfo"><b>${esc(g.name)}</b><small>${g.members.map((m) => `${m.online ? '🟢' : '⚫'} ${esc(m.pseudo)}${m.playing ? ` (${esc(m.playing)})` : ''}`).join(' · ')}</small></div><button class="btn play sm" data-gnotify="${esc(g.id)}">📣 Prévenir</button><button class="btn ghost sm" data-gleave="${esc(g.id)}" title="${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}">✕</button></div>`).join('') : '<p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p>';
+  $('hGroups').innerHTML = list.length ? list.map((g) => `<div class="hfriend group"><div class="finfo"><b>${esc(g.name)}</b><small>${g.members.length} membres · ${g.members.filter((m) => m.online).length} en ligne</small><div class="group-members">${g.members.map((m) => `<span class="group-member ${m.online ? 'member-online' : ''}" title="${esc(m.playing ?? 'Hors jeu')}">${esc(m.pseudo)}</span>`).join('')}</div></div><div class="factions"><button class="btn play sm" data-gnotify="${esc(g.id)}">Prévenir le groupe</button><button class="btn ghost sm" data-gleave="${esc(g.id)}">${g.owner ? 'Supprimer' : 'Quitter'}</button></div></div>`).join('') : '<div class="empty">Ta prochaine équipe commence ici.<br><small>Crée un groupe et invite tes amis.</small></div>';
 }
+$('friendSearch').addEventListener('input', () => renderHistory());
+$('friendFilter').addEventListener('change', () => renderHistory());
 $('groupNew').addEventListener('click', async () => {
   const amis = state.hist?.amis ?? [];
   if (!amis.length) return toast('Ajoute d’abord des amis History');
@@ -342,15 +346,18 @@ $('groupNew').addEventListener('click', async () => {
   $('modalBox').onclick = async (e) => {
     const b = e.target.closest('[data-m]'); if (!b) return;
     if (b.dataset.m === '0') return $('modal').close();
-    const r = await api.groupCreate($('gName').value, [...document.querySelectorAll('#modalBox .checks input:checked')].map((x) => x.value));
+    if (!$('gName').value.trim() || !document.querySelector('#modalBox .checks input:checked')) return toast('Choisis un nom et au moins un ami');
+    b.disabled = true;
+    const r = await api.groupCreate($('gName').value, [...document.querySelectorAll('#modalBox .checks input:checked')].map((x) => x.value)).catch(() => ({ error: 'Connexion indisponible' }));
+    b.disabled = false;
     if (r?.error) return toast(r.error);
-    $('modal').close(); toast('👥 Groupe créé'); renderGroups(r.groupes ?? []);
+    $('modal').close(); toast('👥 Groupe créé'); state.hist = { ...state.hist, groupes: r.groupes ?? [] }; renderGroups(r.groupes ?? []);
   };
 });
 $('hGroups').addEventListener('click', async (e) => {
   const n = e.target.closest('[data-gnotify]'); const l = e.target.closest('[data-gleave]');
   if (n) { const text = await ui.prompt({ title: 'Prévenir le groupe', text: 'Ton message (tout le groupe le reçoit en bas à gauche) :', value: state.session?.name ? `Je lance ${state.session.name}, vous venez ?` : 'On joue ?', ok: '📣 Envoyer', icon: '👥' }); if (!text) return; const r = await api.groupNotify(n.dataset.gnotify, text); toast(r?.ok ? `📣 Envoyé à ${r.sent} ami${r.sent > 1 ? 's' : ''}` : r?.error ?? 'Impossible'); }
-  if (l && await ui.confirm({ title: 'Quitter ce groupe ?', ok: 'Quitter', icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) renderGroups(r.groupes); }
+  if (l && await ui.confirm({ title: `${l.textContent.trim()} ce groupe ?`, ok: l.textContent.trim(), icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) renderGroups(r.groupes); }
 });
 $('secDiscord').addEventListener('click', async () => {
   const r = await api.discordCode();
@@ -383,10 +390,14 @@ function renderHistory() {
   $('myCode').textContent = r.code;
   $('hRequests').innerHTML = r.demandes.length ? `<div class="reqbox"><b class="sub">Demandes d’ami</b>${r.demandes.map((d) => `
     <div class="hfriend"><div class="finfo"><b>${esc(d.pseudo)}</b><small>${esc(d.code)}</small></div><button class="btn play" data-hacc="${esc(d.id)}">Accepter</button><button class="btn" data-hrem="${esc(d.id)}">Refuser</button></div>`).join('')}</div>` : '';
+  const query = $('friendSearch').value.trim().toLocaleLowerCase('fr');
+  const filter = $('friendFilter').value;
+  const friends = r.amis.filter((a) => a.pseudo.toLocaleLowerCase('fr').includes(query) && (filter === 'all' || (filter === 'online' ? a.online : a.playing)));
+  $('socialTotal').textContent = `${r.amis.filter((a) => a.online).length} en ligne · ${r.amis.length} amis`;
   const playingNow = state.active.size > 0;
   const joinable = (a) => a.playing && (a.join?.steam || (a.join?.fivem && state.items.some((i) => i.source === 'fivem')) || state.items.some((i) => i.installed && i.name.toLowerCase() === a.playing.toLowerCase()));
-  $('hFriends').innerHTML = r.amis.length ? r.amis.map((a) => `
-    <div class="hfriend ${a.playing ? 'ingame' : a.online ? 'on' : ''}"><span class="dot"></span>
+  $('hFriends').innerHTML = friends.length ? friends.map((a) => `
+    <div class="hfriend ${a.playing ? 'ingame' : a.online ? 'on' : ''}"><span class="dot">${esc(a.pseudo.slice(0, 2).toUpperCase())}</span>
       <div class="finfo"><b>${esc(a.pseudo)}${a.dnd ? ' <span class="dndb" title="Ne pas déranger">⛔</span>' : ''}${a.bench ? ` <span class="benchb" title="Score de benchmark">🏁 ${a.bench}</span>` : ''}</b>${a.status ? `<small class="fstatus">« ${esc(a.status)} »</small>` : ''}<small>${a.playing ? `Joue à ${esc(a.playing)}${a.since ? ` · depuis ${hours(Math.max(1, (Date.now() - a.since) / 60_000))}` : ''}` : a.online ? 'En ligne' : 'Hors ligne'}${a.week ? ` · ${hours(a.week)} cette semaine` : ''}${unread[a.id] ? ` · <span class="unread">${unread[a.id]} nouveau${unread[a.id] > 1 ? 'x' : ''} message${unread[a.id] > 1 ? 's' : ''}</span>` : ''}</small></div>
       <div class="factions">
         ${joinable(a) ? `<button class="btn play sm" data-hjoin="${esc(a.id)}">Rejoindre</button>` : ''}
@@ -395,11 +406,14 @@ function renderHistory() {
         ${a.online ? `<button class="btn sm" data-hcall="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Appel vocal">📞</button>` : ''}
         <button class="btn sm" data-hchat="${esc(a.id)}" data-name="${esc(a.pseudo)}">💬 Message</button>
         <button class="btn ghost sm" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer">✕</button>
-      </div></div>`).join('') : '<div class="empty">Pas encore d’amis : donne ton code à tes potes, ou ajoute le leur.</div>';
+      </div></div>`).join('') : `<div class="empty">${r.amis.length ? 'Aucun ami ne correspond à ce filtre.' : 'Pas encore d’amis : partage ton code pour vous retrouver ici.'}</div>`;
   renderEvents();
-  $('eInvites').innerHTML = r.amis.length ? r.amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}">${esc(a.pseudo)}</label>`).join('') : '<small class="hint">Ajoute d’abord des amis.</small>';
+  const selectedInvites = new Set([...$('eInvites').querySelectorAll('input:checked')].map((el) => el.value));
+  const selectedGame = $('eGame').value;
+  $('eInvites').innerHTML = r.amis.length ? r.amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}" ${selectedInvites.has(a.id) ? 'checked' : ''}>${esc(a.pseudo)}</label>`).join('') : '<small class="hint">Ajoute d’abord des amis.</small>';
   const list = games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes);
   $('eGame').innerHTML = list.map((i) => `<option>${esc(i.name)}</option>`).join('');
+  if (list.some((i) => i.name === selectedGame)) $('eGame').value = selectedGame;
   if (!$('eAt').value) { const d = new Date(Date.now() + 3_600_000); d.setMinutes(0, 0, 0); $('eAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
 }
 // ---------- Clic droit sur le menu de gauche : onglets, plateformes, collections ----------
@@ -465,7 +479,11 @@ async function openChat(id, name) {
   const f = state.hist?.amis?.find((a) => a.id === id);
   chatWith = { id, name: name ?? f?.pseudo ?? 'Ami' };
   delete unread[id];
+  api.notificationsRead?.({ from: id }).catch(() => {});
   $('chatWho').textContent = chatWith.name;
+  $('chatText').value = '';
+  $('chatStatus').textContent = 'Messages privés · History';
+  $('chatForm').querySelector('button').disabled = false;
   $('chatFil').innerHTML = '<p class="hint">Chargement…</p>';
   if (!$('chatDlg').open) $('chatDlg').showModal();
   $('chatText').focus();
@@ -474,36 +492,87 @@ async function openChat(id, name) {
 }
 async function refreshChat() {
   if (!chatWith) return;
-  const r = await api.chatThread(chatWith.id).catch(() => null);
+  const target = chatWith;
+  const r = await api.chatThread(target.id).catch(() => null);
+  if (chatWith !== target) return;
+  const nearBottom = $('chatFil').scrollHeight - $('chatFil').scrollTop - $('chatFil').clientHeight < 80;
+  const signature = JSON.stringify(r?.fil);
+  if (target.signature === signature) return;
+  target.signature = signature;
   if (!r?.fil) { $('chatFil').innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible de charger la discussion.')}</p>`; return; }
   $('chatFil').innerHTML = r.fil.length ? r.fil.map((m) => `<div class="cmsg ${m.from === chatWith.id ? 'them' : 'me'}"><span>${esc(m.text)}</span>${m.from === chatWith.id && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}<small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="hint">Pas encore de message : dis bonjour 👋</p>';
-  $('chatFil').scrollTop = $('chatFil').scrollHeight;
+  if (nearBottom || target.sent) $('chatFil').scrollTop = $('chatFil').scrollHeight;
+  target.sent = false;
 }
 $('chatForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('chatText').value.trim();
-  if (!text || !chatWith) return;
-  $('chatText').value = '';
-  const r = await api.chatSend(chatWith.id, text);
-  if (r?.error) return toast(r.error);
-  refreshChat();
+  const target = chatWith;
+  if (!text || !target || target.sending) return;
+  target.sending = true;
+  const button = $('chatForm').querySelector('button');
+  button.disabled = true; $('chatStatus').textContent = 'Envoi en cours…';
+  try {
+    const r = await api.chatSend(target.id, text);
+    if (!r?.ok) throw new Error(r?.error ?? 'Message non envoyé');
+    if (chatWith === target) {
+      if ($('chatText').value.trim() === text) $('chatText').value = '';
+      target.sent = true;
+      $('chatStatus').textContent = 'Message envoyé';
+      await refreshChat();
+    }
+  } catch (err) { if (chatWith === target) $('chatStatus').textContent = `${err.message} · Ton message est conservé, réessaie.`; }
+  finally { target.sending = false; button.disabled = false; }
 });
 $('chatClose').addEventListener('click', () => { $('chatDlg').close(); chatWith = null; });
 $('chatDlg').addEventListener('close', () => { chatWith = null; });
 api.onChatOpen?.((d) => { go('amis'); showFriendTab('history'); setTimeout(() => openChat(d.id), 300); });
 api.onSocial?.((d) => {
-  if ((d.messages ?? []).length && document.hasFocus()) window.sfx?.play('notif');
-  for (const m of d.messages ?? []) { if (chatWith?.id === m.from) refreshChat(); else unread[m.from] = (unread[m.from] ?? 0) + 1; }
-  if (state.hist && !state.hist.error && d.amis) { state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes }; if (state.view === 'amis' && state.ftab === 'history') renderHistory(); }
+  $('socialStatus').textContent = 'Connecté'; $('socialStatus').classList.remove('offline');
+  updateIncoming(d.calls ?? [], d.quiet);
+  if ((d.messages ?? []).length && !d.quiet && document.hasFocus()) window.sfx?.play('notif');
+  for (const m of d.messages ?? []) { if (chatWith?.id !== m.from) unread[m.from] = (unread[m.from] ?? 0) + 1; else api.notificationsRead?.(m.id).catch(() => {}); }
+  if (chatWith && (d.messages ?? []).some((m) => m.from === chatWith.id)) refreshChat();
+  if (state.hist && !state.hist.error && d.amis) {
+    const next = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes, groupes: d.groupes ?? state.hist.groupes };
+    const changed = JSON.stringify(next) !== JSON.stringify(state.hist) || (d.messages ?? []).length;
+    state.hist = next;
+    if (changed && state.view === 'amis' && state.ftab === 'history') { renderGroups(next.groupes ?? []); renderHistory(); }
+  }
   const online = (d.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
   const n = Object.values(unread).reduce((a, b) => a + b, 0);
   $('friendsOnline').textContent = n ? `${n} ✉` : online || '';
 });
 // ---------- Appels vocaux (WebRTC pair à pair, micro avec suppression du bruit et de l'écho) ----------
 let callS = null;
+let incoming = null;
+let incomingBusy = false;
+let incomingExpiry;
+function updateIncoming(calls, quiet) {
+  clearTimeout(incomingExpiry);
+  const next = calls.find((c) => Date.now() - c.at < 45_000);
+  if (!next || callS || quiet) { $('incomingCall').close(); incoming = null; return; }
+  incomingExpiry = setTimeout(() => { $('incomingCall').close(); incoming = null; }, Math.max(0, 45_000 - (Date.now() - next.at)));
+  incoming = next; $('incomingName').textContent = `${next.pseudo} t’appelle`;
+  if (!$('incomingCall').open && !incomingBusy) $('incomingCall').showModal();
+}
+async function answerIncoming(id) {
+  if (incomingBusy || callS) return;
+  incomingBusy = true; $('incomingCall').close();
+  try { const r = await api.callAnswer(id, true); if (r?.error) return toast(r.error); await callSetup(id, 'callee', r.avec ?? 'Ami'); }
+  catch { toast('Impossible de répondre, vérifie ta connexion'); }
+  finally { incomingBusy = false; incoming = null; }
+}
+$('incomingAnswer').onclick = () => { if (incoming) answerIncoming(incoming.callId); };
+$('incomingDecline').onclick = async () => { const c = incoming; incoming = null; $('incomingCall').close(); if (c) await api.callAnswer(c.callId, false); };
+$('incomingCall').addEventListener('cancel', () => $('incomingDecline').click());
+api.onSocialStatus?.(() => { $('socialStatus').textContent = 'Reconnexion…'; $('socialStatus').classList.add('offline'); });
+api.onSocialReset?.(() => { state.hist = null; for (const key of Object.keys(unread)) delete unread[key]; $('incomingCall').close(); $('chatDlg').close(); callEnd(); renderHistory(); renderGroups([]); });
+initNotifications(api, { esc, toast, openFriends: () => { go('amis'); showFriendTab('history'); } });
 const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 function callUi(state, extra = '') {
   $('callBar').hidden = !callS;
+  $('chatCallControls').hidden = !callS;
   if (!callS) return;
   $('callWho').textContent = callS.name;
   $('callAv').textContent = callS.name[0]?.toUpperCase() ?? '?';
@@ -513,14 +582,19 @@ function callUi(state, extra = '') {
 async function callSetup(id, role, name) {
   if (callS) return toast('Un appel est déjà en cours');
   let mic;
-  try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); } catch { toast('Micro inaccessible : autorise-le dans Windows (Confidentialité › Microphone)'); if (role === 'callee') api.callAnswer(id, false); else api.callEnd(id); return; }
+  try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); } catch { toast('Micro inaccessible : autorise-le dans Windows (Confidentialité › Microphone)'); api.callEnd(id); return; }
+  if (callS) { mic.getTracks().forEach((track) => track.stop()); api.callEnd(id); return; }
   const pc = new RTCPeerConnection({ iceServers: ICE });
-  callS = { id, role, name, pc, mic, after: -1, offered: false, start: null, timer: null, poll: null };
+  callS = { id, role, name, pc, mic, after: -1, offered: false, start: null, timer: null, poll: null, pendingIce: [], createdAt: Date.now() };
   mic.getTracks().forEach((t) => pc.addTrack(t, mic));
   pc.ontrack = (e) => { $('callAudio').srcObject = e.streams[0]; $('callAudio').play().catch(() => {}); };
-  pc.onicecandidate = (e) => { if (e.candidate) api.callSignal(id, { ice: e.candidate.toJSON() }); };
+  const sendSignal = async (data) => {
+    const result = await api.callSignal(id, data);
+    if (!result?.ok) throw new Error(result?.error ?? 'Signal non envoyé');
+  };
+  pc.onicecandidate = (e) => { if (e.candidate) sendSignal({ ice: e.candidate.toJSON() }).catch(() => { if (callS?.id === id) callEnd('Connexion vocale interrompue, réessaie'); }); };
   pc.onconnectionstatechange = () => {
-    if (!callS) return;
+    if (callS?.id !== id) return;
     if (pc.connectionState === 'connected' && !callS.start) {
       callS.start = Date.now();
       window.sfx?.play('success');
@@ -531,27 +605,34 @@ async function callSetup(id, role, name) {
   callUi(role === 'caller' ? 'ringing' : 'connecting');
   const tick = async () => {
     if (!callS || callS.id !== id) return;
+    if (!callS.start && Date.now() - callS.createdAt > 90_000) return callEnd('Connexion vocale impossible, réessaie');
+    try {
     const r = await api.callPoll(id, callS.after).catch(() => null);
     if (!callS || callS.id !== id) return;
+    if (r?.status === 404) return callEnd('Appel terminé', false);
     if (r?.state && ['ended', 'declined', 'missed'].includes(r.state)) return callEnd({ ended: 'Appel terminé', declined: `${name} a refusé`, missed: `${name} n’a pas répondu` }[r.state]);
     if (r?.state === 'live' && role === 'caller' && !callS.offered) {
-      callS.offered = true;
       callUi('connecting');
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      api.callSignal(id, { sdp: pc.localDescription.toJSON() });
+      await sendSignal({ sdp: pc.localDescription.toJSON() });
+      if (callS?.id !== id) return;
+      callS.offered = true;
     }
     for (const sig of r?.signals ?? []) {
-      callS.after = Math.max(callS.after, sig.n);
+      if (callS?.id !== id) return;
       const d = sig.data ?? {};
       try {
         if (d.sdp) {
           await pc.setRemoteDescription(d.sdp);
-          if (d.sdp.type === 'offer') { const ans = await pc.createAnswer(); await pc.setLocalDescription(ans); api.callSignal(id, { sdp: pc.localDescription.toJSON() }); }
-        } else if (d.ice) await pc.addIceCandidate(d.ice);
-      } catch { /* signal en double ou arrivé trop tôt */ }
+          for (const ice of callS.pendingIce.splice(0)) await pc.addIceCandidate(ice);
+          if (d.sdp.type === 'offer') { const ans = await pc.createAnswer(); await pc.setLocalDescription(ans); await sendSignal({ sdp: pc.localDescription.toJSON() }); }
+        } else if (d.ice) { if (pc.remoteDescription) await pc.addIceCandidate(d.ice); else callS.pendingIce.push(d.ice); }
+        if (callS?.id === id) callS.after = Math.max(callS.after, sig.n);
+      } catch { throw new Error('Signal à réessayer'); }
     }
-    callS.poll = setTimeout(tick, callS.start ? 3000 : 800);
+    } catch { if (callS?.id === id) callUi('connecting', 'Reconnexion…'); }
+    if (callS?.id === id) callS.poll = setTimeout(tick, callS.start ? 3000 : 800);
   };
   tick();
 }
@@ -568,16 +649,19 @@ function callEnd(msg = 'Appel terminé', notify = true) {
   toast(`📞 ${msg}`);
 }
 async function startCall(fid, name) {
-  const r = await api.callStart(fid);
-  if (r?.error || !r?.id) return toast(r?.error ?? 'Appel impossible');
-  window.sfx?.play('call');
-  callSetup(r.id, 'caller', name ?? r.avec ?? 'Ami');
+  if (callS || incomingBusy) return toast('Un appel est déjà en cours');
+  incomingBusy = true;
+  try {
+    const r = await api.callStart(fid);
+    if (r?.error || !r?.id) return toast(r?.error ?? 'Appel impossible');
+    window.sfx?.play('call');
+    await callSetup(r.id, 'caller', name ?? r.avec ?? 'Ami');
+  } catch { toast('Appel impossible, vérifie ta connexion'); }
+  finally { incomingBusy = false; }
 }
-api.onIncomingCall?.(async (d) => {
-  const r = await api.callAnswer(d.callId, true);
-  if (r?.error) return toast(r.error);
-  callSetup(d.callId, 'callee', r.avec ?? 'Ami');
-});
+api.onIncomingCall?.((d) => answerIncoming(d.callId));
+$('chatCallHang').onclick = () => callEnd('Tu as raccroché');
+$('chatCallMute').onclick = () => $('callMute').click();
 $('callHang').addEventListener('click', () => callEnd('Tu as raccroché'));
 $('callMute').addEventListener('click', () => {
   if (!callS) return;
@@ -585,6 +669,7 @@ $('callMute').addEventListener('click', () => {
   on.enabled = !on.enabled;
   $('callMute').classList.toggle('off', !on.enabled);
   $('callMute').textContent = on.enabled ? '🎙' : '🔇';
+  $('chatCallMute').textContent = on.enabled ? 'Couper le micro' : 'Activer le micro';
 });
 function renderEvents() {
   const when = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
@@ -615,7 +700,10 @@ $('copyCode').addEventListener('click', () => { navigator.clipboard?.writeText($
 $('addFriend').addEventListener('click', async () => {
   const code = $('addCode').value.trim();
   if (!code) return;
-  const r = await api.hFriendAdd(code);
+  if (!/^.{2,32}#[a-f0-9]{6}$/i.test(code)) return toast('Utilise le code complet : Pseudo#ABC123');
+  $('addFriend').disabled = true;
+  const r = await api.hFriendAdd(code).catch(() => ({ error: 'Connexion indisponible' }));
+  $('addFriend').disabled = false;
   toast(r?.amis ? 'Vous êtes maintenant amis !' : r?.envoye ? 'Demande envoyée' : r?.error ?? 'Impossible pour l’instant');
   if (r?.amis || r?.envoye) { $('addCode').value = ''; loadHistory(); }
 });
@@ -2123,11 +2211,16 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.rename && state.sel) { const n = await ui.prompt({ title: 'Renommer le jeu', value: state.sel.name, ok: 'Renommer' }); if (n) api.renameGame(state.sel.id, n).then((r) => r?.ok && toast('Jeu renommé')); return; }
   if (t.dataset.remove && state.sel) { if (await ui.confirm({ title: `Retirer ${state.sel.name} ?`, text: 'Il disparaît du launcher ; les fichiers du jeu ne sont pas touchés.', ok: 'Retirer', danger: true, icon: '✕' })) api.removeGame(state.sel.id).then((r) => { if (r?.ok) { state.sel = null; toast('Jeu retiré'); } }); return; }
   if (t.dataset.login) return showAuth(true);
-  if (t.dataset.hacc) { const r = await api.hFriendAccept(t.dataset.hacc); if (r?.amis) { state.hist = r; renderHistory(); toast('Nouvel ami ajouté'); } return; }
+  if (t.dataset.hacc) {
+    t.disabled = true;
+    try { const r = await api.hFriendAccept(t.dataset.hacc); if (!r?.amis) throw new Error(r?.error ?? 'Demande indisponible'); state.hist = r; renderHistory(); toast('Nouvel ami ajouté'); }
+    catch (err) { toast(err.message); } finally { t.disabled = false; } return;
+  }
   if (t.dataset.hrem) {
     if (t.dataset.name && !(await ui.confirm({ title: `Retirer ${t.dataset.name} de tes amis ?`, ok: 'Retirer', danger: true, icon: '👥' }))) return;
-    const r = await api.hFriendRemove(t.dataset.hrem);
-    if (r?.amis) { state.hist = r; renderHistory(); }
+    t.disabled = true;
+    try { const r = await api.hFriendRemove(t.dataset.hrem); if (!r?.amis) throw new Error(r?.error ?? 'Action indisponible'); state.hist = r; renderHistory(); }
+    catch (err) { toast(err.message); } finally { t.disabled = false; }
     return;
   }
   if (t.dataset.eresp) { const r = await api.eventRespond(t.dataset.eresp, t.dataset.r); if (r?.soirees) { state.events = r.soirees; renderEvents(); } return; }
@@ -2681,6 +2774,7 @@ function demoApi() {
       return {};
     },
     account: async () => ({ compte: null, skipped: true }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
+    ...socialDemo(),
   };
 }
 

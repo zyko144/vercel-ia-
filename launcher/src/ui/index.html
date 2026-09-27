@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>History Launcher</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="social.css">
 </head>
 <body data-theme="jeu">
 <div class="neon" aria-hidden="true"></div>
@@ -34,6 +35,7 @@
 
 <header class="top">
   <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Rechercher un jeu, une application…" autocomplete="off"></label>
+  <button class="btn notification-toggle" id="notificationToggle" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Notifications</span><b id="notificationCount" hidden></b></button>
   <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
 
@@ -85,22 +87,26 @@
   </section>
 
   <section id="view-amis" class="view">
+    <div class="social-heading"><div><span class="social-eyebrow">TON ESPACE SOCIAL</span><h2>On se retrouve ici.</h2><p>Une discussion, une équipe, la prochaine partie.</p></div><span id="socialStatus" class="social-status">Amis History</span></div>
     <div class="list-head"><h2>Amis</h2><div class="tabs" id="friendTabs"><button data-ftab="history" class="on">History</button><button data-ftab="steam">Steam</button></div><span id="friendsCount"></span><button class="btn" id="friendsRefresh" type="button">↻ Actualiser</button></div>
     <div id="fHistory">
-      <div class="pcgrid">
+      <div class="social-grid">
         <div class="panel">
-          <h3>👥 Amis History</h3>
-          <p class="hint">Tes potes qui ont History Launcher, quelle que soit leur plateforme (Steam, Epic, Riot…).</p>
+          <h3>Tes amis <span id="socialTotal" class="social-total"></span></h3>
+
           <div class="codebox"><span>Ton code ami</span><b id="myCode">…</b><button class="btn" type="button" id="copyCode">Copier</button></div>
-          <div class="addfriend"><input id="myStatus" placeholder="Ton statut (ex. Dispo pour jouer)" maxlength="60"><button class="btn" type="button" id="saveStatus">Mettre</button><button class="btn ghost" type="button" id="copyInvite" title="Lien qui ouvre History et ajoute ton code">🔗 Lien d’invitation</button></div>
+          <details class="social-profile"><summary>Mon statut et mon lien d’invitation</summary><div class="addfriend"><input id="myStatus" placeholder="Ton statut (ex. Dispo pour jouer)" maxlength="60"><button class="btn" type="button" id="saveStatus">Mettre</button><button class="btn ghost" type="button" id="copyInvite" title="Lien qui ouvre History et ajoute ton code">🔗 Lien d’invitation</button></div></details>
           <div class="addfriend"><input id="addCode" placeholder="Code ami de ton pote (ex. Max#3F9A2C)" maxlength="40"><button class="btn play" type="button" id="addFriend">Ajouter</button></div>
           <div id="hRequests"></div>
+          <div class="social-toolbar"><input id="friendSearch" type="search" placeholder="Rechercher un ami…" aria-label="Rechercher un ami"><select id="friendFilter" aria-label="Filtrer les amis"><option value="all">Tous les amis</option><option value="online">En ligne</option><option value="playing">En jeu</option></select></div>
           <div class="hlist" id="hFriends"></div>
+        </div>
+        <div class="social-aside"><div class="panel social-groups">
           <h3 class="pch">👥 Groupes de jeu <button class="btn ghost sm" type="button" id="groupNew">+ Nouveau groupe</button></h3>
           <div class="hlist" id="hGroups"><p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p></div>
         </div>
-        <div class="panel">
-          <h3>🎉 Soirées jeu</h3>
+        <div class="panel social-events">
+          <h3>Soirées jeu</h3>
           <p class="hint">Choisis un jeu et une heure : tes amis sont invités et tout le monde reçoit un rappel 10 min avant.</p>
           <div id="eventsList"></div>
           <details class="neweve"><summary class="btn">+ Organiser une soirée</summary>
@@ -111,6 +117,7 @@
               <button class="btn play" type="button" id="eCreate">Envoyer les invitations</button>
             </div>
           </details>
+        </div>
         </div>
       </div>
     </div>
@@ -313,7 +320,13 @@
 
 <div id="callBar" class="callbar" hidden><span class="cav" id="callAv">?</span><div><b id="callWho"></b><small id="callState">Sonnerie…</small></div><button class="cbtn" id="callMute" title="Couper le micro">🎙</button><button class="cbtn hang" id="callHang" title="Raccrocher">✆</button><audio id="callAudio" autoplay></audio></div>
 <div id="updScreen" class="updscreen" hidden><div class="updcard"><img src="logo.png" alt=""><h2 id="updTitle">Mise à jour</h2><p id="updText">Téléchargement…</p><div class="updbar"><i id="updFill"></i></div><small id="updPct">0 %</small></div></div>
-<dialog id="chatDlg" class="mdl"><div class="dlg modern chatbox"><div class="mhead"><span class="micon">💬</span><h2 id="chatWho">Message</h2><button type="button" class="fold" id="chatClose" title="Fermer">✕</button></div><div class="chatfil" id="chatFil"></div><form class="chatin" id="chatForm"><input id="chatText" maxlength="500" placeholder="Écris un message…" autocomplete="off"><button class="btn play">Envoyer</button></form></div></dialog>
+<dialog id="notificationCenter" class="mdl" aria-labelledby="notificationTitle"><div class="notification-center">
+  <header><div><span class="social-eyebrow">TON ACTIVITÉ</span><h2 id="notificationTitle">Notifications</h2></div><button class="btn ghost" id="notificationClose" aria-label="Fermer les notifications">✕</button></header>
+  <div class="notification-toolbar"><div class="tabs" id="notificationFilters"><button class="on" data-filter="all">Tout</button><button data-filter="friends">Amis</button><button data-filter="app">Application</button><button data-filter="unread">Non lues</button></div><button class="btn ghost sm" id="notificationRead">Tout lire</button></div>
+  <div id="notificationList" class="notification-list" aria-live="polite"></div><footer>Les 150 dernières notifications sont conservées sur ce PC.</footer>
+</div></dialog>
+<dialog id="incomingCall" class="mdl" aria-labelledby="incomingName"><div class="dlg incoming-call"><span class="incoming-icon">↗</span><span class="social-eyebrow">APPEL ENTRANT</span><h2 id="incomingName">Un ami t’appelle</h2><p>Prêt à rejoindre la conversation ?</p><div class="row"><button class="btn" id="incomingDecline">Refuser</button><button class="btn play" id="incomingAnswer">Décrocher</button></div></div></dialog>
+<dialog id="chatDlg" class="mdl"><div class="dlg modern chatbox"><div class="mhead"><span class="micon">💬</span><h2 id="chatWho">Message</h2><button type="button" class="fold" id="chatClose" title="Fermer">✕</button></div><div id="chatCallControls" class="row" hidden><button class="btn sm" id="chatCallMute">Couper le micro</button><button class="btn sm" id="chatCallHang">Raccrocher</button></div><p class="chat-status" id="chatStatus" role="status">Messages privés · History</p><div class="chatfil" id="chatFil" aria-live="polite"></div><form class="chatin" id="chatForm"><input id="chatText" aria-label="Ton message" maxlength="500" placeholder="Écris un message…" autocomplete="off"><button class="btn play">Envoyer</button></form></div></dialog>
 <dialog id="modal" class="mdl"><form method="dialog" class="dlg modern" id="modalBox"></form></dialog>
 
 <div id="dropzone" hidden><div>Lâche le fichier .exe pour ajouter le jeu</div></div>
