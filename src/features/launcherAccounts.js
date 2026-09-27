@@ -73,7 +73,7 @@ async function newSession(d, id) {
   d.sessions[sha(token)] = { id, at: now, seen: now };
   return token;
 }
-const publicAccount = (a) => ({ id: a.id, pseudo: a.pseudo, email: a.email, createdAt: a.createdAt, verified: a.verified !== false, twoFactor: Boolean(a.totp?.on) });
+const publicAccount = (a) => ({ id: a.id, pseudo: a.pseudo, email: a.email, createdAt: a.createdAt, verified: a.verified !== false, twoFactor: Boolean(a.totp?.on), discord: Boolean(a.discordId) });
 
 export async function register(body, ip) {
   if (!allowAttempt('compte-inscription', ip, 5, 60 * 60_000)) return { status: 429, error: 'Trop d’inscriptions depuis cette connexion, réessaie plus tard.' };
@@ -266,7 +266,7 @@ export async function securityRoute(route, body, token, ip) {
 }
 
 /** Routes /api/compte/… (appelées par le launcher). */
-export async function handleAccountApi(req, res, url, { readJson, send, clientIp }) {
+export async function handleAccountApi(req, res, url, { readJson, readBinary, send, clientIp }) {
   const route = `${req.method} ${url.pathname}`;
   const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
   const ip = clientIp(req);
@@ -298,9 +298,9 @@ export async function handleAccountApi(req, res, url, { readJson, send, clientIp
       const { handleLauncherAi } = await import('./launcherAi.js');
       return await handleLauncherAi(req, res, { readJson, send });
     }
-    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel|benchmark|groupes)(\/|$)/.test(url.pathname)) {
+    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel|benchmark|groupes|fps|alertes|partage|discord\/clip)(\/|$)/.test(url.pathname)) {
       const { handleSocialApi } = await import('./launcherSocial.js');
-      return await handleSocialApi(req, res, url, { readJson, send });
+      return await handleSocialApi(req, res, url, { readJson, readBinary, send });
     }
   } catch {
     return send(res, 400, { error: 'Demande illisible.' });

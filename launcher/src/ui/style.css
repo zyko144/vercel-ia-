@@ -917,3 +917,9 @@ body.idle *, body.idle *::before, body.idle *::after { animation-play-state: pau
 .toolstabs button { flex: 1; white-space: nowrap; }
 .toggle[hidden] { display: none !important; }
 #setGamesNew { height: 0; margin: -6px 0; }
+
+/* 0.20 : mode streamer, envoi de captures, conseils graphiques */
+body.streamer .hfriend .finfo b, body.streamer .hfriend .finfo small, body.streamer #friendsBody b, body.streamer #friendsBody small, body.streamer .chat .who { filter: blur(6px); }
+body.streamer::after { content: '🔴 Mode streamer'; position: fixed; right: 14px; bottom: 12px; z-index: 50; padding: 4px 10px; border-radius: 99px; background: rgba(224, 49, 49, 0.9); color: #fff; font-size: 12px; font-weight: 700; pointer-events: none; }
+.caps.send img { cursor: pointer; outline: 2px dashed var(--blue); outline-offset: 2px; }
+ul.tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; line-height: 1.45; }

@@ -65,6 +65,21 @@ function readRaw(req) {
   });
 }
 
+/** Corps brut (fichiers envoyés par le launcher : clips, sauvegardes partagées), avec sa propre limite. */
+function readBinary(req, max) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > max) { reject(new Error('fichier trop gros')); req.destroy(); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 /**
  * En-têtes de sécurité sur toutes les réponses. Les pages qui ont leurs propres règles (tableaux de bord,
  * arcade dans l'Activité Discord) les remplacent ensuite.
@@ -222,7 +237,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     // Comptes History Launcher (inscription, connexion, profil)
     if (url.pathname.startsWith('/api/compte/')) {
       const { handleAccountApi } = await import('./features/launcherAccounts.js');
-      return handleAccountApi(req, res, url, { readJson, send, clientIp });
+      return handleAccountApi(req, res, url, { readJson, readBinary, send, clientIp });
     }
 
     // Chiffres en direct et classement public des serveurs (site vitrine)

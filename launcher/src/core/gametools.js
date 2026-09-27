@@ -205,3 +205,64 @@ export async function brightness(set = null) {
   const v = String(r?.stdout ?? '').trim();
   return set == null ? (Number(v) || null) : v === 'ok';
 }
+
+// ===================== Partage de sauvegardes entre amis =====================
+// Paquet = JSON compressé (gzip) : { game, dirs: [{ name, files: [{ p: chemin relatif, d: base64 }] }] }.
+const MAX_SHARE = 25 * 1024 * 1024;
+async function walk(dir, base = dir, out = []) {
+  for (const d of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const p = path.join(dir, d.name);
+    if (d.isDirectory()) await walk(p, base, out);
+    else if (d.isFile()) out.push(path.relative(base, p));
+  }
+  return out;
+}
+/** Compresse les dossiers de sauvegarde d'un jeu (25 Mo maximum une fois compressé). */
+export async function packSaves(game, dirs) {
+  const { gzipSync } = await import('node:zlib');
+  let raw = 0;
+  const packed = [];
+  for (const dir of dirs) {
+    const files = [];
+    for (const rel of await walk(dir)) {
+      const buf = await readFile(path.join(dir, rel));
+      raw += buf.length;
+      if (raw > 200 * 1024 * 1024) throw new Error('Sauvegarde trop grosse pour être partagée.');
+      files.push({ p: rel.split(path.sep).join('/'), d: buf.toString('base64') });
+    }
+    packed.push({ name: path.basename(dir), files });
+  }
+  if (!packed.some((x) => x.files.length)) throw new Error('Aucun fichier de sauvegarde trouvé.');
+  const out = gzipSync(Buffer.from(JSON.stringify({ v: 1, game: String(game ?? ''), dirs: packed })));
+  if (out.length > MAX_SHARE) throw new Error('Sauvegarde trop grosse pour être partagée (25 Mo maximum une fois compressée).');
+  return out;
+}
+/** Chemin relatif sûr (pas de « .. », pas de chemin absolu ni de lecteur Windows). */
+export const safeRel = (p) => typeof p === 'string' && p.length > 0 && p.length < 400 && !/^([a-z]:|[\\/])/i.test(p) && !p.split(/[\\/]/).some((x) => x === '..' || x === '' || /[<>:"|?*\u0000-\u001f]/.test(x));
+/** Lit un paquet reçu (et vérifie chaque chemin). */
+export async function readPack(buf) {
+  const { gunzipSync } = await import('node:zlib');
+  const j = JSON.parse(gunzipSync(buf, { maxOutputLength: 300 * 1024 * 1024 }).toString('utf8'));
+  if (j?.v !== 1 || !Array.isArray(j.dirs)) throw new Error('Paquet de sauvegarde illisible.');
+  for (const d of j.dirs) {
+    if (!Array.isArray(d.files) || !safeRel(d.name) || /[\\/]/.test(d.name)) throw new Error('Paquet de sauvegarde illisible.');
+    for (const f of d.files) if (!safeRel(f.p) || typeof f.d !== 'string') throw new Error('Paquet de sauvegarde refusé (chemin interdit).');
+  }
+  return j;
+}
+/** Écrit un paquet dans les dossiers donnés (même nom de dossier sinon même position) ; renvoie le nombre de fichiers. */
+export async function unpackSaves(pack, targets) {
+  let n = 0;
+  for (const [i, d] of pack.dirs.entries()) {
+    const to = targets.find((t) => path.basename(t).toLowerCase() === d.name.toLowerCase()) ?? targets[i] ?? null;
+    if (!to) continue;
+    for (const f of d.files) {
+      const dest = path.join(to, ...f.p.split('/'));
+      if (!path.resolve(dest).startsWith(path.resolve(to) + path.sep)) continue;
+      await mkdir(path.dirname(dest), { recursive: true });
+      await writeFile(dest, Buffer.from(f.d, 'base64'));
+      n += 1;
+    }
+  }
+  return n;
+}

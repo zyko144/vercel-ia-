@@ -329,7 +329,7 @@ function renderFriends() {
 // ---------- Amis History (comptes du launcher) et soirées jeu ----------
 const needLogin = '<div class="empty">Connecte-toi à ton compte History pour ajouter des amis et organiser des soirées.<br><br><button class="btn play" data-login="1">Se connecter</button></div>';
 function renderGroups(list) {
-  $('hGroups').innerHTML = list.length ? list.map((g) => `<div class="hfriend group"><div class="finfo"><b>${esc(g.name)}</b><small>${g.members.map((m) => `${m.online ? '🟢' : '⚫'} ${esc(m.pseudo)}${m.playing ? ` (${esc(m.playing)})` : ''}`).join(' · ')}</small></div><button class="btn play sm" data-gnotify="${esc(g.id)}">📣 Prévenir</button><button class="btn ghost sm" data-gleave="${esc(g.id)}" title="${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}">✕</button></div>`).join('') : '<p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p>';
+  $('hGroups').innerHTML = list.length ? list.map((g) => `<div class="hfriend group"><div class="finfo"><b>${esc(g.name)}</b><small>${g.members.map((m) => `${m.online ? '🟢' : '⚫'} ${esc(m.pseudo)}${m.playing ? ` (${esc(m.playing)})` : ''}`).join(' · ')}</small></div><button class="btn play sm" data-gnotify="${esc(g.id)}">📣 Prévenir</button><button class="btn sm" data-gparty="${esc(g.id)}" title="Annonce la partie sur Discord : les membres liés sont mentionnés, avec un bouton « Je viens »">🎮 Discord</button><button class="btn ghost sm" data-gleave="${esc(g.id)}" title="${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}">✕</button></div>`).join('') : '<p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p>';
 }
 $('groupNew').addEventListener('click', async () => {
   const amis = state.hist?.amis ?? [];
@@ -349,6 +349,8 @@ $('groupNew').addEventListener('click', async () => {
 });
 $('hGroups').addEventListener('click', async (e) => {
   const n = e.target.closest('[data-gnotify]'); const l = e.target.closest('[data-gleave]');
+  const pty = e.target.closest('[data-gparty]');
+  if (pty) { const text = await ui.prompt({ title: 'Lancer une partie sur Discord', text: 'Le bot mentionne les membres du groupe sur Discord (bouton « Je viens ») et les prévient aussi dans le launcher.', value: state.session?.name ? `Je lance ${state.session.name}, qui vient ?` : 'On lance une partie, qui vient ?', ok: '🎮 Annoncer', icon: '🎮' }); if (!text) return; const r = await api.groupParty(pty.dataset.gparty, text); return toast(r?.ok ? `🎮 Annoncé sur Discord${r.mentioned ? ` (${r.mentioned} mentionné${r.mentioned > 1 ? 's' : ''})` : ''}` : r?.error ?? 'Impossible'); }
   if (n) { const text = await ui.prompt({ title: 'Prévenir le groupe', text: 'Ton message (tout le groupe le reçoit en bas à gauche) :', value: state.session?.name ? `Je lance ${state.session.name}, vous venez ?` : 'On joue ?', ok: '📣 Envoyer', icon: '👥' }); if (!text) return; const r = await api.groupNotify(n.dataset.gnotify, text); toast(r?.ok ? `📣 Envoyé à ${r.sent} ami${r.sent > 1 ? 's' : ''}` : r?.error ?? 'Impossible'); }
   if (l && await ui.confirm({ title: 'Quitter ce groupe ?', ok: 'Quitter', icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) renderGroups(r.groupes); }
 });
@@ -731,6 +733,15 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.20.0': [
+    ['📤', 'Clips et captures sur Discord', 'Bouton « Discord » après un clip (Ctrl+Alt+R) ou une capture, et dans la fiche d’un jeu : ça part dans le salon des clips du serveur (vidéo trop lourde réduite toute seule).', ['[data-view=accueil]']],
+    ['🎮', 'Parties de groupe sur Discord', 'Dans Amis › Groupes, « 🎮 Discord » : le bot mentionne les membres et affiche « Je viens / Pas dispo ». Tu es prévenu dans le launcher quand quelqu’un vient.', ['[data-view=amis]']],
+    ['🎚', 'Réglages graphiques conseillés', 'Clic droit sur un jeu › Outils du jeu › Réglages conseillés : qualité, résolution, DLSS/FSR et conseils selon ton benchmark, tes FPS mesurés et ton écran.', ['[data-view=accueil]', '#moreBtn', '[data-tools]', 'wait1500', '[data-ttab=graph]', 'wait1200']],
+    ['💾', 'Envoyer sa sauvegarde à un ami', 'Outils du jeu › Sauvegardes › « Envoyer à un ami ». Il la reçoit en un clic ; sa partie est copiée avant.'],
+    ['🔴', 'Mode streamer', 'Automatique quand OBS, Streamlabs ou Twitch Studio tourne : plus de notifications, pseudos d’amis masqués.'],
+    ['🔥', 'Alerte de surchauffe', 'En jeu, si le processeur ou la carte graphique chauffe trop, une alerte apparaît. Le widget peut aussi s’afficher tout seul pendant les parties.'],
+    ['💸', 'Promos en message privé Discord', 'Tes prix suivis et ta liste de souhaits Steam : le bot t’écrit en privé, même PC éteint. Et sur Discord : /launcher comparer et /launcher fps.'],
+  ],
   '0.19.1': [
     ['⬆', 'Mises à jour proposées toutes seules', 'Le launcher cherche une nouvelle version toutes les 30 min et dès que tu reviens dessus, avec une notification Windows s’il est fermé.'],
     ['🎁', 'Salon des bons plans sur Discord', 'Jeux gratuits Epic et grosses promos Steam (-50 % et plus) postés tout seuls dans un salon dédié.'],
@@ -882,7 +893,7 @@ async function openTools(item, tab = 'profil') {
   const d = await api.tools(item.id).catch(() => null);
   if (!d || d.error) return toast(d?.error ?? 'Impossible');
   const p = d.profile;
-  const tabs = [['profil', '🎛 Profil'], ['saves', '💾 Sauvegardes'], ['shaders', '🧊 Saccades'], ...(d.canMove ? [['move', '📦 Déplacer']] : []), ['perf', '📈 Performances']];
+  const tabs = [['profil', '🎛 Profil'], ['graph', '🎚 Réglages conseillés'], ['saves', '💾 Sauvegardes'], ['shaders', '🧊 Saccades'], ...(d.canMove ? [['move', '📦 Déplacer']] : []), ['perf', '📈 Performances']];
   const perf = d.perf.slice().reverse();
   const B = { cpu: 'processeur limitant', gpu: 'carte graphique à fond', mixte: 'équilibré' };
   const month = (days) => perf.filter((x) => Date.now() - x.at < days * 86_400_000 && x.avg);
@@ -900,7 +911,10 @@ async function openTools(item, tab = 'profil') {
     saves: `<p class="hint">Copie de tes parties dans Documents › History › Sauvegardes de jeux (les 5 dernières sont gardées). Avant une restauration, ta partie actuelle est mise de côté.</p>
       <div class="flist">${d.saveDirs.length ? d.saveDirs.map((x) => `<div><div><b>📁 ${esc(x.split(/[\\\\/]/).pop())}</b><small>${esc(x)}</small></div></div>`).join('') : '<div><div><b>Dossier non trouvé</b><small>Choisis-le à la main (Documents, AppData, Saved Games…)</small></div></div>'}</div>
       <div class="row"><button class="btn play" data-tact="backup" ${d.saveDirs.length ? '' : 'disabled'}>💾 Sauvegarder maintenant</button><button class="btn ghost" data-tact="pick">📁 ${d.savesCustom || d.saveDirs.length ? 'Changer le dossier' : 'Choisir le dossier'}</button><button class="btn ghost" data-tact="openSaves">Ouvrir le dossier des copies</button></div>
+      ${d.received?.length ? `<b class="sub">Reçues de tes amis</b><div class="flist">${d.received.map((x) => `<div><div><b>💾 ${esc(x.from)} · ${esc(x.name)}</b><small>${new Date(x.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · valable 24 h</small></div><button class="btn play sm" data-recv="${esc(x.id)}">Recevoir</button></div>`).join('')}</div>` : ''}
+      <div class="row"><button class="btn" data-tact="share" ${d.saveDirs.length ? '' : 'disabled'}>📤 Envoyer ma sauvegarde à un ami</button></div>
       <b class="sub">Copies</b><div class="flist">${d.backups.length ? d.backups.map((b) => `<div><div><b>${new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</b><small>${gb(b.bytes)}</small></div><button class="btn ghost sm" data-restore="${esc(b.id)}">Restaurer</button></div>`).join('') : '<p class="hint">Pas encore de copie.</p>'}</div>`,
+    graph: graphicsHtml(d.graphics),
     shaders: `<p class="hint">Un cache de shaders abîmé ou trop vieux donne des saccades (surtout après une mise à jour du jeu ou du pilote). Il se recrée tout seul : les premières minutes peuvent saccader le temps qu’il se reconstruise.</p>
       <div class="checks">${d.caches.map((c) => `<label class="check"><input type="checkbox" data-cache="${esc(c.id)}" ${c.own ? 'checked' : ''}><span>${esc(c.label)}</span><em>${gb(c.bytes)}</em></label>`).join('')}</div>
       <div class="row"><button class="btn play" data-tact="shaders">🧊 Vider la sélection</button></div>`,
@@ -934,12 +948,36 @@ async function openTools(item, tab = 'profil') {
     if (a === 'openSaves') return api.savesOpen();
     if (a === 'shaders') { const which = [...document.querySelectorAll('#modalBox [data-cache]:checked')].map((x) => x.dataset.cache); if (!which.length) return toast('Rien de coché'); const r = await api.shadersClear(item.id, which); toast(r?.ok ? `🧊 ${gb(r.freed)} de cache vidés` : r?.error ?? 'Impossible'); return openTools(item, 'shaders'); }
     if (a === 'fps') return enableFps();
+    if (a === 'bench') { $('modal').close(); return showView('pc'); }
+    if (t.dataset.recv) { t.disabled = true; const r = await api.savesReceive(t.dataset.recv); if (r?.ok) toast(r.folder ? `💾 ${r.files} fichier(s) rangés dans Sauvegardes reçues` : `💾 Sauvegarde installée (${r.files} fichier(s))`); else if (!r?.cancelled) toast(r?.error ?? 'Impossible'); return openTools(item, 'saves'); }
+    if (a === 'share') return shareSaves(item);
   };
   $('modalBox').onchange = async (e) => {
     const el = e.target;
     if (el.dataset.prof) await api.toolsProfile(item.id, { [el.dataset.prof]: el.dataset.prof === 'power' ? (el.checked ? 'high' : 'none') : el.checked });
     if (el.closest('#profApps')) await api.toolsProfile(item.id, { close: [...document.querySelectorAll('#profApps input:checked')].map((x) => x.value) });
     if (el.dataset.prof === 'enabled') toast(el.checked ? `🎛 Profil actif pour ${item.name}` : 'Profil désactivé');
+  };
+}
+function graphicsHtml(g) {
+  if (!g) return '<p class="hint">Réglages conseillés disponibles pour les jeux seulement.</p>';
+  if (g.need === 'benchmark') return '<p class="hint">Lance d’abord le benchmark (Mon PC › Performances) : les conseils se basent sur la vraie puissance de ton PC.</p><div class="row"><button class="btn play" data-tact="bench">🏁 Aller au benchmark</button></div>';
+  return `<p class="hint">D’après ton benchmark${g.measured ? `, tes ${g.measured} FPS mesurés sur ce jeu` : ''} et ton écran.${g.known ? '' : ' Jeu non répertorié : estimation pour un jeu récent moyen.'}</p>
+    <div class="scansum"><div><b>${esc(g.preset)}</b><small>Qualité conseillée</small></div><div><b>${esc(g.res)}</b><small>Résolution</small></div><div><b>${esc(g.upscaler)}</b><small>Mise à l’échelle</small></div><div><b>${g.target}</b><small>FPS visés</small></div></div>
+    ${g.tips.length ? `<b class="sub">Conseils</b><ul class="tips">${g.tips.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
+}
+async function shareSaves(item) {
+  const r = await api.hFriends().catch(() => null);
+  const amis = r?.amis ?? [];
+  if (!amis.length) return toast('Ajoute d’abord des amis History (onglet Amis)');
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📤</span><h2>Envoyer ma sauvegarde</h2></div>
+    <p class="hint">${esc(item.name)} : ton ami la reçoit dans son launcher (valable 24 h). Sa partie à lui est copiée avant d’être remplacée.</p>
+    <div class="flist">${amis.map((a) => `<div><div><b>${a.online ? '🟢' : '⚫'} ${esc(a.pseudo)}</b></div><button class="btn play sm" data-sendto="${esc(a.id)}">Envoyer</button></div>`).join('')}</div>
+    <div class="row end"><button type="button" class="btn ghost" data-back="1">Retour</button></div>`;
+  $('modalBox').onclick = async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.back) return openTools(item, 'saves');
+    if (t.dataset.sendto) { t.disabled = true; t.textContent = 'Envoi…'; const x = await api.savesShare(item.id, t.dataset.sendto); toast(x?.ok ? `📤 Sauvegarde envoyée (${gb(x.bytes)})` : x?.error ?? 'Impossible'); return openTools(item, 'saves'); }
   };
 }
 api.onMove?.((p) => { const el = document.getElementById('moveProg'); if (el && p.total) el.innerHTML = `<div class="gbar big"><i style="width:${Math.round((100 * p.copied) / p.total)}%"></i></div><small class="hint">${gb(p.copied)} / ${gb(p.total)} · ${esc(p.file ?? '')}</small>`; });
@@ -1988,7 +2026,7 @@ async function loadSheetExtras(i) {
     const vids = caps.filter((c) => c.video).length;
     $('sxCaps').innerHTML = `<h3>📸 Captures <small class="hint">${imgs.length} image${imgs.length > 1 ? 's' : ''}${vids ? ` · ${vids} vidéo${vids > 1 ? 's' : ''}` : ''}</small></h3>
       <div class="caps">${imgs.slice(0, 24).map((c) => `<img src="${esc(c.url)}" data-cap="${esc(c.token)}" alt="" loading="lazy">`).join('')}</div>
-      <button class="btn" data-capdir="${esc(caps[0].token)}">Ouvrir le dossier</button>`;
+      <div class="row"><button class="btn" data-capdir="${esc(caps[0].token)}">Ouvrir le dossier</button><button class="btn ghost" data-capmode="1" title="Clique ensuite sur une capture pour l’envoyer dans le salon des clips">📤 Envoyer sur Discord</button></div>`;
   }).catch(() => {});
 }
 
@@ -2116,6 +2154,14 @@ document.addEventListener('click', async (e) => {
     const r = await api.fivemJoin(code);
     return toast(r?.ok ? 'Connexion au serveur…' : r?.error ?? 'Impossible');
   }
+  if (t.dataset.capmode) { const on = t.closest('#sxCaps')?.querySelector('.caps')?.classList.toggle('send'); t.classList.toggle('on', on); return toast(on ? '📤 Clique sur la capture à envoyer sur Discord' : 'Envoi annulé'); }
+  if (t.dataset.cap && t.closest('.caps.send')) {
+    const note = await ui.prompt({ title: 'Envoyer sur Discord', text: 'Un petit mot avec la capture ? (facultatif)', placeholder: 'GG !', ok: '📤 Envoyer', icon: '📤' });
+    if (note === null || note === undefined) return;
+    t.closest('.caps').classList.remove('send');
+    const r = await api.captureDiscord(t.dataset.cap, note);
+    return toast(r?.ok ? '✅ Envoyée dans le salon des clips' : r?.error ?? 'Envoi impossible');
+  }
   if (t.dataset.cap) return api.openCapture(t.dataset.cap);
   if (t.dataset.capdir) return api.captureFolder(t.dataset.capdir);
   if (t.dataset.cols && state.sel) return openCollections(state.sel);
@@ -2202,6 +2248,8 @@ function showKeys(s) {
   $('directLaunch').checked = s.directLaunch !== false;
   $('gameMode').checked = s.gameMode !== false;
   $('dealAlerts').checked = s.dealAlerts !== false;
+  $('widgetGame').checked = Boolean(s.widgetGame); $('heatAlert').checked = s.heatAlert !== false; $('promoDm').checked = s.promoDm !== false;
+  $('streamerAuto').checked = s.streamerAuto !== false; $('streamerOn').checked = Boolean(s.streamer);
   $('discordStatus').checked = s.discordStatus !== false;
   $('shareActivity').checked = s.shareActivity !== false;
   $('friendNotifs').checked = s.friendNotifs !== false;
@@ -2235,6 +2283,10 @@ $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
 $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: e.target.checked }));
+for (const [id, key] of [['widgetGame', 'widgetGame'], ['heatAlert', 'heatAlert'], ['promoDm', 'promoDm'], ['streamerAuto', 'streamerAuto'], ['streamerOn', 'streamer']]) $(id).addEventListener('change', (e) => api.setSettings({ [key]: e.target.checked }).then(() => api.streamer?.()).then((on) => { if (on != null) document.body.classList.toggle('streamer', Boolean(on)); }));
+// Mode streamer : pseudos des amis floutés tant qu'un logiciel de live tourne (ou si le mode est forcé)
+api.streamer?.().then((on) => document.body.classList.toggle('streamer', Boolean(on))).catch(() => {});
+api.onStreamer?.((on) => { document.body.classList.toggle('streamer', Boolean(on)); if (on) toast('🔴 Mode streamer : notifications coupées, pseudos masqués'); });
 $('discordStatus').addEventListener('change', (e) => api.setSettings({ discordStatus: e.target.checked }));
 $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActivity: e.target.checked }));
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
@@ -2663,7 +2715,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.19.1',
+    version: async () => '0.20.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

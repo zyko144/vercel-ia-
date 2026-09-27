@@ -15,12 +15,14 @@ process.env.SUPABASE_SERVICE_KEY = '';
 process.env.PORT = String(20000 + Math.floor(Math.random() * 20000));
 process.env.STORAGE_DIR = mkdtempSync(path.join(os.tmpdir(), 'ldiscord-'));
 process.env.RESEND_API_KEY = 'essai';
+process.env.LAUNCHER_CLIPS_SALON = 'clips1';
+process.env.LAUNCHER_PARTIES_SALON = 'parties1';
 const mails = [];
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (u, o) => (String(u).startsWith('https://api.resend.com/') ? (mails.push(JSON.parse(o.body)), new Response('{}')) : realFetch(u, o));
 
 const { startHttpServer } = await import('../src/server.js');
-const { profileOf, rolesFor, handleLauncherCommand, _test } = await import('../src/features/launcherDiscord.js');
+const { profileOf, rolesFor, handleLauncherCommand, handlePartyButton, handleLauncherAutocomplete, _test } = await import('../src/features/launcherDiscord.js');
 let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };
 const server = startHttpServer(() => ({ discord: 'ready' }));
@@ -135,6 +137,117 @@ await check('salon des bons plans créé tout seul + grosses promos Steam une fo
   assert.equal(sent.length, 1, 'une fois par jour');
   assert.equal(sent[0].embeds.length, 1, 'seulement les promos de -50 % et plus');
   assert.match(sent[0].embeds[0].toJSON().description, /14,99 €/);
+});
+
+// Faux Discord pour les salons du launcher (clips, parties) et les messages privés
+const posted = { clips1: [], parties1: [] }; const dms = [];
+const fakeChannel = (id) => ({ id, isTextBased: () => true, send: async (p) => { posted[id].push(p); return { url: `https://discord.com/channels/x/${id}/1` }; } });
+_test.setClient({ channels: { fetch: async (id) => (posted[id] ? fakeChannel(id) : null) }, users: { fetch: async (id) => ({ send: async (p) => dms.push({ id, ...p }) }) } });
+const raw = (p, token, buf) => realFetch(`${base}/${p}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' }, body: buf }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+const linkAs = async (token, discordId) => { const c = await call('discord/code', token, {}); const replies = []; await handleLauncherCommand({ channels: { fetch: async () => null } }, { user: { id: discordId, username: discordId, displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), options: { getSubcommand: () => 'lier', getString: () => c.code, getUser: () => null }, reply: async (p) => replies.push(p) }); };
+
+await check('clips : refusé sans Discord lié, image envoyée dans le salon des clips, vidéo trop lourde réencodée', async () => {
+  const png = Buffer.from('89504e470d0a1a0a0000', 'hex');
+  assert.equal((await raw('discord/clip?type=png', zoe, png)).status, 403, 'compte non lié');
+  assert.equal((await raw('discord/clip?type=exe', noam, png)).status, 400);
+  const r = await raw(`discord/clip?type=png&jeu=${encodeURIComponent('Rocket League')}&texte=GG`, noam, png);
+  assert.equal(r.ok, true, r.error);
+  const m = posted.clips1.at(-1);
+  assert.match(m.content, /Noam.*<@d1>.*capture de \*\*Rocket League\*\*/s);
+  assert.deepEqual(m.allowedMentions, { parse: [] });
+  assert.equal(m.files[0].name.endsWith('.png'), true);
+  // Vidéo de 12 Mo : réencodée en 720p pour passer sous la limite de Discord
+  const { default: ffmpeg } = await import('ffmpeg-static');
+  const { execFileSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+  const big = path.join(process.env.STORAGE_DIR, 'big.mp4');
+  execFileSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=30', '-f', 'lavfi', '-i', 'anoisesrc=d=8', '-t', '8', '-c:v', 'libx264', '-preset', 'ultrafast', '-b:v', '14M', '-minrate', '14M', '-maxrate', '14M', '-bufsize', '2M', '-c:a', 'aac', big], { stdio: 'ignore' });
+  const buf = readFileSync(big);
+  assert.ok(buf.length > 10 * 1024 * 1024, `vidéo de test trop petite (${buf.length})`);
+  const fit = await _test.fitForDiscord(buf, 'mp4');
+  assert.ok(fit.buf.length <= 9.5 * 1024 * 1024 && fit.ext === 'mp4');
+  await assert.rejects(_test.fitForDiscord(Buffer.alloc(11 * 1024 * 1024), 'png'), /image trop lourde/);
+});
+
+await check('partie de groupe : mention des membres liés, « Je viens » prévient l’organisateur dans le launcher', async () => {
+  await linkAs(max, 'd2');
+  const g = await call('groupes', noam, { nom: 'Squad', membres: [maxId] });
+  const gid = g.groupes.find((x) => x.name === 'Squad').id;
+  assert.equal((await call('groupes/partie', zoe, { id: gid })).status, 404);
+  const r = await call('groupes/partie', noam, { id: gid, jeu: 'Rocket League', texte: 'Ranked à 21 h ?' });
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.mentioned, 1);
+  const m = posted.parties1.at(-1);
+  assert.equal(m.content, '<@d2>');
+  assert.deepEqual(m.allowedMentions, { users: ['d2'] });
+  const e = m.embeds[0].toJSON();
+  assert.match(e.title, /Noam lance Rocket League/);
+  const btn = m.components[0].toJSON().components[0].custom_id;
+  assert.match(btn, /^hlparty:oui:/);
+  let upd = null;
+  await handlePartyButton({ customId: btn, user: { id: 'd2', username: 'max' }, update: async (p) => { upd = p; }, reply: async () => {} });
+  assert.match(upd.embeds[0].toJSON().fields[1].value, /✅ <@d2>/);
+  assert.match(upd.embeds[0].toJSON().fields[1].name, /\(2\)/);
+  const box = (await call('boite', noam)).items;
+  assert.match(box.at(-1).text, /Max vient à ta partie/);
+  assert.equal((await call('boite', max)).items.filter((x) => x.type === 'group').at(-1).text, 'Ranked à 21 h ?');
+});
+
+await check('/launcher comparer (duel en GIF) et /launcher fps (classement du jeu, autocomplétion)', async () => {
+  const replies = [];
+  const inter = (sub, o = {}) => ({ user: { id: 'd1', username: 'noam', displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), reply: async (p) => replies.push(p),
+    options: { getSubcommand: () => sub, getUser: (n) => o[n] ?? null, getString: () => o.jeu, getFocused: () => o.focus } });
+  await handleLauncherCommand({}, inter('comparer', { membre: { id: 'd3', username: 'zoe' } }));
+  assert.match(replies.at(-1).content, /Pas de compte History lié pour zoe/);
+  await handleLauncherCommand({}, inter('comparer', { membre: { id: 'd2', username: 'max', displayAvatarURL: () => 'https://x/b.png' } }));
+  assert.equal(replies.at(-1).files[0].name, 'history-duel.gif');
+  assert.equal(replies.at(-1).files[0].attachment.subarray(0, 4).toString(), 'GIF8');
+  assert.equal((await call('fps', noam, { jeu: 'Rocket League', avg: 240, low1: 180, minutes: 2 })).status, 400, 'partie trop courte');
+  await call('fps', noam, { jeu: 'Rocket League', avg: 240, low1: 180, minutes: 30 });
+  await call('fps', max, { jeu: 'rocket league', avg: 144, low1: 90, minutes: 12 });
+  await handleLauncherCommand({}, inter('fps', { jeu: 'Rocket League' }));
+  const e = replies.at(-1).embeds[0].toJSON();
+  assert.match(e.description, /1\. Noam\*\* · \*\*240 FPS\*\*.*RTX 4070/s);
+  assert.match(e.description, /2\. Max\*\* · \*\*144 FPS/);
+  let choices = null;
+  await handleLauncherAutocomplete({ options: { getFocused: () => 'rock' }, respond: async (c) => { choices = c; } });
+  assert.equal(choices[0].value, 'Rocket League', 'le premier nom reste');
+  assert.match(choices[0].name, /2 joueurs/);
+  await handleLauncherCommand({}, inter('fps', { jeu: 'Jeu inconnu' }));
+  assert.match(replies.at(-1).content, /Personne n’a encore mesuré/);
+});
+
+await check('partage de sauvegarde entre amis : seulement l’ami destinataire, 24 h', async () => {
+  const data = Buffer.from('sauvegarde-de-test');
+  assert.equal((await raw(`partage?a=${encodeURIComponent('inconnu')}`, noam, data)).status, 404);
+  assert.equal((await raw(`partage?a=${maxId}&jeu=Minecraft&nom=Monde`, noam, data)).ok, true);
+  const item = (await call('boite', max)).items.find((x) => x.type === 'share');
+  assert.equal(item.game, 'Minecraft'); assert.equal(item.size, data.length);
+  const get = (token) => realFetch(`${base}/partage?id=${item.share}`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal((await get(zoe)).status, 404, 'pas pour les autres');
+  assert.equal(Buffer.from(await (await get(max)).arrayBuffer()).toString(), 'sauvegarde-de-test');
+});
+
+await check('promos en message privé : prix suivi et liste de souhaits, une seule fois par baisse', async () => {
+  const r = await call('alertes', noam, { steam: '76561198000000001', prix: [{ appId: '252950', name: 'Rocket League', target: 10 }, { appId: 'x', name: 'mauvais' }], mp: true });
+  assert.equal(r.suivis, 1);
+  await call('alertes', max, { prix: [{ appId: '1', name: 'X', target: 5 }], mp: false });
+  const fetchImpl = async (u) => {
+    u = String(u);
+    if (u.includes('appdetails')) return new Response(JSON.stringify({ 252950: { success: true, data: { price_overview: { final: 799, initial: 1999, discount_percent: 60 } } }, 1: { success: true, data: { price_overview: { final: 100, initial: 1000, discount_percent: 90 } } } }));
+    if (u.includes('GetWishlist')) return new Response(JSON.stringify({ response: { items: [{ appid: 570 }] } }));
+    if (u.includes('GetItems')) return new Response(JSON.stringify({ response: { store_items: [{ appid: 570, name: 'Jeu Souhaité', best_purchase_option: { discount_pct: 40, formatted_final_price: '12,00€', formatted_original_price: '20,00€' } }] } }));
+    return new Response('{}', { status: 404 });
+  };
+  dms.length = 0;
+  assert.equal(await _test.checkWatch({ users: { fetch: async (id) => ({ send: async (p) => dms.push({ id, ...p }) }) } }, fetchImpl), 1);
+  assert.equal(dms.length, 1, 'Max a coupé les messages privés');
+  assert.equal(dms[0].id, 'd1');
+  const titles = dms[0].embeds.map((x) => x.toJSON().title);
+  assert.ok(titles.includes('💸 Rocket League à 7,99 €'), titles.join());
+  assert.ok(titles.includes('Jeu Souhaité : -40 %'));
+  await _test.checkWatch({ users: { fetch: async (id) => ({ send: async (p) => dms.push({ id, ...p }) }) } }, fetchImpl);
+  assert.equal(dms.length, 1, 'pas deux fois la même promo');
 });
 
 server.close();

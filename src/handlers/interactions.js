@@ -58,6 +58,7 @@ export async function onInteraction(client, interaction) {
   try {
     if (interaction.isAutocomplete()) {
       if (MUSIC_COMMAND_NAMES.has(interaction.commandName)) return await handleMusicAutocomplete(interaction);
+      if (interaction.commandName === 'launcher') return await (await import('../features/launcherDiscord.js')).handleLauncherAutocomplete(interaction);
       return await handleGameAutocomplete(interaction);
     }
     // Anti-spam global : 25 actions (commandes, boutons, menus) en 20 s par personne au maximum
@@ -91,6 +92,7 @@ export async function onInteraction(client, interaction) {
     if (isLiveComponent(interaction)) return await handleLiveComponent(client, interaction);
     if (isTribunalComponent(interaction)) return await handleTribunalComponent(client, interaction);
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('hlparty:')) return await (await import('../features/launcherDiscord.js')).handlePartyButton(interaction);
       if (interaction.customId.startsWith('report:')) return await handleReportButton(client, interaction);
       if (interaction.customId === 'copy:code') return await handleCopyButton(interaction);
       if (interaction.customId.startsWith('quiz')) return await handleQuizButton(client, interaction);
