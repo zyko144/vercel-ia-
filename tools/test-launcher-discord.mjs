@@ -69,7 +69,7 @@ await check('liaison Discord : code à usage unique, profil /launcher avec nivea
   await call('presence', noam, { playing: 'Rocket League', week: 600, top: 'Rocket League', level: 27 });
   await call('benchmark', noam, { v: 2, scores: { total: 1650 }, cpu: 'Ryzen 7 7800X3D', gpu: 'RTX 4070' });
   const replies = [];
-  const inter = (sub, opts = {}) => ({ user: { id: 'd1', username: 'noam', displayAvatarURL: () => 'https://x/a.png' }, options: { getSubcommand: () => sub, getString: () => opts.code, getUser: () => null }, reply: async (p) => replies.push(p) });
+  const inter = (sub, opts = {}) => ({ user: { id: 'd1', username: 'noam', displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), options: { getSubcommand: () => sub, getString: () => opts.code, getUser: () => null }, reply: async (p) => replies.push(p) });
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: 'ZZZZZZ' }));
   assert.match(replies.at(-1).content, /inconnu ou expiré/);
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: c.code }));
@@ -77,12 +77,14 @@ await check('liaison Discord : code à usage unique, profil /launcher avec nivea
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: c.code }));
   assert.match(replies.at(-1).content, /inconnu ou expiré/, 'code à usage unique');
   await handleLauncherCommand({}, inter('profil'));
-  const e = replies.at(-1).embeds[0].toJSON();
-  assert.match(e.description, /Rocket League/);
-  const f = Object.fromEntries(e.fields.map((x) => [x.name, x.value]));
-  assert.equal(f['⭐ Niveau'], '27');
-  assert.match(f['🏁 Benchmark'], /1650/);
-  assert.equal(f['🕒 Cette semaine'], '10 h 00');
+  const file = replies.at(-1).files[0];
+  assert.equal(file.name, 'history-profil.gif');
+  assert.equal(file.attachment.subarray(0, 4).toString(), 'GIF8', 'carte animée');
+  const p = await profileOf((await call('moi', noam)).compte.id);
+  assert.equal(p.level, 27); assert.equal(p.bench, 1650); assert.equal(p.week, 600); assert.equal(p.playing, 'Rocket League');
+  const { launcherCardSvg } = await import('../src/features/launcherCard.js');
+  const svg = launcherCardSvg({ ...p, pseudo: 'Noam' });
+  for (const x of ['NIVEAU 27', '1650', '10 h 00', 'Rocket League']) assert.ok(svg.includes(x), x);
   noamId = (await call('moi', noam)).compte.id;
 });
 

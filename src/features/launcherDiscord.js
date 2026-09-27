@@ -4,7 +4,9 @@
 // - rôles automatiques selon le niveau et le benchmark (sur le serveur des annonces du launcher)
 // - jeux gratuits de la semaine sur l'Epic Games Store annoncés avec leur image
 import { AttachmentBuilder, EmbedBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
+import { allowAttempt } from '../dashboard/auth.js';
 import { load, save } from '../storage.js';
+import { launcherCardGif } from './launcherCard.js';
 import { accountByDiscord, linkDiscord, linkedAccounts } from './launcherAccounts.js';
 import { RELEASES_CHANNEL } from './launcherReleases.js';
 
@@ -49,7 +51,7 @@ export async function profileOf(accountId) {
   const p = s.presence?.[accountId] ?? {};
   const online = Date.now() - (p.seen ?? 0) < 3 * 60_000;
   const b = s.bench2?.[accountId] ?? null;
-  return { level: p.level ?? null, bench: b?.total ?? null, benchCpu: b?.cpu ?? null, benchGpu: b?.gpuName ?? null, playing: online ? p.playing ?? null : null, online, week: p.week ?? 0, top: p.top ?? null, friends: (s.friends?.[accountId] ?? []).length };
+  return { level: p.level ?? null, bench: b?.total ?? null, benchCpu: b?.cpu ?? null, benchGpu: b?.gpuName ?? null, cpu1: b?.cpu1 ?? null, cpuN: b?.cpuN ?? null, ram: b?.ram ?? null, disk: b?.disk ?? null, gpu: b?.gpu ?? null, playing: online ? p.playing ?? null : null, online, week: p.week ?? 0, top: p.top ?? null, friends: (s.friends?.[accountId] ?? []).length };
 }
 const hours = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, '0')}` : `${Math.round(m)} min`);
 
@@ -68,6 +70,21 @@ export async function handleLauncherCommand(client, interaction) {
     return interaction.reply({ content: user.id === interaction.user.id ? '🔗 Ton compte n’est pas encore lié : dans le launcher, ouvre Paramètres › Compte › « Lier Discord », puis tape `/launcher lier code:XXXXXX`.' : `${user.username} n’a pas lié de compte History.`, ...PRIVATE });
   }
   const p = await profileOf(acc.id);
+  // Carte animée aux couleurs du launcher (texte seul si trop de demandes ou si le rendu échoue)
+  if (allowAttempt('launcher-card', interaction.user.id, 4, 60_000)) {
+    await interaction.deferReply();
+    try {
+      const gif = await launcherCardGif({ ...p, pseudo: acc.pseudo }, { avatarUrl: user.displayAvatarURL({ extension: 'png', size: 128 }) });
+      return await interaction.editReply({ files: [new AttachmentBuilder(gif, { name: 'history-profil.gif' })] });
+    } catch (err) {
+      console.error('[launcher] carte profil :', err.message);
+      return interaction.editReply({ embeds: [profileEmbed(acc, user, p)] });
+    }
+  }
+  return interaction.reply({ embeds: [profileEmbed(acc, user, p)] });
+}
+
+function profileEmbed(acc, user, p) {
   const e = new EmbedBuilder().setColor(0x2f8bff).setAuthor({ name: `${acc.pseudo} · History Launcher`, iconURL: user.displayAvatarURL() })
     .setDescription(p.playing ? `🟢 **Joue à ${p.playing}**` : p.online ? '🟢 En ligne' : '⚫ Hors ligne')
     .addFields(
@@ -79,7 +96,7 @@ export async function handleLauncherCommand(client, interaction) {
     )
     .setFooter({ text: 'historylauncher.vercel.app' });
   if (p.benchCpu || p.benchGpu) e.addFields({ name: '🖥 PC', value: [p.benchCpu, p.benchGpu].filter(Boolean).join('\n').slice(0, 200) });
-  return interaction.reply({ embeds: [e] });
+  return e;
 }
 
 /** Donne les bons rôles à un membre (et retire les paliers qui ne s'appliquent plus). */
