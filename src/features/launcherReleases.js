@@ -24,14 +24,20 @@ export function releaseMessage(rel) {
 
 /** Dernière version publiée : API GitHub, sinon (limite de 60 appels/h par adresse IP, vite atteinte sur un
  *  hébergeur partagé) directement depuis les fichiers de la release, avec les notes tirées du CHANGELOG. */
-export async function latestRelease(fetchImpl = fetch) {
+/**
+ * Dernière version publiée. `want` (ex. « 0.21.1 », donné par GitHub juste après la publication) : on va chercher
+ * exactement cette version, sans dépendre de « latest » qui peut encore montrer l'ancienne pendant quelques minutes.
+ */
+export async function latestRelease(fetchImpl = fetch, want = null) {
   const headers = { 'User-Agent': 'HistoryBot', Accept: 'application/vnd.github+json', ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) };
-  const r = await fetchImpl(`https://api.github.com/repos/${REPO}/releases/latest`, { headers, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  const api = want ? `releases/tags/v${want}` : 'releases/latest';
+  const r = await fetchImpl(`https://api.github.com/repos/${REPO}/${api}`, { headers, signal: AbortSignal.timeout(10_000) }).catch(() => null);
   if (r?.ok) { const rel = await r.json().catch(() => null); if (rel?.tag_name && !rel.draft) return rel; }
-  const y = await fetchImpl(`https://github.com/${REPO}/releases/latest/download/latest.yml`, { redirect: 'follow', signal: AbortSignal.timeout(15_000) }).catch(() => null);
+  const ymlUrl = want ? `https://github.com/${REPO}/releases/download/v${want}/latest.yml` : `https://github.com/${REPO}/releases/latest/download/latest.yml`;
+  const y = await fetchImpl(ymlUrl, { redirect: 'follow', signal: AbortSignal.timeout(15_000) }).catch(() => null);
   if (!y?.ok) return null;
   const v = (await y.text()).match(/^version:\s*([\d.]+)\s*$/m)?.[1];
-  if (!v) return null;
+  if (!v || (want && v !== want)) return null;
   const dl = (f) => `https://github.com/${REPO}/releases/download/v${v}/${f}`;
   const assets = [{ name: 'latest.yml' }, { name: `History-Launcher-Setup-${v}.exe`, browser_download_url: dl(`History-Launcher-Setup-${v}.exe`) }];
   for (let i = 1; i <= 10; i++) {
@@ -45,13 +51,15 @@ export async function latestRelease(fetchImpl = fetch) {
   return { tag_name: `v${v}`, body, assets };
 }
 
-async function tick(client, fetchImpl = fetch) {
-  const rel = await latestRelease(fetchImpl);
+const vnum = (t) => String(t ?? '').replace(/^v/, '').split('.').map(Number).reduce((n, x) => n * 1000 + (x || 0), 0);
+async function tick(client, fetchImpl = fetch, want = null) {
+  const rel = await latestRelease(fetchImpl, want);
   if (!rel?.tag_name) return false;
   // La release doit être complète (installateur + fichier de mise à jour) avant d'être annoncée
   if (!(rel.assets ?? []).some((a) => a.name === 'latest.yml')) return false;
   const st = (await load(KEY, null)) ?? {};
-  if (st.last === rel.tag_name) return false;
+  // Déjà annoncée, ou plus ancienne que la dernière annonce (« latest » en retard) : rien
+  if (st.last === rel.tag_name || (st.last && vnum(rel.tag_name) < vnum(st.last))) return false;
   const channel = await client.channels.fetch(RELEASES_CHANNEL).catch(() => null);
   if (!channel?.isTextBased?.()) { console.warn('[annonces launcher] salon introuvable ou inaccessible :', RELEASES_CHANNEL); return false; }
   const msg = releaseMessage(rel);
@@ -67,11 +75,15 @@ async function tick(client, fetchImpl = fetch) {
 let clientRef = null;
 let lastTrigger = 0;
 /** Appelé par GitHub juste après la publication d'une version (le bot n'attend pas sa vérification suivante). */
-export async function announceNow() {
+export async function announceNow(version = null) {
   if (!clientRef) return { ok: false, error: 'bot pas encore prêt' };
-  if (Date.now() - lastTrigger < 20_000) return { ok: true, skipped: true };
+  const want = /^\d{1,3}\.\d{1,3}\.\d{1,4}$/.test(String(version ?? '')) ? String(version) : null;
+  if (Date.now() - lastTrigger < 10_000) return { ok: true, skipped: true };
   lastTrigger = Date.now();
-  return { ok: true, posted: await tick(clientRef) };
+  const posted = await tick(clientRef, fetch, want);
+  const st = (await load(KEY, null)) ?? {};
+  // « already » : cette version est déjà dans le salon (GitHub arrête alors de réessayer)
+  return { ok: true, posted, already: Boolean(want && st.last === `v${want}`), last: st.last ?? null };
 }
 
 export function startLauncherReleases(client) {
@@ -80,4 +92,4 @@ export function startLauncherReleases(client) {
   setTimeout(run, 60_000).unref();
   setInterval(run, 10 * 60_000).unref();
 }
-export const _test = { tick };
+export const _test = { tick, vnum };
