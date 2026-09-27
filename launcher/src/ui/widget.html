@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>History · widget</title>
+<link rel="stylesheet" href="widget.css">
+</head>
+<body>
+<div class="w">
+  <div class="top"><b>History</b><span id="game"></span><button id="x" title="Fermer le widget">✕</button></div>
+  <div class="grid">
+    <div><small>Processeur</small><b id="cpu">–</b><em id="cpuT"></em></div>
+    <div><small>Graphique</small><b id="gpu">–</b><em id="gpuT"></em></div>
+    <div><small>Mémoire</small><b id="ram">–</b><em>&nbsp;</em></div>
+    <div class="fps"><small>FPS</small><b id="fps">–</b><em id="fpsHint">en jeu</em></div>
+  </div>
+  <div class="friends" id="friends"></div>
+</div>
+<script src="widget.js"></script>
+</body>
+</html>

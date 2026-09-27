@@ -1,3 +1,4 @@
+import { launcherCommand } from '../features/launcherDiscord.js';
 import {
   ApplicationCommandType,
   ChannelType,
@@ -325,7 +326,7 @@ const adminCommand = utilityCommands.find((c) => c.name === 'admin');
 const playCommand = guildOnly(musicCommands.find((c) => c.name === 'play'));
 const contextMenus = aiCommands.filter((c) => c instanceof ContextMenuCommandBuilder);
 
-export const commandDefinitions = [...panelCommands, adminCommand, ...contextMenus];
+export const commandDefinitions = [...panelCommands, launcherCommand, adminCommand, ...contextMenus];
 /** Enregistrées serveur par serveur : elles apparaissent tout de suite (les globales peuvent mettre du temps). */
 export const guildCommandDefinitions = [playCommand];
 
@@ -337,6 +338,6 @@ export const COMMANDS_ALLOWED_EVERYWHERE = new Set([
   ...moderationCommands.map((c) => c.name),
   ...MUSIC_COMMAND_NAMES,
   ...GAME_COMMAND_NAMES,
-  'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin', 'vocal', 'tribunal',
+  'userinfo', 'serverinfo', 'avatar', 'aide', 'ping', 'admin', 'vocal', 'tribunal', 'launcher',
   'Expliquer ce message', 'Traduire en français', 'Signaler au staff',
 ]);

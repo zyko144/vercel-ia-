@@ -54,6 +54,7 @@ export async function cpuBench({ ms = 4000, sustainMs = 30_000, onStep = () => {
     multi[k] = Math.round((await inThreads(k, ms, threads)).reduce((n, r) => n + r[0], 0) * 10) / 10;
   }
   // Endurance : tous les cœurs à fond, mesure découpée en 6 tranches pour voir si les performances chutent (chauffe)
+  if (!sustainMs) return { threads, single, multi, sustain: null };
   onStep(`Processeur · endurance ${Math.round(sustainMs / 1000)} s pleine charge`);
   const slices = 6;
   const per = await inThreads('mix', sustainMs, threads, slices);

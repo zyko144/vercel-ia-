@@ -4,7 +4,7 @@ const cdn = (id) => ({ cover: `https://cdn.cloudflare.steamstatic.com/steam/apps
 const H = 3_600_000;
 const G = [
   ['359550', 'Tom Clancy’s Rainbow Six Siege', 6600, 2], ['252950', 'Rocket League', 17100, 20], ['271590', 'Grand Theft Auto V', 9200, 50],
-  ['1172470', 'Apex Legends', 4300, 26], ['730', 'Counter-Strike 2', 12600, 5], ['1245620', 'ELDEN RING', 3100, 900], ['4000', 'Garry’s Mod', 1500, 1400], ['1091500', 'Cyberpunk 2077', 2200, 1100],
+  ['1172470', 'Apex Legends', 4300, 26], ['730', 'Counter-Strike 2', 12600, 5], ['1245620', 'ELDEN RING', 3100, 900], ['4000', 'Garry’s Mod', 1500, 5200], ['1091500', 'Cyberpunk 2077', 2200, 1100],
 ];
 export function demoItems(now = Date.now()) {
   return G.map(([id, name, minutes, ago]) => ({
@@ -21,6 +21,7 @@ export function demoFriends(now = Date.now()) {
       { id: 'd3', pseudo: 'Lucas', code: 'Lucas#778899', online: true, playing: null, week: 300, status: 'Dispo pour jouer', bench: 960 },
       { id: 'd4', pseudo: 'Inès', code: 'Ines#112233', online: false, playing: null, week: 90, status: null },
     ],
+    groupes: [{ id: 'g1', name: 'Squad RL', owner: true, members: [{ id: 'me', pseudo: 'Noam', online: true, playing: null }, { id: 'd2', pseudo: 'Zoé', online: true, playing: 'Rocket League' }, { id: 'd3', pseudo: 'Lucas', online: true, playing: null }] }],
   };
 }
 export function demoBench(now = Date.now()) {
@@ -88,4 +89,8 @@ export function demoWu(now = Date.now()) {
     ],
     history: [{ title: 'Mise à jour cumulative pour Windows 11 (KB5063878)', date: new Date(now - 18 * 864e5).toISOString(), result: 'ok' }, { title: 'Microsoft Defender Antivirus (KB2267602)', date: new Date(now - 2 * 864e5).toISOString(), result: 'ok' }],
   };
+}
+/** Parties suivies d'exemple (FPS réels, goulot) pour la fenêtre « Outils du jeu ». */
+export function demoPerf(now = Date.now()) {
+  return Array.from({ length: 9 }, (_, i) => ({ at: now - (8 - i) * 3 * 86_400_000, minutes: 70 + ((i * 37) % 90), avg: 228 + ((i * 13) % 30) - (i < 3 ? 25 : 0), low1: 150 + ((i * 7) % 25), stutters: i % 3, cpuBound: 68, gpuAvg: 61 + (i % 5), coreMax: 94, bound: 'cpu' }));
 }

@@ -20,7 +20,28 @@ async function data() {
   d.byEmail ??= {}; // e-mail -> id
   d.sessions ??= {}; // empreinte du jeton -> { id, at, seen }
   d.tickets ??= {}; // étape double authentification : empreinte -> { id, exp, tries }
+  d.discordCodes ??= {}; // code de liaison Discord -> { id, exp }
   return d;
+}
+
+// Alerte de connexion : un e-mail quand le compte se connecte depuis un PC jamais vu (identifiant d'appareil aléatoire du launcher)
+const cleanDevice = (v) => (/^[\w-]{8,64}$/.test(String(v ?? '')) ? String(v) : null);
+async function deviceCheck(a, device, ip) {
+  if (!device) return;
+  const h = sha(`appareil:${device}`);
+  a.devices ??= [];
+  const known = a.devices.find((x) => x.h === h);
+  if (known) { known.at = Date.now(); return; }
+  const hadOthers = a.devices.length > 0;
+  a.devices = [...a.devices, { h, at: Date.now() }].slice(-20);
+  if (!hadOthers || !mailReady()) return;
+  const when = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'full', timeStyle: 'short' });
+  const html = `<div style="background:#0b0910;padding:36px 16px;font-family:Segoe UI,Arial,sans-serif;color:#f4f1f6"><div style="max-width:440px;margin:auto;padding:30px;border-radius:22px;background:linear-gradient(160deg,#1b1826,#121018);border:1px solid #2b2638">
+<div style="font-size:13px;letter-spacing:3px;color:#22d3ee;font-weight:700;text-align:center">HISTORY</div><h1 style="font-size:21px;margin:14px 0 8px;text-align:center">Nouvelle connexion à ton compte</h1>
+<p style="color:#b8b0c2">Salut ${String(a.pseudo).replace(/[<>&"]/g, '')}, ton compte History vient d’être ouvert sur un nouveau PC :</p>
+<p style="color:#f4f1f6">🕒 ${when}<br>🌐 Adresse IP : ${String(ip ?? '?').replace(/[^\w.:]/g, '')}</p>
+<p style="color:#948d9c;font-size:13px">C’est toi ? Rien à faire. Sinon, change ton mot de passe tout de suite (Paramètres › Compte) et active la double authentification.</p></div></div>`;
+  sendMail(a.email, 'Nouvelle connexion à ton compte History', html).catch(() => {});
 }
 
 const cleanEmail = (e) => String(e ?? '').trim().toLowerCase();
@@ -99,12 +120,13 @@ export async function login(body, ip) {
   // Double authentification : pas de session tant que le code de l'application n'est pas donné
   if (account.totp?.on) {
     const ticket = randomBytes(24).toString('base64url');
-    d.tickets[sha(ticket)] = { id: account.id, exp: Date.now() + 5 * 60_000, tries: 0 };
+    d.tickets[sha(ticket)] = { id: account.id, exp: Date.now() + 5 * 60_000, tries: 0, device: cleanDevice(body.appareil) };
     for (const [k, t] of Object.entries(d.tickets)) if (Date.now() > t.exp) delete d.tickets[k];
     save(KEY, d);
     return { status: 200, need2fa: true, ticket };
   }
   const token = await newSession(d, account.id);
+  await deviceCheck(account, cleanDevice(body.appareil), ip);
   save(KEY, d);
   return { status: 200, token, compte: publicAccount(account) };
 }
@@ -148,6 +170,7 @@ export async function securityRoute(route, body, token, ip) {
     if (recovery) a.totp.recovery = a.totp.recovery.filter((h) => h !== hashValue(code));
     delete d.tickets[sha(String(body.ticket))];
     const tok = await newSession(d, a.id);
+    await deviceCheck(a, t.device, ip);
     save(KEY, d);
     return { status: 200, token: tok, compte: publicAccount(a), recoveryLeft: recovery ? a.totp.recovery.length : undefined };
   }
@@ -255,6 +278,17 @@ export async function handleAccountApi(req, res, url, { readJson, send, clientIp
     if (url.pathname.startsWith('/api/compte/verif') || url.pathname.startsWith('/api/compte/mdp') || url.pathname.startsWith('/api/compte/2fa') || route === 'POST /api/compte/connexion/2fa') {
       const r = await securityRoute(route, await readJson(req), token, ip); return send(res, r.status, r);
     }
+    if (route === 'POST /api/compte/discord/code' || route === 'POST /api/compte/discord/delier') {
+      const d = await data();
+      const a = await accountOf(d, token);
+      if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      if (route.endsWith('delier')) { delete a.discordId; save(KEY, d); return send(res, 200, { ok: true }); }
+      for (const [c, x] of Object.entries(d.discordCodes)) if (Date.now() > x.exp || x.id === a.id) delete d.discordCodes[c];
+      const code = Array.from(randomBytes(6), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
+      d.discordCodes[code] = { id: a.id, exp: Date.now() + 10 * 60_000 };
+      save(KEY, d);
+      return send(res, 200, { ok: true, code, lie: Boolean(a.discordId) });
+    }
     if (route === 'GET /api/compte/moi') { const c = await me(token); return c ? send(res, 200, { compte: c }) : send(res, 401, { error: 'Session expirée, reconnecte-toi.' }); }
     if (url.pathname === '/api/compte/sauvegarde' && ['GET', 'POST'].includes(req.method)) {
       const { handleBackupApi } = await import('./launcherBackup.js');
@@ -264,7 +298,7 @@ export async function handleAccountApi(req, res, url, { readJson, send, clientIp
       const { handleLauncherAi } = await import('./launcherAi.js');
       return await handleLauncherAi(req, res, { readJson, send });
     }
-    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel|benchmark)(\/|$)/.test(url.pathname)) {
+    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel|benchmark|groupes)(\/|$)/.test(url.pathname)) {
       const { handleSocialApi } = await import('./launcherSocial.js');
       return await handleSocialApi(req, res, url, { readJson, send });
     }
@@ -272,4 +306,28 @@ export async function handleAccountApi(req, res, url, { readJson, send, clientIp
     return send(res, 400, { error: 'Demande illisible.' });
   }
   return send(res, 404, { error: 'route inconnue' });
+}
+
+// ---------- Pour le bot Discord (/launcher) ----------
+/** Lie un compte Discord avec le code affiché dans le launcher (valable 10 min, une seule fois). */
+export async function linkDiscord(code, discordId) {
+  const d = await data();
+  const c = String(code ?? '').trim().toUpperCase();
+  const x = d.discordCodes[c];
+  if (!x || Date.now() > x.exp) return { ok: false, error: 'Code inconnu ou expiré : génère-en un nouveau dans le launcher (Paramètres › Compte).' };
+  delete d.discordCodes[c];
+  for (const acc of Object.values(d.accounts)) if (acc.discordId === discordId) delete acc.discordId;
+  const a = d.accounts[x.id];
+  if (!a) return { ok: false, error: 'Compte introuvable.' };
+  a.discordId = String(discordId);
+  save(KEY, d);
+  return { ok: true, pseudo: a.pseudo, id: a.id };
+}
+export async function accountByDiscord(discordId) {
+  const d = await data();
+  return Object.values(d.accounts).find((a) => a.discordId === String(discordId)) ?? null;
+}
+export async function linkedAccounts() {
+  const d = await data();
+  return Object.values(d.accounts).filter((a) => a.discordId).map((a) => ({ id: a.id, pseudo: a.pseudo, discordId: a.discordId }));
 }

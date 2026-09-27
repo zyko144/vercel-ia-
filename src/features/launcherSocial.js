@@ -22,6 +22,7 @@ async function data() {
   d.events ??= {}; // id soirée -> { id, owner, game, at, invites: { id: 'oui'|'non'|null } }
   d.inbox ??= {}; // id -> [{ id, type: msg|ask|invite|reply, from, text?, game?, join?, oui?, at }]
   d.threads ??= {}; // « idA:idB » -> [{ from, text, at }]
+  d.groups ??= {}; // id groupe -> { id, name, owner, members: [ids], at }
   return d;
 }
 const accounts = async () => (await load('launcher-comptes', null))?.accounts ?? {};
@@ -55,6 +56,7 @@ function view(d, accs, id) {
     amis: listOf(d.friends, id).map(person).filter(Boolean).sort((a, b) => (b.online - a.online) || a.pseudo.localeCompare(b.pseudo, 'fr')),
     demandes: listOf(d.requests, id).map((fid) => accs[fid] && { id: fid, pseudo: accs[fid].pseudo, code: friendCode(accs[fid]) }).filter(Boolean),
     moi: { week: d.presence[id]?.week ?? 0, top: d.presence[id]?.top ?? null },
+    groupes: Object.values(d.groups).filter((g) => g.members.includes(id)).map((g) => ({ id: g.id, name: g.name, owner: g.owner === id, members: g.members.filter((m) => accs[m]).map((m) => ({ id: m, pseudo: accs[m].pseudo, online: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS, playing: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS ? d.presence[m]?.playing ?? null : null })) })),
   };
 }
 
@@ -193,6 +195,7 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
       status: body.status ? text(body.status, 60) : null, dnd: Boolean(body.dnd),
       bench: Number.isFinite(Number(body.bench)) && Number(body.bench) > 0 ? Math.min(20_000, Math.round(Number(body.bench))) : prev.bench ?? null,
       top: body.top ? text(body.top, 80) : null, seen: Date.now(),
+      level: Number.isFinite(Number(body.level)) ? Math.max(1, Math.min(999, Math.round(Number(body.level)))) : prev.level ?? null,
     };
     return done(200, { ok: true });
   }
@@ -222,6 +225,33 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     const fid = String(url.searchParams.get('avec') ?? '');
     if (!friendOf(fid)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
     return send(res, 200, { fil: d.threads[pairKey(id, fid)] ?? [] });
+  }
+
+  // Groupes de jeu (« Squad RL ») : créés avec ses amis, un message prévient tout le groupe d'un coup
+  if (route === 'POST /api/compte/groupes') {
+    const name = text(body.nom, 40);
+    if (!name) return send(res, 400, { error: 'Donne un nom au groupe.' });
+    if (Object.values(d.groups).filter((g) => g.owner === id).length >= 20) return send(res, 400, { error: 'Trop de groupes (20 maximum).' });
+    const members = [...new Set((Array.isArray(body.membres) ? body.membres : []).map(String))].filter((fid) => friendOf(fid)).slice(0, 30);
+    if (!members.length) return send(res, 400, { error: 'Ajoute au moins un ami.' });
+    const g = { id: randomUUID(), name, owner: id, members: [id, ...members], at: Date.now() };
+    d.groups[g.id] = g;
+    for (const m of members) pushInbox(d, m, { type: 'group', from: id, group: name, text: `Tu as été ajouté au groupe « ${name} ».` });
+    return done(200, { ok: true, ...view(d, accs, id) });
+  }
+  if (route === 'POST /api/compte/groupes/prevenir') {
+    const g = d.groups[String(body.id ?? '')];
+    if (!g || !g.members.includes(id)) return send(res, 404, { error: 'Groupe introuvable.' });
+    const msg = text(body.text, 200) || 'On joue ?';
+    if (!allowAttempt('launcher-groupe', id, 10, 10 * 60_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
+    for (const m of g.members.filter((x) => x !== id)) pushInbox(d, m, { type: 'group', from: id, group: g.name, text: msg, game: d.presence[id]?.playing ?? null, join: d.presence[id]?.join ?? null });
+    return done(200, { ok: true, sent: g.members.length - 1 });
+  }
+  if (route === 'POST /api/compte/groupes/quitter') {
+    const g = d.groups[String(body.id ?? '')];
+    if (!g || !g.members.includes(id)) return send(res, 404, { error: 'Groupe introuvable.' });
+    if (g.owner === id) delete d.groups[g.id]; else g.members = g.members.filter((m) => m !== id);
+    return done(200, { ok: true, ...view(d, accs, id) });
   }
 
   // « On joue ? » (demander à rejoindre sa partie) ou invitation à rejoindre la mienne

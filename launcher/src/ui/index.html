@@ -96,6 +96,8 @@
           <div class="addfriend"><input id="addCode" placeholder="Code ami de ton pote (ex. Max#3F9A2C)" maxlength="40"><button class="btn play" type="button" id="addFriend">Ajouter</button></div>
           <div id="hRequests"></div>
           <div class="hlist" id="hFriends"></div>
+          <h3 class="pch">👥 Groupes de jeu <button class="btn ghost sm" type="button" id="groupNew">+ Nouveau groupe</button></h3>
+          <div class="hlist" id="hGroups"><p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p></div>
         </div>
         <div class="panel">
           <h3>🎉 Soirées jeu</h3>
@@ -155,6 +157,7 @@
 
     <div class="pctab" data-pctab="composants" hidden>
       <div class="row pcactions"><button class="btn" type="button" id="pcDiagBtn">⚡ Relire les composants</button></div>
+      <div id="pcDriver"></div>
       <div class="comps" id="pcComps"><div class="empty">Lecture des composants…</div></div>
       <h3 class="pch">💡 Améliorations conseillées</h3>
       <div class="advice" id="pcAdvice"><div class="empty">Les conseils apparaîtront après la lecture des composants.</div></div>
@@ -211,7 +214,7 @@
         <h2>Optimisation du PC</h2>
         <p class="hint" id="optiIntro">Une vraie analyse de tout le PC : fichiers inutiles, restes de jeux désinstallés, programmes au démarrage et réglages Windows pour les jeux. Rien n’est touché sans ton accord.</p>
         <div class="optisum" id="optiSum"></div>
-        <div class="row optibtns"><button class="btn play big" id="optiScan" type="button">Analyser mon PC</button><button class="btn big" id="optiRun" type="button" hidden>⚡ Tout optimiser</button><label class="toggle"><input type="checkbox" id="optiAuto"><span></span>Optimisation automatique chaque semaine</label></div>
+        <div class="row optibtns"><button class="btn play big" id="optiScan" type="button">Analyser mon PC</button><button class="btn big" id="optiRun" type="button" hidden>⚡ Tout optimiser</button><label class="toggle"><input type="checkbox" id="optiAuto"><span></span>Optimisation automatique chaque semaine</label><label class="toggle"><input type="checkbox" id="optiGain"><span></span>Mesurer le gain (mini-benchmark avant / après)</label></div>
       </div>
     </div>
     <div id="optiProgress" hidden></div>
@@ -381,6 +384,13 @@
       <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher une fois un jeu lancé (jamais pour les applis)</label>
       <label class="toggle"><input type="checkbox" id="replay"><span></span>Replay : garder les 30 dernières secondes avec <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd> (enregistre l’écran en continu, utilise un peu la carte graphique)</label>
       <div class="setrow"><span>Limite de jeu par jour</span><select id="dailyLimit"><option value="0">Aucune</option><option value="60">1 h</option><option value="120">2 h</option><option value="180">3 h</option><option value="240">4 h</option><option value="360">6 h</option></select></div>
+      <div id="setGamesNew"></div>
+      <label class="toggle"><input type="checkbox" id="fpsOn"><span></span>📈 Mesurer les vrais FPS de mes parties (PresentMon) : moyenne, 1 % low, saccades, qui limite</label>
+      <label class="toggle"><input type="checkbox" id="widgetOn"><span></span>🖥 Widget sur le bureau : températures, FPS en direct, amis en ligne</label>
+      <label class="toggle small" id="widgetTopRow"><input type="checkbox" id="widgetTop"><span></span>Toujours au premier plan</label>
+      <label class="toggle"><input type="checkbox" id="batterySaver"><span></span>🔋 Portable : sur batterie, économie d’énergie et luminosité baissée (tout revient sur secteur)</label>
+      <label class="toggle"><input type="checkbox" id="gamepad"><span></span>🎮 Naviguer dans le launcher à la manette (Xbox / PlayStation)</label>
+      <div class="row"><button type="button" class="btn" id="priceBtn">💸 Mes alertes de prix</button></div>
       <div class="setrow"><span>Rappel de pause</span><select id="breakEvery"><option value="0">Jamais</option><option value="45">Toutes les 45 min</option><option value="60">Toutes les heures</option><option value="90">Toutes les 1 h 30</option><option value="120">Toutes les 2 h</option></select></div>
     </section>
     <section class="setpane" data-pane="social" hidden>
@@ -400,7 +410,7 @@
     <section class="setpane" data-pane="compte" hidden>
       <h3>☁ Compte & sauvegarde</h3>
       <div class="row"><button type="button" class="btn" id="libExport">📤 Exporter ma bibliothèque</button><button type="button" class="btn ghost" id="libImport">📥 Importer</button></div>
-      <div class="secbox"><div><b>🔐 Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">✉ Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">🛡 Double authentification</button></div></div>
+      <div class="secbox"><div><b>🔐 Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">✉ Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">🛡 Double authentification</button><button type="button" class="btn" id="secDiscord">🔗 Lier Discord</button></div></div>
       <label class="toggle" id="lock2faRow" hidden><input type="checkbox" id="lock2fa"><span></span>🔒 Demander le code de l’application à chaque ouverture du launcher</label>
       <p class="hint sethint">Tes collections, favoris, réglages et heures sont sauvegardés sur ton compte History toutes les 30 min et à la fermeture.</p>
       <div class="row updrow"><button type="button" class="btn" id="backupNow">☁ Sauvegarder maintenant</button><button type="button" class="btn ghost" id="backupRestore">Restaurer</button><small class="hint" id="backupStatus"></small></div>

@@ -895,3 +895,25 @@ body.compact main { padding-top: 4px; }
 /* Économie : le fond du menu et le fond flou sont fixes (plus de flou recalculé à chaque image), et les dernières
    animations (bordure néon, jaquette) s'arrêtent dès que la fenêtre n'est plus au premier plan */
 body.idle *, body.idle *::before, body.idle *::after { animation-play-state: paused !important; }
+/* Manette : élément sélectionné bien visible */
+.padfocus { outline: 3px solid var(--cyan) !important; outline-offset: 3px; box-shadow: 0 0 22px color-mix(in srgb, var(--cyan) 45%, transparent) !important; }
+/* Outils du jeu, place prise par les jeux */
+.toolstabs { margin: 4px 0 12px; flex-wrap: wrap; }
+.toolsbody { display: grid; gap: 10px; max-height: 58vh; overflow-y: auto; min-width: min(640px, 80vw); }
+.toolsbody .sub { margin-top: 6px; }
+.gamesize { display: grid; gap: 6px; }
+.gamesize > div { display: grid; grid-template-columns: minmax(120px, 1.2fr) 1fr 70px 110px 100px; gap: 10px; align-items: center; font-size: 13px; }
+.gamesize span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gamesize .t { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.gamesize .t i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--blue)); border-radius: inherit; }
+.gamesize small { color: var(--muted); font-size: 11.5px; }
+.gamesize .stale .t i { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+#pcDriver:empty { display: none; }
+#pcDriver .adv { display: flex; gap: 14px; align-items: center; justify-content: space-between; }
+/* Fenêtre « Outils du jeu » : plus large, textes qui passent à la ligne au lieu d'être coupés */
+#modalBox:has(.toolsbody) { width: min(820px, 92vw); max-width: none; }
+.toolsbody { min-width: 0; }
+.toolsbody .flist small { white-space: normal; }
+.toolstabs button { flex: 1; white-space: nowrap; }
+.toggle[hidden] { display: none !important; }
+#setGamesNew { height: 0; margin: -6px 0; }

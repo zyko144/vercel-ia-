@@ -148,6 +148,7 @@ function menuFor(i) {
   if (i.kind === 'game') {
     const fin = Object.values(state.cols).find((c) => c.name === 'À finir');
     m.push(`<button data-tofinish="1">${fin?.items.includes(i.id) ? '🏁 Retirer de « À finir »' : '🏁 Ajouter à « À finir »'}</button>`);
+    m.push('<button data-tools="1">🎛 Outils du jeu (profil, sauvegardes, FPS…)</button>');
     if (i.steamId) m.push('<button data-reqs="1">✅ Mon PC peut-il le faire tourner ?</button>');
     m.push('<button data-tips="1">🤖 Conseils de l’IA pour ce jeu</button>');
     const g = boostGames[i.id];
@@ -327,11 +328,51 @@ function renderFriends() {
 }
 // ---------- Amis History (comptes du launcher) et soirées jeu ----------
 const needLogin = '<div class="empty">Connecte-toi à ton compte History pour ajouter des amis et organiser des soirées.<br><br><button class="btn play" data-login="1">Se connecter</button></div>';
+function renderGroups(list) {
+  $('hGroups').innerHTML = list.length ? list.map((g) => `<div class="hfriend group"><div class="finfo"><b>${esc(g.name)}</b><small>${g.members.map((m) => `${m.online ? '🟢' : '⚫'} ${esc(m.pseudo)}${m.playing ? ` (${esc(m.playing)})` : ''}`).join(' · ')}</small></div><button class="btn play sm" data-gnotify="${esc(g.id)}">📣 Prévenir</button><button class="btn ghost sm" data-gleave="${esc(g.id)}" title="${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}">✕</button></div>`).join('') : '<p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p>';
+}
+$('groupNew').addEventListener('click', async () => {
+  const amis = state.hist?.amis ?? [];
+  if (!amis.length) return toast('Ajoute d’abord des amis History');
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">👥</span><h2>Nouveau groupe</h2></div>
+    <input class="minput" id="gName" maxlength="40" placeholder="Nom du groupe (ex. Squad RL)">
+    <div class="checks">${amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}">${esc(a.pseudo)}</label>`).join('')}</div>
+    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Créer</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    if (b.dataset.m === '0') return $('modal').close();
+    const r = await api.groupCreate($('gName').value, [...document.querySelectorAll('#modalBox .checks input:checked')].map((x) => x.value));
+    if (r?.error) return toast(r.error);
+    $('modal').close(); toast('👥 Groupe créé'); renderGroups(r.groupes ?? []);
+  };
+});
+$('hGroups').addEventListener('click', async (e) => {
+  const n = e.target.closest('[data-gnotify]'); const l = e.target.closest('[data-gleave]');
+  if (n) { const text = await ui.prompt({ title: 'Prévenir le groupe', text: 'Ton message (tout le groupe le reçoit en bas à gauche) :', value: state.session?.name ? `Je lance ${state.session.name}, vous venez ?` : 'On joue ?', ok: '📣 Envoyer', icon: '👥' }); if (!text) return; const r = await api.groupNotify(n.dataset.gnotify, text); toast(r?.ok ? `📣 Envoyé à ${r.sent} ami${r.sent > 1 ? 's' : ''}` : r?.error ?? 'Impossible'); }
+  if (l && await ui.confirm({ title: 'Quitter ce groupe ?', ok: 'Quitter', icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) renderGroups(r.groupes); }
+});
+$('secDiscord').addEventListener('click', async () => {
+  const r = await api.discordCode();
+  if (!r?.ok) return toast(r?.error ?? 'Connecte-toi d’abord');
+  $('settings').close();
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🔗</span><h2>Lier ton compte Discord</h2></div>
+    <p class="mtext">Sur le serveur Discord, tape la commande :</p><div class="codebox big"><b>/launcher lier code:${esc(r.code)}</b></div>
+    <p class="hint">Le code est valable 10 minutes. Ensuite : <b>/launcher profil</b> montre ton niveau, ton benchmark et ton jeu du moment, et tu reçois automatiquement les rôles de ton niveau et de ton PC.${r.lie ? '<br>Ton compte est déjà lié : le lier à nouveau remplace l’ancien compte Discord.' : ''}</p>
+    <div class="row end">${r.lie ? '<button type="button" class="btn ghost" data-unlink="1">Délier</button>' : ''}<button type="button" class="btn" data-copy="1">Copier la commande</button><button type="button" class="btn play" data-m="1">OK</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    if (e.target.closest('[data-copy]')) { navigator.clipboard?.writeText(`/launcher lier code:${r.code}`); toast('Commande copiée'); }
+    if (e.target.closest('[data-unlink]')) { await api.discordUnlink(); toast('Discord délié'); $('modal').close(); }
+    if (e.target.closest('[data-m]')) $('modal').close();
+  };
+});
 async function loadHistory() {
   const [r, ev] = await Promise.all([api.hFriends?.().catch(() => null), api.events?.().catch(() => null)]);
   state.hist = r;
   state.events = ev?.soirees ?? [];
   renderHistory();
+  renderGroups(r?.groupes ?? []);
   const online = (r?.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
   $('friendsOnline').textContent = online || '';
 }
@@ -690,6 +731,14 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.19.0': [
+    ['🎛', 'Outils du jeu', 'Clic droit sur un jeu › Outils du jeu : profil automatique (performances, applis fermées, notifications Windows coupées, partie classée), sauvegardes des parties, réparation des saccades, déplacement vers un autre disque, historique des FPS.', ['[data-view=accueil]', '#moreBtn', '[data-tools]', 'wait1500', '[data-ttab=perf]', 'wait1200']],
+    ['📈', 'Vrais FPS et goulot', 'Mesure réelle avec PresentMon : FPS moyens, 1 % low, saccades, et qui limite (processeur ou carte graphique), partie après partie.'],
+    ['👥', 'Groupes de jeu', 'Crée « Squad RL » avec tes amis et préviens tout le groupe d’un coup (« On lance à 21 h ? »).', ['[data-view=amis]']],
+    ['🎮', 'Place prise par tes jeux', 'Optimisation : ce que chaque jeu occupe, et ceux pas lancés depuis 6 mois à désinstaller. Plus : gain mesuré avant / après et historique des réglages Windows.', ['[data-view=optimisation]', '#optiScan', 'wait9000', '.gamesize']],
+    ['🖥', 'Widget, manette, batterie, prix', 'Widget sur le bureau (températures, FPS, amis), navigation à la manette, économie sur batterie, alertes de prix Steam + meilleur prix ailleurs.', ['#openSettings', '.setnav [data-pane=jeux]', '#setGamesNew']],
+    ['🤖', 'History sur Discord', '/launcher profil (niveau, benchmark, jeu du moment), rôles automatiques, jeux gratuits Epic annoncés, et un e-mail si ton compte se connecte depuis un nouveau PC.'],
+  ],
   '0.18.0': [
     ['🏁', 'Benchmark extrême', 'Processeur : 5 vraies épreuves (SHA-256, compression, physique, tri, IA) sur 1 cœur puis tous, + 30 s d’endurance pour voir s’il chauffe. Mémoire : débit et latence. Disque : 2 Go, lecture d’un vrai fichier de jeu, 4 Ko aléatoires. Carte graphique : 3 scènes en 2560×1440 (150 000 cubes, raymarching, HDR + bloom). Nouveau classement mondial.', ['[data-view=pc]', '[data-pctab=perf]']],
     ['⬆', 'Mises à jour réparées', 'La fenêtre « Nouvelle version disponible » s’affiche enfin, le bouton « Rechercher une mise à jour » marche, et une mise à jour se télécharge toute seule si tu ne réponds pas.'],
@@ -821,6 +870,82 @@ async function openGmod(found = null) {
     if (b.dataset.gminst) { await api.gmodInstall(b.dataset.gminst); toast('Steam s’ouvre sur l’addon : clique sur « S’abonner » pour l’installer'); }
   };
 }
+// ---------- Outils du jeu : profil, sauvegardes, saccades, déplacement, performances ----------
+let toolsFor = null;
+async function openTools(item, tab = 'profil') {
+  hideCtx();
+  toolsFor = item;
+  const d = await api.tools(item.id).catch(() => null);
+  if (!d || d.error) return toast(d?.error ?? 'Impossible');
+  const p = d.profile;
+  const tabs = [['profil', '🎛 Profil'], ['saves', '💾 Sauvegardes'], ['shaders', '🧊 Saccades'], ...(d.canMove ? [['move', '📦 Déplacer']] : []), ['perf', '📈 Performances']];
+  const perf = d.perf.slice().reverse();
+  const B = { cpu: 'processeur limitant', gpu: 'carte graphique à fond', mixte: 'équilibré' };
+  const month = (days) => perf.filter((x) => Date.now() - x.at < days * 86_400_000 && x.avg);
+  const avgOf = (l) => (l.length ? Math.round(l.reduce((a, x) => a + x.avg, 0) / l.length) : null);
+  const recent = avgOf(month(7)); const older = avgOf(perf.filter((x) => Date.now() - x.at >= 7 * 86_400_000 && Date.now() - x.at < 37 * 86_400_000 && x.avg));
+  const body = {
+    profil: `<p class="hint">Appliqué automatiquement à chaque lancement de ${esc(item.name)}, puis tout est remis comme avant.</p>
+      <label class="toggle"><input type="checkbox" data-prof="enabled" ${p.enabled ? 'checked' : ''}><span></span><b>Activer le profil de ce jeu</b></label>
+      <label class="toggle small"><input type="checkbox" data-prof="power" ${p.power !== 'none' ? 'checked' : ''}><span></span>Windows en « Performances élevées » pendant la partie</label>
+      <label class="toggle small"><input type="checkbox" data-prof="quiet" ${p.quiet ? 'checked' : ''}><span></span>Couper les notifications de Windows</label>
+      <label class="toggle small"><input type="checkbox" data-prof="dnd" ${p.dnd ? 'checked' : ''}><span></span>🎯 Partie classée : ne pas déranger (tes amis voient « En partie classée »)</label>
+      <label class="toggle small"><input type="checkbox" data-prof="saves" ${p.saves ? 'checked' : ''}><span></span>💾 Copier mes sauvegardes avant chaque partie</label>
+      <label class="toggle small"><input type="checkbox" data-prof="fps" ${p.fps !== false ? 'checked' : ''}><span></span>📈 Mesurer les FPS de ce jeu ${d.fps ? '' : '<small class="opt">à activer dans Paramètres › Jeux</small>'}</label>
+      <b class="sub">Fermer pendant la partie</b><div class="checks" id="profApps">${d.apps.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}" ${p.close.includes(a.id) ? 'checked' : ''}>${esc(a.label)}</label>`).join('')}</div>`,
+    saves: `<p class="hint">Copie de tes parties dans Documents › History › Sauvegardes de jeux (les 5 dernières sont gardées). Avant une restauration, ta partie actuelle est mise de côté.</p>
+      <div class="flist">${d.saveDirs.length ? d.saveDirs.map((x) => `<div><div><b>📁 ${esc(x.split(/[\\\\/]/).pop())}</b><small>${esc(x)}</small></div></div>`).join('') : '<div><div><b>Dossier non trouvé</b><small>Choisis-le à la main (Documents, AppData, Saved Games…)</small></div></div>'}</div>
+      <div class="row"><button class="btn play" data-tact="backup" ${d.saveDirs.length ? '' : 'disabled'}>💾 Sauvegarder maintenant</button><button class="btn ghost" data-tact="pick">📁 ${d.savesCustom || d.saveDirs.length ? 'Changer le dossier' : 'Choisir le dossier'}</button><button class="btn ghost" data-tact="openSaves">Ouvrir le dossier des copies</button></div>
+      <b class="sub">Copies</b><div class="flist">${d.backups.length ? d.backups.map((b) => `<div><div><b>${new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</b><small>${gb(b.bytes)}</small></div><button class="btn ghost sm" data-restore="${esc(b.id)}">Restaurer</button></div>`).join('') : '<p class="hint">Pas encore de copie.</p>'}</div>`,
+    shaders: `<p class="hint">Un cache de shaders abîmé ou trop vieux donne des saccades (surtout après une mise à jour du jeu ou du pilote). Il se recrée tout seul : les premières minutes peuvent saccader le temps qu’il se reconstruise.</p>
+      <div class="checks">${d.caches.map((c) => `<label class="check"><input type="checkbox" data-cache="${esc(c.id)}" ${c.own ? 'checked' : ''}><span>${esc(c.label)}</span><em>${gb(c.bytes)}</em></label>`).join('')}</div>
+      <div class="row"><button class="btn play" data-tact="shaders">🧊 Vider la sélection</button></div>`,
+    move: d.canMove ? `<p class="hint">Actuellement dans <b>${esc(d.from)}</b>${d.size ? ` · ${gb(d.size)}` : ''}. Ferme Steam complètement avant de lancer le déplacement.</p>
+      <div class="flist">${d.targets.length ? d.targets.map((t) => `<div><div><b>${esc(t.lib)}</b><small>${t.free != null ? `${gb(t.free)} libres` : ''}${d.size && t.free != null && t.free < d.size ? ' · pas assez de place' : ''}</small></div><button class="btn play sm" data-move="${esc(t.lib)}" ${d.size && t.free != null && t.free < d.size ? 'disabled' : ''}>Déplacer ici</button></div>`).join('') : '<p class="hint">Aucune autre bibliothèque Steam : crées-en une dans Steam › Paramètres › Stockage.</p>'}</div><div id="moveProg"></div>` : '',
+    perf: `${perf.length ? `<div class="scansum">${recent ? `<div><b>${recent}</b><small>FPS moyens (7 jours)</small></div>` : ''}${older && recent ? `<div class="${recent < older * 0.9 ? 'bad' : ''}"><b>${recent >= older ? '+' : ''}${Math.round((100 * (recent - older)) / older)} %</b><small>vs le mois d’avant (${older} FPS)</small></div>` : ''}<div><b>${perf.length}</b><small>parties suivies</small></div></div>
+      <div class="flist">${perf.slice(0, 20).map((x) => `<div><div><b>${new Date(x.at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} · ${x.minutes} min</b><small>${x.avg ? `${x.avg} FPS moy. · 1 % low ${x.low1}${x.stutters ? ` · ${x.stutters} saccades` : ''}` : 'FPS non mesurés'}${x.bound ? ` · ${B[x.bound]}` : ''}${x.gpuAvg != null ? ` · carte graphique ${x.gpuAvg} %` : ''}${x.coreMax != null ? ` · cœur le plus chargé ${x.coreMax} %` : ''}</small></div></div>`).join('')}</div>`
+      : `<p class="hint">Joue une partie de plus de 3 minutes : tes FPS (si la mesure est activée), la charge du processeur et de la carte graphique et le composant qui limite s’afficheront ici.</p>`}
+      ${d.fps ? '' : '<div class="row"><button class="btn" data-tact="fps">📈 Activer la mesure des vrais FPS</button></div>'}`,
+  };
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🎛</span><h2>${esc(item.name)}</h2></div>
+    <div class="tabs toolstabs">${tabs.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="toolsbody">${body[tab] ?? ''}</div>
+    <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+  if (!$('modal').open) $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.m) return $('modal').close();
+    if (t.dataset.ttab) return openTools(item, t.dataset.ttab);
+    if (t.dataset.restore) { const r = await api.savesRestore(item.id, t.dataset.restore); if (r?.ok) toast('💾 Sauvegarde restaurée'); else if (!r?.cancelled) toast(r?.error ?? 'Impossible'); return openTools(item, 'saves'); }
+    if (t.dataset.move) {
+      t.disabled = true;
+      const r = await api.steamMove(item.id, t.dataset.move);
+      if (r?.ok) { toast(`📦 ${item.name} déplacé (${gb(r.bytes)})`); return $('modal').close(); }
+      t.disabled = false; if (!r?.cancelled) toast(r?.error ?? 'Déplacement impossible');
+      return;
+    }
+    const a = t.dataset.tact;
+    if (a === 'backup') { t.disabled = true; const r = await api.savesBackup(item.id); toast(r?.ok ? `💾 Copie faite (${gb(r.bytes)})` : r?.error ?? 'Impossible'); return openTools(item, 'saves'); }
+    if (a === 'pick') { await api.savesPick(item.id); return openTools(item, 'saves'); }
+    if (a === 'openSaves') return api.savesOpen();
+    if (a === 'shaders') { const which = [...document.querySelectorAll('#modalBox [data-cache]:checked')].map((x) => x.dataset.cache); if (!which.length) return toast('Rien de coché'); const r = await api.shadersClear(item.id, which); toast(r?.ok ? `🧊 ${gb(r.freed)} de cache vidés` : r?.error ?? 'Impossible'); return openTools(item, 'shaders'); }
+    if (a === 'fps') return enableFps();
+  };
+  $('modalBox').onchange = async (e) => {
+    const el = e.target;
+    if (el.dataset.prof) await api.toolsProfile(item.id, { [el.dataset.prof]: el.dataset.prof === 'power' ? (el.checked ? 'high' : 'none') : el.checked });
+    if (el.closest('#profApps')) await api.toolsProfile(item.id, { close: [...document.querySelectorAll('#profApps input:checked')].map((x) => x.value) });
+    if (el.dataset.prof === 'enabled') toast(el.checked ? `🎛 Profil actif pour ${item.name}` : 'Profil désactivé');
+  };
+}
+api.onMove?.((p) => { const el = document.getElementById('moveProg'); if (el && p.total) el.innerHTML = `<div class="gbar big"><i style="width:${Math.round((100 * p.copied) / p.total)}%"></i></div><small class="hint">${gb(p.copied)} / ${gb(p.total)} · ${esc(p.file ?? '')}</small>`; });
+async function enableFps() {
+  if (!(await ui.confirm({ title: 'Mesurer les vrais FPS ?', text: 'Le launcher télécharge PresentMon (outil officiel open source d’Intel, 400 Ko, vérifié) et demande une seule fois l’autorisation administrateur pour avoir le droit de lire les images des jeux. Il faudra ensuite te déconnecter / reconnecter à Windows une fois.', list: ['FPS moyens et 1 % les plus lents de chaque partie', 'Saccades repérées', 'Qui limite : processeur ou carte graphique', 'FPS en direct dans le widget et l’écran d’infos'], ok: '📈 Activer', icon: '📈' }))) return;
+  const r = await api.fpsEnable();
+  if (!r?.ok) return toast(r?.error ?? 'Autorisation refusée');
+  ui.confirm({ title: '✅ Mesure des FPS activée', text: 'Déconnecte-toi puis reconnecte-toi à Windows une fois : ensuite, chaque partie est mesurée automatiquement.', ok: 'OK', cancel: 'Fermer', icon: '📈' });
+}
+
 async function openReqs(item) {
   hideCtx();
   $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>${esc(item.name)}</h2></div><p class="hint">Comparaison avec ton PC…</p>`;
@@ -1054,6 +1179,9 @@ let pcTimer = null;
 async function openPc() {
   renderPc();
   if (!state.pcDiagDone) pcDiag(false);
+  api.driverInfo?.().then((d) => {
+    $('pcDriver').innerHTML = !d ? '' : `<div class="adv ${d.latest ? 'p1' : 'p2'}"><div><b>${d.latest ? `Nouveau pilote NVIDIA ${esc(d.latest)} disponible` : `Pilote graphique ancien (${Math.round((d.age ?? 0) / 30)} mois)`}</b><small>${esc(d.name)} · tu as la ${esc(d.version)}${d.date ? ` · sorti le ${new Date(d.date).toLocaleDateString('fr-FR')}` : ''}. Les jeux récents gagnent souvent des FPS et des corrections avec le dernier pilote.</small></div><div class="row"><button class="btn ghost sm" data-drv="notes">${d.latest ? 'Nouveautés' : 'Page officielle'}</button>${d.download ? '<button class="btn play sm" data-drv="download">Télécharger</button>' : ''}</div></div>`;
+  }).catch(() => {});
   refreshHealth();
   api.scanLast?.().then(showScanLast).catch(() => {});
   if (!state.demoShown) api.demo?.().then((d) => { if (!d) return; state.demoShown = true; renderScan(d.scan); showScanLast(d.scan); wu = d.wu; renderWu(); }).catch(() => {});
@@ -1257,6 +1385,15 @@ function renderOpti() {
     `${o.startup.map((x) => `<label class="toggle small"><input type="checkbox" data-startup="${esc(x.name)}" ${x.enabled ? 'checked' : ''}><span></span>${esc(x.name)}${x.heavy ? ' <small class="warn">ralentit le démarrage</small>' : ''}</label>`).join('') || '<p class="hint">Aucune appli lancée au démarrage.</p>'}<p class="hint">Désactiver ne désinstalle rien (réversible ici ou dans le Gestionnaire des tâches).</p>`, { count: 'au démarrage', open: heavyOn.length > 0 }));
   cards.push(catCard('tweaks', '🎯', 'Réglages Windows pour les jeux', 'Réglages sûrs et réversibles qui donnent des FPS et de la réactivité.', `${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}`,
     o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.optional ? ' <small class="opt">facultatif</small>' : ''}<small class="hint">${esc(t.help)}</small></div></label>`).join(''), { count: tweaksOff.length ? `${tweaksOff.length} à faire` : 'optimisés', open: tweaksOff.length > 0 }));
+  // Place prise par chaque jeu installé (et ceux pas lancés depuis 6 mois)
+  const games = state.items.filter((x) => x.kind === 'game' && x.installed && x.size > 0).sort((a, b) => b.size - a.size);
+  const stale = games.filter((g) => !g.lastPlayed || Date.now() - g.lastPlayed > 182 * 86_400_000);
+  if (games.length) {
+    const maxG = games[0].size;
+    cards.push(catCard('', '🎮', 'Place prise par tes jeux', stale.length ? `${stale.length} jeu${stale.length > 1 ? 'x' : ''} pas lancé${stale.length > 1 ? 's' : ''} depuis 6 mois (${gb(stale.reduce((n, g) => n + g.size, 0))}) : désinstalle-les pour faire de la place.` : 'Tous tes jeux installés ont servi ces 6 derniers mois.', gb(games.reduce((n, g) => n + g.size, 0)),
+      `<div class="gamesize">${games.slice(0, 20).map((g) => { const old = stale.includes(g); return `<div class="${old ? 'stale' : ''}"><span>${esc(g.name)}</span><div class="t"><i style="width:${(100 * g.size) / maxG}%"></i></div><b>${gb(g.size)}</b><small>${g.lastPlayed ? `joué ${ago(g.lastPlayed).toLowerCase()}` : 'jamais lancé ici'}</small>${old ? `<button class="btn ghost sm" data-uninst="${esc(g.id)}">Désinstaller</button>` : '<span></span>'}</div>`; }).join('')}</div>`, { count: `${games.length} jeux`, open: stale.length > 0 }));
+  }
+  cards.push(catCard('', '🕘', 'Réglages sauvegardés', 'Avant chaque changement de réglages Windows, History garde une photo de tes réglages : reviens en arrière en un clic ou exporte le rapport avant / après.', '', '<div id="setHist"><p class="hint">Chargement…</p></div>', { count: 'historique' }));
   cards.push(catCard('', '⚙', 'Réglages système pro', 'Priorité aux jeux, planification GPU, alimentation, veille prolongée, télémétrie… Un point de restauration est créé avant. Demande l’autorisation administrateur.', state.sys ? `${state.sys.filter((t) => t.on).length}/${state.sys.length}` : '…',
     `<div id="sysTweaks">${sysTweaksHtml()}</div><div class="row"><button class="btn play" id="sysApply" type="button">Appliquer les réglages cochés</button></div><p class="hint">Chaque réglage est réversible : décoche puis applique pour revenir à la valeur de Windows.</p>`, { count: 'admin', open: Boolean(state.sys?.some((t) => !t.on)) }));
   cards.push(catCard('', '💽', 'Stockage : TRIM et défragmentation', 'TRIM de chaque SSD (garde leurs performances d’écriture) et défragmentation des disques durs, comme l’outil officiel de Windows.', '',
@@ -1266,6 +1403,20 @@ function renderOpti() {
   cards.push(catCard('', '🛡', 'Nettoyage profond de Windows', 'Anciennes mises à jour, fichiers temporaires système, cache de distribution, TRIM du SSD, nettoyage des composants. Demande l’autorisation administrateur.', '',
     '<button class="btn" id="optiDeep" type="button">Lancer le nettoyage profond</button><p class="hint">Plusieurs minutes. Windows affiche une demande d’autorisation.</p>', { count: 'admin' }));
   $('optiBody').innerHTML = cards.join('');
+  renderSetHist();
+}
+async function renderSetHist() {
+  const el = document.getElementById('setHist'); if (!el) return;
+  const h = await api.settingsHistory().catch(() => null);
+  if (!h?.list?.length) { el.innerHTML = '<p class="hint">Rien pour l’instant : la première photo sera prise avant ton prochain changement de réglages.</p>'; return; }
+  el.innerHTML = `<div class="flist">${h.list.map((x) => `<div><div><b>${new Date(x.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</b><small>${esc(x.label)} · ${diffSettings(x, h.now).length} différence(s) avec maintenant</small></div><button class="btn ghost sm" data-shreport="${x.at}">Rapport</button><button class="btn ghost sm" data-shrestore="${x.at}">Revenir à ces réglages</button></div>`).join('')}</div>`;
+  state.setHist = h;
+}
+function diffSettings(a, b) {
+  const out = [];
+  for (const k of ['sys', 'game']) for (const t of a[k]) { const n = b[k].find((x) => x.id === t.id); if (n && n.on !== t.on) out.push(`${t.label} : ${t.on ? 'activé' : 'désactivé'} → ${n.on ? 'activé' : 'désactivé'}`); }
+  for (const t of a.startup) { const n = b.startup.find((x) => x.name === t.name); if (n && n.enabled !== t.enabled) out.push(`Démarrage de ${t.name} : ${t.enabled ? 'oui' : 'non'} → ${n.enabled ? 'oui' : 'non'}`); }
+  return out;
 }
 function planFromUi() {
   const on = (k) => document.querySelector(`[data-catcheck="${k}"]`)?.checked;
@@ -1307,13 +1458,19 @@ $('optiRun').addEventListener('click', async () => {
   if (!(await ui.confirm({ title: 'Lancer l’optimisation ?', text: 'Tes jeux installés, sauvegardes, mots de passe et fichiers perso ne sont pas touchés.', list, ok: '⚡ Optimiser', icon: '🚀' }))) return;
   const before = opti.score;
   runLog = [];
+  const gain = $('optiGain').checked;
+  let benchBefore = null;
+  if (gain) { showProgress('<div class="oprog"><b>Mesure avant optimisation (≈ 10 s)…</b><div class="gbar big indet"><i></i></div></div>'); benchBefore = await api.benchQuick().catch(() => null); }
   $('optiRun').disabled = true; $('optiScan').disabled = true;
   const r = await api.optiRun(plan).catch(() => null);
   $('optiRun').disabled = false; $('optiScan').disabled = false;
   if (!r?.ok) { showProgress(null); return ui.confirm({ title: 'L’optimisation s’est arrêtée', text: r?.error ? `Erreur : ${r.error}` : 'Réessaie dans un instant.', ok: 'OK', cancel: 'Fermer', icon: '⚠️' }); }
   if (r.scan) { opti = r.scan; renderOpti(); }
   await refreshHealth(true);
-  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks}</b><small>réglage${r.tweaks > 1 ? 's' : ''} appliqué${r.tweaks > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>`);
+  let benchAfter = null;
+  if (gain && benchBefore && !benchBefore.error) { showProgress('<div class="oprog"><b>Mesure après optimisation (≈ 10 s)…</b><div class="gbar big indet"><i></i></div></div>'); benchAfter = await api.benchQuick().catch(() => null); }
+  const delta = benchAfter?.total && benchBefore?.total ? Math.round((100 * (benchAfter.total - benchBefore.total)) / benchBefore.total) : null;
+  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks}</b><small>réglage${r.tweaks > 1 ? 's' : ''} appliqué${r.tweaks > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div>${delta != null ? `<div><b>${benchBefore.total} → ${benchAfter.total}</b><small>mini-benchmark (${delta >= 0 ? '+' : ''}${delta} %${Math.abs(delta) <= 2 ? ', dans la marge de mesure' : ''})</small></div>` : ''}</div><button class="btn ghost" data-closeprog="1">Fermer</button></div>`);
 });
 $('optiProgress').addEventListener('click', (e) => { if (e.target.closest('[data-closeprog]')) showProgress(null); });
 $('optiBody').addEventListener('change', async (e) => {
@@ -1325,6 +1482,13 @@ $('optiBody').addEventListener('change', async (e) => {
 $('optiBody').addEventListener('click', async (e) => {
   const tg = e.target.closest('[data-toggle]');
   if (tg) { tg.closest('.ocat').classList.toggle('open'); return; }
+  if (e.target.dataset.uninst) { const it = state.items.find((x) => x.id === e.target.dataset.uninst); if (it) { state.sel = it; const r = await api.action(it.id, 'uninstall'); if (r && !r.ok && r.error) toast(r.error); } return; }
+  if (e.target.dataset.shrestore) { const r = await api.settingsRestore(Number(e.target.dataset.shrestore)); if (r?.ok) { toast(`🕘 Réglages remis${r.sys ? ' (réglages système compris)' : ''}`); renderSetHist(); } return; }
+  if (e.target.dataset.shreport) {
+    const x = state.setHist.list.find((y) => y.at === Number(e.target.dataset.shreport));
+    const d = diffSettings(x, state.setHist.now);
+    return showReport({ text: `Réglages du ${new Date(x.at).toLocaleString('fr-FR')} (${x.label}) comparés à maintenant :\n\n${d.length ? d.map((l) => `- ${l}`).join('\n') : 'Aucune différence.'}` }, 'Rapport avant / après');
+  }
   if (e.target.id === 'sysApply') {
     const changes = [...document.querySelectorAll('#sysTweaks [data-sys]')].map((i) => ({ id: i.dataset.sys, on: i.checked })).filter((c) => state.sys.find((t) => t.id === c.id)?.on !== c.on);
     if (!changes.length) return toast('Aucun changement à appliquer');
@@ -1406,6 +1570,7 @@ function pcTab(tab) {
   state.pcTab = tab;
   if (tab === 'securite' && !$('pcProcs').dataset.done) { $('pcProcs').dataset.done = '1'; renderProcs(); }
 }
+$('pcDriver').addEventListener('click', (e) => { const b = e.target.closest('[data-drv]'); if (b) api.driverOpen(b.dataset.drv); });
 $('pcTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-pctab]'); if (b) { window.sfx?.play('nav'); pcTab(b.dataset.pctab); } });
 document.querySelector('#view-pc').addEventListener('click', (e) => { const b = e.target.closest('[data-gotab]'); if (b) pcTab(b.dataset.gotab); });
 
@@ -1934,6 +2099,7 @@ document.addEventListener('click', async (e) => {
     return toast(on ? `🏁 ${state.sel.name} ajouté à « À finir »` : 'Retiré de « À finir »');
   }
   if (t.dataset.reqs && state.sel) return openReqs(state.sel);
+  if (t.dataset.tools && state.sel) return openTools(state.sel);
   if (t.dataset.tips && state.sel) { const it = state.sel; toast('L’IA prépare ses conseils…'); const r = await api.gameTips(it.id); return showReport(r?.text ? { text: r.text, ai: true } : { error: r?.error }, `Conseils pour ${it.name}`); }
   if (t.dataset.fivemsrv) return openFivemServers();
   if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
@@ -2039,6 +2205,8 @@ function showKeys(s) {
   $('textScale').value = String(s.textScale ?? 1);
   $('compact').checked = Boolean(s.compact); document.body.classList.toggle('compact', Boolean(s.compact));
   $('dnd').checked = Boolean(s.dnd); $('tournament').checked = Boolean(s.tournament);
+  $('fpsOn').checked = s.fps === true; $('widgetOn').checked = Boolean(s.widget); $('widgetTop').checked = s.widgetTop !== false; $('widgetTopRow').hidden = !s.widget;
+  $('batterySaver').checked = s.batterySaver === true; $('gamepad').checked = s.gamepad !== false; state.gamepadOn = s.gamepad !== false;
   if (s.status != null) $('myStatus').value = s.status;
   if (s.dnd || s.tournament) window.sfx?.set({ notif: false });
   window.sfx?.set({ on: s.sfxOn !== false, notif: s.sfxNotif !== false, vol: (s.sfxVol ?? 60) / 100 });
@@ -2306,6 +2474,45 @@ function showSecurity() {
   $('lock2faRow').hidden = !c?.twoFactor;
   api.settings?.().then((s) => { $('lock2fa').checked = s?.lock2fa !== false; }).catch(() => {});
 }
+$('fpsOn').addEventListener('change', async (e) => { if (e.target.checked) { e.target.checked = false; await enableFps(); const st = await api.settings(); e.target.checked = st?.fps === true; } else { await api.fpsDisable(); toast('Mesure des FPS coupée'); } });
+$('widgetOn').addEventListener('change', (e) => { api.setSettings({ widget: e.target.checked }); $('widgetTopRow').hidden = !e.target.checked; });
+$('widgetTop').addEventListener('change', (e) => api.setSettings({ widgetTop: e.target.checked }));
+$('batterySaver').addEventListener('change', (e) => api.setSettings({ batterySaver: e.target.checked }).then(() => toast(e.target.checked ? '🔋 Économie sur batterie activée' : 'Économie sur batterie coupée')));
+$('gamepad').addEventListener('change', (e) => { state.gamepadOn = e.target.checked; api.setSettings({ gamepad: e.target.checked }); });
+$('priceBtn').addEventListener('click', () => { $('settings').close(); openPrices(); });
+api.onSettingsChanged?.((c) => { if ('widget' in c) { $('widgetOn').checked = c.widget; $('widgetTopRow').hidden = !c.widget; } });
+// ---------- 💸 Alertes de prix ----------
+async function openPrices() {
+  const list = await api.priceList().catch(() => []);
+  const eur = (v) => (v == null ? '?' : `${Number(v).toFixed(2).replace('.', ',')} €`);
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">💸</span><h2>Alertes de prix</h2></div>
+    <p class="hint">Tu es prévenu dès qu’un jeu passe sous ton prix sur Steam (vérifié toutes les 6 h). Le meilleur prix ailleurs (Epic, GOG, Humble…) vient de CheapShark, en dollars.</p>
+    <div class="addfriend"><input id="priceQ" placeholder="Nom du jeu ou lien Steam" maxlength="120"><button class="btn play" type="button" id="priceFind">Chercher</button></div>
+    <div class="flist" id="priceRes"></div>
+    <b class="sub">Suivis</b>
+    <div class="flist">${list.length ? list.map((a) => `<div><div><b>${esc(a.name)}</b><small>Steam : ${a.last?.free ? 'gratuit' : `${eur(a.last?.price)}${a.last?.discount ? ` (-${a.last.discount} %)` : ''}`} · alerte sous ${eur(a.target)}${a.best ? ` · ailleurs : ${a.best.price} $ sur ${esc(a.best.store)}${a.best.cheapest ? ` (record ${a.best.cheapest} $)` : ''}` : ''}</small></div><button class="btn ghost sm" data-unprice="${esc(a.appId)}">Retirer</button></div>`).join('') : '<p class="hint">Aucun jeu suivi.</p>'}</div>
+    <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+  if (!$('modal').open) $('modal').showModal();
+  const find = async () => {
+    const r = await api.priceSearch($('priceQ').value);
+    $('priceRes').innerHTML = r.length ? r.map((g) => `<div><div><b>${esc(g.name)}</b><small>${g.price != null ? `${eur(g.price)} sur Steam` : ''}</small></div><button class="btn play sm" data-track="${esc(g.id)}" data-name="${esc(g.name)}">Suivre</button></div>`).join('') : '<p class="hint">Rien trouvé.</p>';
+  };
+  $('priceFind').onclick = find;
+  $('priceQ').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } };
+  $('modalBox').onclick = async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.m) return $('modal').close();
+    if (t.dataset.unprice) { await api.priceSet(t.dataset.unprice, '', null); return openPrices(); }
+    if (t.dataset.track) {
+      const v = await ui.prompt({ title: `Prévenir sous quel prix ?`, text: `${t.dataset.name} : prix en euros.`, placeholder: '19,99', ok: 'Suivre', icon: '💸' });
+      const target = Number(String(v ?? '').replace(',', '.'));
+      if (!v || !Number.isFinite(target)) return openPrices();
+      await api.priceSet(t.dataset.track, t.dataset.name, target);
+      toast('💸 Prix suivi');
+      return openPrices();
+    }
+  };
+}
 $('lock2fa').addEventListener('change', (e) => api.setSettings({ lock2fa: e.target.checked }).then(() => toast(e.target.checked ? '🔒 Le code sera demandé à chaque ouverture' : 'Le code ne sera demandé qu’à la connexion')));
 $('secVerify').addEventListener('click', async () => { $('settings').close(); await api.verifyResend(); openStep('verif'); });
 $('sec2fa').addEventListener('click', async () => {
@@ -2452,7 +2659,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.18.0',
+    version: async () => '0.19.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
@@ -2472,3 +2679,59 @@ function demoApi() {
     account: async () => ({ compte: null, skipped: true }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }
+
+// ---------- 🎮 Manette : croix / stick = se déplacer, A = valider, B = retour, X = jouer, Y = menu du jeu,
+// LB / RB = page précédente / suivante, Start = recherche. Ne tourne que si une manette est branchée. ----------
+(() => {
+  const NAV = ['accueil', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis', 'pc', 'optimisation'];
+  const prev = {}; let raf = null; let lastMove = 0;
+  const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+  const scope = () => ($('modal').open ? $('modal') : $('settings').open ? $('settings') : document);
+  const targets = () => [...scope().querySelectorAll('button:not([disabled]), [data-id], input, select, .side [data-view]')].filter((el) => visible(el) && !el.closest('[hidden]'));
+  function focusEl(el) {
+    if (!el) return;
+    document.querySelectorAll('.padfocus').forEach((x) => x.classList.remove('padfocus'));
+    if (!el.hasAttribute('tabindex') && !/^(BUTTON|INPUT|SELECT|A)$/.test(el.tagName)) el.setAttribute('tabindex', '-1');
+    el.focus({ preventScroll: true }); el.classList.add('padfocus');
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }
+  function move(dx, dy) {
+    const list = targets(); const cur = document.activeElement && list.includes(document.activeElement) ? document.activeElement : null;
+    if (!cur) return focusEl(list.find((el) => el.closest('main')) ?? list[0]);
+    const a = cur.getBoundingClientRect(); const ax = a.left + a.width / 2; const ay = a.top + a.height / 2;
+    let best = null; let bestScore = Infinity;
+    for (const el of list) {
+      if (el === cur) continue;
+      const b = el.getBoundingClientRect(); const bx = b.left + b.width / 2; const by = b.top + b.height / 2;
+      const px = bx - ax; const py = by - ay;
+      const along = dx ? px * dx : py * dy; const across = dx ? Math.abs(py) : Math.abs(px);
+      if (along <= 4) continue;
+      const score = along + across * 2.5;
+      if (score < bestScore) { bestScore = score; best = el; }
+    }
+    if (best) { focusEl(best); window.sfx?.play('nav'); }
+  }
+  const press = (i, pad) => { const b = pad.buttons[i]; const was = prev[`${pad.index}-${i}`]; prev[`${pad.index}-${i}`] = b?.pressed; return b?.pressed && !was; };
+  function loop() {
+    raf = null;
+    if (state.gamepadOn === false || !document.hasFocus()) { raf = setTimeout(loop, 500); return; }
+    for (const pad of navigator.getGamepads?.() ?? []) {
+      if (!pad) continue;
+      const now = performance.now();
+      const [lx = 0, ly = 0] = pad.axes;
+      const dir = [pad.buttons[14]?.pressed || lx < -0.6 ? -1 : pad.buttons[15]?.pressed || lx > 0.6 ? 1 : 0, pad.buttons[12]?.pressed || ly < -0.6 ? -1 : pad.buttons[13]?.pressed || ly > 0.6 ? 1 : 0];
+      if ((dir[0] || dir[1]) && now - lastMove > 170) { lastMove = now; move(dir[0], dir[0] ? 0 : dir[1]); }
+      if (!dir[0] && !dir[1]) lastMove = 0;
+      const el = document.activeElement;
+      if (press(0, pad) && el && el !== document.body) el.click();
+      if (press(1, pad)) { if (!$('ctx').hidden) hideCtx(); else if ($('modal').open) $('modal').close(); else if ($('settings').open) $('settings').close(); else go('accueil'); }
+      if (press(2, pad) && el?.dataset?.id) el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      if (press(3, pad) && el?.dataset?.id) { const r = el.getBoundingClientRect(); openCtx(state.items.find((x) => x.id === el.dataset.id), r.left, r.bottom); }
+      if (press(4, pad) || press(5, pad)) { const i = NAV.indexOf(state.view); go(NAV[(Math.max(0, i) + (pad.buttons[5]?.pressed ? 1 : NAV.length - 1)) % NAV.length]); }
+      if (press(9, pad)) openPalette();
+    }
+    raf = requestAnimationFrame(loop);
+  }
+  addEventListener('gamepadconnected', (e) => { toast(`🎮 Manette connectée : ${e.gamepad.id.split('(')[0].trim()}`); if (!raf) loop(); });
+  addEventListener('gamepaddisconnected', () => { if (![...(navigator.getGamepads?.() ?? [])].some(Boolean) && raf) { cancelAnimationFrame(raf); clearTimeout(raf); raf = null; } });
+})();

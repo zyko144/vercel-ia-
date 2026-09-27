@@ -38,6 +38,7 @@ export function cardFor(x) {
   if (x.type === 'msg') return { id: x.id, kind: 'msg', from: x.from, icon: '💬', title: who, body: cut(x.text, 140), actions: [['reply', 'Répondre']], ttl: 12_000 };
   if (x.type === 'ask') return { id: x.id, kind: 'ask', from: x.from, icon: '🎮', title: `${who} veut jouer avec toi`, body: x.game ? `Demande à rejoindre ta partie de ${cut(x.game, 40)}.` : 'Demande à jouer avec toi.', actions: [['accept', 'Accepter'], ['decline', 'Refuser']], ttl: 30_000 };
   if (x.type === 'invite') return { id: x.id, kind: 'invite', from: x.from, icon: '📨', title: `${who} t’invite`, body: x.game ? `Rejoins sa partie de ${cut(x.game, 40)} !` : 'Rejoins sa partie !', actions: [['accept', 'Rejoindre'], ['decline', 'Plus tard']], ttl: 30_000 };
+  if (x.type === 'group') return { id: x.id, kind: 'group', from: x.from, icon: '👥', title: `${cut(x.group ?? 'Groupe', 30)} · ${who}`, body: cut(x.text, 140), join: x.join ?? null, game: x.game ?? null, actions: x.join ? [['join', 'Rejoindre'], ['reply', 'Répondre']] : [['reply', 'Répondre']], ttl: 15_000 };
   if (x.type === 'call') return { id: x.id, kind: 'call', from: x.from, callId: x.callId, icon: '📞', title: `${who} t’appelle`, body: 'Appel vocal History', actions: [['answer', 'Décrocher'], ['hangup', 'Refuser']], ttl: 40_000 };
   if (x.type === 'reply') {
     return x.oui
