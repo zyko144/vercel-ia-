@@ -5,7 +5,7 @@ import path from 'node:path';
 import { classify, deepScan, eta, sizeGroups, storageScore } from '../src/core/deepscan.js';
 import { installScript, kindOf, parseSearch } from '../src/core/winupdate.js';
 import { parseEvents, unifiedHealth } from '../src/core/health.js';
-import { SYSTEM_TWEAKS, systemTweakScript } from '../src/core/optimize.js';
+import { GAME_TWEAKS, SYSTEM_TWEAKS, resetPlan, riskyLeft, systemTweakScript } from '../src/core/optimize.js';
 import { REF, VERSION, cpuBench, diskBench, ramBench, scores } from '../src/core/bench.js';
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n += 1; };
@@ -83,4 +83,15 @@ ok(Object.values(cpu.single).every((v) => v > 0) && Object.values(cpu.multi).eve
 ok(ramBench(100).latency > 0, 'latence mémoire mesurée');
 const dk = await diskBench(os.tmpdir(), { sizeMb: 16 });
 ok(dk.write > 0 && dk.read > 0 && dk.iopsR > 0 && dk.iopsW > 0 && dk.readSrc === 'test', 'disque mesuré');
+// Correctif 0.20.1 : réglages qui font bugger les jeux retirés, retour exact à l'état d'avant
+ok(['hags', 'mmcss'].every((id) => SYSTEM_TWEAKS.find((t) => t.id === id).retired) && ['background', 'visualfx'].every((id) => GAME_TWEAKS.find((t) => t.id === id).retired), 'réglages risqués retirés');
+ok(/reg delete "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers" \/v "HwSchMode"/.test(systemTweakScript([{ id: 'hags', on: false }])), 'HAGS rendue à Windows (valeur supprimée)');
+const nowSys = [{ id: 'hags', on: true, retired: 'x' }, { id: 'fth', on: true }, { id: 'power', on: true }, { id: 'hibernate', on: false }];
+const nowGame = [{ id: 'dvr', on: true }, { id: 'background', on: true, retired: 'x' }, { id: 'mouse', on: true }];
+ok(riskyLeft(nowSys, nowGame).map((t) => t.id).join() === 'hags,background', 'réglages risqués encore actifs repérés');
+const orig = { sys: [{ id: 'hags', on: false }, { id: 'fth', on: false }, { id: 'power', on: true }, { id: 'hibernate', on: false }], game: [{ id: 'dvr', on: false }, { id: 'background', on: false }, { id: 'mouse', on: true }] };
+const rp = resetPlan(nowSys, nowGame, orig);
+ok(JSON.stringify(rp.sys) === JSON.stringify([{ id: 'hags', on: false }, { id: 'fth', on: false }]) && JSON.stringify(rp.game) === JSON.stringify([{ id: 'dvr', on: false }, { id: 'background', on: false }]), 'retour à l’état d’origine (ce qui était déjà là reste)');
+const rp2 = resetPlan(nowSys, nowGame, null);
+ok(!rp2.sys.some((c) => c.id === 'power') && rp2.sys.some((c) => c.id === 'hags'), 'sans photo : alimentation gardée, le reste remis comme Windows');
 console.log(`✅ Analyse pro, Windows Update, score unique, réglages système : ${n} vérifications`);

@@ -733,6 +733,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.20.1': [
+    ['↩', 'Correctif FiveM et jeux qui buggent', 'Les réglages qui pouvaient faire saccader ou planter certains jeux (planification GPU forcée, bridage réseau, applis en arrière-plan) sont retirés. Optimisation › « Remettre Windows comme avant » remet tout comme avant ta première optimisation.', ['[data-view=optimisation]']],
+    ['🎮', 'Rien par-dessus tes parties', 'Pendant un jeu, les notifications d’amis attendent la fin de la partie (plus de fenêtre qui fait clignoter FiveM en plein écran), et le launcher mesure le PC plus légèrement.'],
+    ['🧊', 'Caches de shaders gardés', 'L’optimisation ne vide plus les caches de shaders (DirectX, NVIDIA, AMD) : c’est ce qui faisait saccader les jeux après un nettoyage.'],
+  ],
   '0.20.0': [
     ['📤', 'Clips et captures sur Discord', 'Bouton « Discord » après un clip (Ctrl+Alt+R) ou une capture, et dans la fiche d’un jeu : ça part dans le salon des clips du serveur (vidéo trop lourde réduite toute seule).', ['[data-view=accueil]']],
     ['🎮', 'Parties de groupe sur Discord', 'Dans Amis › Groupes, « 🎮 Discord » : le bot mentionne les membres et affiche « Je viens / Pas dispo ». Tu es prévenu dans le launcher quand quelqu’un vient.', ['[data-view=amis]']],
@@ -1398,13 +1403,14 @@ const catCard = (key, icon, title, desc, total, body, { checked = true, open = f
     </div>
     <div class="obody">${body}</div>
   </div>`;
+const SHADERS = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 const itemRow = (group, x, checked = true) => `<label class="check"><input type="checkbox" data-g="${group}" value="${esc(x.id)}" ${checked ? 'checked' : ''}><span>${esc(x.label)}${x.note ? ` <small class="hint">· ${esc(x.note)}</small>` : ''}</span><em>${gb(x.bytes)}</em></label>`;
 function renderOpti() {
   const o = opti;
   setRing(state.health?.score ?? o.score, state.health?.label ?? o.label);
   const junkTotal = o.junk.reduce((n, x) => n + x.bytes, 0);
   const orphanTotal = o.orphans.reduce((n, x) => n + x.bytes, 0);
-  const tweaksOff = o.tweaks.filter((t) => !t.on && !t.optional);
+  const tweaksOff = o.tweaks.filter((t) => !t.on && !t.optional && !t.retired);
   const heavyOn = o.startup.filter((x) => x.enabled && x.heavy);
   $('optiSum').innerHTML = `
     <div><b>${o.score}/100</b><small>entretien</small></div>
@@ -1415,10 +1421,12 @@ function renderOpti() {
   $('optiRun').hidden = false;
   $('optiRun').classList.add('play'); $('optiScan').classList.remove('play');
   const cards = [];
+  cards.push(catCard('', '↩', 'Un jeu bug depuis l’optimisation ?', 'Remets tous les réglages de Windows exactement comme avant ta première optimisation (FiveM, GTA V et les autres jeux retrouvent leur comportement normal). Tes fichiers ne sont pas touchés.', '',
+    '<button class="btn play" id="optiReset" type="button">↩ Remettre Windows comme avant</button><p class="hint">Point de restauration créé avant. Windows demande l’autorisation administrateur, puis redémarre le PC.</p>', { count: 'réparer', open: [...o.tweaks, ...(state.sys ?? [])].some((t) => t.retired) }));
   for (const [key, icon, title, desc] of GROUPS) {
     const list = o.junk.filter((x) => x.group === key);
     if (!list.length) continue;
-    cards.push(catCard(key, icon, title, desc, gb(list.reduce((n, x) => n + x.bytes, 0)), `<div class="checks">${list.map((x) => itemRow('junk', x)).join('')}</div>`, { count: `${list.length} élément${list.length > 1 ? 's' : ''}` }));
+    cards.push(catCard(key, icon, title, desc, gb(list.reduce((n, x) => n + x.bytes, 0)), `<div class="checks">${list.map((x) => itemRow('junk', SHADERS.includes(x.id) ? { ...x, note: 'À vider seulement si un jeu saccade après une mise à jour du pilote : sinon les jeux saccadent le temps de le recréer' } : x, !SHADERS.includes(x.id))).join('')}</div>`, { count: `${list.length} élément${list.length > 1 ? 's' : ''}` }));
   }
   if (o.recycle > 0) cards.push(catCard('recycle', '♻', 'Corbeille', 'Fichiers déjà supprimés qui prennent encore de la place.', gb(o.recycle), '<p class="hint">Elle sera vidée définitivement.</p>'));
   cards.push(catCard('orphans', '🧩', 'Restes de jeux désinstallés', 'Dossiers de jeux Steam qui ne sont plus installés.', gb(orphanTotal),
@@ -1426,7 +1434,7 @@ function renderOpti() {
   cards.push(catCard('', '⏻', 'Démarrage de Windows', 'Moins d’applis au démarrage = PC prêt plus vite et plus de mémoire libre.', `${o.startup.filter((x) => x.enabled).length}`,
     `${o.startup.map((x) => `<label class="toggle small"><input type="checkbox" data-startup="${esc(x.name)}" ${x.enabled ? 'checked' : ''}><span></span>${esc(x.name)}${x.heavy ? ' <small class="warn">ralentit le démarrage</small>' : ''}</label>`).join('') || '<p class="hint">Aucune appli lancée au démarrage.</p>'}<p class="hint">Désactiver ne désinstalle rien (réversible ici ou dans le Gestionnaire des tâches).</p>`, { count: 'au démarrage', open: heavyOn.length > 0 }));
   cards.push(catCard('tweaks', '🎯', 'Réglages Windows pour les jeux', 'Réglages sûrs et réversibles qui donnent des FPS et de la réactivité.', `${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}`,
-    o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.optional ? ' <small class="opt">facultatif</small>' : ''}<small class="hint">${esc(t.help)}</small></div></label>`).join(''), { count: tweaksOff.length ? `${tweaksOff.length} à faire` : 'optimisés', open: tweaksOff.length > 0 }));
+    o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.optional ? ' <small class="opt">facultatif</small>' : ''}${t.retired ? ' <small class="warn">déconseillé : décoche-le</small>' : ''}<small class="hint">${esc(t.retired ?? t.help)}</small></div></label>`).join(''), { count: tweaksOff.length ? `${tweaksOff.length} à faire` : 'optimisés', open: tweaksOff.length > 0 }));
   // Place prise par chaque jeu installé (et ceux pas lancés depuis 6 mois)
   const games = state.items.filter((x) => x.kind === 'game' && x.installed && x.size > 0).sort((a, b) => b.size - a.size);
   const stale = games.filter((g) => !g.lastPlayed || Date.now() - g.lastPlayed > 182 * 86_400_000);
@@ -1463,7 +1471,7 @@ function diffSettings(a, b) {
 function planFromUi() {
   const on = (k) => document.querySelector(`[data-catcheck="${k}"]`)?.checked;
   const ids = (g) => [...document.querySelectorAll(`#optiBody input[data-g="${g}"]:checked`)].filter((i) => on(i.closest('.ocat')?.dataset.cat)).map((i) => i.value);
-  return { junk: ids('junk'), orphans: ids('orphans'), recycle: Boolean(on('recycle')) && opti.recycle > 0, tweaks: on('tweaks') ? opti.tweaks.filter((t) => !t.on && !t.optional).map((t) => t.id) : [] };
+  return { junk: ids('junk'), orphans: ids('orphans'), recycle: Boolean(on('recycle')) && opti.recycle > 0, tweaks: on('tweaks') ? opti.tweaks.filter((t) => !t.on && !t.optional && !t.retired).map((t) => t.id) : [] };
 }
 const SCAN_STEPS = [['junk', 'Fichiers inutiles'], ['recycle', 'Corbeille'], ['orphans', 'Restes de jeux'], ['startup', 'Démarrage de Windows'], ['tweaks', 'Réglages pour les jeux']];
 function showProgress(html) { $('optiProgress').hidden = !html; $('optiProgress').innerHTML = html ?? ''; }
@@ -1531,6 +1539,16 @@ $('optiBody').addEventListener('click', async (e) => {
     const d = diffSettings(x, state.setHist.now);
     return showReport({ text: `Réglages du ${new Date(x.at).toLocaleString('fr-FR')} (${x.label}) comparés à maintenant :\n\n${d.length ? d.map((l) => `- ${l}`).join('\n') : 'Aucune différence.'}` }, 'Rapport avant / après');
   }
+  if (e.target.id === 'optiReset') {
+    e.target.disabled = true;
+    const r = await api.optiReset();
+    e.target.disabled = false;
+    if (r?.cancelled) return;
+    if (!r?.ok) return toast(r?.refused ? 'Autorisation refusée : les réglages système n’ont pas été remis' : r?.error ?? 'Impossible');
+    toast(r.changed ? `↩ ${r.changed} réglage(s) remis comme avant : redémarre le PC` : 'Tout est déjà comme Windows d’origine 👍');
+    state.sys = await api.optiSys().catch(() => state.sys);
+    return optiScanUi();
+  }
   if (e.target.id === 'sysApply') {
     const changes = [...document.querySelectorAll('#sysTweaks [data-sys]')].map((i) => ({ id: i.dataset.sys, on: i.checked })).filter((c) => state.sys.find((t) => t.id === c.id)?.on !== c.on);
     if (!changes.length) return toast('Aucun changement à appliquer');
@@ -1578,7 +1596,8 @@ function openOpti() {
 }
 function sysTweaksHtml() {
   if (!state.sys) return '<p class="hint">Lecture des réglages…</p>';
-  return state.sys.map((t) => `<label class="toggle small"><input type="checkbox" data-sys="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.on ? ' <small class="ok">actif</small>' : ''}${t.reboot ? ' <small class="opt">redémarrage</small>' : ''}<small class="hint">${esc(t.help)}</small></div></label>`).join('');
+  // Réglages retirés encore actifs : décochés d'office, « Appliquer » les remet comme Windows
+  return state.sys.map((t) => `<label class="toggle small"><input type="checkbox" data-sys="${esc(t.id)}" ${t.on && !t.retired ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.retired ? ' <small class="warn">déconseillé : sera retiré</small>' : t.on ? ' <small class="ok">actif</small>' : ''}${t.reboot ? ' <small class="opt">redémarrage</small>' : ''}<small class="hint">${esc(t.retired ?? t.help)}</small></div></label>`).join('');
 }
 
 // ---------- Score de santé unique (Mon PC = Optimisation) ----------
@@ -2248,7 +2267,7 @@ function showKeys(s) {
   $('directLaunch').checked = s.directLaunch !== false;
   $('gameMode').checked = s.gameMode !== false;
   $('dealAlerts').checked = s.dealAlerts !== false;
-  $('widgetGame').checked = Boolean(s.widgetGame); $('heatAlert').checked = s.heatAlert !== false; $('promoDm').checked = s.promoDm !== false;
+  $('widgetGame').checked = Boolean(s.widgetGame); $('gamePopups').checked = s.gamePopups === true; $('promoDm').checked = s.promoDm !== false;
   $('streamerAuto').checked = s.streamerAuto !== false; $('streamerOn').checked = Boolean(s.streamer);
   $('discordStatus').checked = s.discordStatus !== false;
   $('shareActivity').checked = s.shareActivity !== false;
@@ -2283,7 +2302,7 @@ $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
 $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: e.target.checked }));
-for (const [id, key] of [['widgetGame', 'widgetGame'], ['heatAlert', 'heatAlert'], ['promoDm', 'promoDm'], ['streamerAuto', 'streamerAuto'], ['streamerOn', 'streamer']]) $(id).addEventListener('change', (e) => api.setSettings({ [key]: e.target.checked }).then(() => api.streamer?.()).then((on) => { if (on != null) document.body.classList.toggle('streamer', Boolean(on)); }));
+for (const [id, key] of [['widgetGame', 'widgetGame'], ['gamePopups', 'gamePopups'], ['promoDm', 'promoDm'], ['streamerAuto', 'streamerAuto'], ['streamerOn', 'streamer']]) $(id).addEventListener('change', (e) => api.setSettings({ [key]: e.target.checked }).then(() => api.streamer?.()).then((on) => { if (on != null) document.body.classList.toggle('streamer', Boolean(on)); }));
 // Mode streamer : pseudos des amis floutés tant qu'un logiciel de live tourne (ou si le mode est forcé)
 api.streamer?.().then((on) => document.body.classList.toggle('streamer', Boolean(on))).catch(() => {});
 api.onStreamer?.((on) => { document.body.classList.toggle('streamer', Boolean(on)); if (on) toast('🔴 Mode streamer : notifications coupées, pseudos masqués'); });
@@ -2715,7 +2734,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.20.0',
+    version: async () => '0.20.1',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

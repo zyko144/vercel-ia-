@@ -164,10 +164,10 @@ export async function setStartup(name, enabled) {
 export const GAME_TWEAKS = [
   { id: 'gamemode', label: 'Mode Jeu de Windows activé', help: 'Windows donne la priorité au jeu en cours.', key: 'HKCU\\Software\\Microsoft\\GameBar', values: { AutoGameModeEnabled: 1 }, off: { AutoGameModeEnabled: 0 } },
   { id: 'dvr', label: 'Enregistrement en arrière-plan de la Xbox Game Bar coupé', help: 'Évite que Windows filme en continu pendant les parties (gain de FPS).', key: 'HKCU\\System\\GameConfigStore', values: { GameDVR_Enabled: 0 }, off: { GameDVR_Enabled: 1 }, extra: { key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR', values: { AppCaptureEnabled: 0 }, off: { AppCaptureEnabled: 1 } } },
-  { id: 'background', label: 'Applis Windows en arrière-plan coupées', help: 'Moins de programmes qui tournent pour rien (mémoire et processeur).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications', values: { GlobalUserDisabled: 1 }, off: { GlobalUserDisabled: 0 } },
+  { id: 'background', retired: 'Empêche des applis (Xbox, notifications, certains anti-triche et overlays) de marcher en fond.', label: 'Applis Windows en arrière-plan coupées', help: 'Moins de programmes qui tournent pour rien (mémoire et processeur).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications', values: { GlobalUserDisabled: 1 }, off: { GlobalUserDisabled: 0 } },
   { id: 'ads', label: 'Pubs et suggestions de Windows coupées', help: 'Plus d’applis installées toutes seules ni de suggestions dans le menu Démarrer.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager', values: { SilentInstalledAppsEnabled: 0, SystemPaneSuggestionsEnabled: 0, 'SubscribedContent-338388Enabled': 0, 'SubscribedContent-338389Enabled': 0 }, off: { SilentInstalledAppsEnabled: 1, SystemPaneSuggestionsEnabled: 1, 'SubscribedContent-338388Enabled': 1, 'SubscribedContent-338389Enabled': 1 } },
   { id: 'transparency', label: 'Effets de transparence coupés', help: 'Un peu moins de travail pour la carte graphique (look plus simple).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', values: { EnableTransparency: 0 }, off: { EnableTransparency: 1 }, optional: true },
-  { id: 'visualfx', label: 'Animations de Windows réduites', help: 'Windows plus réactif sur les petits PC (look plus simple).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects', values: { VisualFXSetting: 2 }, off: { VisualFXSetting: 0 }, optional: true },
+  { id: 'visualfx', retired: 'Gain nul sur un PC de jeu, et des fenêtres ou menus peuvent mal s’afficher.', label: 'Animations de Windows réduites', help: 'Windows plus réactif sur les petits PC (look plus simple).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects', values: { VisualFXSetting: 2 }, off: { VisualFXSetting: 0 }, optional: true },
   { id: 'mouse', label: 'Accélération de la souris coupée', help: 'Visée plus précise (effet après reconnexion à Windows).', optional: true, key: 'HKCU\\Control Panel\\Mouse', values: { MouseSpeed: '0', MouseThreshold1: '0', MouseThreshold2: '0' }, off: { MouseSpeed: '1', MouseThreshold1: '6', MouseThreshold2: '10' } },
 ];
 export function tweakApplied(tweak, current) {
@@ -178,9 +178,13 @@ async function readKey(key) {
   return parseRegQuery(r?.stdout ?? '')[0]?.values ?? {};
 }
 export async function tweakStates() {
-  if (!win) return GAME_TWEAKS.map((t) => ({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on: false }));
+  if (!win) return GAME_TWEAKS.filter((t) => !t.retired).map((t) => ({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on: false }));
   const out = [];
-  for (const t of GAME_TWEAKS) out.push({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on: tweakApplied(t, await readKey(t.key)) });
+  for (const t of GAME_TWEAKS) {
+    const on = tweakApplied(t, await readKey(t.key));
+    if (t.retired && !on) continue;
+    out.push({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on, ...(t.retired ? { retired: t.retired } : {}) });
+  }
   return out;
 }
 export async function setTweak(id, on) {
@@ -235,8 +239,8 @@ export function deepClean() {
 
 // Chaque réglage : clé HKLM, valeurs « optimisé » et valeurs d'origine de Windows (null = valeur supprimée)
 export const SYSTEM_TWEAKS = [
-  { id: 'hags', label: 'Planification GPU accélérée (HAGS)', help: 'La carte graphique gère sa propre file d’attente : moins de latence sur les cartes récentes. Redémarrage nécessaire.', key: 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers', values: { HwSchMode: 2 }, off: { HwSchMode: 1 }, reboot: true },
-  { id: 'mmcss', label: 'Priorité maximale aux jeux (planificateur multimédia)', help: 'Windows réserve moins de processeur aux tâches de fond (10 % au lieu de 20 %) et lève le bridage réseau pendant le jeu.', key: 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile', values: { SystemResponsiveness: 10, NetworkThrottlingIndex: 4294967295 }, off: { SystemResponsiveness: 20, NetworkThrottlingIndex: 10 } },
+  { id: 'hags', retired: 'Forcée, elle provoque saccades, écrans noirs et plantages sur FiveM / GTA V et avec certains pilotes : on laisse Windows décider.', label: 'Planification GPU accélérée (HAGS) forcée', help: 'La carte graphique gère sa propre file d’attente. Redémarrage nécessaire.', key: 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers', values: { HwSchMode: 2 }, off: { HwSchMode: null }, reboot: true },
+  { id: 'mmcss', retired: 'Le bridage réseau levé donne des coupures de son, de vocal et des pics de ping sur certaines cartes réseau.', label: 'Priorité maximale aux jeux (planificateur multimédia)', help: 'Windows réserve moins de processeur aux tâches de fond (10 % au lieu de 20 %) et lève le bridage réseau pendant le jeu.', key: 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile', values: { SystemResponsiveness: 10, NetworkThrottlingIndex: 4294967295 }, off: { SystemResponsiveness: 20, NetworkThrottlingIndex: 10 } },
   { id: 'gamestask', label: 'Tâche « Games » en priorité haute', help: 'Processeur et carte graphique servent le jeu en premier (profil officiel « Games » de Windows).', key: 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games', values: { 'GPU Priority': 8, Priority: 6, 'Scheduling Category': 'High', 'SFIO Priority': 'High' }, off: { 'GPU Priority': 8, Priority: 2, 'Scheduling Category': 'Medium', 'SFIO Priority': 'Normal' } },
   { id: 'dosvc', label: 'Partage des mises à jour avec d’autres PC coupé', help: 'Windows n’envoie plus tes mises à jour à des inconnus sur Internet (bande passante gardée pour le jeu).', key: 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization', values: { DODownloadMode: 0 }, off: { DODownloadMode: null } },
   { id: 'telemetry', label: 'Télémétrie réduite au minimum', help: 'Windows envoie seulement les données obligatoires (moins d’activité en fond).', key: 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection', values: { AllowTelemetry: 1 }, off: { AllowTelemetry: null } },
@@ -257,7 +261,9 @@ export async function systemTweakStates() {
   const list = [];
   for (const t of SYSTEM_TWEAKS) {
     const cur = win ? await readKey(t.key) : {};
-    list.push({ id: t.id, label: t.label, help: t.help, reboot: Boolean(t.reboot), on: tweakApplied(t, cur) });
+    const on = tweakApplied(t, cur);
+    if (t.retired && !on) continue;
+    list.push({ id: t.id, label: t.label, help: t.help, reboot: Boolean(t.reboot), on, ...(t.retired ? { retired: t.retired } : {}) });
   }
   const scheme = win ? String((await run('powercfg', ['/getactivescheme'], { windowsHide: true }).catch(() => null))?.stdout ?? '') : '';
   const hib = win ? await readKey('HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power') : {};
@@ -330,4 +336,21 @@ export async function repairWindows(outFile, onProgress = () => {}) {
   await rm(outFile, { force: true }).catch(() => {});
   if (!t) return { ok: false, error: ok ? 'Réparation interrompue.' : 'Autorisation administrateur refusée.' };
   return { ok: true, ...JSON.parse(t.replace(/^﻿/, '')) };
+}
+
+// ===================== Remettre Windows comme avant =====================
+/** Réglages retirés encore actifs (ceux qui peuvent faire bugger les jeux, FiveM en tête). */
+export const riskyLeft = (sys, game) => [...sys, ...game].filter((t) => t.retired && t.on);
+/**
+ * Plan de retour à l'état d'origine : chaque réglage revient à son état d'avant la première optimisation
+ * (photo la plus ancienne), sinon à la valeur de Windows.
+ */
+export function resetPlan(nowSys, nowGame, oldest = null) {
+  const was = (list, id) => oldest?.[list]?.find((x) => x.id === id)?.on;
+  // Sans photo d'avant, on ne touche pas au mode d'alimentation ni à la veille prolongée (choix possibles de l'utilisateur)
+  const target = (list, t) => was(list, t.id) ?? (!oldest && ['power', 'hibernate'].includes(t.id) ? t.on : false);
+  return {
+    sys: nowSys.filter((t) => t.on !== target('sys', t)).map((t) => ({ id: t.id, on: target('sys', t) })),
+    game: nowGame.filter((t) => t.on !== target('game', t)).map((t) => ({ id: t.id, on: target('game', t) })),
+  };
 }
