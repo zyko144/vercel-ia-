@@ -54,3 +54,23 @@ export function playingCard(friend, joinable) {
     actions: [...(joinable ? [['join', 'Rejoindre']] : []), ['ask', 'On joue ?']], ttl: 10_000, join: friend.join ?? null, game: friend.playing,
   };
 }
+
+// ---------- Messages : liens louches (arnaques classiques aux cadeaux Steam / Nitro, faux sites) ----------
+const SAFE_HOSTS = /(^|\.)(steampowered\.com|steamcommunity\.com|discord\.com|discord\.gg|youtube\.com|youtu\.be|twitch\.tv|epicgames\.com|cfx\.re|google\.com|vercel\.app|github\.com|reddit\.com|x\.com|twitter\.com|instagram\.com|tiktok\.com|spotify\.com)$/i;
+const LOOKALIKE = /(st[e3]a?m[ck]?o?m+un+[i1l]t?y|steancommunity|steamcomunity|stearncommunity|d[i1l]sc[o0]rd-?(gift|nitro)|dlscord|discrod|discorcl)/i;
+/** Renvoie la raison si un message semble être une arnaque, sinon null. */
+export function scamCheck(text) {
+  const t = String(text ?? '');
+  const urls = t.match(/https?:\/\/[^\s<>"']+|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(ru|xyz|top|click|gift|shop|online|site|link|cc|tk|ml|com|net|org|gg|io)\b[^\s]*/gi) ?? [];
+  for (const u of urls) {
+    let host = '';
+    try { host = new URL(u.startsWith('http') ? u : `https://${u}`).hostname; } catch { host = u; }
+    if (LOOKALIKE.test(host)) return 'Faux site qui imite Steam ou Discord : n’y mets jamais tes identifiants.';
+    if (!SAFE_HOSTS.test(host)) {
+      if (/(gift|free|nitro|skin|cadeau|gratuit|trade|airdrop|claim)/i.test(t)) return 'Lien inconnu qui promet un cadeau : arnaque très courante.';
+      return 'Lien vers un site inconnu : vérifie avant de cliquer.';
+    }
+  }
+  if (/(nitro|skins?|cadeau|gift).{0,40}(gratuit|free)|(gratuit|free).{0,40}(nitro|skins?)/i.test(t) && urls.length) return 'Promesse de cadeau gratuit : arnaque très courante.';
+  return null;
+}

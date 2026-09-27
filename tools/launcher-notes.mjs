@@ -1,7 +1,8 @@
 /**
  * Notes de version du launcher, tirées du CHANGELOG de l'appli (launcher/src/ui/app.js) :
  *   node tools/launcher-notes.mjs <version> notes   → texte Markdown (chaque nouveauté en « # » pour écrire en grand)
- *   node tools/launcher-notes.mjs <version> shotjs  → script qui ouvre l'écran à montrer pour la capture
+ *   node tools/launcher-notes.mjs <version> shotjs [n] → script qui ouvre l'écran de la n-ième nouveauté illustrée
+ *   node tools/launcher-notes.mjs <version> shots   → nombre de nouveautés illustrées (une capture chacune)
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -23,15 +24,18 @@ export function notesFor(version, log = readChangelog()) {
   return lines.join('\n');
 }
 
-/** Script de mise en scène : ferme l'écran de connexion puis clique les éléments demandés par la 1re nouveauté. */
-export function shotScript(version, log = readChangelog()) {
-  const clicks = (log[version] ?? []).find((e) => Array.isArray(e[3]))?.[3] ?? [];
+const illustrated = (version, log) => (log[version] ?? []).filter((e) => Array.isArray(e[3]) && e[3].length);
+export const shotCount = (version, log = readChangelog()) => illustrated(version, log).length;
+
+/** Script de mise en scène : ferme l'écran de connexion puis clique les éléments demandés par la n-ième nouveauté. */
+export function shotScript(version, log = readChangelog(), n = 0) {
+  const clicks = illustrated(version, log)[n]?.[3] ?? [];
   const safe = clicks.filter((c) => typeof c === 'string' && /^[#.\w\s\-=[\]"']{1,80}$/.test(c));
   // La fenêtre « Quoi de neuf » (premier lancement) est fermée avant de cliquer
-  return `document.getElementById('auth').hidden = true; const shut = () => ['modal', 'recapDlg'].forEach((id) => document.getElementById(id)?.open && document.getElementById(id).close()); [150, 700, 1100].forEach((t) => setTimeout(shut, t)); ${JSON.stringify(safe)}.forEach((sel, i) => setTimeout(() => { if (i === 0) shut(); document.querySelector(sel)?.click(); }, 300 + 250 * i));`;
+  return `document.getElementById('auth').hidden = true; const shut = () => ['modal', 'recapDlg'].forEach((id) => document.getElementById(id)?.open && document.getElementById(id).close()); [150, 700, 1100].forEach((t) => setTimeout(shut, t)); const sels = ${JSON.stringify(safe)}; sels.forEach((sel, i) => setTimeout(() => { if (i === 0) shut(); const el = document.querySelector(sel); el?.click(); if (i > 0) el?.scrollIntoView({ block: 'center' }); }, 300 + 250 * i)); new Promise((r) => setTimeout(r, 1500 + 250 * sels.length));`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [version, what = 'notes'] = process.argv.slice(2);
-  process.stdout.write(what === 'shotjs' ? shotScript(version) : notesFor(version));
+  const [version, what = 'notes', n = '0'] = process.argv.slice(2);
+  process.stdout.write(what === 'shotjs' ? shotScript(version, readChangelog(), Number(n)) : what === 'shots' ? String(shotCount(version)) : notesFor(version));
 }

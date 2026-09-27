@@ -16,7 +16,10 @@ export function releaseMessage(rel) {
   if (!body.startsWith('#')) body = `# 🚀 History Launcher v${version}\n${body}`;
   const foot = `\n\n-# Version ${version}${setup ? ` · [Télécharger l’installateur](${setup.browser_download_url})` : ''}`;
   if (body.length + foot.length > 2000) body = `${body.slice(0, 1990 - foot.length).replace(/\n[^\n]*$/, '')}\n…`;
-  return { content: body + foot, image: (rel.assets ?? []).find((a) => a.name === 'apercu.png')?.browser_download_url ?? null, version };
+  // Une capture par nouveauté : apercu.png puis apercu-2.png, apercu-3.png… (10 fichiers max sur Discord)
+  const rank = (n) => Number(n.match(/^apercu(?:-(\d+))?\.png$/)?.[1] ?? 1);
+  const images = (rel.assets ?? []).filter((a) => /^apercu(-\d+)?\.png$/.test(a.name)).sort((a, b) => rank(a.name) - rank(b.name)).slice(0, 10).map((a) => a.browser_download_url);
+  return { content: body + foot, image: images[0] ?? null, images, version };
 }
 
 async function tick(client, fetchImpl = fetch) {
@@ -32,9 +35,9 @@ async function tick(client, fetchImpl = fetch) {
   if (!channel?.isTextBased?.()) return;
   const msg = releaseMessage(rel);
   const files = [];
-  if (msg.image) {
-    const img = await fetchImpl(msg.image, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
-    if (img?.ok) files.push(new AttachmentBuilder(Buffer.from(await img.arrayBuffer()), { name: `history-v${msg.version}.png` }));
+  for (const [i, url] of msg.images.entries()) {
+    const img = await fetchImpl(url, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
+    if (img?.ok) files.push(new AttachmentBuilder(Buffer.from(await img.arrayBuffer()), { name: `history-v${msg.version}${i ? `-${i + 1}` : ''}.png` }));
   }
   await channel.send({ content: msg.content, files, allowedMentions: { parse: [] } });
   save(KEY, { last: rel.tag_name, at: Date.now() });

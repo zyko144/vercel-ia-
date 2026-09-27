@@ -148,6 +148,7 @@ export async function steamDetails(appid, fetchImpl = fetch) {
     genres: (d.genres ?? []).map((g) => g.description).slice(0, 5), released: d.release_date?.date ?? null,
     score: d.metacritic?.score ?? null, screenshots: (d.screenshots ?? []).slice(0, 8).map((s) => s.path_thumbnail),
     background: d.background_raw ?? d.background ?? null, website: d.website ?? null,
+    requirements: d.pc_requirements && !Array.isArray(d.pc_requirements) ? { min: d.pc_requirements.minimum ?? null, rec: d.pc_requirements.recommended ?? null } : null,
   };
 }
 const stripHtml = (t) => String(t).replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();

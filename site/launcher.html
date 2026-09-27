@@ -124,6 +124,14 @@ section { padding: 90px 0; }
 .steps div::before { content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--glass-2); border: 1px solid var(--line); }
 .steps b { color: #fff; }
 .note { margin-top: 16px; font-size: 13px; color: var(--muted); }
+.versions { display: grid; gap: 18px; }
+.vcard { padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.vcard.noimg { grid-template-columns: 1fr; }
+.vcard h3 { font-size: 20px; margin-bottom: 4px; } .vcard time { color: var(--muted); font-size: 13px; }
+.vcard ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
+.vcard li b { display: block; } .vcard li span { color: var(--muted); font-size: 14.5px; }
+.vcard img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+@media (max-width: 760px) { .vcard { grid-template-columns: 1fr; } }
 
 /* Comparatif */
 .cmp { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; }
@@ -173,7 +181,7 @@ footer a { color: #cfe7ff; }
 <header class="nav">
   <div class="wrap glass">
     <a class="brand" href="#top"><img src="/launcher/logo.png" alt="">History</a>
-    <nav><a href="#fonctions">Fonctions</a><a href="#monpc">Mon PC</a><a href="#benchmark">Benchmark</a><a href="#comparatif">Comparatif</a><a href="#faq">FAQ</a></nav>
+    <nav><a href="#fonctions">Fonctions</a><a href="#monpc">Mon PC</a><a href="#benchmark">Benchmark</a><a href="#comparatif">Comparatif</a><a href="#versions">Nouveautés</a><a href="#faq">FAQ</a></nav>
     <a class="btn main sm dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">Télécharger</a>
   </div>
 </header>
@@ -308,6 +316,11 @@ footer a { color: #cfe7ff; }
       <p class="note" style="margin-top:0">Mesurée sur le même PC Windows, launcher au repos après 5 minutes (Gestionnaire des tâches, tous les processus de l’application additionnés).</p>
       <div id="conso"></div>
     </div>
+  </section>
+
+  <section id="versions" class="wrap">
+    <div class="head rv"><span class="kicker">Journal</span><h2>Les dernières nouveautés</h2></div>
+    <div class="versions" id="versions-list"><div class="glass vcard"><p class="note">Chargement des versions…</p></div></div>
   </section>
 
   <section class="wrap">

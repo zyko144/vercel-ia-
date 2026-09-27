@@ -1,0 +1,58 @@
+// Mode démonstration (LAUNCHER_DEMO=1) : bibliothèque, amis et PC d'exemple pour les captures qui montrent
+// les nouveautés (annonces Discord, site). Jamais activé chez un utilisateur.
+const cdn = (id) => ({ cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_600x900.jpg`, hero: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_hero.jpg`, logo: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/logo.png`, header: `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg` });
+const H = 3_600_000;
+const G = [
+  ['359550', 'Tom Clancy’s Rainbow Six Siege', 6600, 2], ['252950', 'Rocket League', 17100, 20], ['271590', 'Grand Theft Auto V', 9200, 50],
+  ['1172470', 'Apex Legends', 4300, 26], ['730', 'Counter-Strike 2', 12600, 5], ['1245620', 'ELDEN RING', 3100, 900], ['4000', 'Garry’s Mod', 1500, 1400], ['1091500', 'Cyberpunk 2077', 2200, 1100],
+];
+export function demoItems(now = Date.now()) {
+  return G.map(([id, name, minutes, ago]) => ({
+    id: `steam:${id}`, source: 'steam', kind: 'game', category: 'jeu', name, installed: true, installDir: `C:\\Program Files (x86)\\Steam\\steamapps\\common\\${name}`,
+    steamId: id, size: 40e9, steamTimes: { principal: { minutes, lastPlayed: now - ago * H } }, minutes, lastPlayed: now - ago * H, art: cdn(id), known: true,
+  }));
+}
+export function demoFriends(now = Date.now()) {
+  return {
+    code: 'Noam#3F9A2C', demandes: [], moi: { week: 640, top: 'Rocket League' },
+    amis: [
+      { id: 'd1', pseudo: 'Max', code: 'Max#A1B2C3', online: true, playing: 'FiveM', join: { fivem: 'abc123' }, since: now - 42 * 60_000, week: 780, status: 'Soirée RP 🚓', bench: 1420 },
+      { id: 'd2', pseudo: 'Zoé', code: 'Zoe#D4E5F6', online: true, playing: 'Rocket League', join: { steam: '252950' }, since: now - 12 * 60_000, week: 540, status: null, bench: 1180 },
+      { id: 'd3', pseudo: 'Lucas', code: 'Lucas#778899', online: true, playing: null, week: 300, status: 'Dispo pour jouer', bench: 960 },
+      { id: 'd4', pseudo: 'Inès', code: 'Ines#112233', online: false, playing: null, week: 90, status: null },
+    ],
+  };
+}
+export function demoBench(now = Date.now()) {
+  const scores = { cpu1: 1310, cpuN: 1480, ram: 1220, disk: 1690, gpu: 1540, total: 1440 };
+  return [{ at: now - 3600_000, cpu: { single: 1965, multi: 10360, threads: 16 }, ram: { gbps: 14.6 }, disk: { write: 2540, read: 3380, iops: 33800 }, gpu: { fps: 185 }, scores, tier: 'Très haut de gamme' },
+    { at: now - 8 * 86_400_000, scores: { ...scores, total: 1310 }, tier: 'Très haut de gamme' }];
+}
+/** Jours et sessions d'exemple (série de 9 jours, soirées surtout) pour les statistiques et les badges. */
+export function demoActivity(now = Date.now()) {
+  const days = {};
+  const sessions = [];
+  const ids = G.map((g) => `steam:${g[0]}`);
+  for (let i = 0; i < 30; i++) {
+    const t = now - i * 86_400_000;
+    const h = Array(24).fill(0);
+    if (i < 9 || i % 3 === 0) {
+      [18, 19, 20, 21, 22, 23].forEach((k, j) => { h[k] = 20 + ((i * 7 + j * 13) % 40); });
+      if (i % 4 === 0) h[14] = 35;
+      const start = new Date(t).setHours(20, 5, 0, 0);
+      sessions.push({ id: ids[i % ids.length], start, end: start + (90 + (i % 5) * 40) * 60_000 });
+    }
+    const jeux = h.reduce((a, b) => a + b, 0);
+    days[new Date(t).toISOString().slice(0, 10)] = { jeux, applis: 30, h };
+  }
+  sessions.push({ id: ids[1], start: new Date(now - 5 * 86_400_000).setHours(2, 40, 0, 0), end: new Date(now - 5 * 86_400_000).setHours(7, 10, 0, 0) });
+  return { days, sessions: sessions.sort((a, b) => a.start - b.start) };
+}
+/** Courbe d'exemple des dernières 24 h (une mesure toutes les 10 min). */
+export function demoTemps(now = Date.now()) {
+  return Array.from({ length: 144 }, (_, i) => {
+    const h = new Date(now - (143 - i) * 600_000).getHours();
+    const load = h >= 18 ? 55 + ((i * 17) % 30) : 8 + ((i * 7) % 12);
+    return { t: now - (143 - i) * 600_000, cpu: load, gpuT: 38 + Math.round(load * 0.45), ram: 34 + Math.round(load / 3) };
+  });
+}

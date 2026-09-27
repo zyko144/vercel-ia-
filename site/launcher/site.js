@@ -18,6 +18,26 @@
     })
     .catch(() => {});
 
+  // Journal des nouveautés : les 5 dernières versions publiées, avec la capture de la nouveauté
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  fetch(`https://api.github.com/repos/${REPO}/releases?per_page=5`, { headers: { Accept: 'application/vnd.github+json' } })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((list) => {
+      const box = document.getElementById('versions-list');
+      if (!box || !Array.isArray(list)) return;
+      box.innerHTML = list.filter((r) => !r.draft).map((rel) => {
+        const lines = String(rel.body ?? '').split(/\r?\n/);
+        const items = [];
+        lines.forEach((l, i) => { if (/^# /.test(l) && i > 0) items.push({ t: l.slice(2), d: /^#|^$/.test(lines[i + 1] ?? '') ? '' : lines[i + 1] }); });
+        const img = (rel.assets ?? []).find((a) => a.name === 'apercu.png');
+        const v = String(rel.tag_name ?? '').replace(/^v/, '');
+        return `<article class="glass vcard${img ? '' : ' noimg'}"><div><h3>Version ${esc(v)}</h3><time>${new Date(rel.published_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</time>
+          <ul>${items.slice(0, 8).map((x) => `<li><b>${esc(x.t)}</b>${x.d ? `<span>${esc(x.d)}</span>` : ''}</li>`).join('')}</ul></div>
+          ${img ? `<img src="${esc(img.browser_download_url)}" alt="Capture de la version ${esc(v)}" loading="lazy">` : ''}</article>`;
+      }).join('') || '<div class="glass vcard"><p class="note">Aucune version publiée pour l’instant.</p></div>';
+    })
+    .catch(() => {});
+
   // Capture en 3D qui suit la souris
   const tilt = document.getElementById('tilt');
   if (tilt && matchMedia('(pointer:fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {

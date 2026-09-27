@@ -13,13 +13,14 @@ const { notesFor } = await import('./launcher-notes.mjs');
 
 const rel = {
   tag_name: 'v0.13.0', body: notesFor('0.13.0'),
-  assets: [{ name: 'History-Launcher-Setup-0.13.0.exe', browser_download_url: 'https://x/setup.exe' }, { name: 'latest.yml' }, { name: 'apercu.png', browser_download_url: 'https://x/apercu.png' }],
+  assets: [{ name: 'History-Launcher-Setup-0.13.0.exe', browser_download_url: 'https://x/setup.exe' }, { name: 'latest.yml' }, { name: 'apercu-2.png', browser_download_url: 'https://x/apercu-2.png' }, { name: 'apercu.png', browser_download_url: 'https://x/apercu.png' }],
 };
 const m = releaseMessage(rel);
 assert.match(m.content, /^# 🚀 History Launcher v0\.13\.0/);
 assert.match(m.content, /\n# 🛡 Double authentification\n/);
 assert.match(m.content, /Version 0\.13\.0 · \[Télécharger l’installateur\]\(https:\/\/x\/setup\.exe\)/);
 assert.equal(m.image, 'https://x/apercu.png');
+assert.deepEqual(m.images, ['https://x/apercu.png', 'https://x/apercu-2.png']);
 assert.ok(releaseMessage({ ...rel, body: 'x'.repeat(5000) }).content.length <= 2000);
 assert.equal(RELEASES_CHANNEL, '1553051501578948769');
 
@@ -29,7 +30,7 @@ const fetchImpl = async (u) => (String(u).includes('api.github.com') ? new Respo
 await _test.tick(client, fetchImpl);
 assert.equal(sent.length, 1);
 assert.equal(sent[0].id, '1553051501578948769');
-assert.equal(sent[0].files.length, 1, 'capture PNG jointe');
+assert.equal(sent[0].files.length, 2, 'une capture PNG par nouveauté');
 await new Promise((r) => setTimeout(r, 1200));
 await _test.tick(client, fetchImpl);
 assert.equal(sent.length, 1, 'une seule annonce par version');

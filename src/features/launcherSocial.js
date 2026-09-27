@@ -48,7 +48,7 @@ function view(d, accs, id) {
     const a = accs[fid];
     const p = d.presence[fid] ?? {};
     const online = now - (p.seen ?? 0) < ONLINE_MS;
-    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), online, playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, week: p.week ?? 0, top: p.top ?? null } : null;
+    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), bench: p.bench ?? null, playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, week: p.week ?? 0, top: p.top ?? null } : null;
   };
   return {
     code: friendCode(accs[id]),
@@ -190,6 +190,8 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
       playing, join: playing ? cleanJoin(body.join) : null,
       since: playing ? (prev.playing === playing && prev.since ? prev.since : Date.now()) : null,
       week: Math.max(0, Math.min(10_080, Math.round(Number(body.week) || 0))), // minutes sur 7 jours, plafonnées
+      status: body.status ? text(body.status, 60) : null, dnd: Boolean(body.dnd),
+      bench: Number.isFinite(Number(body.bench)) && Number(body.bench) > 0 ? Math.min(20_000, Math.round(Number(body.bench))) : prev.bench ?? null,
       top: body.top ? text(body.top, 80) : null, seen: Date.now(),
     };
     return done(200, { ok: true });
@@ -243,6 +245,24 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     // Réponse à un « on joue ? » : si oui, on lui envoie de quoi rejoindre ma partie
     pushInbox(d, item.from, { type: 'reply', from: id, oui, game: item.game, join: oui && item.type === 'ask' ? d.presence[id]?.join ?? null : null });
     return done(200, { ok: true, join: oui && item.type === 'invite' ? item.join : null });
+  }
+
+  // Classement mondial des benchmarks (meilleur score de chaque compte)
+  if (route === 'POST /api/compte/benchmark') {
+    const sc = body.scores ?? {};
+    const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.min(20_000, Math.round(Number(v))) : null);
+    const total = num(sc.total);
+    if (!total) return send(res, 400, { error: 'Score invalide.' });
+    d.bench ??= {};
+    const prev = d.bench[id];
+    if (!prev || total >= prev.total) d.bench[id] = { total, cpu1: num(sc.cpu1), cpuN: num(sc.cpuN), ram: num(sc.ram), disk: num(sc.disk), gpu: num(sc.gpu), cpu: text(body.cpu, 80) || null, gpuName: text(body.gpu, 80) || null, at: Date.now() };
+    return done(200, { ok: true, best: d.bench[id].total });
+  }
+  if (route === 'GET /api/compte/benchmark/classement') {
+    const all = Object.entries(d.bench ?? {}).filter(([k]) => accs[k]).map(([k, v]) => ({ id: k, pseudo: accs[k].pseudo, ...v })).sort((a, b) => b.total - a.total);
+    const rank = all.findIndex((x) => x.id === id);
+    const friends = listOf(d.friends, id);
+    return send(res, 200, { top: all.slice(0, 50).map(({ id: k, ...x }) => ({ ...x, moi: k === id, ami: friends.includes(k) })), rang: rank >= 0 ? rank + 1 : null, total: all.length });
   }
 
   if (route === 'GET /api/compte/soirees') return done(200, { soirees: eventsFor(d, accs, id) });

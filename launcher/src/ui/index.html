@@ -43,6 +43,7 @@
     <div class="hero" id="hero"></div>
     <div class="row-head"><h2>Tes jeux les plus joués</h2><small class="hint">Installés en premier</small><button class="seeall" data-go="jeux">Voir tout ›</button></div>
     <div class="cards" id="topGames"></div>
+    <div id="rediscBlock" hidden><div class="row-head"><h2>À redécouvrir</h2><small class="hint">Tu y as beaucoup joué, mais pas depuis un mois</small></div><div class="cards" id="rediscover"></div></div>
     <div class="row-head"><h2>Tes applications</h2><small class="hint">Double-clic pour ouvrir</small><button class="seeall" data-go="applis">Voir tout ›</button></div>
     <div class="apps" id="topApps"></div>
     <div id="dealBlock" hidden><div class="row-head"><h2>En promo dans ta liste de souhaits</h2><small class="hint">Steam · tu es prévenu dès qu’une promo commence</small></div>
@@ -70,6 +71,13 @@
 
   <section id="view-stats" class="view">
     <div class="list-head"><h2>Statistiques</h2><button class="btn" type="button" id="openRecap">📅 Résumé de la semaine</button><div class="tabs" id="periods"><button data-p="semaine" class="on">Semaine</button><button data-p="mois">Mois</button><button data-p="annee">Année</button></div></div>
+    <div class="progress-card glass-p" id="progCard"></div>
+    <div class="statsgrid">
+      <div class="panel"><h3>🕒 Quand tu joues <small class="hint">30 derniers jours</small></h3><div class="hourly" id="hourly"></div></div>
+      <div class="panel"><h3>🎮 Sessions récentes</h3><div class="sessions" id="sessions"></div></div>
+    </div>
+    <h3 class="pch">🏅 Badges <small class="hint" id="badgeCount"></small></h3>
+    <div class="badges" id="badges"></div>
     <div class="statsgrid">
       <div class="panel donutCard"><h3>Répartition du temps</h3><div class="donutWrap"><svg id="donut" viewBox="0 0 120 120"></svg><div class="legend" id="legend"></div></div></div>
       <div class="panel"><h3>Les plus utilisés (temps total)</h3><div class="statsbig" id="statsBig"></div></div>
@@ -84,6 +92,7 @@
           <h3>👥 Amis History</h3>
           <p class="hint">Tes potes qui ont History Launcher, quelle que soit leur plateforme (Steam, Epic, Riot…).</p>
           <div class="codebox"><span>Ton code ami</span><b id="myCode">…</b><button class="btn" type="button" id="copyCode">Copier</button></div>
+          <div class="addfriend"><input id="myStatus" placeholder="Ton statut (ex. Dispo pour jouer)" maxlength="60"><button class="btn" type="button" id="saveStatus">Mettre</button><button class="btn ghost" type="button" id="copyInvite" title="Lien qui ouvre History et ajoute ton code">🔗 Lien d’invitation</button></div>
           <div class="addfriend"><input id="addCode" placeholder="Code ami de ton pote (ex. Max#3F9A2C)" maxlength="40"><button class="btn play" type="button" id="addFriend">Ajouter</button></div>
           <div id="hRequests"></div>
           <div class="hlist" id="hFriends"></div>
@@ -135,6 +144,11 @@
         <div id="pcBench" class="hint">Mesure réelle du processeur, de la mémoire, du disque et de la carte graphique. 1000 = PC de jeu milieu de gamme.</div>
       </div>
     </div>
+    <div class="pcgrid">
+      <div class="panel"><h3>🌡 Dernières 24 h <small class="hint">processeur, carte graphique, mémoire</small></h3><div id="pcTemps" class="tchart"><div class="empty">Les mesures s’enregistrent chaque minute.</div></div></div>
+      <div class="panel"><h3>🌐 Réseau</h3><p class="hint">Latence réelle vers les services de jeu et vitesse des serveurs DNS.</p><div class="row"><button class="btn" type="button" id="netPing">📶 Tester la latence</button><button class="btn" type="button" id="netDns">⚡ Trouver le DNS le plus rapide</button></div><div id="netOut"></div></div>
+    </div>
+    <div class="row pcextra"><button class="btn ghost" type="button" id="restoreBtn">🛟 Créer un point de restauration</button><button class="btn ghost" type="button" id="rankBtn">🌍 Classement mondial des benchmarks</button></div>
     <h3 class="pch">🧠 Programmes qui consomment <button class="btn ghost sm" type="button" id="procRefresh">Actualiser</button></h3>
     <div class="procs" id="pcProcs"><div class="empty">Clique sur Actualiser pour voir ce qui tourne.</div></div>
     <div class="pcgrid">
@@ -318,12 +332,16 @@
     <div class="setbody">
     <section class="setpane" data-pane="general">
       <h3>⚙ Général</h3>
+      <div class="setrow"><span>Taille du texte</span><select id="textScale"><option value="0.9">Petite</option><option value="1">Normale</option><option value="1.1">Grande</option><option value="1.25">Très grande</option></select></div>
+      <label class="toggle"><input type="checkbox" id="compact"><span></span>Mode compact (plus de jeux à l’écran)</label>
+      <label class="toggle"><input type="checkbox" id="dnd"><span></span>Ne pas déranger (aucune notification d’amis ni son)</label>
       <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
       <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option></select></div>
       <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
     </section>
     <section class="setpane" data-pane="jeux" hidden>
       <h3>🎮 Jeux</h3>
+      <label class="toggle"><input type="checkbox" id="tournament"><span></span>🏆 Mode tournoi : boost sur chaque partie, aucune notification, rien ne dérange</label>
       <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
       <p class="hint sethint">Les jeux avec anti-triche (Rocket League, Rainbow Six…) passent toujours par Steam / Epic.</p>
       <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher une fois un jeu lancé (jamais pour les applis)</label>
@@ -342,10 +360,12 @@
       <label class="toggle"><input type="checkbox" id="sfxOn"><span></span>Sons de l’interface (navigation, lancement d’un jeu, validations)</label>
       <label class="toggle"><input type="checkbox" id="sfxNotif"><span></span>Son des notifications et des appels</label>
       <div class="setrow"><span>Volume</span><input type="range" id="sfxVol" min="0" max="100" step="5"></div>
+      <div class="row"><button type="button" class="btn" id="micTest">🎙 Tester mon micro</button><div class="miclvl"><i id="micLvl"></i></div></div>
       <div class="row"><button type="button" class="btn ghost" data-sfxtry="launch">▶ Lancement</button><button type="button" class="btn ghost" data-sfxtry="notif">▶ Notification</button><button type="button" class="btn ghost" data-sfxtry="call">▶ Appel</button></div>
     </section>
     <section class="setpane" data-pane="compte" hidden>
       <h3>☁ Compte & sauvegarde</h3>
+      <div class="row"><button type="button" class="btn" id="libExport">📤 Exporter ma bibliothèque</button><button type="button" class="btn ghost" id="libImport">📥 Importer</button></div>
       <div class="secbox"><div><b>🔐 Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">✉ Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">🛡 Double authentification</button></div></div>
       <p class="hint sethint">Tes collections, favoris, réglages et heures sont sauvegardés sur ton compte History toutes les 30 min et à la fermeture.</p>
       <div class="row updrow"><button type="button" class="btn" id="backupNow">☁ Sauvegarder maintenant</button><button type="button" class="btn ghost" id="backupRestore">Restaurer</button><small class="hint" id="backupStatus"></small></div>
