@@ -21,9 +21,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 ::-webkit-scrollbar { width: 0; height: 0; }
 
 /* ---------- Barre de gauche ---------- */
-.side { grid-area: side; display: flex; flex-direction: column; padding: 18px 14px; border-right: 1px solid rgba(255, 255, 255, .1); background: linear-gradient(160deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .015) 35%, rgba(255, 255, 255, .04)), linear-gradient(175deg, color-mix(in srgb, var(--accent) 40%, #0b0910), #0e0b16 30%, color-mix(in srgb, var(--cyan) 22%, #0b0910) 55%, #0d0a14 75%, rgba(130, 80, 220, .38)), #0b0910; background-size: 100% 100%, 100% 260%, 100% 100%; backdrop-filter: blur(28px) saturate(170%); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .12), inset -1px 0 0 rgba(255, 255, 255, .05); overflow-y: auto; overflow-x: hidden; animation: glassflow 16s ease-in-out infinite alternate; }
-@keyframes glassflow { from { background-position: 0 0, 0 0%, 0 0; } to { background-position: 0 0, 0 100%, 0 0; } }
-@media (prefers-reduced-motion: reduce) { .side { animation: none; } }
+.side { grid-area: side; display: flex; flex-direction: column; padding: 18px 14px; border-right: 1px solid rgba(255, 255, 255, .1); background: linear-gradient(160deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .015) 35%, rgba(255, 255, 255, .04)), linear-gradient(175deg, color-mix(in srgb, var(--accent) 40%, #0b0910), #0e0b16 30%, color-mix(in srgb, var(--cyan) 22%, #0b0910) 55%, #0d0a14 75%, rgba(130, 80, 220, .38)), #0b0910; background-size: 100% 100%, 100% 260%, 100% 100%; backdrop-filter: blur(28px) saturate(170%); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .12), inset -1px 0 0 rgba(255, 255, 255, .05); overflow-y: auto; overflow-x: hidden; }
+
 .brandmark { display: grid; place-items: center; padding: 6px 0 16px; }
 .brandmark img { width: 62px; height: 62px; object-fit: contain; filter: drop-shadow(0 0 14px rgba(47, 139, 255, .55)); }
 .side nav { display: flex; flex-direction: column; gap: 3px; }
@@ -679,9 +678,8 @@ body.big .gcard:hover, body.big .gridcard:hover { transform: translateY(-6px) sc
 .chatin input:focus { border-color: var(--accent); }
 
 /* Fond animé tiré de la jaquette du jeu sélectionné (flou, très doux) + jaquette du haut qui « respire » */
-#ambient { position: fixed; inset: -60px; z-index: 0; pointer-events: none; background: var(--amb, none) center / cover no-repeat; filter: blur(70px) saturate(1.5) brightness(.4); opacity: 0; transition: opacity 1.2s ease; animation: ambdrift 40s ease-in-out infinite alternate; }
+#ambient { position: fixed; inset: -60px; z-index: 0; pointer-events: none; background: var(--amb, none) center / cover no-repeat; filter: blur(70px) saturate(1.5) brightness(.4); opacity: 0; transition: opacity 1.2s ease; transform: scale(1.1); }
 #ambient.on { opacity: .55; }
-@keyframes ambdrift { from { transform: scale(1.05) translate(0, 0); } to { transform: scale(1.18) translate(-2%, 2%); } }
 .hero .hbg:not(.brandbg) { animation: kenburns 26s ease-in-out infinite alternate; }
 @keyframes kenburns { from { translate: 0 0; scale: 1; } to { translate: -2% -1.5%; scale: 1.08; } }
 .top, .side { position: relative; z-index: 2; }
@@ -891,3 +889,9 @@ body.compact main { padding-top: 4px; }
 @media (max-width: 1250px) { .healthcard { grid-template-columns: auto 1fr; } .hacts { grid-column: 1 / -1; grid-auto-flow: column; } .scanhero { grid-template-columns: 1fr; } }
 .tlabel small.opt, .tlabel small.ok { display: inline-block !important; width: auto !important; margin-left: 6px; vertical-align: 1px; }
 #sysTweaks { display: grid; gap: 12px; }
+
+.bdetail { display: block; margin: -4px 0 4px 140px; line-height: 1.4; }
+
+/* Économie : le fond du menu et le fond flou sont fixes (plus de flou recalculé à chaque image), et les dernières
+   animations (bordure néon, jaquette) s'arrêtent dès que la fenêtre n'est plus au premier plan */
+body.idle *, body.idle *::before, body.idle *::after { animation-play-state: paused !important; }

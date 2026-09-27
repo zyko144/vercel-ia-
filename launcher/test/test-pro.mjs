@@ -6,6 +6,7 @@ import { classify, deepScan, eta, sizeGroups, storageScore } from '../src/core/d
 import { installScript, kindOf, parseSearch } from '../src/core/winupdate.js';
 import { parseEvents, unifiedHealth } from '../src/core/health.js';
 import { SYSTEM_TWEAKS, systemTweakScript } from '../src/core/optimize.js';
+import { REF, VERSION, cpuBench, diskBench, ramBench, scores } from '../src/core/bench.js';
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n += 1; };
 
@@ -72,4 +73,14 @@ const sc = systemTweakScript([{ id: 'mmcss', on: true }, { id: 'dosvc', on: fals
 ok(/^.*\n?Checkpoint-Computer/m.test(sc) && /SystemResponsiveness" \/t REG_DWORD \/d "10"/.test(sc), 'point de restauration + valeur optimisée');
 ok(/reg delete ".*DeliveryOptimization" \/v "DODownloadMode"/.test(sc), 'retour à la valeur de Windows');
 ok(/powercfg -duplicatescheme e9a42b02/.test(sc) && SYSTEM_TWEAKS.length >= 6, 'performances optimales');
+// Benchmark extrême : PC de référence = 1000 partout ; vraies mesures courtes pour vérifier que tout tourne
+const refRun = { v: VERSION, cpu: { single: REF.cpu1, multi: REF.cpuN }, ram: REF.ram, disk: REF.disk, gpu: { scenes: REF.gpu } };
+const sref = scores(refRun);
+ok(sref.total === 1000 && sref.cpu1 === 1000 && sref.gpu === 1000 && sref.disk === 1000, 'PC de référence = 1000');
+ok(scores({ ...refRun, gpu: { scenes: { geometry: 600, shader: 220, post: 440 } } }).gpu === 2000, 'carte 2× plus rapide = 2000');
+const cpu = await cpuBench({ ms: 150, sustainMs: 600 });
+ok(Object.values(cpu.single).every((v) => v > 0) && Object.values(cpu.multi).every((v) => v > 0) && cpu.sustain.slices.length === 6, 'épreuves processeur mesurées');
+ok(ramBench(100).latency > 0, 'latence mémoire mesurée');
+const dk = await diskBench(os.tmpdir(), { sizeMb: 16 });
+ok(dk.write > 0 && dk.read > 0 && dk.iopsR > 0 && dk.iopsW > 0 && dk.readSrc === 'test', 'disque mesuré');
 console.log(`✅ Analyse pro, Windows Update, score unique, réglages système : ${n} vérifications`);

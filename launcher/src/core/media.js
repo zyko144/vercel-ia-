@@ -1,6 +1,7 @@
 // Lecteur en bas de l'appli : le titre joué par Spotify (lu dans le titre de sa fenêtre, « Artiste - Titre »),
 // la vraie pochette trouvée sur Deezer (API publique), et les touches multimédia de Windows pour piloter la lecture.
 import { execFile } from 'node:child_process';
+import { ps } from './pshost.js';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
@@ -19,8 +20,7 @@ export function parseTitle(player, windowTitle) {
 export async function nowPlaying() {
   if (process.platform !== 'win32') return null;
   try {
-    const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      `Get-Process ${PLAYERS.join(',')} -ErrorAction SilentlyContinue | Where-Object MainWindowTitle | ForEach-Object { $_.ProcessName + '|' + $_.MainWindowTitle }`], { windowsHide: true, timeout: 8000 });
+    const stdout = await ps(`Get-Process ${PLAYERS.join(',')} -ErrorAction SilentlyContinue | Where-Object MainWindowTitle | ForEach-Object { $_.ProcessName + '|' + $_.MainWindowTitle }`, 8000);
     for (const line of stdout.split(/\r?\n/)) {
       const [proc, ...rest] = line.split('|');
       const player = PLAYERS.find((p) => p.toLowerCase() === proc.trim().toLowerCase());

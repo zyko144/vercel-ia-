@@ -116,19 +116,23 @@ await check('mot de passe oublié : même réponse sans compte, code par e-mail,
 await check('double authentification : QR, activation, connexion en 2 étapes, code de secours', async () => {
   const login = await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '7.7.7.7');
   const t = login.token;
+  const other = (await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '7.7.7.7')).token; // autre PC déjà connecté
   const start = await post('2fa/debut', {}, '7.7.7.7', t);
   assert.match(start.url, /^otpauth:\/\/totp\/History%3Azoe%40exemple\.fr\?secret=[A-Z2-7]+&issuer=History/);
   assert.equal((await post('2fa/activer', { code: '123456' }, '7.7.7.7', t)).status, 400);
   const on = await post('2fa/activer', { code: totp(start.secret) }, '7.7.7.7', t);
   assert.equal(on.compte.twoFactor, true);
   assert.equal(on.recovery.length, 8);
+  assert.equal((await post('2fa/verifier', { code: '000000' }, '7.7.7.7', other)).status, 401, 'autres appareils déconnectés à l’activation');
+  assert.equal((await post('2fa/verifier', { code: '000000' }, '7.7.7.7', t)).status, 401, 'déverrouillage : mauvais code refusé');
+  assert.equal((await post('2fa/verifier', { code: on.recovery[7] }, '7.7.7.7', t)).ok, true, 'déverrouillage avec un code');
   const step1 = await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '7.7.7.7');
   assert.equal(step1.need2fa, true);
   assert.equal(step1.token, undefined, 'pas de session avant le code');
   assert.equal((await post('connexion/2fa', { ticket: step1.ticket, code: '000000' }, '7.7.7.7')).status, 401);
   const step2 = await post('connexion/2fa', { ticket: step1.ticket, code: on.recovery[0] }, '7.7.7.7');
   assert.ok(step2.token);
-  assert.equal(step2.recoveryLeft, 7, 'code de secours à usage unique');
+  assert.equal(step2.recoveryLeft, 6, 'code de secours à usage unique');
   const again = await post('connexion', { email: 'zoe@exemple.fr', motDePasse: 'Nouveau-2026!' }, '7.7.7.7');
   assert.equal((await post('connexion/2fa', { ticket: again.ticket, code: on.recovery[0] }, '7.7.7.7')).status, 401, 'code de secours déjà utilisé');
   assert.equal((await post('2fa/desactiver', { motDePasse: 'faux', code: on.recovery[1] }, '7.7.7.7', step2.token)).status, 401);

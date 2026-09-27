@@ -253,16 +253,19 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.min(20_000, Math.round(Number(v))) : null);
     const total = num(sc.total);
     if (!total) return send(res, 400, { error: 'Score invalide.' });
-    d.bench ??= {};
-    const prev = d.bench[id];
-    if (!prev || total >= prev.total) d.bench[id] = { total, cpu1: num(sc.cpu1), cpuN: num(sc.cpuN), ram: num(sc.ram), disk: num(sc.disk), gpu: num(sc.gpu), cpu: text(body.cpu, 80) || null, gpuName: text(body.gpu, 80) || null, at: Date.now() };
-    return done(200, { ok: true, best: d.bench[id].total });
+    // Benchmark v2 (« extrême ») : classement séparé, les scores de la v1 ne sont pas comparables
+    const v2 = Number(body.v) === 2;
+    const table = v2 ? (d.bench2 ??= {}) : (d.bench ??= {});
+    const prev = table[id];
+    const raw = v2 && body.raw && typeof body.raw === 'object' ? { geometry: num(body.raw.gpu?.geometry), shader: num(body.raw.gpu?.shader), post: num(body.raw.gpu?.post), ramLat: num(body.raw.ramLat) } : null;
+    if (!prev || total >= prev.total) table[id] = { total, cpu1: num(sc.cpu1), cpuN: num(sc.cpuN), ram: num(sc.ram), disk: num(sc.disk), gpu: num(sc.gpu), cpu: text(body.cpu, 80) || null, gpuName: text(body.gpu, 80) || null, raw, at: Date.now() };
+    return done(200, { ok: true, best: table[id].total });
   }
   if (route === 'GET /api/compte/benchmark/classement') {
-    const all = Object.entries(d.bench ?? {}).filter(([k]) => accs[k]).map(([k, v]) => ({ id: k, pseudo: accs[k].pseudo, ...v })).sort((a, b) => b.total - a.total);
+    const all = Object.entries(d.bench2 ?? {}).filter(([k]) => accs[k]).map(([k, v]) => ({ id: k, pseudo: accs[k].pseudo, ...v })).sort((a, b) => b.total - a.total);
     const rank = all.findIndex((x) => x.id === id);
     const friends = listOf(d.friends, id);
-    return send(res, 200, { top: all.slice(0, 50).map(({ id: k, ...x }) => ({ ...x, moi: k === id, ami: friends.includes(k) })), rang: rank >= 0 ? rank + 1 : null, total: all.length });
+    return send(res, 200, { top: all.slice(0, 50).map(({ id: k, raw, ...x }) => ({ ...x, moi: k === id, ami: friends.includes(k) })), rang: rank >= 0 ? rank + 1 : null, total: all.length });
   }
 
   if (route === 'GET /api/compte/soirees') return done(200, { soirees: eventsFor(d, accs, id) });

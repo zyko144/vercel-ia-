@@ -2,6 +2,7 @@
 // NVIDIA : nvidia-smi (installé avec le pilote). AMD/Intel : compteurs Windows (utilisation seulement).
 // Température du processeur : Windows ne la donne qu'aux applis lancées en administrateur, souvent pas du tout.
 import { execFile } from 'node:child_process';
+import { ps as psHost } from './pshost.js';
 import os from 'node:os';
 import { promisify } from 'node:util';
 
@@ -38,9 +39,9 @@ async function gpuInfo() {
   }
   if (gpuMode === 'counters') {
     const ps = "$s=(Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples | Measure-Object CookedValue -Sum; [math]::Round($s.Sum)";
-    const r = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, timeout: 8000 }).catch(() => null);
-    const v = Number(String(r?.stdout ?? '').trim());
-    if (!Number.isFinite(v) || !r?.stdout?.trim()) { gpuMode = 'none'; return null; }
+    const out = await psHost(ps, 8000).catch(() => '');
+    const v = Number(String(out).trim());
+    if (!Number.isFinite(v) || !String(out).trim()) { gpuMode = 'none'; return null; }
     return { name: null, temp: null, usage: Math.min(100, v), vramUsed: null, vramTotal: null };
   }
   return null;
@@ -51,8 +52,7 @@ let cpuTempOk = true;
 async function cpuTemp() {
   if (process.platform !== 'win32' || !cpuTempOk) return null;
   const ps = "(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | Select-Object -First 1).CurrentTemperature";
-  const r = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, timeout: 6000 }).catch(() => null);
-  const k = Number(String(r?.stdout ?? '').trim());
+  const k = Number(String(await psHost(ps, 6000).catch(() => '')).trim());
   if (!k) { if (++cpuTempTried >= 2) cpuTempOk = false; return null; }
   const c = Math.round(k / 10 - 273.15);
   return c > 0 && c < 120 ? c : null;

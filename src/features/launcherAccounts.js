@@ -212,8 +212,22 @@ export async function securityRoute(route, body, token, ip) {
     if (step == null) return { status: 400, error: 'Code incorrect : vérifie l’heure de ton téléphone et réessaie.' };
     const codes = recoveryCodes();
     a.totp = { on: true, secret: a.totp.secret, lastStep: step, recovery: codes.map(hashValue), since: Date.now() };
+    // Les autres appareils déjà connectés sont déconnectés : ils devront donner le code pour revenir
+    for (const [h, sess] of Object.entries(d.sessions)) if (sess.id === a.id && h !== sha(String(token ?? ''))) delete d.sessions[h];
     save(KEY, d);
     return { status: 200, ok: true, recovery: codes, compte: publicAccount(a) };
+  }
+  // Déverrouillage du launcher à l'ouverture (compte avec double authentification)
+  if (route === 'POST /api/compte/2fa/verifier') {
+    if (!a.totp?.on) return { status: 200, ok: true };
+    const code = String(body.code ?? '').trim().toUpperCase();
+    const step = checkTotp(a.totp.secret, code, a.totp.lastStep ?? -1);
+    const recovery = step == null && a.totp.recovery?.includes(hashValue(code));
+    if (step == null && !recovery) return { status: 401, error: 'Code incorrect.' };
+    if (step != null) a.totp.lastStep = step;
+    if (recovery) a.totp.recovery = a.totp.recovery.filter((h) => h !== hashValue(code));
+    save(KEY, d);
+    return { status: 200, ok: true, recoveryLeft: recovery ? a.totp.recovery.length : undefined };
   }
   if (route === 'POST /api/compte/2fa/desactiver') {
     if (!a.totp?.on) return { status: 200, ok: true };

@@ -271,10 +271,10 @@ footer a { color: #cfe7ff; }
       <div class="panel glass rv">
         <h3>Comment c’est mesuré</h3>
         <div class="steps">
-          <div><b>Processeur, 1 cœur puis tous</b> : calcul d’empreintes SHA-256 sur des blocs de 1 Mo pendant 3 s, en Mo/s.</div>
-          <div><b>Mémoire</b> : copies de blocs de 128 Mo pendant 2,5 s, en Go/s.</div>
-          <div><b>Disque</b> : écriture puis lecture d’un fichier de 1 Go, et lectures aléatoires de 4 Ko (IOPS).</div>
-          <div><b>Carte graphique</b> : scène 3D de 60 000 formes animées, images par seconde mesurées sans la limite de l’écran.</div>
+          <div><b>Processeur, 1 cœur puis tous</b> : 5 épreuves proches du jeu (SHA-256, compression, physique à virgule flottante, tri, recherche de chemin façon IA), puis 30 s d’endurance à pleine charge pour voir s’il chauffe et ralentit.</div>
+          <div><b>Mémoire</b> : débit de copie sur 256 Mo et latence d’accès aléatoire (chaîne de pointeurs, impossible à prévoir pour le processeur).</div>
+          <div><b>Disque</b> : 2 Go écrits avec synchro, lecture d’un vrai fichier de jeu (pas en cache), 4 Ko aléatoires en lecture (file d’attente 32) et en écriture synchronisée.</div>
+          <div><b>Carte graphique</b> : 3 scènes en 2560×1440 quelle que soit la fenêtre : 150 000 cubes éclairés par 8 lumières avec anticrénelage 4×, raymarching avec ombres douces et relief fractal, rendu HDR avec halo lumineux et tone mapping.</div>
           <div><b>Score</b> : chaque épreuve vaut 1000 sur un PC de jeu milieu de gamme, le total est une moyenne géométrique (comme les benchmarks connus).</div>
         </div>
       </div>
