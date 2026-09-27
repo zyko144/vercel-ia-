@@ -170,6 +170,43 @@ await check('retirer un ami : des deux côtés', async () => {
   assert.equal((await call('amis', max)).amis.length, 0);
 });
 
+await check('boîte en attente longue : message et appel reçus tout de suite, rien de perdu', async () => {
+  // (redevenir amis après le test précédent)
+  await call('amis/ajouter', noam, { code: (await call('amis', max)).code });
+  await call('amis/accepter', max, { id: (await call('amis', max)).demandes[0].id });
+  const maxId = (await call('amis', noam)).amis[0].id;
+  const start = (await call('boite', max)).now;
+  // Rien de nouveau : la requête attend (au moins ~1 s ici) puis répond vide
+  let t = Date.now();
+  const empty = await call(`boite?apres=${start}&attente=1`, max);
+  assert.equal(empty.items.length, 0);
+  assert.ok(Date.now() - t >= 900, 'a bien attendu');
+  // Un message arrive pendant l'attente : réponse immédiate (bien avant les 20 s)
+  t = Date.now();
+  const waiting = call(`boite?apres=${empty.now}&attente=20`, max);
+  await new Promise((r) => setTimeout(r, 300));
+  await call('messages', noam, { to: maxId, text: 'Tu es là ?' });
+  const got = await waiting;
+  assert.ok(Date.now() - t < 3000, `réveil immédiat (${Date.now() - t} ms)`);
+  assert.equal(got.items.at(-1).text, 'Tu es là ?');
+  assert.equal(got.now, got.items.at(-1).at, 'curseur = dernier élément reçu');
+  // Deux éléments dans la même milliseconde : tous les deux arrivent
+  await call('messages', noam, { to: maxId, text: 'un' });
+  await call('messages', noam, { to: maxId, text: 'deux' });
+  const both = await call(`boite?apres=${got.now}`, max);
+  assert.deepEqual(both.items.map((x) => x.text), ['un', 'deux']);
+  // Appel : l'appelé le reçoit sans attendre
+  await call('presence', max, { week: 1 });
+  const waitCall = call(`boite?apres=${both.now}&attente=20`, max);
+  await new Promise((r) => setTimeout(r, 200));
+  t = Date.now();
+  const c = await call('appel', noam, { to: maxId });
+  const ring = await waitCall;
+  assert.ok(Date.now() - t < 3000);
+  assert.equal(ring.items.find((x) => x.type === 'call').callId, c.id);
+  await call('appel/fin', noam, { call: c.id });
+});
+
 server.close();
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);
