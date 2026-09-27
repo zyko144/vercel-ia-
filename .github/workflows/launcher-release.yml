@@ -95,7 +95,11 @@ jobs:
         shell: bash
         run: |
           # Le service Render peut être en veille : plusieurs essais, sans jamais faire échouer la publication
-          for i in 1 2 3 4 5 6; do
-            if curl -fsS -m 90 -X POST https://vercel-ia.onrender.com/api/launcher/annonce; then echo; break; fi
-            sleep 20
+          # Le bot redémarre souvent au même moment (déploiement Render) : on réessaie jusqu'à ce que l'annonce soit postée
+          V="${{ steps.v.outputs.version }}"
+          for i in $(seq 1 12); do
+            R=$(curl -fsS -m 90 -X POST "https://vercel-ia.onrender.com/api/launcher/annonce?version=$V" || true)
+            echo "$R"
+            if echo "$R" | grep -Eq '"(posted|already)": ?true'; then break; fi
+            sleep 30
           done || true
