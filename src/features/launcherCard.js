@@ -82,13 +82,18 @@ export function launcherCardSvg(p, { shine = null, pulse = 0, avatar = null, log
 
 async function dataUri(buf, mime) { return buf ? `data:${mime};base64,${Buffer.from(buf).toString('base64')}` : null; }
 
-/** GIF animé de la carte (≈ 2,5 s en boucle) ; avatarUrl = image PNG du membre Discord. */
-export async function launcherCardGif(p, { avatarUrl = null, fetchImpl = fetch } = {}) {
+async function avatarOf(sharp, url, fetchImpl) {
+  const buf = url ? await fetchImpl(url, { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null) : null;
+  return buf ? dataUri(await sharp(Buffer.from(buf)).resize(128, 128).png().toBuffer(), 'image/png') : null;
+}
+async function logoOf(sharp) {
+  const buf = await readFile(path.join(here, '..', '..', 'launcher', 'src', 'ui', 'logo.png')).catch(() => null);
+  return buf ? dataUri(await sharp(buf).resize(80, 80, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer(), 'image/png') : null;
+}
+
+/** Assemble les images en GIF (≈ 1,6 s en boucle) : tout est fixe, un reflet traverse la carte et le point « en ligne » pulse. */
+async function renderGif(svgOf) {
   const [{ default: sharp }, { default: ffmpeg }, fs, os, { spawn }] = await Promise.all([import('sharp'), import('ffmpeg-static'), import('node:fs/promises'), import('node:os'), import('node:child_process')]);
-  const avBuf = avatarUrl ? await fetchImpl(avatarUrl, { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null) : null;
-  const avatar = avBuf ? await dataUri(await sharp(Buffer.from(avBuf)).resize(128, 128).png().toBuffer(), 'image/png') : null;
-  const logoBuf = await readFile(path.join(here, '..', '..', 'launcher', 'src', 'ui', 'logo.png')).catch(() => null);
-  const logo = logoBuf ? await dataUri(await sharp(logoBuf).resize(80, 80, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer(), 'image/png') : null;
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hcarte-'));
   const run = (args) => new Promise((resolve, reject) => {
     const pr = spawn(ffmpeg, args, { stdio: 'ignore' });
@@ -96,11 +101,10 @@ export async function launcherCardGif(p, { avatarUrl = null, fetchImpl = fetch }
     pr.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))));
   });
   try {
-    // Tout est fixe (barres pleines d'emblée) : un reflet traverse la carte et le point « en ligne » pulse
     const N = 24; const SHINE = 12;
-    const frames = Array.from({ length: N }, (_, i) => ({ shine: i < SHINE ? -300 + (i * 1500) / (SHINE - 1) : null, pulse: (i % 12) / 12 }));
-    for (const [i, f] of frames.entries()) {
-      await sharp(Buffer.from(launcherCardSvg(p, { ...f, avatar, logo }))).png().toFile(path.join(dir, `f${String(i).padStart(3, '0')}.png`));
+    for (let i = 0; i < N; i++) {
+      const f = { shine: i < SHINE ? -300 + (i * 1500) / (SHINE - 1) : null, pulse: (i % 12) / 12 };
+      await sharp(Buffer.from(svgOf(f))).png().toFile(path.join(dir, `f${String(i).padStart(3, '0')}.png`));
     }
     const input = path.join(dir, 'f%03d.png');
     await run(['-y', '-framerate', '15', '-i', input, '-vf', 'palettegen=max_colors=192:stats_mode=full', path.join(dir, 'p.png')]);
@@ -109,4 +113,74 @@ export async function launcherCardGif(p, { avatarUrl = null, fetchImpl = fetch }
   } finally {
     await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/** GIF animé de la carte ; avatarUrl = image PNG du membre Discord. */
+export async function launcherCardGif(p, { avatarUrl = null, fetchImpl = fetch } = {}) {
+  const { default: sharp } = await import('sharp');
+  const [avatar, logo] = await Promise.all([avatarOf(sharp, avatarUrl, fetchImpl), logoOf(sharp)]);
+  return renderGif((f) => launcherCardSvg(p, { ...f, avatar, logo }));
+}
+
+/** Duel de deux profils (/launcher comparer) : chaque ligne part du centre, le meilleur est mis en valeur. */
+export function compareCardSvg(a, b, { shine = null, avA = null, avB = null, logo = null } = {}) {
+  const rows = [
+    ['Niveau', a.level, b.level, 100], ['Benchmark', a.bench, b.bench, 2500], ['Processeur · 1 cœur', a.cpu1, b.cpu1, 2500], ['Processeur · tous', a.cpuN, b.cpuN, 2500],
+    ['Mémoire', a.ram, b.ram, 2500], ['Disque', a.disk, b.disk, 2500], ['Carte graphique', a.gpu, b.gpu, 2500], ['Cette semaine', a.week, b.week, 3000, hoursText],
+  ];
+  const cx = W / 2; const half = 170;
+  let winsA = 0; let winsB = 0;
+  const lines = rows.map(([label, va, vb, max, fmt], i) => {
+    const y = 176 + i * 36;
+    const wa = va ? Math.max(4, (half * Math.min(va, max)) / max) : 0;
+    const wb = vb ? Math.max(4, (half * Math.min(vb, max)) / max) : 0;
+    const bestA = (va ?? 0) > (vb ?? 0); const bestB = (vb ?? 0) > (va ?? 0);
+    if (bestA) winsA += 1; if (bestB) winsB += 1;
+    const show = (v) => (v ? esc(fmt ? fmt(v) : String(v)) : '–');
+    return `<text x="${cx}" y="${y - 6}" text-anchor="middle" font-size="13" font-weight="600" fill="#aea7b8">${esc(label)}</text>
+    <rect x="${cx - half}" y="${y}" width="${half}" height="10" rx="5" fill="#ffffff" fill-opacity="0.06"/><rect x="${cx}" y="${y}" width="${half}" height="10" rx="5" fill="#ffffff" fill-opacity="0.06"/>
+    ${wa ? `<rect x="${(cx - wa).toFixed(1)}" y="${y}" width="${wa.toFixed(1)}" height="10" rx="5" fill="url(#accA)" fill-opacity="${bestA ? 1 : 0.55}"/>` : ''}
+    ${wb ? `<rect x="${cx}" y="${y}" width="${wb.toFixed(1)}" height="10" rx="5" fill="url(#accB)" fill-opacity="${bestB ? 1 : 0.55}"/>` : ''}
+    <text x="${cx - half - 14}" y="${y + 10}" text-anchor="end" font-size="17" font-weight="800" fill="${bestA ? '#ffffff' : '#8c8596'}">${show(va)}</text>
+    <text x="${cx + half + 14}" y="${y + 10}" font-size="17" font-weight="800" fill="${bestB ? '#ffffff' : '#8c8596'}">${show(vb)}</text>`;
+  }).join('');
+  const side = (p, x, av, color, grad, wins) => `
+    <circle cx="${x}" cy="118" r="44" fill="none" stroke="url(#${grad})" stroke-width="4"/>
+    ${av ? `<image href="${av}" x="${x - 40}" y="78" width="80" height="80" clip-path="url(#c${grad})" preserveAspectRatio="xMidYMid slice"/>` : `<circle cx="${x}" cy="118" r="40" fill="#1b1720"/><text x="${x}" y="132" text-anchor="middle" font-size="36" font-weight="800" fill="${color}">${esc(String(p.pseudo ?? '?')[0]?.toUpperCase())}</text>`}
+    <text x="${x}" y="${x < cx ? 196 : 196}" text-anchor="middle" font-size="22" font-weight="800" fill="#f4f1f6">${esc(cut(p.pseudo, 14))}</text>
+    <text x="${x}" y="220" text-anchor="middle" font-size="13" fill="#d0c9d9">${esc(p.playing ? `Joue à ${cut(p.playing, 18)}` : p.online ? 'En ligne' : 'Hors ligne')}</text>
+    <text x="${x}" y="262" text-anchor="middle" font-size="44" font-weight="800" fill="${color}">${wins}</text>
+    <text x="${x}" y="284" text-anchor="middle" font-size="12" font-weight="600" letter-spacing="2" fill="#aea7b8">MANCHES GAGNÉES</text>
+    <text x="${x}" y="330" text-anchor="middle" font-size="12" fill="#aea7b8">${esc(cut(p.benchCpu ?? '', 26))}</text>
+    <text x="${x}" y="348" text-anchor="middle" font-size="12" fill="#aea7b8">${esc(cut(p.benchGpu ?? '', 26))}</text>
+    ${p.bench ? `<text x="${x}" y="372" text-anchor="middle" font-size="13" font-weight="600" fill="${color}">${esc(tierOf(p.bench))}</text>` : ''}`;
+  const verdict = winsA === winsB ? 'Égalité parfaite' : `${cut(winsA > winsB ? a.pseudo : b.pseudo, 16)} gagne le duel`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Inter, 'Noto Sans', 'DejaVu Sans', sans-serif">
+  <defs>
+    <radialGradient id="g1" cx="0" cy="0.2" r="0.7"><stop offset="0" stop-color="#2f8bff" stop-opacity="0.40"/><stop offset="1" stop-color="#2f8bff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g2" cx="1" cy="0.2" r="0.7"><stop offset="0" stop-color="#8c5aff" stop-opacity="0.38"/><stop offset="1" stop-color="#8c5aff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="accA" x1="1" x2="0"><stop offset="0" stop-color="#2f8bff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+    <linearGradient id="accB" x1="0" x2="1"><stop offset="0" stop-color="#8c5aff"/><stop offset="1" stop-color="#e05aff"/></linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.10"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.03"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/></linearGradient>
+    <linearGradient id="shine" x1="0" x2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.13"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+    <clipPath id="caccA"><circle cx="130" cy="118" r="40"/></clipPath><clipPath id="caccB"><circle cx="${W - 130}" cy="118" r="40"/></clipPath>
+    <clipPath id="card"><rect x="14" y="14" width="${W - 28}" height="${H - 28}" rx="28"/></clipPath>
+  </defs>
+  <rect width="${W}" height="${H}" fill="#0b090e"/><rect width="${W}" height="${H}" fill="url(#g1)"/><rect width="${W}" height="${H}" fill="url(#g2)"/>
+  <rect x="14" y="14" width="${W - 28}" height="${H - 28}" rx="28" fill="url(#glass)" stroke="#ffffff" stroke-opacity="0.12"/>
+  ${logo ? `<image href="${logo}" x="${cx - 18}" y="34" width="36" height="36"/>` : ''}
+  <text x="${cx}" y="94" text-anchor="middle" font-size="13" font-weight="700" letter-spacing="4" fill="#22d3ee">HISTORY LAUNCHER</text>
+  <text x="${cx}" y="126" text-anchor="middle" font-size="26" font-weight="800" fill="#f4f1f6">Duel de profils</text>
+  ${side(a, 130, avA, '#5fb2ff', 'accA', winsA)}${side(b, W - 130, avB, '#c08bff', 'accB', winsB)}
+  ${lines}
+  <rect x="${cx - 150}" y="${H - 66}" width="300" height="34" rx="17" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="${cx}" y="${H - 43}" text-anchor="middle" font-size="15" font-weight="800" fill="#f4f1f6">${esc(verdict)}</text>
+  ${shine == null ? '' : `<g clip-path="url(#card)"><rect x="${Math.round(shine)}" y="-120" width="240" height="${H + 240}" fill="url(#shine)" transform="rotate(20 ${Math.round(shine) + 120} ${H / 2})"/></g>`}
+</svg>`;
+}
+
+export async function compareCardGif(a, b, { avatarA = null, avatarB = null, fetchImpl = fetch } = {}) {
+  const { default: sharp } = await import('sharp');
+  const [avA, avB, logo] = await Promise.all([avatarOf(sharp, avatarA, fetchImpl), avatarOf(sharp, avatarB, fetchImpl), logoOf(sharp)]);
+  return renderGif((f) => compareCardSvg(a, b, { ...f, avA, avB, logo }));
 }

@@ -3,38 +3,50 @@
 // - /launcher profil [membre] : niveau, benchmark, jeu du moment, temps de la semaine
 // - rôles automatiques selon le niveau et le benchmark (sur le serveur des annonces du launcher)
 // - jeux gratuits de la semaine sur l'Epic Games Store annoncés avec leur image
-import { AttachmentBuilder, EmbedBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
+// - /launcher comparer : duel de deux profils ; /launcher fps : FPS mesurés par les membres sur un jeu
+// - clips et captures envoyés depuis le launcher, parties de groupe (« Je viens »), promos en message privé
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { allowAttempt } from '../dashboard/auth.js';
 import { load, save } from '../storage.js';
-import { launcherCardGif } from './launcherCard.js';
+import { compareCardGif, launcherCardGif } from './launcherCard.js';
 import { accountByDiscord, linkDiscord, linkedAccounts } from './launcherAccounts.js';
+import { gameKey, notifyAccount, saveSocial, socialData } from './launcherSocial.js';
 import { RELEASES_CHANNEL } from './launcherReleases.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
 const DEALS_NAME = '🎁・jeux-gratuits-et-promos';
-/** Salon des jeux gratuits et des promos : celui de LAUNCHER_GRATUIT_SALON, sinon créé à côté du salon des nouveautés. */
-export async function dealsChannel(client) {
-  if (process.env.LAUNCHER_GRATUIT_SALON) return client.channels.fetch(process.env.LAUNCHER_GRATUIT_SALON).catch(() => null);
-  const st = (await load('launcher-bons-plans', null)) ?? {};
+/** Salon du launcher : celui de la variable d'environnement, sinon créé une fois à côté du salon des nouveautés. */
+async function launcherChannel(client, { key, name, topic, env }) {
+  if (env && process.env[env]) return client.channels.fetch(process.env[env]).catch(() => null);
+  const st = (await load(key, null)) ?? {};
   if (st.channelId) { const c = await client.channels.fetch(st.channelId).catch(() => null); if (c) return c; }
   const news = await client.channels.fetch(RELEASES_CHANNEL).catch(() => null);
   const guild = news?.guild;
   if (!guild) return news;
-  let c = guild.channels.cache.find((x) => x.name === DEALS_NAME);
+  let c = guild.channels.cache.find((x) => x.name === name);
   if (!c) {
-    c = await guild.channels.create({ name: DEALS_NAME, parent: news.parentId ?? undefined, topic: 'Jeux gratuits de la semaine sur Epic Games et grosses promos Steam, postés tout seuls par le bot (History Launcher).', reason: 'History Launcher : bons plans' })
-      .catch((err) => { console.warn('[bons plans] création du salon impossible (permission « Gérer les salons ») :', err.message); return null; });
+    c = await guild.channels.create({ name, parent: news.parentId ?? undefined, topic, reason: 'History Launcher' })
+      .catch((err) => { console.warn(`[launcher] création du salon ${name} impossible (permission « Gérer les salons ») :`, err.message); return null; });
   }
-  if (c) save('launcher-bons-plans', { ...st, channelId: c.id });
+  if (c) save(key, { ...((await load(key, null)) ?? {}), channelId: c.id });
   return c ?? news;
 }
+/** Salon des jeux gratuits et des promos. */
+export const dealsChannel = (client) => launcherChannel(client, { key: 'launcher-bons-plans', name: DEALS_NAME, env: 'LAUNCHER_GRATUIT_SALON', topic: 'Jeux gratuits de la semaine sur Epic Games et grosses promos Steam, postés tout seuls par le bot (History Launcher).' });
+const clipsChannel = (client) => launcherChannel(client, { key: 'launcher-clips', name: '🎬・clips-history', env: 'LAUNCHER_CLIPS_SALON', topic: 'Clips et captures envoyés depuis History Launcher (bouton « Discord » après un clip ou dans la fiche d’un jeu).' });
+const partyChannel = (client) => launcherChannel(client, { key: 'launcher-parties-salon', name: '🎮・on-joue', env: 'LAUNCHER_PARTIES_SALON', topic: 'Parties lancées depuis les groupes de History Launcher : clique « Je viens » pour rejoindre.' });
 const EPIC_FEED = 'https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=fr&country=FR&allowCountries=FR';
 
 export const launcherCommand = new SlashCommandBuilder().setName('launcher').setDescription('🚀 History Launcher : ton profil, lier ton compte')
   .addSubcommand((s) => s.setName('profil').setDescription('Profil History : niveau, benchmark, jeu du moment')
     .addUserOption((o) => o.setName('membre').setDescription('Voir le profil de quelqu’un d’autre')))
   .addSubcommand((s) => s.setName('lier').setDescription('Lier ton compte History (code dans Paramètres › Compte du launcher)')
-    .addStringOption((o) => o.setName('code').setDescription('Le code à 6 caractères').setRequired(true).setMinLength(6).setMaxLength(6)));
+    .addStringOption((o) => o.setName('code').setDescription('Le code à 6 caractères').setRequired(true).setMinLength(6).setMaxLength(6)))
+  .addSubcommand((s) => s.setName('comparer').setDescription('Duel de profils : niveau, benchmark, composants, temps de jeu')
+    .addUserOption((o) => o.setName('membre').setDescription('Avec qui te comparer').setRequired(true))
+    .addUserOption((o) => o.setName('avec').setDescription('Comparer deux autres membres (sinon : toi)')))
+  .addSubcommand((s) => s.setName('fps').setDescription('FPS mesurés par les joueurs History sur un jeu, avec leur PC')
+    .addStringOption((o) => o.setName('jeu').setDescription('Le jeu').setRequired(true).setAutocomplete(true).setMaxLength(80)));
 
 // Paliers de rôles (créés s'ils manquent). Le benchmark suit les paliers du launcher.
 export const BENCH_TIERS = [[1600, '🏁 Monstre de jeu'], [1150, '🏁 Très haut de gamme'], [850, '🏁 Bon PC de jeu']];
@@ -65,6 +77,8 @@ export async function handleLauncherCommand(client, interaction) {
     syncMember(client, interaction.user.id, p).catch(() => {});
     return cardReply(interaction, { id: r.id, pseudo: r.pseudo }, interaction.user, p, `✅ Ton compte Discord est lié au compte History **${r.pseudo}**. Tes rôles arrivent dans quelques secondes.`);
   }
+  if (sub === 'comparer') return compareCommand(interaction);
+  if (sub === 'fps') return fpsCommand(interaction);
   const user = interaction.options.getUser('membre') ?? interaction.user;
   const acc = await accountByDiscord(user.id);
   if (!acc) {
@@ -101,6 +115,180 @@ function profileEmbed(acc, user, p) {
     .setFooter({ text: 'historylauncher.vercel.app' });
   if (p.benchCpu || p.benchGpu) e.addFields({ name: '🖥 PC', value: [p.benchCpu, p.benchGpu].filter(Boolean).join('\n').slice(0, 200) });
   return e;
+}
+
+const avatarPng = (u) => u.displayAvatarURL({ extension: 'png', size: 128 });
+
+/** /launcher comparer : duel de deux comptes liés, en carte GIF. */
+async function compareCommand(interaction) {
+  const other = interaction.options.getUser('membre', true);
+  const me = interaction.options.getUser('avec') ?? interaction.user;
+  if (other.id === me.id) return interaction.reply({ content: 'Choisis quelqu’un d’autre pour le duel.', ...PRIVATE });
+  const [accA, accB] = await Promise.all([accountByDiscord(me.id), accountByDiscord(other.id)]);
+  const missing = [[me, accA], [other, accB]].filter(([, a]) => !a).map(([u]) => (u.id === interaction.user.id ? 'toi' : u.username));
+  if (missing.length) return interaction.reply({ content: `🔗 Pas de compte History lié pour ${missing.join(' et ')} : dans le launcher, Paramètres › Compte › « Lier Discord », puis \`/launcher lier\`.`, ...PRIVATE });
+  if (!allowAttempt('launcher-card', interaction.user.id, 4, 60_000)) return interaction.reply({ content: '⏳ Attends une minute avant une nouvelle carte.', ...PRIVATE });
+  await interaction.deferReply();
+  const [a, b] = await Promise.all([profileOf(accA.id), profileOf(accB.id)]);
+  try {
+    const gif = await compareCardGif({ ...a, pseudo: accA.pseudo }, { ...b, pseudo: accB.pseudo }, { avatarA: avatarPng(me), avatarB: avatarPng(other) });
+    return await interaction.editReply({ files: [new AttachmentBuilder(gif, { name: 'history-duel.gif' })] });
+  } catch (err) {
+    console.error('[launcher] carte duel :', err.message);
+    const line = (p, acc) => `**${acc.pseudo}** · niveau ${p.level ?? '–'} · benchmark ${p.bench ?? '–'} · ${hours(p.week || 0)} cette semaine`;
+    return interaction.editReply({ content: `⚔️ Duel\n${line(a, accA)}\n${line(b, accB)}` });
+  }
+}
+
+/** Mesures de FPS d'un jeu (dernière partie de chaque joueur), du plus fluide au moins fluide. */
+export async function fpsOf(game) {
+  const d = await socialData();
+  const g = d.fps?.[gameKey(game)];
+  if (!g) return null;
+  const accs = (await load('launcher-comptes', null))?.accounts ?? {};
+  const rows = Object.entries(g.by).filter(([id]) => accs[id]).map(([id, x]) => ({ pseudo: accs[id].pseudo, ...x, cpu: d.bench2?.[id]?.cpu ?? null, gpu: d.bench2?.[id]?.gpuName ?? null, bench: d.bench2?.[id]?.total ?? null }))
+    .sort((a, b) => b.avg - a.avg);
+  return { name: g.name, rows };
+}
+async function fpsCommand(interaction) {
+  const q = interaction.options.getString('jeu', true);
+  const r = await fpsOf(q);
+  if (!r?.rows.length) return interaction.reply({ content: `Personne n’a encore mesuré ses FPS sur **${q.slice(0, 80)}**. Dans le launcher : Paramètres › Jeux › « Mesurer les vrais FPS », puis joue au moins 5 minutes.`, ...PRIVATE });
+  const med = r.rows.map((x) => x.avg).sort((a, b) => a - b)[Math.floor(r.rows.length / 2)];
+  const e = new EmbedBuilder().setColor(0x22d3ee).setTitle(`📈 FPS sur ${r.name}`)
+    .setDescription(r.rows.slice(0, 15).map((x, i) => `**${i + 1}. ${x.pseudo}** · **${x.avg} FPS** (1 % low ${x.low1})${x.gpu || x.cpu ? `\n-# ${[x.gpu, x.cpu].filter(Boolean).join(' · ').slice(0, 120)}` : ''}`).join('\n'))
+    .addFields({ name: 'Joueurs', value: String(r.rows.length), inline: true }, { name: 'FPS médians', value: String(med), inline: true })
+    .setFooter({ text: 'Mesuré en jeu par History Launcher (PresentMon) · dernière partie de chaque joueur' });
+  return interaction.reply({ embeds: [e] });
+}
+export async function handleLauncherAutocomplete(interaction) {
+  const q = gameKey(interaction.options.getFocused() ?? '');
+  const d = await socialData();
+  const list = Object.entries(d.fps ?? {}).filter(([k]) => !q || k.includes(q)).sort((a, b) => Object.keys(b[1].by).length - Object.keys(a[1].by).length)
+    .slice(0, 25).map(([, g]) => ({ name: `${g.name} · ${Object.keys(g.by).length} joueur${Object.keys(g.by).length > 1 ? 's' : ''}`.slice(0, 100), value: g.name.slice(0, 100) }));
+  return interaction.respond(list).catch(() => {});
+}
+
+// ---------- Clips et captures envoyés depuis le launcher ----------
+let clientRef = null;
+const DISCORD_MAX = 9.5 * 1024 * 1024;
+/** Discord refuse plus de 10 Mo : une vidéo trop lourde est réencodée en 720p H.264 (sans perdre la fin du clip). */
+async function fitForDiscord(buf, ext) {
+  if (buf.length <= DISCORD_MAX) return { buf, ext };
+  if (!['webm', 'mp4'].includes(ext)) throw new Error('image trop lourde (10 Mo maximum)');
+  const [{ default: ffmpeg }, fs, os, path, { spawn }] = await Promise.all([import('ffmpeg-static'), import('node:fs/promises'), import('node:os'), import('node:path'), import('node:child_process')]);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hclip-'));
+  try {
+    const src = path.join(dir, `in.${ext}`);
+    await fs.writeFile(src, buf);
+    for (const kbps of [2200, 1100, 600]) {
+      const out = path.join(dir, `out-${kbps}.mp4`);
+      await new Promise((resolve, reject) => {
+        const p = spawn(ffmpeg, ['-y', '-i', src, '-t', '60', '-vf', "scale=-2:'min(720,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', `${kbps}k`, '-maxrate', `${Math.round(kbps * 1.2)}k`, '-bufsize', `${kbps * 2}k`, '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', out], { stdio: 'ignore' });
+        p.on('error', reject);
+        p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`réencodage impossible (${code})`))));
+      });
+      const b = await fs.readFile(out);
+      if (b.length <= DISCORD_MAX) return { buf: b, ext: 'mp4' };
+    }
+    throw new Error('clip trop long pour Discord');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+export async function postClip({ discordId, pseudo, buf, ext, game, note }) {
+  if (!clientRef) return { ok: false, error: 'Le bot Discord démarre, réessaie dans une minute.' };
+  const channel = await clipsChannel(clientRef);
+  if (!channel?.isTextBased?.()) return { ok: false, error: 'Salon des clips introuvable sur Discord.' };
+  const file = await fitForDiscord(buf, ext);
+  const kind = ['webm', 'mp4'].includes(file.ext) ? '🎬 un clip' : '📸 une capture';
+  const msg = await channel.send({
+    content: `**${pseudo}** (<@${discordId}>) partage ${kind}${game ? ` de **${game}**` : ''}${note ? `\n> ${note}` : ''}\n-# Envoyé depuis History Launcher`,
+    files: [new AttachmentBuilder(file.buf, { name: `history-${Date.now()}.${file.ext}` })], allowedMentions: { parse: [] },
+  });
+  return { ok: true, url: msg.url };
+}
+
+// ---------- Parties de groupe : mention des membres liés + boutons « Je viens » / « Pas dispo » ----------
+const PARTIES = 'launcher-parties';
+function partyView(p) {
+  const who = [...p.yes.map((x) => `✅ ${x}`), ...p.no.map((x) => `❌ ${x}`)];
+  const e = new EmbedBuilder().setColor(0x2f8bff).setTitle(`🎮 ${p.owner} lance ${p.game ?? 'une partie'}`).setDescription(p.text)
+    .addFields({ name: 'Groupe', value: p.group, inline: true }, { name: `Qui vient ? (${p.yes.length})`, value: who.join('\n').slice(0, 1000) || '—', inline: true })
+    .setFooter({ text: 'History Launcher · les membres du groupe sont aussi prévenus dans le launcher' }).setTimestamp(p.at);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`hlparty:oui:${p.id}`).setLabel('Je viens').setEmoji('✅').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`hlparty:non:${p.id}`).setLabel('Pas dispo').setEmoji('❌').setStyle(ButtonStyle.Secondary),
+  );
+  return { embeds: [e], components: [row] };
+}
+export async function postParty({ group, owner, members, game, text }) {
+  if (!clientRef) return { ok: false, error: 'Le bot Discord démarre, réessaie dans une minute.' };
+  const channel = await partyChannel(clientRef);
+  if (!channel?.isTextBased?.()) return { ok: false, error: 'Salon des parties introuvable sur Discord.' };
+  const ping = members.filter((m) => m.discordId && m.id !== owner?.id).map((m) => m.discordId);
+  const p = { id: Math.random().toString(36).slice(2, 10), owner: owner?.pseudo ?? '?', ownerId: owner?.id ?? null, group, game, text, yes: [owner?.discordId ? `<@${owner.discordId}>` : owner?.pseudo ?? '?'], no: [], at: Date.now() };
+  const msg = await channel.send({ content: ping.length ? ping.map((x) => `<@${x}>`).join(' ') : undefined, ...partyView(p), allowedMentions: { users: ping } });
+  const st = (await load(PARTIES, null)) ?? {};
+  st[p.id] = p;
+  for (const k of Object.keys(st).sort((a, b) => st[a].at - st[b].at).slice(0, Math.max(0, Object.keys(st).length - 50))) delete st[k];
+  save(PARTIES, st);
+  return { ok: true, mentioned: ping.length, url: msg.url };
+}
+export async function handlePartyButton(interaction) {
+  const [, choice, id] = interaction.customId.split(':');
+  const st = (await load(PARTIES, null)) ?? {};
+  const p = st[id];
+  if (!p || Date.now() - p.at > 12 * 3_600_000) return interaction.reply({ content: 'Cette partie est terminée.', ...PRIVATE });
+  const me = `<@${interaction.user.id}>`;
+  const was = p.yes.includes(me);
+  p.yes = p.yes.filter((x) => x !== me); p.no = p.no.filter((x) => x !== me);
+  (choice === 'oui' ? p.yes : p.no).push(me);
+  save(PARTIES, st);
+  await interaction.update(partyView(p));
+  // L'organisateur est prévenu dans le launcher
+  if (choice === 'oui' && !was && p.ownerId) {
+    const acc = await accountByDiscord(interaction.user.id);
+    if (acc?.id !== p.ownerId) await notifyAccount(p.ownerId, { type: 'group', from: acc?.id ?? p.ownerId, group: p.group, text: `${acc?.pseudo ?? interaction.user.username} vient à ta partie (Discord) !` }).catch(() => {});
+  }
+}
+
+// ---------- Promos en message privé : prix suivis et liste de souhaits Steam, toutes les 6 h ----------
+async function checkWatch(client, fetchImpl = fetch) {
+  const d = await socialData();
+  const accs = (await load('launcher-comptes', null))?.accounts ?? {};
+  const { steamPrice, priceAlert } = await import('../../launcher/src/core/gametools.js');
+  const { wishlistDeals, newDeals } = await import('../../launcher/src/core/social.js');
+  const eur = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
+  let sent = 0;
+  for (const [id, w] of Object.entries(d.watch ?? {})) {
+    const acc = accs[id];
+    if (!w.dm || !acc?.discordId) continue;
+    w.seen ??= {}; w.wish ??= {};
+    const embeds = [];
+    for (const a of w.alerts ?? []) {
+      const now = await steamPrice(a.appId, fetchImpl).catch(() => null);
+      if (!now) continue;
+      if (now.price > a.target) { delete w.seen[a.appId]; continue; }
+      if (!priceAlert({ target: a.target, lastNotified: w.seen[a.appId] ?? null }, now)) continue;
+      w.seen[a.appId] = now.price;
+      embeds.push(new EmbedBuilder().setColor(0x2ee07a).setTitle(`💸 ${a.name || `Jeu ${a.appId}`} à ${eur(now.price)}`).setURL(`https://store.steampowered.com/app/${a.appId}`)
+        .setDescription(`Sous ton prix de ${eur(a.target)}${now.discount ? ` (-${now.discount} %)` : ''}.`));
+    }
+    if (w.steam) {
+      const deals = newDeals(await wishlistDeals(w.steam, fetchImpl).catch(() => []), w.wish);
+      for (const x of deals.slice(0, 6)) {
+        embeds.push(new EmbedBuilder().setColor(0x22d3ee).setTitle(`${x.name} : -${x.pct} %`).setURL(`https://store.steampowered.com/app/${x.appid}`)
+          .setDescription(`${x.before ? `~~${x.before}~~ ` : ''}**${x.price ?? ''}** · dans ta liste de souhaits Steam`).setThumbnail(x.image ?? null));
+      }
+      for (const x of deals) w.wish[x.appid] = x.pct;
+    }
+    if (!embeds.length) continue;
+    const user = await client.users.fetch(acc.discordId).catch(() => null);
+    await user?.send({ content: '🔔 **Promos pour toi** (History Launcher)\n-# Pour arrêter : Paramètres › Amis & partage › « Promos en message privé Discord ».', embeds: embeds.slice(0, 10) }).then(() => { sent += 1; }).catch(() => {});
+  }
+  saveSocial(d);
+  return sent;
 }
 
 /** Donne les bons rôles à un membre (et retire les paliers qui ne s'appliquent plus). */
@@ -168,6 +356,9 @@ async function announceDeals(client, fetchImpl = fetch) {
 }
 
 export function startLauncherDiscord(client) {
+  clientRef = client;
+  setTimeout(() => checkWatch(client).catch((err) => console.warn('[promos mp]', err.message)), 8 * 60_000).unref();
+  setInterval(() => checkWatch(client).catch((err) => console.warn('[promos mp]', err.message)), 6 * 3_600_000).unref();
   setTimeout(() => announceDeals(client).catch((err) => console.warn('[bons plans]', err.message)), 4 * 60_000).unref();
   setInterval(() => announceDeals(client).catch((err) => console.warn('[bons plans]', err.message)), 2 * 3_600_000).unref();
   const safe = (f) => () => f(client).catch((err) => console.warn('[launcher discord]', err.message));
@@ -176,4 +367,4 @@ export function startLauncherDiscord(client) {
   setTimeout(safe(syncAll), 3 * 60_000).unref();
   setInterval(safe(syncAll), 30 * 60_000).unref();
 }
-export const _test = { announceFree, announceDeals, syncMember };
+export const _test = { announceFree, announceDeals, syncMember, checkWatch, fitForDiscord, setClient: (c) => { clientRef = c; } };

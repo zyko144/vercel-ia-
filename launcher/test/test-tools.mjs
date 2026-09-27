@@ -3,7 +3,9 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, stat } from 'node:fs/prom
 import os from 'node:os';
 import path from 'node:path';
 import { csvReader, frameStats } from '../src/core/fps.js';
-import { backupSaves, clearDir, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaVersion, priceAlert, restoreBackup, shaderCaches } from '../src/core/gametools.js';
+import { backupSaves, clearDir, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, safeRel, shaderCaches, unpackSaves } from '../src/core/gametools.js';
+import { gameDemand, graphicsAdvice } from '../src/core/graphics.js';
+import { cardFor } from '../src/core/friendsync.js';
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n += 1; };
 
@@ -58,4 +60,31 @@ ok(!(await moveSteamGame({ appId: '10', installDir: '../x', fromLib: from, toLib
 ok(priceAlert({ target: 20 }, { price: 19.99 }) && !priceAlert({ target: 20, lastNotified: 15 }, { price: 19 }) && !priceAlert({ target: 20 }, { price: 25 }), 'alerte de prix');
 ok(nvidiaVersion('32.0.15.8129') === '581.29' && nvidiaVersion('31.0.15.5222') === '552.22', 'version NVIDIA');
 ok(newerVersion('581.42', '581.29') && !newerVersion('581.29', '581.29'), 'comparaison de versions');
+// Partage de sauvegardes : paquet compressé, chemins vérifiés, écrit dans les dossiers du destinataire
+const sv = path.join(home, 'share', 'Saves'); await mkdir(path.join(sv, 'slot1'), { recursive: true });
+await writeFile(path.join(sv, 'slot1', 'monde.dat'), 'partie-a-moi'); await writeFile(path.join(sv, 'options.ini'), 'fov=90');
+const pk = await packSaves('Jeu', [sv]);
+ok(pk[0] === 0x1f && pk[1] === 0x8b, 'paquet gzip');
+const rd = await readPack(pk);
+const dst = path.join(home, 'share2', 'Saves'); await mkdir(dst, { recursive: true });
+ok(await unpackSaves(rd, [dst]) === 2 && await readFile(path.join(dst, 'slot1', 'monde.dat'), 'utf8') === 'partie-a-moi', 'sauvegarde reçue écrite au bon endroit');
+const { gzipSync } = await import('node:zlib');
+const evil = (dirs) => gzipSync(Buffer.from(JSON.stringify({ v: 1, game: 'x', dirs })));
+await assert.rejects(readPack(evil([{ name: 'a', files: [{ p: '../../evil.exe', d: '' }] }])), /chemin interdit/);
+await assert.rejects(readPack(evil([{ name: 'a', files: [{ p: 'C:/Windows/evil.exe', d: '' }] }])), /chemin interdit/);
+await assert.rejects(readPack(evil([{ name: '..', files: [] }])), /illisible/);
+ok(safeRel('a/b.sav') && !safeRel('/etc/x') && !safeRel('a/../b'), 'chemins relatifs sûrs');
+await assert.rejects(packSaves('Jeu', [path.join(home, 'vide-inexistant')]), /Aucun fichier/);
+ok(cardFor({ id: '1', type: 'share', from: 'f', share: 's1', pseudo: 'Max', game: 'Minecraft', text: 'Monde', size: 4096 }).actions[0][0] === 'saveget', 'carte « sauvegarde reçue »');
+
+// Réglages graphiques conseillés
+ok(gameDemand('Cyberpunk 2077').gpu === 1500 && !gameDemand('Jeu Inconnu').known, 'exigence des jeux');
+ok(graphicsAdvice({ name: 'Cyberpunk 2077' }).need === 'benchmark', 'benchmark demandé');
+const cp = graphicsAdvice({ name: 'Cyberpunk 2077', gpuScore: 1400, gpuName: 'NVIDIA GeForce RTX 4070', hz: 165, width: 2560 });
+ok(cp.preset === 'Moyen' && /DLSS/.test(cp.upscaler) && cp.tips.some((t) => /génération d’images/.test(t)), `cyberpunk sur RTX 4070 : ${cp.preset}`);
+const low = graphicsAdvice({ name: 'Cyberpunk 2077', gpuScore: 1400, gpuName: 'RTX 4070', perf: [{ avg: 38, bound: 'gpu' }, { avg: 40, bound: 'gpu' }] });
+ok(low.preset === 'Bas' && low.measured === 39, 'FPS mesurés trop bas : un cran plus bas');
+const vl = graphicsAdvice({ name: 'VALORANT', gpuScore: 2000, gpuName: 'Radeon RX 7800 XT', hz: 240 });
+ok(vl.esport && vl.target === 240 && vl.level <= 2, 'jeu compétitif : FPS avant tout');
+ok(graphicsAdvice({ name: 'FiveM', gpuScore: 1000, cpu1: 700 }).tips.some((t) => /processeur/.test(t)), 'jeu gourmand en processeur');
 console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, pilotes) : ${n} vérifications`);

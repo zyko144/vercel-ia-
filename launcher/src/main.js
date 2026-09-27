@@ -18,7 +18,7 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
-import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, priceAlert, restoreBackup, shaderCaches, steamPrice, windowsToasts } from './core/gametools.js';
+import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
@@ -45,6 +45,7 @@ import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core
 import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
 import { VERSION as BENCH_VERSION, cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
 import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
+import { graphicsAdvice } from './core/graphics.js';
 import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
 import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
@@ -424,8 +425,12 @@ let detected = null;
 const currentSession = () => playSession ?? (detected && Date.now() - lastActive.at < 120_000 && lastActive.ids.includes(detected.id) ? detected : null);
 let boosted = null;
 const boostSettings = () => ({ enabled: false, power: true, close: [], restore: true, ...(store.data.settings.boost ?? {}) });
+// Mode streamer : pas de notifications Windows ni de cartes d'amis (pseudos, messages) pendant un live
+let obsRunning = false;
+const streaming = () => Boolean(store.data.settings.streamer || (store.data.settings.streamerAuto !== false && obsRunning));
+class Notif extends Notification { show() { if (!streaming()) super.show(); } }
 function notify(title, body) {
-  if (Notification.isSupported()) new Notification({ title, body, icon: ICON, silent: true }).show();
+  if (Notification.isSupported()) new Notif({ title, body, icon: ICON, silent: true }).show();
 }
 async function startBoost(item) {
   const b = boostSettings();
@@ -1027,7 +1032,7 @@ async function checkDriver() {
     driverInfo = { name: nv.name, vendor: 'nvidia', version: mine, latest: latest.version, notes: latest.notes, download: latest.download, date: latest.date, link: latest.notes ?? DRIVER_LINKS[0] };
     if (store.data.driverLatestNotified !== latest.version && Notification.isSupported()) {
       store.data.driverLatestNotified = latest.version; store.save();
-      const n = new Notification({ title: `Nouveau pilote NVIDIA ${latest.version}`, body: `Tu as la ${mine}. Clique pour voir les nouveautés (jeux optimisés, corrections) et le télécharger.`, icon: ICON });
+      const n = new Notif({ title: `Nouveau pilote NVIDIA ${latest.version}`, body: `Tu as la ${mine}. Clique pour voir les nouveautés (jeux optimisés, corrections) et le télécharger.`, icon: ICON });
       n.on('click', () => openLink(driverInfo.link).catch(() => {}));
       n.show();
     }
@@ -1039,7 +1044,7 @@ async function checkDriver() {
   store.data.driverAlertAt = Date.now();
   store.save();
   const months = Math.round(driverInfo.age / 30);
-  const n = new Notification({ title: 'Pilote graphique à mettre à jour', body: `Ton pilote ${driverInfo.name} a ${months} mois : les jeux récents tournent souvent mieux avec le dernier. Clique pour le télécharger.`, icon: ICON });
+  const n = new Notif({ title: 'Pilote graphique à mettre à jour', body: `Ton pilote ${driverInfo.name} a ${months} mois : les jeux récents tournent souvent mieux avec le dernier. Clique pour le télécharger.`, icon: ICON });
   n.on('click', () => openLink(driverInfo.link).catch(() => {}));
   n.show();
 }
@@ -1268,7 +1273,9 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   for (const k of ['sfxOn', 'sfxNotif']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
   if ('sfxVol' in patch) store.data.settings.sfxVol = Math.max(0, Math.min(100, Math.round(Number(patch.sfxVol) || 0)));
   for (const k of ['dnd', 'tournament', 'compact', 'lock2fa']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
-  for (const k of ['batterySaver', 'widgetTop', 'gamepad']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
+  for (const k of ['batterySaver', 'widgetTop', 'gamepad', 'widgetGame', 'heatAlert', 'streamerAuto']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
+  if ('streamer' in patch) { store.data.settings.streamer = Boolean(patch.streamer); send('streamer:state', streaming()); }
+  if ('promoDm' in patch) { store.data.settings.promoDm = Boolean(patch.promoDm); syncWatch().catch(() => {}); }
   if ('widget' in patch) { store.data.settings.widget = Boolean(patch.widget); setWidget(store.data.settings.widget); }
   if ('widgetTop' in patch) widget?.setAlwaysOnTop(Boolean(patch.widgetTop));
   if ('batterySaver' in patch && !patch.batterySaver && onBattery) batteryMode(false).catch(() => {});
@@ -1370,7 +1377,7 @@ async function checkFree() {
   for (const g of list) {
     if (seen.has(g.slug ?? g.name)) continue;
     seen.add(g.slug ?? g.name);
-    const n = new Notification({ title: '🎁 Jeu gratuit sur Epic', body: `${g.name} est offert${g.until ? ` jusqu’au ${new Date(g.until).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : ''} : il reste à toi pour toujours.`, icon: ICON });
+    const n = new Notif({ title: '🎁 Jeu gratuit sur Epic', body: `${g.name} est offert${g.until ? ` jusqu’au ${new Date(g.until).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : ''} : il reste à toi pour toujours.`, icon: ICON });
     if (g.slug && /^[\w-]{1,120}$/.test(g.slug)) n.on('click', () => openLink(`https://store.epicgames.com/fr/p/${g.slug}`).catch(() => {}));
     n.show();
   }
@@ -1398,7 +1405,7 @@ async function checkDeals(notify = true) {
   const fresh = newDeals(deals, seen);
   if (notify && store.data.settings.dealAlerts !== false && Notification.isSupported()) {
     for (const d of fresh.slice(0, 3)) {
-      const n = new Notification({ title: `${d.name} : -${d.pct} %`, body: `En promo sur Steam${d.price ? ` à ${d.price}` : ''} (dans ta liste de souhaits)`, icon: ICON });
+      const n = new Notif({ title: `${d.name} : -${d.pct} %`, body: `En promo sur Steam${d.price ? ` à ${d.price}` : ''} (dans ta liste de souhaits)`, icon: ICON });
       n.on('click', () => openLink(`https://store.steampowered.com/app/${d.appid}`).catch(() => {}));
       n.show();
     }
@@ -1492,7 +1499,8 @@ function armCard(c) {
 }
 function pushCard(c, force = false) {
   if (!c || notifCards.some((x) => x.id === c.id)) return;
-  if (!force && (store.data.settings.friendNotifs === false || store.data.settings.dnd || store.data.settings.tournament || gameDnd())) return;
+  if (!force && (store.data.settings.friendNotifs === false || store.data.settings.dnd || store.data.settings.tournament || gameDnd() || streaming())) return;
+  if (force) c = { ...c, force: true };
   notifCards.push(c);
   armCard(c);
   notifSync();
@@ -1503,7 +1511,8 @@ ipcMain.on('notif:act', async (_e, id, action) => {
   if (!c) return;
   dropCard(id);
   if (action === 'close') return;
-  if (c.file) { if (action === 'play') shell.openPath(c.file); else shell.showItemInFolder(c.file); return; }
+  if (c.file) { if (action === 'discord') { await clipToDiscord(c.file); return; } if (action === 'play') shell.openPath(c.file); else shell.showItemInFolder(c.file); return; }
+  if (c.kind === 'share') { if (action === 'saveget') await receiveShare(c.share); return; }
   if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
   if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }
   if (action === 'join') { await joinGame(c.join, c.game); return; }
@@ -1534,7 +1543,7 @@ async function takeScreenshot() {
   const src = (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size }))[0];
   if (!src || src.thumbnail.isEmpty()) throw new Error('écran introuvable');
   const file = await saveCapture(src.thumbnail.toPNG(), 'png');
-  pushCard({ id: `cap-${Date.now()}`, icon: '📸', title: 'Capture enregistrée', body: path.basename(file), actions: [['folder', 'Ouvrir le dossier']], ttl: 6000, file }, true);
+  pushCard({ id: `cap-${Date.now()}`, icon: '📸', title: 'Capture enregistrée', body: path.basename(file), actions: [['discord', 'Discord'], ['folder', 'Ouvrir le dossier']], ttl: 8000, file }, true);
   return file;
 }
 let recWin = null;
@@ -1560,7 +1569,7 @@ ipcMain.on('rec:clip', async (e, buf, mime) => {
   if (!recWin || e.sender !== recWin.webContents) return;
   try {
     const file = await saveCapture(Buffer.from(buf), 'webm');
-    pushCard({ id: `clip-${Date.now()}`, icon: '🎬', title: 'Clip enregistré', body: `${path.basename(file)} · ${(buf.byteLength / 1e6).toFixed(0)} Mo`, actions: [['play', 'Regarder'], ['folder', 'Dossier']], ttl: 8000, file }, true);
+    pushCard({ id: `clip-${Date.now()}`, icon: '🎬', title: 'Clip enregistré', body: `${path.basename(file)} · ${(buf.byteLength / 1e6).toFixed(0)} Mo`, actions: [['play', 'Regarder'], ['discord', 'Discord'], ['folder', 'Dossier']], ttl: 10_000, file }, true);
   } catch (err) { notify('Clip non enregistré', err.message); }
 });
 function saveClip() {
@@ -1595,7 +1604,10 @@ async function socialTick() {
   if (!r || r.status !== 200) return;
   store.data.inboxAt = r.now ?? Date.now();
   socialLive = r;
-  for (const x of r.items ?? []) pushCard(cardFor(x));
+  for (const x of r.items ?? []) {
+    if (x.type === 'share') { store.data.sharesIn = [...(store.data.sharesIn ?? []).filter((y) => Date.now() - y.at < 86_400_000), { id: x.share, from: x.pseudo, game: x.game, name: x.text, size: x.size, at: x.at }].slice(-20); store.save(); pushCard(cardFor(x), true); continue; }
+    pushCard(cardFor(x));
+  }
   for (const f of newlyPlaying(socialPrev, r.amis)) pushCard(playingCard(f, canJoin(f, items)));
   socialPrev = playingMap(r.amis);
   if ((r.items ?? []).length || socialPrev) send('social:live', { amis: r.amis, demandes: r.demandes, code: r.code, moi: r.moi, messages: (r.items ?? []).filter((x) => x.type === 'msg') });
@@ -1649,7 +1661,7 @@ async function checkEvents() {
     if (e.ma === 'oui' && soon > 0 && soon <= 11 * 60_000 && !seen[`go:${e.id}`]) {
       seen[`go:${e.id}`] = Date.now();
       const game = items.find((i) => i.installed && norm(i.name) === norm(e.game));
-      const n = new Notification({ title: `${e.game} dans ${Math.max(1, Math.round(soon / 60_000))} min`, body: game ? 'Clique pour lancer le jeu.' : `Soirée organisée par ${e.organisateur}.`, icon: ICON });
+      const n = new Notif({ title: `${e.game} dans ${Math.max(1, Math.round(soon / 60_000))} min`, body: game ? 'Clique pour lancer le jeu.' : `Soirée organisée par ${e.organisateur}.`, icon: ICON });
       if (game) n.on('click', () => doAction(game.id, 'launch').catch(() => {}));
       n.show();
     }
@@ -2227,7 +2239,7 @@ async function startUpdater() {
     updateState({ state: 'available', version: info.version, error: null });
     // Fenêtre fermée ou rangée : une notification Windows (clic = ouvrir le launcher sur la question)
     if (fresh && (!win || win.isDestroyed() || !win.isVisible()) && Notification.isSupported()) {
-      const n = new Notification({ title: `History Launcher v${info.version} disponible`, body: 'Clique pour mettre à jour maintenant (moins d’une minute).', icon: ICON });
+      const n = new Notif({ title: `History Launcher v${info.version} disponible`, body: 'Clique pour mettre à jour maintenant (moins d’une minute).', icon: ICON });
       n.on('click', () => showWindow());
       n.show();
     }
@@ -2316,6 +2328,8 @@ ipcMain.handle('tools:get', async (_e, id) => {
     saveDirs: await saveDirsOf(item), savesCustom: Boolean(store.data.saveDirs?.[item.id]?.length), backups: await listBackups(item, savesRoot()),
     caches, canMove: item.source === 'steam' && Boolean(lib) && Boolean(item.installDir), from: lib, targets, size: item.size ?? null,
     perf: process.env.LAUNCHER_DEMO ? demoPerf() : (store.data.perf?.[item.id] ?? []).slice(-30), fps: process.env.LAUNCHER_DEMO ? true : store.data.settings.fps === true,
+    received: (store.data.sharesIn ?? []).filter((x) => Date.now() - x.at < 86_400_000 && norm(x.game) === norm(item.name)),
+    graphics: await graphicsFor(item).catch(() => null),
   };
 });
 ipcMain.handle('tools:profile', (_e, id, patch) => {
@@ -2380,10 +2394,11 @@ ipcMain.handle('price:list', () => Object.values(store.data.priceAlerts ?? {}));
 ipcMain.handle('price:set', async (_e, appId, name, target) => {
   if (!/^\d+$/.test(String(appId))) return null;
   const alerts = (store.data.priceAlerts ??= {});
-  if (target == null) { delete alerts[appId]; store.save(); return Object.values(alerts); }
+  if (target == null) { delete alerts[appId]; store.save(); syncWatch().catch(() => {}); return Object.values(alerts); }
   const now = await steamPrice(appId).catch(() => null);
   alerts[appId] = { appId: String(appId), name: String(name ?? '').slice(0, 80), target: Math.max(0, Number(target) || 0), last: now, lastCheck: Date.now(), best: await bestDeal(name).catch(() => null) };
   store.save();
+  syncWatch().catch(() => {});
   return Object.values(alerts);
 });
 async function checkPrices() {
@@ -2393,7 +2408,7 @@ async function checkPrices() {
     a.last = now; a.lastCheck = Date.now(); a.best = await bestDeal(a.name).catch(() => a.best);
     if (priceAlert(a, now)) {
       a.lastNotified = now.price;
-      const n = new Notification({ title: `💸 ${a.name} à ${now.price.toFixed(2).replace('.', ',')} €`, body: `Sous ton prix de ${a.target} €${now.discount ? ` (-${now.discount} %)` : ''}. Clique pour ouvrir la page Steam.`, icon: ICON });
+      const n = new Notif({ title: `💸 ${a.name} à ${now.price.toFixed(2).replace('.', ',')} €`, body: `Sous ton prix de ${a.target} €${now.discount ? ` (-${now.discount} %)` : ''}. Clique pour ouvrir la page Steam.`, icon: ICON });
       n.on('click', () => openLink(`https://store.steampowered.com/app/${a.appId}`).catch(() => {}));
       n.show();
     }
@@ -2419,11 +2434,13 @@ async function sessionTick(s) {
   const snap = await snapshot().catch(() => null);
   const c = coreLoad();
   sess.samples.push({ gpu: snap?.gpu?.usage ?? null, core: c.max, cpu: c.avg });
+  heatCheck(sess, snap);
 }
 async function sessionStart(s) {
   const item = items.find((i) => i.id === s.id);
   coreLoad();
   sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null };
+  if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
   if (!item || store.data.settings.fps !== true || profileOf(item.id).fps === false || process.platform !== 'win32') return;
   const exe = (await runningPaths(0)).find((p) => item.installDir && p.startsWith(String(item.installDir).toLowerCase()) && /\.exe$/.test(p) && !/(crash|report|launcher|helper|updater|redist|unins)/i.test(p));
   if (!exe) return;
@@ -2442,6 +2459,7 @@ function verdict(stats, samples) {
 async function sessionEnd() {
   const s = sess; sess = null;
   if (!s) return;
+  if (s.autoWidget && !store.data.settings.widget) setWidget(false);
   const minutes = (Date.now() - s.start) / 60_000;
   let stats = null;
   if (s.cap) { stats = await Promise.race([s.cap.done, new Promise((r) => setTimeout(() => r(null), 6000))]); s.cap.stop(); }
@@ -2452,6 +2470,8 @@ async function sessionEnd() {
   ((store.data.perf ??= {})[s.id] ??= []).push(rec);
   store.data.perf[s.id] = store.data.perf[s.id].slice(-60);
   store.save();
+  // FPS partagés avec les joueurs History (/launcher fps sur Discord), si le partage d'activité est activé
+  if (rec.avg && minutes >= 5 && store.data.settings.shareActivity !== false) social('/api/compte/fps', { jeu: s.name, avg: rec.avg, low1: rec.low1, minutes: Math.round(minutes) }).catch(() => {});
   const B = { cpu: 'le processeur limite tes FPS', gpu: 'la carte graphique travaille à fond (normal pour un jeu exigeant)', mixte: 'processeur et carte graphique sont équilibrés' };
   if (rec.avg || rec.bound) notify(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s) repérée(s).` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
 }
@@ -2533,7 +2553,7 @@ async function widgetPush() {
   const hist = socialLive?.amis ?? [];
   widget.webContents.send('widget:data', {
     cpu: pc?.cpu?.usage ?? null, cpuT: pc?.cpu?.temp ?? null, gpuT: pc?.gpu?.temp ?? null, gpu: pc?.gpu?.usage ?? null, ram: pc?.ram ? Math.round((100 * pc.ram.used) / pc.ram.total) : null,
-    game: sess?.name ?? null, fps: sess?.live?.avg ?? null,
+    game: sess?.name ?? null, fps: sess?.live?.avg ?? null, hot: Boolean(sess?.hot >= 2), streamer: streaming(),
     online: hist.filter((a) => a.online).length + friends.filter((f) => f.online).length,
     playing: [...hist.filter((a) => a.playing).map((a) => ({ name: a.pseudo, game: a.playing })), ...friends.filter((f) => f.game).map((f) => ({ name: f.name, game: f.game }))].slice(0, 2),
   });
@@ -2557,7 +2577,7 @@ ipcMain.on('widget:open', () => showWindow());
 ipcMain.on('widget:close', () => { store.data.settings.widget = false; store.save(); setWidget(false); send('settings:changed', { widget: false }); });
 app.whenReady().then(() => setTimeout(() => { if (store.data.settings.widget) setWidget(true); }, 3000));
 
-app.whenReady().then(start).catch(async (err) => { await fatal(err); app.exit(1); });
+
 async function start() {
   protocol.handle('libimg', (req) => {
     const token = new URL(req.url).pathname.replace(/^\//, '').replace(/\.(png|jpg)$/, '');
@@ -2600,3 +2620,126 @@ async function start() {
 app.on('before-quit', () => { quitting = true; backupNow().catch(() => {}); endBoost({ silent: true }).catch(() => {}); rpc.reset(); });
 app.on('window-all-closed', (e) => e.preventDefault());
 
+// =====================================================================================================
+// 0.20 : clips vers Discord, parties de groupe, promos en message privé, FPS partagés, réglages conseillés,
+// mode streamer, partage de sauvegardes entre amis, alerte de surchauffe
+// =====================================================================================================
+/** Envoi d'un fichier brut au serveur (clip, sauvegarde partagée). */
+async function apiRaw(pathname, buf, { timeout = 180_000 } = {}) {
+  const token = secret('account');
+  if (!token) return { status: 401, error: 'Connecte-toi à ton compte History pour ça.' };
+  try {
+    const res = await fetch(`${API}${pathname}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', Authorization: `Bearer ${token}` }, body: buf, signal: AbortSignal.timeout(timeout) });
+    return { status: res.status, ...(await res.json().catch(() => ({}))) };
+  } catch { return { status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }; }
+}
+
+// ---------- Clips et captures vers le salon Discord (compte Discord lié) ----------
+async function clipToDiscord(file, note = '') {
+  const { readFile, stat } = await import('node:fs/promises');
+  const ext = path.extname(file).slice(1).toLowerCase().replace('jpeg', 'jpg');
+  if (!['png', 'jpg', 'webm', 'mp4'].includes(ext)) return { ok: false, error: 'Format non pris en charge (images PNG/JPG, vidéos WEBM/MP4).' };
+  if (((await stat(file).catch(() => null))?.size ?? 0) > 60 * 1024 * 1024) return { ok: false, error: 'Fichier trop gros (60 Mo maximum).' };
+  pushCard({ id: `disc-${Date.now()}`, icon: '📤', title: 'Envoi sur Discord…', body: path.basename(file), actions: [], ttl: 5000 }, true);
+  const game = currentSession()?.name ?? path.basename(path.dirname(file));
+  const q = new URLSearchParams({ type: ext, jeu: String(game ?? '').slice(0, 80), ...(note ? { texte: String(note).slice(0, 200) } : {}) });
+  const r = await apiRaw(`/api/compte/discord/clip?${q}`, await readFile(file));
+  pushCard(r.ok ? { id: `disc-ok-${Date.now()}`, icon: '✅', title: 'Envoyé sur Discord', body: 'Dans le salon des clips du serveur History.', actions: [], ttl: 6000 } : { id: `disc-ko-${Date.now()}`, icon: '⚠️', title: 'Envoi impossible', body: r.error ?? 'Réessaie plus tard.', actions: [], ttl: 9000 }, true);
+  return r.ok ? { ok: true, url: r.url } : { ok: false, error: r.error ?? 'Envoi impossible.' };
+}
+ipcMain.handle('capture:discord', (_e, token, note) => { const f = captureFiles.get(String(token)); return f ? clipToDiscord(f, note) : { ok: false, error: 'Capture introuvable.' }; });
+
+// ---------- Groupe : lancer une partie annoncée sur Discord ----------
+ipcMain.handle('groups:party', (_e, id, text) => social('/api/compte/groupes/partie', { id: String(id ?? ''), jeu: currentSession()?.name ?? undefined, texte: String(text ?? '').slice(0, 200) }));
+
+// ---------- Promos en message privé Discord : le serveur connaît les prix suivis et la liste de souhaits ----------
+async function syncWatch() {
+  if (!secret('account')) return;
+  const prix = Object.values(store.data.priceAlerts ?? {}).map((a) => ({ appId: a.appId, name: a.name, target: a.target }));
+  await social('/api/compte/alertes', { steam: store.data.settings.dealAlerts !== false ? myId64() : null, prix, mp: store.data.settings.promoDm !== false });
+}
+setTimeout(() => syncWatch().catch(() => {}), 90_000);
+setInterval(() => syncWatch().catch(() => {}), 12 * 3_600_000);
+
+// ---------- Réglages graphiques conseillés (benchmark + FPS mesurés + écran) ----------
+async function graphicsFor(item) {
+  if (item.kind && item.kind !== 'game') return null;
+  if (process.env.LAUNCHER_DEMO) return graphicsAdvice({ name: item.name, gpuScore: 1420, cpu1: 1350, gpuName: 'NVIDIA GeForce RTX 4070', vramGb: 12, hz: 165, width: 2560, perf: demoPerf() });
+  const b = (store.data.bench ?? []).find((x) => x.v === 2 && x.scores?.gpu) ?? null;
+  const diag = diagCache?.data ?? await Promise.race([runDiag().catch(() => null), new Promise((r) => setTimeout(() => r(null), 6000))]);
+  const gpu = diag?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? diag?.gpus?.[0] ?? null;
+  return graphicsAdvice({
+    name: item.name, gpuScore: b?.scores?.gpu ?? null, cpu1: b?.scores?.cpu1 ?? null, gpuName: gpu?.name ?? '',
+    vramGb: gpu?.vram ? Math.round(gpu.vram / 1024 ** 3) : null, hz: gpu?.hz ?? null, width: gpu?.width ?? null, perf: store.data.perf?.[item.id] ?? [],
+  });
+}
+
+// ---------- Mode streamer : automatique quand OBS, Streamlabs, Twitch Studio ou XSplit tourne ----------
+const STREAM_APPS = /\\(obs64|obs32|obs|streamlabs obs|streamlabs desktop|twitch studio|xsplit\.core|xsplitbroadcaster)\.exe$/i;
+setInterval(async () => {
+  if (store.data.settings.streamerAuto === false) { if (obsRunning) { obsRunning = false; send('streamer:state', streaming()); } return; }
+  const on = (await runningPaths(0).catch(() => [])).some((p) => STREAM_APPS.test(p));
+  if (on !== obsRunning) {
+    obsRunning = on;
+    send('streamer:state', streaming());
+    widgetPush();
+    if (on) { notifCards = notifCards.filter((c) => c.force); notifSync(); }
+  }
+}, 30_000);
+ipcMain.handle('streamer:get', () => streaming());
+
+// ---------- Sauvegardes partagées entre amis ----------
+ipcMain.handle('saves:share', async (_e, id, friendId) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item) return { ok: false, error: 'Jeu introuvable.' };
+  const dirs = await saveDirsOf(item);
+  if (!dirs.length) return { ok: false, error: 'Dossier de sauvegarde inconnu : choisis-le d’abord.' };
+  let buf;
+  try { buf = await packSaves(item.name, dirs); } catch (err) { return { ok: false, error: err.message }; }
+  const q = new URLSearchParams({ a: FID(friendId), jeu: item.name.slice(0, 80), nom: `Sauvegarde du ${new Date().toLocaleDateString('fr-FR')}` });
+  const r = await apiRaw(`/api/compte/partage?${q}`, buf, { timeout: 120_000 });
+  return r.ok ? { ok: true, bytes: buf.length } : { ok: false, error: r.error ?? 'Envoi impossible.' };
+});
+async function receiveShare(shareId) {
+  const info = (store.data.sharesIn ?? []).find((x) => x.id === String(shareId));
+  const token = secret('account');
+  if (!info || !token) return { ok: false, error: 'Partage introuvable.' };
+  let pack;
+  try {
+    const res = await fetch(`${API}/api/compte/partage?id=${encodeURIComponent(info.id)}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(120_000) });
+    if (!res.ok) return { ok: false, error: (await res.json().catch(() => ({}))).error ?? 'Partage expiré (24 h).' };
+    pack = await readPack(Buffer.from(await res.arrayBuffer()));
+  } catch (err) { return { ok: false, error: err.message }; }
+  const item = items.find((i) => i.installed && norm(i.name) === norm(info.game));
+  const dirs = item ? await saveDirsOf(item) : [];
+  if (item && dirs.length) {
+    if (activeItems([item], await runningPaths(0)).size) return { ok: false, error: 'Ferme le jeu avant de recevoir la sauvegarde.' };
+    if (!(await confirm(`Utiliser la sauvegarde de ${info.from} pour ${item.name} ?`, 'Ta partie actuelle est d’abord copiée (Outils du jeu › Sauvegardes) : tu pourras revenir dessus. Si le jeu utilise Steam Cloud, choisis « garder les fichiers locaux » au prochain lancement.'))) return { ok: false, cancelled: true };
+    await savesBackup(item);
+    const n = await unpackSaves(pack, dirs);
+    store.data.sharesIn = store.data.sharesIn.filter((x) => x.id !== info.id); store.save();
+    notify('💾 Sauvegarde reçue', `${n} fichier(s) de ${info.from} installés pour ${item.name}.`);
+    return { ok: true, files: n };
+  }
+  // Jeu pas installé ou dossier inconnu : rangée dans Documents › History › Sauvegardes reçues
+  const dest = path.join(app.getPath('documents'), 'History', 'Sauvegardes reçues', String(info.game).replace(/[<>:"/\\|?*]/g, '').slice(0, 60), `${String(info.from).replace(/[^\w-]/g, '')}-${Date.now()}`);
+  const n = await unpackSaves(pack, pack.dirs.map((d) => path.join(dest, d.name.replace(/[<>:"/\\|?*]/g, '_'))));
+  store.data.sharesIn = store.data.sharesIn.filter((x) => x.id !== info.id); store.save();
+  shell.openPath(dest).catch(() => {});
+  return { ok: true, files: n, folder: dest };
+}
+ipcMain.handle('saves:receive', (_e, id) => receiveShare(id));
+
+// ---------- Surchauffe pendant une partie (2 mesures d'affilée, alerte toutes les 10 min au plus) ----------
+function heatCheck(s, snap) {
+  const cpuT = snap?.cpu?.temp ?? 0; const gpuT = snap?.gpu?.temp ?? 0;
+  const hot = cpuT >= 90 || gpuT >= 87;
+  s.hot = hot ? (s.hot ?? 0) + 1 : 0;
+  if (s.hot < 2 || store.data.settings.heatAlert === false || Date.now() - (s.heatAt ?? 0) < 10 * 60_000) return;
+  s.heatAt = Date.now();
+  const what = [cpuT >= 90 ? `processeur ${cpuT} °C` : null, gpuT >= 87 ? `carte graphique ${gpuT} °C` : null].filter(Boolean).join(', ');
+  pushCard({ id: `heat-${Date.now()}`, icon: '🔥', title: 'PC en surchauffe', body: `${what} : le PC va baisser ses performances. Vérifie la ventilation et la poussière, ou limite les FPS.`, actions: [], ttl: 12_000 }, true);
+  widgetPush();
+}
+
+app.whenReady().then(start).catch(async (err) => { await fatal(err); app.exit(1); });

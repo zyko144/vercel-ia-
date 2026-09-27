@@ -39,6 +39,7 @@ export function cardFor(x) {
   if (x.type === 'ask') return { id: x.id, kind: 'ask', from: x.from, icon: '🎮', title: `${who} veut jouer avec toi`, body: x.game ? `Demande à rejoindre ta partie de ${cut(x.game, 40)}.` : 'Demande à jouer avec toi.', actions: [['accept', 'Accepter'], ['decline', 'Refuser']], ttl: 30_000 };
   if (x.type === 'invite') return { id: x.id, kind: 'invite', from: x.from, icon: '📨', title: `${who} t’invite`, body: x.game ? `Rejoins sa partie de ${cut(x.game, 40)} !` : 'Rejoins sa partie !', actions: [['accept', 'Rejoindre'], ['decline', 'Plus tard']], ttl: 30_000 };
   if (x.type === 'group') return { id: x.id, kind: 'group', from: x.from, icon: '👥', title: `${cut(x.group ?? 'Groupe', 30)} · ${who}`, body: cut(x.text, 140), join: x.join ?? null, game: x.game ?? null, actions: x.join ? [['join', 'Rejoindre'], ['reply', 'Répondre']] : [['reply', 'Répondre']], ttl: 15_000 };
+  if (x.type === 'share') return { id: x.id, kind: 'share', from: x.from, share: x.share, icon: '💾', title: `${who} t’envoie une sauvegarde`, body: `${cut(x.game ?? 'Jeu', 40)} · ${cut(x.text, 50)}${x.size ? ` (${Math.max(1, Math.round(x.size / 1024))} Ko)` : ''}`, actions: [['saveget', 'Recevoir'], ['close', 'Plus tard']], ttl: 60_000 };
   if (x.type === 'call') return { id: x.id, kind: 'call', from: x.from, callId: x.callId, icon: '📞', title: `${who} t’appelle`, body: 'Appel vocal History', actions: [['answer', 'Décrocher'], ['hangup', 'Refuser']], ttl: 40_000 };
   if (x.type === 'reply') {
     return x.oui

@@ -127,7 +127,7 @@ async function callRoute(req, res, url, route, id, { readJson, send }) {
   return send(res, 404, { error: 'route inconnue' });
 }
 
-export async function handleSocialApi(req, res, url, { readJson, send }) {
+export async function handleSocialApi(req, res, url, { readJson, readBinary, send }) {
   const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
   const compte = await me(token);
   if (!compte) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
@@ -139,6 +139,8 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     return callRoute(req, res, url, route, id, { readJson, send });
   }
   if (!allowAttempt('compte-social', id, 900, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
+  const binary = await fileRoutes(req, res, url, route, id, { readBinary, send });
+  if (binary !== undefined) return binary;
   const body = req.method === 'POST' ? await readJson(req) : {};
   const d = await data();
   const accs = await accounts();
@@ -329,5 +331,108 @@ export async function handleSocialApi(req, res, url, { readJson, send }) {
     return done(200, { soirees: eventsFor(d, accs, id) });
   }
 
+  // Promos : prix suivis et liste de souhaits Steam, vérifiés aussi par le bot (message privé Discord, même PC éteint)
+  if (route === 'POST /api/compte/alertes') {
+    const steam = /^\d{17}$/.test(String(body.steam ?? '')) ? String(body.steam) : null;
+    const alerts = (Array.isArray(body.prix) ? body.prix : []).slice(0, 50).map((a) => ({ appId: String(a?.appId ?? ''), name: text(a?.name, 80), target: Math.max(0, Math.min(1000, Number(a?.target) || 0)) })).filter((a) => /^\d{1,10}$/.test(a.appId));
+    const prev = (d.watch ??= {})[id] ?? {};
+    d.watch[id] = { steam, alerts, dm: body.mp !== false, seen: prev.seen ?? {}, at: Date.now() };
+    return done(200, { ok: true, suivis: alerts.length });
+  }
+
+  // FPS mesurés en jeu (PresentMon) : partagés avec la commande /launcher fps
+  if (route === 'POST /api/compte/fps') {
+    const game = text(body.jeu, 80);
+    const avg = Math.round(Number(body.avg)); const low1 = Math.round(Number(body.low1));
+    if (!game || !(avg > 0 && avg < 2000) || !(low1 >= 0 && low1 <= avg) || !(Number(body.minutes) >= 5)) return send(res, 400, { error: 'Mesure invalide.' });
+    const k = gameKey(game);
+    const g = ((d.fps ??= {})[k] ??= { name: game, by: {} });
+    g.by[id] = { avg, low1, at: Date.now() };
+    const keys = Object.keys(d.fps);
+    if (keys.length > 300) for (const old of keys.sort((a, b) => lastAt(d.fps[a]) - lastAt(d.fps[b])).slice(0, keys.length - 300)) delete d.fps[old];
+    return done(200, { ok: true });
+  }
+
+  // Lancer une partie avec un groupe : le bot mentionne sur Discord les membres qui ont lié leur compte
+  if (route === 'POST /api/compte/groupes/partie') {
+    const g = d.groups[String(body.id ?? '')];
+    if (!g || !g.members.includes(id)) return send(res, 404, { error: 'Groupe introuvable.' });
+    if (!allowAttempt('launcher-partie', id, 6, 30 * 60_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
+    const game = text(body.jeu, 80) || d.presence[id]?.playing || null;
+    const msg = text(body.texte, 200) || (game ? `On lance ${game} !` : 'On lance une partie !');
+    const members = g.members.filter((m) => accs[m]).map((m) => ({ id: m, pseudo: accs[m].pseudo, discordId: accs[m].discordId ?? null }));
+    const r = await (await import('./launcherDiscord.js')).postParty({ group: g.name, owner: members.find((m) => m.id === id), members, game, text: msg })
+      .catch((err) => ({ ok: false, error: `Discord injoignable (${err.message}).` }));
+    for (const m of g.members.filter((x) => x !== id)) pushInbox(d, m, { type: 'group', from: id, group: g.name, text: msg, game, join: d.presence[id]?.join ?? null });
+    return done(r.ok ? 200 : 502, { ...r, sent: g.members.length - 1 });
+  }
+
   return send(res, 404, { error: 'route inconnue' });
 }
+
+const gameKey = (name) => String(name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const lastAt = (g) => Math.max(0, ...Object.values(g?.by ?? {}).map((x) => x.at));
+export { gameKey };
+
+// ---------- Fichiers : clips vers Discord, sauvegardes partagées entre amis ----------
+const CLIP_MAX = 60 * 1024 * 1024;
+const SHARE_MAX = 25 * 1024 * 1024;
+const SHARE_TTL = 24 * 3_600_000;
+const SHARE_TOTAL = 300 * 1024 * 1024;
+const shares = new Map(); // id -> { id, from, to, game, name, buf, at } (en mémoire : valable 24 h)
+function sweepShares() {
+  const now = Date.now();
+  for (const [k, x] of shares) if (now - x.at > SHARE_TTL) shares.delete(k);
+  let total = [...shares.values()].reduce((n, x) => n + x.buf.length, 0);
+  for (const [k, x] of [...shares].sort((a, b) => a[1].at - b[1].at)) { if (total <= SHARE_TOTAL) break; total -= x.buf.length; shares.delete(k); }
+}
+async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend }) {
+  const send = (...a) => { rawSend(...a); return true; };
+  if (route === 'POST /api/compte/discord/clip') {
+    const accs = await accounts();
+    const acc = accs[id];
+    if (!acc?.discordId) return send(res, 403, { error: 'Lie d’abord ton compte Discord (Paramètres › Compte › Lier Discord).' });
+    if (!allowAttempt('launcher-clip', id, 12, 60 * 60_000)) return send(res, 429, { error: 'Trop de clips envoyés, réessaie dans un moment.' });
+    const ext = String(url.searchParams.get('type') ?? '').toLowerCase();
+    if (!['png', 'jpg', 'webm', 'mp4'].includes(ext)) return send(res, 400, { error: 'Format non pris en charge.' });
+    const buf = await readBinary(req, CLIP_MAX).catch(() => null);
+    if (!buf?.length) return send(res, 413, { error: 'Fichier trop gros (60 Mo maximum).' });
+    const r = await (await import('./launcherDiscord.js')).postClip({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, game: text(url.searchParams.get('jeu'), 80) || null, note: text(url.searchParams.get('texte'), 200) || null })
+      .catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
+    return send(res, r.ok ? 200 : 502, r);
+  }
+  if (route === 'POST /api/compte/partage') {
+    const to = String(url.searchParams.get('a') ?? '');
+    const d = await data();
+    const accs = await accounts();
+    if (!listOf(d.friends, id).includes(to) || !accs[to]) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
+    if (!allowAttempt('launcher-partage', id, 10, 60 * 60_000)) return send(res, 429, { error: 'Trop de partages, réessaie dans un moment.' });
+    const buf = await readBinary(req, SHARE_MAX).catch(() => null);
+    if (!buf?.length) return send(res, 413, { error: 'Sauvegarde trop grosse (25 Mo maximum).' });
+    sweepShares();
+    const s = { id: randomUUID(), from: id, to, game: text(url.searchParams.get('jeu'), 80) || 'Jeu', name: text(url.searchParams.get('nom'), 80) || 'Sauvegarde', buf, at: Date.now() };
+    shares.set(s.id, s);
+    pushInbox(d, to, { type: 'share', from: id, share: s.id, game: s.game, text: s.name, size: buf.length });
+    save(KEY, d);
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'GET /api/compte/partage') {
+    sweepShares();
+    const s = shares.get(String(url.searchParams.get('id') ?? ''));
+    if (!s || s.to !== id) return send(res, 404, { error: 'Partage introuvable ou expiré (24 h).' });
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': s.buf.length, 'Cache-Control': 'no-store' });
+    res.end(s.buf);
+    return true;
+  }
+  return undefined;
+}
+
+/** Pour le bot : message dans la boîte du launcher d'un compte (ex. « X vient à ta partie »). */
+export async function notifyAccount(to, item) {
+  const d = await data();
+  pushInbox(d, to, item);
+  save(KEY, d);
+}
+/** Pour le bot : suivis de prix, FPS partagés. */
+export async function socialData() { return data(); }
+export const saveSocial = (d) => save(KEY, d);
