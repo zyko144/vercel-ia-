@@ -46,6 +46,12 @@ function raiseTop() {
 }
 // Une fenêtre (dialog) qui s'ouvre passe devant : on remet la barre d'appel, la sonnerie et le toast au-dessus
 new MutationObserver((list) => { if (list.some((m) => m.target.open)) requestAnimationFrame(raiseTop); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+/** Copie dans le presse-papiers (par l'appli ; dans un navigateur, par l'API du navigateur). */
+function copyText(text) {
+  const t = String(text ?? '');
+  if (api.copy) return api.copy(t).catch(() => false);
+  return navigator.clipboard?.writeText(t).then(() => true).catch(() => false) ?? Promise.resolve(false);
+}
 function toast(text) {
   const t = $('toast');
   t.textContent = text;
@@ -395,7 +401,7 @@ $('secDiscord').addEventListener('click', async () => {
     <div class="row end">${r.lie ? '<button type="button" class="btn ghost" data-unlink="1">Délier</button>' : ''}<button type="button" class="btn" data-copy="1">Copier la commande</button><button type="button" class="btn play" data-m="1">OK</button></div>`;
   $('modal').showModal();
   $('modalBox').onclick = async (e) => {
-    if (e.target.closest('[data-copy]')) { navigator.clipboard?.writeText(`/launcher lier code:${r.code}`); toast('Commande copiée'); }
+    if (e.target.closest('[data-copy]')) { copyText(`/launcher lier code:${r.code}`); toast('Commande copiée'); }
     if (e.target.closest('[data-unlink]')) { await api.discordUnlink(); toast('Discord délié'); $('modal').close(); }
     if (e.target.closest('[data-m]')) $('modal').close();
   };
@@ -430,6 +436,7 @@ function friendCard(a, playingNow) {
       ${a.online ? btn(`data-hcall="${esc(a.id)}" data-name="${esc(a.pseudo)}"`, '📞', 'Appel vocal', 'iconb') : ''}
       ${a.playing ? btn(`data-hask="${esc(a.id)}"`, '🎮', 'Lui demander de jouer ensemble', 'iconb') : ''}
       ${playingNow && a.online && !a.playing ? btn(`data-hinv="${esc(a.id)}"`, '📨', 'L’inviter dans ta partie', 'iconb') : ''}
+      ${a.code ? `<button class="btn ghost sm iconb" data-copytext="${esc(a.code)}" data-copied="Code de ${esc(a.pseudo)} copié" title="Copier son code ami (${esc(a.code)})">📋</button>` : ''}
       <button class="btn ghost sm iconb fmore" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer de mes amis">✕</button>
     </div>
   </div>`;
@@ -729,13 +736,13 @@ function showFriendTab(tab) {
   if (tab === 'history') { $('friendsCount').textContent = ''; loadHistory(); } else { renderFriends(); loadFriends(); }
 }
 $('saveStatus').addEventListener('click', async () => { await api.setSettings({ status: $('myStatus').value }); toast($('myStatus').value.trim() ? 'Statut mis à jour' : 'Statut retiré'); });
-$('copyInvite').addEventListener('click', () => { const code = $('myCode').textContent; if (!code || code === '—') return toast('Connecte-toi d’abord'); navigator.clipboard?.writeText(`history://ami/${encodeURIComponent(code)}`); toast('Lien copié : envoie-le à tes potes (ils cliquent → demande d’ami)'); });
+$('copyInvite').addEventListener('click', () => { const code = $('myCode').textContent; if (!code || code === '—') return toast('Connecte-toi d’abord'); copyText(`history://ami/${encodeURIComponent(code)}`); toast('Lien copié : envoie-le à tes potes (ils cliquent → demande d’ami)'); });
 api.onInvite?.(async (d) => {
   if (!(await ui.confirm({ title: 'Ajouter cet ami ?', text: `Envoyer une demande d’ami à ${d.code} ?`, ok: '👥 Ajouter', icon: '👥' }))) return;
   const r = await api.hFriendAdd(d.code);
   toast(r?.amis ? 'Vous êtes maintenant amis !' : r?.envoye ? 'Demande envoyée' : r?.error ?? 'Impossible');
 });
-$('copyCode').addEventListener('click', () => { navigator.clipboard?.writeText($('myCode').textContent); toast('Code copié'); });
+$('copyCode').addEventListener('click', () => { copyText($('myCode').textContent); toast('Code copié'); });
 $('addFriend').addEventListener('click', async () => {
   const code = $('addCode').value.trim();
   if (!code) return;
@@ -932,6 +939,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.21.1': [
+    ['🔐', 'Double authentification seulement à la connexion', 'Le code de l’application n’est plus demandé à chaque ouverture : seulement quand tu te reconnectes à ton compte (option « à chaque ouverture » dans Paramètres › Compte si tu préfères). Et tant que tu ouvres le launcher, tu restes connecté.'],
+    ['🛠', 'Optimisation corrigée', 'L’optimisation retire toute seule les réglages d’anciennes versions qui faisaient bugger FiveM et d’autres jeux, et ne les propose plus jamais.', ['[data-view=optimisation]']],
+    ['💽', 'Analyse pro : choisis tes disques', 'Mon PC › Analyse pro : coche un seul disque ou plusieurs avant de lancer.', ['[data-view=pc]', '[data-pctab=analyse]', 'wait900']],
+    ['📋', 'Boutons Copier réparés', 'Code ami, lien d’invitation, commande Discord, rapport, codes de secours : tout se copie. Et un bouton pour copier le code de chaque ami.'],
+  ],
   '0.21.0': [
     ['👥', 'Page Amis refaite', 'Cartes d’amis claires (en jeu, en ligne, hors ligne), recherche, ton profil et ton code à droite, groupes avec les avatars des membres : plus rien ne déborde ni ne passe sous les fenêtres.', ['[data-view=amis]']],
     ['🔔', 'Centre de notifications', 'La cloche en haut à droite garde tes dernières notifications (amis et appli) : répondre, rejoindre, rappeler un appel manqué, recevoir une sauvegarde… directement depuis la liste.', ['[data-view=amis]', '#bellBtn', 'wait900']],
@@ -1552,7 +1565,7 @@ function showReport(r, title = 'Rapport détaillé') {
     <small class="hint">${r?.ai ? 'Rédigé par l’IA à partir des vraies mesures de ton PC.' : 'Rapport automatique (connecte-toi pour la version rédigée par l’IA).'}</small>
     <div class="row end"><button type="button" class="btn" id="repPdf">📄 PDF</button><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
-  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); if (e.target.closest('#repCopy')) { navigator.clipboard?.writeText(r?.text ?? ''); toast('Rapport copié'); } if (e.target.closest('#repPdf')) api.pcPdf(title, r?.text ?? '').then((p) => toast(p?.ok ? '📄 PDF enregistré dans Documents › History' : p?.error ?? 'Impossible')); };
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); if (e.target.closest('#repCopy')) { copyText(r?.text ?? ''); toast('Rapport copié'); } if (e.target.closest('#repPdf')) api.pcPdf(title, r?.text ?? '').then((p) => toast(p?.ok ? '📄 PDF enregistré dans Documents › History' : p?.error ?? 'Impossible')); };
 }
 $('pcDiagBtn').addEventListener('click', () => pcDiag(true));
 $('pcBenchBtn').addEventListener('click', async () => {
@@ -1721,6 +1734,7 @@ $('optiRun').addEventListener('click', async () => {
   $('optiRun').disabled = false; $('optiScan').disabled = false;
   if (!r?.ok) { showProgress(null); return ui.confirm({ title: 'L’optimisation s’est arrêtée', text: r?.error ? `Erreur : ${r.error}` : 'Réessaie dans un instant.', ok: 'OK', cancel: 'Fermer', icon: '⚠️' }); }
   if (r.scan) { opti = r.scan; renderOpti(); }
+  if (r.fixed?.fixed) toast(r.fixed.reboot ? '✅ Réglages qui faisaient bugger les jeux corrigés : redémarre le PC' : '✅ Réglages qui faisaient bugger les jeux corrigés');
   await refreshHealth(true);
   let benchAfter = null;
   if (gain && benchBefore && !benchBefore.error) { showProgress('<div class="oprog"><b>Mesure après optimisation (≈ 10 s)…</b><div class="gbar big indet"><i></i></div></div>'); benchAfter = await api.benchQuick().catch(() => null); }
@@ -1835,6 +1849,7 @@ function pcTab(tab) {
   document.querySelectorAll('#view-pc .pctab').forEach((el) => { el.hidden = el.dataset.pctab !== tab; });
   state.pcTab = tab;
   if (tab === 'securite' && !$('pcProcs').dataset.done) { $('pcProcs').dataset.done = '1'; renderProcs(); }
+  if (tab === 'analyse' && !$('scanDrives').children.length) renderScanDrives();
 }
 $('pcDriver').addEventListener('click', (e) => { const b = e.target.closest('[data-drv]'); if (b) api.driverOpen(b.dataset.drv); });
 $('pcTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-pctab]'); if (b) { window.sfx?.play('nav'); pcTab(b.dataset.pctab); } });
@@ -1882,10 +1897,23 @@ function renderScan(r) {
     </div>
     <small class="hint">${num(r.denied)} éléments protégés par Windows n’ont pas pu être lus (normal sans droits administrateur).</small>`;
 }
+// Choix des disques à analyser : tous cochés au départ, on garde le dernier choix
+async function renderScanDrives() {
+  const list = await api.scanDrives?.().catch(() => null);
+  if (!list?.length) { $('scanDrives').innerHTML = ''; return; }
+  let keep = null;
+  try { keep = JSON.parse(localStorage.getItem('scanDrives') ?? 'null'); } catch { /* rien de gardé */ }
+  $('scanDrives').innerHTML = `<b class="sub">Disques à analyser</b><div class="drivechips">${list.map((d) => `<label class="drivechip"><input type="checkbox" value="${esc(d.letter)}" ${!keep || keep.includes(d.letter) ? 'checked' : ''}><span>💽 ${esc(d.letter)}:${d.system ? ' <small>(Windows)</small>' : ''}<small>${gb(d.used)} utilisés sur ${gb(d.size)}</small></span></label>`).join('')}</div>`;
+}
+const scanLetters = () => [...document.querySelectorAll('#scanDrives input:checked')].map((i) => i.value);
+$('scanDrives').addEventListener('change', () => { try { localStorage.setItem('scanDrives', JSON.stringify(scanLetters())); } catch { /* pas grave */ } });
 $('scanBtn').addEventListener('click', async () => {
-  if (!(await ui.confirm({ title: 'Lancer l’analyse pro ?', text: 'Chaque fichier de chaque disque va être lu. Compte 10 à 30 minutes selon ton nombre de fichiers ; le PC reste utilisable (un peu plus lent pendant la lecture).', list: ['Lecture de chaque fichier (taille, date, type)', 'Doublons confirmés par empreinte SHA-256', 'Fichiers louches : signature + antivirus de Windows', 'Journal de Windows : écrans bleus, arrêts brutaux, erreurs disque'], ok: '🔬 Lancer', icon: '🔬' }))) return;
+  const letters = scanLetters();
+  if (document.querySelector('#scanDrives input') && !letters.length) return toast('Coche au moins un disque');
+  const which = letters.length ? `${letters.map((l) => `${l}:`).join(' et ')}` : 'chaque disque';
+  if (!(await ui.confirm({ title: 'Lancer l’analyse pro ?', text: `Chaque fichier de ${letters.length === 1 ? `ton disque ${which}` : letters.length ? `tes disques ${which}` : 'chaque disque'} va être lu. Compte 10 à 30 minutes selon ton nombre de fichiers ; le PC reste utilisable (un peu plus lent pendant la lecture).`, list: ['Lecture de chaque fichier (taille, date, type)', 'Doublons confirmés par empreinte SHA-256', 'Fichiers louches : signature + antivirus de Windows', 'Journal de Windows : écrans bleus, arrêts brutaux, erreurs disque'], ok: '🔬 Lancer', icon: '🔬' }))) return;
   $('scanBtn').disabled = true; $('scanStop').hidden = false; $('scanOut').innerHTML = '';
-  const r = await api.scanStart();
+  const r = await api.scanStart(letters.length ? letters : undefined);
   $('scanBtn').disabled = false; $('scanStop').hidden = true; $('scanLive').hidden = true;
   if (r?.error) return toast(r.error);
   window.sfx?.play('success');
@@ -2368,6 +2396,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.tools && state.sel) return openTools(state.sel);
   if (t.dataset.tips && state.sel) { const it = state.sel; toast('L’IA prépare ses conseils…'); const r = await api.gameTips(it.id); return showReport(r?.text ? { text: r.text, ai: true } : { error: r?.error }, `Conseils pour ${it.name}`); }
   if (t.dataset.fivemsrv) return openFivemServers();
+  if (t.dataset.copytext) { await copyText(t.dataset.copytext); return toast(t.dataset.copied || 'Copié'); }
   if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
   if (t.dataset.hcall) return startCall(t.dataset.hcall, t.dataset.name);
   if (t.dataset.hjoin) { const r = await api.friendJoin(t.dataset.hjoin); return toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); }
@@ -2752,7 +2781,7 @@ function showSecurity() {
   $('sec2fa').hidden = !c;
   $('sec2fa').textContent = c?.twoFactor ? '🛡 Désactiver la double authentification' : '🛡 Activer la double authentification';
   $('lock2faRow').hidden = !c?.twoFactor;
-  api.settings?.().then((s) => { $('lock2fa').checked = s?.lock2fa !== false; }).catch(() => {});
+  api.settings?.().then((s) => { $('lock2fa').checked = s?.lock2fa === true; }).catch(() => {});
 }
 $('fpsOn').addEventListener('change', async (e) => { if (e.target.checked) { e.target.checked = false; await enableFps(); const st = await api.settings(); e.target.checked = st?.fps === true; } else { await api.fpsDisable(); toast('Mesure des FPS coupée'); } });
 $('widgetOn').addEventListener('change', (e) => { api.setSettings({ widget: e.target.checked }); $('widgetTopRow').hidden = !e.target.checked; });
@@ -2825,7 +2854,7 @@ $('sec2fa').addEventListener('click', async () => {
       <p>Garde ces <b>codes de secours</b> en lieu sûr : chacun marche une seule fois si tu perds ton téléphone.</p>
       <div class="recov">${r.recovery.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
       <div class="row end"><button type="button" class="btn" id="tfCopy">Copier</button><button type="button" class="btn play" data-m="1">J’ai noté mes codes</button></div>`;
-    $('tfCopy').onclick = () => { navigator.clipboard?.writeText(r.recovery.join('\n')); toast('Codes copiés'); };
+    $('tfCopy').onclick = () => { copyText(r.recovery.join('\n')); toast('Codes copiés'); };
   };
 });
 $('authSkip').addEventListener('click', async () => { await api.skipAccount?.(); showAuth(false); });
@@ -2841,7 +2870,8 @@ api.account?.().then(async (r) => {
   if (!r.compte && !r.skipped) return showAuth(true);
   // Double authentification : l'appli se verrouille à chaque ouverture tant que le code n'est pas donné
   const s = await api.settings?.().catch(() => null);
-  if (r.compte?.twoFactor && s?.lock2fa !== false) openStep('lock');
+  // Le code n'est demandé qu'à la connexion au compte, sauf si « à chaque ouverture » est coché
+  if (r.compte?.twoFactor && s?.lock2fa === true) openStep('lock');
 }).catch(() => {});
 
 // ---------- Données ----------
@@ -2950,7 +2980,8 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.21.0',
+    version: async () => '0.21.1',
+    scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

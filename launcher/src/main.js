@@ -1,5 +1,5 @@
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
-import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -13,7 +13,7 @@ import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statC
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
-import { applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
+import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
 import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from './core/deepscan.js';
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
@@ -817,7 +817,7 @@ ipcMain.handle('opti:scan', async () => {
 async function optiApply(plan, progress = () => {}) {
   const junk = cleanList.filter((t) => plan?.junk?.includes(t.id));
   const orphans = orphanList.filter((o) => plan?.orphans?.includes(o.id));
-  const tweaks = (plan?.tweaks ?? []).map(String);
+  const tweaks = (plan?.tweaks ?? []).map(String).filter((id) => !GAME_TWEAKS.find((t) => t.id === id)?.retired);
   const steps = [...junk.map((t) => ({ kind: 'junk', label: t.label, t })), ...(plan?.recycle ? [{ kind: 'recycle', label: 'Corbeille' }] : []), ...orphans.map((o) => ({ kind: 'orphan', label: `Reste de jeu : ${o.label}`, o })), ...tweaks.map((id) => ({ kind: 'tweak', label: `Réglage : ${id}`, id }))];
   const before = await freeSpace();
   let freed = 0;
@@ -839,6 +839,8 @@ async function optiApply(plan, progress = () => {}) {
 ipcMain.handle('opti:run', async (_e, plan) => {
   try {
     const r = await optiApply(plan, (p) => send('opti:progress', p));
+    // L'optimisation corrige aussi les réglages d'anciennes versions qui font bugger les jeux
+    r.fixed = await fixRisky({ ask: true, reason: 'optimisation' }).catch(() => null);
     const scan = await optiScan().catch(() => null);
     return { ...r, score: scan?.score ?? null, scan };
   } catch (err) {
@@ -897,7 +899,13 @@ function defenderFile(file) {
     p.on('close', (code) => resolve(code === 2 ? 'menace' : code === 0 ? 'propre' : null));
   });
 }
-ipcMain.handle('scan:start', async () => {
+// Disques proposés pour l'analyse pro (on peut en choisir un seul ou plusieurs)
+ipcMain.handle('scan:drives', async () => {
+  const diag = await runDiag().catch(() => null);
+  const sys = (process.env.SystemDrive ?? 'C:')[0].toUpperCase();
+  return (diag?.volumes ?? []).map((v) => ({ letter: v.letter.toUpperCase(), size: v.size, used: v.size - v.free, system: v.letter.toUpperCase() === sys }));
+});
+ipcMain.handle('scan:start', async (_e, letters) => {
   if (deepAbort) return { error: 'Une analyse est déjà en cours.' };
   deepAbort = new AbortController();
   const signal = deepAbort.signal;
@@ -905,7 +913,9 @@ ipcMain.handle('scan:start', async () => {
   try {
     prog({ phase: 'prep', label: 'Liste des disques…' });
     const diag = await runDiag().catch(() => null);
-    const vols = process.platform === 'win32' ? (diag?.volumes ?? []) : [];
+    const want = Array.isArray(letters) ? letters.map((l) => String(l).toUpperCase()).filter((l) => /^[A-Z]$/.test(l)) : [];
+    const vols = process.platform === 'win32' ? (diag?.volumes ?? []).filter((v) => !want.length || want.includes(v.letter.toUpperCase())) : [];
+    if (process.platform === 'win32' && want.length && !vols.length) { deepAbort = null; return { error: 'Disque introuvable.' }; }
     const roots = vols.length ? vols.map((v) => `${v.letter}:\\`) : [os.homedir()];
     const totalBytes = vols.reduce((n, v) => n + (v.size - v.free), 0);
     const r = await deepScan({ roots, totalBytes, signal, onProgress: prog, dupRoots: [os.homedir(), ...vols.filter((v) => v.letter.toUpperCase() !== (process.env.SystemDrive ?? 'C:')[0]).map((v) => `${v.letter}:\\`)] });
@@ -2813,17 +2823,30 @@ async function resetWindows({ ask = true } = {}) {
   return { ok: sysOk, changed: labels.length, reboot: plan.sys.some((c) => c.id === 'hags'), refused: !sysOk };
 }
 ipcMain.handle('opti:reset', () => resetWindows());
-// Une fois, au premier lancement de cette version : proposer de retirer les réglages qui font bugger les jeux
-setTimeout(async () => {
-  if (process.platform !== 'win32' || store.data.fixOffered === '0.20.1' || !(store.data.settingsHistory?.length || store.data.settingsOriginal)) return;
-  store.data.fixOffered = '0.20.1'; store.save();
+/** Retire les réglages qui peuvent faire bugger les jeux (remis comme Windows). Sans administrateur si possible. */
+async function fixRisky({ ask = true, reason = '' } = {}) {
+  if (process.platform !== 'win32') return null;
   const [sys, game] = await Promise.all([systemTweakStates().catch(() => []), tweakStates().catch(() => [])]);
   const risky = riskyLeft(sys, game);
-  if (!risky.length) return;
-  const ok = await confirm('Correctif pour FiveM et les jeux', `Des réglages appliqués par une ancienne version de l'optimisation peuvent faire saccader ou planter certains jeux (FiveM, GTA V…) :\n${risky.map((t) => `• ${t.label}`).join('\n')}\n\nOn remet Windows comme avant ton optimisation ? (autorisation administrateur, puis redémarre le PC)`);
-  if (!ok) return;
-  const r = await resetWindows({ ask: false });
-  notify(r.ok ? '✅ Windows remis comme avant' : 'Correctif incomplet', r.ok ? 'Redémarre le PC pour finir : tes jeux retrouvent leur comportement normal.' : 'L’autorisation administrateur a été refusée : relance « Remettre Windows comme avant » dans Optimisation.');
+  if (!risky.length) return { fixed: 0 };
+  await snapshotSettings('Avant la correction des réglages risqués').catch(() => {});
+  // Réglages de l'utilisateur (sans administrateur) : corrigés tout de suite
+  const g = risky.filter((t) => game.some((x) => x.id === t.id));
+  for (const t of g) await setTweak(t.id, false).catch(() => {});
+  const sy = risky.filter((t) => sys.some((x) => x.id === t.id));
+  if (!sy.length) return { fixed: g.length };
+  if (ask && !(await confirm('Corriger les réglages qui font bugger les jeux ?', `${reason === 'optimisation' ? 'Pendant l’optimisation, on a trouvé' : 'Il reste'} des réglages d’une ancienne version qui peuvent faire saccader ou planter FiveM, GTA V et d’autres jeux :\n${sy.map((t) => `• ${t.label}`).join('\n')}\n\nOn les remet comme Windows ? (autorisation administrateur, point de restauration avant, puis redémarre le PC)`))) return { fixed: g.length, pending: sy.length };
+  const ok = await applySystemTweaks(sy.map((t) => ({ id: t.id, on: false })));
+  return { fixed: g.length + (ok ? sy.length : 0), pending: ok ? 0 : sy.length, reboot: ok && sy.some((t) => t.reboot) };
+}
+ipcMain.handle('opti:fixRisky', () => fixRisky({ ask: true }));
+// Au démarrage (si l'optimisation a déjà servi sur ce PC) : correction automatique, redemandée tous les 3 jours tant qu'il en reste
+setTimeout(async () => {
+  if (process.platform !== 'win32' || !(store.data.settingsHistory?.length || store.data.settingsOriginal)) return;
+  const askAgain = Date.now() - (store.data.fixAskedAt ?? 0) > 3 * 86_400_000;
+  const r = await fixRisky({ ask: askAgain }).catch(() => null);
+  if (askAgain && r?.pending !== undefined) { store.data.fixAskedAt = Date.now(); store.save(); }
+  if (r?.fixed && !r.pending) notify('✅ Réglages corrigés', r.reboot ? 'Redémarre le PC pour finir : tes jeux retrouvent leur comportement normal.' : 'Les réglages qui pouvaient faire bugger tes jeux ont été remis comme Windows.');
 }, 40_000);
 
 app.whenReady().then(start).catch(async (err) => { await fatal(err); app.exit(1); });
@@ -2872,3 +2895,6 @@ ipcMain.handle('notifs:act', async (_e, id, action) => {
   await cardAction({ ...e, kind: e.kind === 'missed' ? 'msg' : e.kind }, String(action));
   return { ok: true };
 });
+
+// Copier du texte (code ami, lien d'invitation, rapport…) : par l'appli, le presse-papiers du navigateur étant bloqué
+ipcMain.handle('clip:write', (_e, text) => { clipboard.writeText(String(text ?? '').slice(0, 20_000)); return true; });
