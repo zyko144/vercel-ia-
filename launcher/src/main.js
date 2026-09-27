@@ -2223,7 +2223,14 @@ async function startUpdater() {
   updater.autoInstallOnAppQuit = true;
   updater.logger = null;
   updater.on('update-available', (info) => {
+    const fresh = updateInfo.version !== info.version;
     updateState({ state: 'available', version: info.version, error: null });
+    // Fenêtre fermée ou rangée : une notification Windows (clic = ouvrir le launcher sur la question)
+    if (fresh && (!win || win.isDestroyed() || !win.isVisible()) && Notification.isSupported()) {
+      const n = new Notification({ title: `History Launcher v${info.version} disponible`, body: 'Clique pour mettre à jour maintenant (moins d’une minute).', icon: ICON });
+      n.on('click', () => showWindow());
+      n.show();
+    }
     // Filet de sécurité : sans réponse à « Mettre à jour maintenant ? » en 10 min, elle se télécharge en fond
     // et s'installe à la prochaine fermeture (une mise à jour n'est jamais bloquée par l'interface)
     setTimeout(() => { if (updateInfo.state === 'available' && updateInfo.version === info.version) downloadUpdate(false); }, 10 * 60_000);
@@ -2236,9 +2243,12 @@ async function startUpdater() {
     if (updateInfo.installNow) setTimeout(() => { quitting = true; updater.quitAndInstall(true, true); }, 1500);
   });
   updater.on('error', (err) => { fatalLog(err); if (['checking', 'progress'].includes(updateInfo.state)) updateState({ state: 'error', error: String(err?.message ?? err).slice(0, 160) }); });
-  const check = () => { if (!['progress', 'ready'].includes(updateInfo.state)) updater.checkForUpdates().catch((err) => fatalLog(err)); };
-  setTimeout(check, 15_000);
-  setInterval(check, 3 * 3_600_000);
+  let lastCheck = 0;
+  const check = () => { if (['progress', 'ready'].includes(updateInfo.state)) return; lastCheck = Date.now(); updater.checkForUpdates().catch((err) => fatalLog(err)); };
+  setTimeout(check, 10_000);
+  setInterval(check, 30 * 60_000); // toutes les 30 min (avant : 3 h, une nouvelle version pouvait attendre longtemps)
+  // Et dès qu'on revient sur le launcher, si la dernière recherche date de plus de 5 min
+  app.on('browser-window-focus', () => { if (Date.now() - lastCheck > 5 * 60_000) check(); });
 }
 /** Cherche une mise à jour maintenant ; now = installer tout de suite si elle existe. */
 async function checkUpdate(now = false) {

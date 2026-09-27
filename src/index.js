@@ -93,7 +93,7 @@ client.once(Events.ClientReady, async (c) => {
   const guildPayload = guildCommandDefinitions.map((cmd) => cmd.toJSON());
   const registerOn = (guild) => guild.commands.set(guildPayload).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
   await Promise.all([...c.guilds.cache.values()].map(registerOn));
-  console.log(`▶️ /play enregistrée sur ${c.guilds.cache.size} serveur(s)`);
+  console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
   c.on(Events.GuildCreate, (guild) => registerOn(guild));
   // Résumé des commandes « !! » dans le salon agora (une fois par version)
   import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));
