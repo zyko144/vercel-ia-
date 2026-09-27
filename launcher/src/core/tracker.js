@@ -1,5 +1,6 @@
 // Temps passé sur chaque jeu ou appli : toutes les 60 s, on regarde les programmes ouverts et on
 // crédite une minute à ceux dont l'exécutable est dans le dossier d'un élément de la bibliothèque.
+import { logSession } from './progress.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -86,6 +87,13 @@ export function startTracker(getItems, store, onChange, everyMs = 60_000, accoun
       const cat = statCategory(item);
       day[cat] = (day[cat] ?? 0) + everyMs / 60_000;
       (day.items ??= {})[id] = (day.items[id] ?? 0) + everyMs / 60_000;
+      // Heure de la journée (statistiques « quand je joue ») et journal des sessions
+      if (item.kind === 'game') {
+        const h = new Date(now).getHours();
+        day.h ??= Array(24).fill(0);
+        day.h[h] = (day.h[h] ?? 0) + everyMs / 60_000;
+        store.data.sessions = logSession(store.data.sessions, id, now, everyMs);
+      }
     }
     // On garde un an d'historique
     for (const k of Object.keys(store.data.days)) if (k < dayKey(now - 400 * 86_400_000)) delete store.data.days[k];

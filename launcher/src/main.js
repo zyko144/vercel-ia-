@@ -22,7 +22,7 @@ import { steamMatch } from './core/art.js';
 import { norm } from './core/sort.js';
 import { steamPath } from './core/library.js';
 import { epicActions } from './core/epic.js';
-import { steamActions } from './core/steam.js';
+import { steamActions, steamDetails } from './core/steam.js';
 import { createStore } from './core/store.js';
 import { safeGameDir, uninstallFiles } from './core/manage.js';
 import { verifyGame } from './core/verify.js';
@@ -30,6 +30,11 @@ import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
+import { badges, hourly, levelOf, rediscover, streakOf } from './core/progress.js';
+import { dnsTest, pingHosts } from './core/net.js';
+import { checkReq, parseReq } from './core/reqs.js';
+import { gogGames, ubisoftGames } from './core/stores.js';
+import { demoActivity, demoBench, demoFriends, demoItems, demoTemps } from './core/demo.js';
 import { captureDir, captureName } from './core/capture.js';
 import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core/gmod.js';
 import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
@@ -38,6 +43,7 @@ import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
 import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
 import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
+import { readRegistry } from './core/registry.js';
 import { directEnv, insideDir, launchPlan, hasAntiCheat } from './core/direct.js';
 import { findItem as findByName, similarity, stripWake, understand } from './core/commands.js';
 import { speak, startListening } from './core/voice.js';
@@ -112,6 +118,7 @@ function createWindow() {
   });
   win.loadFile(path.join(here, 'ui', 'index.html'));
   win.once('ready-to-show', () => win.show());
+  win.webContents.on('did-finish-load', () => { const z = store.data.settings?.textScale; if (z && z !== 1) win.webContents.setZoomFactor(z); });
   // Bancs d'essai : LAUNCHER_SHOT=fichier.png fait une capture de la fenêtre puis quitte
   if (process.env.LAUNCHER_SHOT) {
     win.webContents.once('did-finish-load', () => setTimeout(async () => {
@@ -252,7 +259,14 @@ async function scan() {
   const [found, xbox, fivem] = await Promise.all([scanAll({}, { steamApiKey: secret('steam') }), scanXbox().catch(() => []), scanFivem(undefined, store.data.fivemSessions ?? []).catch(() => ({ item: null }))]);
   if (fivem.item) store.data.fivemSessions = fivem.sessions; // sessions gardées même quand FiveM efface ses vieux journaux
   if (fivem.item) store.data.fivemLogs = await fivemServerLogs(fivemDir(), store.data.fivemLogs ?? {}).catch(() => store.data.fivemLogs ?? {});
-  raw = [...found.filter((i) => !(fivem.item && /^fivem$/i.test(i.name ?? ''))), ...xbox, ...(fivem.item ? [fivem.item] : []), ...Object.values(store.data.custom ?? {}).map(customItem)];
+  // GOG et Ubisoft Connect (registre) ; les mêmes jeux vus comme simples programmes sont retirés
+  const [gogReg, ubiReg] = await Promise.all([readRegistry('HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games'), readRegistry('HKLM\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs')]).catch(() => [[], []]);
+  const stores = [...gogGames(gogReg), ...ubisoftGames(ubiReg)];
+  for (const g of stores) if (!g.exe) g.exe = await findExe(g.installDir).catch(() => null);
+  const storeDirs = new Set(stores.map((g) => g.installDir.toLowerCase().replace(/[\\/]+$/, '')));
+  const notDup = (i) => !(i.installDir && storeDirs.has(String(i.installDir).toLowerCase().replace(/[\\/]+$/, '')));
+  raw = [...found.filter((i) => !(fivem.item && /^fivem$/i.test(i.name ?? '')) && notDup(i)), ...stores, ...xbox, ...(fivem.item ? [fivem.item] : []), ...Object.values(store.data.custom ?? {}).map(customItem)];
+  if (process.env.LAUNCHER_DEMO) raw = demoItems();
   await fillSteamNames(raw).catch(() => {});
   await remerge();
   enrichInBackground().catch(() => {});
@@ -395,7 +409,7 @@ async function startBoost(item) {
   const b = boostSettings();
   // Réglage par jeu : « toujours » (même si l'opti auto est coupée) ou « jamais » pour ce jeu
   const perGame = b.games?.[item.id];
-  if (perGame === false || (!b.enabled && perGame !== true) || boosted || process.platform !== 'win32') return;
+  if (perGame === false || (!b.enabled && perGame !== true && !store.data.settings.tournament) || boosted || process.platform !== 'win32') return;
   const scheme = b.power ? await activeScheme() : null;
   if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(HIGH_PERFORMANCE);
   const closed = await closeApps(boostPlan(await runningPaths(), b.close));
@@ -479,6 +493,7 @@ async function runBench() {
   r.tier = tier(r.scores.total);
   store.data.bench = [r, ...(store.data.bench ?? [])].slice(0, 12);
   store.save();
+  submitBench(r).catch(() => {});
   step('done', 100, 'Terminé');
   return r;
 }
@@ -503,7 +518,7 @@ ipcMain.handle('pc:bench', async () => {
   benchRunning = true;
   try { return await runBench(); } catch (err) { return { error: err.message }; } finally { benchRunning = false; }
 });
-ipcMain.handle('pc:benchHistory', () => store.data.bench ?? []);
+ipcMain.handle('pc:benchHistory', () => (process.env.LAUNCHER_DEMO ? demoBench() : store.data.bench ?? []));
 
 /** Rapport détaillé écrit par l'IA à partir des vraies mesures (sans IA : rapport automatique). */
 async function pcReport(diag, procs, bench, extra = '') {
@@ -534,6 +549,136 @@ ipcMain.handle('pc:report', async () => {
   const procs = await processes().catch(() => []);
   return pcReport(diag, procs, store.data.bench?.[0] ?? null);
 });
+// ---------- Progression : niveau, badges, série, heures de jeu, sessions, à redécouvrir ----------
+ipcMain.handle('progress:get', async () => {
+  const games = items.filter((i) => i.kind === 'game');
+  const total = games.reduce((n, i) => n + (i.minutes || 0), 0);
+  const friends = (socialLive?.amis ?? []).length;
+  const act = process.env.LAUNCHER_DEMO ? demoActivity() : { days: store.data.days, sessions: store.data.sessions ?? [] };
+  const sess = act.sessions.slice(-15).reverse().map((x) => ({ ...x, name: items.find((i) => i.id === x.id)?.name ?? 'Jeu' }));
+  return {
+    level: levelOf(total), totalMinutes: total, streak: streakOf(act.days),
+    badges: badges({ items, days: act.days, sessions: act.sessions, friends, bench: (process.env.LAUNCHER_DEMO ? demoBench() : store.data.bench ?? [])[0] ?? null, health: diagCache?.data?.score ?? store.data.diagHistory?.at(-1)?.score ?? null, collections: Object.keys(store.data.collections ?? {}).length }),
+    hourly: hourly(act.days, 30), sessions: sess, rediscover: rediscover(items).map((i) => i.id),
+  };
+});
+
+// ---------- Réseau : latence vers les services de jeu et vitesse des DNS ----------
+ipcMain.handle('net:ping', () => pingHosts().catch((err) => ({ error: err.message })));
+ipcMain.handle('net:dns', () => dnsTest().catch((err) => ({ error: err.message })));
+
+// ---------- Point de restauration Windows (avant une optimisation) ----------
+ipcMain.handle('pc:restorepoint', async () => {
+  if (process.platform !== 'win32') return { ok: false, error: 'Windows seulement.' };
+  const { execFile } = await import('node:child_process');
+  const cmd = "Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '-NoProfile','-Command','Enable-ComputerRestore -Drive $env:SystemDrive; Checkpoint-Computer -Description ''History Launcher'' -RestorePointType MODIFY_SETTINGS'";
+  return new Promise((resolve) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], { windowsHide: true, timeout: 180_000 }, (err) => resolve(err ? { ok: false, error: 'Autorisation refusée ou restauration désactivée.' } : { ok: true })));
+});
+
+// ---------- Mon PC peut-il faire tourner ce jeu ? (configuration Steam vs PC mesuré) ----------
+ipcMain.handle('game:reqs', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item?.steamId) return { error: 'Disponible pour les jeux Steam.' };
+  const det = store.data.art[item.id]?.details?.requirements ? store.data.art[item.id].details : await steamDetails(item.steamId).catch(() => null);
+  const req = det?.requirements;
+  if (!req?.min && !req?.rec) return { error: 'Steam ne donne pas de configuration pour ce jeu.' };
+  const diag = await runDiag().catch(() => null);
+  const drive = String(item.installDir ?? 'C:').slice(0, 1).toUpperCase();
+  const vol = diag?.volumes?.find((v) => v.letter.toUpperCase() === drive) ?? diag?.volumes?.[0];
+  const gpu = diag?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? diag?.gpus?.[0];
+  const pc = { ramGb: diag?.ramGb ?? Math.round(os.totalmem() / 1024 ** 3), freeGb: vol ? vol.free / 1e9 + (item.installed ? (item.size ?? 0) / 1e9 : 0) : null, vramGb: gpu?.vram ? gpu.vram / 1024 ** 3 : null };
+  const min = checkReq(parseReq(req.min), pc);
+  const rec = checkReq(parseReq(req.rec), pc);
+  const mine = { cpu: diag?.cpu?.name ?? os.cpus()[0]?.model, gpu: gpu?.name ?? null, ...pc };
+  let ai = null;
+  const brain = await getAi().catch(() => null);
+  if (brain && (min || rec)) {
+    ai = await brain.ask({ system: 'Tu es un expert matériel PC gaming. Réponds en français, tutoie, 3 phrases maximum, sans inventer de chiffres de FPS.', text: `Jeu : ${item.name}\nMon processeur : ${mine.cpu}\nMa carte graphique : ${mine.gpu}\nMa mémoire : ${mine.ramGb} Go\nMinimum demandé : processeur ${min?.cpu ?? '?'} ; carte ${min?.gpu ?? '?'}\nRecommandé : processeur ${rec?.cpu ?? '?'} ; carte ${rec?.gpu ?? '?'}\nMon processeur et ma carte graphique atteignent-ils le minimum puis le recommandé ? Quelle qualité graphique viser ?` }).catch(() => null);
+  }
+  return { name: item.name, min, rec, mine, ai };
+});
+
+// ---------- Conseils de l'IA pour un jeu (réglages graphiques selon ce PC + astuces) ----------
+ipcMain.handle('ai:gametips', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item) return { error: 'Jeu introuvable.' };
+  const brain = await getAi().catch(() => null);
+  if (!brain) return { error: 'Connecte-toi à ton compte History pour les conseils de l’IA.' };
+  const diag = await runDiag().catch(() => null);
+  const pcTxt = diag && !diag.error ? `Processeur ${diag.cpu.name}, ${diag.ramGb} Go de mémoire, carte ${diag.gpus.map((g) => `${g.name}${g.vram ? ` ${Math.round(g.vram / 1024 ** 3)} Go` : ''}`).join(' + ')}, écran ${diag.gpus[0]?.width ?? '?'}×${diag.gpus[0]?.height ?? '?'} à ${diag.gpus[0]?.hz ?? '?'} Hz` : `Processeur ${os.cpus()[0]?.model}, ${Math.round(os.totalmem() / 1024 ** 3)} Go de mémoire`;
+  const text = await brain.ask({ system: 'Tu es un coach gaming et expert en réglages PC. Français, tutoiement. Structure : « Réglages conseillés » (liste courte des options du jeu avec la valeur à choisir), « Pour gagner des FPS » (3 points), « Astuces de jeu » (3 conseils utiles pour progresser). Pas de chiffres de FPS inventés.', text: `Jeu : ${item.name}\nPC : ${pcTxt}\nTemps de jeu : ${Math.round((item.minutes || 0) / 60)} h` }).catch((err) => ({ error: err.message }));
+  return typeof text === 'string' ? { text } : { error: text?.error ?? 'IA indisponible' };
+});
+
+// ---------- Rapport en PDF (Documents\History) ----------
+ipcMain.handle('pc:pdf', async (_e, title, body) => {
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  const html = `<!doctype html><meta charset="utf-8"><style>body{font:13px/1.6 Segoe UI,Arial,sans-serif;color:#1b1826;margin:42px}h1{font-size:22px;margin:0 0 4px;color:#1554d1}small{color:#777}pre{white-space:pre-wrap;font:inherit}</style><h1>${esc(title)}</h1><small>History Launcher · ${new Date().toLocaleString('fr-FR')}</small><pre>${esc(body)}</pre>`;
+  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } });
+  try {
+    await w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    const pdf = await w.webContents.printToPDF({ pageSize: 'A4', printBackground: true });
+    const dir = path.join(app.getPath('documents'), 'History');
+    await mkdir(dir, { recursive: true });
+    const file = path.join(dir, `Rapport PC ${new Date().toISOString().slice(0, 10)}.pdf`);
+    await writeFile(file, pdf);
+    shell.showItemInFolder(file);
+    return { ok: true, file };
+  } catch (err) { return { ok: false, error: err.message }; } finally { w.destroy(); }
+});
+
+// ---------- Export / import de la bibliothèque (réglages, collections, favoris, heures) ----------
+ipcMain.handle('lib:export', async () => {
+  const r = await dialog.showSaveDialog(win, { title: 'Exporter ma bibliothèque', defaultPath: path.join(app.getPath('documents'), `history-bibliotheque-${new Date().toISOString().slice(0, 10)}.json`), filters: [{ name: 'Sauvegarde History', extensions: ['json'] }] });
+  if (r.canceled || !r.filePath) return { ok: false };
+  const { writeFile } = await import('node:fs/promises');
+  await writeFile(r.filePath, JSON.stringify({ app: 'History Launcher', version: app.getVersion(), at: Date.now(), data: pickBackup(store.data) }, null, 1));
+  return { ok: true, file: r.filePath };
+});
+ipcMain.handle('lib:import', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Importer une bibliothèque', filters: [{ name: 'Sauvegarde History', extensions: ['json'] }], properties: ['openFile'] });
+  if (r.canceled || !r.filePaths[0]) return { ok: false };
+  const { readFile } = await import('node:fs/promises');
+  try {
+    const j = JSON.parse(await readFile(r.filePaths[0], 'utf8'));
+    if (j?.app !== 'History Launcher' || typeof j.data !== 'object') return { ok: false, error: 'Ce fichier n’est pas une sauvegarde History.' };
+    await applyRemote(j.data);
+    return { ok: true };
+  } catch { return { ok: false, error: 'Fichier illisible.' }; }
+});
+
+// ---------- Classement mondial des benchmarks ----------
+async function submitBench(r) {
+  const token = secret('account');
+  if (!token || !r?.scores?.total) return;
+  const diag = diagCache?.data;
+  await api('/api/compte/benchmark', { method: 'POST', token, body: { scores: r.scores, cpu: diag?.cpu?.name ?? r.cpuName ?? null, gpu: diag?.gpus?.[0]?.name ?? null } }).catch(() => {});
+}
+ipcMain.handle('bench:ranking', () => social('/api/compte/benchmark/classement'));
+
+// ---------- Historique des températures (24 h) et analyse automatique chaque semaine ----------
+setInterval(async () => {
+  const snap = await snapshot().catch(() => null);
+  if (!snap) return;
+  const list = store.data.temps ?? [];
+  list.push({ t: Date.now(), cpu: snap.cpu?.usage ?? null, cpuT: snap.cpu?.temp ?? null, gpuT: snap.gpu?.temp ?? null, gpu: snap.gpu?.usage ?? null, ram: snap.ram ? Math.round((100 * snap.ram.used) / snap.ram.total) : null });
+  store.data.temps = list.filter((x) => Date.now() - x.t < 24 * 3_600_000).slice(-1440);
+}, 60_000);
+ipcMain.handle('pc:temps', () => (process.env.LAUNCHER_DEMO ? demoTemps() : store.data.temps ?? []));
+async function weeklyDiag() {
+  const last = store.data.diagHistory?.at(-1);
+  if (last && Date.now() - last.at < 7 * 86_400_000) return;
+  const d = await runDiag(true).catch(() => null);
+  if (!d || d.error) return;
+  store.data.diagHistory = [...(store.data.diagHistory ?? []), { at: Date.now(), score: d.score }].slice(-26);
+  store.save();
+  const urgent = d.advice.filter((a) => a.prio === 0);
+  if (urgent.length || (last && d.score < last.score - 10)) notify('Analyse de la semaine', urgent.length ? `${urgent[0].title} : ouvre Mon PC pour les détails.` : `Le score de santé de ton PC est passé de ${last.score} à ${d.score}.`);
+}
+setTimeout(() => weeklyDiag().catch(() => {}), 10 * 60_000);
+setInterval(() => weeklyDiag().catch(() => {}), 12 * 3_600_000);
+
 // Analyse complète : diagnostic + processus + fichiers inutiles + antivirus complet + benchmark + rapport IA
 ipcMain.handle('pc:deep', async () => {
   if (benchRunning) return { error: 'Une analyse est déjà en cours.' };
@@ -904,6 +1049,9 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('friendNotifs' in patch) store.data.settings.friendNotifs = Boolean(patch.friendNotifs);
   for (const k of ['sfxOn', 'sfxNotif']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
   if ('sfxVol' in patch) store.data.settings.sfxVol = Math.max(0, Math.min(100, Math.round(Number(patch.sfxVol) || 0)));
+  for (const k of ['dnd', 'tournament', 'compact']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
+  if ('status' in patch) { store.data.settings.status = String(patch.status ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 60) || null; lastPresence = 0; }
+  if ('textScale' in patch) { const z = [0.9, 1, 1.1, 1.25].includes(Number(patch.textScale)) ? Number(patch.textScale) : 1; store.data.settings.textScale = z; win?.webContents.setZoomFactor(z); }
   if ('replay' in patch) { store.data.settings.replay = Boolean(patch.replay); setReplay(store.data.settings.replay).catch(() => {}); }
   if ('sidebar' in patch) {
     const sb = patch.sidebar ?? {};
@@ -992,6 +1140,34 @@ ipcMain.handle('friends:open', async (_e, action, id64) => {
 });
 
 // ---------- Promos de la liste de souhaits Steam (vérifiées toutes les 6 h, alerte pour chaque nouvelle promo) ----------
+// Jeux gratuits Epic : une notification par nouveau jeu offert (clic = page du jeu)
+async function checkFree() {
+  if (store.data.settings.dealAlerts === false || !Notification.isSupported()) return;
+  const list = (await epicFreeGames().catch(() => [])).filter((g) => g.now);
+  const seen = new Set(store.data.freeSeen ?? []);
+  for (const g of list) {
+    if (seen.has(g.slug ?? g.name)) continue;
+    seen.add(g.slug ?? g.name);
+    const n = new Notification({ title: '🎁 Jeu gratuit sur Epic', body: `${g.name} est offert${g.until ? ` jusqu’au ${new Date(g.until).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : ''} : il reste à toi pour toujours.`, icon: ICON });
+    if (g.slug && /^[\w-]{1,120}$/.test(g.slug)) n.on('click', () => openLink(`https://store.epicgames.com/fr/p/${g.slug}`).catch(() => {}));
+    n.show();
+  }
+  store.data.freeSeen = [...seen].slice(-100);
+  store.save();
+}
+setTimeout(() => checkFree().catch(() => {}), 2 * 60_000);
+setInterval(() => checkFree().catch(() => {}), 6 * 3_600_000);
+
+// Lien d'invitation : history://ami/<code ami> (ou https://vercelia.vercel.app/launcher#ami=<code>)
+function handleInvite(argv) {
+  const url = (argv ?? []).find((a) => /^history:\/\//i.test(String(a)));
+  const m = url && decodeURIComponent(String(url)).match(/^history:\/\/ami\/([\p{L}\p{N}._-]{2,20}#[0-9A-Fa-f]{6})\/?$/u);
+  if (!m) return;
+  showWindow();
+  setTimeout(() => send('invite:friend', { code: m[1] }), 800);
+}
+app.on('second-instance', (_e, argv) => handleInvite(argv));
+
 async function checkDeals(notify = true) {
   const id64 = myId64();
   if (!id64) return [];
@@ -1052,7 +1228,7 @@ async function sendPresence(s) {
   const top = games.sort((a, b) => b[1] - a[1])[0]?.[0]?.name ?? null;
   const item = s ? items.find((i) => i.id === s.id) : null;
   const join = share && s ? joinFor(item, item?.source === 'fivem' ? lastFivemServer(store.data.fivemLogs, store.data.fivemLast ?? null) : null) : null;
-  await api('/api/compte/presence', { method: 'POST', token, body: { playing: share && s ? s.name : null, join, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
+  await api('/api/compte/presence', { method: 'POST', token, body: { status: store.data.settings.status ?? null, dnd: Boolean(store.data.settings.dnd || store.data.settings.tournament), bench: share ? (store.data.bench ?? [])[0]?.scores?.total ?? null : null, playing: share && s ? s.name : null, join, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
 }
 
 // ---------- Amis en direct : notifications en bas à gauche (comme Steam), messages, « on joue ? », rejoindre ----------
@@ -1093,7 +1269,7 @@ function armCard(c) {
 }
 function pushCard(c, force = false) {
   if (!c || notifCards.some((x) => x.id === c.id)) return;
-  if (!force && store.data.settings.friendNotifs === false) return;
+  if (!force && (store.data.settings.friendNotifs === false || store.data.settings.dnd || store.data.settings.tournament)) return;
   notifCards.push(c);
   armCard(c);
   notifSync();
@@ -1188,6 +1364,7 @@ async function joinGame(join, game) {
 let socialPrev = null;
 let socialLive = null;
 async function socialTick() {
+  if (process.env.LAUNCHER_DEMO) { const r = demoFriends(); socialLive = r; send('social:live', { ...r, messages: [] }); return; }
   const token = secret('account');
   if (!token) { socialPrev = null; return; }
   const after = store.data.inboxAt ?? Date.now() - 60_000;
@@ -1228,7 +1405,7 @@ async function social(pathname, body) {
   return api(pathname, { method: body ? 'POST' : 'GET', token, body }).catch(() => ({ status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }));
 }
 const ID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
-ipcMain.handle('hfriends:get', () => social('/api/compte/amis'));
+ipcMain.handle('hfriends:get', () => (process.env.LAUNCHER_DEMO ? demoFriends() : social('/api/compte/amis')));
 ipcMain.handle('hfriends:add', (_e, code) => social('/api/compte/amis/ajouter', { code: String(code ?? '').slice(0, 40) }));
 ipcMain.handle('hfriends:accept', (_e, id) => social('/api/compte/amis/accepter', { id: ID(id) }));
 ipcMain.handle('hfriends:remove', (_e, id) => social('/api/compte/amis/retirer', { id: ID(id) }));
@@ -1400,14 +1577,15 @@ ipcMain.handle('color:of', async (_e, id) => {
 // ---------- Statistiques ----------
 ipcMain.handle('stats:get', (_e, period) => {
   const n = { semaine: 7, mois: 30, annee: 365 }[period] ?? 7;
-  const split = periodStats(store.data.days, n);
+  const days = process.env.LAUNCHER_DEMO ? demoActivity().days : store.data.days;
+  const split = periodStats(days, n);
   const top = [...items].sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((i) => ({ id: i.id, name: i.name, minutes: i.minutes, cat: statCategory(i) }));
   // Classement de la période (temps suivi par le launcher), en plus du temps total
-  const recent = periodItems(store.data.days, n);
+  const recent = periodItems(days, n);
   // Classement « 2 dernières semaines » : chiffres officiels de Steam pour ses jeux, chronomètre du launcher pour les autres
-  const tracked14 = periodItems(store.data.days, 14);
+  const tracked14 = periodItems(days, 14);
   const twoWeeks = Object.fromEntries(items.filter((i) => i.kind === 'game').map((i) => [i.id, i.recent2w ?? tracked14[i.id] ?? 0]).filter(([, m]) => m > 0));
-  return { split, top, recent, twoWeeks, profile: os.userInfo().username };
+  return { split, top, recent, twoWeeks, profile: process.env.LAUNCHER_DEMO ? 'Noam' : os.userInfo().username };
 });
 
 // ---------- Musique ----------
@@ -1884,6 +2062,8 @@ async function start() {
   globalShortcut.register('CommandOrControl+Alt+R', () => { saveClip(); });
   if (store.data.settings.replay) setTimeout(() => setReplay(true).catch(() => {}), 8000);
   globalShortcut.register('CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
+  if (app.isPackaged) app.setAsDefaultProtocolClient('history');
+  setTimeout(() => handleInvite(process.argv), 3000);
   setTimeout(() => checkDeals().catch(() => {}), 60_000);
   setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);
   startTracker(() => items, store, (ids) => {

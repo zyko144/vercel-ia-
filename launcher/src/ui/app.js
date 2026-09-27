@@ -1,3 +1,4 @@
+import { scamCheck } from '../core/friendsync.js';
 // Interface du launcher : accueil (bannière, plus joués, applis, recommandations), bibliothèque, statistiques,
 // assistant IA et lecteur de musique. Toutes les images sont les images officielles trouvées par le launcher.
 import { filterSort } from '../core/sort.js';
@@ -145,6 +146,10 @@ function menuFor(i) {
   if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
   if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
   if (i.kind === 'game') {
+    const fin = Object.values(state.cols).find((c) => c.name === 'À finir');
+    m.push(`<button data-tofinish="1">${fin?.items.includes(i.id) ? '🏁 Retirer de « À finir »' : '🏁 Ajouter à « À finir »'}</button>`);
+    if (i.steamId) m.push('<button data-reqs="1">✅ Mon PC peut-il le faire tourner ?</button>');
+    m.push('<button data-tips="1">🤖 Conseils de l’IA pour ce jeu</button>');
     const g = boostGames[i.id];
     m.push(`<button data-boostgame="${g === true ? 'off' : g === false ? 'auto' : 'on'}">${g === true ? '⚡ Opti auto : toujours (changer → jamais)' : g === false ? '⚡ Opti auto : jamais (changer → par défaut)' : '⚡ Toujours optimiser ce jeu'}</button>`);
   }
@@ -254,6 +259,11 @@ function renderHome() {
   }).join('') : '<div class="empty">Aucune application trouvée.</div>';
   renderRecos();
   renderUpdates();
+  api.progress?.().then((p) => {
+    const list = (p?.rediscover ?? []).map((id) => state.items.find((i) => i.id === id)).filter(Boolean);
+    $('rediscBlock').hidden = !list.length;
+    $('rediscover').innerHTML = list.map((i) => card(i)).join('');
+  }).catch(() => {});
 }
 
 function renderUpdates() {
@@ -336,7 +346,7 @@ function renderHistory() {
   const joinable = (a) => a.playing && (a.join?.steam || (a.join?.fivem && state.items.some((i) => i.source === 'fivem')) || state.items.some((i) => i.installed && i.name.toLowerCase() === a.playing.toLowerCase()));
   $('hFriends').innerHTML = r.amis.length ? r.amis.map((a) => `
     <div class="hfriend ${a.playing ? 'ingame' : a.online ? 'on' : ''}"><span class="dot"></span>
-      <div class="finfo"><b>${esc(a.pseudo)}</b><small>${a.playing ? `Joue à ${esc(a.playing)}${a.since ? ` · depuis ${hours(Math.max(1, (Date.now() - a.since) / 60_000))}` : ''}` : a.online ? 'En ligne' : 'Hors ligne'}${a.week ? ` · ${hours(a.week)} cette semaine` : ''}${unread[a.id] ? ` · <span class="unread">${unread[a.id]} nouveau${unread[a.id] > 1 ? 'x' : ''} message${unread[a.id] > 1 ? 's' : ''}</span>` : ''}</small></div>
+      <div class="finfo"><b>${esc(a.pseudo)}${a.dnd ? ' <span class="dndb" title="Ne pas déranger">⛔</span>' : ''}${a.bench ? ` <span class="benchb" title="Score de benchmark">🏁 ${a.bench}</span>` : ''}</b>${a.status ? `<small class="fstatus">« ${esc(a.status)} »</small>` : ''}<small>${a.playing ? `Joue à ${esc(a.playing)}${a.since ? ` · depuis ${hours(Math.max(1, (Date.now() - a.since) / 60_000))}` : ''}` : a.online ? 'En ligne' : 'Hors ligne'}${a.week ? ` · ${hours(a.week)} cette semaine` : ''}${unread[a.id] ? ` · <span class="unread">${unread[a.id]} nouveau${unread[a.id] > 1 ? 'x' : ''} message${unread[a.id] > 1 ? 's' : ''}</span>` : ''}</small></div>
       <div class="factions">
         ${joinable(a) ? `<button class="btn play sm" data-hjoin="${esc(a.id)}">Rejoindre</button>` : ''}
         ${a.playing ? `<button class="btn sm" data-hask="${esc(a.id)}" title="Lui demander de jouer ensemble">🎮 On joue ?</button>` : ''}
@@ -425,7 +435,7 @@ async function refreshChat() {
   if (!chatWith) return;
   const r = await api.chatThread(chatWith.id).catch(() => null);
   if (!r?.fil) { $('chatFil').innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible de charger la discussion.')}</p>`; return; }
-  $('chatFil').innerHTML = r.fil.length ? r.fil.map((m) => `<div class="cmsg ${m.from === chatWith.id ? 'them' : 'me'}"><span>${esc(m.text)}</span><small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="hint">Pas encore de message : dis bonjour 👋</p>';
+  $('chatFil').innerHTML = r.fil.length ? r.fil.map((m) => `<div class="cmsg ${m.from === chatWith.id ? 'them' : 'me'}"><span>${esc(m.text)}</span>${m.from === chatWith.id && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}<small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="hint">Pas encore de message : dis bonjour 👋</p>';
   $('chatFil').scrollTop = $('chatFil').scrollHeight;
 }
 $('chatForm').addEventListener('submit', async (e) => {
@@ -553,6 +563,13 @@ function showFriendTab(tab) {
   $('fSteam').hidden = tab !== 'steam';
   if (tab === 'history') { $('friendsCount').textContent = ''; loadHistory(); } else { renderFriends(); loadFriends(); }
 }
+$('saveStatus').addEventListener('click', async () => { await api.setSettings({ status: $('myStatus').value }); toast($('myStatus').value.trim() ? 'Statut mis à jour' : 'Statut retiré'); });
+$('copyInvite').addEventListener('click', () => { const code = $('myCode').textContent; if (!code || code === '—') return toast('Connecte-toi d’abord'); navigator.clipboard?.writeText(`history://ami/${encodeURIComponent(code)}`); toast('Lien copié : envoie-le à tes potes (ils cliquent → demande d’ami)'); });
+api.onInvite?.(async (d) => {
+  if (!(await ui.confirm({ title: 'Ajouter cet ami ?', text: `Envoyer une demande d’ami à ${d.code} ?`, ok: '👥 Ajouter', icon: '👥' }))) return;
+  const r = await api.hFriendAdd(d.code);
+  toast(r?.amis ? 'Vous êtes maintenant amis !' : r?.envoye ? 'Demande envoyée' : r?.error ?? 'Impossible');
+});
 $('copyCode').addEventListener('click', () => { navigator.clipboard?.writeText($('myCode').textContent); toast('Code copié'); });
 $('addFriend').addEventListener('click', async () => {
   const code = $('addCode').value.trim();
@@ -673,6 +690,19 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.16.0': [
+    ['🏅', 'Niveaux, badges et série de jours', 'Statistiques : ton niveau de joueur, ta série de jours d’affilée et 15 badges à débloquer (marathon, oiseau de nuit, machine de guerre…).', ['[data-view=stats]']],
+    ['🕒', 'Quand tu joues', 'Tes heures de jeu sur 30 jours et le journal de tes sessions (début, durée), en plus des statistiques.'],
+    ['🌡', 'Courbes des dernières 24 h et réseau', 'Mon PC : processeur, température graphique et mémoire sur 24 h, latence vers Steam / Epic / Riot / FiveM, et le DNS le plus rapide.', ['[data-view=pc]', '#pcTemps']],
+    ['👥', 'Statut, ne pas déranger et lien d’invitation', 'Mets un statut (« Dispo pour jouer »), coupe les notifications, partage un lien history:// qui ajoute ton code, et les liens d’arnaque sont signalés dans le chat.', ['[data-view=amis]']],
+    ['🎯', 'À redécouvrir', 'L’accueil te repropose les jeux où tu as passé des heures mais que tu n’as pas lancés depuis un mois.', ['[data-view=accueil]', '#rediscBlock']],
+    ['🏆', 'Mode tournoi, mode compact, taille du texte', 'Paramètres : boost automatique et zéro notification en tournoi, plus de jeux à l’écran, texte plus grand, test du micro.', ['#openSettings']],
+    ['📋', 'Configuration requise', 'Clic droit sur un jeu Steam › Config requise : minimum et recommandé comparés à ton PC, avec l’avis de l’IA et des conseils.'],
+    ['🌍', 'Classement mondial des benchmarks', 'Compare ton score à tous les joueurs History (tes amis sont mis en avant) et suis ta progression.'],
+    ['🧩', 'GOG et Ubisoft Connect', 'Les jeux GOG et Ubisoft installés apparaissent dans la bibliothèque, sans doublon.'],
+    ['🛟', 'Point de restauration, rapport PDF, export', 'Crée un point de restauration Windows en un clic, enregistre le rapport du PC en PDF, exporte ou importe ta bibliothèque.'],
+    ['🔔', 'Alertes utiles', 'Un nouveau jeu gratuit sur Epic ou une baisse de santé du PC au diagnostic de la semaine : tu es prévenu.'],
+  ],
   '0.15.0': [
     ['📞', 'Appels entre amis', 'Bouton 📞 sur un ami en ligne : appel vocal direct (micro avec suppression du bruit), sonnerie en bas à gauche.', ['[data-view=amis]']],
     ['🧩', 'Addons Garry’s Mod', 'Clic droit sur Garry’s Mod : tes addons installés, et colle un lien du Workshop pour en ajouter.'],
@@ -774,6 +804,22 @@ async function openGmod(found = null) {
     if (b.id === 'wsGo') { const d = await api.gmodDetails($('wsLink').value); return openGmod(d?.error ? d : d); }
     if (b.dataset.gminst) { await api.gmodInstall(b.dataset.gminst); toast('Steam s’ouvre sur l’addon : clique sur « S’abonner » pour l’installer'); }
   };
+}
+async function openReqs(item) {
+  hideCtx();
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>${esc(item.name)}</h2></div><p class="hint">Comparaison avec ton PC…</p>`;
+  if (!$('modal').open) $('modal').showModal();
+  const r = await api.gameReqs(item.id);
+  const row = (label, c, unit = ' Go') => (c?.need == null ? '' : `<div class="reqrow"><span>${label}</span><b>${Math.round(c.need * 10) / 10}${unit}</b><b>${c.have == null ? '?' : `${Math.round(c.have * 10) / 10}${unit}`}</b><em class="${c.ok ? 'ok' : c.ok === false ? 'bad' : ''}">${c.ok ? '✓' : c.ok === false ? '✗' : '?'}</em></div>`);
+  const block = (title, v) => (v ? `<div class="reqblock"><h3>${title} ${v.pass === true ? '<span class="ok">● OK</span>' : v.pass === false ? '<span class="bad">● insuffisant</span>' : ''}</h3>
+    <div class="reqrow head"><span></span><b>Demandé</b><b>Ton PC</b><em></em></div>${row('Mémoire', v.checks.ram)}${row('Place libre', v.checks.disk)}${row('Mémoire vidéo', v.checks.vram)}
+    ${v.cpu ? `<small class="hint">Processeur demandé : ${esc(v.cpu)}</small>` : ''}${v.gpu ? `<small class="hint">Carte graphique demandée : ${esc(v.gpu)}</small>` : ''}</div>` : '');
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>${esc(item.name)} sur ton PC</h2></div>
+    ${r?.error ? `<p class="hint">${esc(r.error)}</p>` : `${block('Minimum', r.min)}${block('Recommandé', r.rec)}
+    <small class="hint">Ton PC : ${esc(r.mine.cpu ?? '?')} · ${esc(r.mine.gpu ?? '?')}</small>
+    ${r.ai ? `<div class="reporttxt">🤖 ${esc(r.ai)}</div>` : ''}`}
+    <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); };
 }
 async function openFivemServers() {
   hideCtx();
@@ -990,6 +1036,7 @@ let pcTimer = null;
 async function openPc() {
   renderPc();
   if (!$('pcScore').innerHTML) pcDiag(false);
+  renderTemps();
   api.pcBenchHistory?.().then((h) => h?.length && renderBench(h[0], h)).catch(() => {});
   clearInterval(pcTimer);
   pcTimer = setInterval(() => (state.view === 'pc' ? renderPc() : clearInterval(pcTimer)), 2500);
@@ -1021,8 +1068,47 @@ function renderBench(r, hist = []) {
   const max = Math.max(2000, ...rows.map(([, v]) => v ?? 0));
   $('pcBench').innerHTML = `<div class="pcscore"><b class="big">${r.scores.total ?? '–'}</b><div><b>${esc(r.tier ?? '')}</b><small class="hint">le ${new Date(r.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · trait blanc = PC de référence (1000)</small></div></div>
     <div class="benchbars">${rows.map(([n, v, raw]) => `<div class="bbar"><span>${n}</span><div class="t"><i style="width:${Math.min(100, (100 * (v ?? 0)) / max)}%"></i><b style="left:${(100 * 1000) / max}%"></b></div><b>${v ?? '–'}</b></div><small class="hint" style="margin:-4px 0 0 140px">${esc(raw)}</small>`).join('')}</div>
-    ${hist.length > 1 ? `<small class="hint">Précédent : ${hist[1].scores.total} (${new Date(hist[1].at).toLocaleDateString('fr-FR')})</small>` : ''}`;
+    ${hist.length > 1 ? `<div class="bhist"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${spark([...hist].reverse().map((h) => h.scores.total), '#22d3ee', Math.max(...hist.map((h) => h.scores.total)) * 1.1)}</svg><small class="hint">Historique : ${[...hist].reverse().map((h) => h.scores.total).join(' → ')}</small></div>` : ''}`;
 }
+function spark(values, color, max = 100) {
+  const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * 100},${100 - (Math.max(0, v ?? 0) / max) * 100}`).join(' ');
+  return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`;
+}
+async function renderTemps() {
+  const list = await api.pcTemps?.().catch(() => []);
+  if (!list?.length) return;
+  const last = list.at(-1);
+  const series = [['cpu', 'Processeur %', '#2f8bff', 100], ['gpuT', 'Temp. graphique °C', '#ff6b6b', 100], ['ram', 'Mémoire %', '#22d3ee', 100]].filter(([k]) => list.some((x) => x[k] != null));
+  $('pcTemps').innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${series.map(([k, , c, m]) => spark(list.map((x) => x[k]), c, m)).join('')}</svg>
+    <div class="tleg">${series.map(([k, n, c]) => `<span><i style="background:${c}"></i>${n} : <b>${last[k] ?? '–'}</b> (max ${Math.max(...list.map((x) => x[k] ?? 0))})</span>`).join('')}</div>`;
+}
+$('netPing').addEventListener('click', async () => {
+  $('netOut').innerHTML = '<p class="hint">Mesure en cours…</p>';
+  const r = await api.netPing();
+  if (!Array.isArray(r)) return ($('netOut').innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible')}</p>`);
+  $('netOut').innerHTML = `<div class="netlist">${r.map((x) => `<div><span>${esc(x.name)}</span><b class="${x.ms == null ? 'bad' : x.ms < 60 ? 'ok' : x.ms < 120 ? '' : 'bad'}">${x.ms == null ? 'injoignable' : `${x.ms} ms`}</b></div>`).join('')}</div><small class="hint">Temps d’ouverture de la connexion, médiane de 3 essais.</small>`;
+});
+$('netDns').addEventListener('click', async () => {
+  $('netOut').innerHTML = '<p class="hint">Test des DNS…</p>';
+  const r = await api.netDns();
+  if (!r?.list) return ($('netOut').innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible')}</p>`);
+  $('netOut').innerHTML = `<div class="netlist">${r.list.map((x) => `<div><span>${esc(x.name)}${x.ip ? ` <small>${esc(x.ip)}</small>` : ''}</span><b>${x.ms == null ? 'échec' : `${x.ms} ms`}</b></div>`).join('')}</div>
+    <p class="hint">${r.best && r.gain > 5 ? `💡 ${esc(r.best.name)} (${esc(r.best.ip)}) répond ${r.gain} ms plus vite que ton DNS actuel : Paramètres Windows › Réseau › Modifier les options DNS.` : 'Ton DNS actuel est déjà rapide 👌'}</p>`;
+});
+$('restoreBtn').addEventListener('click', async () => {
+  if (!(await ui.confirm({ title: 'Créer un point de restauration ?', text: 'Windows pourra revenir à l’état actuel si une optimisation ou un pilote pose problème. Windows va demander l’autorisation administrateur.', ok: '🛟 Créer', icon: '🛟' }))) return;
+  toast('Création du point de restauration…');
+  const r = await api.restorePoint();
+  toast(r?.ok ? '🛟 Point de restauration créé' : r?.error ?? 'Impossible');
+});
+$('rankBtn').addEventListener('click', async () => {
+  const r = await api.benchRanking();
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🌍</span><h2>Classement mondial des benchmarks</h2></div>
+    ${r?.top ? `<p class="hint">${r.rang ? `Tu es ${r.rang}${r.rang === 1 ? 'er' : 'e'} sur ${r.total}.` : 'Fais un benchmark pour entrer dans le classement.'}</p><div class="ranklist2">${r.top.map((x, n) => `<div class="${x.moi ? 'me' : x.ami ? 'friend' : ''}"><span>${n + 1}</span><b>${esc(x.pseudo)}${x.ami ? ' 👥' : ''}</b><small>${esc([x.cpu, x.gpuName].filter(Boolean).join(' · '))}</small><em>${x.total}</em></div>`).join('')}</div>` : `<p class="hint">${esc(r?.error ?? 'Connecte-toi pour voir le classement.')}</p>`}
+    <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); };
+});
 async function renderProcs() {
   $('pcProcs').innerHTML = '<div class="empty">Mesure pendant 2 secondes…</div>';
   const list = await api.pcProcs?.().catch(() => null);
@@ -1045,9 +1131,9 @@ async function pcDiag(force) {
 function showReport(r, title = 'Rapport détaillé') {
   $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📄</span><h2>${esc(title)}</h2></div><div class="reporttxt">${esc(r?.text ?? r?.error ?? 'Rapport indisponible.')}</div>
     <small class="hint">${r?.ai ? 'Rédigé par l’IA à partir des vraies mesures de ton PC.' : 'Rapport automatique (connecte-toi pour la version rédigée par l’IA).'}</small>
-    <div class="row end"><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+    <div class="row end"><button type="button" class="btn" id="repPdf">📄 PDF</button><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
-  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); if (e.target.closest('#repCopy')) { navigator.clipboard?.writeText(r?.text ?? ''); toast('Rapport copié'); } };
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); if (e.target.closest('#repCopy')) { navigator.clipboard?.writeText(r?.text ?? ''); toast('Rapport copié'); } if (e.target.closest('#repPdf')) api.pcPdf(title, r?.text ?? '').then((p) => toast(p?.ok ? '📄 PDF enregistré dans Documents › History' : p?.error ?? 'Impossible')); };
 }
 $('pcDiagBtn').addEventListener('click', () => pcDiag(true));
 $('pcBenchBtn').addEventListener('click', async () => {
@@ -1250,7 +1336,22 @@ function renderList() {
 
 // ---------- Statistiques ----------
 const CATS = [['jeux', 'Jeux', '#2f8bff'], ['applis', 'Applications', '#22d3ee'], ['musique', 'Musique', '#6d7cff'], ['autres', 'Autres', '#2ee07a']];
+async function renderProgress() {
+  const p = await api.progress?.().catch(() => null);
+  if (!p) return;
+  const l = p.level;
+  $('progCard').innerHTML = `<div class="lvl"><b>${l.level}</b><small>niveau</small></div>
+    <div class="lvlinfo"><b>${esc(state.account?.pseudo ?? state.profile)} · niveau ${l.level}</b><div class="lvlbar"><i style="width:${l.pct}%"></i></div><small class="hint">${hours(p.totalMinutes)} de jeu · encore ${l.hoursToNext} h pour le niveau ${l.level + 1}</small></div>
+    <div class="streak"><b>🔥 ${p.streak}</b><small>jour${p.streak > 1 ? 's' : ''} d’affilée</small></div>`;
+  const max = Math.max(1, ...p.hourly);
+  $('hourly').innerHTML = p.hourly.map((m, h) => `<div class="hb" title="${h} h : ${hours(m)}"><i style="height:${Math.max(2, (100 * m) / max)}%"></i><small>${h % 3 === 0 ? h : ''}</small></div>`).join('');
+  $('sessions').innerHTML = p.sessions.length ? p.sessions.map((x) => `<div class="sess" data-id="${esc(x.id)}"><b>${esc(x.name)}</b><small>${new Date(x.start).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${hours(Math.max(1, (x.end - x.start) / 60_000))}</small></div>`).join('') : '<div class="empty">Tes prochaines parties apparaîtront ici.</div>';
+  const got = p.badges.filter((b) => b.got).length;
+  $('badgeCount').textContent = `${got} / ${p.badges.length} débloqués`;
+  $('badges').innerHTML = p.badges.map((b) => `<div class="bdg ${b.got ? 'got' : ''}" title="${esc(b.desc)}"><span>${b.icon}</span><b>${esc(b.title)}</b><small>${esc(b.desc)}</small>${b.got ? '' : `<div class="lvlbar"><i style="width:${b.progress}%"></i></div>`}</div>`).join('');
+}
 async function renderStats() {
+  renderProgress();
   const s = await api.stats(state.period);
   const total = Object.values(s.split).reduce((a, b) => a + b, 0);
   let offset = 0;
@@ -1599,6 +1700,17 @@ document.addEventListener('click', async (e) => {
     return toast(t.dataset.boostgame === 'on' ? `⚡ ${state.sel.name} sera toujours optimisé au lancement` : t.dataset.boostgame === 'off' ? `${state.sel.name} ne sera jamais optimisé` : 'Réglage par défaut remis');
   }
   if (t.dataset.gmod) return openGmod();
+  if (t.dataset.tofinish && state.sel) {
+    let id = Object.keys(state.cols).find((k) => state.cols[k].name === 'À finir');
+    if (!id) { id = newColId(); state.cols[id] = { name: 'À finir', items: [] }; }
+    const c = state.cols[id];
+    const on = !c.items.includes(state.sel.id);
+    c.items = on ? [...c.items, state.sel.id] : c.items.filter((x) => x !== state.sel.id);
+    saveCols();
+    return toast(on ? `🏁 ${state.sel.name} ajouté à « À finir »` : 'Retiré de « À finir »');
+  }
+  if (t.dataset.reqs && state.sel) return openReqs(state.sel);
+  if (t.dataset.tips && state.sel) { const it = state.sel; toast('L’IA prépare ses conseils…'); const r = await api.gameTips(it.id); return showReport(r?.text ? { text: r.text, ai: true } : { error: r?.error }, `Conseils pour ${it.name}`); }
   if (t.dataset.fivemsrv) return openFivemServers();
   if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
   if (t.dataset.hcall) return startCall(t.dataset.hcall, t.dataset.name);
@@ -1700,6 +1812,11 @@ function showKeys(s) {
   $('shareActivity').checked = s.shareActivity !== false;
   $('friendNotifs').checked = s.friendNotifs !== false;
   $('replay').checked = Boolean(s.replay);
+  $('textScale').value = String(s.textScale ?? 1);
+  $('compact').checked = Boolean(s.compact); document.body.classList.toggle('compact', Boolean(s.compact));
+  $('dnd').checked = Boolean(s.dnd); $('tournament').checked = Boolean(s.tournament);
+  if (s.status != null) $('myStatus').value = s.status;
+  if (s.dnd || s.tournament) window.sfx?.set({ notif: false });
   window.sfx?.set({ on: s.sfxOn !== false, notif: s.sfxNotif !== false, vol: (s.sfxVol ?? 60) / 100 });
   $('sfxOn').checked = s.sfxOn !== false;
   $('sfxNotif').checked = s.sfxNotif !== false;
@@ -1734,6 +1851,28 @@ const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxN
 ['sfxOn', 'sfxNotif'].forEach((id) => $(id).addEventListener('change', sfxSave));
 $('sfxVol').addEventListener('change', () => { sfxSave(); window.sfx?.play('success'); });
 document.querySelectorAll('[data-sfxtry]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const was = window.sfx.get(); window.sfx.set({ on: true, notif: true }); window.sfx.play(b.dataset.sfxtry); window.sfx.set(was); }));
+$('textScale').addEventListener('change', (e) => api.setSettings({ textScale: Number(e.target.value) }));
+$('compact').addEventListener('change', (e) => { document.body.classList.toggle('compact', e.target.checked); api.setSettings({ compact: e.target.checked }); });
+$('dnd').addEventListener('change', (e) => api.setSettings({ dnd: e.target.checked }).then(() => { window.sfx?.set({ notif: !e.target.checked && $('sfxNotif').checked }); toast(e.target.checked ? '⛔ Ne pas déranger activé' : 'Notifications réactivées'); }));
+$('tournament').addEventListener('change', (e) => api.setSettings({ tournament: e.target.checked }).then(() => toast(e.target.checked ? '🏆 Mode tournoi : boost sur chaque partie, zéro notification' : 'Mode tournoi désactivé')));
+$('libExport').addEventListener('click', async () => { const r = await api.libExport(); if (r?.ok) toast('📤 Bibliothèque exportée'); });
+$('libImport').addEventListener('click', async () => { const r = await api.libImport(); if (r?.ok) { toast('📥 Bibliothèque importée'); api.settings().then(showKeys); } else if (r?.error) toast(r.error); });
+$('micTest').addEventListener('click', async (e) => {
+  e.preventDefault();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); } catch { return toast('Micro inaccessible : autorise-le dans Windows (Confidentialité › Microphone)'); }
+  const ctx = new AudioContext(); const an = ctx.createAnalyser(); an.fftSize = 512; ctx.createMediaStreamSource(stream).connect(an);
+  const buf = new Uint8Array(an.fftSize); let peak = 0; const end = Date.now() + 6000;
+  toast('🎙 Parle pendant 6 secondes…');
+  (function loop() {
+    an.getByteTimeDomainData(buf);
+    const lvl = Math.min(100, Math.round(Math.max(...buf.map((v) => Math.abs(v - 128))) / 1.28));
+    peak = Math.max(peak, lvl);
+    $('micLvl').style.width = `${lvl}%`;
+    if (Date.now() < end) requestAnimationFrame(loop);
+    else { stream.getTracks().forEach((t) => t.stop()); ctx.close(); $('micLvl').style.width = '0'; toast(peak < 8 ? '🎙 Aucun son capté : vérifie le micro choisi dans Windows' : peak > 95 ? '🎙 Micro qui sature : baisse son volume dans Windows' : '🎙 Micro OK 👍'); }
+  })();
+});
 $('replay').addEventListener('change', (e) => api.setSettings({ replay: e.target.checked }).then(() => toast(e.target.checked ? '🎬 Replay activé : Ctrl+Alt+R garde les 30 dernières secondes' : 'Replay désactivé')));
 
 // Assistant : bulle en bas à droite, qui s'ouvre et se referme
@@ -2070,7 +2209,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.15.0',
+    version: async () => '0.16.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

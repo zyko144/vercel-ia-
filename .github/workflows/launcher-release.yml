@@ -59,10 +59,18 @@ jobs:
         run: |
           V="${{ steps.v.outputs.version }}"
           node ../tools/launcher-notes.mjs "$V" notes > dist/notes.md
-          export LAUNCHER_SHOT_JS="$(node ../tools/launcher-notes.mjs "$V" shotjs)"
-          export LAUNCHER_SHOT="$PWD/dist/apercu.png"
-          timeout 90 "dist/win-unpacked/History Launcher.exe" || true
-          ls -la dist/apercu.png || echo "pas de capture"
+          # Mode démo : bibliothèque, amis, benchmark et PC d'exemple pour que chaque capture montre la nouveauté
+          export LAUNCHER_DEMO=1
+          export LAUNCHER_DEMO_DIAG="$PWD/test/fixtures/diag-demo.json"
+          N="$(node ../tools/launcher-notes.mjs "$V" shots)"
+          [ "$N" -gt 0 ] || N=1
+          for i in $(seq 0 $((N - 1))); do
+            [ "$i" -eq 0 ] && OUT=apercu.png || OUT="apercu-$((i + 1)).png"
+            export LAUNCHER_SHOT_JS="$(node ../tools/launcher-notes.mjs "$V" shotjs "$i")"
+            export LAUNCHER_SHOT="$PWD/dist/$OUT"
+            timeout 90 "dist/win-unpacked/History Launcher.exe" || true
+          done
+          ls -la dist/apercu*.png || echo "pas de capture"
 
       - name: Publication (tag + release avec latest.yml pour la mise à jour auto)
         if: steps.exists.outputs.yes == 'false'
@@ -74,7 +82,7 @@ jobs:
           git tag "v$V" "$GITHUB_SHA" 2>/dev/null || true
           git push origin "v$V" || true
           FILES=(dist/*.exe dist/*.exe.blockmap dist/latest.yml)
-          [ -f dist/apercu.png ] && FILES+=(dist/apercu.png)
+          for f in dist/apercu*.png; do [ -f "$f" ] && FILES+=("$f"); done
           if gh release view "v$V" >/dev/null 2>&1; then
             gh release upload "v$V" "${FILES[@]}" --clobber
             gh release edit "v$V" --notes-file dist/notes.md

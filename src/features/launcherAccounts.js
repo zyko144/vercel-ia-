@@ -250,7 +250,7 @@ export async function handleAccountApi(req, res, url, { readJson, send, clientIp
       const { handleLauncherAi } = await import('./launcherAi.js');
       return await handleLauncherAi(req, res, { readJson, send });
     }
-    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel)(\/|$)/.test(url.pathname)) {
+    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel|benchmark)(\/|$)/.test(url.pathname)) {
       const { handleSocialApi } = await import('./launcherSocial.js');
       return await handleSocialApi(req, res, url, { readJson, send });
     }

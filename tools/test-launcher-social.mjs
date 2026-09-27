@@ -145,6 +145,23 @@ await check('appel vocal : sonnerie, réponse, signaux dans les deux sens, fin',
   assert.equal((await call('appel/fin', max, { call: c.id })).state, 'ended');
 });
 
+await check('statut, ne pas déranger, benchmark visible des amis et classement mondial', async () => {
+  await call('presence', max, { status: 'Soirée RP <b>', dnd: true, bench: 1420, week: 5 });
+  const f = (await call('amis', noam)).amis[0];
+  assert.equal(f.status, 'Soirée RP b', 'texte nettoyé');
+  assert.equal(f.dnd, true);
+  assert.equal(f.bench, 1420);
+  assert.equal((await call('benchmark', noam, { scores: { total: 'x' } })).status, 400);
+  await call('benchmark', noam, { scores: { total: 1200, gpu: 1300 }, cpu: 'Ryzen 5', gpu: 'RTX 3060' });
+  await call('benchmark', max, { scores: { total: 1500 } });
+  await call('benchmark', noam, { scores: { total: 900 } });
+  const r = await call('benchmark/classement', noam);
+  assert.deepEqual(r.top.map((x) => x.total), [1500, 1200], 'meilleur score gardé');
+  assert.equal(r.rang, 2);
+  assert.equal(r.top[0].ami, true);
+  assert.equal(r.top[1].moi, true);
+});
+
 await check('retirer un ami : des deux côtés', async () => {
   const maxId = (await call('amis', noam)).amis[0].id;
   await call('amis/retirer', noam, { id: maxId });
