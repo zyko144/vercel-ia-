@@ -841,3 +841,53 @@ body.big .gcard:hover, body.big .gridcard:hover { transform: translateY(-6px) sc
 body.compact .grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 12px; }
 body.compact .panel { padding: 10px 12px; }
 body.compact main { padding-top: 4px; }
+
+/* ---------- 0.17.0 : Mon PC en onglets, score unique, analyse pro, Windows Update ---------- */
+#view-pc .list-head { flex-wrap: wrap; gap: 12px; }
+.pctabs { flex-wrap: wrap; margin-left: 0 !important; }
+.pctabs button { position: relative; }
+.pctabs .navcount { position: static; margin-left: 6px; }
+.pctab { display: grid; gap: 16px; animation: tabin .25s ease; }
+.pctab[hidden] { display: none; }
+@keyframes tabin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.healthcard { display: grid; grid-template-columns: auto 1fr auto; gap: 26px; align-items: center; padding: 22px 26px; }
+.ring.small { width: 128px; height: 128px; }
+.ring.small b { font-size: 36px; }
+.hinfo2 { display: grid; gap: 6px; min-width: 0; }
+.hinfo2 > b { font-size: 18px; }
+.hparts { display: grid; gap: 7px; margin-top: 6px; }
+.hparts > div { display: grid; grid-template-columns: 170px 1fr 34px; gap: 10px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.hparts b { color: var(--text); text-align: right; }
+.hacts { display: grid; gap: 8px; }
+.advice.compact .adv { padding: 10px 12px; }
+.pcactions { justify-content: flex-end; }
+.scanhero { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: center; padding: 20px 24px; }
+.scanhero > div:first-child { display: grid; gap: 6px; }
+.scanhero b { font-size: 17px; }
+.scanlive .oprog, #wuLive .oprog, #wuOut .oprog { padding: 18px 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+.scanstats, .scansum, .evgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 10px; }
+.scanstats > div, .scansum > div, .evgrid > div { padding: 12px 14px; border-radius: 12px; background: var(--panel-2); }
+.scanstats b, .scansum b, .evgrid b { display: block; font-size: 20px; }
+.scanstats small, .scansum small, .evgrid small { color: var(--muted); font-size: 11.5px; }
+.scansum { margin: 0 0 16px; }
+.scansum .bad b, .evgrid .bad b { color: #ef4444; } .evgrid .warn b { color: #f59e0b; }
+.scanpath { display: block; margin-top: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: Consolas, monospace; font-size: 11.5px; }
+#scanOut { display: grid; gap: 16px; }
+.catbars .bbar, .catbars { display: grid; gap: 8px; }
+.catbars .bbar { grid-template-columns: 190px 1fr 80px; align-items: center; }
+.catbars .t { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.catbars .t i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--blue)); border-radius: inherit; }
+.catbars b { text-align: right; }
+.flist { display: grid; gap: 6px; max-height: 380px; overflow-y: auto; }
+.flist > div { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); }
+.flist > div > div { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.flist small { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flist em { font-style: normal; font-weight: 700; white-space: nowrap; }
+.flist > div.bad { outline: 1px solid rgba(239, 68, 68, .5); }
+.flist .dup small { display: flex; gap: 6px; align-items: center; }
+.linkbtn.sm, .flist .linkbtn { font-size: 11px; }
+#wuOut { display: grid; gap: 16px; }
+#wuOut .sub { display: block; margin: 12px 0 6px; }
+@media (max-width: 1250px) { .healthcard { grid-template-columns: auto 1fr; } .hacts { grid-column: 1 / -1; grid-auto-flow: column; } .scanhero { grid-template-columns: 1fr; } }
+.tlabel small.opt, .tlabel small.ok { display: inline-block !important; width: auto !important; margin-left: 6px; vertical-align: 1px; }
+#sysTweaks { display: grid; gap: 12px; }

@@ -56,3 +56,35 @@ export function demoTemps(now = Date.now()) {
     return { t: now - (143 - i) * 600_000, cpu: load, gpuT: 38 + Math.round(load * 0.45), ram: 34 + Math.round(load / 3) };
   });
 }
+/** Résultat d'exemple de l'analyse pro (captures de démonstration uniquement). */
+export function demoScan(now = Date.now()) {
+  const G = 1e9;
+  return {
+    at: now - 20 * 60_000, elapsed: 17 * 60_000 + 42_000, files: 1_284_553, dirs: 212_048, bytes: 1_486 * G, denied: 3_214, emptyDirs: 8_120, score: 71, threats: 1,
+    cats: [['jeux', '🎮', 'Fichiers de jeux', 612], ['videos', '🎬', 'Vidéos', 248], ['systeme', '⚙', 'Windows et programmes', 187], ['archives', '📦', 'Archives et images disque', 96], ['installeurs', '💿', 'Installateurs et programmes', 64], ['images', '🖼', 'Images', 38], ['musique', '🎵', 'Musique', 12], ['documents', '📄', 'Documents', 6], ['autres', '🗂', 'Autres', 223]].map(([id, icon, label, gb]) => ({ id, icon, label, files: Math.round(gb * 900), bytes: gb * G })),
+    junk: [{ id: 'installer', icon: '💿', label: 'Installateurs déjà utilisés (Téléchargements, plus d’un mois)', files: 38, bytes: 11.4 * G }, { id: 'temp', icon: '🗑', label: 'Fichiers temporaires de plus de 7 jours', files: 18_420, bytes: 6.2 * G }, { id: 'dump', icon: '💥', label: 'Rapports de plantage (dumps)', files: 64, bytes: 3.1 * G }, { id: 'log', icon: '📜', label: 'Gros journaux (logs) anciens', files: 22, bytes: 1.4 * G }],
+    junkBytes: 22.1 * G,
+    duplicates: [{ size: 4.2 * G, paths: ['D:\\Vidéos\\Montage finale.mp4', 'C:\\Users\\Noam\\Desktop\\Montage finale (1).mp4'] }, { size: 1.9 * G, paths: ['C:\\Users\\Noam\\Downloads\\GTA5-mods.zip', 'D:\\Backup\\GTA5-mods.zip', 'E:\\Old\\GTA5-mods.zip'] }],
+    dupWasted: 8 * G, hashed: { files: 4_812, bytes: 96 * G },
+    suspects: [{ path: 'C:\\Users\\Noam\\AppData\\Roaming\\winupdt.exe', size: 2.1e6, reason: 'Programme caché dans un dossier temporaire ou à la racine d’AppData', defender: 'menace' }, { path: 'C:\\Users\\Noam\\Downloads\\skins_gratuits.pdf.exe', size: 840e3, reason: 'Double extension (ex. facture.pdf.exe) : technique classique des virus', defender: 'propre' }],
+    largest: [{ path: 'D:\\SteamLibrary\\steamapps\\common\\Call of Duty\\data\\data.0101', size: 38 * G }, { path: 'C:\\hiberfil.sys', size: 25.6 * G }, { path: 'D:\\Vidéos\\Montage finale.mp4', size: 4.2 * G }],
+    old: { files: 412, bytes: 57 * G }, events: demoEvents(),
+  };
+}
+export function demoEvents() {
+  return { power: 2, bsod: 1, disk: 0, whea: 0, gpu: 1, errors: 48, crashes: [{ name: 'FortniteClient-Win64-Shipping.exe', count: 4 }], score: 55,
+    findings: [{ prio: 0, title: '1 écran bleu cette semaine', text: 'Souvent un pilote (carte graphique, réseau) ou la mémoire : mets à jour les pilotes et lance « Réparer Windows ».' }, { prio: 1, title: '2 arrêts brutaux du PC', text: 'Le PC s’est éteint sans passer par « Arrêter » : coupure de courant, surchauffe ou alimentation trop faible.' }, { prio: 1, title: '1 plantage du pilote graphique', text: 'Réinstalle le dernier pilote et vérifie la température de la carte.' }] };
+}
+export function demoWu(now = Date.now()) {
+  const id = (n) => `6a1b2c3d-4e5f-4a6b-8c7d-00000000000${n}`;
+  return {
+    reboot: false,
+    updates: [
+      { id: id(1), title: '2026-09 Mise à jour cumulative pour Windows 11 Version 24H2 (KB5065431)', kb: 'KB5065431', size: 812e6, downloaded: false, reboot: true, optional: false, kind: 'securite' },
+      { id: id(2), title: 'Mise à jour de la veille de sécurité pour Microsoft Defender Antivirus (KB2267602)', kb: 'KB2267602', size: 92e6, reboot: false, optional: false, kind: 'defender' },
+      { id: id(3), title: 'Mise à jour cumulative de .NET Framework 3.5 et 4.8.1 (KB5064401)', kb: 'KB5064401', size: 74e6, reboot: true, optional: false, kind: 'dotnet' },
+      { id: id(4), title: 'NVIDIA - Display - 32.0.15.7688', size: 712e6, reboot: false, optional: true, kind: 'pilote' },
+    ],
+    history: [{ title: 'Mise à jour cumulative pour Windows 11 (KB5063878)', date: new Date(now - 18 * 864e5).toISOString(), result: 'ok' }, { title: 'Microsoft Defender Antivirus (KB2267602)', date: new Date(now - 2 * 864e5).toISOString(), result: 'ok' }],
+  };
+}

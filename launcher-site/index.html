@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>History Launcher · Tous tes jeux, ton PC au top</title>
 <meta name="description" content="Le launcher gratuit qui réunit Steam, Epic, Xbox, FiveM et tes applis, analyse ton PC pour de vrai, mesure ses performances et te connecte à tes amis.">
-<link rel="icon" href="/launcher/logo.png">
+<link rel="icon" href="assets/logo.png">
 <meta name="theme-color" content="#07060b">
 <meta property="og:title" content="History Launcher">
 <meta property="og:description" content="Tous tes jeux au même endroit, ton PC analysé pour de vrai, tes amis en direct.">
-<meta property="og:image" content="/launcher/accueil.webp">
+<meta property="og:image" content="assets/accueil.webp">
 <style>
 :root {
   color-scheme: dark;
@@ -45,7 +45,7 @@ p { margin: 0; }
 
 /* Barre du haut */
 .nav { position: sticky; top: 12px; z-index: 20; margin-top: 12px; }
-.nav .wrap { display: flex; align-items: center; gap: 16px; padding: 10px 14px 10px 16px; border-radius: 18px; }
+.nav .wrap { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); display: flex; align-items: center; gap: 16px; padding: 10px 14px 10px 16px; border-radius: 18px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .02em; }
 .brand img { width: 34px; filter: drop-shadow(0 0 12px rgba(47, 139, 255, .7)); }
 .nav nav { display: flex; gap: 4px; margin-left: auto; }
@@ -175,8 +175,8 @@ footer a { color: #cfe7ff; }
 
 <header class="nav">
   <div class="wrap glass">
-    <a class="brand" href="#top"><img src="/launcher/logo.png" alt="">History</a>
-    <nav><a href="#fonctions">Fonctions</a><a href="#monpc">Mon PC</a><a href="#benchmark">Benchmark</a><a href="#comparatif">Comparatif</a><a href="#versions">Nouveautés</a><a href="#faq">FAQ</a></nav>
+    <a class="brand" href="#top"><img src="assets/logo.png" alt="">History</a>
+    <nav><a href="#fonctions">Fonctions</a><a href="#monpc">Mon PC</a><a href="#analyse">Analyse pro</a><a href="#benchmark">Benchmark</a><a href="#comparatif">Comparatif</a><a href="#versions">Nouveautés</a><a href="#faq">FAQ</a></nav>
     <a class="btn main sm dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">Télécharger</a>
   </div>
 </header>
@@ -193,7 +193,7 @@ footer a { color: #cfe7ff; }
     <p class="meta" id="dlMeta">Gratuit · Windows 10 et 11 · mises à jour automatiques</p>
     <div class="stage">
       <div class="tilt" id="tilt">
-        <img src="/launcher/accueil.webp" alt="L’accueil de History Launcher : la bibliothèque de jeux avec Rainbow Six Siege en vedette" width="1600" height="859">
+        <img src="assets/accueil.webp" alt="L’accueil de History Launcher : la bibliothèque de jeux avec Rainbow Six Siege en vedette" width="1600" height="859">
         <div class="float glass f1"><span>🟢</span>Max joue maintenant à FiveM · <b>Rejoindre</b></div>
         <div class="float glass f2"><span>🔬</span>Score de santé du PC · <b>75/100</b></div>
         <div class="float glass f3"><span>🛡</span>Double authentification activée</div>
@@ -206,7 +206,9 @@ footer a { color: #cfe7ff; }
     <div class="grid">
       <div class="card glass rv"><div class="ic">🎮</div><h3>Toute ta bibliothèque</h3><p>Steam, Epic, Xbox Game Pass, EA, FiveM, Roblox et tes applis, avec jaquettes, temps de jeu officiel et collections.</p></div>
       <div class="card glass rv"><div class="ic">👥</div><h3>Amis en direct</h3><p>Vois qui lance un jeu, rejoins sa partie en un clic ou demande « On joue ? ». Les messages arrivent en bas à gauche, même en jeu.</p></div>
-      <div class="card glass rv"><div class="ic">🔬</div><h3>Analyse complète du PC</h3><p>Santé et durée de vie des composants, antivirus, programmes louches, fichiers inutiles et rapport détaillé.</p></div>
+      <div class="card glass rv"><div class="ic">🔬</div><h3>Analyse pro du PC</h3><p>Chaque fichier de chaque disque lu un par un : doublons confirmés par SHA-256, fichiers louches passés à l’antivirus, journal de Windows vérifié.</p></div>
+      <div class="card glass rv"><div class="ic">⬆</div><h3>Windows Update intégré</h3><p>Recherche, choisis et installe tes mises à jour Windows, pilotes et Defender sans ouvrir les Paramètres.</p></div>
+      <div class="card glass rv"><div class="ic">⚙</div><h3>Optimisation pro</h3><p>Priorité aux jeux, planification GPU, performances optimales, TRIM des SSD, réparation de Windows. Réversible, avec point de restauration.</p></div>
       <div class="card glass rv"><div class="ic">🏁</div><h3>Benchmark maison</h3><p>Processeur, mémoire, disque et carte graphique mesurés par le launcher, avec un score comparable d’un PC à l’autre.</p></div>
       <div class="card glass rv"><div class="ic">⚡</div><h3>Boost de jeu</h3><p>Performances élevées pendant la partie, applis gourmandes fermées puis rouvertes, réglage par jeu.</p></div>
       <div class="card glass rv"><div class="ic">🛡</div><h3>Compte sécurisé</h3><p>Double authentification par QR code, vérification de l’e-mail, mot de passe oublié, sauvegarde en ligne.</p></div>
@@ -214,7 +216,7 @@ footer a { color: #cfe7ff; }
       <div class="card glass rv"><div class="ic">🌐</div><h3>FiveM comme il faut</h3><p>Tes vraies heures (depuis les journaux), heures par serveur, favoris avec joueurs en ligne, rejoindre en un clic.</p></div>
       <div class="card glass rv"><div class="ic">🤖</div><h3>Assistant IA et voix</h3><p>« Lance Rocket League », « fais une opti », « clip ça » : il le fait à ta place, au clavier ou à la voix.</p></div>
       <div class="card glass rv"><div class="ic">🔊</div><h3>Sons premium</h3><p>Un vrai sound design pour la navigation, les lancements, les notifications et les appels (désactivable).</p></div>
-      <div class="card glass rv"><div class="ic">⬆</div><h3>Mises à jour toutes seules</h3><p>« Mettre à jour maintenant ? » puis installation silencieuse et redémarrage, avec la liste des nouveautés.</p></div>
+      <div class="card glass rv"><div class="ic">🔁</div><h3>Mises à jour toutes seules</h3><p>« Mettre à jour maintenant ? » puis installation silencieuse et redémarrage, avec la liste des nouveautés.</p></div>
       <div class="card glass rv"><div class="ic">🛡</div><h3>Anti-triche respecté</h3><p>Rocket League, Rainbow Six et les jeux avec Easy Anti-Cheat ou BattlEye passent toujours par leur plateforme.</p></div>
     </div>
   </section>
@@ -226,6 +228,7 @@ footer a { color: #cfe7ff; }
         <h2>Ton PC analysé pour de vrai</h2>
         <p>Le launcher lit directement Windows : pas d’estimation au hasard. Quand une donnée n’est pas disponible, il le dit.</p>
         <ul>
+          <li>Un seul score de santé, détaillé : matériel et sécurité, entretien, fichiers, stabilité de Windows</li>
           <li>Durée de vie réelle des SSD (usure mesurée), heures des disques durs, santé de la batterie</li>
           <li>Points faibles détectés : une seule barrette, XMP désactivé, Windows sur disque dur, pilote ancien…</li>
           <li>Chaque conseil avec le gain attendu, classé du plus urgent au moins urgent</li>
@@ -234,7 +237,31 @@ footer a { color: #cfe7ff; }
           <li>Rapport détaillé rédigé par l’IA à partir des seules mesures</li>
         </ul>
       </div>
-      <figure class="shot glass rv"><img src="/launcher/pc.webp" alt="Mon PC : score de santé, composants et durée de vie, améliorations conseillées" loading="lazy" width="1280" height="860"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
+      <figure class="shot glass rv"><img src="assets/pc.webp" alt="Mon PC : score de santé détaillé, jauges en direct, courbes des 24 dernières heures et conseils" loading="lazy" width="1280" height="798"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="analyse" class="wrap">
+    <div class="head rv"><span class="kicker">Analyse pro</span><h2>Chaque fichier, un par un</h2><p>Pas une analyse de 30 secondes : le launcher lit réellement tout ce qu’il y a sur tes disques. Selon le nombre de fichiers, compte 10 à 30 minutes.</p></div>
+    <div class="split">
+      <div class="txt rv">
+        <ul>
+          <li><span><b>Lecture de chaque fichier</b> de chaque disque : taille, date, type, avec l’avancement en direct</span></li>
+          <li><span><b>Doublons</b> confirmés par l’empreinte SHA-256 du contenu entier, jamais sur le simple nom</span></li>
+          <li><span><b>Fichiers louches</b> (double extension, programmes cachés dans AppData ou Temp) : signature numérique puis antivirus de Windows, un par un</span></li>
+          <li><span><b>Journal de Windows</b> : écrans bleus, arrêts brutaux, erreurs disque et matérielles, applis qui plantent</span></li>
+          <li><span><b>Nettoyage sûr</b> : les fichiers perso vont à la corbeille, il reste toujours une copie de chaque doublon</span></li>
+        </ul>
+      </div>
+      <figure class="shot glass rv"><img src="assets/analyse.webp" alt="Analyse pro : fichiers lus, place occupée par type, fichiers inutiles, doublons et fichiers louches" loading="lazy" width="1280" height="798"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
+    </div>
+    <div class="split rev" style="margin-top:40px">
+      <div class="txt rv">
+        <span class="kicker">Windows Update</span>
+        <h2>Tes mises à jour, ici</h2>
+        <p>Le launcher interroge l’agent officiel Windows Update, range les mises à jour (sécurité, Defender, pilotes, .NET) et les installe avec l’avancement en direct. Il te prévient quand un redémarrage est nécessaire.</p>
+      </div>
+      <figure class="shot glass rv"><img src="assets/maj.webp" alt="Windows Update dans History Launcher : mises à jour rangées par type, installation de la sélection" loading="lazy" width="1280" height="798"></figure>
     </div>
   </section>
 
@@ -274,7 +301,7 @@ footer a { color: #cfe7ff; }
         <p>Quand un ami lance un jeu, tu le sais tout de suite. Les messages, invitations et « On joue ? » arrivent en bas à gauche de l’écran, comme sur Steam, même pendant une partie.</p>
         <ul><li>Rejoindre en un clic : jeu Steam ou serveur FiveM</li><li>Messages entre amis et invitations</li><li>Soirées jeu organisées avec rappel</li></ul>
       </div>
-      <figure class="shot glass rv"><img src="/launcher/notifications.webp" alt="Notifications d’amis en bas à gauche : demande de jeu, message, ami qui lance FiveM" loading="lazy" width="360" height="353" style="max-width:420px;margin:auto"></figure>
+      <figure class="shot glass rv"><img src="assets/notifications.webp" alt="Notifications d’amis en bas à gauche : demande de jeu, message, ami qui lance FiveM" loading="lazy" width="360" height="353" style="max-width:420px;margin:auto"></figure>
     </div>
   </section>
 
@@ -285,7 +312,7 @@ footer a { color: #cfe7ff; }
         <h2>Propre, rangé, à ton goût</h2>
         <p>Paramètres classés par catégories, sons réglables, thème, compte et sauvegarde en ligne pour tout retrouver sur un autre PC.</p>
       </div>
-      <figure class="shot glass rv"><img src="/launcher/settings.webp" alt="Paramètres de History Launcher, catégorie Sons" loading="lazy" width="1280" height="860"></figure>
+      <figure class="shot glass rv"><img src="assets/settings.webp" alt="Paramètres de History Launcher, catégorie Sons" loading="lazy" width="1280" height="860"></figure>
     </div>
   </section>
 
@@ -320,7 +347,7 @@ footer a { color: #cfe7ff; }
 
   <section class="wrap">
     <div class="dl glass rv">
-      <img class="logo" src="/launcher/logo.png" alt="">
+      <img class="logo" src="assets/logo.png" alt="">
       <h2>Prêt à essayer ?</h2>
       <p id="dlLine">Gratuit, sans publicité. L’installation prend moins d’une minute.</p>
       <a class="btn main dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">⬇ Télécharger History Launcher</a>
@@ -340,6 +367,6 @@ footer a { color: #cfe7ff; }
 </main>
 <footer><a href="/">History IA</a> · <a href="/mentions">Mentions légales</a> · <a href="/confidentialite">Confidentialité</a></footer>
 
-<script src="/launcher/site.js" defer></script>
+<script src="site.js" defer></script>
 </body>
 </html>

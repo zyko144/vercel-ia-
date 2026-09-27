@@ -13,7 +13,10 @@ import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statC
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
-import { deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, orphanGameFolders, recycleBinSize, removeOrphan, scoreLabel, setStartup, setTweak, startupApps, steamJunk, tweakStates } from './core/optimize.js';
+import { applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
+import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from './core/deepscan.js';
+import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
+import { unifiedHealth, windowsEvents } from './core/health.js';
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
@@ -34,7 +37,7 @@ import { badges, hourly, levelOf, rediscover, streakOf } from './core/progress.j
 import { dnsTest, pingHosts } from './core/net.js';
 import { checkReq, parseReq } from './core/reqs.js';
 import { gogGames, ubisoftGames } from './core/stores.js';
-import { demoActivity, demoBench, demoFriends, demoItems, demoTemps } from './core/demo.js';
+import { demoActivity, demoBench, demoEvents, demoFriends, demoItems, demoScan, demoTemps, demoWu } from './core/demo.js';
 import { captureDir, captureName } from './core/capture.js';
 import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core/gmod.js';
 import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
@@ -547,7 +550,14 @@ ipcMain.handle('pc:report', async () => {
   const diag = await runDiag();
   if (diag.error) return diag;
   const procs = await processes().catch(() => []);
-  return pcReport(diag, procs, store.data.bench?.[0] ?? null);
+  const ds = store.data.deepScan;
+  const ev = eventsCache?.data;
+  const extra = [
+    ds ? `Analyse pro des fichiers (${new Date(ds.at).toLocaleDateString('fr-FR')}) : ${ds.files} fichiers lus, ${Math.round(ds.junkBytes / 1e8) / 10} Go de fichiers inutiles, ${Math.round(ds.dupWasted / 1e8) / 10} Go de doublons, ${ds.threats} menace(s) confirmée(s) par l’antivirus` : '',
+    ev ? `Journal de Windows (7 jours) : ${ev.bsod} écran(s) bleu(s), ${ev.power} arrêt(s) brutal(aux), ${ev.whea} erreur(s) matérielle(s), ${ev.disk} erreur(s) disque, ${ev.gpu} plantage(s) du pilote graphique${ev.crashes.length ? ` ; applis qui plantent : ${ev.crashes.map((c) => `${c.name} (${c.count})`).join(', ')}` : ''}` : '',
+    store.data.healthLast ? `Score de santé global : ${store.data.healthLast.score}/100` : '',
+  ].filter(Boolean).join('\n');
+  return pcReport(diag, procs, store.data.bench?.[0] ?? null, extra);
 });
 // ---------- Progression : niveau, badges, série, heures de jeu, sessions, à redécouvrir ----------
 ipcMain.handle('progress:get', async () => {
@@ -792,6 +802,148 @@ ipcMain.handle('opti:deep', async () => {
   const after = await freeSpace();
   return { ok, freed: before != null && after != null ? Math.max(0, after - before) : null };
 });
+
+// ---------- Score de santé unique (le même dans Mon PC et Optimisation) ----------
+let eventsCache = null;
+async function healthNow(refresh = false) {
+  const diag = await runDiag(refresh).catch(() => null);
+  if (!lastScan || refresh || Date.now() - lastScan.at > 10 * 60_000) await optiScan().catch(() => null);
+  if (!eventsCache || refresh || Date.now() - eventsCache.at > 30 * 60_000) eventsCache = { at: Date.now(), data: process.env.LAUNCHER_DEMO ? demoEvents() : await windowsEvents().catch(() => null) };
+  const h = unifiedHealth({ diag: diag && !diag.error ? diag.score : null, opti: lastScan?.score ?? null, storage: process.env.LAUNCHER_DEMO ? demoScan().score : store.data.deepScan?.score ?? null, events: eventsCache.data?.score ?? null });
+  if (h.score != null) { store.data.healthLast = { score: h.score, at: Date.now() }; store.save(); }
+  return { ...h, events: eventsCache.data, deepAt: process.env.LAUNCHER_DEMO ? Date.now() : store.data.deepScan?.at ?? null };
+}
+ipcMain.handle('health:get', (_e, refresh) => healthNow(Boolean(refresh)).catch((err) => ({ error: err.message })));
+
+// ---------- Analyse pro : chaque fichier de chaque disque, doublons par empreinte, fichiers louches, journal de Windows ----------
+let deepAbort = null;
+let lastDeep = null;
+const DEFENDER = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Windows Defender', 'MpCmdRun.exe');
+async function signatures(paths) {
+  if (process.platform !== 'win32' || !paths.length) return {};
+  const { writeFile: wf, rm: rmf } = await import('node:fs/promises');
+  const list = path.join(os.tmpdir(), `history-sig-${Date.now()}.json`);
+  await wf(list, JSON.stringify(paths), 'utf8');
+  const script = `$ErrorActionPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; $p=Get-Content -LiteralPath '${list.replace(/'/g, "''")}' -Raw | ConvertFrom-Json; @($p | ForEach-Object { $s=Get-AuthenticodeSignature -LiteralPath $_; @{ path=$_; ok=($s.Status -eq 'Valid'); signer=[string]$s.SignerCertificate.Subject } }) | ConvertTo-Json -Compress`;
+  const out = await new Promise((resolve) => {
+    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true });
+    let o = ''; p.stdout.on('data', (c) => { o += c; }); p.on('close', () => resolve(o)); p.on('error', () => resolve(''));
+  });
+  await rmf(list, { force: true }).catch(() => {});
+  try { const a = JSON.parse(out.slice(out.search(/[[{]/))); return Object.fromEntries((Array.isArray(a) ? a : [a]).map((x) => [x.path, { ok: x.ok, signer: (x.signer.match(/CN=("?)([^,"]+)\1/) ?? [])[2] ?? null }])); } catch { return {}; }
+}
+function defenderFile(file) {
+  if (process.platform !== 'win32') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const p = spawn(DEFENDER, ['-Scan', '-ScanType', '3', '-File', file, '-DisableRemediation'], { windowsHide: true, stdio: 'ignore' });
+    p.on('error', () => resolve(null));
+    p.on('close', (code) => resolve(code === 2 ? 'menace' : code === 0 ? 'propre' : null));
+  });
+}
+ipcMain.handle('scan:start', async () => {
+  if (deepAbort) return { error: 'Une analyse est déjà en cours.' };
+  deepAbort = new AbortController();
+  const signal = deepAbort.signal;
+  const prog = (p) => send('scan:progress', p);
+  try {
+    prog({ phase: 'prep', label: 'Liste des disques…' });
+    const diag = await runDiag().catch(() => null);
+    const vols = process.platform === 'win32' ? (diag?.volumes ?? []) : [];
+    const roots = vols.length ? vols.map((v) => `${v.letter}:\\`) : [os.homedir()];
+    const totalBytes = vols.reduce((n, v) => n + (v.size - v.free), 0);
+    const r = await deepScan({ roots, totalBytes, signal, onProgress: prog, dupRoots: [os.homedir(), ...vols.filter((v) => v.letter.toUpperCase() !== (process.env.SystemDrive ?? 'C:')[0]).map((v) => `${v.letter}:\\`)] });
+    // Fichiers louches : signature numérique, puis contrôle par l'antivirus de Windows un par un
+    prog({ phase: 'suspects', label: `Vérification de ${r.suspects.length} fichier(s) louche(s)…`, total: r.suspects.length, index: 0 });
+    const sig = await signatures(r.suspects.map((x) => x.path));
+    let threats = 0;
+    for (const [i, x] of r.suspects.entries()) {
+      if (signal.aborted) throw new Error('annulé');
+      x.signed = sig[x.path]?.ok ?? null; x.signer = sig[x.path]?.signer ?? null;
+      if (!x.signed) { prog({ phase: 'suspects', label: `Antivirus : ${path.basename(x.path)}`, total: r.suspects.length, index: i + 1 }); x.defender = await defenderFile(x.path); if (x.defender === 'menace') threats += 1; }
+    }
+    r.suspects = r.suspects.filter((x) => !x.signed); // un programme signé par son éditeur n'est plus louche
+    prog({ phase: 'events', label: 'Journal de Windows (plantages, écrans bleus, erreurs disque)…' });
+    eventsCache = { at: Date.now(), data: await windowsEvents().catch(() => null) };
+    const junkBytes = Object.values(r.junk).reduce((n, j) => n + j.bytes, 0);
+    const score = Math.max(0, storageScore(r) - threats * 20);
+    lastDeep = r;
+    const summary = {
+      at: Date.now(), elapsed: r.elapsed, files: r.files, dirs: r.dirs, bytes: r.bytes, denied: r.denied, emptyDirs: r.emptyDirs, score, threats,
+      cats: CATEGORIES.map(([k, icon, label]) => ({ id: k, icon, label, ...r.cats[k] })).filter((c) => c.files),
+      junk: Object.entries(r.junk).map(([k, j]) => ({ id: k, icon: JUNK_LABELS[k][0], label: JUNK_LABELS[k][1], files: j.files, bytes: j.bytes })).sort((a, b) => b.bytes - a.bytes), junkBytes,
+      duplicates: r.duplicates.slice(0, 60).map((d) => ({ size: d.size, paths: d.paths })), dupWasted: r.dupWasted, hashed: r.hashed,
+      suspects: r.suspects.map((x) => ({ path: x.path, size: x.size, reason: SUSPECT_LABELS[x.reason], defender: x.defender ?? null, signer: x.signer })),
+      largest: r.largest.slice(0, 25), old: r.old, events: eventsCache.data,
+    };
+    store.data.deepScan = { at: summary.at, score, files: r.files, bytes: r.bytes, junkBytes, dupWasted: r.dupWasted, threats, elapsed: r.elapsed };
+    store.save();
+    prog({ phase: 'done' });
+    return { ...summary, health: await healthNow().catch(() => null) };
+  } catch (err) {
+    prog({ phase: 'done' });
+    return { error: err.message === 'annulé' ? 'Analyse arrêtée.' : `Analyse impossible : ${err.message}` };
+  } finally { deepAbort = null; }
+});
+// Mode démonstration (captures) : résultats d'exemple de l'analyse pro et de Windows Update
+ipcMain.handle('demo:get', () => (process.env.LAUNCHER_DEMO ? { scan: demoScan(), wu: { ...demoWu(), kinds: WU_KINDS } } : null));
+ipcMain.handle('scan:stop', () => { deepAbort?.abort(); return true; });
+ipcMain.handle('scan:last', () => store.data.deepScan ?? null);
+const inDeep = (p) => lastDeep && (lastDeep.suspects.some((x) => x.path === p) || lastDeep.duplicates.some((d) => d.paths.includes(p)) || lastDeep.largest.some((x) => x.path === p));
+ipcMain.handle('scan:show', (_e, p) => { if (inDeep(String(p))) shell.showItemInFolder(String(p)); return true; });
+ipcMain.handle('scan:trash', async (_e, paths) => {
+  const list = (Array.isArray(paths) ? paths : []).map(String).filter(inDeep);
+  // Doublons : on garde toujours au moins une copie de chaque fichier
+  for (const d of lastDeep?.duplicates ?? []) if (d.paths.every((p) => list.includes(p))) list.splice(list.indexOf(d.paths[0]), 1);
+  if (!list.length || !(await confirm(`Mettre ${list.length} fichier(s) à la corbeille ?`, 'Tu pourras les récupérer depuis la corbeille tant qu’elle n’est pas vidée.'))) return { ok: false };
+  let n = 0;
+  for (const p of list) if (await shell.trashItem(p).then(() => true).catch(() => false)) n += 1;
+  return { ok: true, n };
+});
+ipcMain.handle('scan:clean', async (_e, kinds) => {
+  const ks = (Array.isArray(kinds) ? kinds : []).map(String).filter((k) => lastDeep?.junk?.[k]);
+  if (!ks.length) return { ok: false };
+  const { rm: rmf } = await import('node:fs/promises');
+  let freed = 0; let n = 0;
+  for (const k of ks) {
+    for (const p of lastDeep.junk[k].paths) {
+      const st = await (await import('node:fs/promises')).lstat(p).catch(() => null);
+      if (!st?.isFile()) continue;
+      // Installateurs : à la corbeille (récupérables) ; le reste se recrée tout seul
+      const ok = k === 'installer' ? await shell.trashItem(p).then(() => true).catch(() => false) : await rmf(p, { force: true }).then(() => true).catch(() => false);
+      if (ok) { freed += st.size; n += 1; }
+    }
+    delete lastDeep.junk[k];
+  }
+  return { ok: true, freed, n };
+});
+
+// ---------- Windows Update ----------
+let wuBusy = false;
+ipcMain.handle('wu:search', async () => {
+  if (wuBusy) return { error: 'Une installation est en cours.' };
+  const r = await searchUpdates();
+  if (!r.error) { store.data.wuLast = { at: Date.now(), count: r.updates.length }; store.save(); }
+  return { ...r, kinds: WU_KINDS };
+});
+ipcMain.handle('wu:install', async (_e, ids) => {
+  if (wuBusy) return { ok: false, error: 'Une installation est déjà en cours.' };
+  wuBusy = true;
+  try { return await installUpdates((Array.isArray(ids) ? ids : []).map(String), (p) => send('wu:progress', p)); } finally { wuBusy = false; }
+});
+ipcMain.handle('wu:reboot', async () => {
+  if (!(await confirm('Redémarrer le PC maintenant ?', 'Enregistre ton travail : Windows redémarre dans 30 secondes pour finir d’installer les mises à jour.'))) return false;
+  spawn('shutdown.exe', ['/r', '/t', '30', '/c', 'History Launcher : redémarrage pour finir les mises à jour Windows'], { windowsHide: true, detached: true, stdio: 'ignore' }).unref();
+  return true;
+});
+
+// ---------- Optimisation pro : réglages système (administrateur), stockage, réparation de Windows ----------
+ipcMain.handle('opti:sys', () => systemTweakStates().catch(() => []));
+ipcMain.handle('opti:sysApply', async (_e, changes) => {
+  const ok = await applySystemTweaks((Array.isArray(changes) ? changes : []).map((c) => ({ id: String(c?.id), on: Boolean(c?.on) })));
+  return { ok, states: await systemTweakStates().catch(() => []) };
+});
+ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
+ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto !== false, last: store.data.optiAutoLast ?? null }; });
 // Optimisation automatique chaque semaine : seulement les caches qui se recréent (système, pilotes, launchers), en silence
 setInterval(async () => {
