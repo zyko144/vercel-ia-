@@ -90,8 +90,9 @@ jobs:
             gh release create "v$V" --verify-tag --title "History Launcher $V" --notes-file dist/notes.md "${FILES[@]}"
           fi
 
+      # Toujours lancé (même si la version existait déjà) : le bot n'annonce jamais deux fois la même version,
+      # et un lancement à la main (workflow_dispatch) rattrape une annonce ratée
       - name: Prévenir le bot Discord (annonce tout de suite)
-        if: steps.exists.outputs.yes == 'false'
         shell: bash
         run: |
           # Le service Render peut être en veille : plusieurs essais, sans jamais faire échouer la publication
