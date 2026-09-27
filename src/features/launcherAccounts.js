@@ -75,27 +75,63 @@ async function newSession(d, id) {
 }
 // Profil personnalisé : photo (servie à part, en cache), couleur, bio. Visible par les amis.
 export const PUBLIC_BASE = (process.env.PUBLIC_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
-export const profileOf = (a) => ({
-  avatar: a?.profile?.av ? `${PUBLIC_BASE}/api/compte/avatar/${a.id}?v=${a.profile.av}` : null,
-  color: a?.profile?.color ?? null, bio: a?.profile?.bio ?? null,
-});
+// Choix possibles (vérifiés côté serveur : rien d'autre ne passe)
+export const PROFILE_CHOICES = {
+  frame: ['aucun', 'neon', 'or', 'arcenciel', 'feu', 'glace', 'toxique', 'galaxie'],
+  nameFx: ['aucun', 'degrade', 'neon', 'or', 'arcenciel'],
+  banner: ['nuit', 'aurore', 'coucher', 'ocean', 'foret', 'lave', 'neige', 'synthwave', 'carbone', 'rose'],
+  badges: ['fondateur', 'nuit', 'rp', 'fps', 'streamer', 'collection', 'social', 'compet', 'chill', 'createur', 'speedrun', 'coop'],
+  links: ['discord', 'twitch', 'youtube', 'tiktok', 'steam', 'instagram'],
+};
+export const profileOf = (a) => {
+  const p = a?.profile ?? {};
+  return {
+    avatar: p.av ? `${PUBLIC_BASE}/api/compte/avatar/${a.id}?v=${p.av}` : null,
+    bannerImg: p.bv ? `${PUBLIC_BASE}/api/compte/banniere/${a.id}?v=${p.bv}` : null,
+    color: p.color ?? null, bio: p.bio ?? null, banner: p.banner ?? null, frame: p.frame ?? null, nameFx: p.nameFx ?? null,
+    favGame: p.favGame ?? null, badges: p.badges ?? [], links: p.links ?? {}, since: a?.createdAt ?? null,
+  };
+};
 const publicAccount = (a) => ({ id: a.id, pseudo: a.pseudo, email: a.email, createdAt: a.createdAt, verified: a.verified !== false, twoFactor: Boolean(a.totp?.on), discord: Boolean(a.discordId), profile: profileOf(a) });
 const AVATAR_MAX = 150 * 1024;
+/** Image envoyée par le launcher : format annoncé ET signature du fichier vérifiés, taille plafonnée. */
+function checkImage(dataUrl, max) {
+  const m = String(dataUrl ?? '').match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return 'Image illisible (PNG, JPG ou WEBP).';
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > max) return `Image trop lourde (${Math.round(max / 1024)} Ko maximum).`;
+  const ok = m[1] === 'png' ? buf.subarray(0, 4).toString('hex') === '89504e47' : m[1] === 'jpeg' ? buf.subarray(0, 2).toString('hex') === 'ffd8' : buf.subarray(8, 12).toString() === 'WEBP';
+  return ok ? { mime: `image/${m[1]}`, data: m[2] } : 'Image illisible (PNG, JPG ou WEBP).';
+}
 async function saveProfile(a, body) {
   const p = (a.profile ??= {});
   if ('couleur' in body) p.color = /^#[0-9a-f]{6}$/i.test(String(body.couleur ?? '')) ? String(body.couleur).toLowerCase() : null;
   if ('bio' in body) p.bio = String(body.bio ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140) || null;
+  const pick = (v, list) => (list.includes(String(v)) && String(v) !== 'aucun' ? String(v) : null);
+  if ('cadre' in body) p.frame = pick(body.cadre, PROFILE_CHOICES.frame);
+  if ('effet' in body) p.nameFx = pick(body.effet, PROFILE_CHOICES.nameFx);
+  if ('banniere' in body) p.banner = pick(body.banniere, PROFILE_CHOICES.banner);
+  if ('jeu' in body) p.favGame = String(body.jeu ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 60) || null;
+  if ('badges' in body) p.badges = [...new Set((Array.isArray(body.badges) ? body.badges : []).map(String))].filter((b) => PROFILE_CHOICES.badges.includes(b)).slice(0, 3);
+  if ('liens' in body && body.liens && typeof body.liens === 'object') {
+    p.links = {};
+    for (const k of PROFILE_CHOICES.links) { const v = String(body.liens[k] ?? '').trim().replace(/^@/, ''); if (/^[\w.#-]{2,40}$/.test(v)) p.links[k] = v; }
+  }
+  if ('banniereImg' in body) {
+    if (body.banniereImg === null) { delete p.bv; save(`launcher-banniere-${a.id}`, {}); }
+    else {
+      const img = checkImage(body.banniereImg, 300 * 1024);
+      if (typeof img === 'string') return img.replace('Image', 'Bannière');
+      save(`launcher-banniere-${a.id}`, img);
+      p.bv = Date.now();
+    }
+  }
   if ('avatar' in body) {
     if (body.avatar === null) { delete p.av; save(`launcher-avatar-${a.id}`, {}); }
     else {
-      const m = String(body.avatar).match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
-      if (!m) return 'Image illisible (PNG, JPG ou WEBP).';
-      const buf = Buffer.from(m[2], 'base64');
-      if (buf.length > AVATAR_MAX) return 'Image trop lourde (150 Ko maximum).';
-      // Vérifie la signature du fichier (pas seulement ce qu'il prétend être)
-      const ok = m[1] === 'png' ? buf.subarray(0, 4).toString('hex') === '89504e47' : m[1] === 'jpeg' ? buf.subarray(0, 2).toString('hex') === 'ffd8' : buf.subarray(8, 12).toString() === 'WEBP';
-      if (!ok) return 'Image illisible (PNG, JPG ou WEBP).';
-      save(`launcher-avatar-${a.id}`, { mime: `image/${m[1]}`, data: m[2] });
+      const img = checkImage(body.avatar, AVATAR_MAX);
+      if (typeof img === 'string') return img;
+      save(`launcher-avatar-${a.id}`, img);
       p.av = Date.now();
     }
   }
@@ -318,9 +354,9 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       return send(res, 200, { ok: true, code, lie: Boolean(a.discordId) });
     }
     // Photo de profil : publique (identifiant aléatoire), gardée en cache par le navigateur
-    const avm = url.pathname.match(/^\/api\/compte\/avatar\/([\w-]{8,64})$/);
+    const avm = url.pathname.match(/^\/api\/compte\/(avatar|banniere)\/([\w-]{8,64})$/);
     if (avm && req.method === 'GET') {
-      const img = await load(`launcher-avatar-${avm[1]}`, null);
+      const img = await load(`launcher-${avm[1]}-${avm[2]}`, null);
       if (!img?.data) return send(res, 404, { error: 'Pas de photo.' });
       res.writeHead(200, { 'Content-Type': img.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
       res.end(Buffer.from(img.data, 'base64'));

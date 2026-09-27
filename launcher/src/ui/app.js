@@ -336,7 +336,7 @@ function avStyle(p) {
   const col = typeof p === 'object' && /^#[0-9a-f]{6}$/i.test(p?.color ?? '') ? p.color : null;
   return { name, img, style: `--h:${hueOf(name)};${col ? `background-color:${col};` : ''}${img ? `background-image:url('${img}');` : ''}` };
 }
-const avatar = (p, cls = '') => { const a = avStyle(p); return `<span class="pav ${a.img ? 'img' : ''} ${cls}" style="${a.style}">${a.img ? '' : esc(String(a.name ?? '?').trim()[0]?.toUpperCase() ?? '?')}</span>`; };
+const avatar = (p, cls = '') => { const a = avStyle(p); const fr = typeof p === 'object' && p?.frame && !/fr-/.test(cls) ? ` fr-${p.frame}` : ''; return `<span class="pav ${a.img ? 'img' : ''} ${cls}${fr}" style="${a.style}">${a.img ? '' : esc(String(a.name ?? '?').trim()[0]?.toUpperCase() ?? '?')}</span>`; };
 const avWrap = (p, st, cls = '') => `<span class="favw ${st}">${avatar(p, cls)}<i class="st"></i></span>`;
 /** Met une photo de profil (ou l'initiale) dans un élément existant. */
 function setAv(el, p) {
@@ -524,54 +524,143 @@ function renderHistory() {
   if (!$('eAt').value) { const d = new Date(Date.now() + 3_600_000); d.setMinutes(0, 0, 0); $('eAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
   if (fx.sel?.type === 'ami') { if (r.amis.some((a) => a.id === fx.sel.id)) chatHeader(); else fxShow(null); }
 }
-// ---------- Personnaliser mon profil : photo (recadrée en carré), couleur, bio ----------
+// ---------- Profil : carte de joueur (bannière, cadre animé, effet du pseudo, badges, jeu préféré, réseaux) ----------
 const PCOLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#64748b', '#1f2937'];
-async function cropImage(file) {
+const FRAMES = [['aucun', 'Aucun'], ['neon', 'Néon'], ['or', 'Or'], ['arcenciel', 'Arc-en-ciel'], ['feu', 'Feu'], ['glace', 'Glace'], ['toxique', 'Toxique'], ['galaxie', 'Galaxie']];
+const NAMEFX = [['aucun', 'Normal'], ['degrade', 'Dégradé'], ['neon', 'Néon'], ['or', 'Or'], ['arcenciel', 'Arc-en-ciel']];
+const BANNERS = [['nuit', 'Nuit'], ['aurore', 'Aurore'], ['coucher', 'Coucher de soleil'], ['ocean', 'Océan'], ['foret', 'Forêt'], ['lave', 'Lave'], ['neige', 'Neige'], ['synthwave', 'Synthwave'], ['carbone', 'Carbone'], ['rose', 'Rose']];
+const BADGES = { fondateur: ['🏅', 'Fondateur'], nuit: ['🌙', 'Oiseau de nuit'], rp: ['🚓', 'Rôliste'], fps: ['🎯', 'Chasseur de FPS'], streamer: ['🎥', 'Streamer'], collection: ['📚', 'Collectionneur'], social: ['🤝', 'Pote de tout le monde'], compet: ['🏆', 'Compétiteur'], chill: ['🛋', 'Joueur chill'], createur: ['🛠', 'Créateur'], speedrun: ['⏱', 'Speedrunner'], coop: ['🧩', 'Fan de coop'] };
+const LINKS = [['discord', 'Discord', 'pseudo'], ['twitch', 'Twitch', 'chaîne'], ['youtube', 'YouTube', '@chaîne'], ['tiktok', 'TikTok', '@compte'], ['steam', 'Steam', 'identifiant'], ['instagram', 'Instagram', '@compte']];
+const safeBanner = (u) => (/^https:\/\/[\w.-]+\/api\/compte\/banniere\/[\w-]+\?v=\d+$/.test(String(u ?? '')) ? u : null);
+/** Carte de profil complète (aperçu de l'éditeur et profil d'un ami). */
+function profileCard(p, { live = null } = {}) {
+  const col = /^#[0-9a-f]{6}$/i.test(p.color ?? '') ? p.color : '#3b82f6';
+  const ban = p.bannerData ?? safeBanner(p.bannerImg);
+  const game = p.favGame ? state.items.find((i) => i.name.toLowerCase() === p.favGame.toLowerCase()) : null;
+  const since = p.since ? new Date(p.since).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : null;
+  const links = LINKS.filter(([k]) => p.links?.[k]);
+  return `<div class="pc2" style="--pc:${col}">
+    <div class="pc2ban ban-${esc(p.banner ?? 'nuit')}" ${ban ? `style="background-image:url('${esc(ban)}')"` : ''}></div>
+    <div class="pc2main">
+      <div class="pc2top">${p.avatarData ? `<span class="pav xl img ${p.frame ? `fr-${esc(p.frame)}` : ''}" style="background-image:url('${esc(p.avatarData)}')"></span>` : avatar(p, `xl ${p.frame ? `fr-${p.frame}` : ''}`)}
+        ${live ? `<span class="pc2live ${live.cls}">${esc(live.text)}</span>` : ''}</div>
+      <div class="pc2name nfx-${esc(p.nameFx ?? 'aucun')}">${esc(p.pseudo ?? '')}</div>
+      <small class="pc2sub">${p.code ? esc(p.code) : ''}${since ? `${p.code ? ' · ' : ''}membre depuis ${esc(since)}` : ''}</small>
+      ${p.bio ? `<p class="pc2bio">${esc(p.bio)}</p>` : ''}
+      ${(p.badges ?? []).length ? `<div class="pc2badges">${p.badges.filter((b) => BADGES[b]).map((b) => `<span class="pbadge"><i>${BADGES[b][0]}</i>${esc(BADGES[b][1])}</span>`).join('')}</div>` : ''}
+      <div class="pc2grid">
+        ${p.favGame ? `<div class="pc2box fav">${game?.art?.cover ? `<img src="${esc(game.art.cover)}" alt="">` : '<span class="pc2ico">🎮</span>'}<div><small>Jeu préféré</small><b>${esc(p.favGame)}</b></div></div>` : ''}
+        ${p.week ? `<div class="pc2box"><span class="pc2ico">⏱</span><div><small>Cette semaine</small><b>${hours(p.week)}</b></div></div>` : ''}
+        ${p.bench ? `<div class="pc2box"><span class="pc2ico">🏁</span><div><small>Benchmark</small><b>${p.bench}</b></div></div>` : ''}
+        ${p.top && p.top !== p.favGame ? `<div class="pc2box"><span class="pc2ico">🔥</span><div><small>Le plus joué (7 j)</small><b>${esc(p.top)}</b></div></div>` : ''}
+      </div>
+      ${links.length ? `<div class="pc2links">${links.map(([k, label]) => `<button type="button" class="plink pl-${k}" data-copytext="${esc(p.links[k])}" data-copied="${esc(label)} copié : ${esc(p.links[k])}" title="Copier">${esc(label)} <b>${esc(p.links[k])}</b></button>`).join('')}</div>` : ''}
+    </div></div>`;
+}
+/** Profil d'un ami (clic sur sa photo ou son nom). */
+function openFriendProfile(id) {
+  const f = (state.hist?.amis ?? []).find((a) => a.id === id);
+  if (!f) return;
+  const live = f.playing ? { cls: 'g', text: `Joue à ${f.playing}` } : f.online ? { cls: 'on', text: 'En ligne' } : { cls: 'off', text: 'Hors ligne' };
+  $('modalBox').classList.add('wide', 'fp');
+  $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) setTimeout(() => $('modal').close(), 0); };
+}
+$('modal').addEventListener('close', () => $('modalBox').classList.remove('wide', 'fp'));
+async function cropImage(file, w = 256, h = 256, maxKb = 140) {
   const bmp = await createImageBitmap(file);
-  const side = Math.min(bmp.width, bmp.height);
-  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
-  c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, 256, 256);
-  for (const q of [0.88, 0.75, 0.6, 0.45]) { const u = c.toDataURL('image/webp', q); if (u.length * 0.75 < 140 * 1024) return u; }
-  return c.toDataURL('image/jpeg', 0.5);
+  const scale = Math.max(w / bmp.width, h / bmp.height);
+  const sw = w / scale; const sh = h / scale;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) / 2, sw, sh, 0, 0, w, h);
+  for (const q of [0.88, 0.75, 0.6, 0.45, 0.3]) { const u = c.toDataURL('image/webp', q); if (u.length * 0.75 < maxKb * 1024) return u; }
+  return c.toDataURL('image/jpeg', 0.4);
 }
 async function openProfileEditor() {
   if (!state.account) return showAuth(true);
-  const me = { pseudo: state.account.pseudo, ...(state.account.profile ?? {}) };
-  let draft = { avatar: undefined, couleur: me.color ?? null, bio: me.bio ?? '' };
-  const preview = () => ({ pseudo: me.pseudo, avatar: draft.avatar === undefined ? me.avatar : null, color: draft.couleur });
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🎨</span><h2>Mon profil</h2></div>
-    <div class="pedit">
-      <div class="pcard" id="peCard"><span class="pav big" id="peAv"></span><div><b>${esc(me.pseudo)}</b><small id="peBio"></small></div></div>
-      <div class="pphoto"><button type="button" class="btn" id="pePick">Choisir une photo</button><button type="button" class="btn ghost" id="peDel">Retirer la photo</button><input type="file" id="peFile" accept="image/png,image/jpeg,image/webp" hidden></div>
-      <b class="sub">Couleur</b>
-      <div class="pcolors">${PCOLORS.map((c) => `<button type="button" class="pcol" data-pcol="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="pcol custom" title="Autre couleur"><input type="color" id="peColor" value="${esc(me.color ?? '#3b82f6')}"></label></div>
-      <b class="sub">Bio</b>
-      <textarea id="peBioIn" maxlength="140" rows="2" placeholder="Ex. RP tous les soirs, main support sur Overwatch…">${esc(me.bio ?? '')}</textarea>
-      <small class="hint">Tes amis voient ta photo, ta couleur et ta bio.</small>
-    </div>
-    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Enregistrer</button></div>`;
-  const paint = () => {
-    const p = preview();
-    if (draft.avatar && draft.avatar !== null) { $('peAv').setAttribute('style', `background-image:url('${draft.avatar}')`); $('peAv').classList.add('img'); $('peAv').textContent = ''; } else setAv($('peAv'), p);
-    $('peBio').textContent = $('peBioIn').value.trim() || 'Pas encore de bio';
-    document.querySelectorAll('#modalBox [data-pcol]').forEach((b) => b.classList.toggle('on', b.dataset.pcol === draft.couleur));
-    $('peCard').style.setProperty('--pc', draft.couleur ?? '#3b82f6');
+  const cur = state.account.profile ?? {};
+  const moi = state.hist?.moi ?? {};
+  const d = {
+    pseudo: state.account.pseudo, code: state.hist?.code, since: state.account.createdAt, week: moi.week, top: moi.top,
+    avatar: cur.avatar, bannerImg: cur.bannerImg, color: cur.color ?? '#3b82f6', bio: cur.bio ?? '', frame: cur.frame, nameFx: cur.nameFx, banner: cur.banner ?? 'nuit',
+    favGame: cur.favGame ?? '', badges: [...(cur.badges ?? [])], links: { ...(cur.links ?? {}) },
   };
+  const change = {};
+  let tab = 'look';
+  const gamesList = [...new Set(games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes).map((i) => i.name))].slice(0, 60);
+  $('modalBox').classList.add('wide');
+  const paint = () => {
+    $('peCard').innerHTML = profileCard(d);
+    document.querySelectorAll('#modalBox [data-ptab]').forEach((b) => b.classList.toggle('on', b.dataset.ptab === tab));
+    document.querySelectorAll('#modalBox .ptabpane').forEach((p) => { p.hidden = p.dataset.ptab !== tab; });
+    document.querySelectorAll('#modalBox [data-pcol]').forEach((b) => b.classList.toggle('on', b.dataset.pcol === d.color));
+    document.querySelectorAll('#modalBox [data-pframe]').forEach((b) => b.classList.toggle('on', b.dataset.pframe === (d.frame ?? 'aucun')));
+    document.querySelectorAll('#modalBox [data-pfx]').forEach((b) => b.classList.toggle('on', b.dataset.pfx === (d.nameFx ?? 'aucun')));
+    document.querySelectorAll('#modalBox [data-pban]').forEach((b) => b.classList.toggle('on', !d.bannerImg && !d.bannerData && b.dataset.pban === d.banner));
+    document.querySelectorAll('#modalBox [data-pbadge]').forEach((b) => b.classList.toggle('on', d.badges.includes(b.dataset.pbadge)));
+    $('peBadgeCount').textContent = `${d.badges.length}/3`;
+  };
+  const sample = (fx) => `<span class="nfx-${fx}" style="--pc:${esc(d.color)}">${esc(d.pseudo)}</span>`;
+  $('modalBox').innerHTML = `<div class="pedit2">
+    <div class="pe2prev"><div id="peCard"></div><small class="hint">Aperçu : c’est ce que tes amis voient.</small></div>
+    <div class="pe2ctl">
+      <div class="mhead"><h2>Mon profil</h2></div>
+      <div class="tabs ptabs"><button type="button" data-ptab="look" class="on">Apparence</button><button type="button" data-ptab="about">À propos</button><button type="button" data-ptab="links">Réseaux</button></div>
+      <div class="ptabpane" data-ptab="look">
+        <b class="sub">Photo</b>
+        <div class="pphoto"><button type="button" class="btn sm" id="pePick">Choisir une photo</button><button type="button" class="btn ghost sm" id="peDel">Retirer</button><input type="file" id="peFile" accept="image/png,image/jpeg,image/webp" hidden></div>
+        <b class="sub">Cadre de la photo</b>
+        <div class="pframes">${FRAMES.map(([k, l]) => `<button type="button" class="pframe" data-pframe="${k}" title="${l}">${avatar({ pseudo: d.pseudo, avatar: d.avatar, color: d.color }, `sm ${k !== 'aucun' ? `fr-${k}` : ''}`)}<small>${l}</small></button>`).join('')}</div>
+        <b class="sub">Bannière</b>
+        <div class="pbanners">${BANNERS.map(([k, l]) => `<button type="button" class="pban ban-${k}" data-pban="${k}" title="${l}"></button>`).join('')}<button type="button" class="pban up" id="peBanPick" title="Ta propre image">＋ Image</button><input type="file" id="peBanFile" accept="image/png,image/jpeg,image/webp" hidden></div>
+        <b class="sub">Couleur</b>
+        <div class="pcolors">${PCOLORS.map((c) => `<button type="button" class="pcol" data-pcol="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="pcol custom" title="Autre couleur"><input type="color" id="peColor" value="${esc(d.color)}"></label></div>
+        <b class="sub">Effet du pseudo</b>
+        <div class="pfxs">${NAMEFX.map(([k, l]) => `<button type="button" class="pfx" data-pfx="${k}"><b>${sample(k)}</b><small>${l}</small></button>`).join('')}</div>
+      </div>
+      <div class="ptabpane" data-ptab="about" hidden>
+        <b class="sub">Bio</b>
+        <textarea id="peBioIn" maxlength="140" rows="3" placeholder="Ex. RP tous les soirs, main support sur Overwatch…">${esc(d.bio)}</textarea>
+        <b class="sub">Jeu préféré</b>
+        <input class="minput" id="peGame" list="peGames" maxlength="60" placeholder="Ex. FiveM" value="${esc(d.favGame)}"><datalist id="peGames">${gamesList.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
+        <b class="sub">Badges <small class="hint" id="peBadgeCount"></small></b>
+        <div class="pbadgepick">${Object.entries(BADGES).map(([k, [i, l]]) => `<button type="button" class="pbadge pick" data-pbadge="${k}"><i>${i}</i>${esc(l)}</button>`).join('')}</div>
+      </div>
+      <div class="ptabpane" data-ptab="links" hidden>
+        <p class="hint">Affichés sur ton profil ; tes amis les copient en un clic.</p>
+        ${LINKS.map(([k, l, ph]) => `<label class="plinkin"><span class="plink pl-${k}">${l}</span><input data-plink="${k}" maxlength="40" placeholder="${ph}" value="${esc(d.links[k] ?? '')}"></label>`).join('')}
+      </div>
+      <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Enregistrer</button></div>
+    </div></div>`;
   $('modal').showModal(); paint();
   $('pePick').onclick = () => $('peFile').click();
-  $('peFile').onchange = async () => { const f = $('peFile').files?.[0]; if (!f) return; try { draft.avatar = await cropImage(f); paint(); } catch { toast('Image illisible'); } };
-  $('peDel').onclick = () => { draft.avatar = null; paint(); };
-  $('peColor').oninput = (e) => { draft.couleur = e.target.value; paint(); };
-  $('peBioIn').oninput = paint;
+  $('peFile').onchange = async () => { const f = $('peFile').files?.[0]; if (!f) return; try { change.avatar = await cropImage(f); d.avatarData = change.avatar; paint(); } catch { toast('Image illisible'); } };
+  $('peDel').onclick = () => { change.avatar = null; d.avatarData = null; d.avatar = null; paint(); };
+  $('peBanPick').onclick = () => $('peBanFile').click();
+  $('peBanFile').onchange = async () => { const f = $('peBanFile').files?.[0]; if (!f) return; try { change.banniereImg = await cropImage(f, 900, 300, 280); d.bannerData = change.banniereImg; paint(); } catch { toast('Image illisible'); } };
+  $('peColor').oninput = (e) => { d.color = e.target.value; change.couleur = d.color; paint(); };
+  $('peBioIn').oninput = (e) => { d.bio = e.target.value; change.bio = d.bio; paint(); };
+  $('peGame').oninput = (e) => { d.favGame = e.target.value; change.jeu = d.favGame; paint(); };
+  $('modalBox').oninput = (e) => { const k = e.target.dataset?.plink; if (k) { d.links[k] = e.target.value.trim(); change.liens = { ...d.links }; paint(); } };
   $('modalBox').onclick = async (e) => {
-    const c = e.target.closest('[data-pcol]'); if (c) { draft.couleur = c.dataset.pcol; paint(); return; }
-    const b = e.target.closest('[data-m]'); if (!b) return;
-    if (b.dataset.m === '0') return $('modal').close();
-    b.disabled = true;
-    const body = { couleur: draft.couleur ?? '', bio: $('peBioIn').value };
-    if (draft.avatar !== undefined) body.avatar = draft.avatar;
-    const r = await api.saveProfile?.(body);
-    b.disabled = false;
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.ptab) { tab = t.dataset.ptab; return paint(); }
+    if (t.dataset.pcol) { d.color = t.dataset.pcol; change.couleur = d.color; return paint(); }
+    if (t.dataset.pframe) { d.frame = t.dataset.pframe === 'aucun' ? null : t.dataset.pframe; change.cadre = t.dataset.pframe; return paint(); }
+    if (t.dataset.pfx) { d.nameFx = t.dataset.pfx === 'aucun' ? null : t.dataset.pfx; change.effet = t.dataset.pfx; return paint(); }
+    if (t.dataset.pban) { d.banner = t.dataset.pban; d.bannerImg = null; d.bannerData = null; change.banniere = d.banner; change.banniereImg = null; return paint(); }
+    if (t.dataset.pbadge) {
+      const k = t.dataset.pbadge;
+      if (d.badges.includes(k)) d.badges = d.badges.filter((x) => x !== k); else if (d.badges.length < 3) d.badges.push(k); else return toast('3 badges au maximum');
+      change.badges = [...d.badges]; return paint();
+    }
+    if (!t.dataset.m) return;
+    if (t.dataset.m === '0') return $('modal').close();
+    if (!Object.keys(change).length) return $('modal').close();
+    t.disabled = true;
+    const r = await api.saveProfile?.(change);
+    t.disabled = false;
     if (!r?.ok) return toast(r?.error ?? 'Impossible pour l’instant');
     setAccount(r.compte); $('modal').close(); toast('Profil mis à jour');
     loadHistory();
@@ -649,6 +738,8 @@ function chatHeader() {
   $('chatWho').textContent = chatWith.name;
   $('chatAv').className = `pav ${f?.playing ? 'ingame' : f?.online ? 'on' : 'off'}`;
   setAv($('chatAv'), f ?? chatWith.name);
+  if (f?.frame) $('chatAv').classList.add(`fr-${f.frame}`);
+  $('chatWho').className = `nfx-${f?.nameFx ?? 'aucun'}`; $('chatWho').style.setProperty('--pc', f?.color ?? '#3b82f6');
   $('chatSub').textContent = `${f?.playing ? `Joue à ${f.playing}` : f?.online ? (f.status ? `En ligne · « ${f.status} »` : 'En ligne') : 'Hors ligne · il verra ton message à sa prochaine connexion'}${f?.bio ? ` — ${f.bio}` : ''}`;
   $('chatCall').hidden = !f?.online;
   $('chatJoin').hidden = !f?.playing;
@@ -703,6 +794,8 @@ $('chatForm').addEventListener('submit', async (e) => {
 });
 $('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chatForm').requestSubmit(); } });
 $('chatText').addEventListener('input', (e) => { e.target.style.height = ''; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; });
+$('chatAv').addEventListener('click', () => chatWith && openFriendProfile(chatWith.id));
+$('chatWho').addEventListener('click', () => chatWith && openFriendProfile(chatWith.id));
 $('chatAsk').addEventListener('click', async () => { if (!chatWith) return; const r = await api.friendInvite(chatWith.id, 'ask'); toast(r?.ok ? 'Demande envoyée' : r?.error ?? 'Impossible'); });
 $('chatInvite').addEventListener('click', async () => { if (!chatWith) return; const r = await api.friendInvite(chatWith.id, 'invite'); toast(r?.ok ? 'Invitation envoyée' : r?.error ?? 'Impossible'); });
 // « ••• » : copier son code, le retirer de mes amis
@@ -1098,18 +1191,17 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
-  '0.22.0': [
-    ['👥', 'Page Amis en deux panneaux', 'Tes amis à gauche, la discussion à droite (plus de fenêtre qui s’ouvre). Groupes et Soirées ont leurs onglets en haut, avec le même principe : la liste à gauche, le détail à droite.', ['[data-view=amis]']],
-    ['🎨', 'Personnalise ton profil', 'Photo de profil, couleur et bio : clique sur ton nom en bas à gauche › Personnaliser mon profil. Tes amis les voient partout (liste, discussion, notifications).'],
-    ['🔔', 'Notifications plus claires', 'La cloche passe à gauche, et chaque notification montre la photo de ton ami.'],
-    ['🧩', 'Composants avec néon', 'Mon PC › Composants : un néon de couleur tourne autour de chaque composant. Les alertes importantes (redémarrage en attente…) passent en verre rouge.', ['[data-view=pc]', '[data-pctab=composants]', 'wait1500']],
-    ['🎮', 'Jeu en cours plus juste', 'Riot Vanguard, les anti-triche, clients et lanceurs ne sont plus affichés comme des jeux (« Joue à … »).'],
+  '0.23.0': [
+    ['🖼', 'Profil bien plus personnalisable', 'Bannière (10 styles ou ta propre image), cadre animé autour de ta photo (néon, or, feu, glace, galaxie…), effet sur ton pseudo (dégradé, néon, or, arc-en-ciel).'],
+    ['🏅', 'Badges, jeu préféré et réseaux', 'Choisis jusqu’à 3 badges, ton jeu préféré et tes réseaux (Discord, Twitch, YouTube, TikTok, Steam, Instagram) : tes amis les copient en un clic.'],
+    ['🪪', 'Carte de profil', 'Clique sur la photo d’un ami dans sa discussion pour voir sa carte : bannière, bio, badges, temps de jeu de la semaine, benchmark et réseaux.'],
+    ['👀', 'Aperçu en direct', 'L’éditeur de profil montre ta carte telle que tes amis la verront pendant que tu la modifies.'],
   ],
   '0.22.0': [
     ['👥', 'Page Amis en deux panneaux', 'Tes amis à gauche, la discussion à droite (plus de fenêtre qui s’ouvre). Groupes et Soirées ont leurs onglets en haut, avec le même principe : la liste à gauche, le détail à droite.', ['[data-view=amis]']],
     ['🎨', 'Personnalise ton profil', 'Photo de profil, couleur et bio : clique sur ton nom en bas à gauche › Personnaliser mon profil. Tes amis les voient partout (liste, discussion, notifications).'],
     ['🔔', 'Notifications plus claires', 'La cloche passe à gauche, et chaque notification montre la photo de ton ami.'],
-    ['🧩', 'Composants en couleur', 'Mon PC › Composants : une couleur par composant avec un néon qui tourne autour, et des alertes en verre coloré (rouge quand c’est urgent, comme un redémarrage en attente).', ['[data-view=pc]', '[data-pctab=composants]', 'wait1500']],
+    ['🧩', 'Composants avec néon', 'Mon PC › Composants : un néon de couleur tourne autour de chaque composant. Les alertes importantes (redémarrage en attente…) passent en verre rouge.', ['[data-view=pc]', '[data-pctab=composants]', 'wait1500']],
     ['🎮', 'Jeu en cours plus juste', 'Riot Vanguard, les anti-triche, clients et lanceurs ne sont plus affichés comme des jeux (« Joue à … »).'],
   ],
   '0.21.1': [
@@ -3148,7 +3240,7 @@ function demoApi() {
     achievements: async () => ({ done: 45, total: 77, easy: [{ name: 'Bienvenue à Los Santos', desc: 'Termine la première mission', pct: 81.2, icon: null }, { name: 'Un peu de sport', desc: 'Joue au tennis', pct: 34.8, icon: null }], recent: [{ name: 'Braquage réussi', desc: 'Termine un braquage', done: true, pct: 22.1, icon: null }] }),
     captures: async () => [{ token: 'a', url: img('h1.jpg'), video: false }, { token: 'b', url: img('h2.jpg'), video: false }, { token: 'c', video: true }],
     hFriends: async () => ({ code: 'Noam#3F9A2C', moi: { week: 610, top: 'Rocket League' }, demandes: [{ id: 'z', pseudo: 'Zoé', code: 'Zoé#11AA22' }],
-      amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Grand Theft Auto V Enhanced — serveur FiveM RP très long', since: Date.now() - 42 * 60_000, week: 840, top: 'FiveM', status: 'Soirée RP 🚓 on recrute des flics motivés ce soir', bench: 1420, join: { fivem: 'abc123' } }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT', status: 'Dispo pour jouer' }, { id: 'k', pseudo: 'UnPseudoVraimentTrèsLongPourTester', online: true, playing: 'Rocket League', since: Date.now() - 5 * 60_000, week: 120, dnd: true, bench: 980 }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }],
+      amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Grand Theft Auto V Enhanced — serveur FiveM RP très long', since: Date.now() - 42 * 60_000, week: 840, top: 'FiveM', status: 'Soirée RP 🚓 on recrute des flics motivés ce soir', bench: 1420, join: { fivem: 'abc123' }, color: '#f97316', frame: 'feu', nameFx: 'neon', banner: 'lave', bio: 'Flic le jour, braqueur la nuit. Serveur RP tous les soirs à 21 h.', favGame: 'FiveM', badges: ['rp', 'nuit', 'streamer'], links: { twitch: 'max_rp', discord: 'max.rp' }, since: Date.now() - 200 * 86_400_000 }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT', status: 'Dispo pour jouer' }, { id: 'k', pseudo: 'UnPseudoVraimentTrèsLongPourTester', online: true, playing: 'Rocket League', since: Date.now() - 5 * 60_000, week: 120, dnd: true, bench: 980 }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }],
       groupes: [{ id: 'g1', name: 'Squad RL — les meilleurs du serveur', owner: true, members: [{ id: 'me', pseudo: 'Noam', online: true }, { id: 'm', pseudo: 'Max', online: true, playing: 'FiveM' }, { id: 'l', pseudo: 'Léa', online: true }, { id: 's', pseudo: 'Sam', online: false }, { id: 'a', pseudo: 'Alex', online: false }, { id: 'b', pseudo: 'Bob', online: true }, { id: 'c', pseudo: 'Chloé', online: false }, { id: 'd', pseudo: 'Dan', online: false }] }] }),
     notifs: async () => ({ unread: 3, list: [
       { id: 'n1', at: Date.now() - 60_000, kind: 'msg', cat: 'amis', icon: '💬', title: 'Max', body: 'T’es chaud pour une partie ce soir ? On lance le serveur RP vers 21 h', from: 'm', read: false },
@@ -3169,7 +3261,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.22.0',
+    version: async () => '0.23.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
@@ -3187,7 +3279,7 @@ function demoApi() {
       if (location.hash.includes('fin')) demoVerify?.({ id, name, phase: 'done', canRepair: true, result: { mode: 'complet', ok: false, checked: 3117, missing: ['update/x64/dlcpacks/patchday27ng/dlc.rpf'], corrupt: ['x64a.rpf', 'common.rpf'], sizes: [] } });
       return {};
     },
-    account: async () => (location.hash.includes('connecte') ? { compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: '#8b5cf6', bio: 'RP tous les soirs, main support', avatar: null } } } : { compte: null, skipped: true }),
+    account: async () => (location.hash.includes('connecte') ? { compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: '#8b5cf6', bio: 'RP tous les soirs, main support', avatar: null, frame: 'galaxie', nameFx: 'degrade', banner: 'synthwave', badges: ['fondateur', 'rp'], favGame: 'Rocket League', links: { twitch: 'noam_tv' } } } } : { compte: null, skipped: true }),
     saveProfile: async (p) => ({ ok: true, compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: p.couleur, bio: p.bio, avatar: null } } }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }

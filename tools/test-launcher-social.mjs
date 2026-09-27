@@ -223,6 +223,18 @@ await check('profil : photo (vérifiée), couleur, bio, visibles par les amis', 
   assert.equal(seen.avatar, r.compte.profile.avatar, 'l’ami voit la photo');
   assert.equal(seen.color, '#ff5500');
   assert.equal((await call('profil', noam, { avatar: null })).compte.profile.avatar, null);
+  // Profil complet : cadre, effet, bannière, jeu préféré, badges, réseaux (valeurs inconnues ignorées)
+  const full = await call('profil', noam, { cadre: 'neon', effet: 'or', banniere: 'synthwave', jeu: 'FiveM <RP>', badges: ['rp', 'nuit', 'inconnu', 'fps', 'chill'], liens: { twitch: '@noam_tv', youtube: 'x', tiktok: '<script>' } });
+  assert.equal(full.compte.profile.frame, 'neon'); assert.equal(full.compte.profile.nameFx, 'or'); assert.equal(full.compte.profile.banner, 'synthwave');
+  assert.equal(full.compte.profile.favGame, 'FiveM  RP');
+  assert.deepEqual(full.compte.profile.badges, ['rp', 'nuit', 'fps'], 'badges connus, 3 au maximum');
+  assert.deepEqual(full.compte.profile.links, { twitch: 'noam_tv' }, 'liens valides seulement');
+  assert.equal((await call('profil', noam, { cadre: 'hack' })).compte.profile.frame, null);
+  const ban = 'data:image/png;base64,' + Buffer.from('89504e470d0a1a0a00', 'hex').toString('base64');
+  const b = await call('profil', noam, { banniereImg: ban });
+  assert.ok(b.compte.profile.bannerImg.includes('/api/compte/banniere/'));
+  const seen2 = (await call('amis', max)).amis.find((a) => a.pseudo === 'Noam');
+  assert.equal(seen2.frame, null); assert.deepEqual(seen2.badges, ['rp', 'nuit', 'fps']); assert.ok(seen2.bannerImg);
 });
 
 server.close();
