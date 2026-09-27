@@ -837,6 +837,7 @@ async function optiApply(plan, progress = () => {}) {
   return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: tweaks.length };
 }
 ipcMain.handle('opti:run', async (_e, plan) => {
+  if (OPTI_PAUSED) return { error: 'L’optimisation est en pause le temps qu’on la corrige.' };
   try {
     const r = await optiApply(plan, (p) => send('opti:progress', p));
     // L'optimisation corrige aussi les réglages d'anciennes versions qui font bugger les jeux
@@ -1013,11 +1014,13 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
 ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto !== false, last: store.data.optiAutoLast ?? null }; });
+// Optimisation en pause : on la retravaille (des réglages faisaient bugger certains jeux). La correction des anciens réglages reste active.
+const OPTI_PAUSED = true;
 // Caches de shaders : les vider fait saccader les jeux (FiveM surtout) le temps qu'ils se recréent
 const SHADER_CACHES = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 // Optimisation automatique chaque semaine : seulement les caches qui se recréent (système, pilotes, launchers), en silence
 setInterval(async () => {
-  if (store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
+  if (OPTI_PAUSED || store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
   const scan = await optiScan().catch(() => null);
   if (!scan) return;
   const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs' && !SHADER_CACHES.includes(j.id)).map((j) => j.id) }).catch(() => null);
@@ -1503,6 +1506,75 @@ function notifSync() {
   notifWin.webContents.send('notif:cards', notifCards.slice(-4), { sound: store.data.settings.sfxNotif !== false, vol: (store.data.settings.sfxVol ?? 60) / 100 });
   if (!notifWin.isVisible()) notifWin.showInactive();
 }
+// Bulle de message en haut à droite : visible même en jeu, on clique pour répondre sans quitter la partie
+let bubbleWin = null;
+let bubble = null; // { key, title, group, avatar, color, msgs }
+let bubbleHover = false;
+let bubbleTyping = false;
+let bubbleTimer = null;
+let bubbleH = 150;
+function bubbleArm() {
+  clearTimeout(bubbleTimer);
+  bubbleTimer = setTimeout(() => { if (bubbleHover || bubbleTyping) return bubbleArm(); bubbleHide(); }, 9000);
+}
+function bubbleHide() {
+  clearTimeout(bubbleTimer);
+  bubbleTyping = false; bubble = null;
+  if (bubbleWin && !bubbleWin.isDestroyed()) { bubbleWin.setFocusable(false); bubbleWin.hide(); bubbleWin.webContents.send('bubble:data', null); }
+}
+function bubblePlace() {
+  const area = screen.getPrimaryDisplay().workArea;
+  bubbleWin.setBounds({ x: area.x + area.width - 340 - 8, y: area.y + 8, width: 340, height: Math.max(90, Math.min(420, bubbleH)) });
+}
+/** Affiche le message dans la bulle ; renvoie false si elle ne doit pas s'afficher (la carte classique prend le relais). */
+function bubbleMsg(x) {
+  const st = store.data.settings;
+  if (st.msgBubble === false || st.friendNotifs === false || st.dnd || st.tournament || gameDnd() || streaming()) return false;
+  if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) return false;
+  const group = x.type === 'gmsg';
+  const key = group ? `g:${x.gid}` : `f:${x.from}`;
+  const f = (socialLive?.amis ?? []).find((a) => a.id === x.from);
+  const g = group ? (socialLive?.groupes ?? []).find((y) => y.id === x.gid) : null;
+  const m = { pseudo: x.pseudo ?? f?.pseudo ?? '?', text: String(x.text ?? '').slice(0, 300) };
+  if (bubble?.key === key) bubble.msgs = [...bubble.msgs, m].slice(-3);
+  else if (!bubbleTyping) bubble = { key, from: x.from, gid: x.gid ?? null, title: group ? (g?.name ?? x.group ?? 'Groupe') : m.pseudo, group, avatar: group ? null : f?.avatar ?? null, color: f?.color ?? '#3b82f6', msgs: [m] };
+  else return false; // en train de répondre à quelqu'un d'autre : la carte classique prend le relais
+  const data = { ...bubble, sound: st.sfxNotif !== false, vol: (st.sfxVol ?? 60) / 100 };
+  if (!bubbleWin || bubbleWin.isDestroyed()) {
+    bubbleWin = new BrowserWindow({
+      width: 340, height: bubbleH, frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
+      webPreferences: { preload: path.join(here, 'bubble.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    });
+    bubbleWin.setAlwaysOnTop(true, 'screen-saver');
+    bubbleWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    bubbleWin.webContents.on('will-navigate', (e) => e.preventDefault());
+    bubbleWin.on('blur', () => { if (bubbleTyping) { bubbleTyping = false; bubbleWin.setFocusable(false); bubbleArm(); } });
+    bubbleWin.loadFile(path.join(here, 'ui', 'bubble.html'));
+    bubbleWin.webContents.once('did-finish-load', () => { if (!bubble) return; bubblePlace(); bubbleWin.webContents.send('bubble:data', { ...bubble, sound: data.sound, vol: data.vol }); bubbleWin.showInactive(); });
+  } else {
+    bubblePlace();
+    bubbleWin.webContents.send('bubble:data', data);
+    if (!bubbleWin.isVisible()) bubbleWin.showInactive();
+  }
+  bubbleArm();
+  return true;
+}
+ipcMain.on('bubble:hover', (_e, on) => { bubbleHover = Boolean(on); });
+ipcMain.on('bubble:size', (_e, h) => { bubbleH = Number(h) || bubbleH; if (bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()) bubblePlace(); });
+// Clic sur la bulle : elle prend le clavier (le jeu reste lancé derrière) le temps d'écrire
+ipcMain.on('bubble:open', () => { if (!bubbleWin || bubbleWin.isDestroyed()) return; bubbleTyping = true; clearTimeout(bubbleTimer); bubbleWin.setFocusable(true); bubbleWin.focus(); });
+ipcMain.on('bubble:close', () => bubbleHide());
+ipcMain.on('bubble:app', () => { const b = bubble; bubbleHide(); if (!b) return; showWindow(); if (b.group) send('group:open', { id: b.gid }); else send('chat:open', { id: b.from }); });
+ipcMain.handle('bubble:reply', async (_e, text) => {
+  if (!bubble) return { ok: false, error: 'Discussion fermée.' };
+  const id = bubble.key.slice(2);
+  const cid = randomUUID();
+  const r = bubble.group ? await sendReliable('/api/compte/groupes/messages', { id: CIDM(id), text: String(text).slice(0, 500), cid }) : await sendReliable('/api/compte/messages', { to: FID(id), text: String(text).slice(0, 500), cid });
+  if (r.error) return { ok: false, error: r.error };
+  send('social:sent', { key: bubble.key, fil: r.fil ?? null });
+  return { ok: true };
+});
+
 function dropCard(id) {
   clearTimeout(notifTimers.get(id));
   notifTimers.delete(id);
@@ -1561,6 +1633,7 @@ async function cardAction(c, action) {
   markNotif(c.id, action);
   if (c.file) { if (action === 'discord') { await clipToDiscord(c.file); return; } if (action === 'play') shell.openPath(c.file); else shell.showItemInFolder(c.file); return; }
   if (c.kind === 'share') { if (action === 'saveget') await receiveShare(c.share); return; }
+  if ((action === 'reply' || action === 'open') && c.gid) { showWindow(); send('group:open', { id: c.gid }); return; }
   if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
   if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }
   if (action === 'join') { await joinGame(c.join, c.game); return; }
@@ -1656,8 +1729,10 @@ async function socialTick(wait = 0) {
   store.data.inboxAt = Math.max(after, Number(r.now) || 0, ...(r.items ?? []).map((x) => x.at));
   socialLive = r;
   for (const x of r.items ?? []) {
+    if (x.type === 'msgdel' || x.type === 'gmsgdel') continue;
     if (x.type === 'share') { store.data.sharesIn = [...(store.data.sharesIn ?? []).filter((y) => Date.now() - y.at < 86_400_000), { id: x.share, from: x.pseudo, game: x.game, name: x.text, size: x.size, at: x.at }].slice(-20); store.save(); pushCard(cardFor(x), true); continue; }
     if (x.type === 'call') { if (Date.now() - x.at < 60_000) { pushCard(cardFor(x), true); send('call:ringing', { callId: x.callId, from: x.from, pseudo: x.pseudo }); } else logNotif({ ...cardFor(x), kind: 'missed', icon: '📵', title: `Appel manqué de ${x.pseudo ?? 'un ami'}`, body: 'Clique pour le rappeler.', at: x.at }); continue; }
+    if ((x.type === 'msg' || x.type === 'gmsg') && bubbleMsg(x)) { logNotif({ ...cardFor(x), read: true }); continue; }
     pushCard(cardFor(x));
   }
   for (const f of newlyPlaying(socialPrev, r.amis)) pushCard(playingCard(f, canJoin(f, items)));
@@ -1689,7 +1764,22 @@ ipcMain.handle('call:signal', (_e, id, data) => social('/api/compte/appel/signal
 ipcMain.handle('call:poll', (_e, id, after) => social(`/api/compte/appel/signal?call=${CID(id)}&apres=${Number(after) || -1}`));
 ipcMain.handle('call:end', (_e, id) => social('/api/compte/appel/fin', { call: CID(id) }));
 ipcMain.handle('chat:thread', (_e, fid) => social(`/api/compte/messages?avec=${encodeURIComponent(FID(fid))}`));
-ipcMain.handle('chat:send', (_e, fid, text) => social('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500) }));
+// Envoi fiable : même identifiant à chaque essai (le serveur ignore les doublons), 3 essais si le réseau ou le serveur flanche
+async function sendReliable(pathname, body) {
+  let r;
+  for (let i = 0; i < 3; i++) {
+    r = await social(pathname, body);
+    if (r.status === 200 || (r.status >= 400 && r.status < 500)) return r.status === 200 ? r : { ...r, error: r.error ?? 'Message refusé.' };
+    await new Promise((ok) => setTimeout(ok, 1500 * (i + 1)));
+  }
+  return { ...r, error: r?.error ?? 'Serveur injoignable : message non envoyé.' };
+}
+const CIDM = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
+ipcMain.handle('chat:send', (_e, fid, text, cid) => sendReliable('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined }));
+ipcMain.handle('chat:delete', (_e, fid, id) => social('/api/compte/messages/supprimer', { avec: FID(fid), id: CIDM(id) }));
+ipcMain.handle('group:thread', (_e, gid) => social(`/api/compte/groupes/messages?id=${encodeURIComponent(CIDM(gid))}`));
+ipcMain.handle('group:send', (_e, gid, text, cid) => sendReliable('/api/compte/groupes/messages', { id: CIDM(gid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined }));
+ipcMain.handle('group:delete', (_e, gid, id) => social('/api/compte/groupes/messages/supprimer', { id: CIDM(gid), msg: CIDM(id) }));
 ipcMain.handle('friend:invite', (_e, fid, type) => social('/api/compte/inviter', { to: FID(fid), type: type === 'invite' ? 'invite' : 'ask', ...(type === 'invite' ? { game: currentSession()?.name ?? undefined } : {}) }));
 ipcMain.handle('friend:join', async (_e, fid) => {
   const f = (socialLive?.amis ?? (await social('/api/compte/amis')).amis ?? []).find((a) => a.id === FID(fid));
@@ -2156,15 +2246,34 @@ ipcMain.handle('account:2fa', async (_e, ticket, code) => loggedIn(await api('/a
 ipcMain.handle('account:verif', async (_e, code) => { const r = await secu('/api/compte/verif', { code: code6(code) }); if (r.compte) { store.data.settings.lastAccount = r.compte; store.save(); } return r; });
 ipcMain.handle('account:verifResend', () => secu('/api/compte/verif/envoyer', {}));
 // Profil personnalisé (photo recadrée par l'interface, couleur, bio)
+// Réseaux d'un profil : le lien est reconstruit ici à partir du pseudo, vers le site officiel seulement
+function profileLinkUrl(kind, h) {
+  const v = String(h ?? '');
+  if (kind === 'discord') return /^gg\/[\w-]{2,40}$/.test(v) ? `https://discord.gg/${v.slice(3)}` : null;
+  if (!/^[\w.-]{2,40}$/.test(v)) return null;
+  if (kind === 'twitch') return `https://www.twitch.tv/${v}`;
+  if (kind === 'youtube') return /^UC[\w-]{22}$/.test(v) ? `https://www.youtube.com/channel/${v}` : `https://www.youtube.com/@${v}`;
+  if (kind === 'tiktok') return `https://www.tiktok.com/@${v}`;
+  if (kind === 'steam') return /^\d{17}$/.test(v) ? `https://steamcommunity.com/profiles/${v}` : `https://steamcommunity.com/id/${v}`;
+  if (kind === 'instagram') return `https://www.instagram.com/${v}`;
+  return null;
+}
+ipcMain.handle('profile:link', async (_e, kind, h) => {
+  const url = profileLinkUrl(String(kind), h);
+  if (!url) return { ok: false };
+  await shell.openExternal(url);
+  return { ok: true };
+});
 ipcMain.handle('account:profile', async (_e, p) => {
   const body = {};
   if (p && 'avatar' in p) body.avatar = p.avatar === null ? null : String(p.avatar ?? '').slice(0, 220_000);
   if (p && 'couleur' in p) body.couleur = String(p.couleur ?? '').slice(0, 7);
   if (p && 'bio' in p) body.bio = String(p.bio ?? '').slice(0, 140);
   for (const k of ['cadre', 'effet', 'banniere']) if (p && k in p) body[k] = String(p[k] ?? '').slice(0, 20);
+  if (p && 'cadreCouleur' in p) body.cadreCouleur = p.cadreCouleur === null ? null : String(p.cadreCouleur ?? '').slice(0, 7);
   if (p && 'jeu' in p) body.jeu = String(p.jeu ?? '').slice(0, 60);
   if (p && Array.isArray(p.badges)) body.badges = p.badges.slice(0, 3).map((x) => String(x).slice(0, 20));
-  if (p && p.liens && typeof p.liens === 'object') body.liens = Object.fromEntries(Object.entries(p.liens).slice(0, 8).map(([k, v]) => [String(k).slice(0, 12), String(v ?? '').slice(0, 40)]));
+  if (p && p.liens && typeof p.liens === 'object') body.liens = Object.fromEntries(Object.entries(p.liens).slice(0, 8).map(([k, v]) => [String(k).slice(0, 12), String(v ?? '').slice(0, 120)]));
   if (p && 'banniereImg' in p) body.banniereImg = p.banniereImg === null ? null : String(p.banniereImg ?? '').slice(0, 420_000);
   const r = await secu('/api/compte/profil', body);
   if (r.compte) { store.data.settings.lastAccount = r.compte; store.save(); }
@@ -2870,7 +2979,7 @@ app.whenReady().then(start).catch(async (err) => { await fatal(err); app.exit(1)
 // =====================================================================================================
 // Centre de notifications : les 150 dernières notifications de l'appli et des amis, lues ou non
 // =====================================================================================================
-const NOTIF_KINDS_FRIENDS = ['msg', 'ask', 'invite', 'group', 'call', 'missed', 'reply', 'playing', 'share'];
+const NOTIF_KINDS_FRIENDS = ['msg', 'gmsg', 'ask', 'invite', 'group', 'call', 'missed', 'reply', 'playing', 'share'];
 function logNotif(c) {
   if (!c?.title) return;
   const list = (store.data.notifLog ??= []);
@@ -2879,7 +2988,7 @@ function logNotif(c) {
   const kind = c.kind ?? 'app';
   const e = {
     id, at: c.at ?? Date.now(), kind, cat: NOTIF_KINDS_FRIENDS.includes(kind) ? 'amis' : 'appli', icon: c.icon ?? '🔔', title: String(c.title).slice(0, 120), body: String(c.body ?? '').slice(0, 300),
-    from: c.from ?? null, game: c.game ?? null, join: c.join ?? null, callId: c.callId ?? null, share: c.share ?? null, file: c.file ?? null, read: false, done: null,
+    from: c.from ?? null, gid: c.gid ?? null, game: c.game ?? null, join: c.join ?? null, callId: c.callId ?? null, share: c.share ?? null, file: c.file ?? null, read: false, done: null,
   };
   store.data.notifLog = [e, ...list].slice(0, 150);
   store.save();

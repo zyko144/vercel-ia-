@@ -10,6 +10,7 @@ const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'acc
 const sidebar = { hiddenPlatforms: [], hiddenNav: [] }; // menu de gauche personnalisé (sur ce compte)
 let boostGames = {}; // opti auto par jeu : id -> true (toujours) | false (jamais)
 const unread = {}; // messages d'amis non lus (id -> nombre)
+const gUnread = {}; // messages de groupe non lus (id groupe -> nombre)
 let chatWith = null; // discussion ouverte
 let callS = null; // appel en cours
 let ringing = null; // appel qui sonne
@@ -334,7 +335,8 @@ function avStyle(p) {
   const name = typeof p === 'string' ? p : p?.pseudo;
   const img = typeof p === 'object' ? safeImg(p?.avatar) : null;
   const col = typeof p === 'object' && /^#[0-9a-f]{6}$/i.test(p?.color ?? '') ? p.color : null;
-  return { name, img, style: `--h:${hueOf(name)};${col ? `background-color:${col};` : ''}${img ? `background-image:url('${img}');` : ''}` };
+  const fc = typeof p === 'object' && /^#[0-9a-f]{6}$/i.test(p?.frameColor ?? '') ? p.frameColor : null;
+  return { name, img, style: `--h:${hueOf(name)};${col ? `background-color:${col};` : ''}${fc ? `--fc:${fc};` : ''}${img ? `background-image:url('${img}');` : ''}` };
 }
 const avatar = (p, cls = '') => { const a = avStyle(p); const fr = typeof p === 'object' && p?.frame && !/fr-/.test(cls) ? ` fr-${p.frame}` : ''; return `<span class="pav ${a.img ? 'img' : ''} ${cls}${fr}" style="${a.style}">${a.img ? '' : esc(String(a.name ?? '?').trim()[0]?.toUpperCase() ?? '?')}</span>`; };
 const avWrap = (p, st, cls = '') => `<span class="favw ${st}">${avatar(p, cls)}<i class="st"></i></span>`;
@@ -371,12 +373,13 @@ function fxShow(sel) {
   fx.sel = sel;
   $('fxChat').hidden = sel?.type !== 'ami';
   $('fxEventForm').hidden = sel?.type !== 'nouvelleSoiree';
-  $('fxDetail').hidden = !['steam', 'groupe', 'soiree'].includes(sel?.type);
+  $('fxDetail').hidden = !['steam', 'soiree'].includes(sel?.type);
+  $('fxGroup').hidden = sel?.type !== 'groupe';
   $('fxEmpty').hidden = Boolean(sel);
   if (!sel) { const [t, x] = EMPTY[fx.tab]; $('fxEmptyT').textContent = t; $('fxEmptyS').textContent = x; chatWith = null; }
   if (sel?.type !== 'ami') chatWith = null;
   if (sel?.type === 'steam') renderSteamDetail();
-  if (sel?.type === 'groupe') renderGroupDetail();
+  if (sel?.type === 'groupe') openGroupChat(sel.id);
   if (sel?.type === 'soiree') renderEventDetail();
   document.querySelectorAll('#view-amis [data-fsel], #view-amis [data-gsel], #view-amis [data-esel], #view-amis [data-ssel]').forEach((el) => el.classList.toggle('sel', Boolean(sel) && (el.dataset.fsel ?? el.dataset.gsel ?? el.dataset.esel ?? el.dataset.ssel) === sel.id));
 }
@@ -410,6 +413,12 @@ function renderSteamDetail() {
 }
 
 // ---------- Groupes ----------
+function lastLine(g) {
+  const m = threads.get(`g:${g.id}`)?.at(-1);
+  if (!m) return null;
+  const who = m.from === myId() ? 'Toi' : g.members.find((x) => x.id === m.from)?.pseudo ?? '?';
+  return `${who} : ${m.text}`.slice(0, 60);
+}
 function renderGroups(list) {
   state.groups = list;
   if (state.hist) state.hist.groupes = list;
@@ -417,7 +426,8 @@ function renderGroups(list) {
     const on = g.members.filter((m) => m.online).length;
     return `<div class="fxrow grp ${fx.sel?.id === g.id ? 'sel' : ''}" data-gsel="${esc(g.id)}">
       <span class="gstack">${g.members.slice(0, 3).map((m) => avatar(m, 'xs')).join('')}</span>
-      <div class="fxrinfo"><b>${esc(g.name)}</b><small>${on}/${g.members.length} en ligne${g.members.some((m) => m.playing) ? ' · en jeu' : ''}</small></div>
+      <div class="fxrinfo"><b>${esc(g.name)}</b><small>${esc(lastLine(g) ?? `${on}/${g.members.length} en ligne${g.members.some((m) => m.playing) ? ' · en jeu' : ''}`)}</small></div>
+      ${gUnread[g.id] ? `<em class="funread">${gUnread[g.id]}</em>` : ''}
     </div>`;
   }).join('') : (state.hist && !state.hist.error && state.hist.status !== 401 ? '<div class="fxnote">Pas encore de groupe. Crée « Squad RL » avec tes potes pour les prévenir tous d’un coup.</div>' : needLogin);
   fxCounts();
@@ -427,14 +437,12 @@ function renderGroupDetail() {
   const g = (state.groups ?? []).find((x) => x.id === fx.sel?.id);
   if (!g) return;
   const on = g.members.filter((m) => m.online).length;
-  $('fxDetail').innerHTML = `<div class="dhead"><span class="gstack big">${g.members.slice(0, 3).map((m) => avatar(m, 'sm')).join('')}</span><div class="dwho"><b>${esc(g.name)}</b><small>${g.members.length} membres · ${on} en ligne</small></div>
-      <button class="btn ghost sm" data-gleave="${esc(g.id)}">${g.owner ? 'Supprimer le groupe' : 'Quitter'}</button></div>
-    <div class="dbody">
-      <div class="dacts"><button class="btn play" data-gnotify="${esc(g.id)}">Prévenir le groupe</button><button class="btn" data-gparty="${esc(g.id)}">Annoncer sur Discord</button></div>
-      <p class="hint">« Prévenir » envoie ton message à tout le groupe dans le launcher. « Annoncer sur Discord » mentionne les membres liés avec un bouton « Je viens ».</p>
-      <div class="dsec">Membres</div>
-      <div class="dlist">${g.members.map((m) => `<div class="drow">${avWrap(m, m.playing ? 'ingame' : m.online ? 'on' : 'off', 'sm')}<div class="fxrinfo"><b>${esc(m.pseudo)}</b><small>${m.playing ? `Joue à ${esc(m.playing)}` : m.online ? 'En ligne' : 'Hors ligne'}</small></div>${state.hist?.amis?.some((a) => a.id === m.id) ? `<button class="btn ghost sm" data-hchat="${esc(m.id)}" data-name="${esc(m.pseudo)}">Message</button>` : ''}</div>`).join('')}</div>
-    </div>`;
+  $('gAv').innerHTML = g.members.slice(0, 3).map((m) => avatar(m, 'sm')).join('');
+  $('gWho').textContent = g.name;
+  const playing = g.members.filter((m) => m.playing);
+  $('gSub').textContent = `${g.members.length} membres · ${on} en ligne${playing.length ? ` · ${playing.map((m) => m.pseudo).slice(0, 2).join(', ')} en jeu` : ''}`;
+  $('gMembersBtn').textContent = `👥 ${g.members.length}`;
+  $('gMembers').innerHTML = g.members.map((m) => `<div class="drow">${avWrap(m, m.playing ? 'ingame' : m.online ? 'on' : 'off', 'sm')}<div class="fxrinfo"><b>${esc(m.pseudo)}</b><small>${m.playing ? `Joue à ${esc(m.playing)}` : m.online ? 'En ligne' : 'Hors ligne'}</small></div>${state.hist?.amis?.some((a) => a.id === m.id) ? `<button type="button" class="btn ghost sm" data-hchat="${esc(m.id)}" data-name="${esc(m.pseudo)}">Message</button>` : ''}</div>`).join('');
 }
 $('groupNew').addEventListener('click', async () => {
   const amis = state.hist?.amis ?? [];
@@ -465,6 +473,24 @@ $('view-amis').addEventListener('click', async (e) => {
   if (pty) { const text = await ui.prompt({ title: 'Annoncer sur Discord', text: 'Le bot mentionne les membres du groupe sur Discord (bouton « Je viens ») et les prévient aussi dans le launcher.', value: state.session?.name ? `Je lance ${state.session.name}, qui vient ?` : 'On lance une partie, qui vient ?', ok: 'Annoncer', icon: '🎮' }); if (!text) return; const r = await api.groupParty(pty.dataset.gparty, text); return toast(r?.ok ? `Annoncé sur Discord${r.mentioned ? ` (${r.mentioned} mentionné${r.mentioned > 1 ? 's' : ''})` : ''}` : r?.error ?? 'Impossible'); }
   if (n) { const text = await ui.prompt({ title: 'Prévenir le groupe', text: 'Ton message (tout le groupe le reçoit dans le launcher) :', value: state.session?.name ? `Je lance ${state.session.name}, vous venez ?` : 'On joue ?', ok: 'Envoyer', icon: '👥' }); if (!text) return; const r = await api.groupNotify(n.dataset.gnotify, text); return toast(r?.ok ? `Envoyé à ${r.sent} ami${r.sent > 1 ? 's' : ''}` : r?.error ?? 'Impossible'); }
   if (l && await ui.confirm({ title: 'Quitter ce groupe ?', ok: 'Quitter', icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) { renderGroups(r.groupes); fxShow(null); } }
+});
+$('gMembersBtn').addEventListener('click', () => { $('gMembers').hidden = !$('gMembers').hidden; });
+$('gNotify').addEventListener('click', async () => { const id = gOpen(); if (!id) return; const text = await ui.prompt({ title: 'Prévenir le groupe', text: 'Une notification part chez tout le groupe (même s’ils ne sont pas sur la discussion) :', value: state.session?.name ? `Je lance ${state.session.name}, vous venez ?` : 'On joue ?', ok: 'Envoyer', icon: '🔔' }); if (!text) return; const r = await api.groupNotify(id, text); toast(r?.ok ? `Envoyé à ${r.sent} ami${r.sent > 1 ? 's' : ''}` : r?.error ?? 'Impossible'); });
+$('gParty').addEventListener('click', async () => { const id = gOpen(); if (!id) return; const text = await ui.prompt({ title: 'Annoncer sur Discord', text: 'Le bot mentionne les membres du groupe sur Discord (bouton « Je viens ») et les prévient aussi dans le launcher.', value: state.session?.name ? `Je lance ${state.session.name}, qui vient ?` : 'On lance une partie, qui vient ?', ok: 'Annoncer', icon: '🎮' }); if (!text) return; const r = await api.groupParty(id, text); toast(r?.ok ? `Annoncé sur Discord${r.mentioned ? ` (${r.mentioned} mentionné${r.mentioned > 1 ? 's' : ''})` : ''}` : r?.error ?? 'Impossible'); });
+$('gMore').addEventListener('click', (e) => {
+  const g = (state.groups ?? []).find((x) => x.id === gOpen()); if (!g) return;
+  const ctx = $('ctx');
+  ctx.innerHTML = `<div class="ctxhead">${esc(g.name)}</div><button class="danger" data-gleave="${esc(g.id)}">${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}</button>`;
+  ctx.hidden = false;
+  const r = e.target.getBoundingClientRect();
+  ctx.style.left = `${Math.min(r.left, window.innerWidth - ctx.offsetWidth - 8)}px`; ctx.style.top = `${r.bottom + 6}px`;
+  ctx.classList.remove('show'); void ctx.offsetWidth; ctx.classList.add('show');
+  e.stopPropagation();
+});
+$('ctx').addEventListener('click', async (e) => {
+  const l = e.target.closest('[data-gleave]'); if (!l) return;
+  $('ctx').hidden = true;
+  if (await ui.confirm({ title: 'Quitter ce groupe ?', ok: 'Quitter', icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) { renderGroups(r.groupes); fxShow(null); } }
 });
 $('secDiscord').addEventListener('click', async () => {
   const r = await api.discordCode();
@@ -526,11 +552,48 @@ function renderHistory() {
 }
 // ---------- Profil : carte de joueur (bannière, cadre animé, effet du pseudo, badges, jeu préféré, réseaux) ----------
 const PCOLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#64748b', '#1f2937'];
-const FRAMES = [['aucun', 'Aucun'], ['neon', 'Néon'], ['or', 'Or'], ['arcenciel', 'Arc-en-ciel'], ['feu', 'Feu'], ['glace', 'Glace'], ['toxique', 'Toxique'], ['galaxie', 'Galaxie']];
+const FRAMES = [['aucun', 'Aucun'], ['perso', 'Ta couleur'], ['neon', 'Néon'], ['or', 'Or'], ['arcenciel', 'Arc-en-ciel'], ['feu', 'Feu'], ['glace', 'Glace'], ['toxique', 'Toxique'], ['galaxie', 'Galaxie']];
 const NAMEFX = [['aucun', 'Normal'], ['degrade', 'Dégradé'], ['neon', 'Néon'], ['or', 'Or'], ['arcenciel', 'Arc-en-ciel']];
 const BANNERS = [['nuit', 'Nuit'], ['aurore', 'Aurore'], ['coucher', 'Coucher de soleil'], ['ocean', 'Océan'], ['foret', 'Forêt'], ['lave', 'Lave'], ['neige', 'Neige'], ['synthwave', 'Synthwave'], ['carbone', 'Carbone'], ['rose', 'Rose']];
 const BADGES = { fondateur: ['🏅', 'Fondateur'], nuit: ['🌙', 'Oiseau de nuit'], rp: ['🚓', 'Rôliste'], fps: ['🎯', 'Chasseur de FPS'], streamer: ['🎥', 'Streamer'], collection: ['📚', 'Collectionneur'], social: ['🤝', 'Pote de tout le monde'], compet: ['🏆', 'Compétiteur'], chill: ['🛋', 'Joueur chill'], createur: ['🛠', 'Créateur'], speedrun: ['⏱', 'Speedrunner'], coop: ['🧩', 'Fan de coop'] };
-const LINKS = [['discord', 'Discord', 'pseudo'], ['twitch', 'Twitch', 'chaîne'], ['youtube', 'YouTube', '@chaîne'], ['tiktok', 'TikTok', '@compte'], ['steam', 'Steam', 'identifiant'], ['instagram', 'Instagram', '@compte']];
+const LINKS = [['discord', 'Discord', 'pseudo ou lien d’invitation'], ['twitch', 'Twitch', 'twitch.tv/… ou pseudo'], ['youtube', 'YouTube', 'youtube.com/@… ou @chaîne'], ['tiktok', 'TikTok', 'tiktok.com/@… ou @compte'], ['steam', 'Steam', 'lien du profil Steam'], ['instagram', 'Instagram', 'instagram.com/… ou @compte']];
+// Logos simplifiés des réseaux (SVG maison)
+const LINK_ICONS = {
+  discord: '<svg viewBox="0 0 24 24"><path d="M19.6 5.3A17 17 0 0 0 15.4 4l-.5 1a15.6 15.6 0 0 0-5.8 0l-.5-1a17 17 0 0 0-4.2 1.3C1.7 9.3 1 13.2 1.3 17a17 17 0 0 0 5.2 2.6l1.1-1.8c-.6-.2-1.2-.5-1.8-.9l.4-.3a12.2 12.2 0 0 0 11.6 0l.4.3c-.6.4-1.2.7-1.8.9l1.1 1.8a17 17 0 0 0 5.2-2.6c.4-4.4-.7-8.3-3.1-11.7ZM8.5 14.7c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1Zm7 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1Z"/></svg>',
+  twitch: '<svg viewBox="0 0 24 24"><path d="M4.3 2 3 5.4v13.8h4.7V22h2.6l2.7-2.8h3.8l5.2-5.2V2H4.3Zm15.4 11.2-3 3h-4.7l-2.6 2.6v-2.6H5.4V3.9h14.3v9.3ZM16.8 7v5.3h-1.9V7h1.9Zm-5 0v5.3H9.9V7h1.9Z"/></svg>',
+  youtube: '<svg viewBox="0 0 24 24"><path d="M23 7.2a3 3 0 0 0-2.1-2.1C19 4.6 12 4.6 12 4.6s-7 0-8.9.5A3 3 0 0 0 1 7.2 31 31 0 0 0 .5 12a31 31 0 0 0 .5 4.8 3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.8 31 31 0 0 0-.5-4.8ZM9.7 15V9l5.8 3-5.8 3Z"/></svg>',
+  tiktok: '<svg viewBox="0 0 24 24"><path d="M16.6 2h-3.4v13.5a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9.3a6.3 6.3 0 1 0 5.4 6.2V8.7a8 8 0 0 0 4.6 1.5V6.8a4.6 4.6 0 0 1-4.6-4.8Z"/></svg>',
+  steam: '<svg viewBox="0 0 24 24"><path d="M12 1.5A10.5 10.5 0 0 0 1.6 11l5.6 2.3a3 3 0 0 1 1.9-.5l2.5-3.6v-.1a4 4 0 1 1 4 4h-.1l-3.6 2.6a3 3 0 0 1-5.9.6l-4-1.7A10.5 10.5 0 1 0 12 1.5Zm-4.4 16 1.3.5a2.2 2.2 0 1 0 1.2-2.9l-1.3-.5a1.6 1.6 0 1 1-1.2 2.9Zm10.1-8.4a2.7 2.7 0 1 0-5.4 0 2.7 2.7 0 0 0 5.4 0Zm-4.7 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24"><path d="M12 7.3a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4Zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm6-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0ZM21.9 8c0-1.6-.4-3-1.6-4.2S17.6 2.1 16 2.1c-1.6-.1-6.4-.1-8 0-1.6 0-3 .4-4.2 1.6S2.1 6.4 2.1 8c-.1 1.6-.1 6.4 0 8 0 1.6.4 3 1.6 4.2s2.6 1.6 4.2 1.6c1.6.1 6.4.1 8 0 1.6 0 3-.4 4.2-1.6s1.6-2.6 1.6-4.2c.1-1.6.1-6.4 0-8Zm-2.1 9.7a3.3 3.3 0 0 1-1.8 1.8c-1.3.5-4.4.4-5.9.4s-4.6.1-5.9-.4a3.3 3.3 0 0 1-1.8-1.8c-.5-1.3-.4-4.4-.4-5.7s-.1-4.5.4-5.8a3.3 3.3 0 0 1 1.8-1.8c1.3-.5 4.4-.4 5.9-.4s4.6-.1 5.9.4a3.3 3.3 0 0 1 1.8 1.8c.5 1.3.4 4.4.4 5.8s.1 4.4-.4 5.7Z"/></svg>',
+};
+// Pseudo ou lien collé -> pseudo gardé + vrai lien (mêmes règles que le serveur)
+const LINK_URL = {
+  twitch: /^(?:https?:\/\/)?(?:www\.|m\.)?twitch\.tv\/([\w.-]+)/i,
+  youtube: /^(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/|channel\/)?([\w.-]+)/i,
+  tiktok: /^(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@([\w.-]+)/i,
+  steam: /^(?:https?:\/\/)?steamcommunity\.com\/(?:id|profiles)\/([\w.-]+)/i,
+  instagram: /^(?:https?:\/\/)?(?:www\.)?instagram\.com\/([\w.-]+)/i,
+  discord: /^(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord\.com\/invite)\/([\w-]+)/i,
+};
+function linkHandle(kind, raw) {
+  const v = String(raw ?? '').trim();
+  const m = v.match(LINK_URL[kind] ?? /$^/);
+  if (m) return kind === 'discord' ? `gg/${m[1]}` : m[1].slice(0, 40);
+  const h = v.replace(/^@/, '');
+  if (kind === 'discord') return /^(gg\/)?[\w.#-]{2,40}$/.test(h) ? h : null;
+  return /^[\w.-]{2,40}$/.test(h) ? h : null;
+}
+function linkUrl(kind, h) {
+  if (!h) return null;
+  if (kind === 'discord') return h.startsWith('gg/') ? `https://discord.gg/${h.slice(3)}` : null;
+  if (kind === 'twitch') return `https://www.twitch.tv/${h}`;
+  if (kind === 'youtube') return /^UC[\w-]{22}$/.test(h) ? `https://www.youtube.com/channel/${h}` : `https://www.youtube.com/@${h}`;
+  if (kind === 'tiktok') return `https://www.tiktok.com/@${h}`;
+  if (kind === 'steam') return /^\d{17}$/.test(h) ? `https://steamcommunity.com/profiles/${h}` : `https://steamcommunity.com/id/${h}`;
+  if (kind === 'instagram') return `https://www.instagram.com/${h}`;
+  return null;
+}
+const linkShown = (kind, h) => (kind === 'discord' && h.startsWith('gg/') ? `discord.gg/${h.slice(3)}` : kind === 'discord' || kind === 'steam' ? h : `@${h}`);
 const safeBanner = (u) => (/^https:\/\/[\w.-]+\/api\/compte\/banniere\/[\w-]+\?v=\d+$/.test(String(u ?? '')) ? u : null);
 /** Carte de profil complète (aperçu de l'éditeur et profil d'un ami). */
 function profileCard(p, { live = null } = {}) {
@@ -542,7 +605,7 @@ function profileCard(p, { live = null } = {}) {
   return `<div class="pc2" style="--pc:${col}">
     <div class="pc2ban ban-${esc(p.banner ?? 'nuit')}" ${ban ? `style="background-image:url('${esc(ban)}')"` : ''}></div>
     <div class="pc2main">
-      <div class="pc2top">${p.avatarData ? `<span class="pav xl img ${p.frame ? `fr-${esc(p.frame)}` : ''}" style="background-image:url('${esc(p.avatarData)}')"></span>` : avatar(p, `xl ${p.frame ? `fr-${p.frame}` : ''}`)}
+      <div class="pc2top">${p.avatarData ? `<span class="pav xl img ${p.frame ? `fr-${esc(p.frame)}` : ''}" style="background-image:url('${esc(p.avatarData)}');${/^#[0-9a-f]{6}$/i.test(p.frameColor ?? '') ? `--fc:${p.frameColor}` : ''}"></span>` : avatar(p, `xl ${p.frame ? `fr-${p.frame}` : ''}`)}
         ${live ? `<span class="pc2live ${live.cls}">${esc(live.text)}</span>` : ''}</div>
       <div class="pc2name nfx-${esc(p.nameFx ?? 'aucun')}">${esc(p.pseudo ?? '')}</div>
       <small class="pc2sub">${p.code ? esc(p.code) : ''}${since ? `${p.code ? ' · ' : ''}membre depuis ${esc(since)}` : ''}</small>
@@ -554,7 +617,7 @@ function profileCard(p, { live = null } = {}) {
         ${p.bench ? `<div class="pc2box"><span class="pc2ico">🏁</span><div><small>Benchmark</small><b>${p.bench}</b></div></div>` : ''}
         ${p.top && p.top !== p.favGame ? `<div class="pc2box"><span class="pc2ico">🔥</span><div><small>Le plus joué (7 j)</small><b>${esc(p.top)}</b></div></div>` : ''}
       </div>
-      ${links.length ? `<div class="pc2links">${links.map(([k, label]) => `<button type="button" class="plink pl-${k}" data-copytext="${esc(p.links[k])}" data-copied="${esc(label)} copié : ${esc(p.links[k])}" title="Copier">${esc(label)} <b>${esc(p.links[k])}</b></button>`).join('')}</div>` : ''}
+      ${links.length ? `<div class="pc2links">${links.map(([k, label]) => { const h = p.links[k]; const url = linkUrl(k, h); return `<button type="button" class="plink2 pl-${k}" ${url ? `data-plopen="${esc(k)}" data-plh="${esc(h)}" title="Ouvrir ${esc(label)}"` : `data-copytext="${esc(h)}" data-copied="${esc(label)} copié : ${esc(h)}" title="Copier le pseudo"`}><i class="plico">${LINK_ICONS[k]}</i><span><small>${esc(label)}</small><b>${esc(linkShown(k, h))}</b></span><em>${url ? '↗' : '⧉'}</em></button>`; }).join('')}</div>` : ''}
     </div></div>`;
 }
 /** Profil d'un ami (clic sur sa photo ou son nom). */
@@ -563,19 +626,44 @@ function openFriendProfile(id) {
   if (!f) return;
   const live = f.playing ? { cls: 'g', text: `Joue à ${f.playing}` } : f.online ? { cls: 'on', text: 'En ligne' } : { cls: 'off', text: 'Hors ligne' };
   $('modalBox').classList.add('wide', 'fp');
-  $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+  $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn play" data-m="1" autofocus>Fermer</button></div>`;
   $('modal').showModal();
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) setTimeout(() => $('modal').close(), 0); };
 }
 $('modal').addEventListener('close', () => $('modalBox').classList.remove('wide', 'fp'));
-async function cropImage(file, w = 256, h = 256, maxKb = 140) {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.max(w / bmp.width, h / bmp.height);
-  const sw = w / scale; const sh = h / scale;
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  c.getContext('2d').drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) / 2, sw, sh, 0, 0, w, h);
-  for (const q of [0.88, 0.75, 0.6, 0.45, 0.3]) { const u = c.toDataURL('image/webp', q); if (u.length * 0.75 < maxKb * 1024) return u; }
-  return c.toDataURL('image/jpeg', 0.4);
+/** Recadrer une image (glisser pour déplacer, molette ou curseur pour zoomer) avant de l'envoyer. */
+function adjustImage(file, w, h, { round = false, maxKb = 140, title = 'Ajuste ton image' } = {}) {
+  return new Promise((resolve) => {
+    createImageBitmap(file).then((bmp) => {
+      const W = w / h >= 2 ? 560 : 300; const H = Math.round((W * h) / w);
+      $('cropTitle').textContent = title;
+      const cv = $('cropCv'); cv.width = W; cv.height = H; cv.classList.toggle('round', round);
+      const base = Math.max(W / bmp.width, H / bmp.height);
+      let z = 1; let ox = 0; let oy = 0; let drag = null;
+      const clamp = () => { const k = base * z; const mx = Math.max(0, (bmp.width * k - W) / 2); const my = Math.max(0, (bmp.height * k - H) / 2); ox = Math.min(mx, Math.max(-mx, ox)); oy = Math.min(my, Math.max(-my, oy)); };
+      const draw = (ctx, CW, CH) => { const r = CW / W; const k = base * z * r; ctx.clearRect(0, 0, CW, CH); ctx.drawImage(bmp, CW / 2 + ox * r - (bmp.width * k) / 2, CH / 2 + oy * r - (bmp.height * k) / 2, bmp.width * k, bmp.height * k); };
+      const paint = () => { clamp(); draw(cv.getContext('2d'), W, H); };
+      $('cropZoom').value = '1';
+      $('cropZoom').oninput = (e) => { z = Number(e.target.value); paint(); };
+      cv.onpointerdown = (e) => { drag = { x: e.clientX, y: e.clientY, ox, oy }; cv.setPointerCapture(e.pointerId); };
+      cv.onpointermove = (e) => { if (!drag) return; ox = drag.ox + (e.clientX - drag.x); oy = drag.oy + (e.clientY - drag.y); paint(); };
+      cv.onpointerup = () => { drag = null; };
+      cv.onwheel = (e) => { e.preventDefault(); z = Math.min(4, Math.max(1, z * (e.deltaY < 0 ? 1.08 : 0.93))); $('cropZoom').value = String(z); paint(); };
+      const done = (ok) => {
+        $('cropDlg').onclose = null; $('cropDlg').close();
+        if (!ok) return resolve(null);
+        const out = document.createElement('canvas'); out.width = w; out.height = h;
+        draw(out.getContext('2d'), w, h);
+        for (const q of [0.88, 0.75, 0.6, 0.45, 0.3]) { const u = out.toDataURL('image/webp', q); if (u.length * 0.75 < maxKb * 1024) return resolve(u); }
+        return resolve(out.toDataURL('image/jpeg', 0.4));
+      };
+      $('cropOk').onclick = () => done(true);
+      $('cropCancel').onclick = () => done(false);
+      $('cropDlg').onclose = () => resolve(null);
+      $('cropDlg').showModal();
+      paint();
+    }).catch(() => resolve(undefined));
+  });
 }
 async function openProfileEditor() {
   if (!state.account) return showAuth(true);
@@ -583,9 +671,11 @@ async function openProfileEditor() {
   const moi = state.hist?.moi ?? {};
   const d = {
     pseudo: state.account.pseudo, code: state.hist?.code, since: state.account.createdAt, week: moi.week, top: moi.top,
-    avatar: cur.avatar, bannerImg: cur.bannerImg, color: cur.color ?? '#3b82f6', bio: cur.bio ?? '', frame: cur.frame, nameFx: cur.nameFx, banner: cur.banner ?? 'nuit',
+    avatar: cur.avatar, bannerImg: cur.bannerImg, color: cur.color ?? '#3b82f6', bio: cur.bio ?? '', frame: cur.frame, frameColor: cur.frameColor ?? cur.color ?? '#3b82f6', nameFx: cur.nameFx, banner: cur.banner ?? 'nuit',
     favGame: cur.favGame ?? '', badges: [...(cur.badges ?? [])], links: { ...(cur.links ?? {}) },
   };
+  const files = { avatar: null, banner: null };
+  const raw = Object.fromEntries(LINKS.map(([k]) => [k, d.links[k] ? (linkUrl(k, d.links[k]) ?? d.links[k]) : '']));
   const change = {};
   let tab = 'look';
   const gamesList = [...new Set(games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes).map((i) => i.name))].slice(0, 60);
@@ -599,7 +689,17 @@ async function openProfileEditor() {
     document.querySelectorAll('#modalBox [data-pfx]').forEach((b) => b.classList.toggle('on', b.dataset.pfx === (d.nameFx ?? 'aucun')));
     document.querySelectorAll('#modalBox [data-pban]').forEach((b) => b.classList.toggle('on', !d.bannerImg && !d.bannerData && b.dataset.pban === d.banner));
     document.querySelectorAll('#modalBox [data-pbadge]').forEach((b) => b.classList.toggle('on', d.badges.includes(b.dataset.pbadge)));
+    document.querySelector('#modalBox .pframe[data-pframe="perso"] .pav')?.style.setProperty('--fc', d.frameColor);
+    $('peFrameCol').hidden = d.frame !== 'perso';
+    $('peAvAdj').hidden = !files.avatar; $('peBanAdj').hidden = !files.banner;
+    $('peBanUp').classList.toggle('on', Boolean(d.bannerImg || d.bannerData));
     $('peBadgeCount').textContent = `${d.badges.length}/3`;
+    for (const [k] of LINKS) {
+      const v = raw[k].trim(); const h = v ? linkHandle(k, v) : null;
+      const st = document.querySelector(`#modalBox [data-plst="${k}"]`);
+      st.className = `plst ${!v ? '' : h ? 'ok' : 'bad'}`;
+      st.textContent = !v ? '' : h ? (linkUrl(k, h) ? `✓ ${linkUrl(k, h).replace(/^https:\/\/(www\.)?/, '')}` : `✓ ${h} (copié au clic)`) : '✕ Pseudo ou lien non reconnu';
+    }
   };
   const sample = (fx) => `<span class="nfx-${fx}" style="--pc:${esc(d.color)}">${esc(d.pseudo)}</span>`;
   $('modalBox').innerHTML = `<div class="pedit2">
@@ -607,14 +707,17 @@ async function openProfileEditor() {
     <div class="pe2ctl">
       <div class="mhead"><h2>Mon profil</h2></div>
       <div class="tabs ptabs"><button type="button" data-ptab="look" class="on">Apparence</button><button type="button" data-ptab="about">À propos</button><button type="button" data-ptab="links">Réseaux</button></div>
+      <div class="pe2scroll">
       <div class="ptabpane" data-ptab="look">
         <b class="sub">Photo</b>
-        <div class="pphoto"><button type="button" class="btn sm" id="pePick">Choisir une photo</button><button type="button" class="btn ghost sm" id="peDel">Retirer</button><input type="file" id="peFile" accept="image/png,image/jpeg,image/webp" hidden></div>
+        <div class="pphoto"><button type="button" class="btn sm" id="pePick">Choisir une photo</button><button type="button" class="btn sm" id="peAvAdj" hidden>✂ Recadrer</button><button type="button" class="btn ghost sm" id="peDel">Retirer</button><input type="file" id="peFile" accept="image/png,image/jpeg,image/webp" hidden></div>
         <b class="sub">Cadre de la photo</b>
-        <div class="pframes">${FRAMES.map(([k, l]) => `<button type="button" class="pframe" data-pframe="${k}" title="${l}">${avatar({ pseudo: d.pseudo, avatar: d.avatar, color: d.color }, `sm ${k !== 'aucun' ? `fr-${k}` : ''}`)}<small>${l}</small></button>`).join('')}</div>
+        <div class="pframes">${FRAMES.map(([k, l]) => `<button type="button" class="pframe" data-pframe="${k}" title="${l}">${avatar({ pseudo: d.pseudo, avatar: d.avatar, color: d.color, frameColor: d.frameColor }, `sm ${k !== 'aucun' ? `fr-${k}` : ''}`)}<small>${l}</small></button>`).join('')}</div>
+        <label class="pframecol" id="peFrameCol" hidden><span>Couleur du cadre</span><input type="color" id="peFrameColor" value="${esc(d.frameColor)}"></label>
         <b class="sub">Bannière</b>
-        <div class="pbanners">${BANNERS.map(([k, l]) => `<button type="button" class="pban ban-${k}" data-pban="${k}" title="${l}"></button>`).join('')}<button type="button" class="pban up" id="peBanPick" title="Ta propre image">＋ Image</button><input type="file" id="peBanFile" accept="image/png,image/jpeg,image/webp" hidden></div>
-        <b class="sub">Couleur</b>
+        <div class="pbanners">${BANNERS.map(([k, l]) => `<button type="button" class="pban ban-${k}" data-pban="${k}" title="${l}"></button>`).join('')}<button type="button" class="pban up" id="peBanUp" title="Ta propre image"><span>＋ Ton image</span></button><input type="file" id="peBanFile" accept="image/png,image/jpeg,image/webp" hidden></div>
+        <button type="button" class="btn sm" id="peBanAdj" hidden>✂ Recadrer la bannière</button>
+        <b class="sub">Couleur du profil</b>
         <div class="pcolors">${PCOLORS.map((c) => `<button type="button" class="pcol" data-pcol="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="pcol custom" title="Autre couleur"><input type="color" id="peColor" value="${esc(d.color)}"></label></div>
         <b class="sub">Effet du pseudo</b>
         <div class="pfxs">${NAMEFX.map(([k, l]) => `<button type="button" class="pfx" data-pfx="${k}"><b>${sample(k)}</b><small>${l}</small></button>`).join('')}</div>
@@ -628,28 +731,40 @@ async function openProfileEditor() {
         <div class="pbadgepick">${Object.entries(BADGES).map(([k, [i, l]]) => `<button type="button" class="pbadge pick" data-pbadge="${k}"><i>${i}</i>${esc(l)}</button>`).join('')}</div>
       </div>
       <div class="ptabpane" data-ptab="links" hidden>
-        <p class="hint">Affichés sur ton profil ; tes amis les copient en un clic.</p>
-        ${LINKS.map(([k, l, ph]) => `<label class="plinkin"><span class="plink pl-${k}">${l}</span><input data-plink="${k}" maxlength="40" placeholder="${ph}" value="${esc(d.links[k] ?? '')}"></label>`).join('')}
+        <p class="hint">Colle le lien de ta chaîne ou ton pseudo : sur ton profil, tes amis cliquent et ça s’ouvre directement.</p>
+        ${LINKS.map(([k, l, ph]) => `<div class="plinkrow pl-${k}"><i class="plico">${LINK_ICONS[k]}</i><div class="plinkf"><b>${l}</b><input data-plink="${k}" maxlength="120" placeholder="${esc(ph)}" value="${esc(raw[k])}"><small data-plst="${k}"></small></div></div>`).join('')}
       </div>
-      <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Enregistrer</button></div>
+      </div>
+      <div class="pe2foot"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Enregistrer</button></div>
     </div></div>`;
   $('modal').showModal(); paint();
+  const pickAvatar = async (f) => { const u = await adjustImage(f, 256, 256, { round: true, maxKb: 140, title: 'Recadre ta photo' }); if (u === undefined) return toast('Image illisible'); if (!u) return; files.avatar = f; change.avatar = u; d.avatarData = u; paint(); };
+  const pickBanner = async (f) => { const u = await adjustImage(f, 900, 300, { maxKb: 280, title: 'Ajuste ta bannière' }); if (u === undefined) return toast('Image illisible'); if (!u) return; files.banner = f; change.banniereImg = u; d.bannerData = u; paint(); };
   $('pePick').onclick = () => $('peFile').click();
-  $('peFile').onchange = async () => { const f = $('peFile').files?.[0]; if (!f) return; try { change.avatar = await cropImage(f); d.avatarData = change.avatar; paint(); } catch { toast('Image illisible'); } };
-  $('peDel').onclick = () => { change.avatar = null; d.avatarData = null; d.avatar = null; paint(); };
-  $('peBanPick').onclick = () => $('peBanFile').click();
-  $('peBanFile').onchange = async () => { const f = $('peBanFile').files?.[0]; if (!f) return; try { change.banniereImg = await cropImage(f, 900, 300, 280); d.bannerData = change.banniereImg; paint(); } catch { toast('Image illisible'); } };
+  $('peFile').onchange = () => { const f = $('peFile').files?.[0]; $('peFile').value = ''; if (f) pickAvatar(f); };
+  $('peAvAdj').onclick = () => files.avatar && pickAvatar(files.avatar);
+  $('peDel').onclick = () => { change.avatar = null; d.avatarData = null; d.avatar = null; files.avatar = null; paint(); };
+  $('peBanUp').onclick = () => (files.banner ? pickBanner(files.banner) : $('peBanFile').click());
+  $('peBanFile').onchange = () => { const f = $('peBanFile').files?.[0]; $('peBanFile').value = ''; if (f) pickBanner(f); };
+  $('peBanAdj').onclick = () => files.banner && pickBanner(files.banner);
   $('peColor').oninput = (e) => { d.color = e.target.value; change.couleur = d.color; paint(); };
+  $('peFrameColor').oninput = (e) => { d.frameColor = e.target.value; change.cadreCouleur = d.frameColor; paint(); };
   $('peBioIn').oninput = (e) => { d.bio = e.target.value; change.bio = d.bio; paint(); };
   $('peGame').oninput = (e) => { d.favGame = e.target.value; change.jeu = d.favGame; paint(); };
-  $('modalBox').oninput = (e) => { const k = e.target.dataset?.plink; if (k) { d.links[k] = e.target.value.trim(); change.liens = { ...d.links }; paint(); } };
+  $('modalBox').oninput = (e) => {
+    const k = e.target.dataset?.plink; if (!k) return;
+    raw[k] = e.target.value;
+    const h = raw[k].trim() ? linkHandle(k, raw[k]) : null;
+    if (h) d.links[k] = h; else delete d.links[k];
+    change.liens = { ...d.links }; paint();
+  };
   $('modalBox').onclick = async (e) => {
     const t = e.target.closest('button'); if (!t) return;
     if (t.dataset.ptab) { tab = t.dataset.ptab; return paint(); }
     if (t.dataset.pcol) { d.color = t.dataset.pcol; change.couleur = d.color; return paint(); }
-    if (t.dataset.pframe) { d.frame = t.dataset.pframe === 'aucun' ? null : t.dataset.pframe; change.cadre = t.dataset.pframe; return paint(); }
+    if (t.dataset.pframe) { d.frame = t.dataset.pframe === 'aucun' ? null : t.dataset.pframe; change.cadre = t.dataset.pframe; if (d.frame === 'perso') change.cadreCouleur = d.frameColor; return paint(); }
     if (t.dataset.pfx) { d.nameFx = t.dataset.pfx === 'aucun' ? null : t.dataset.pfx; change.effet = t.dataset.pfx; return paint(); }
-    if (t.dataset.pban) { d.banner = t.dataset.pban; d.bannerImg = null; d.bannerData = null; change.banniere = d.banner; change.banniereImg = null; return paint(); }
+    if (t.dataset.pban) { d.banner = t.dataset.pban; d.bannerImg = null; d.bannerData = null; files.banner = null; change.banniere = d.banner; change.banniereImg = null; return paint(); }
     if (t.dataset.pbadge) {
       const k = t.dataset.pbadge;
       if (d.badges.includes(k)) d.badges = d.badges.filter((x) => x !== k); else if (d.badges.length < 3) d.badges.push(k); else return toast('3 badges au maximum');
@@ -666,6 +781,15 @@ async function openProfileEditor() {
     loadHistory();
   };
 }
+// Optimisation en pause : seul « Remettre Windows comme avant » reste disponible
+$('maintReset').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  const r = await api.optiReset?.().catch(() => null);
+  e.target.disabled = false;
+  if (r?.cancelled) return;
+  if (!r?.ok) return toast(r?.refused ? 'Autorisation refusée : rien n’a été changé' : r?.error ?? 'Impossible');
+  toast(r.changed ? `↩ ${r.changed} réglage(s) remis comme avant : redémarre le PC` : 'Tout est déjà comme Windows d’origine 👍');
+});
 $('meAv').addEventListener('click', openProfileEditor);
 $('meName').addEventListener('click', openProfileEditor);
 
@@ -746,53 +870,119 @@ function chatHeader() {
   $('chatAsk').hidden = !f?.playing;
   $('chatInvite').hidden = !(state.active.size > 0 && f?.online && !f?.playing);
 }
+const dayOf = (t) => new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+// Fils de discussion (amis « f:id », groupes « g:id ») : gardés en mémoire et sur ce PC pour s'afficher tout de suite
+const threads = new Map();
+const pendingMsgs = new Map(); // identifiant d'envoi -> { key, text, at, failed }
+try { for (const [k, v] of JSON.parse(localStorage.getItem('hl-threads') ?? '[]')) if (Array.isArray(v)) threads.set(k, v); } catch { /* rien en cache */ }
+function keepThread(key, fil) {
+  threads.delete(key); threads.set(key, fil.slice(-80));
+  try { localStorage.setItem('hl-threads', JSON.stringify([...threads].slice(-40))); } catch { /* stockage plein ou bloqué */ }
+}
+const myId = () => state.account?.id ?? 'me';
+const gOpen = () => (fx.sel?.type === 'groupe' ? fx.sel.id : null);
+const newCid = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`);
+const threadEl = (key) => (key === `f:${chatWith?.id}` ? $('chatFil') : key === `g:${gOpen()}` ? $('gFil') : null);
+function paintThread(key, { force = false } = {}) {
+  const el = threadEl(key);
+  if (!el) return;
+  const fil = threads.get(key);
+  const pend = [...pendingMsgs].filter(([, p]) => p.key === key);
+  if (!fil && !pend.length) { el.innerHTML = '<div class="cload"><i></i><i></i><i></i></div>'; return; }
+  const group = key.startsWith('g:');
+  const members = group ? (state.groups ?? []).find((g) => `g:${g.id}` === key)?.members ?? [] : [];
+  const nameOf = (id) => members.find((m) => m.id === id) ?? state.hist?.amis?.find((a) => a.id === id) ?? { pseudo: '?' };
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  let day = '';
+  const list = fil ?? [];
+  const html = list.map((m, i) => {
+    const d = dayOf(m.at); const sep = d !== day ? `<div class="cday">${esc(d)}</div>` : ''; day = d;
+    const them = m.from !== myId();
+    const grouped = i > 0 && list[i - 1].from === m.from && m.at - list[i - 1].at < 120_000 && !sep;
+    const who = group && them && !grouped ? nameOf(m.from) : null;
+    return `${sep}<div class="cmsg ${them ? 'them' : 'me'} ${grouped ? 'grouped' : ''} ${who ? 'named' : ''}" data-mid="${esc(m.id ?? '')}">${who ? `<em class="cname">${avatar(who, 'xs')}${esc(who.pseudo)}</em>` : ''}<span>${esc(m.text)}</span>${them && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}<small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small>${!them && m.id ? `<button type="button" class="cdel" data-mdel="${esc(m.id)}" title="Supprimer le message">🗑</button>` : ''}</div>`;
+  }).join('') + pend.map(([cid, p]) => `<div class="cmsg me ${p.failed ? 'failed' : 'sending'}" data-cid="${esc(cid)}"><span>${esc(p.text)}</span><small>${p.failed ? `⚠ ${esc(p.failed)} · <button type="button" class="linkbtn" data-mretry="${esc(cid)}">Réessayer</button> · <button type="button" class="linkbtn" data-mdrop="${esc(cid)}">Annuler</button>` : 'envoi…'}</small></div>`).join('');
+  if (!force && el.dataset.html === html) return;
+  el.dataset.html = html;
+  const empty = group ? '<div class="cempty"><span class="cemo">👥</span><b>Discussion du groupe</b><small>Tout le groupe voit les messages ici. Dis bonjour 👋</small></div>' : `<div class="cempty">${avatar(state.hist?.amis?.find((a) => a.id === chatWith?.id) ?? chatWith?.name ?? '?', 'big')}<b>${esc(chatWith?.name ?? '')}</b><small>Pas encore de message : dis bonjour 👋</small></div>`;
+  el.innerHTML = html || empty;
+  if (atBottom || force) el.scrollTop = el.scrollHeight;
+}
+async function loadThread(key) {
+  const [kind, id] = [key[0], key.slice(2)];
+  const r = await (kind === 'f' ? api.chatThread(id) : api.groupThread?.(id))?.catch(() => null);
+  if (!r?.fil) { if (!threads.has(key)) { const el = threadEl(key); if (el) el.innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible de charger la discussion.')} <button type="button" class="linkbtn" data-mreload="${esc(key)}">Réessayer</button></p>`; } return; }
+  keepThread(key, r.fil);
+  paintThread(key);
+  if (key[0] === 'g') renderGroups(state.groups ?? []);
+}
 async function openChat(id, name) {
   const f = state.hist?.amis?.find((a) => a.id === id);
-  chatWith = { id, name: name ?? f?.pseudo ?? 'Ami', last: 0 };
+  chatWith = { id, name: name ?? f?.pseudo ?? 'Ami' };
   delete unread[id];
   if (state.view !== 'amis') go('amis');
   if (fx.tab !== 'amis') fxTab('amis');
   fxShow({ type: 'ami', id });
   chatHeader();
-  $('chatFil').innerHTML = '<p class="hint">Chargement…</p>';
+  paintThread(`f:${id}`, { force: true });
   $('chatText').focus();
-  await refreshChat();
+  loadThread(`f:${id}`);
   if (state.hist) renderHistory();
   updateFriendsBadge();
 }
-const dayOf = (t) => new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-async function refreshChat() {
-  if (!chatWith) return;
-  const r = await api.chatThread(chatWith.id).catch(() => null);
-  if (!chatWith) return;
-  if (!r?.fil) { $('chatFil').innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible de charger la discussion.')}</p>`; return; }
-  const last = r.fil.at(-1)?.at ?? 0;
-  if (last === chatWith.last && $('chatFil').children.length) return;
-  chatWith.last = last;
-  let day = '';
-  $('chatFil').innerHTML = r.fil.length ? r.fil.map((m, i) => {
-    const d = dayOf(m.at); const sep = d !== day ? `<div class="cday">${esc(d)}</div>` : ''; day = d;
-    const them = m.from === chatWith.id;
-    const grouped = i > 0 && r.fil[i - 1].from === m.from && m.at - r.fil[i - 1].at < 120_000 && !sep;
-    return `${sep}<div class="cmsg ${them ? 'them' : 'me'} ${grouped ? 'grouped' : ''}"><span>${esc(m.text)}</span>${them && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}<small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
-  }).join('') : `<div class="cempty">${avatar(chatWith.name, 'big')}<b>${esc(chatWith.name)}</b><small>Pas encore de message : dis bonjour 👋</small></div>`;
-  $('chatFil').scrollTop = $('chatFil').scrollHeight;
+function openGroupChat(id) {
+  delete gUnread[id];
+  renderGroupDetail();
+  $('gMembers').hidden = true;
+  paintThread(`g:${id}`, { force: true });
+  setTimeout(() => $('gText').focus(), 0);
+  loadThread(`g:${id}`);
+  renderGroups(state.groups ?? []);
+  updateFriendsBadge();
 }
-$('chatForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = $('chatText').value.trim();
-  if (!text || !chatWith) return;
-  $('chatText').value = ''; $('chatText').style.height = '';
-  // Affiché tout de suite, confirmé par le serveur juste après
-  $('chatFil').querySelector('.cempty')?.remove();
-  $('chatFil').insertAdjacentHTML('beforeend', `<div class="cmsg me sending"><span>${esc(text)}</span><small>envoi…</small></div>`);
-  $('chatFil').scrollTop = $('chatFil').scrollHeight;
-  const r = await api.chatSend(chatWith.id, text);
-  if (r?.error) { $('chatFil').querySelector('.sending small').textContent = `⚠ ${r.error}`; return; }
-  chatWith.last = -1;
-  refreshChat();
-});
-$('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chatForm').requestSubmit(); } });
+const refreshChat = () => chatWith && loadThread(`f:${chatWith.id}`);
+async function sendMsg(key, text, cid = newCid()) {
+  pendingMsgs.set(cid, { key, text, failed: null });
+  paintThread(key, { force: true });
+  const id = key.slice(2);
+  const r = await (key[0] === 'f' ? api.chatSend(id, text, cid) : api.groupSend(id, text, cid)).catch(() => null);
+  if (!r || r.error || (r.status && r.status !== 200)) { pendingMsgs.set(cid, { key, text, failed: r?.error ?? 'Non envoyé' }); paintThread(key); return; }
+  pendingMsgs.delete(cid);
+  if (r.fil) keepThread(key, r.fil);
+  else keepThread(key, [...(threads.get(key) ?? []), r.message ?? { id: r.id ?? cid, from: myId(), text, at: Date.now() }]);
+  paintThread(key, { force: true });
+  if (key[0] === 'g') renderGroups(state.groups ?? []);
+}
+function submitFrom(area, key) {
+  const text = area.value.trim();
+  if (!text || !key) return;
+  area.value = ''; area.style.height = '';
+  sendMsg(key, text);
+}
+$('chatForm').addEventListener('submit', (e) => { e.preventDefault(); if (chatWith) submitFrom($('chatText'), `f:${chatWith.id}`); });
+$('gForm').addEventListener('submit', (e) => { e.preventDefault(); if (gOpen()) submitFrom($('gText'), `g:${gOpen()}`); });
+for (const id of ['chatText', 'gText']) {
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.target.form.requestSubmit(); } });
+  if (id === 'gText') $(id).addEventListener('input', (e) => { e.target.style.height = ''; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; });
+}
+// Supprimer, réessayer, annuler un message (discussion d'ami ou de groupe)
+for (const fil of ['chatFil', 'gFil']) {
+  $(fil).addEventListener('click', async (e) => {
+    const key = fil === 'chatFil' ? (chatWith ? `f:${chatWith.id}` : null) : (gOpen() ? `g:${gOpen()}` : null);
+    if (!key) return;
+    const t = e.target.closest('[data-mdel],[data-mretry],[data-mdrop],[data-mreload]'); if (!t) return;
+    if (t.dataset.mreload) return loadThread(key);
+    if (t.dataset.mdrop) { pendingMsgs.delete(t.dataset.mdrop); return paintThread(key, { force: true }); }
+    if (t.dataset.mretry) { const p = pendingMsgs.get(t.dataset.mretry); if (p) sendMsg(key, p.text, t.dataset.mretry); return; }
+    const mid = t.dataset.mdel;
+    if (!(await ui.confirm({ title: 'Supprimer ce message ?', text: key[0] === 'g' ? 'Il disparaît pour tout le groupe.' : 'Il disparaît aussi chez ton ami.', ok: 'Supprimer', danger: true, icon: '🗑' }))) return;
+    const before = threads.get(key) ?? [];
+    keepThread(key, before.filter((m) => m.id !== mid)); paintThread(key);
+    const r = await (key[0] === 'f' ? api.chatDelete?.(key.slice(2), mid) : api.groupDelete?.(key.slice(2), mid))?.catch(() => null);
+    if (!r?.ok) { keepThread(key, before); paintThread(key); return toast(r?.error ?? 'Suppression impossible pour l’instant'); }
+    if (r.fil) { keepThread(key, r.fil); paintThread(key); }
+  });
+}
 $('chatText').addEventListener('input', (e) => { e.target.style.height = ''; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; });
 $('chatAv').addEventListener('click', () => chatWith && openFriendProfile(chatWith.id));
 $('chatWho').addEventListener('click', () => chatWith && openFriendProfile(chatWith.id));
@@ -815,14 +1005,30 @@ $('chatCall').addEventListener('click', () => chatWith && startCall(chatWith.id,
 $('chatJoin').addEventListener('click', async () => { if (!chatWith) return; const r = await api.friendJoin(chatWith.id); toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); });
 function updateFriendsBadge() {
   const online = (state.hist?.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
-  const n = Object.values(unread).reduce((a, b) => a + b, 0);
+  const n = Object.values(unread).reduce((a, b) => a + b, 0) + Object.values(gUnread).reduce((a, b) => a + b, 0);
   $('friendsOnline').textContent = n ? `${n} ✉` : online || '';
   $('friendsOnline').classList.toggle('hot', n > 0);
 }
 api.onChatOpen?.((d) => { showFriendTab('history'); setTimeout(() => openChat(d.id), 200); });
+// Un message arrivé par la boîte en direct s'ajoute tout de suite au fil (sans recharger toute la discussion)
+function applyLive(x) {
+  const key = x.type === 'msg' || x.type === 'msgdel' ? `f:${x.from}` : `g:${x.gid}`;
+  const fil = threads.get(key);
+  if (x.type === 'msgdel' || x.type === 'gmsgdel') { if (fil) { keepThread(key, fil.filter((m) => m.id !== x.msg)); paintThread(key); } return false; }
+  const m = { id: x.msg ?? x.id, from: x.from, text: x.text, at: x.sentAt ?? x.at };
+  if (fil && !fil.some((y) => y.id === m.id)) keepThread(key, [...fil, m].sort((a, b) => a.at - b.at));
+  if (threadEl(key)) { paintThread(key); if (!fil) loadThread(key); return false; }
+  return true;
+}
 api.onSocial?.((d) => {
-  if ((d.messages ?? []).some((m) => chatWith?.id !== m.from) && document.hasFocus()) window.sfx?.play('notif');
-  for (const m of d.messages ?? []) { if (chatWith?.id === m.from) refreshChat(); else unread[m.from] = (unread[m.from] ?? 0) + 1; }
+  let ding = false;
+  for (const x of d.items ?? d.messages ?? []) {
+    if (!['msg', 'gmsg', 'msgdel', 'gmsgdel'].includes(x.type)) continue;
+    if (!applyLive(x)) continue;
+    ding = true;
+    if (x.type === 'msg') unread[x.from] = (unread[x.from] ?? 0) + 1; else gUnread[x.gid] = (gUnread[x.gid] ?? 0) + 1;
+  }
+  if (ding && document.hasFocus()) window.sfx?.play('notif');
   if (state.hist && !state.hist.error && d.amis) {
     state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes, groupes: d.groupes ?? state.hist.groupes };
     if (state.view === 'amis') { if (state.ftab === 'history') renderHistory(); if (d.groupes) renderGroups(d.groupes); }
@@ -830,6 +1036,9 @@ api.onSocial?.((d) => {
   if (chatWith) chatHeader();
   updateFriendsBadge();
 });
+// Réponse envoyée depuis la bulle (en jeu) : le fil se met à jour ici aussi
+api.onSocialSent?.((d) => { if (d?.fil) { keepThread(d.key, d.fil); paintThread(d.key); } else if (d?.key && threadEl(d.key)) loadThread(d.key); });
+api.onGroupOpen?.((d) => { go('amis'); showFriendTab('history'); setTimeout(() => { fxTab('groupes'); fxShow({ type: 'groupe', id: d.id }); }, 200); });
 // ---------- Appels vocaux (WebRTC pair à pair, micro avec suppression du bruit et de l'écho) ----------
 const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 function callUi(state, extra = '') {
@@ -1063,7 +1272,9 @@ function renderNotifs() {
     </div>`;
   }).join('');
 }
-$('notifCenter').addEventListener('toggle', (e) => { if (e.newState === 'open') { const r = $('bellBtn').getBoundingClientRect(); $('notifCenter').style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - $('notifCenter').offsetWidth - 8))}px`; renderNotifs(); loadNotifs(); } else if (nc.unread) api.notifsRead?.().then((r) => { bellCount(r?.unread ?? 0); nc.list.forEach((x) => { x.read = true; }); }); });
+// Toujours ancré sous la cloche, calculé avant l'affichage (pas de saut d'un côté à l'autre)
+$('notifCenter').addEventListener('beforetoggle', (e) => { if (e.newState === 'open') { const r = $('bellBtn').getBoundingClientRect(); const w = Math.min(420, window.innerWidth - 24); $('notifCenter').style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 12))}px`; $('notifCenter').style.right = 'auto'; } });
+$('notifCenter').addEventListener('toggle', (e) => { if (e.newState === 'open') { renderNotifs(); loadNotifs(); } else if (nc.unread) api.notifsRead?.().then((r) => { bellCount(r?.unread ?? 0); nc.list.forEach((x) => { x.read = true; }); }); });
 $('ncTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-nc]'); if (t) { nc.tab = t.dataset.nc; renderNotifs(); } });
 $('ncRead').addEventListener('click', async () => { const r = await api.notifsRead?.(); nc.list.forEach((x) => { x.read = true; }); bellCount(r?.unread ?? 0); renderNotifs(); });
 $('ncClear').addEventListener('click', async () => { const r = await api.notifsClear?.(nc.tab === 'tout' ? null : nc.tab); if (r) { nc.list = r.list; bellCount(r.unread); renderNotifs(); } });
@@ -1191,6 +1402,14 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.24.0': [
+    ['💬', 'Messages fiables', 'Un message qui ne part pas est renvoyé tout seul (sans doublon), sinon il reste affiché avec « Réessayer ». Les discussions s’ouvrent tout de suite, même au démarrage.'],
+    ['🗑', 'Supprimer un message', 'Passe la souris sur un de tes messages › 🗑 : il disparaît aussi chez ton ami (ou tout le groupe).'],
+    ['👥', 'Discussion de groupe', 'Chaque groupe a maintenant sa propre discussion, avec le nom et la photo de qui parle. « Prévenir » envoie toujours une notification à tout le monde.'],
+    ['🎮', 'Réponds sans quitter ton jeu', 'Quand un ami t’écrit, une petite bulle apparaît en haut à droite, même en partie : clique dessus, écris, Entrée, et tu retournes jouer (jeu en plein écran fenêtré).'],
+    ['🖼', 'Profil retouché', 'Recadre ta photo et ta bannière (glisser + zoom), cadre à ta couleur, nouvelles bannières plus douces, bio sans cadre, et réseaux cliquables : colle le lien de ta chaîne, tes amis l’ouvrent en un clic.'],
+    ['🚧', 'Optimisation en travaux', 'On retravaille l’optimisation pour qu’elle ne fasse plus bugger aucun jeu. En attendant, rien n’est modifié ; « Remettre Windows comme avant » reste disponible.'],
+  ],
   '0.23.0': [
     ['🖼', 'Profil bien plus personnalisable', 'Bannière (10 styles ou ta propre image), cadre animé autour de ta photo (néon, or, feu, glace, galaxie…), effet sur ton pseudo (dégradé, néon, or, arc-en-ciel).'],
     ['🏅', 'Badges, jeu préféré et réseaux', 'Choisis jusqu’à 3 badges, ton jeu préféré et tes réseaux (Discord, Twitch, YouTube, TikTok, Steam, Instagram) : tes amis les copient en un clic.'],
@@ -1590,7 +1809,7 @@ $('openNews2').addEventListener('click', () => { $('settings').close(); showWhat
 // ---------- Recherche rapide (Ctrl+Espace, ou Ctrl+Alt+Espace depuis Windows) ----------
 const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']];
 const PAL_ACTIONS = [
-  ['Optimiser mon PC', '🚀', () => { go('optimisation'); setTimeout(() => $('optiScan').click(), 300); }],
+  ['Optimiser mon PC', '🚀', () => go('optimisation')],
   ['Paramètres', '⚙', () => $('openSettings').click()],
   ['Ajouter un jeu', '➕', () => $('addGame').click()],
   ['Mode grand écran', '📺', () => toggleBig()],
@@ -1873,7 +2092,7 @@ function setRing(score, label) {
   $('ringNum').textContent = score ?? '–';
   $('ringNum').style.color = col;
   $('ringLabel').textContent = label ?? 'Pas encore analysé';
-  $('optiBadge').textContent = score != null && score < 75 ? '!' : '';
+  $('optiBadge').textContent = ''; // optimisation en pause
 }
 const catCard = (key, icon, title, desc, total, body, { checked = true, open = false, count = '' } = {}) => `
   <div class="ocat ${open ? 'open' : ''}" data-cat="${key}">
@@ -2397,8 +2616,8 @@ function applyReply(r) {
   say(r.reply || 'D’accord.');
   const views = { jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque', accueil: 'accueil', amis: 'amis', pc: 'pc', optimisation: 'optimisation' };
   if (r.action === 'show') { if (r.value === 'parametres') $('openSettings').click(); else go(views[r.value] ?? 'bibliotheque'); }
-  if (r.action === 'optimize') { go('optimisation'); setTimeout(async () => { await optiScanUi(); if (r.value === 'run' && opti && !opti.error) $('optiRun').click(); }, 300); }
-  if (r.action === 'deep_clean') { go('optimisation'); setTimeout(async () => { if (!opti) await optiScanUi(); $('optiDeep')?.click(); }, 300); }
+  if (r.action === 'optimize') go('optimisation');
+  if (r.action === 'deep_clean') go('optimisation');
   if (r.action === 'theme' && r.value) { themeName = r.value; $('themeSel').value = r.value; if (r.value === 'auto') themeFor(state.sel); else applyTheme(THEMES[r.value]); }
   if (r.action === 'fullscreen') toggleBig(true);
   if (r.action === 'recap') api.recap?.().then(showRecap);
@@ -2662,6 +2881,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.tips && state.sel) { const it = state.sel; toast('L’IA prépare ses conseils…'); const r = await api.gameTips(it.id); return showReport(r?.text ? { text: r.text, ai: true } : { error: r?.error }, `Conseils pour ${it.name}`); }
   if (t.dataset.fivemsrv) return openFivemServers();
   if (t.dataset.copytext) { await copyText(t.dataset.copytext); return toast(t.dataset.copied || 'Copié'); }
+  if (t.dataset.plopen) { const r = await api.openProfileLink?.(t.dataset.plopen, t.dataset.plh); if (!r?.ok) toast('Lien impossible à ouvrir'); return; }
   if (t.dataset.pact) return profileAction(t.dataset.pact);
   if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
   if (t.dataset.hcall) return startCall(t.dataset.hcall, t.dataset.name);
@@ -3142,6 +3362,7 @@ async function profileAction(a) {
   if (a === 'logout') {
     if (!(await ui.confirm({ title: 'Se déconnecter ?', text: `Connecté en tant que ${state.account.pseudo} (${state.account.email}).`, ok: 'Se déconnecter', icon: '👤' }))) return;
     await api.logout();
+    threads.clear(); try { localStorage.removeItem('hl-threads'); } catch { /* rien */ }
     setAccount(null);
     showAuth(true);
   }
@@ -3240,7 +3461,7 @@ function demoApi() {
     achievements: async () => ({ done: 45, total: 77, easy: [{ name: 'Bienvenue à Los Santos', desc: 'Termine la première mission', pct: 81.2, icon: null }, { name: 'Un peu de sport', desc: 'Joue au tennis', pct: 34.8, icon: null }], recent: [{ name: 'Braquage réussi', desc: 'Termine un braquage', done: true, pct: 22.1, icon: null }] }),
     captures: async () => [{ token: 'a', url: img('h1.jpg'), video: false }, { token: 'b', url: img('h2.jpg'), video: false }, { token: 'c', video: true }],
     hFriends: async () => ({ code: 'Noam#3F9A2C', moi: { week: 610, top: 'Rocket League' }, demandes: [{ id: 'z', pseudo: 'Zoé', code: 'Zoé#11AA22' }],
-      amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Grand Theft Auto V Enhanced — serveur FiveM RP très long', since: Date.now() - 42 * 60_000, week: 840, top: 'FiveM', status: 'Soirée RP 🚓 on recrute des flics motivés ce soir', bench: 1420, join: { fivem: 'abc123' }, color: '#f97316', frame: 'feu', nameFx: 'neon', banner: 'lave', bio: 'Flic le jour, braqueur la nuit. Serveur RP tous les soirs à 21 h.', favGame: 'FiveM', badges: ['rp', 'nuit', 'streamer'], links: { twitch: 'max_rp', discord: 'max.rp' }, since: Date.now() - 200 * 86_400_000 }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT', status: 'Dispo pour jouer' }, { id: 'k', pseudo: 'UnPseudoVraimentTrèsLongPourTester', online: true, playing: 'Rocket League', since: Date.now() - 5 * 60_000, week: 120, dnd: true, bench: 980 }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }],
+      amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Grand Theft Auto V Enhanced — serveur FiveM RP très long', since: Date.now() - 42 * 60_000, week: 840, top: 'FiveM', status: 'Soirée RP 🚓 on recrute des flics motivés ce soir', bench: 1420, join: { fivem: 'abc123' }, color: '#f97316', frame: 'feu', nameFx: 'neon', banner: 'lave', bio: 'Flic le jour, braqueur la nuit. Serveur RP tous les soirs à 21 h.', favGame: 'FiveM', badges: ['rp', 'nuit', 'streamer'], links: { twitch: 'max_rp', discord: 'max.rp', youtube: 'MaxRP', tiktok: 'max.rp' }, since: Date.now() - 200 * 86_400_000 }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT', status: 'Dispo pour jouer' }, { id: 'k', pseudo: 'UnPseudoVraimentTrèsLongPourTester', online: true, playing: 'Rocket League', since: Date.now() - 5 * 60_000, week: 120, dnd: true, bench: 980 }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }],
       groupes: [{ id: 'g1', name: 'Squad RL — les meilleurs du serveur', owner: true, members: [{ id: 'me', pseudo: 'Noam', online: true }, { id: 'm', pseudo: 'Max', online: true, playing: 'FiveM' }, { id: 'l', pseudo: 'Léa', online: true }, { id: 's', pseudo: 'Sam', online: false }, { id: 'a', pseudo: 'Alex', online: false }, { id: 'b', pseudo: 'Bob', online: true }, { id: 'c', pseudo: 'Chloé', online: false }, { id: 'd', pseudo: 'Dan', online: false }] }] }),
     notifs: async () => ({ unread: 3, list: [
       { id: 'n1', at: Date.now() - 60_000, kind: 'msg', cat: 'amis', icon: '💬', title: 'Max', body: 'T’es chaud pour une partie ce soir ? On lance le serveur RP vers 21 h', from: 'm', read: false },
@@ -3248,9 +3469,12 @@ function demoApi() {
       { id: 'n3', at: Date.now() - 9 * 60_000, kind: 'invite', cat: 'amis', icon: '📨', title: 'Max t’invite', body: 'Rejoins sa partie de FiveM !', from: 'm', read: false },
       { id: 'n4', at: Date.now() - 3 * 3_600_000, kind: 'app', cat: 'appli', icon: '🔔', title: 'History Launcher v0.21.0 disponible', body: 'Clique pour mettre à jour maintenant (moins d’une minute).', read: true },
       { id: 'n5', at: Date.now() - 30 * 3_600_000, kind: 'share', cat: 'amis', icon: '💾', title: 'Sam t’envoie une sauvegarde', body: 'Minecraft · Monde survie (412 Ko)', read: true, done: 'saveget' }] }),
-    chatSend: async () => ({ ok: true }), friendJoin: async () => ({ ok: true }), callStart: async () => ({ error: 'Aperçu : pas d’appel' }),
+    chatSend: async (fid, text, cid) => ({ ok: true, id: cid, message: { id: cid, from: 'me', text, at: Date.now() } }), friendJoin: async () => ({ ok: true }), callStart: async () => ({ error: 'Aperçu : pas d’appel' }),
     notifsRead: async () => ({ unread: 0 }), notifsClear: async () => ({ list: [], unread: 0 }), notifsAct: async () => ({ ok: true }),
-    chatThread: async () => ({ fil: [{ from: 'm', text: 'Yo ! T’es là ?', at: Date.now() - 3_600_000 }, { from: 'm', text: 'On lance le serveur RP vers 21 h', at: Date.now() - 3_590_000 }, { from: 'me', text: 'Grave, j’arrive dans 10 min', at: Date.now() - 3_500_000 }] }),
+    chatThread: async () => ({ fil: [{ id: 'a1', from: 'm', text: 'Yo ! T’es là ?', at: Date.now() - 3_600_000 }, { id: 'a2', from: 'm', text: 'On lance le serveur RP vers 21 h', at: Date.now() - 3_590_000 }, { id: 'a3', from: 'me', text: 'Grave, j’arrive dans 10 min', at: Date.now() - 3_500_000 }] }),
+    chatDelete: async () => ({ ok: true }), groupDelete: async () => ({ ok: true }),
+    groupThread: async () => ({ fil: [{ id: 'g1', from: 'm', text: 'Qui est chaud pour une ranked ce soir ?', at: Date.now() - 7_200_000 }, { id: 'g2', from: 'l', text: 'Moi ! 21 h ?', at: Date.now() - 7_100_000 }, { id: 'g3', from: 'l', text: 'Je ramène Sam aussi', at: Date.now() - 7_080_000 }, { id: 'g4', from: 'me', text: 'Parfait, je lance le serveur', at: Date.now() - 7_000_000 }] }),
+    groupSend: async (gid, text, cid) => ({ ok: true, id: cid, message: { id: cid, from: 'me', text, at: Date.now() } }),
     events: async () => ({ soirees: [{ id: 'e1', game: 'Rocket League', at: Date.now() + 5 * 3_600_000, mine: true, organisateur: 'Noam', ma: 'oui', invites: [{ pseudo: 'Max', reponse: 'oui' }, { pseudo: 'Léa', reponse: null }] }, { id: 'e2', game: 'VALORANT', at: Date.now() + 26 * 3_600_000, mine: false, organisateur: 'Léa', ma: null, invites: [{ pseudo: 'Noam', reponse: null }] }] }),
     pc: async () => ({ cpu: { usage: 37, temp: null, name: 'AMD Ryzen 7 5800X' }, ram: { used: 11.2e9, total: 32e9 }, gpu: { name: 'NVIDIA GeForce RTX 3070', usage: 92, temp: 71, vramUsed: 6200, vramTotal: 8192 } }),
     boost: async () => ({ enabled: true, power: true, restore: true, heatAlerts: true, close: ['chrome'], apps: [{ id: 'chrome', label: 'Google Chrome' }, { id: 'edge', label: 'Microsoft Edge' }, { id: 'onedrive', label: 'OneDrive' }, { id: 'office', label: 'Word / Excel / PowerPoint' }] }),
@@ -3261,7 +3485,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.23.0',
+    version: async () => '0.24.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
@@ -3279,7 +3503,7 @@ function demoApi() {
       if (location.hash.includes('fin')) demoVerify?.({ id, name, phase: 'done', canRepair: true, result: { mode: 'complet', ok: false, checked: 3117, missing: ['update/x64/dlcpacks/patchday27ng/dlc.rpf'], corrupt: ['x64a.rpf', 'common.rpf'], sizes: [] } });
       return {};
     },
-    account: async () => (location.hash.includes('connecte') ? { compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: '#8b5cf6', bio: 'RP tous les soirs, main support', avatar: null, frame: 'galaxie', nameFx: 'degrade', banner: 'synthwave', badges: ['fondateur', 'rp'], favGame: 'Rocket League', links: { twitch: 'noam_tv' } } } } : { compte: null, skipped: true }),
+    account: async () => (location.hash.includes('connecte') ? { compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: '#8b5cf6', bio: 'RP tous les soirs, main support', avatar: null, frameColor: '#22c55e', frame: 'galaxie', nameFx: 'degrade', banner: 'synthwave', badges: ['fondateur', 'rp'], favGame: 'Rocket League', links: { twitch: 'noam_tv' } } } } : { compte: null, skipped: true }),
     saveProfile: async (p) => ({ ok: true, compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: p.couleur, bio: p.bio, avatar: null } } }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }

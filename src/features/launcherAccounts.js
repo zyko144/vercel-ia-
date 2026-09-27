@@ -77,7 +77,7 @@ async function newSession(d, id) {
 export const PUBLIC_BASE = (process.env.PUBLIC_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
 // Choix possibles (vérifiés côté serveur : rien d'autre ne passe)
 export const PROFILE_CHOICES = {
-  frame: ['aucun', 'neon', 'or', 'arcenciel', 'feu', 'glace', 'toxique', 'galaxie'],
+  frame: ['aucun', 'perso', 'neon', 'or', 'arcenciel', 'feu', 'glace', 'toxique', 'galaxie'],
   nameFx: ['aucun', 'degrade', 'neon', 'or', 'arcenciel'],
   banner: ['nuit', 'aurore', 'coucher', 'ocean', 'foret', 'lave', 'neige', 'synthwave', 'carbone', 'rose'],
   badges: ['fondateur', 'nuit', 'rp', 'fps', 'streamer', 'collection', 'social', 'compet', 'chill', 'createur', 'speedrun', 'coop'],
@@ -88,7 +88,7 @@ export const profileOf = (a) => {
   return {
     avatar: p.av ? `${PUBLIC_BASE}/api/compte/avatar/${a.id}?v=${p.av}` : null,
     bannerImg: p.bv ? `${PUBLIC_BASE}/api/compte/banniere/${a.id}?v=${p.bv}` : null,
-    color: p.color ?? null, bio: p.bio ?? null, banner: p.banner ?? null, frame: p.frame ?? null, nameFx: p.nameFx ?? null,
+    color: p.color ?? null, bio: p.bio ?? null, banner: p.banner ?? null, frame: p.frame ?? null, frameColor: p.frameColor ?? null, nameFx: p.nameFx ?? null,
     favGame: p.favGame ?? null, badges: p.badges ?? [], links: p.links ?? {}, since: a?.createdAt ?? null,
   };
 };
@@ -103,19 +103,37 @@ function checkImage(dataUrl, max) {
   const ok = m[1] === 'png' ? buf.subarray(0, 4).toString('hex') === '89504e47' : m[1] === 'jpeg' ? buf.subarray(0, 2).toString('hex') === 'ffd8' : buf.subarray(8, 12).toString() === 'WEBP';
   return ok ? { mime: `image/${m[1]}`, data: m[2] } : 'Image illisible (PNG, JPG ou WEBP).';
 }
+// Réseaux : on garde le pseudo (ou le lien collé, ramené au pseudo) ; le launcher en refait un lien propre
+const LINK_URL = {
+  twitch: /^(?:https?:\/\/)?(?:www\.|m\.)?twitch\.tv\/([\w.-]+)/i,
+  youtube: /^(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/|channel\/)?([\w.-]+)/i,
+  tiktok: /^(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@([\w.-]+)/i,
+  steam: /^(?:https?:\/\/)?steamcommunity\.com\/(?:id|profiles)\/([\w.-]+)/i,
+  instagram: /^(?:https?:\/\/)?(?:www\.)?instagram\.com\/([\w.-]+)/i,
+  discord: /^(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord\.com\/invite)\/([\w-]+)/i,
+};
+export function linkHandle(kind, raw) {
+  const v = String(raw ?? '').trim();
+  const m = v.match(LINK_URL[kind] ?? /$^/);
+  if (m) return kind === 'discord' ? `gg/${m[1]}` : m[1].slice(0, 40);
+  const h = v.replace(/^@/, '');
+  if (kind === 'discord') return /^(gg\/)?[\w.#-]{2,40}$/.test(h) ? h : null;
+  return /^[\w.-]{2,40}$/.test(h) ? h : null;
+}
 async function saveProfile(a, body) {
   const p = (a.profile ??= {});
   if ('couleur' in body) p.color = /^#[0-9a-f]{6}$/i.test(String(body.couleur ?? '')) ? String(body.couleur).toLowerCase() : null;
   if ('bio' in body) p.bio = String(body.bio ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140) || null;
   const pick = (v, list) => (list.includes(String(v)) && String(v) !== 'aucun' ? String(v) : null);
   if ('cadre' in body) p.frame = pick(body.cadre, PROFILE_CHOICES.frame);
+  if ('cadreCouleur' in body) p.frameColor = /^#[0-9a-f]{6}$/i.test(String(body.cadreCouleur ?? '')) ? String(body.cadreCouleur).toLowerCase() : null;
   if ('effet' in body) p.nameFx = pick(body.effet, PROFILE_CHOICES.nameFx);
   if ('banniere' in body) p.banner = pick(body.banniere, PROFILE_CHOICES.banner);
   if ('jeu' in body) p.favGame = String(body.jeu ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 60) || null;
   if ('badges' in body) p.badges = [...new Set((Array.isArray(body.badges) ? body.badges : []).map(String))].filter((b) => PROFILE_CHOICES.badges.includes(b)).slice(0, 3);
   if ('liens' in body && body.liens && typeof body.liens === 'object') {
     p.links = {};
-    for (const k of PROFILE_CHOICES.links) { const v = String(body.liens[k] ?? '').trim().replace(/^@/, ''); if (/^[\w.#-]{2,40}$/.test(v)) p.links[k] = v; }
+    for (const k of PROFILE_CHOICES.links) { const v = linkHandle(k, body.liens[k]); if (v) p.links[k] = v; }
   }
   if ('banniereImg' in body) {
     if (body.banniereImg === null) { delete p.bv; save(`launcher-banniere-${a.id}`, {}); }

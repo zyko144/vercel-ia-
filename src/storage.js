@@ -50,17 +50,23 @@ async function writeRemote(key, value) {
   await fs.writeFile(path.join(DATA_DIR, `${key}.json`), JSON.stringify(value, null, 2));
 }
 
+const loading = new Map();
 export async function load(key, fallback) {
   if (cache.has(key)) return cache.get(key);
-  let value;
-  try {
-    value = await readRemote(key);
-  } catch (err) {
-    console.error(`[storage] lecture "${key}" impossible :`, err.message);
+  // Deux lectures en même temps (démarrage) : une seule copie en mémoire, sinon les écritures de l'une écrasent l'autre
+  if (!loading.has(key)) {
+    loading.set(key, (async () => {
+      let value;
+      try {
+        value = await readRemote(key);
+      } catch (err) {
+        console.error(`[storage] lecture "${key}" impossible :`, err.message);
+      }
+      if (!cache.has(key)) cache.set(key, value ?? fallback);
+      return cache.get(key);
+    })().finally(() => loading.delete(key)));
   }
-  value ??= fallback;
-  cache.set(key, value);
-  return value;
+  return loading.get(key);
 }
 
 // Écriture groupée (1 s) pour éviter de spammer Supabase
@@ -76,6 +82,14 @@ export function save(key, value) {
       );
     }, 1000),
   );
+}
+
+/** Écrit tout de suite ce qui attendait (arrêt du serveur : rien ne se perd pendant une mise à jour). */
+export async function flushAll() {
+  const keys = [...pendingWrites.keys()];
+  for (const k of keys) clearTimeout(pendingWrites.get(k));
+  pendingWrites.clear();
+  await Promise.all(keys.map((k) => writeRemote(k, cache.get(k)).catch((err) => console.error(`[storage] écriture "${k}" impossible :`, err.message))));
 }
 
 export const storageBackend = useSupabase ? 'Supabase' : 'fichiers locaux';

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' https:">
+<link rel="stylesheet" href="bubble.css">
+</head>
+<body>
+<div id="b" class="bub" hidden>
+  <div class="head"><span class="av" id="av"></span><div class="who"><b id="who"></b><small id="sub"></small></div><button class="x" id="x" title="Fermer (Échap)">✕</button></div>
+  <div class="msgs" id="msgs"></div>
+  <div class="hint" id="hint">Clique pour répondre sans quitter ton jeu</div>
+  <form class="rep" id="rep" hidden><input id="txt" maxlength="500" placeholder="Répondre…" autocomplete="off"><button title="Envoyer">➤</button></form>
+  <div class="foot" id="foot" hidden><button type="button" id="app">Ouvrir le launcher</button><small>Entrée : envoyer · Échap : fermer</small></div>
+</div>
+<script src="sfx.js"></script>
+<script src="bubble.js"></script>
+</body>
+</html>

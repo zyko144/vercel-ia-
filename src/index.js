@@ -39,7 +39,7 @@ import { handleMusicVoiceState } from './music/handlers.js';
 import { lavalink } from './music/lavalink.js';
 import { restoreSessions } from './music/session.js';
 import { startHttpServer } from './server.js';
-import { storageBackend } from './storage.js';
+import { flushAll, storageBackend } from './storage.js';
 
 const INTENTS = [
   GatewayIntentBits.Guilds,
@@ -179,7 +179,7 @@ async function shutdown(signal) {
   if (stopping) return;
   stopping = true;
   console.log(`🛑 ${signal} reçu : arrêt propre`);
-  await Promise.race([lavalink.shutdown(), new Promise((resolve) => setTimeout(resolve, 5_000))]).catch(() => {});
+  await Promise.race([Promise.all([lavalink.shutdown(), flushAll()]), new Promise((resolve) => setTimeout(resolve, 5_000))]).catch(() => {});
   process.exit(0);
 }
 process.once('SIGTERM', () => shutdown('SIGTERM'));

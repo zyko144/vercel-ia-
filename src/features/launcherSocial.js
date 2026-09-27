@@ -10,7 +10,8 @@ const MAX_FRIENDS = 200;
 const MAX_REQUESTS = 50;
 const MAX_EVENTS = 20;
 const ONLINE_MS = 3 * 60_000;
-const MAX_INBOX = 60;
+const MAX_INBOX = 150;
+const MAX_GTHREAD = 200;
 const MAX_THREAD = 100;
 const INBOX_TTL = 3 * 86_400_000;
 
@@ -23,6 +24,7 @@ async function data() {
   d.inbox ??= {}; // id -> [{ id, type: msg|ask|invite|reply, from, text?, game?, join?, oui?, at }]
   d.threads ??= {}; // « idA:idB » -> [{ from, text, at }]
   d.groups ??= {}; // id groupe -> { id, name, owner, members: [ids], at }
+  d.gthreads ??= {}; // id groupe -> [{ id, from, text, at }]
   return d;
 }
 const accounts = async () => (await load('launcher-comptes', null))?.accounts ?? {};
@@ -244,21 +246,45 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
 
   const friendOf = (fid) => listOf(d.friends, id).includes(fid) && accs[fid];
 
+  // Identifiant du message choisi par le launcher : un renvoi (réseau coupé, serveur qui redémarre) ne crée pas de doublon
+  const msgId = (v) => (/^[\w-]{8,64}$/.test(String(v ?? '')) ? String(v) : randomUUID());
+  const withIds = (fil) => fil.map((m) => (m.id ? m : { ...m, id: `${m.at}-${String(m.from).slice(0, 8)}` }));
+
   if (route === 'POST /api/compte/messages') {
     const to = String(body.to ?? '');
     const msg = text(body.text, 500);
     if (!friendOf(to)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
     if (!msg) return send(res, 400, { error: 'Message vide.' });
     const key = pairKey(id, to);
-    d.threads[key] = [...listOf(d.threads, key), { from: id, text: msg, at: Date.now() }].slice(-MAX_THREAD);
-    pushInbox(d, to, { type: 'msg', from: id, text: msg });
-    return done(200, { ok: true, fil: d.threads[key] });
+    const mid = msgId(body.cid);
+    const fil = listOf(d.threads, key);
+    if (fil.some((m) => m.id === mid)) return send(res, 200, { ok: true, id: mid, fil: withIds(fil) });
+    if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
+    const m = { id: mid, from: id, text: msg, at: Date.now() };
+    d.threads[key] = [...fil, m].slice(-MAX_THREAD);
+    pushInbox(d, to, { type: 'msg', from: id, text: msg, msg: mid, sentAt: m.at });
+    return done(200, { ok: true, id: mid, message: m, fil: withIds(d.threads[key]) });
   }
 
   if (route === 'GET /api/compte/messages') {
     const fid = String(url.searchParams.get('avec') ?? '');
     if (!friendOf(fid)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
-    return send(res, 200, { fil: d.threads[pairKey(id, fid)] ?? [] });
+    return send(res, 200, { fil: withIds(d.threads[pairKey(id, fid)] ?? []) });
+  }
+
+  // Supprimer un de ses messages (pour les deux)
+  if (route === 'POST /api/compte/messages/supprimer') {
+    const fid = String(body.avec ?? '');
+    const mid = String(body.id ?? '');
+    if (!friendOf(fid)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
+    const key = pairKey(id, fid);
+    const fil = withIds(listOf(d.threads, key));
+    const m = fil.find((x) => x.id === mid);
+    if (!m) return send(res, 200, { ok: true, fil });
+    if (m.from !== id) return send(res, 403, { error: 'Tu ne peux supprimer que tes messages.' });
+    d.threads[key] = fil.filter((x) => x.id !== mid);
+    pushInbox(d, fid, { type: 'msgdel', from: id, msg: mid });
+    return done(200, { ok: true, fil: d.threads[key] });
   }
 
   // Groupes de jeu (« Squad RL ») : créés avec ses amis, un message prévient tout le groupe d'un coup
@@ -273,18 +299,51 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     for (const m of members) pushInbox(d, m, { type: 'group', from: id, group: name, text: `Tu as été ajouté au groupe « ${name} ».` });
     return done(200, { ok: true, ...view(d, accs, id) });
   }
+  // Discussion de groupe
+  const groupOf = (gid) => { const g = d.groups[String(gid ?? '')]; return g && g.members.includes(id) ? g : null; };
+  if (route === 'GET /api/compte/groupes/messages') {
+    const g = groupOf(url.searchParams.get('id'));
+    if (!g) return send(res, 404, { error: 'Groupe introuvable.' });
+    return send(res, 200, { fil: d.gthreads[g.id] ?? [] });
+  }
+  if (route === 'POST /api/compte/groupes/messages') {
+    const g = groupOf(body.id);
+    if (!g) return send(res, 404, { error: 'Groupe introuvable.' });
+    const msg = text(body.text, 500);
+    if (!msg) return send(res, 400, { error: 'Message vide.' });
+    const mid = msgId(body.cid);
+    const fil = listOf(d.gthreads, g.id);
+    if (fil.some((m) => m.id === mid)) return send(res, 200, { ok: true, id: mid, fil });
+    if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
+    const m = { id: mid, from: id, text: msg, at: Date.now() };
+    d.gthreads[g.id] = [...fil, m].slice(-MAX_GTHREAD);
+    for (const to of g.members.filter((x) => x !== id)) pushInbox(d, to, { type: 'gmsg', from: id, gid: g.id, group: g.name, text: msg, msg: mid, sentAt: m.at });
+    return done(200, { ok: true, id: mid, message: m, fil: d.gthreads[g.id] });
+  }
+  if (route === 'POST /api/compte/groupes/messages/supprimer') {
+    const g = groupOf(body.id);
+    if (!g) return send(res, 404, { error: 'Groupe introuvable.' });
+    const mid = String(body.msg ?? '');
+    const fil = listOf(d.gthreads, g.id);
+    const m = fil.find((x) => x.id === mid);
+    if (!m) return send(res, 200, { ok: true, fil });
+    if (m.from !== id) return send(res, 403, { error: 'Tu ne peux supprimer que tes messages.' });
+    d.gthreads[g.id] = fil.filter((x) => x.id !== mid);
+    for (const to of g.members.filter((x) => x !== id)) pushInbox(d, to, { type: 'gmsgdel', from: id, gid: g.id, msg: mid });
+    return done(200, { ok: true, fil: d.gthreads[g.id] });
+  }
   if (route === 'POST /api/compte/groupes/prevenir') {
     const g = d.groups[String(body.id ?? '')];
     if (!g || !g.members.includes(id)) return send(res, 404, { error: 'Groupe introuvable.' });
     const msg = text(body.text, 200) || 'On joue ?';
     if (!allowAttempt('launcher-groupe', id, 10, 10 * 60_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
-    for (const m of g.members.filter((x) => x !== id)) pushInbox(d, m, { type: 'group', from: id, group: g.name, text: msg, game: d.presence[id]?.playing ?? null, join: d.presence[id]?.join ?? null });
+    for (const m of g.members.filter((x) => x !== id)) pushInbox(d, m, { type: 'group', from: id, gid: g.id, group: g.name, text: msg, game: d.presence[id]?.playing ?? null, join: d.presence[id]?.join ?? null });
     return done(200, { ok: true, sent: g.members.length - 1 });
   }
   if (route === 'POST /api/compte/groupes/quitter') {
     const g = d.groups[String(body.id ?? '')];
     if (!g || !g.members.includes(id)) return send(res, 404, { error: 'Groupe introuvable.' });
-    if (g.owner === id) delete d.groups[g.id]; else g.members = g.members.filter((m) => m !== id);
+    if (g.owner === id) { delete d.groups[g.id]; delete d.gthreads[g.id]; } else g.members = g.members.filter((m) => m !== id);
     return done(200, { ok: true, ...view(d, accs, id) });
   }
 
