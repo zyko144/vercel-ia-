@@ -207,6 +207,24 @@ await check('boîte en attente longue : message et appel reçus tout de suite, r
   await call('appel/fin', noam, { call: c.id });
 });
 
+await check('profil : photo (vérifiée), couleur, bio, visibles par les amis', async () => {
+  const png = 'data:image/png;base64,' + Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64');
+  const fake = 'data:image/png;base64,' + Buffer.from('<script>alert(1)</script>').toString('base64');
+  assert.equal((await call('profil', noam, { avatar: fake })).status, 400, 'faux PNG refusé');
+  const r = await call('profil', noam, { avatar: png, couleur: '#FF5500', bio: 'RP tous les soirs <b>' });
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.compte.profile.color, '#ff5500');
+  assert.equal(r.compte.profile.bio, 'RP tous les soirs  b');
+  const path = new URL(r.compte.profile.avatar).pathname;
+  const img = await fetch(`http://127.0.0.1:${process.env.PORT}${path}`);
+  assert.equal(img.headers.get('content-type'), 'image/png');
+  assert.equal(Buffer.from(await img.arrayBuffer()).subarray(0, 4).toString('hex'), '89504e47');
+  const seen = (await call('amis', max)).amis.find((a) => a.pseudo === 'Noam');
+  assert.equal(seen.avatar, r.compte.profile.avatar, 'l’ami voit la photo');
+  assert.equal(seen.color, '#ff5500');
+  assert.equal((await call('profil', noam, { avatar: null })).compte.profile.avatar, null);
+});
+
 server.close();
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);

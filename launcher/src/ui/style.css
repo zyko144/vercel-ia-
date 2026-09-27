@@ -1118,3 +1118,204 @@ ul.tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; line-hei
 .drivechip:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); }
 .drivechip span { display: grid; font-weight: 700; }
 .drivechip small { font-weight: 400; color: var(--muted); font-size: 11.5px; }
+
+/* =====================================================================
+   Amis (0.22) : deux panneaux, sobre. Onglets Amis / Groupes / Soirées en haut.
+   ===================================================================== */
+#view-amis.on { animation: none; }
+.fx { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 14px; height: calc(100vh - 118px); min-height: 480px; }
+.fxtop { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.fxtop h2 { margin: 0; font-size: 22px; }
+.fxnav { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+.fxnav button { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.fxnav button:hover { color: var(--text); }
+.fxnav button.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+.fxnav em { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.fxnav em:empty { display: none; }
+.fxnav button.on em { color: #6ea8ff; }
+.fxgrow { flex: 1; }
+.fxcode { display: grid; text-align: left; gap: 1px; padding: 5px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel); color: inherit; font: inherit; cursor: copy; min-width: 0; }
+.fxcode small { font-size: 10.5px; color: var(--muted); } .fxcode b { font-size: 13px; letter-spacing: .02em; white-space: nowrap; }
+.fxcode:hover { border-color: var(--accent); }
+.fxtop .btn.play { height: 40px; white-space: nowrap; }
+.fxbody { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+.fxleft { min-height: 0; border-right: 1px solid var(--line); background: #110f14; }
+.fxpane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.fxpane[hidden] { display: none; }
+.fxtools { display: grid; gap: 8px; padding: 12px 12px 6px; }
+.fxsearch { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; background: var(--panel-2); }
+.fxsearch svg { width: 15px; height: 15px; fill: none; stroke: var(--muted); stroke-width: 2; flex: none; }
+.fxsearch input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: inherit; font: inherit; font-size: 13px; }
+.fxsrc { display: flex; gap: 14px; padding: 0 4px; }
+.fxsrc button { border: 0; background: none; padding: 4px 0; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; }
+.fxsrc button.on { color: var(--text); border-bottom-color: var(--accent); }
+.fxadd { display: grid; gap: 8px; margin: 12px 12px 0; padding: 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line-2); }
+.fxadd b { font-size: 13px; }
+.fxadd .finput { display: flex; gap: 6px; } .fxadd input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: #110f14; color: inherit; font: inherit; font-size: 13px; outline: 0; }
+.linkbtn { justify-self: start; border: 0; background: none; padding: 0; color: #6ea8ff; font: inherit; font-size: 12.5px; cursor: pointer; }
+.fxlist { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 10px; }
+.fxlhead { display: flex; align-items: center; gap: 8px; padding: 14px 12px 8px; } .fxlhead b { flex: 1; font-size: 14px; }
+.fxlab { padding: 12px 8px 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6f6a77; }
+.fxrow { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; min-width: 0; }
+.fxrow:hover { background: rgba(255, 255, 255, .04); }
+.fxrow.sel { background: rgba(255, 255, 255, .08); }
+.fxrow.off { opacity: .55; } .fxrow.off.sel, .fxrow.off:hover { opacity: 1; }
+.fxrinfo { flex: 1; min-width: 0; display: grid; }
+.fxrinfo b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxrinfo small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxrow.ingame .fxrinfo small, .drow .favw.ingame + .fxrinfo small { color: #6ea8ff; }
+.fxrinfo small.ok { color: #4ade80; } .fxrinfo small.no { color: #f87171; }
+.fxrow.req { cursor: default; background: rgba(255, 255, 255, .03); margin-bottom: 4px; }
+.fxrow.req .btn { width: 30px; padding: 0; }
+.fxbadge { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #e5484d; color: #fff; font-style: normal; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.fxnote { display: grid; gap: 8px; justify-items: start; margin: 10px 8px; padding: 12px; border-radius: 10px; background: rgba(255, 255, 255, .03); color: var(--muted); font-size: 13px; line-height: 1.45; }
+.fxnote b { color: var(--text); }
+.fxme { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); background: #0e0c11; }
+.fxme > div { flex: 1; min-width: 0; display: grid; }
+.fxme b { font-size: 13px; }
+.fxme input { min-width: 0; border: 0; outline: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; padding: 0; }
+.fxme input:focus { color: var(--text); }
+/* avatars : cercle plein, pastille de statut */
+.pav { --h: 210; width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 16px; color: #fff; object-fit: cover; background: hsl(var(--h) 45% 50%); }
+.pav.big { width: 48px; height: 48px; font-size: 19px; } .pav.sm { width: 34px; height: 34px; font-size: 14px; } .pav.xs { width: 24px; height: 24px; font-size: 11px; }
+.favw { position: relative; flex: none; display: inline-grid; }
+.favw .st { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; border: 2.5px solid #110f14; background: #5c5864; }
+.favw.on .st { background: #3ba55d; } .favw.ingame .st { background: #3b82f6; }
+.gstack { display: flex; padding-left: 6px; flex: none; } .gstack .pav { margin-left: -6px; box-shadow: 0 0 0 2px #110f14; }
+.gstack.big .pav { margin-left: -10px; box-shadow: 0 0 0 3px var(--panel); }
+.edate { flex: none; width: 38px; height: 40px; border-radius: 8px; background: var(--panel-2); display: grid; place-content: center; text-align: center; line-height: 1.05; }
+.edate b { font-size: 16px; } .edate small { font-size: 10.5px; color: var(--muted); text-transform: uppercase; }
+.edate.big { width: 48px; height: 50px; } .edate.big b { font-size: 20px; }
+/* panneau de droite */
+.fxright { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.fxright > [hidden] { display: none !important; }
+.fxempty { margin: auto; display: grid; gap: 6px; max-width: 340px; text-align: center; color: var(--muted); padding: 20px; }
+.fxempty b { color: var(--text); font-size: 16px; }
+.fxchat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fxchat .chathead { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); min-width: 0; }
+.fxchat .chathead .pav { width: 44px; height: 44px; font-size: 18px; }
+.fxchat .chathead .pav.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px #3ba55d; } .fxchat .chathead .pav.ingame { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px #3b82f6; }
+.fxchat .chatwho { flex: 1; min-width: 0; display: grid; }
+.fxchat .chatwho b { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxchat .chatwho small { font-size: 12.5px; color: #6ea8ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatacts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.fxchat .chatfil { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 2px; }
+.fxchat .cmsg { max-width: 72%; margin-top: 8px; display: flex; flex-direction: column; }
+.fxchat .cmsg.grouped { margin-top: 1px; } .fxchat .cmsg.grouped small { display: none; }
+.fxchat .cmsg span { padding: 8px 12px; border-radius: 14px; background: #221f28; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
+.fxchat .cmsg.me { align-self: flex-end; align-items: flex-end; } .fxchat .cmsg.me span { background: #2563eb; }
+.fxchat .cmsg small { font-size: 10.5px; color: #6f6a77; margin: 3px 6px 0; }
+.fxchat .cday { align-self: center; margin: 12px 0 4px; padding: 2px 10px; border-radius: 10px; border: 1px solid var(--line-2); color: var(--muted); font-size: 11.5px; }
+.fxchat .chatin { display: flex; gap: 8px; align-items: flex-end; padding: 12px 18px 16px; border-top: 0; }
+.fxchat .chatin textarea { flex: 1; min-height: 42px; max-height: 120px; resize: none; padding: 11px 14px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel-2); color: inherit; font: inherit; outline: none; line-height: 1.35; }
+.fxchat .chatin textarea:focus { border-color: var(--accent); }
+.fxchat .chatin .btn { width: 46px; height: 42px; padding: 0; }
+.fxdetail { flex: 1; min-height: 0; overflow-y: auto; }
+.dhead { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); min-width: 0; }
+.dwho { flex: 1; min-width: 0; display: grid; } .dwho b { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dwho small { color: var(--muted); } .dwho small.g { color: #6ea8ff; }
+.dtag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: var(--panel-2); color: var(--muted); }
+.dbody { display: grid; gap: 14px; padding: 18px 20px; align-content: start; }
+.dacts { display: flex; flex-wrap: wrap; gap: 8px; }
+.dsec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6f6a77; margin-top: 4px; }
+.dlist { display: grid; gap: 2px; }
+.drow { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-bottom: 1px solid rgba(255, 255, 255, .04); }
+.fxdetail h3 { margin: 18px 20px 4px; font-size: 18px; } .fxdetail > .hint { margin: 0 20px; }
+#fxEventForm .eveform { display: grid; gap: 12px; padding: 16px 20px; max-width: 520px; }
+#fxEventForm .eveform > label { display: grid; gap: 5px; font-size: 12.5px; color: var(--muted); }
+#fxEventForm select, #fxEventForm input:not([type=checkbox]) { height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); color: inherit; font: inherit; }
+#fxEventForm .checks { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+@media (max-width: 1100px) { .fxbody { grid-template-columns: 250px minmax(0, 1fr); } .fxcode { display: none; } }
+.fxadd[hidden] { display: none; }
+#view-amis #eventsList, #view-amis #hGroups { display: block; }
+#view-amis .fxlist > .fxrow + .fxrow { margin-top: 2px; }
+#fxEventForm .check { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); cursor: pointer; }
+#fxEventForm .check { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxchat .chatin { padding-right: 78px; }
+
+/* =====================================================================
+   Alertes « liquid glass » (0.22) : verre teinté, reflet, bord lumineux.
+   Rouge = urgent (redémarrage en attente, menace, écran bleu…), orange = à surveiller, bleu = conseil.
+   ===================================================================== */
+.adv, .evgrid > div.bad, .evgrid > div.warn, .flist > div.bad, .scansum > div.bad {
+  --g: 47, 139, 255;
+  position: relative; overflow: hidden; border-left: 0 !important;
+  background: linear-gradient(135deg, rgba(var(--g), .22), rgba(var(--g), .07) 55%, rgba(var(--g), .12)) !important;
+  border: 1px solid rgba(var(--g), .45) !important; outline: 0 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 10px 30px -14px rgba(var(--g), .7);
+  backdrop-filter: blur(18px) saturate(160%);
+}
+.adv::before, .evgrid > div.bad::before, .evgrid > div.warn::before, .flist > div.bad::before, .scansum > div.bad::before {
+  content: ''; position: absolute; inset: 0 0 55% 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0));
+}
+.adv > *, .flist > div.bad > *, .scansum > div.bad > *, .evgrid > div > * { position: relative; }
+.adv.p0, .evgrid > div.bad, .flist > div.bad, .scansum > div.bad { --g: 239, 68, 68; }
+.adv.p0 b, .evgrid > div.bad b, .scansum > div.bad b { color: #ffd4d4; }
+.adv.p0 small, .evgrid > div.bad small { color: #f3b1b1; }
+.adv.p1, .evgrid > div.warn { --g: 245, 158, 11; }
+.adv.p1 b { color: #ffe3b0; }
+.adv.p0 .btn.play { background: linear-gradient(180deg, #f87171, #dc2626); border-color: rgba(255, 255, 255, .25); box-shadow: 0 6px 20px -6px rgba(239, 68, 68, .9); }
+.adv.p0 { animation: redpulse 3s ease-in-out infinite; }
+@keyframes redpulse { 50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 10px 36px -8px rgba(239, 68, 68, .95); } }
+@media (prefers-reduced-motion: reduce) { .adv.p0 { animation: none; } }
+
+/* Cloche à gauche (avant la recherche), centre de notifications ancré dessous */
+.top .bell { margin-left: 0; order: -1; }
+.top .bell + .search, .top .search { margin-left: 0; }
+.winbtns { margin-left: auto; }
+.ncenter { right: auto; left: 250px; }
+/* Visage des notifications : photo de l'ami ou logo du launcher, petit badge d'action */
+.ncitem .ncicon { display: none; }
+.ncface { position: relative; flex: none; width: 38px; height: 38px; }
+.ncface .pav { width: 38px; height: 38px; }
+.ncface.app img { width: 38px; height: 38px; border-radius: 10px; }
+.ncbadge { position: absolute; right: -5px; bottom: -5px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; background: #1c1922; box-shadow: 0 0 0 2px #1a1620; }
+.ncitem.unread { background: rgba(255, 255, 255, .045); }
+.ncitem.unread::before { width: 3px; height: auto; top: 10px; bottom: 10px; left: 0; margin: 0; border-radius: 2px; background: var(--accent); }
+.ncitem.unread .ncbody b { color: #fff; }
+.ncitem:not(.unread) .ncbody b { font-weight: 600; color: #d6d1dc; }
+/* Photos de profil */
+.pav.img { background-size: cover; background-position: center; color: transparent; }
+.profile .avatar.img, #avatar.img { background-size: cover; background-position: center; color: transparent; }
+.fxme .pav, .fxme b { cursor: pointer; }
+.fxme .pav:hover { box-shadow: 0 0 0 2px var(--accent); }
+/* Éditeur de profil */
+.pedit { display: grid; gap: 10px; }
+.pcard { --pc: #3b82f6; display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--pc) 35%, #1a171e), #1a171e 70%); border: 1px solid color-mix(in srgb, var(--pc) 45%, transparent); }
+.pcard .pav { width: 64px; height: 64px; font-size: 26px; box-shadow: 0 0 0 3px #1a171e, 0 0 0 5px var(--pc); }
+.pcard > div { display: grid; min-width: 0; } .pcard b { font-size: 18px; } .pcard small { color: #d0c9d9; overflow-wrap: anywhere; }
+.pphoto { display: flex; gap: 8px; flex-wrap: wrap; }
+.pcolors { display: flex; flex-wrap: wrap; gap: 8px; }
+.pcol { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.pcol.on { box-shadow: 0 0 0 2px #151119, 0 0 0 4px #fff; }
+.pcol.custom { display: grid; place-items: center; background: conic-gradient(#ef4444, #eab308, #22c55e, #3b82f6, #8b5cf6, #ef4444); overflow: hidden; }
+.pcol.custom input { opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.pedit textarea { resize: none; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel-2); color: inherit; font: inherit; outline: none; }
+.pedit textarea:focus { border-color: var(--accent); }
+
+/* =====================================================================
+   Mon PC › Composants (0.22) : une couleur par composant, néon qui tourne autour de la carte
+   ===================================================================== */
+@property --ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.comp { --cc: #3b82f6; position: relative; isolation: isolate; border: 1px solid transparent !important;
+  background: linear-gradient(160deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02)) padding-box, #141118 padding-box !important;
+  box-shadow: none !important; }
+.comp::before { content: ''; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; padding: 2px; pointer-events: none;
+  background: conic-gradient(from var(--ang), transparent 0 58%, color-mix(in srgb, var(--cc) 60%, transparent) 70%, var(--cc) 80%, #fff 84%, var(--cc) 88%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: compspin 4.5s linear infinite; }
+.comp::after { content: ''; position: absolute; inset: 0; z-index: -2; border-radius: inherit; pointer-events: none; border: 1px solid rgba(255, 255, 255, .07); }
+.comp:nth-child(2n)::before { animation-delay: -1.5s; } .comp:nth-child(3n)::before { animation-delay: -3s; }
+@keyframes compspin { to { --ang: 360deg; } }
+.comp.ck-cpu { --cc: #3b82f6; } .comp.ck-gpu { --cc: #22c55e; } .comp.ck-ram { --cc: #a855f7; } .comp.ck-disk, .comp.ck-disks, .comp.ck-storage { --cc: #f59e0b; }
+.comp.ck-board, .comp.ck-mb { --cc: #14b8a6; } .comp.ck-screen, .comp.ck-display { --cc: #ec4899; } .comp.ck-net, .comp.ck-network { --cc: #06b6d4; }
+.comp.ck-battery { --cc: #84cc16; } .comp.ck-audio { --cc: #f472b6; } .comp.ck-os, .comp.ck-windows { --cc: #60a5fa; }
+.comp.st-warn { --cc: #f59e0b; } .comp.st-bad { --cc: #ef4444; }
+body.idle .comp::before { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .comp::before { animation: none; } }
+/* Améliorations conseillées : mêmes couleurs, cartes en verre avec un liseré de couleur */
+#pcAdvice .adv { --g: 59, 130, 246; }
+#pcAdvice .adv.p0 { --g: 239, 68, 68; } #pcAdvice .adv.p1 { --g: 245, 158, 11; } #pcAdvice .adv.p2 { --g: 34, 197, 94; }
+#pcAdvice .adv em { color: #4ade80; font-weight: 600; }
+.comp.ck-bat { --cc: #84cc16; } .comp[class*="ck-disk"] { --cc: #f59e0b; }
+.adv > .btn { margin-left: auto; align-self: center; flex: none; }

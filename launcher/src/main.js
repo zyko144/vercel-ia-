@@ -22,7 +22,7 @@ import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dir
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
-import { readRegValue } from './core/registry.js';
+import { readRegValue, NOT_GAME } from './core/registry.js';
 import { steamMatch } from './core/art.js';
 import { norm } from './core/sort.js';
 import { steamPath } from './core/library.js';
@@ -1472,6 +1472,7 @@ async function sendPresence(s) {
   const games = Object.entries(week).map(([id, m]) => [items.find((i) => i.id === id), m]).filter(([i]) => i?.kind === 'game');
   const top = games.sort((a, b) => b[1] - a[1])[0]?.[0]?.name ?? null;
   const item = s ? items.find((i) => i.id === s.id) : null;
+  if (s && (NOT_GAME.test(s.name ?? '') || (item && item.kind !== 'game'))) s = null;
   const join = share && s ? joinFor(item, item?.source === 'fivem' ? lastFivemServer(store.data.fivemLogs, store.data.fivemLast ?? null) : null) : null;
   await api('/api/compte/presence', { method: 'POST', token, body: { status: gameDnd() ? `🎯 En partie classée${s ? ` sur ${s.name}` : ''}` : store.data.settings.status ?? null, dnd: Boolean(store.data.settings.dnd || store.data.settings.tournament || gameDnd()), level: levelOf(items.filter((i) => i.kind === 'game').reduce((n, i) => n + (i.minutes || 0), 0)).level, bench: share ? (store.data.bench ?? [])[0]?.scores?.total ?? null : null, playing: share && s ? s.name : null, join, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
 }
@@ -2154,6 +2155,16 @@ const secu = async (pathname, body, auth = true) => {
 ipcMain.handle('account:2fa', async (_e, ticket, code) => loggedIn(await api('/api/compte/connexion/2fa', { method: 'POST', body: { ticket: String(ticket ?? '').slice(0, 64), code: code6(code) } }).catch(() => ({ status: 0, error: 'Serveur injoignable.' }))));
 ipcMain.handle('account:verif', async (_e, code) => { const r = await secu('/api/compte/verif', { code: code6(code) }); if (r.compte) { store.data.settings.lastAccount = r.compte; store.save(); } return r; });
 ipcMain.handle('account:verifResend', () => secu('/api/compte/verif/envoyer', {}));
+// Profil personnalisé (photo recadrée par l'interface, couleur, bio)
+ipcMain.handle('account:profile', async (_e, p) => {
+  const body = {};
+  if (p && 'avatar' in p) body.avatar = p.avatar === null ? null : String(p.avatar ?? '').slice(0, 220_000);
+  if (p && 'couleur' in p) body.couleur = String(p.couleur ?? '').slice(0, 7);
+  if (p && 'bio' in p) body.bio = String(p.bio ?? '').slice(0, 140);
+  const r = await secu('/api/compte/profil', body);
+  if (r.compte) { store.data.settings.lastAccount = r.compte; store.save(); }
+  return r;
+});
 ipcMain.handle('account:forgot', (_e, email) => secu('/api/compte/mdp/oubli', { email: String(email ?? '').slice(0, 254) }, false));
 ipcMain.handle('account:reset', (_e, email, code, motDePasse) => secu('/api/compte/mdp/nouveau', { email: String(email ?? '').slice(0, 254), code: code6(code), motDePasse: String(motDePasse ?? '').slice(0, 128) }, false));
 ipcMain.handle('account:2faStart', async () => {
@@ -2679,7 +2690,7 @@ async function start() {
   setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);
   startTracker(() => items, store, (ids) => {
     lastActive = { ids, at: Date.now() };
-    const g = items.find((i) => ids.includes(i.id) && i.kind === 'game');
+    const g = items.find((i) => ids.includes(i.id) && i.kind === 'game' && !NOT_GAME.test(i.name));
     if (g && detected?.id !== g.id) { detected = { id: g.id, name: g.name, start: Date.now() - 60_000 }; if (!playSession) startBoost(g).catch(() => {}); } // lancé hors du launcher : opti quand même
     win?.webContents.send('lib:active', ids);
   }, 60_000, accountFor, () => pcAway);

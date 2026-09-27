@@ -310,7 +310,7 @@ function renderDeals() {
     </div>`).join('');
 }
 
-// ---------- Amis Steam ----------
+// ---------- Amis (deux panneaux) : liste à gauche, détail à droite ; onglets Amis / Groupes / Soirées en haut ----------
 const FRIEND_HELP = {
   cle: 'La liste d’amis Steam n’est pas disponible ici : ajoute tes potes dans l’onglet History (code ami) pour voir à quoi ils jouent, les rejoindre et leur écrire.',
   prive: 'Ta liste d’amis Steam est privée : Steam › Profil › Modifier › Confidentialité › « Liste d’amis » en Public.',
@@ -325,48 +325,116 @@ async function loadFriends(force = false) {
   $('friendsOnline').textContent = online || '';
   if (state.view === 'amis' && state.ftab === 'steam') renderFriends();
 }
-function renderFriends() {
-  const r = state.friends;
-  if (!r) { $('friendsBody').innerHTML = '<div class="empty">Chargement…</div>'; return; }
-  if (!r.ok) { $('friendsCount').textContent = ''; $('friendsBody').innerHTML = `<div class="empty">${esc(FRIEND_HELP[r.reason] ?? FRIEND_HELP.erreur)}</div>`; return; }
-  const q = ($('fSearch')?.value ?? '').trim().toLowerCase();
-  const all = r.friends.filter((f) => !q || f.name.toLowerCase().includes(q));
-  const groups = [['🎮 En jeu', all.filter((f) => f.game)], ['🟢 En ligne', all.filter((f) => f.online && !f.game)], ['⚫ Hors ligne', all.filter((f) => !f.online)]];
-  $('friendsCount').textContent = `${r.friends.filter((f) => f.online).length} en ligne · ${r.friends.length} amis Steam`;
-  const mine = (f) => f.appid && state.items.find((i) => i.steamId === f.appid && i.installed);
-  $('friendsBody').innerHTML = groups.filter(([, l]) => l.length).map(([title, l]) => `
-    <h3 class="fsec">${title} <em>${l.length}</em></h3>
-    <div class="fgrid">${l.map((f) => `
-      <div class="fcard ${f.game ? 'ingame' : f.online ? 'on' : 'off'}">
-        <div class="ftop">
-          <span class="favw">${f.avatar ? `<img class="pav" src="${esc(f.avatar)}" alt="">` : avatar(f.name)}<i class="st"></i></span>
-          <div class="finfo"><div class="fname"><b title="${esc(f.name)}">${esc(f.name)}</b></div><small class="fline">${f.game ? `Joue à <b>${esc(f.game)}</b>` : esc(f.status)}</small></div>
-        </div>
-        <div class="fbtns">
-          ${f.game ? `<button class="btn play sm" data-friend="join" data-fid="${esc(f.id64)}" ${f.lobby ? '' : 'disabled title="Pas de partie ouverte à rejoindre"'}>▶ Rejoindre</button>` : ''}
-          ${f.game && !f.lobby && mine(f) ? `<button class="btn sm" data-id="${esc(mine(f).id)}" title="Lancer le même jeu">Lancer le jeu</button>` : ''}
-          ${f.online ? `<button class="btn sm" data-friend="message" data-fid="${esc(f.id64)}">💬 Message</button>` : ''}
-          <button class="btn ghost sm" data-friend="profile" data-fid="${esc(f.id64)}" title="Profil Steam">Profil</button>
-        </div>
-      </div>`).join('')}</div>`).join('') || `<div class="empty">${q ? `Aucun ami Steam ne s’appelle « ${esc(q)} ».` : 'Aucun ami Steam pour l’instant.'}</div>`;
-}
-// ---------- Amis History (comptes du launcher) et soirées jeu ----------
-const needLogin = '<div class="empty">Connecte-toi à ton compte History pour ajouter des amis et organiser des soirées.<br><br><button class="btn play" data-login="1">Se connecter</button></div>';
+
 // Pastille d'un joueur : initiale sur une couleur tirée de son pseudo (toujours la même)
 const hueOf = (t) => [...String(t ?? '')].reduce((h, c) => (h * 31 + c.codePointAt(0)) % 360, 7);
-const avatar = (name, cls = '') => `<span class="pav ${cls}" style="--h:${hueOf(name)}">${esc(String(name ?? '?').trim()[0]?.toUpperCase() ?? '?')}</span>`;
+// Photo de profil (ou initiale sur sa couleur) ; p = pseudo ou { pseudo, avatar, color }
+const safeImg = (u) => (/^https:\/\/[\w.-]+\/api\/compte\/avatar\/[\w-]+\?v=\d+$/.test(String(u ?? '')) ? u : null);
+function avStyle(p) {
+  const name = typeof p === 'string' ? p : p?.pseudo;
+  const img = typeof p === 'object' ? safeImg(p?.avatar) : null;
+  const col = typeof p === 'object' && /^#[0-9a-f]{6}$/i.test(p?.color ?? '') ? p.color : null;
+  return { name, img, style: `--h:${hueOf(name)};${col ? `background-color:${col};` : ''}${img ? `background-image:url('${img}');` : ''}` };
+}
+const avatar = (p, cls = '') => { const a = avStyle(p); return `<span class="pav ${a.img ? 'img' : ''} ${cls}" style="${a.style}">${a.img ? '' : esc(String(a.name ?? '?').trim()[0]?.toUpperCase() ?? '?')}</span>`; };
+const avWrap = (p, st, cls = '') => `<span class="favw ${st}">${avatar(p, cls)}<i class="st"></i></span>`;
+/** Met une photo de profil (ou l'initiale) dans un élément existant. */
+function setAv(el, p) {
+  if (!el) return;
+  const a = avStyle(p);
+  el.setAttribute('style', a.style);
+  el.classList.toggle('img', Boolean(a.img));
+  el.textContent = a.img ? '' : String(a.name ?? '?').trim()[0]?.toUpperCase() ?? '?';
+}
+const needLogin = '<div class="fxnote">Connecte-toi à ton compte History pour ajouter des amis, créer des groupes et organiser des soirées.<button class="btn play sm" data-login="1">Se connecter</button></div>';
+const fx = { tab: 'amis', sel: null }; // sel : { type: 'ami' | 'steam' | 'groupe' | 'soiree' | 'nouvelleSoiree', id }
+function fxTab(tab) {
+  fx.tab = tab;
+  document.querySelectorAll('#fxNav [data-fx]').forEach((b) => b.classList.toggle('on', b.dataset.fx === tab));
+  document.querySelectorAll('#view-amis .fxpane').forEach((p) => { p.hidden = p.dataset.fx !== tab; });
+  const keep = fx.sel && ({ amis: ['ami', 'steam'], groupes: ['groupe'], soirees: ['soiree', 'nouvelleSoiree'] })[tab].includes(fx.sel.type);
+  if (!keep) fxShow(null);
+}
+function fxCounts() {
+  const on = (state.hist?.amis ?? []).filter((a) => a.online).length;
+  $('fxnAmis').textContent = on ? `${on} en ligne` : '';
+  $('fxnGroupes').textContent = (state.hist?.groupes ?? []).length || '';
+  $('fxnSoirees').textContent = (state.events ?? []).length || '';
+}
+const EMPTY = {
+  amis: ['Choisis un ami', 'Sa discussion, ce à quoi il joue et les boutons pour le rejoindre ou l’appeler s’affichent ici.'],
+  groupes: ['Choisis un groupe', 'Préviens tout le groupe d’un coup, ou annonce une partie sur Discord.'],
+  soirees: ['Choisis une soirée', 'Ou clique « Organiser » : tes amis reçoivent l’invitation et un rappel 10 min avant.'],
+};
+/** Affiche le panneau de droite pour la sélection (ou l'écran vide de l'onglet). */
+function fxShow(sel) {
+  fx.sel = sel;
+  $('fxChat').hidden = sel?.type !== 'ami';
+  $('fxEventForm').hidden = sel?.type !== 'nouvelleSoiree';
+  $('fxDetail').hidden = !['steam', 'groupe', 'soiree'].includes(sel?.type);
+  $('fxEmpty').hidden = Boolean(sel);
+  if (!sel) { const [t, x] = EMPTY[fx.tab]; $('fxEmptyT').textContent = t; $('fxEmptyS').textContent = x; chatWith = null; }
+  if (sel?.type !== 'ami') chatWith = null;
+  if (sel?.type === 'steam') renderSteamDetail();
+  if (sel?.type === 'groupe') renderGroupDetail();
+  if (sel?.type === 'soiree') renderEventDetail();
+  document.querySelectorAll('#view-amis [data-fsel], #view-amis [data-gsel], #view-amis [data-esel], #view-amis [data-ssel]').forEach((el) => el.classList.toggle('sel', Boolean(sel) && (el.dataset.fsel ?? el.dataset.gsel ?? el.dataset.esel ?? el.dataset.ssel) === sel.id));
+}
+$('fxNav').addEventListener('click', (e) => { const b = e.target.closest('[data-fx]'); if (b) fxTab(b.dataset.fx); });
+
+// Liste des amis Steam (même présentation que les amis History)
+function renderFriends() {
+  const r = state.friends;
+  if (!r) { $('friendsBody').innerHTML = '<div class="fxnote">Chargement…</div>'; return; }
+  if (!r.ok) { $('friendsBody').innerHTML = `<div class="fxnote">${esc(FRIEND_HELP[r.reason] ?? FRIEND_HELP.erreur)}</div>`; return; }
+  const q = ($('fSearch')?.value ?? '').trim().toLowerCase();
+  const all = r.friends.filter((f) => !q || f.name.toLowerCase().includes(q));
+  const groups = [['En jeu', all.filter((f) => f.game)], ['En ligne', all.filter((f) => f.online && !f.game)], ['Hors ligne', all.filter((f) => !f.online)]];
+  $('friendsBody').innerHTML = groups.filter(([, l]) => l.length).map(([title, l]) => `<div class="fxlab">${title} — ${l.length}</div>${l.map((f) => `
+    <div class="fxrow ${f.game ? 'ingame' : f.online ? 'on' : 'off'} ${fx.sel?.id === f.id64 ? 'sel' : ''}" data-ssel="${esc(f.id64)}">
+      <span class="favw ${f.game ? 'ingame' : f.online ? 'on' : 'off'}">${f.avatar ? `<img class="pav sm" src="${esc(f.avatar)}" alt="">` : avatar(f.name, 'sm')}<i class="st"></i></span>
+      <div class="fxrinfo"><b>${esc(f.name)}</b><small>${f.game ? `Joue à ${esc(f.game)}` : esc(f.status)}</small></div>
+    </div>`).join('')}`).join('') || `<div class="fxnote">${q ? `Aucun ami Steam ne s’appelle « ${esc(q)} ».` : 'Aucun ami Steam pour l’instant.'}</div>`;
+}
+function renderSteamDetail() {
+  const f = state.friends?.friends?.find((x) => x.id64 === fx.sel?.id);
+  if (!f) return fxShow(null);
+  const mine = f.appid && state.items.find((i) => i.steamId === f.appid && i.installed);
+  $('fxDetail').innerHTML = `<div class="dhead">${f.avatar ? `<img class="pav big" src="${esc(f.avatar)}" alt="">` : avatar(f.name, 'big')}<div class="dwho"><b>${esc(f.name)}</b><small class="${f.game ? 'g' : ''}">${f.game ? `Joue à ${esc(f.game)}` : esc(f.status)}</small></div><span class="dtag">Steam</span></div>
+    <div class="dbody"><div class="dacts">
+      ${f.game ? `<button class="btn play" data-friend="join" data-fid="${esc(f.id64)}" ${f.lobby ? '' : 'disabled title="Pas de partie ouverte à rejoindre"'}>▶ Rejoindre</button>` : ''}
+      ${f.game && !f.lobby && mine ? `<button class="btn" data-id="${esc(mine.id)}">Lancer ${esc(f.game)}</button>` : ''}
+      ${f.online ? `<button class="btn" data-friend="message" data-fid="${esc(f.id64)}">Message sur Steam</button>` : ''}
+      <button class="btn ghost" data-friend="profile" data-fid="${esc(f.id64)}">Profil Steam</button>
+    </div><p class="hint">Les amis Steam se contactent par Steam. Ajoute-les aussi sur History (leur code ami) pour discuter, les appeler et voir leurs parties ici.</p></div>`;
+}
+
+// ---------- Groupes ----------
 function renderGroups(list) {
   state.groups = list;
+  if (state.hist) state.hist.groupes = list;
   $('hGroups').innerHTML = list.length ? list.map((g) => {
     const on = g.members.filter((m) => m.online).length;
-    const playing = g.members.filter((m) => m.playing);
-    return `<div class="grpcard">
-      <div class="ghead"><b title="${esc(g.name)}">${esc(g.name)}</b><small>${on}/${g.members.length} en ligne</small></div>
-      <div class="gmembers">${g.members.slice(0, 7).map((m) => `<span class="gm ${m.playing ? 'ingame' : m.online ? 'on' : ''}" title="${esc(m.pseudo)}${m.playing ? ` · ${esc(m.playing)}` : m.online ? ' · en ligne' : ''}">${avatar(m.pseudo, 'xs')}</span>`).join('')}${g.members.length > 7 ? `<span class="gmore">+${g.members.length - 7}</span>` : ''}</div>
-      ${playing.length ? `<small class="gplay">🎮 ${esc(playing.map((m) => `${m.pseudo} (${m.playing})`).join(', '))}</small>` : ''}
-      <div class="gbtns"><button class="btn play sm" data-gnotify="${esc(g.id)}" title="Message à tout le groupe dans le launcher">📣 Prévenir</button><button class="btn sm" data-gparty="${esc(g.id)}" title="Annonce la partie sur Discord : les membres liés sont mentionnés, avec un bouton « Je viens »">🎮 Discord</button><button class="btn ghost sm iconb" data-gleave="${esc(g.id)}" title="${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}">✕</button></div>
+    return `<div class="fxrow grp ${fx.sel?.id === g.id ? 'sel' : ''}" data-gsel="${esc(g.id)}">
+      <span class="gstack">${g.members.slice(0, 3).map((m) => avatar(m, 'xs')).join('')}</span>
+      <div class="fxrinfo"><b>${esc(g.name)}</b><small>${on}/${g.members.length} en ligne${g.members.some((m) => m.playing) ? ' · en jeu' : ''}</small></div>
     </div>`;
-  }).join('') : '<p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p>';
+  }).join('') : (state.hist && !state.hist.error && state.hist.status !== 401 ? '<div class="fxnote">Pas encore de groupe. Crée « Squad RL » avec tes potes pour les prévenir tous d’un coup.</div>' : needLogin);
+  fxCounts();
+  if (fx.sel?.type === 'groupe') { if (list.some((g) => g.id === fx.sel.id)) renderGroupDetail(); else fxShow(null); }
+}
+function renderGroupDetail() {
+  const g = (state.groups ?? []).find((x) => x.id === fx.sel?.id);
+  if (!g) return;
+  const on = g.members.filter((m) => m.online).length;
+  $('fxDetail').innerHTML = `<div class="dhead"><span class="gstack big">${g.members.slice(0, 3).map((m) => avatar(m, 'sm')).join('')}</span><div class="dwho"><b>${esc(g.name)}</b><small>${g.members.length} membres · ${on} en ligne</small></div>
+      <button class="btn ghost sm" data-gleave="${esc(g.id)}">${g.owner ? 'Supprimer le groupe' : 'Quitter'}</button></div>
+    <div class="dbody">
+      <div class="dacts"><button class="btn play" data-gnotify="${esc(g.id)}">Prévenir le groupe</button><button class="btn" data-gparty="${esc(g.id)}">Annoncer sur Discord</button></div>
+      <p class="hint">« Prévenir » envoie ton message à tout le groupe dans le launcher. « Annoncer sur Discord » mentionne les membres liés avec un bouton « Je viens ».</p>
+      <div class="dsec">Membres</div>
+      <div class="dlist">${g.members.map((m) => `<div class="drow">${avWrap(m, m.playing ? 'ingame' : m.online ? 'on' : 'off', 'sm')}<div class="fxrinfo"><b>${esc(m.pseudo)}</b><small>${m.playing ? `Joue à ${esc(m.playing)}` : m.online ? 'En ligne' : 'Hors ligne'}</small></div>${state.hist?.amis?.some((a) => a.id === m.id) ? `<button class="btn ghost sm" data-hchat="${esc(m.id)}" data-name="${esc(m.pseudo)}">Message</button>` : ''}</div>`).join('')}</div>
+    </div>`;
 }
 $('groupNew').addEventListener('click', async () => {
   const amis = state.hist?.amis ?? [];
@@ -381,15 +449,22 @@ $('groupNew').addEventListener('click', async () => {
     if (b.dataset.m === '0') return $('modal').close();
     const r = await api.groupCreate($('gName').value, [...document.querySelectorAll('#modalBox .checks input:checked')].map((x) => x.value));
     if (r?.error) return toast(r.error);
-    $('modal').close(); toast('👥 Groupe créé'); renderGroups(r.groupes ?? []);
+    $('modal').close(); toast('Groupe créé');
+    renderGroups(r.groupes ?? []);
+    const created = (r.groupes ?? []).at(-1);
+    if (created) fxShow({ type: 'groupe', id: created.id });
   };
 });
-$('hGroups').addEventListener('click', async (e) => {
-  const n = e.target.closest('[data-gnotify]'); const l = e.target.closest('[data-gleave]');
-  const pty = e.target.closest('[data-gparty]');
-  if (pty) { const text = await ui.prompt({ title: 'Lancer une partie sur Discord', text: 'Le bot mentionne les membres du groupe sur Discord (bouton « Je viens ») et les prévient aussi dans le launcher.', value: state.session?.name ? `Je lance ${state.session.name}, qui vient ?` : 'On lance une partie, qui vient ?', ok: '🎮 Annoncer', icon: '🎮' }); if (!text) return; const r = await api.groupParty(pty.dataset.gparty, text); return toast(r?.ok ? `🎮 Annoncé sur Discord${r.mentioned ? ` (${r.mentioned} mentionné${r.mentioned > 1 ? 's' : ''})` : ''}` : r?.error ?? 'Impossible'); }
-  if (n) { const text = await ui.prompt({ title: 'Prévenir le groupe', text: 'Ton message (tout le groupe le reçoit en bas à gauche) :', value: state.session?.name ? `Je lance ${state.session.name}, vous venez ?` : 'On joue ?', ok: '📣 Envoyer', icon: '👥' }); if (!text) return; const r = await api.groupNotify(n.dataset.gnotify, text); toast(r?.ok ? `📣 Envoyé à ${r.sent} ami${r.sent > 1 ? 's' : ''}` : r?.error ?? 'Impossible'); }
-  if (l && await ui.confirm({ title: 'Quitter ce groupe ?', ok: 'Quitter', icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) renderGroups(r.groupes); }
+// Actions des groupes, où qu'elles soient (liste ou panneau de droite)
+$('view-amis').addEventListener('click', async (e) => {
+  const gsel = e.target.closest('[data-gsel]'); if (gsel) return fxShow({ type: 'groupe', id: gsel.dataset.gsel });
+  const esel = e.target.closest('[data-esel]'); if (esel) return fxShow({ type: 'soiree', id: esel.dataset.esel });
+  const ssel = e.target.closest('[data-ssel]'); if (ssel) return fxShow({ type: 'steam', id: ssel.dataset.ssel });
+  const fsel = e.target.closest('[data-fsel]'); if (fsel && !e.target.closest('button')) return openChat(fsel.dataset.fsel);
+  const n = e.target.closest('[data-gnotify]'); const l = e.target.closest('[data-gleave]'); const pty = e.target.closest('[data-gparty]');
+  if (pty) { const text = await ui.prompt({ title: 'Annoncer sur Discord', text: 'Le bot mentionne les membres du groupe sur Discord (bouton « Je viens ») et les prévient aussi dans le launcher.', value: state.session?.name ? `Je lance ${state.session.name}, qui vient ?` : 'On lance une partie, qui vient ?', ok: 'Annoncer', icon: '🎮' }); if (!text) return; const r = await api.groupParty(pty.dataset.gparty, text); return toast(r?.ok ? `Annoncé sur Discord${r.mentioned ? ` (${r.mentioned} mentionné${r.mentioned > 1 ? 's' : ''})` : ''}` : r?.error ?? 'Impossible'); }
+  if (n) { const text = await ui.prompt({ title: 'Prévenir le groupe', text: 'Ton message (tout le groupe le reçoit dans le launcher) :', value: state.session?.name ? `Je lance ${state.session.name}, vous venez ?` : 'On joue ?', ok: 'Envoyer', icon: '👥' }); if (!text) return; const r = await api.groupNotify(n.dataset.gnotify, text); return toast(r?.ok ? `Envoyé à ${r.sent} ami${r.sent > 1 ? 's' : ''}` : r?.error ?? 'Impossible'); }
+  if (l && await ui.confirm({ title: 'Quitter ce groupe ?', ok: 'Quitter', icon: '👥' })) { const r = await api.groupLeave(l.dataset.gleave); if (r?.groupes) { renderGroups(r.groupes); fxShow(null); } }
 });
 $('secDiscord').addEventListener('click', async () => {
   const r = await api.discordCode();
@@ -412,62 +487,101 @@ async function loadHistory() {
   state.events = ev?.soirees ?? [];
   renderHistory();
   if (r && !r.error && r.status !== 401) renderGroups(r.groupes ?? []);
+  fxCounts();
   const online = (r?.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
   $('friendsOnline').textContent = online || '';
 }
-function friendCard(a, playingNow) {
-  const joinable = a.playing && (a.join?.steam || (a.join?.fivem && state.items.some((i) => i.source === 'fivem')) || state.items.some((i) => i.installed && i.name.toLowerCase() === a.playing.toLowerCase()));
-  const line = a.playing ? `Joue à <b>${esc(a.playing)}</b>${a.since ? ` · ${hours(Math.max(1, (Date.now() - a.since) / 60_000))}` : ''}` : a.online ? (a.dnd ? 'Ne pas déranger' : 'En ligne') : 'Hors ligne';
+function friendRow(a) {
   const n = unread[a.id] ?? 0;
-  const btn = (attr, label, title, cls = '') => `<button class="btn sm ${cls}" ${attr} title="${esc(title)}">${label}</button>`;
-  return `<div class="fcard ${a.playing ? 'ingame' : a.online ? 'on' : 'off'}" data-fname="${esc(a.pseudo.toLowerCase())}">
-    <div class="ftop">
-      <span class="favw">${avatar(a.pseudo)}<i class="st"></i>${n ? `<em class="fbadge">${n}</em>` : ''}</span>
-      <div class="finfo">
-        <div class="fname"><b title="${esc(a.pseudo)}">${esc(a.pseudo)}</b>${a.dnd ? '<span class="chip red" title="Ne pas déranger">⛔</span>' : ''}${a.bench ? `<span class="chip" title="Score de benchmark">🏁 ${a.bench}</span>` : ''}</div>
-        <small class="fline" title="${esc(a.playing ?? '')}">${line}</small>
-        ${a.status ? `<small class="fstatus" title="${esc(a.status)}">« ${esc(a.status)} »</small>` : ''}
-        ${a.week ? `<small class="fweek">${hours(a.week)} de jeu cette semaine${a.top ? ` · surtout ${esc(a.top)}` : ''}</small>` : ''}
-      </div>
-    </div>
-    <div class="fbtns">
-      ${joinable ? btn(`data-hjoin="${esc(a.id)}"`, '▶ Rejoindre', 'Lancer le jeu et le rejoindre', 'play') : ''}
-      ${btn(`data-hchat="${esc(a.id)}" data-name="${esc(a.pseudo)}"`, `💬 Message${n ? ` (${n})` : ''}`, 'Écrire un message', joinable ? '' : 'play')}
-      ${a.online ? btn(`data-hcall="${esc(a.id)}" data-name="${esc(a.pseudo)}"`, '📞', 'Appel vocal', 'iconb') : ''}
-      ${a.playing ? btn(`data-hask="${esc(a.id)}"`, '🎮', 'Lui demander de jouer ensemble', 'iconb') : ''}
-      ${playingNow && a.online && !a.playing ? btn(`data-hinv="${esc(a.id)}"`, '📨', 'L’inviter dans ta partie', 'iconb') : ''}
-      ${a.code ? `<button class="btn ghost sm iconb" data-copytext="${esc(a.code)}" data-copied="Code de ${esc(a.pseudo)} copié" title="Copier son code ami (${esc(a.code)})">📋</button>` : ''}
-      <button class="btn ghost sm iconb fmore" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer de mes amis">✕</button>
-    </div>
+  const st = a.playing ? 'ingame' : a.online ? 'on' : 'off';
+  const line = a.playing ? `Joue à ${esc(a.playing)}` : a.online ? (a.dnd ? 'Ne pas déranger' : a.status ? esc(a.status) : 'En ligne') : 'Hors ligne';
+  return `<div class="fxrow ${st} ${fx.sel?.type === 'ami' && fx.sel.id === a.id ? 'sel' : ''}" data-fsel="${esc(a.id)}">
+    ${avWrap(a, st, 'sm')}
+    <div class="fxrinfo"><b>${esc(a.pseudo)}</b><small>${line}</small></div>
+    ${n ? `<em class="fxbadge">${n}</em>` : ''}
   </div>`;
 }
 function renderHistory() {
   const r = state.hist;
-  if (!r || r.status === 401) { $('hFriends').innerHTML = needLogin; $('hRequests').innerHTML = ''; $('myCode').textContent = '—'; $('eventsList').innerHTML = ''; $('hGroups').innerHTML = ''; return; }
-  if (r.error) { $('hFriends').innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
+  fxCounts();
+  if (!r || r.status === 401) { $('hFriends').innerHTML = needLogin; $('hRequests').innerHTML = ''; $('myCode').textContent = '—'; $('eventsList').innerHTML = needLogin; $('hGroups').innerHTML = needLogin; return; }
+  if (r.error) { $('hFriends').innerHTML = `<div class="fxnote">${esc(r.error)}</div>`; return; }
   $('myCode').textContent = r.code;
   const me = String(r.code ?? '').split('#')[0] || 'Toi';
-  $('meName').textContent = me; $('meAv').textContent = me[0]?.toUpperCase() ?? '?'; $('meAv').style.setProperty('--h', hueOf(me));
-  $('meSub').textContent = r.moi?.week ? `${hours(r.moi.week)} de jeu cette semaine${r.moi.top ? ` · ${r.moi.top}` : ''}` : 'Donne ton code à tes potes';
-  $('hRequests').innerHTML = r.demandes.length ? `<div class="freq"><h3 class="fsec">Demandes d’ami <em>${r.demandes.length}</em></h3>${r.demandes.map((d) => `
-    <div class="freqrow">${avatar(d.pseudo, 'sm')}<div class="finfo"><b>${esc(d.pseudo)}</b><small>${esc(d.code)}</small></div><button class="btn play sm" data-hacc="${esc(d.id)}">Accepter</button><button class="btn ghost sm" data-hrem="${esc(d.id)}">Refuser</button></div>`).join('')}</div>` : '';
+  $('meName').textContent = me; setAv($('meAv'), { pseudo: me, ...(r.moi ?? {}) });
+  $('hRequests').innerHTML = r.demandes.length ? `<div class="fxlab">Demandes d’ami — ${r.demandes.length}</div>${r.demandes.map((d) => `
+    <div class="fxrow req">${avatar(d, 'sm')}<div class="fxrinfo"><b>${esc(d.pseudo)}</b><small>${esc(d.code)}</small></div><button class="btn play sm" data-hacc="${esc(d.id)}" title="Accepter">✓</button><button class="btn ghost sm" data-hrem="${esc(d.id)}" title="Refuser">✕</button></div>`).join('')}` : '';
   const q = ($('fSearch')?.value ?? '').trim().toLowerCase();
   const list = r.amis.filter((a) => !q || a.pseudo.toLowerCase().includes(q));
-  const playingNow = state.active.size > 0;
-  const sections = [['🎮 En jeu', list.filter((a) => a.playing)], ['🟢 En ligne', list.filter((a) => a.online && !a.playing)], ['⚫ Hors ligne', list.filter((a) => !a.online)]];
-  const on = r.amis.filter((a) => a.online).length;
-  $('friendsCount').textContent = r.amis.length ? `${on} en ligne · ${r.amis.length} ami${r.amis.length > 1 ? 's' : ''}` : '';
+  const sections = [['En jeu', list.filter((a) => a.playing)], ['En ligne', list.filter((a) => a.online && !a.playing)], ['Hors ligne', list.filter((a) => !a.online)]];
   $('hFriends').innerHTML = r.amis.length
-    ? (sections.filter(([, l]) => l.length).map(([title, l]) => `<h3 class="fsec">${title} <em>${l.length}</em></h3><div class="fgrid">${l.map((a) => friendCard(a, playingNow)).join('')}</div>`).join('') || `<div class="empty">Aucun ami ne s’appelle « ${esc(q)} ».</div>`)
-    : '<div class="empty fempty"><b>Pas encore d’amis</b>Donne ton code (à droite) à tes potes, ou colle le leur et clique « Ajouter ».</div>';
+    ? (sections.filter(([, l]) => l.length).map(([title, l]) => `<div class="fxlab">${title} — ${l.length}</div>${l.map(friendRow).join('')}`).join('') || `<div class="fxnote">Aucun ami ne s’appelle « ${esc(q)} ».</div>`)
+    : '<div class="fxnote"><b>Pas encore d’amis</b>Clique « Ajouter un ami » en haut et colle le code de ton pote, ou envoie-lui ton code.</div>';
   renderEvents();
   $('eInvites').innerHTML = r.amis.length ? r.amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}">${esc(a.pseudo)}</label>`).join('') : '<small class="hint">Ajoute d’abord des amis.</small>';
   const games2 = games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes);
   $('eGame').innerHTML = games2.map((i) => `<option>${esc(i.name)}</option>`).join('');
   if (!$('eAt').value) { const d = new Date(Date.now() + 3_600_000); d.setMinutes(0, 0, 0); $('eAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
+  if (fx.sel?.type === 'ami') { if (r.amis.some((a) => a.id === fx.sel.id)) chatHeader(); else fxShow(null); }
 }
+// ---------- Personnaliser mon profil : photo (recadrée en carré), couleur, bio ----------
+const PCOLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#64748b', '#1f2937'];
+async function cropImage(file) {
+  const bmp = await createImageBitmap(file);
+  const side = Math.min(bmp.width, bmp.height);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, 256, 256);
+  for (const q of [0.88, 0.75, 0.6, 0.45]) { const u = c.toDataURL('image/webp', q); if (u.length * 0.75 < 140 * 1024) return u; }
+  return c.toDataURL('image/jpeg', 0.5);
+}
+async function openProfileEditor() {
+  if (!state.account) return showAuth(true);
+  const me = { pseudo: state.account.pseudo, ...(state.account.profile ?? {}) };
+  let draft = { avatar: undefined, couleur: me.color ?? null, bio: me.bio ?? '' };
+  const preview = () => ({ pseudo: me.pseudo, avatar: draft.avatar === undefined ? me.avatar : null, color: draft.couleur });
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🎨</span><h2>Mon profil</h2></div>
+    <div class="pedit">
+      <div class="pcard" id="peCard"><span class="pav big" id="peAv"></span><div><b>${esc(me.pseudo)}</b><small id="peBio"></small></div></div>
+      <div class="pphoto"><button type="button" class="btn" id="pePick">Choisir une photo</button><button type="button" class="btn ghost" id="peDel">Retirer la photo</button><input type="file" id="peFile" accept="image/png,image/jpeg,image/webp" hidden></div>
+      <b class="sub">Couleur</b>
+      <div class="pcolors">${PCOLORS.map((c) => `<button type="button" class="pcol" data-pcol="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="pcol custom" title="Autre couleur"><input type="color" id="peColor" value="${esc(me.color ?? '#3b82f6')}"></label></div>
+      <b class="sub">Bio</b>
+      <textarea id="peBioIn" maxlength="140" rows="2" placeholder="Ex. RP tous les soirs, main support sur Overwatch…">${esc(me.bio ?? '')}</textarea>
+      <small class="hint">Tes amis voient ta photo, ta couleur et ta bio.</small>
+    </div>
+    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Enregistrer</button></div>`;
+  const paint = () => {
+    const p = preview();
+    if (draft.avatar && draft.avatar !== null) { $('peAv').setAttribute('style', `background-image:url('${draft.avatar}')`); $('peAv').classList.add('img'); $('peAv').textContent = ''; } else setAv($('peAv'), p);
+    $('peBio').textContent = $('peBioIn').value.trim() || 'Pas encore de bio';
+    document.querySelectorAll('#modalBox [data-pcol]').forEach((b) => b.classList.toggle('on', b.dataset.pcol === draft.couleur));
+    $('peCard').style.setProperty('--pc', draft.couleur ?? '#3b82f6');
+  };
+  $('modal').showModal(); paint();
+  $('pePick').onclick = () => $('peFile').click();
+  $('peFile').onchange = async () => { const f = $('peFile').files?.[0]; if (!f) return; try { draft.avatar = await cropImage(f); paint(); } catch { toast('Image illisible'); } };
+  $('peDel').onclick = () => { draft.avatar = null; paint(); };
+  $('peColor').oninput = (e) => { draft.couleur = e.target.value; paint(); };
+  $('peBioIn').oninput = paint;
+  $('modalBox').onclick = async (e) => {
+    const c = e.target.closest('[data-pcol]'); if (c) { draft.couleur = c.dataset.pcol; paint(); return; }
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    if (b.dataset.m === '0') return $('modal').close();
+    b.disabled = true;
+    const body = { couleur: draft.couleur ?? '', bio: $('peBioIn').value };
+    if (draft.avatar !== undefined) body.avatar = draft.avatar;
+    const r = await api.saveProfile?.(body);
+    b.disabled = false;
+    if (!r?.ok) return toast(r?.error ?? 'Impossible pour l’instant');
+    setAccount(r.compte); $('modal').close(); toast('Profil mis à jour');
+    loadHistory();
+  };
+}
+$('meAv').addEventListener('click', openProfileEditor);
+$('meName').addEventListener('click', openProfileEditor);
+
 $('fSearch').addEventListener('input', () => (state.ftab === 'steam' ? renderFriends() : renderHistory()));
-$('fAddBtn').addEventListener('click', () => { if (state.ftab !== 'history') showFriendTab('history'); $('addCode').focus(); $('addCode').closest('.fbox')?.classList.add('flash'); setTimeout(() => $('addCode').closest('.fbox')?.classList.remove('flash'), 900); });
+$('fAddBtn').addEventListener('click', () => { fxTab('amis'); showFriendTab('history'); $('fxAdd').hidden = !$('fxAdd').hidden; if (!$('fxAdd').hidden) $('addCode').focus(); });
 $('addCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('addFriend').click(); });
 $('myStatus').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('saveStatus').click(); });
 // ---------- Clic droit sur le menu de gauche : onglets, plateformes, collections ----------
@@ -533,20 +647,23 @@ function chatHeader() {
   if (!chatWith) return;
   const f = state.hist?.amis?.find((a) => a.id === chatWith.id);
   $('chatWho').textContent = chatWith.name;
-  $('chatAv').textContent = chatWith.name[0]?.toUpperCase() ?? '?'; $('chatAv').style.setProperty('--h', hueOf(chatWith.name));
   $('chatAv').className = `pav ${f?.playing ? 'ingame' : f?.online ? 'on' : 'off'}`;
-  $('chatSub').textContent = f?.playing ? `Joue à ${f.playing}` : f?.online ? (f.status ? `En ligne · « ${f.status} »` : 'En ligne') : 'Hors ligne · il verra ton message à sa prochaine connexion';
+  setAv($('chatAv'), f ?? chatWith.name);
+  $('chatSub').textContent = `${f?.playing ? `Joue à ${f.playing}` : f?.online ? (f.status ? `En ligne · « ${f.status} »` : 'En ligne') : 'Hors ligne · il verra ton message à sa prochaine connexion'}${f?.bio ? ` — ${f.bio}` : ''}`;
   $('chatCall').hidden = !f?.online;
   $('chatJoin').hidden = !f?.playing;
+  $('chatAsk').hidden = !f?.playing;
+  $('chatInvite').hidden = !(state.active.size > 0 && f?.online && !f?.playing);
 }
 async function openChat(id, name) {
   const f = state.hist?.amis?.find((a) => a.id === id);
   chatWith = { id, name: name ?? f?.pseudo ?? 'Ami', last: 0 };
   delete unread[id];
+  if (state.view !== 'amis') go('amis');
+  if (fx.tab !== 'amis') fxTab('amis');
+  fxShow({ type: 'ami', id });
   chatHeader();
   $('chatFil').innerHTML = '<p class="hint">Chargement…</p>';
-  if (!$('chatDlg').open) $('chatDlg').showModal();
-  raiseTop();
   $('chatText').focus();
   await refreshChat();
   if (state.hist) renderHistory();
@@ -586,8 +703,21 @@ $('chatForm').addEventListener('submit', async (e) => {
 });
 $('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chatForm').requestSubmit(); } });
 $('chatText').addEventListener('input', (e) => { e.target.style.height = ''; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; });
-$('chatClose').addEventListener('click', () => { $('chatDlg').close(); chatWith = null; });
-$('chatDlg').addEventListener('close', () => { chatWith = null; });
+$('chatAsk').addEventListener('click', async () => { if (!chatWith) return; const r = await api.friendInvite(chatWith.id, 'ask'); toast(r?.ok ? 'Demande envoyée' : r?.error ?? 'Impossible'); });
+$('chatInvite').addEventListener('click', async () => { if (!chatWith) return; const r = await api.friendInvite(chatWith.id, 'invite'); toast(r?.ok ? 'Invitation envoyée' : r?.error ?? 'Impossible'); });
+// « ••• » : copier son code, le retirer de mes amis
+$('chatMore').addEventListener('click', (e) => {
+  const f = state.hist?.amis?.find((a) => a.id === chatWith?.id);
+  if (!f) return;
+  const ctx = $('ctx');
+  ctx.innerHTML = `<div class="ctxhead">${esc(f.pseudo)}</div>${f.code ? `<button data-copytext="${esc(f.code)}" data-copied="Code de ${esc(f.pseudo)} copié">Copier son code ami (${esc(f.code)})</button>` : ''}<hr><button class="danger" data-hrem="${esc(f.id)}" data-name="${esc(f.pseudo)}">Retirer de mes amis</button>`;
+  ctx.hidden = false;
+  const r = e.target.getBoundingClientRect();
+  ctx.style.left = `${Math.min(r.left, window.innerWidth - ctx.offsetWidth - 8)}px`;
+  ctx.style.top = `${r.bottom + 6}px`;
+  ctx.classList.remove('show'); void ctx.offsetWidth; ctx.classList.add('show');
+  e.stopPropagation();
+});
 $('chatCall').addEventListener('click', () => chatWith && startCall(chatWith.id, chatWith.name));
 $('chatJoin').addEventListener('click', async () => { if (!chatWith) return; const r = await api.friendJoin(chatWith.id); toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); });
 function updateFriendsBadge() {
@@ -596,13 +726,13 @@ function updateFriendsBadge() {
   $('friendsOnline').textContent = n ? `${n} ✉` : online || '';
   $('friendsOnline').classList.toggle('hot', n > 0);
 }
-api.onChatOpen?.((d) => { go('amis'); showFriendTab('history'); setTimeout(() => openChat(d.id), 300); });
+api.onChatOpen?.((d) => { showFriendTab('history'); setTimeout(() => openChat(d.id), 200); });
 api.onSocial?.((d) => {
   if ((d.messages ?? []).some((m) => chatWith?.id !== m.from) && document.hasFocus()) window.sfx?.play('notif');
   for (const m of d.messages ?? []) { if (chatWith?.id === m.from) refreshChat(); else unread[m.from] = (unread[m.from] ?? 0) + 1; }
   if (state.hist && !state.hist.error && d.amis) {
     state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes, groupes: d.groupes ?? state.hist.groupes };
-    if (state.view === 'amis' && state.ftab === 'history') { renderHistory(); if (d.groupes) renderGroups(d.groupes); }
+    if (state.view === 'amis') { if (state.ftab === 'history') renderHistory(); if (d.groupes) renderGroups(d.groupes); }
   }
   if (chatWith) chatHeader();
   updateFriendsBadge();
@@ -717,45 +847,67 @@ $('callMute').addEventListener('click', () => {
   $('callMute').classList.toggle('off', !on.enabled);
   $('callMute').textContent = on.enabled ? '🎙' : '🔇';
 });
+const whenTxt = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 function renderEvents() {
-  const when = (t) => new Date(t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-  $('eventsList').innerHTML = state.events.length ? state.events.map((e) => {
-    const yes = e.invites.filter((i) => i.reponse === 'oui').map((i) => i.pseudo);
+  $('eventsList').innerHTML = (state.events ?? []).length ? state.events.map((e) => {
+    const yes = e.invites.filter((i) => i.reponse === 'oui').length + 1;
     const live = e.at <= Date.now();
-    return `<div class="eve"><b>${esc(e.game)}</b><span class="when">${live ? 'En cours' : esc(when(e.at))}</span>
-      <span class="who">${e.mine ? 'Organisée par toi' : `Organisée par ${esc(e.organisateur)}`} · ${yes.length ? `${esc(yes.join(', '))} ${yes.length > 1 ? 'viennent' : 'vient'}` : 'Personne n’a encore répondu'}</span>
-      <div class="acts">${e.mine ? `<button class="btn" data-ecancel="${esc(e.id)}">Annuler</button>` : `<button class="btn ${e.ma === 'oui' ? 'play' : ''}" data-eresp="${esc(e.id)}" data-r="oui">Je viens</button><button class="btn ${e.ma === 'non' ? 'play' : ''}" data-eresp="${esc(e.id)}" data-r="non">Pas dispo</button>`}
-      ${state.items.some((i) => i.installed && i.name === e.game) ? `<button class="btn" data-id="${esc(state.items.find((i) => i.installed && i.name === e.game).id)}">Voir le jeu</button>` : ''}</div></div>`;
-  }).join('') : '<div class="empty">Aucune soirée prévue.</div>';
+    return `<div class="fxrow eve2 ${fx.sel?.id === e.id ? 'sel' : ''}" data-esel="${esc(e.id)}">
+      <span class="edate"><b>${new Date(e.at).getDate()}</b><small>${new Date(e.at).toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</small></span>
+      <div class="fxrinfo"><b>${esc(e.game)}</b><small>${live ? 'En cours' : new Date(e.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${yes} participant${yes > 1 ? 's' : ''}${!e.mine && e.ma == null ? ' · à répondre' : ''}</small></div>
+      ${!e.mine && e.ma == null ? '<em class="fxbadge">!</em>' : ''}
+    </div>`;
+  }).join('') : (state.hist && !state.hist.error && state.hist.status !== 401 ? '<div class="fxnote">Aucune soirée prévue. Clique « Organiser » pour en créer une.</div>' : needLogin);
+  fxCounts();
+  if (fx.sel?.type === 'soiree') { if (state.events.some((x) => x.id === fx.sel.id)) renderEventDetail(); else fxShow(null); }
 }
+function renderEventDetail() {
+  const e = (state.events ?? []).find((x) => x.id === fx.sel?.id);
+  if (!e) return;
+  const game = state.items.find((i) => i.installed && i.name === e.game);
+  const rep = { oui: 'vient', non: 'ne peut pas' };
+  $('fxDetail').innerHTML = `<div class="dhead"><span class="edate big"><b>${new Date(e.at).getDate()}</b><small>${new Date(e.at).toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</small></span><div class="dwho"><b>${esc(e.game)}</b><small>${e.at <= Date.now() ? 'En cours' : esc(whenTxt(e.at))}</small></div>
+      ${e.mine ? `<button class="btn ghost sm" data-ecancel="${esc(e.id)}">Annuler la soirée</button>` : ''}</div>
+    <div class="dbody">
+      ${e.mine ? '' : `<div class="dacts"><button class="btn ${e.ma === 'oui' ? 'play' : ''}" data-eresp="${esc(e.id)}" data-r="oui">Je viens</button><button class="btn ${e.ma === 'non' ? 'play' : ''}" data-eresp="${esc(e.id)}" data-r="non">Pas dispo</button>${game ? `<button class="btn ghost" data-id="${esc(game.id)}">Voir le jeu</button>` : ''}</div>`}
+      ${e.mine && game ? `<div class="dacts"><button class="btn ghost" data-id="${esc(game.id)}">Voir le jeu</button></div>` : ''}
+      <div class="dsec">Participants</div>
+      <div class="dlist"><div class="drow">${avatar(e.organisateur, 'sm')}<div class="fxrinfo"><b>${esc(e.mine ? 'Toi' : e.organisateur)}</b><small>organise</small></div></div>
+      ${e.invites.map((i) => `<div class="drow">${avatar(i.pseudo, 'sm')}<div class="fxrinfo"><b>${esc(i.pseudo)}</b><small class="${i.reponse === 'oui' ? 'ok' : i.reponse === 'non' ? 'no' : ''}">${rep[i.reponse] ?? 'pas encore répondu'}</small></div></div>`).join('')}</div>
+      <p class="hint">Rappel automatique 10 min avant pour tous ceux qui viennent.</p>
+    </div>`;
+}
+$('eNew').addEventListener('click', () => { if (!(state.hist?.amis ?? []).length) return toast('Ajoute d’abord des amis History'); fxShow({ type: 'nouvelleSoiree', id: 'new' }); });
+$('eCancelForm').addEventListener('click', () => fxShow(null));
 function showFriendTab(tab) {
   state.ftab = tab;
   document.querySelectorAll('#friendTabs button').forEach((b) => b.classList.toggle('on', b.dataset.ftab === tab));
-  $('fHistory').hidden = tab !== 'history';
-  $('fSteam').hidden = tab !== 'steam';
-  if (tab === 'history') { $('friendsCount').textContent = ''; loadHistory(); } else { renderFriends(); loadFriends(); }
+  $('hFriends').hidden = tab !== 'history'; $('hRequests').hidden = tab !== 'history';
+  $('friendsBody').hidden = tab !== 'steam';
+  if (fx.sel?.type === (tab === 'history' ? 'steam' : 'ami')) fxShow(null);
+  if (tab === 'history') loadHistory(); else { renderFriends(); loadFriends(); }
 }
 $('saveStatus').addEventListener('click', async () => { await api.setSettings({ status: $('myStatus').value }); toast($('myStatus').value.trim() ? 'Statut mis à jour' : 'Statut retiré'); });
-$('copyInvite').addEventListener('click', () => { const code = $('myCode').textContent; if (!code || code === '—') return toast('Connecte-toi d’abord'); copyText(`history://ami/${encodeURIComponent(code)}`); toast('Lien copié : envoie-le à tes potes (ils cliquent → demande d’ami)'); });
+$('copyInvite').addEventListener('click', async () => { const code = $('myCode').textContent; if (!code || code === '—') return toast('Connecte-toi d’abord'); await copyText(`history://ami/${encodeURIComponent(code)}`); toast('Lien copié : envoie-le à tes potes (ils cliquent → demande d’ami)'); });
 api.onInvite?.(async (d) => {
-  if (!(await ui.confirm({ title: 'Ajouter cet ami ?', text: `Envoyer une demande d’ami à ${d.code} ?`, ok: '👥 Ajouter', icon: '👥' }))) return;
+  if (!(await ui.confirm({ title: 'Ajouter cet ami ?', text: `Envoyer une demande d’ami à ${d.code} ?`, ok: 'Ajouter', icon: '👥' }))) return;
   const r = await api.hFriendAdd(d.code);
   toast(r?.amis ? 'Vous êtes maintenant amis !' : r?.envoye ? 'Demande envoyée' : r?.error ?? 'Impossible');
 });
-$('copyCode').addEventListener('click', () => { copyText($('myCode').textContent); toast('Code copié'); });
+$('copyCode').addEventListener('click', async () => { const c = $('myCode').textContent; if (!c || c === '—' || c === '…') return toast('Connecte-toi d’abord'); await copyText(c); toast('Code copié'); });
 $('addFriend').addEventListener('click', async () => {
   const code = $('addCode').value.trim();
   if (!code) return;
   const r = await api.hFriendAdd(code);
   toast(r?.amis ? 'Vous êtes maintenant amis !' : r?.envoye ? 'Demande envoyée' : r?.error ?? 'Impossible pour l’instant');
-  if (r?.amis || r?.envoye) { $('addCode').value = ''; loadHistory(); }
+  if (r?.amis || r?.envoye) { $('addCode').value = ''; $('fxAdd').hidden = true; loadHistory(); }
 });
 $('eCreate').addEventListener('click', async () => {
   const invites = [...document.querySelectorAll('#eInvites input:checked')].map((i) => i.value);
+  if (!invites.length) return toast('Coche au moins un ami');
   const r = await api.eventCreate({ jeu: $('eGame').value, at: new Date($('eAt').value).getTime(), invites });
-  if (r?.soirees) { state.events = r.soirees; renderEvents(); $('eCreate').closest('details').open = false; toast('Invitations envoyées'); } else toast(r?.error ?? 'Impossible pour l’instant');
+  if (r?.soirees) { state.events = r.soirees; renderEvents(); toast('Invitations envoyées'); const e = r.soirees.filter((x) => x.mine).sort((a, b) => b.at - a.at)[0]; fxShow(e ? { type: 'soiree', id: e.id } : null); } else toast(r?.error ?? 'Impossible pour l’instant');
 });
-$('friendsRefresh').addEventListener('click', () => (state.ftab === 'history' ? loadHistory() : loadFriends(true)).then(() => toast('Amis actualisés')));
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'history') loadHistory(); }, 60_000);
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'steam') loadFriends(); }, 60_000);
 
@@ -795,6 +947,13 @@ function notifActions(e) {
   if (e.file) return `${b('play', 'Ouvrir')}${b('folder', 'Dossier', 'ghost')}`;
   return '';
 }
+// Visage de la notification : la photo de l'ami (ou son initiale), sinon le logo du launcher
+function ncFace(e) {
+  const f = e.from ? (state.hist?.amis ?? []).find((a) => a.id === e.from) ?? (state.hist?.demandes ?? []).find((a) => a.id === e.from) : null;
+  const name = f?.pseudo ?? (e.cat === 'amis' ? String(e.title).replace(/^(Appel manqué de |)/, '').split(/[ ·]/)[0] : null);
+  if (f || name) return `<span class="ncface">${avatar(f ?? name, 'sm')}<i class="ncbadge">${esc(e.icon)}</i></span>`;
+  return '<span class="ncface app"><img src="icon.png" alt=""></span>';
+}
 function renderNotifs() {
   const list = nc.list.filter((e) => nc.tab === 'tout' || e.cat === nc.tab);
   document.querySelectorAll('#ncTabs [data-nc]').forEach((x) => x.classList.toggle('on', x.dataset.nc === nc.tab));
@@ -806,12 +965,12 @@ function renderNotifs() {
     const h = d === today ? 'Aujourd’hui' : d === yest ? 'Hier' : 'Plus ancien';
     const sep = h !== head ? `<div class="ncday">${h}</div>` : ''; head = h;
     return `${sep}<div class="ncitem ${e.read ? '' : 'unread'} ${e.cat}" data-nopen="${esc(e.id)}">
-      <span class="ncicon">${esc(e.icon)}</span>
+      ${ncFace(e)}
       <div class="ncbody"><b>${esc(e.title)}</b>${e.body ? `<p>${esc(e.body)}</p>` : ''}<div class="ncfoot"><small>${esc(sinceTxt(e.at))}</small><div class="ncacts">${notifActions(e)}</div></div></div>
     </div>`;
   }).join('');
 }
-$('notifCenter').addEventListener('toggle', (e) => { if (e.newState === 'open') { renderNotifs(); loadNotifs(); } else if (nc.unread) api.notifsRead?.().then((r) => { bellCount(r?.unread ?? 0); nc.list.forEach((x) => { x.read = true; }); }); });
+$('notifCenter').addEventListener('toggle', (e) => { if (e.newState === 'open') { const r = $('bellBtn').getBoundingClientRect(); $('notifCenter').style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - $('notifCenter').offsetWidth - 8))}px`; renderNotifs(); loadNotifs(); } else if (nc.unread) api.notifsRead?.().then((r) => { bellCount(r?.unread ?? 0); nc.list.forEach((x) => { x.read = true; }); }); });
 $('ncTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-nc]'); if (t) { nc.tab = t.dataset.nc; renderNotifs(); } });
 $('ncRead').addEventListener('click', async () => { const r = await api.notifsRead?.(); nc.list.forEach((x) => { x.read = true; }); bellCount(r?.unread ?? 0); renderNotifs(); });
 $('ncClear').addEventListener('click', async () => { const r = await api.notifsClear?.(nc.tab === 'tout' ? null : nc.tab); if (r) { nc.list = r.list; bellCount(r.unread); renderNotifs(); } });
@@ -939,6 +1098,20 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.22.0': [
+    ['👥', 'Page Amis en deux panneaux', 'Tes amis à gauche, la discussion à droite (plus de fenêtre qui s’ouvre). Groupes et Soirées ont leurs onglets en haut, avec le même principe : la liste à gauche, le détail à droite.', ['[data-view=amis]']],
+    ['🎨', 'Personnalise ton profil', 'Photo de profil, couleur et bio : clique sur ton nom en bas à gauche › Personnaliser mon profil. Tes amis les voient partout (liste, discussion, notifications).'],
+    ['🔔', 'Notifications plus claires', 'La cloche passe à gauche, et chaque notification montre la photo de ton ami.'],
+    ['🧩', 'Composants avec néon', 'Mon PC › Composants : un néon de couleur tourne autour de chaque composant. Les alertes importantes (redémarrage en attente…) passent en verre rouge.', ['[data-view=pc]', '[data-pctab=composants]', 'wait1500']],
+    ['🎮', 'Jeu en cours plus juste', 'Riot Vanguard, les anti-triche, clients et lanceurs ne sont plus affichés comme des jeux (« Joue à … »).'],
+  ],
+  '0.22.0': [
+    ['👥', 'Page Amis en deux panneaux', 'Tes amis à gauche, la discussion à droite (plus de fenêtre qui s’ouvre). Groupes et Soirées ont leurs onglets en haut, avec le même principe : la liste à gauche, le détail à droite.', ['[data-view=amis]']],
+    ['🎨', 'Personnalise ton profil', 'Photo de profil, couleur et bio : clique sur ton nom en bas à gauche › Personnaliser mon profil. Tes amis les voient partout (liste, discussion, notifications).'],
+    ['🔔', 'Notifications plus claires', 'La cloche passe à gauche, et chaque notification montre la photo de ton ami.'],
+    ['🧩', 'Composants en couleur', 'Mon PC › Composants : une couleur par composant avec un néon qui tourne autour, et des alertes en verre coloré (rouge quand c’est urgent, comme un redémarrage en attente).', ['[data-view=pc]', '[data-pctab=composants]', 'wait1500']],
+    ['🎮', 'Jeu en cours plus juste', 'Riot Vanguard, les anti-triche, clients et lanceurs ne sont plus affichés comme des jeux (« Joue à … »).'],
+  ],
   '0.21.1': [
     ['🔐', 'Double authentification seulement à la connexion', 'Le code de l’application n’est plus demandé à chaque ouverture : seulement quand tu te reconnectes à ton compte (option « à chaque ouverture » dans Paramètres › Compte si tu préfères). Et tant que tu ouvres le launcher, tu restes connecté.'],
     ['🛠', 'Optimisation corrigée', 'L’optimisation retire toute seule les réglages d’anciennes versions qui faisaient bugger FiveM et d’autres jeux, et ne les propose plus jamais.', ['[data-view=optimisation]']],
@@ -1467,7 +1640,7 @@ function renderDiag(d) {
   state.pcDiagDone = true;
   state.diag = d;
   renderTop();
-  $('pcComps').innerHTML = d.components.map((c) => `<div class="comp st-${c.status}">
+  $('pcComps').innerHTML = d.components.map((c) => `<div class="comp st-${c.status} ck-${esc(c.key ?? 'x')}">
     <div class="ch"><span>${c.icon}</span><div><small>${esc(c.title)}</small><b>${esc(c.name)}</b></div><em class="chip">${STATUS[c.status]}</em></div>
     <ul>${c.specs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
     ${c.life?.pct != null ? `<div class="lifebar"><i style="width:${c.life.pct}%;background-position:${100 - c.life.pct}% 0"></i></div>` : ''}
@@ -2397,6 +2570,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.tips && state.sel) { const it = state.sel; toast('L’IA prépare ses conseils…'); const r = await api.gameTips(it.id); return showReport(r?.text ? { text: r.text, ai: true } : { error: r?.error }, `Conseils pour ${it.name}`); }
   if (t.dataset.fivemsrv) return openFivemServers();
   if (t.dataset.copytext) { await copyText(t.dataset.copytext); return toast(t.dataset.copied || 'Copié'); }
+  if (t.dataset.pact) return profileAction(t.dataset.pact);
   if (t.dataset.hchat) return openChat(t.dataset.hchat, t.dataset.name);
   if (t.dataset.hcall) return startCall(t.dataset.hcall, t.dataset.name);
   if (t.dataset.hjoin) { const r = await api.friendJoin(t.dataset.hjoin); return toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); }
@@ -2665,7 +2839,7 @@ function setAccount(c) {
   state.account = c;
   const name = c?.pseudo ?? state.profile;
   $('profileName').textContent = name;
-  $('avatar').textContent = name[0]?.toUpperCase() ?? '?';
+  setAv($('avatar'), c ? { pseudo: name, ...(c.profile ?? {}) } : name);
   $('profileSub').innerHTML = c ? '<i class="online"></i>Compte History' : 'Pas connecté · se connecter';
 }
 $('authTabs').addEventListener('click', (e) => {
@@ -2858,13 +3032,28 @@ $('sec2fa').addEventListener('click', async () => {
   };
 });
 $('authSkip').addEventListener('click', async () => { await api.skipAccount?.(); showAuth(false); });
-$('profileBtn').addEventListener('click', async () => {
+// Menu du compte (en bas du menu de gauche) : personnaliser le profil ou se déconnecter
+$('profileBtn').addEventListener('click', (e) => {
   if (!state.account) return showAuth(true);
-  if (!(await ui.confirm({ title: 'Se déconnecter ?', text: `Connecté en tant que ${state.account.pseudo} (${state.account.email}).`, ok: 'Se déconnecter', icon: '👤' }))) return;
-  await api.logout();
-  setAccount(null);
-  showAuth(true);
+  const ctx = $('ctx');
+  ctx.innerHTML = `<div class="ctxhead">${esc(state.account.pseudo)}</div><button data-pact="edit">🎨 Personnaliser mon profil</button><button data-pact="friends">👥 Mes amis</button><hr><button class="danger" data-pact="logout">Se déconnecter</button>`;
+  ctx.hidden = false;
+  const r = $('profileBtn').getBoundingClientRect();
+  ctx.style.left = `${r.left}px`;
+  ctx.style.top = `${Math.max(8, r.top - ctx.offsetHeight - 8)}px`;
+  ctx.classList.remove('show'); void ctx.offsetWidth; ctx.classList.add('show');
+  e.stopPropagation();
 });
+async function profileAction(a) {
+  if (a === 'edit') return openProfileEditor();
+  if (a === 'friends') return go('amis');
+  if (a === 'logout') {
+    if (!(await ui.confirm({ title: 'Se déconnecter ?', text: `Connecté en tant que ${state.account.pseudo} (${state.account.email}).`, ok: 'Se déconnecter', icon: '👤' }))) return;
+    await api.logout();
+    setAccount(null);
+    showAuth(true);
+  }
+}
 api.account?.().then(async (r) => {
   setAccount(r.compte);
   if (!r.compte && !r.skipped) return showAuth(true);
@@ -2980,7 +3169,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.21.1',
+    version: async () => '0.22.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
@@ -2998,7 +3187,8 @@ function demoApi() {
       if (location.hash.includes('fin')) demoVerify?.({ id, name, phase: 'done', canRepair: true, result: { mode: 'complet', ok: false, checked: 3117, missing: ['update/x64/dlcpacks/patchday27ng/dlc.rpf'], corrupt: ['x64a.rpf', 'common.rpf'], sizes: [] } });
       return {};
     },
-    account: async () => ({ compte: null, skipped: true }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
+    account: async () => (location.hash.includes('connecte') ? { compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: '#8b5cf6', bio: 'RP tous les soirs, main support', avatar: null } } } : { compte: null, skipped: true }),
+    saveProfile: async (p) => ({ ok: true, compte: { id: 'me', pseudo: 'Noam', email: 'noam@exemple.fr', profile: { color: p.couleur, bio: p.bio, avatar: null } } }), register: async (b) => ({ ok: true, compte: { pseudo: b.pseudo, email: b.email } }), login: async () => ({ ok: false, error: 'E-mail ou mot de passe incorrect.' }), skipAccount: async () => ({}), setVoice: async () => ({}), ask: async (t) => ({ reply: `(aperçu) Je m’occupe de « ${t} ».`, action: 'none' }), openReco: async () => {},
   };
 }
 
