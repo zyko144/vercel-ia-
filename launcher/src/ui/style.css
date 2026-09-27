@@ -1109,3 +1109,12 @@ ul.tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; line-hei
 .ncempty span { font-size: 30px; opacity: .6; }
 .ncempty b { color: var(--text); }
 .navcount.hot { background: #ef4444; color: #fff; }
+
+/* Analyse pro : choix des disques */
+.scandrives { display: grid; gap: 6px; margin: 4px 0 2px; }
+.scandrives:empty { display: none; }
+.drivechips { display: flex; flex-wrap: wrap; gap: 8px; }
+.drivechip { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line-2); cursor: pointer; }
+.drivechip:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); }
+.drivechip span { display: grid; font-weight: 700; }
+.drivechip small { font-weight: 400; color: var(--muted); font-size: 11.5px; }

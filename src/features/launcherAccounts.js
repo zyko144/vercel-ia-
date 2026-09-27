@@ -69,7 +69,7 @@ const hashPassword = async (password, salt) => (await scrypt(String(password), s
 async function newSession(d, id) {
   const token = randomBytes(32).toString('base64url');
   const now = Date.now();
-  for (const [h, s] of Object.entries(d.sessions)) if (now - s.at > SESSION_MS) delete d.sessions[h];
+  for (const [h, s] of Object.entries(d.sessions)) if (now - (s.seen ?? s.at) > SESSION_MS) delete d.sessions[h];
   d.sessions[sha(token)] = { id, at: now, seen: now };
   return token;
 }
@@ -135,7 +135,8 @@ export async function me(token) {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
   const d = await data();
   const s = d.sessions[sha(token)];
-  if (!s || Date.now() - s.at > SESSION_MS) return null;
+  // Session glissante : 90 jours sans ouvrir le launcher avant de devoir se reconnecter (et redonner le code 2FA)
+  if (!s || Date.now() - (s.seen ?? s.at) > SESSION_MS) return null;
   s.seen = Date.now();
   const account = d.accounts[s.id];
   return account ? publicAccount(account) : null;
@@ -151,7 +152,7 @@ export async function logout(token) {
 const accountOf = async (d, token) => {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
   const s = d.sessions[sha(token)];
-  return s && Date.now() - s.at <= SESSION_MS ? d.accounts[s.id] ?? null : null;
+  return s && Date.now() - (s.seen ?? s.at) <= SESSION_MS ? d.accounts[s.id] ?? null : null;
 };
 
 /** Vérification e-mail, mot de passe oublié, double authentification. */
