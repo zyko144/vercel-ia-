@@ -7,10 +7,25 @@ import { AttachmentBuilder, EmbedBuilder, MessageFlags, SlashCommandBuilder } fr
 import { load, save } from '../storage.js';
 import { accountByDiscord, linkDiscord, linkedAccounts } from './launcherAccounts.js';
 import { RELEASES_CHANNEL } from './launcherReleases.js';
-import { parseEpicFree } from '../../launcher/src/core/freegames.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
-export const FREE_CHANNEL = process.env.LAUNCHER_GRATUIT_SALON || RELEASES_CHANNEL;
+const DEALS_NAME = '🎁・jeux-gratuits-et-promos';
+/** Salon des jeux gratuits et des promos : celui de LAUNCHER_GRATUIT_SALON, sinon créé à côté du salon des nouveautés. */
+export async function dealsChannel(client) {
+  if (process.env.LAUNCHER_GRATUIT_SALON) return client.channels.fetch(process.env.LAUNCHER_GRATUIT_SALON).catch(() => null);
+  const st = (await load('launcher-bons-plans', null)) ?? {};
+  if (st.channelId) { const c = await client.channels.fetch(st.channelId).catch(() => null); if (c) return c; }
+  const news = await client.channels.fetch(RELEASES_CHANNEL).catch(() => null);
+  const guild = news?.guild;
+  if (!guild) return news;
+  let c = guild.channels.cache.find((x) => x.name === DEALS_NAME);
+  if (!c) {
+    c = await guild.channels.create({ name: DEALS_NAME, parent: news.parentId ?? undefined, topic: 'Jeux gratuits de la semaine sur Epic Games et grosses promos Steam, postés tout seuls par le bot (History Launcher).', reason: 'History Launcher : bons plans' })
+      .catch((err) => { console.warn('[bons plans] création du salon impossible (permission « Gérer les salons ») :', err.message); return null; });
+  }
+  if (c) save('launcher-bons-plans', { ...st, channelId: c.id });
+  return c ?? news;
+}
 const EPIC_FEED = 'https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=fr&country=FR&allowCountries=FR';
 
 export const launcherCommand = new SlashCommandBuilder().setName('launcher').setDescription('🚀 History Launcher : ton profil, lier ton compte')
@@ -90,12 +105,13 @@ async function syncAll(client) {
 /** Jeux gratuits Epic de la semaine : un message par nouveau jeu, avec son image. */
 async function announceFree(client, fetchImpl = fetch) {
   const json = await fetchImpl(EPIC_FEED, { signal: AbortSignal.timeout(15_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const { parseEpicFree } = await import('../../launcher/src/core/freegames.js');
   const now = parseEpicFree(json).filter((g) => g.now);
   if (!now.length) return;
   const st = (await load('launcher-epic-annonces', null)) ?? { done: [] };
   const fresh = now.filter((g) => !st.done.includes(`${g.slug}:${g.until}`));
   if (!fresh.length) return;
-  const channel = await client.channels.fetch(FREE_CHANNEL).catch(() => null);
+  const channel = await dealsChannel(client);
   if (!channel?.isTextBased?.()) return;
   for (const g of fresh) {
     const until = new Date(g.until).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
@@ -110,11 +126,33 @@ async function announceFree(client, fetchImpl = fetch) {
   save('launcher-epic-annonces', st);
 }
 
+/** Grosses promos Steam du jour (au moins -50 %), une fois par jour, en un seul message avec les images. */
+async function announceDeals(client, fetchImpl = fetch) {
+  const today = new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+  const st = (await load('launcher-bons-plans', null)) ?? {};
+  if (st.dealsDay === today) return;
+  const j = await fetchImpl('https://store.steampowered.com/api/featuredcategories?cc=fr&l=french', { signal: AbortSignal.timeout(15_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const seen = new Set(st.dealsSeen ?? []);
+  const deals = (j?.specials?.items ?? []).filter((x) => x.discounted && x.discount_percent >= 50 && !seen.has(`${x.id}:${x.final_price}`))
+    .sort((a, b) => b.discount_percent - a.discount_percent).slice(0, 6);
+  if (!deals.length) return;
+  const channel = await dealsChannel(client);
+  if (!channel?.isTextBased?.()) return;
+  const eur = (c) => `${(c / 100).toFixed(2).replace('.', ',')} €`;
+  const embeds = deals.map((x) => new EmbedBuilder().setColor(0x22d3ee).setTitle(`${x.name} : -${x.discount_percent} %`).setURL(`https://store.steampowered.com/app/${x.id}`)
+    .setDescription(`~~${eur(x.original_price)}~~ **${eur(x.final_price)}**${x.discount_expiration ? ` · jusqu’au ${new Date(x.discount_expiration * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' })}` : ''}`)
+    .setThumbnail(x.header_image ?? x.large_capsule_image ?? null));
+  await channel.send({ content: '# 🔥 Grosses promos Steam du jour\n-# Suis un prix dans History Launcher (Paramètres › Jeux › Alertes de prix) pour être prévenu sous ton prix.', embeds, allowedMentions: { parse: [] } });
+  save('launcher-bons-plans', { ...st, dealsDay: today, dealsSeen: [...seen, ...deals.map((x) => `${x.id}:${x.final_price}`)].slice(-300) });
+}
+
 export function startLauncherDiscord(client) {
+  setTimeout(() => announceDeals(client).catch((err) => console.warn('[bons plans]', err.message)), 4 * 60_000).unref();
+  setInterval(() => announceDeals(client).catch((err) => console.warn('[bons plans]', err.message)), 2 * 3_600_000).unref();
   const safe = (f) => () => f(client).catch((err) => console.warn('[launcher discord]', err.message));
   setTimeout(safe(announceFree), 2 * 60_000).unref();
   setInterval(safe(announceFree), 3 * 3_600_000).unref();
   setTimeout(safe(syncAll), 3 * 60_000).unref();
   setInterval(safe(syncAll), 30 * 60_000).unref();
 }
-export const _test = { announceFree, syncMember };
+export const _test = { announceFree, announceDeals, syncMember };

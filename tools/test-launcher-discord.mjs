@@ -114,6 +114,26 @@ await check('jeux gratuits Epic : annoncés une seule fois, avec image', async (
   assert.equal(sent[0].files.length, 1);
 });
 
+await check('salon des bons plans créé tout seul + grosses promos Steam une fois par jour', async () => {
+  const created = []; const sent = [];
+  const chan = { id: 'bp1', name: '🎁・jeux-gratuits-et-promos', isTextBased: () => true, send: async (p) => sent.push(p) };
+  const guild = { channels: { cache: { find: () => null }, create: async (o) => { created.push(o); return chan; } } };
+  const client = { channels: { fetch: async (id) => (id === 'bp1' ? chan : { guild, parentId: 'cat', isTextBased: () => true }) } };
+  const steam = { specials: { items: [
+    { id: 1, name: 'Gros Jeu', discounted: true, discount_percent: 75, original_price: 5999, final_price: 1499, header_image: 'https://x/1.jpg', discount_expiration: 1_900_000_000 },
+    { id: 2, name: 'Petite promo', discounted: true, discount_percent: 20, original_price: 1000, final_price: 800 },
+  ] } };
+  const fetchImpl = async () => new Response(JSON.stringify(steam));
+  await _test.announceDeals(client, fetchImpl);
+  await new Promise((r) => setTimeout(r, 1200));
+  await _test.announceDeals(client, fetchImpl);
+  assert.equal(created.length, 1, 'salon créé une fois');
+  assert.equal(created[0].parent, 'cat');
+  assert.equal(sent.length, 1, 'une fois par jour');
+  assert.equal(sent[0].embeds.length, 1, 'seulement les promos de -50 % et plus');
+  assert.match(sent[0].embeds[0].toJSON().description, /14,99 €/);
+});
+
 server.close();
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);

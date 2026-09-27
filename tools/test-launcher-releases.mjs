@@ -36,5 +36,18 @@ await _test.tick(client, fetchImpl);
 assert.equal(sent.length, 1, 'une seule annonce par version');
 await _test.tick(client, async (u) => (String(u).includes('api.github.com') ? new Response(JSON.stringify({ ...rel, tag_name: 'v0.13.1', assets: [] })) : null));
 assert.equal(sent.length, 1, 'release incomplète : pas encore annoncée');
-console.log('✅ Annonces du launcher : 10 vérifications');
+// Repli quand l'API GitHub refuse (limite par adresse IP) : version lue dans latest.yml, captures testées une par une
+const { latestRelease } = await import('../src/features/launcherReleases.js');
+const fb = await latestRelease(async (u, o) => {
+  u = String(u);
+  if (u.includes('api.github.com')) return new Response('{"message":"API rate limit exceeded"}', { status: 403 });
+  if (u.endsWith('/latest/download/latest.yml')) return new Response('version: 0.13.0\nfiles: []\n');
+  if (o?.method === 'HEAD') return new Response(null, { status: /apercu(-2)?\.png$/.test(u) ? 200 : 404 });
+  return new Response('', { status: 404 });
+});
+assert.equal(fb.tag_name, 'v0.13.0');
+assert.deepEqual(fb.assets.map((a) => a.name), ['latest.yml', 'History-Launcher-Setup-0.13.0.exe', 'apercu.png', 'apercu-2.png']);
+assert.match(releaseMessage(fb).content, /# 🛡 Double authentification/, 'notes tirées du CHANGELOG');
+assert.equal(releaseMessage(fb).images.length, 2);
+console.log('✅ Annonces du launcher : 13 vérifications');
 process.exit(0);

@@ -226,6 +226,12 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     }
 
     // Chiffres en direct et classement public des serveurs (site vitrine)
+    // GitHub prévient le bot dès qu'une version du launcher est publiée (l'annonce part tout de suite)
+    if (url.pathname === '/api/launcher/annonce' && req.method === 'POST') {
+      if (!allowAttempt('launcher-annonce', clientIp(req), 6, 10 * 60_000)) return send(res, 429, { error: 'trop de demandes' });
+      const r = await (await import('./features/launcherReleases.js')).announceNow().catch((err) => ({ ok: false, error: err.message }));
+      return send(res, 200, r);
+    }
     if ((url.pathname === '/api/public' || url.pathname === '/api/classement') && req.method === 'GET') {
       const { publicStats, publicRanking } = await import('./features/publicStats.js');
       allowSiteOrigin(req, res);
