@@ -11,6 +11,8 @@ const sidebar = { hiddenPlatforms: [], hiddenNav: [] }; // menu de gauche person
 let boostGames = {}; // opti auto par jeu : id -> true (toujours) | false (jamais)
 const unread = {}; // messages d'amis non lus (id -> nombre)
 let chatWith = null; // discussion ouverte
+let callS = null; // appel en cours
+let ringing = null; // appel qui sonne
 
 // ---------- Formats ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,9 +35,21 @@ const CATEGORY_COLORS = { musique: '#b36bff', video: '#ff4d5e', discussion: '#7b
 const colorOf = (i) => (i.brand?.color ?? (i.kind === 'game' ? state.sources[i.source]?.color : BRANDS[String(i.name).toLowerCase()] ?? CATEGORY_COLORS[i.category])) ?? '#9aa0aa';
 const srcIcon = (i) => state.sources[i.source]?.logo ?? state.sources[i.source]?.icon;
 
+// Toasts, barre d'appel, sonnerie : dans la « couche du dessus » du navigateur (popover), réaffichés après
+// chaque fenêtre ouverte pour ne jamais passer dessous
+function raiseTop() {
+  const t = $('toast');
+  for (const [el, show] of [[$('callBar'), Boolean(callS)], [$('ringBox'), Boolean(ringing)], [t, t.classList.contains('on')]]) {
+    if (!el?.showPopover) continue;
+    try { if (el.matches(':popover-open')) el.hidePopover(); if (show) el.showPopover(); } catch { /* pas encore dans la page */ }
+  }
+}
+// Une fenêtre (dialog) qui s'ouvre passe devant : on remet la barre d'appel, la sonnerie et le toast au-dessus
+new MutationObserver((list) => { if (list.some((m) => m.target.open)) requestAnimationFrame(raiseTop); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
 function toast(text) {
   const t = $('toast');
   t.textContent = text;
+  try { if (t.matches(':popover-open')) t.hidePopover(); t.showPopover(); } catch { /* aperçu sans popover */ }
   t.classList.add('on');
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => t.classList.remove('on'), 2600);
@@ -309,27 +323,44 @@ function renderFriends() {
   const r = state.friends;
   if (!r) { $('friendsBody').innerHTML = '<div class="empty">Chargement…</div>'; return; }
   if (!r.ok) { $('friendsCount').textContent = ''; $('friendsBody').innerHTML = `<div class="empty">${esc(FRIEND_HELP[r.reason] ?? FRIEND_HELP.erreur)}</div>`; return; }
-  const groups = [['En jeu', r.friends.filter((f) => f.game)], ['En ligne', r.friends.filter((f) => f.online && !f.game)], ['Hors ligne', r.friends.filter((f) => !f.online)]];
-  $('friendsCount').textContent = `${r.friends.filter((f) => f.online).length} en ligne sur ${r.friends.length}`;
+  const q = ($('fSearch')?.value ?? '').trim().toLowerCase();
+  const all = r.friends.filter((f) => !q || f.name.toLowerCase().includes(q));
+  const groups = [['🎮 En jeu', all.filter((f) => f.game)], ['🟢 En ligne', all.filter((f) => f.online && !f.game)], ['⚫ Hors ligne', all.filter((f) => !f.online)]];
+  $('friendsCount').textContent = `${r.friends.filter((f) => f.online).length} en ligne · ${r.friends.length} amis Steam`;
   const mine = (f) => f.appid && state.items.find((i) => i.steamId === f.appid && i.installed);
   $('friendsBody').innerHTML = groups.filter(([, l]) => l.length).map(([title, l]) => `
-    <h3 class="fgroup">${title} <em>${l.length}</em></h3>
-    <div class="friends">${l.map((f) => `
-      <div class="friend ${f.game ? 'ingame' : f.online ? 'on' : ''}">
-        ${f.avatar ? `<img src="${esc(f.avatar)}" alt="">` : `<span class="fav">${esc(f.name[0])}</span>`}
-        <div class="finfo"><b>${esc(f.name)}</b><small>${f.game ? `Joue à ${esc(f.game)}` : esc(f.status)}</small></div>
-        <div class="factions">
-          ${f.game ? `<button class="btn play" data-friend="join" data-fid="${esc(f.id64)}" ${f.lobby ? '' : 'disabled title="Pas de partie ouverte à rejoindre"'}>Rejoindre</button>` : ''}
-          ${f.game && !f.lobby && mine(f) ? `<button class="btn" data-id="${esc(mine(f).id)}" title="Lancer le même jeu">Lancer ${esc(f.game)}</button>` : ''}
-          ${f.online ? `<button class="btn" data-friend="message" data-fid="${esc(f.id64)}">Message</button>` : ''}
-          <button class="btn ghost" data-friend="profile" data-fid="${esc(f.id64)}" title="Profil Steam">Profil</button>
+    <h3 class="fsec">${title} <em>${l.length}</em></h3>
+    <div class="fgrid">${l.map((f) => `
+      <div class="fcard ${f.game ? 'ingame' : f.online ? 'on' : 'off'}">
+        <div class="ftop">
+          <span class="favw">${f.avatar ? `<img class="pav" src="${esc(f.avatar)}" alt="">` : avatar(f.name)}<i class="st"></i></span>
+          <div class="finfo"><div class="fname"><b title="${esc(f.name)}">${esc(f.name)}</b></div><small class="fline">${f.game ? `Joue à <b>${esc(f.game)}</b>` : esc(f.status)}</small></div>
         </div>
-      </div>`).join('')}</div>`).join('') || '<div class="empty">Aucun ami Steam pour l’instant.</div>';
+        <div class="fbtns">
+          ${f.game ? `<button class="btn play sm" data-friend="join" data-fid="${esc(f.id64)}" ${f.lobby ? '' : 'disabled title="Pas de partie ouverte à rejoindre"'}>▶ Rejoindre</button>` : ''}
+          ${f.game && !f.lobby && mine(f) ? `<button class="btn sm" data-id="${esc(mine(f).id)}" title="Lancer le même jeu">Lancer le jeu</button>` : ''}
+          ${f.online ? `<button class="btn sm" data-friend="message" data-fid="${esc(f.id64)}">💬 Message</button>` : ''}
+          <button class="btn ghost sm" data-friend="profile" data-fid="${esc(f.id64)}" title="Profil Steam">Profil</button>
+        </div>
+      </div>`).join('')}</div>`).join('') || `<div class="empty">${q ? `Aucun ami Steam ne s’appelle « ${esc(q)} ».` : 'Aucun ami Steam pour l’instant.'}</div>`;
 }
 // ---------- Amis History (comptes du launcher) et soirées jeu ----------
 const needLogin = '<div class="empty">Connecte-toi à ton compte History pour ajouter des amis et organiser des soirées.<br><br><button class="btn play" data-login="1">Se connecter</button></div>';
+// Pastille d'un joueur : initiale sur une couleur tirée de son pseudo (toujours la même)
+const hueOf = (t) => [...String(t ?? '')].reduce((h, c) => (h * 31 + c.codePointAt(0)) % 360, 7);
+const avatar = (name, cls = '') => `<span class="pav ${cls}" style="--h:${hueOf(name)}">${esc(String(name ?? '?').trim()[0]?.toUpperCase() ?? '?')}</span>`;
 function renderGroups(list) {
-  $('hGroups').innerHTML = list.length ? list.map((g) => `<div class="hfriend group"><div class="finfo"><b>${esc(g.name)}</b><small>${g.members.map((m) => `${m.online ? '🟢' : '⚫'} ${esc(m.pseudo)}${m.playing ? ` (${esc(m.playing)})` : ''}`).join(' · ')}</small></div><button class="btn play sm" data-gnotify="${esc(g.id)}">📣 Prévenir</button><button class="btn sm" data-gparty="${esc(g.id)}" title="Annonce la partie sur Discord : les membres liés sont mentionnés, avec un bouton « Je viens »">🎮 Discord</button><button class="btn ghost sm" data-gleave="${esc(g.id)}" title="${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}">✕</button></div>`).join('') : '<p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p>';
+  state.groups = list;
+  $('hGroups').innerHTML = list.length ? list.map((g) => {
+    const on = g.members.filter((m) => m.online).length;
+    const playing = g.members.filter((m) => m.playing);
+    return `<div class="grpcard">
+      <div class="ghead"><b title="${esc(g.name)}">${esc(g.name)}</b><small>${on}/${g.members.length} en ligne</small></div>
+      <div class="gmembers">${g.members.slice(0, 7).map((m) => `<span class="gm ${m.playing ? 'ingame' : m.online ? 'on' : ''}" title="${esc(m.pseudo)}${m.playing ? ` · ${esc(m.playing)}` : m.online ? ' · en ligne' : ''}">${avatar(m.pseudo, 'xs')}</span>`).join('')}${g.members.length > 7 ? `<span class="gmore">+${g.members.length - 7}</span>` : ''}</div>
+      ${playing.length ? `<small class="gplay">🎮 ${esc(playing.map((m) => `${m.pseudo} (${m.playing})`).join(', '))}</small>` : ''}
+      <div class="gbtns"><button class="btn play sm" data-gnotify="${esc(g.id)}" title="Message à tout le groupe dans le launcher">📣 Prévenir</button><button class="btn sm" data-gparty="${esc(g.id)}" title="Annonce la partie sur Discord : les membres liés sont mentionnés, avec un bouton « Je viens »">🎮 Discord</button><button class="btn ghost sm iconb" data-gleave="${esc(g.id)}" title="${g.owner ? 'Supprimer le groupe' : 'Quitter le groupe'}">✕</button></div>
+    </div>`;
+  }).join('') : '<p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p>';
 }
 $('groupNew').addEventListener('click', async () => {
   const amis = state.hist?.amis ?? [];
@@ -374,36 +405,64 @@ async function loadHistory() {
   state.hist = r;
   state.events = ev?.soirees ?? [];
   renderHistory();
-  renderGroups(r?.groupes ?? []);
+  if (r && !r.error && r.status !== 401) renderGroups(r.groupes ?? []);
   const online = (r?.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
   $('friendsOnline').textContent = online || '';
 }
+function friendCard(a, playingNow) {
+  const joinable = a.playing && (a.join?.steam || (a.join?.fivem && state.items.some((i) => i.source === 'fivem')) || state.items.some((i) => i.installed && i.name.toLowerCase() === a.playing.toLowerCase()));
+  const line = a.playing ? `Joue à <b>${esc(a.playing)}</b>${a.since ? ` · ${hours(Math.max(1, (Date.now() - a.since) / 60_000))}` : ''}` : a.online ? (a.dnd ? 'Ne pas déranger' : 'En ligne') : 'Hors ligne';
+  const n = unread[a.id] ?? 0;
+  const btn = (attr, label, title, cls = '') => `<button class="btn sm ${cls}" ${attr} title="${esc(title)}">${label}</button>`;
+  return `<div class="fcard ${a.playing ? 'ingame' : a.online ? 'on' : 'off'}" data-fname="${esc(a.pseudo.toLowerCase())}">
+    <div class="ftop">
+      <span class="favw">${avatar(a.pseudo)}<i class="st"></i>${n ? `<em class="fbadge">${n}</em>` : ''}</span>
+      <div class="finfo">
+        <div class="fname"><b title="${esc(a.pseudo)}">${esc(a.pseudo)}</b>${a.dnd ? '<span class="chip red" title="Ne pas déranger">⛔</span>' : ''}${a.bench ? `<span class="chip" title="Score de benchmark">🏁 ${a.bench}</span>` : ''}</div>
+        <small class="fline" title="${esc(a.playing ?? '')}">${line}</small>
+        ${a.status ? `<small class="fstatus" title="${esc(a.status)}">« ${esc(a.status)} »</small>` : ''}
+        ${a.week ? `<small class="fweek">${hours(a.week)} de jeu cette semaine${a.top ? ` · surtout ${esc(a.top)}` : ''}</small>` : ''}
+      </div>
+    </div>
+    <div class="fbtns">
+      ${joinable ? btn(`data-hjoin="${esc(a.id)}"`, '▶ Rejoindre', 'Lancer le jeu et le rejoindre', 'play') : ''}
+      ${btn(`data-hchat="${esc(a.id)}" data-name="${esc(a.pseudo)}"`, `💬 Message${n ? ` (${n})` : ''}`, 'Écrire un message', joinable ? '' : 'play')}
+      ${a.online ? btn(`data-hcall="${esc(a.id)}" data-name="${esc(a.pseudo)}"`, '📞', 'Appel vocal', 'iconb') : ''}
+      ${a.playing ? btn(`data-hask="${esc(a.id)}"`, '🎮', 'Lui demander de jouer ensemble', 'iconb') : ''}
+      ${playingNow && a.online && !a.playing ? btn(`data-hinv="${esc(a.id)}"`, '📨', 'L’inviter dans ta partie', 'iconb') : ''}
+      <button class="btn ghost sm iconb fmore" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer de mes amis">✕</button>
+    </div>
+  </div>`;
+}
 function renderHistory() {
   const r = state.hist;
-  if (!r || r.status === 401) { $('hFriends').innerHTML = needLogin; $('hRequests').innerHTML = ''; $('myCode').textContent = '—'; $('eventsList').innerHTML = ''; return; }
+  if (!r || r.status === 401) { $('hFriends').innerHTML = needLogin; $('hRequests').innerHTML = ''; $('myCode').textContent = '—'; $('eventsList').innerHTML = ''; $('hGroups').innerHTML = ''; return; }
   if (r.error) { $('hFriends').innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
   $('myCode').textContent = r.code;
-  $('hRequests').innerHTML = r.demandes.length ? `<div class="reqbox"><b class="sub">Demandes d’ami</b>${r.demandes.map((d) => `
-    <div class="hfriend"><div class="finfo"><b>${esc(d.pseudo)}</b><small>${esc(d.code)}</small></div><button class="btn play" data-hacc="${esc(d.id)}">Accepter</button><button class="btn" data-hrem="${esc(d.id)}">Refuser</button></div>`).join('')}</div>` : '';
+  const me = String(r.code ?? '').split('#')[0] || 'Toi';
+  $('meName').textContent = me; $('meAv').textContent = me[0]?.toUpperCase() ?? '?'; $('meAv').style.setProperty('--h', hueOf(me));
+  $('meSub').textContent = r.moi?.week ? `${hours(r.moi.week)} de jeu cette semaine${r.moi.top ? ` · ${r.moi.top}` : ''}` : 'Donne ton code à tes potes';
+  $('hRequests').innerHTML = r.demandes.length ? `<div class="freq"><h3 class="fsec">Demandes d’ami <em>${r.demandes.length}</em></h3>${r.demandes.map((d) => `
+    <div class="freqrow">${avatar(d.pseudo, 'sm')}<div class="finfo"><b>${esc(d.pseudo)}</b><small>${esc(d.code)}</small></div><button class="btn play sm" data-hacc="${esc(d.id)}">Accepter</button><button class="btn ghost sm" data-hrem="${esc(d.id)}">Refuser</button></div>`).join('')}</div>` : '';
+  const q = ($('fSearch')?.value ?? '').trim().toLowerCase();
+  const list = r.amis.filter((a) => !q || a.pseudo.toLowerCase().includes(q));
   const playingNow = state.active.size > 0;
-  const joinable = (a) => a.playing && (a.join?.steam || (a.join?.fivem && state.items.some((i) => i.source === 'fivem')) || state.items.some((i) => i.installed && i.name.toLowerCase() === a.playing.toLowerCase()));
-  $('hFriends').innerHTML = r.amis.length ? r.amis.map((a) => `
-    <div class="hfriend ${a.playing ? 'ingame' : a.online ? 'on' : ''}"><span class="dot"></span>
-      <div class="finfo"><b>${esc(a.pseudo)}${a.dnd ? ' <span class="dndb" title="Ne pas déranger">⛔</span>' : ''}${a.bench ? ` <span class="benchb" title="Score de benchmark">🏁 ${a.bench}</span>` : ''}</b>${a.status ? `<small class="fstatus">« ${esc(a.status)} »</small>` : ''}<small>${a.playing ? `Joue à ${esc(a.playing)}${a.since ? ` · depuis ${hours(Math.max(1, (Date.now() - a.since) / 60_000))}` : ''}` : a.online ? 'En ligne' : 'Hors ligne'}${a.week ? ` · ${hours(a.week)} cette semaine` : ''}${unread[a.id] ? ` · <span class="unread">${unread[a.id]} nouveau${unread[a.id] > 1 ? 'x' : ''} message${unread[a.id] > 1 ? 's' : ''}</span>` : ''}</small></div>
-      <div class="factions">
-        ${joinable(a) ? `<button class="btn play sm" data-hjoin="${esc(a.id)}">Rejoindre</button>` : ''}
-        ${a.playing ? `<button class="btn sm" data-hask="${esc(a.id)}" title="Lui demander de jouer ensemble">🎮 On joue ?</button>` : ''}
-        ${playingNow && a.online && !a.playing ? `<button class="btn sm" data-hinv="${esc(a.id)}" title="L’inviter dans ta partie">📨 Inviter</button>` : ''}
-        ${a.online ? `<button class="btn sm" data-hcall="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Appel vocal">📞</button>` : ''}
-        <button class="btn sm" data-hchat="${esc(a.id)}" data-name="${esc(a.pseudo)}">💬 Message</button>
-        <button class="btn ghost sm" data-hrem="${esc(a.id)}" data-name="${esc(a.pseudo)}" title="Retirer">✕</button>
-      </div></div>`).join('') : '<div class="empty">Pas encore d’amis : donne ton code à tes potes, ou ajoute le leur.</div>';
+  const sections = [['🎮 En jeu', list.filter((a) => a.playing)], ['🟢 En ligne', list.filter((a) => a.online && !a.playing)], ['⚫ Hors ligne', list.filter((a) => !a.online)]];
+  const on = r.amis.filter((a) => a.online).length;
+  $('friendsCount').textContent = r.amis.length ? `${on} en ligne · ${r.amis.length} ami${r.amis.length > 1 ? 's' : ''}` : '';
+  $('hFriends').innerHTML = r.amis.length
+    ? (sections.filter(([, l]) => l.length).map(([title, l]) => `<h3 class="fsec">${title} <em>${l.length}</em></h3><div class="fgrid">${l.map((a) => friendCard(a, playingNow)).join('')}</div>`).join('') || `<div class="empty">Aucun ami ne s’appelle « ${esc(q)} ».</div>`)
+    : '<div class="empty fempty"><b>Pas encore d’amis</b>Donne ton code (à droite) à tes potes, ou colle le leur et clique « Ajouter ».</div>';
   renderEvents();
   $('eInvites').innerHTML = r.amis.length ? r.amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}">${esc(a.pseudo)}</label>`).join('') : '<small class="hint">Ajoute d’abord des amis.</small>';
-  const list = games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes);
-  $('eGame').innerHTML = list.map((i) => `<option>${esc(i.name)}</option>`).join('');
+  const games2 = games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes);
+  $('eGame').innerHTML = games2.map((i) => `<option>${esc(i.name)}</option>`).join('');
   if (!$('eAt').value) { const d = new Date(Date.now() + 3_600_000); d.setMinutes(0, 0, 0); $('eAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }
 }
+$('fSearch').addEventListener('input', () => (state.ftab === 'steam' ? renderFriends() : renderHistory()));
+$('fAddBtn').addEventListener('click', () => { if (state.ftab !== 'history') showFriendTab('history'); $('addCode').focus(); $('addCode').closest('.fbox')?.classList.add('flash'); setTimeout(() => $('addCode').closest('.fbox')?.classList.remove('flash'), 900); });
+$('addCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('addFriend').click(); });
+$('myStatus').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('saveStatus').click(); });
 // ---------- Clic droit sur le menu de gauche : onglets, plateformes, collections ----------
 const NAV_FIXED = ['accueil', 'bibliotheque'];
 function applySidebar() {
@@ -463,50 +522,89 @@ async function sideAction(a, k) {
 }
 
 // ---------- Messages entre amis + synchro en direct ----------
+function chatHeader() {
+  if (!chatWith) return;
+  const f = state.hist?.amis?.find((a) => a.id === chatWith.id);
+  $('chatWho').textContent = chatWith.name;
+  $('chatAv').textContent = chatWith.name[0]?.toUpperCase() ?? '?'; $('chatAv').style.setProperty('--h', hueOf(chatWith.name));
+  $('chatAv').className = `pav ${f?.playing ? 'ingame' : f?.online ? 'on' : 'off'}`;
+  $('chatSub').textContent = f?.playing ? `Joue à ${f.playing}` : f?.online ? (f.status ? `En ligne · « ${f.status} »` : 'En ligne') : 'Hors ligne · il verra ton message à sa prochaine connexion';
+  $('chatCall').hidden = !f?.online;
+  $('chatJoin').hidden = !f?.playing;
+}
 async function openChat(id, name) {
   const f = state.hist?.amis?.find((a) => a.id === id);
-  chatWith = { id, name: name ?? f?.pseudo ?? 'Ami' };
+  chatWith = { id, name: name ?? f?.pseudo ?? 'Ami', last: 0 };
   delete unread[id];
-  $('chatWho').textContent = chatWith.name;
+  chatHeader();
   $('chatFil').innerHTML = '<p class="hint">Chargement…</p>';
   if (!$('chatDlg').open) $('chatDlg').showModal();
+  raiseTop();
   $('chatText').focus();
   await refreshChat();
   if (state.hist) renderHistory();
+  updateFriendsBadge();
 }
+const dayOf = (t) => new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 async function refreshChat() {
   if (!chatWith) return;
   const r = await api.chatThread(chatWith.id).catch(() => null);
+  if (!chatWith) return;
   if (!r?.fil) { $('chatFil').innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible de charger la discussion.')}</p>`; return; }
-  $('chatFil').innerHTML = r.fil.length ? r.fil.map((m) => `<div class="cmsg ${m.from === chatWith.id ? 'them' : 'me'}"><span>${esc(m.text)}</span>${m.from === chatWith.id && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}<small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<p class="hint">Pas encore de message : dis bonjour 👋</p>';
+  const last = r.fil.at(-1)?.at ?? 0;
+  if (last === chatWith.last && $('chatFil').children.length) return;
+  chatWith.last = last;
+  let day = '';
+  $('chatFil').innerHTML = r.fil.length ? r.fil.map((m, i) => {
+    const d = dayOf(m.at); const sep = d !== day ? `<div class="cday">${esc(d)}</div>` : ''; day = d;
+    const them = m.from === chatWith.id;
+    const grouped = i > 0 && r.fil[i - 1].from === m.from && m.at - r.fil[i - 1].at < 120_000 && !sep;
+    return `${sep}<div class="cmsg ${them ? 'them' : 'me'} ${grouped ? 'grouped' : ''}"><span>${esc(m.text)}</span>${them && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}<small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
+  }).join('') : `<div class="cempty">${avatar(chatWith.name, 'big')}<b>${esc(chatWith.name)}</b><small>Pas encore de message : dis bonjour 👋</small></div>`;
   $('chatFil').scrollTop = $('chatFil').scrollHeight;
 }
 $('chatForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('chatText').value.trim();
   if (!text || !chatWith) return;
-  $('chatText').value = '';
+  $('chatText').value = ''; $('chatText').style.height = '';
+  // Affiché tout de suite, confirmé par le serveur juste après
+  $('chatFil').querySelector('.cempty')?.remove();
+  $('chatFil').insertAdjacentHTML('beforeend', `<div class="cmsg me sending"><span>${esc(text)}</span><small>envoi…</small></div>`);
+  $('chatFil').scrollTop = $('chatFil').scrollHeight;
   const r = await api.chatSend(chatWith.id, text);
-  if (r?.error) return toast(r.error);
+  if (r?.error) { $('chatFil').querySelector('.sending small').textContent = `⚠ ${r.error}`; return; }
+  chatWith.last = -1;
   refreshChat();
 });
+$('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chatForm').requestSubmit(); } });
+$('chatText').addEventListener('input', (e) => { e.target.style.height = ''; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; });
 $('chatClose').addEventListener('click', () => { $('chatDlg').close(); chatWith = null; });
 $('chatDlg').addEventListener('close', () => { chatWith = null; });
-api.onChatOpen?.((d) => { go('amis'); showFriendTab('history'); setTimeout(() => openChat(d.id), 300); });
-api.onSocial?.((d) => {
-  if ((d.messages ?? []).length && document.hasFocus()) window.sfx?.play('notif');
-  for (const m of d.messages ?? []) { if (chatWith?.id === m.from) refreshChat(); else unread[m.from] = (unread[m.from] ?? 0) + 1; }
-  if (state.hist && !state.hist.error && d.amis) { state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes }; if (state.view === 'amis' && state.ftab === 'history') renderHistory(); }
-  const online = (d.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
+$('chatCall').addEventListener('click', () => chatWith && startCall(chatWith.id, chatWith.name));
+$('chatJoin').addEventListener('click', async () => { if (!chatWith) return; const r = await api.friendJoin(chatWith.id); toast(r?.ok ? 'On rejoint la partie…' : r?.error ?? 'Impossible'); });
+function updateFriendsBadge() {
+  const online = (state.hist?.amis ?? []).filter((a) => a.online).length + (state.friends?.friends ?? []).filter((f) => f.online).length;
   const n = Object.values(unread).reduce((a, b) => a + b, 0);
   $('friendsOnline').textContent = n ? `${n} ✉` : online || '';
+  $('friendsOnline').classList.toggle('hot', n > 0);
+}
+api.onChatOpen?.((d) => { go('amis'); showFriendTab('history'); setTimeout(() => openChat(d.id), 300); });
+api.onSocial?.((d) => {
+  if ((d.messages ?? []).some((m) => chatWith?.id !== m.from) && document.hasFocus()) window.sfx?.play('notif');
+  for (const m of d.messages ?? []) { if (chatWith?.id === m.from) refreshChat(); else unread[m.from] = (unread[m.from] ?? 0) + 1; }
+  if (state.hist && !state.hist.error && d.amis) {
+    state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes, groupes: d.groupes ?? state.hist.groupes };
+    if (state.view === 'amis' && state.ftab === 'history') { renderHistory(); if (d.groupes) renderGroups(d.groupes); }
+  }
+  if (chatWith) chatHeader();
+  updateFriendsBadge();
 });
 // ---------- Appels vocaux (WebRTC pair à pair, micro avec suppression du bruit et de l'écho) ----------
-let callS = null;
 const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 function callUi(state, extra = '') {
-  $('callBar').hidden = !callS;
-  if (!callS) return;
+  if (!callS) { try { $('callBar').hidePopover(); } catch { /* déjà caché */ } return; }
+  if (!$('callBar').matches(':popover-open')) raiseTop();
   $('callWho').textContent = callS.name;
   $('callAv').textContent = callS.name[0]?.toUpperCase() ?? '?';
   $('callBar').classList.toggle('live', state === 'live');
@@ -575,11 +673,35 @@ async function startCall(fid, name) {
   window.sfx?.play('call');
   callSetup(r.id, 'caller', name ?? r.avec ?? 'Ami');
 }
-api.onIncomingCall?.(async (d) => {
-  const r = await api.callAnswer(d.callId, true);
+async function answerCall(callId) {
+  ringStop(callId);
+  api.callRingDone?.(callId, 'answer');
+  const r = await api.callAnswer(callId, true);
   if (r?.error) return toast(r.error);
-  callSetup(d.callId, 'callee', r.avec ?? 'Ami');
+  callSetup(callId, 'callee', r.avec ?? 'Ami');
+}
+api.onIncomingCall?.((d) => answerCall(d.callId));
+// Sonnerie dans la fenêtre : au-dessus de tout (même d'une fenêtre ouverte), jusqu'à la réponse
+function ringStop(callId) {
+  if (!ringing || (callId && ringing.callId !== callId)) return;
+  clearInterval(ringing.timer); clearTimeout(ringing.end);
+  ringing = null;
+  try { $('ringBox').hidePopover(); } catch { /* déjà caché */ }
+}
+api.onCallRinging?.((d) => {
+  if (callS || ringing?.callId === d.callId) return;
+  ringStop();
+  const name = d.pseudo ?? state.hist?.amis?.find((a) => a.id === d.from)?.pseudo ?? 'Un ami';
+  $('ringWho').textContent = name;
+  $('ringAv').textContent = name[0]?.toUpperCase() ?? '?'; $('ringAv').style.setProperty('--h', hueOf(name));
+  ringing = { callId: d.callId, timer: setInterval(() => window.sfx?.play('call'), 2600), end: setTimeout(() => ringStop(d.callId), 45_000) };
+  window.sfx?.play('call');
+  raiseTop();
 });
+api.onCallRingStop?.((d) => ringStop(d.callId));
+$('ringYes').addEventListener('click', () => ringing && answerCall(ringing.callId));
+$('ringNo').addEventListener('click', () => { if (!ringing) return; const id = ringing.callId; ringStop(id); api.callRingDone?.(id, 'hangup'); api.callAnswer(id, false); });
+api.onCallStart?.((d) => { const f = state.hist?.amis?.find((a) => a.id === d.id); startCall(d.id, f?.pseudo); });
 $('callHang').addEventListener('click', () => callEnd('Tu as raccroché'));
 $('callMute').addEventListener('click', () => {
   if (!callS) return;
@@ -629,6 +751,83 @@ $('eCreate').addEventListener('click', async () => {
 $('friendsRefresh').addEventListener('click', () => (state.ftab === 'history' ? loadHistory() : loadFriends(true)).then(() => toast('Amis actualisés')));
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'history') loadHistory(); }, 60_000);
 setInterval(() => { if (state.view === 'amis' && state.ftab === 'steam') loadFriends(); }, 60_000);
+
+// ---------- Centre de notifications : l'appli et les amis, avec les actions qui restent possibles ----------
+const nc = { tab: 'tout', list: [], unread: 0 };
+function sinceTxt(t) {
+  const m = (Date.now() - t) / 60_000;
+  if (m < 1) return 'à l’instant';
+  if (m < 60) return `il y a ${Math.round(m)} min`;
+  if (m < 6 * 60) return `il y a ${Math.round(m / 60)} h`;
+  const d = new Date(t);
+  const hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? `aujourd’hui ${hm}` : `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${hm}`;
+}
+function bellCount(n) {
+  nc.unread = n;
+  $('bellCount').textContent = n ? (n > 99 ? '99+' : String(n)) : '';
+  $('bellBtn').classList.toggle('has', n > 0);
+}
+async function loadNotifs() {
+  const r = await api.notifs?.().catch(() => null);
+  if (!r) return;
+  nc.list = r.list; bellCount(r.unread);
+  if ($('notifCenter').matches(':popover-open')) renderNotifs();
+}
+function notifActions(e) {
+  const age = Date.now() - e.at;
+  const b = (a, label, cls = '') => `<button class="btn sm ${cls}" data-nact="${a}" data-nid="${esc(e.id)}">${label}</button>`;
+  if (e.done && !['msg', 'group', 'missed', 'app'].includes(e.kind)) return `<small class="ncdone">${{ accept: '✓ Accepté', decline: 'Refusé', answer: '✓ Décroché', hangup: 'Refusé', join: '✓ Rejoint', saveget: '✓ Reçue' }[e.done] ?? '✓ Fait'}</small>`;
+  if (e.kind === 'msg' || e.kind === 'group') return `${b('reply', '💬 Répondre', 'play')}${e.join ? b('join', '▶ Rejoindre') : ''}`;
+  if ((e.kind === 'ask' || e.kind === 'invite') && age < 15 * 60_000) return `${b('accept', e.kind === 'invite' ? '▶ Rejoindre' : '✓ Accepter', 'play')}${b('decline', 'Refuser', 'ghost')}`;
+  if (e.kind === 'reply' && e.join && age < 30 * 60_000) return b('join', '▶ Rejoindre', 'play');
+  if (e.kind === 'playing' && age < 30 * 60_000) return `${e.join ? b('join', '▶ Rejoindre', 'play') : ''}${b('ask', '🎮 On joue ?')}`;
+  if (e.kind === 'call' && age < 45_000) return `${b('answer', '📞 Décrocher', 'play')}${b('hangup', 'Refuser', 'ghost')}`;
+  if (e.kind === 'missed' && e.from) return b('callback', '📞 Rappeler', 'play');
+  if (e.kind === 'share' && age < 86_400_000) return b('saveget', '💾 Recevoir', 'play');
+  if (e.file) return `${b('play', 'Ouvrir')}${b('folder', 'Dossier', 'ghost')}`;
+  return '';
+}
+function renderNotifs() {
+  const list = nc.list.filter((e) => nc.tab === 'tout' || e.cat === nc.tab);
+  document.querySelectorAll('#ncTabs [data-nc]').forEach((x) => x.classList.toggle('on', x.dataset.nc === nc.tab));
+  if (!list.length) { $('ncList').innerHTML = `<div class="ncempty"><span>🔔</span><b>Rien pour l’instant</b><small>${nc.tab === 'amis' ? 'Messages, appels et invitations de tes amis arrivent ici.' : 'Tes notifications s’afficheront ici.'}</small></div>`; return; }
+  const today = new Date().toDateString(); const yest = new Date(Date.now() - 86_400_000).toDateString();
+  let head = '';
+  $('ncList').innerHTML = list.map((e) => {
+    const d = new Date(e.at).toDateString();
+    const h = d === today ? 'Aujourd’hui' : d === yest ? 'Hier' : 'Plus ancien';
+    const sep = h !== head ? `<div class="ncday">${h}</div>` : ''; head = h;
+    return `${sep}<div class="ncitem ${e.read ? '' : 'unread'} ${e.cat}" data-nopen="${esc(e.id)}">
+      <span class="ncicon">${esc(e.icon)}</span>
+      <div class="ncbody"><b>${esc(e.title)}</b>${e.body ? `<p>${esc(e.body)}</p>` : ''}<div class="ncfoot"><small>${esc(sinceTxt(e.at))}</small><div class="ncacts">${notifActions(e)}</div></div></div>
+    </div>`;
+  }).join('');
+}
+$('notifCenter').addEventListener('toggle', (e) => { if (e.newState === 'open') { renderNotifs(); loadNotifs(); } else if (nc.unread) api.notifsRead?.().then((r) => { bellCount(r?.unread ?? 0); nc.list.forEach((x) => { x.read = true; }); }); });
+$('ncTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-nc]'); if (t) { nc.tab = t.dataset.nc; renderNotifs(); } });
+$('ncRead').addEventListener('click', async () => { const r = await api.notifsRead?.(); nc.list.forEach((x) => { x.read = true; }); bellCount(r?.unread ?? 0); renderNotifs(); });
+$('ncClear').addEventListener('click', async () => { const r = await api.notifsClear?.(nc.tab === 'tout' ? null : nc.tab); if (r) { nc.list = r.list; bellCount(r.unread); renderNotifs(); } });
+$('ncList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-nact]');
+  if (b) {
+    const entry = nc.list.find((x) => x.id === b.dataset.nid);
+    b.disabled = true;
+    if (b.dataset.nact === 'reply' && entry?.from) { $('notifCenter').hidePopover(); go('amis'); showFriendTab('history'); setTimeout(() => openChat(entry.from), 200); api.notifsRead?.(entry.id); return; }
+    const r = await api.notifsAct?.(b.dataset.nid, b.dataset.nact);
+    if (r?.call) { $('notifCenter').hidePopover(); startCall(r.call, state.hist?.amis?.find((a) => a.id === r.call)?.pseudo); }
+    if (entry) { entry.read = true; entry.done = b.dataset.nact; }
+    return renderNotifs();
+  }
+  const item = e.target.closest('[data-nopen]');
+  if (item) { const entry = nc.list.find((x) => x.id === item.dataset.nopen); if (entry && !entry.read) { entry.read = true; item.classList.remove('unread'); const r = await api.notifsRead?.(entry.id); bellCount(r?.unread ?? 0); } }
+});
+api.onNotifs?.((d) => {
+  if (typeof d?.unread === 'number') bellCount(d.unread);
+  if (d?.entry) { nc.list = [d.entry, ...nc.list.filter((x) => x.id !== d.entry.id)].slice(0, 150); $('bellBtn').classList.remove('ring'); void $('bellBtn').offsetWidth; $('bellBtn').classList.add('ring'); }
+  if ($('notifCenter').matches(':popover-open')) (d?.entry ? renderNotifs() : loadNotifs());
+});
+loadNotifs();
 
 // ---------- Résumé de la semaine ----------
 function showRecap(r) {
@@ -733,6 +932,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.21.0': [
+    ['👥', 'Page Amis refaite', 'Cartes d’amis claires (en jeu, en ligne, hors ligne), recherche, ton profil et ton code à droite, groupes avec les avatars des membres : plus rien ne déborde ni ne passe sous les fenêtres.', ['[data-view=amis]']],
+    ['🔔', 'Centre de notifications', 'La cloche en haut à droite garde tes dernières notifications (amis et appli) : répondre, rejoindre, rappeler un appel manqué, recevoir une sauvegarde… directement depuis la liste.', ['[data-view=amis]', '#bellBtn', 'wait900']],
+    ['⚡', 'Messages et appels instantanés', 'Les messages, invitations et appels arrivent tout de suite (plus 15 s d’attente). Un appel sonne toujours, même notifications coupées ou en partie, et un appel raté reste dans le centre.'],
+    ['💬', 'Discussion plus agréable', 'Statut de ton ami en direct, bouton Appeler / Rejoindre, Entrée pour envoyer, messages regroupés par jour.'],
+  ],
   '0.20.1': [
     ['↩', 'Correctif FiveM et jeux qui buggent', 'Les réglages qui pouvaient faire saccader ou planter certains jeux (planification GPU forcée, bridage réseau, applis en arrière-plan) sont retirés. Optimisation › « Remettre Windows comme avant » remet tout comme avant ta première optimisation.', ['[data-view=optimisation]']],
     ['🎮', 'Rien par-dessus tes parties', 'Pendant un jeu, les notifications d’amis attendent la fin de la partie (plus de fenêtre qui fait clignoter FiveM en plein écran), et le launcher mesure le PC plus légèrement.'],
@@ -2723,7 +2928,18 @@ function demoApi() {
     timeToBeat: async () => ({ main: 31.5, extra: 48, complete: 82 }),
     achievements: async () => ({ done: 45, total: 77, easy: [{ name: 'Bienvenue à Los Santos', desc: 'Termine la première mission', pct: 81.2, icon: null }, { name: 'Un peu de sport', desc: 'Joue au tennis', pct: 34.8, icon: null }], recent: [{ name: 'Braquage réussi', desc: 'Termine un braquage', done: true, pct: 22.1, icon: null }] }),
     captures: async () => [{ token: 'a', url: img('h1.jpg'), video: false }, { token: 'b', url: img('h2.jpg'), video: false }, { token: 'c', video: true }],
-    hFriends: async () => ({ code: 'Noam#3F9A2C', moi: { week: 610, top: 'Rocket League' }, demandes: [{ id: 'z', pseudo: 'Zoé', code: 'Zoé#11AA22' }], amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Rocket League', week: 840, top: 'Rocket League' }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT' }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }] }),
+    hFriends: async () => ({ code: 'Noam#3F9A2C', moi: { week: 610, top: 'Rocket League' }, demandes: [{ id: 'z', pseudo: 'Zoé', code: 'Zoé#11AA22' }],
+      amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Grand Theft Auto V Enhanced — serveur FiveM RP très long', since: Date.now() - 42 * 60_000, week: 840, top: 'FiveM', status: 'Soirée RP 🚓 on recrute des flics motivés ce soir', bench: 1420, join: { fivem: 'abc123' } }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT', status: 'Dispo pour jouer' }, { id: 'k', pseudo: 'UnPseudoVraimentTrèsLongPourTester', online: true, playing: 'Rocket League', since: Date.now() - 5 * 60_000, week: 120, dnd: true, bench: 980 }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }],
+      groupes: [{ id: 'g1', name: 'Squad RL — les meilleurs du serveur', owner: true, members: [{ id: 'me', pseudo: 'Noam', online: true }, { id: 'm', pseudo: 'Max', online: true, playing: 'FiveM' }, { id: 'l', pseudo: 'Léa', online: true }, { id: 's', pseudo: 'Sam', online: false }, { id: 'a', pseudo: 'Alex', online: false }, { id: 'b', pseudo: 'Bob', online: true }, { id: 'c', pseudo: 'Chloé', online: false }, { id: 'd', pseudo: 'Dan', online: false }] }] }),
+    notifs: async () => ({ unread: 3, list: [
+      { id: 'n1', at: Date.now() - 60_000, kind: 'msg', cat: 'amis', icon: '💬', title: 'Max', body: 'T’es chaud pour une partie ce soir ? On lance le serveur RP vers 21 h', from: 'm', read: false },
+      { id: 'n2', at: Date.now() - 4 * 60_000, kind: 'missed', cat: 'amis', icon: '📵', title: 'Appel manqué de Léa', body: 'Clique pour le rappeler.', from: 'l', read: false },
+      { id: 'n3', at: Date.now() - 9 * 60_000, kind: 'invite', cat: 'amis', icon: '📨', title: 'Max t’invite', body: 'Rejoins sa partie de FiveM !', from: 'm', read: false },
+      { id: 'n4', at: Date.now() - 3 * 3_600_000, kind: 'app', cat: 'appli', icon: '🔔', title: 'History Launcher v0.21.0 disponible', body: 'Clique pour mettre à jour maintenant (moins d’une minute).', read: true },
+      { id: 'n5', at: Date.now() - 30 * 3_600_000, kind: 'share', cat: 'amis', icon: '💾', title: 'Sam t’envoie une sauvegarde', body: 'Minecraft · Monde survie (412 Ko)', read: true, done: 'saveget' }] }),
+    chatSend: async () => ({ ok: true }), friendJoin: async () => ({ ok: true }), callStart: async () => ({ error: 'Aperçu : pas d’appel' }),
+    notifsRead: async () => ({ unread: 0 }), notifsClear: async () => ({ list: [], unread: 0 }), notifsAct: async () => ({ ok: true }),
+    chatThread: async () => ({ fil: [{ from: 'm', text: 'Yo ! T’es là ?', at: Date.now() - 3_600_000 }, { from: 'm', text: 'On lance le serveur RP vers 21 h', at: Date.now() - 3_590_000 }, { from: 'me', text: 'Grave, j’arrive dans 10 min', at: Date.now() - 3_500_000 }] }),
     events: async () => ({ soirees: [{ id: 'e1', game: 'Rocket League', at: Date.now() + 5 * 3_600_000, mine: true, organisateur: 'Noam', ma: 'oui', invites: [{ pseudo: 'Max', reponse: 'oui' }, { pseudo: 'Léa', reponse: null }] }, { id: 'e2', game: 'VALORANT', at: Date.now() + 26 * 3_600_000, mine: false, organisateur: 'Léa', ma: null, invites: [{ pseudo: 'Noam', reponse: null }] }] }),
     pc: async () => ({ cpu: { usage: 37, temp: null, name: 'AMD Ryzen 7 5800X' }, ram: { used: 11.2e9, total: 32e9 }, gpu: { name: 'NVIDIA GeForce RTX 3070', usage: 92, temp: 71, vramUsed: 6200, vramTotal: 8192 } }),
     boost: async () => ({ enabled: true, power: true, restore: true, heatAlerts: true, close: ['chrome'], apps: [{ id: 'chrome', label: 'Google Chrome' }, { id: 'edge', label: 'Microsoft Edge' }, { id: 'onedrive', label: 'OneDrive' }, { id: 'office', label: 'Word / Excel / PowerPoint' }] }),
@@ -2734,7 +2950,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.20.1',
+    version: async () => '0.21.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

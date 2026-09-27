@@ -428,7 +428,10 @@ const boostSettings = () => ({ enabled: false, power: true, close: [], restore: 
 // Mode streamer : pas de notifications Windows ni de cartes d'amis (pseudos, messages) pendant un live
 let obsRunning = false;
 const streaming = () => Boolean(store.data.settings.streamer || (store.data.settings.streamerAuto !== false && obsRunning));
-class Notif extends Notification { show() { if (!streaming()) super.show(); } }
+class Notif extends Notification {
+  constructor(o) { super(o); this.o = o; }
+  show() { logNotif({ kind: 'app', icon: '🔔', title: this.o?.title, body: this.o?.body }); if (!streaming()) super.show(); }
+}
 function notify(title, body) {
   if (Notification.isSupported()) new Notif({ title, body, icon: ICON, silent: true }).show();
 }
@@ -1497,8 +1500,25 @@ function dropCard(id) {
 }
 function armCard(c) {
   clearTimeout(notifTimers.get(c.id));
-  notifTimers.set(c.id, setTimeout(() => (notifHover ? armCard({ ...c, ttl: 3000 }) : dropCard(c.id)), c.ttl ?? 10_000));
+  notifTimers.set(c.id, setTimeout(() => {
+    if (notifHover) return armCard({ ...c, ttl: 3000 });
+    if (c.kind === 'call') missedCall(c.id);
+    dropCard(c.id);
+  }, c.ttl ?? 10_000));
 }
+/** Appel pas décroché : il reste dans le centre de notifications comme « appel manqué » (rappeler en un clic). */
+function missedCall(id) {
+  const e = (store.data.notifLog ?? []).find((x) => x.id === id);
+  if (!e || e.done) return;
+  Object.assign(e, { kind: 'missed', icon: '📵', title: e.title.replace(/ t’appelle$/, '').replace(/^/, 'Appel manqué de '), body: 'Clique pour le rappeler.', read: false });
+  store.save();
+  send('notifs:changed', { unread: store.data.notifLog.filter((x) => !x.read).length });
+  send('call:ringStop', { callId: e.callId });
+}
+// L'appel a été pris (ou refusé) dans la fenêtre : la carte en bas à gauche disparaît
+ipcMain.on('call:ringDone', (_e, callId, action) => {
+  for (const c of notifCards.filter((x) => x.kind === 'call' && x.callId === String(callId))) { markNotif(c.id, action === 'answer' ? 'answer' : 'hangup'); dropCard(c.id); }
+});
 // Pendant une partie, aucune fenêtre ne s'affiche par-dessus le jeu (en plein écran, ça peut le faire saccader,
 // clignoter ou passer en fenêtré) : les cartes attendent la fin de la partie, sauf les appels
 let heldCards = [];
@@ -1508,6 +1528,9 @@ function flushHeld() {
 }
 function pushCard(c, force = false) {
   if (!c || notifCards.some((x) => x.id === c.id)) return;
+  if (!c.logged && !c.nolog) { logNotif(c); c = { ...c, logged: true }; }
+  // Un appel sonne toujours (même notifications d'amis coupées, en partie ou en live)
+  if (c.kind === 'call') force = true;
   if (currentSession() && c.kind !== 'call' && store.data.settings.gamePopups !== true) { if (!heldCards.some((x) => x.c.id === c.id)) heldCards = [...heldCards, { c, force }].slice(-20); return; }
   if (!force && (store.data.settings.friendNotifs === false || store.data.settings.dnd || store.data.settings.tournament || gameDnd() || streaming())) return;
   if (force) c = { ...c, force: true };
@@ -1520,22 +1543,28 @@ ipcMain.on('notif:act', async (_e, id, action) => {
   const c = notifCards.find((x) => x.id === id);
   if (!c) return;
   dropCard(id);
+  await cardAction(c, action);
+});
+async function cardAction(c, action) {
   if (action === 'close') return;
+  markNotif(c.id, action);
   if (c.file) { if (action === 'discord') { await clipToDiscord(c.file); return; } if (action === 'play') shell.openPath(c.file); else shell.showItemInFolder(c.file); return; }
   if (c.kind === 'share') { if (action === 'saveget') await receiveShare(c.share); return; }
   if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
   if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }
   if (action === 'join') { await joinGame(c.join, c.game); return; }
   if (c.kind === 'call') {
+    send('call:ringStop', { callId: c.callId });
     if (action === 'answer') { showWindow(); send('call:incoming', { callId: c.callId, from: c.from }); }
     else social('/api/compte/appel/repondre', { call: c.callId, oui: false }).catch(() => {});
     return;
   }
+  if (action === 'callback') { showWindow(); send('call:start', { id: c.from }); return; }
   if (action === 'accept' || action === 'decline') {
     const r = await social('/api/compte/inviter/repondre', { id: c.id, oui: action === 'accept' });
     if (action === 'accept' && c.kind === 'invite') await joinGame(r.join, c.game);
   }
-});
+}
 
 // ---------- Captures (Ctrl+Alt+S) et replay des 30 dernières secondes (Ctrl+Alt+R, à activer) ----------
 async function saveCapture(buf, ext) {
@@ -1602,28 +1631,43 @@ async function joinGame(join, game) {
   return null;
 }
 
-// Synchro toutes les 15 s : boîte de réception + qui vient de lancer un jeu (la liste d'amis se met à jour en direct)
+// Synchro en direct : la boîte de réception reste « en attente » sur le serveur (jusqu'à 25 s) et répond dès
+// qu'un message, un appel ou une invitation arrive. La liste d'amis se met à jour au passage.
 let socialPrev = null;
 let socialLive = null;
-async function socialTick() {
-  if (process.env.LAUNCHER_DEMO) { const r = demoFriends(); socialLive = r; send('social:live', { ...r, messages: [] }); return; }
+async function socialTick(wait = 0) {
+  if (process.env.LAUNCHER_DEMO) { const r = demoFriends(); socialLive = r; send('social:live', { ...r, messages: [] }); return true; }
   const token = secret('account');
-  if (!token) { socialPrev = null; return; }
+  if (!token) { socialPrev = null; return false; }
   const after = store.data.inboxAt ?? Date.now() - 60_000;
-  const r = await api(`/api/compte/boite?apres=${after}`, { token }).catch(() => null);
-  if (!r || r.status !== 200) return;
-  store.data.inboxAt = r.now ?? Date.now();
+  const r = await api(`/api/compte/boite?apres=${after}${wait ? `&attente=${wait}` : ''}`, { token, timeout: (wait + 15) * 1000 }).catch(() => null);
+  if (!r || r.status !== 200) return false;
+  store.data.inboxAt = Math.max(after, Number(r.now) || 0, ...(r.items ?? []).map((x) => x.at));
   socialLive = r;
   for (const x of r.items ?? []) {
     if (x.type === 'share') { store.data.sharesIn = [...(store.data.sharesIn ?? []).filter((y) => Date.now() - y.at < 86_400_000), { id: x.share, from: x.pseudo, game: x.game, name: x.text, size: x.size, at: x.at }].slice(-20); store.save(); pushCard(cardFor(x), true); continue; }
+    if (x.type === 'call') { if (Date.now() - x.at < 60_000) { pushCard(cardFor(x), true); send('call:ringing', { callId: x.callId, from: x.from, pseudo: x.pseudo }); } else logNotif({ ...cardFor(x), kind: 'missed', icon: '📵', title: `Appel manqué de ${x.pseudo ?? 'un ami'}`, body: 'Clique pour le rappeler.', at: x.at }); continue; }
     pushCard(cardFor(x));
   }
   for (const f of newlyPlaying(socialPrev, r.amis)) pushCard(playingCard(f, canJoin(f, items)));
   socialPrev = playingMap(r.amis);
-  if ((r.items ?? []).length || socialPrev) send('social:live', { amis: r.amis, demandes: r.demandes, code: r.code, moi: r.moi, messages: (r.items ?? []).filter((x) => x.type === 'msg') });
+  send('social:live', { amis: r.amis, demandes: r.demandes, code: r.code, moi: r.moi, groupes: r.groupes, messages: (r.items ?? []).filter((x) => x.type === 'msg'), items: r.items ?? [] });
+  return true;
 }
-setInterval(() => socialTick().catch(() => {}), 15_000);
-setTimeout(() => socialTick().catch(() => {}), 5_000);
+let socialLoopOn = false;
+async function socialLoop() {
+  if (socialLoopOn) return;
+  socialLoopOn = true;
+  for (;;) {
+    const t0 = Date.now();
+    const ok = await socialTick(process.env.LAUNCHER_DEMO ? 0 : 25).catch(() => false);
+    // Réponse trop rapide (ancien serveur, erreur, pas connecté) : petite pause pour ne pas boucler à vide
+    const spent = Date.now() - t0;
+    await new Promise((r) => setTimeout(r, ok ? (spent < 1500 ? 2500 : 150) : 6000));
+  }
+}
+setTimeout(() => socialLoop(), 3000);
+ipcMain.handle('social:now', () => socialTick(0).catch(() => false));
 
 const FID = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
 // Appels vocaux : le launcher relaie les signaux (le son passe directement entre les deux PC)
@@ -2058,10 +2102,10 @@ ipcMain.handle('voice:transcribe', async (_e, audio, mime) => {
 
 // ---------- Compte History (hébergé par le bot) ----------
 const API = (process.env.HL_API || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
-async function api(pathname, { method = 'GET', body, token } = {}) {
+async function api(pathname, { method = 'GET', body, token, timeout = 20_000 } = {}) {
   const res = await fetch(`${API}${pathname}`, {
     method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20_000),
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout),
   });
   const data = await res.json().catch(() => ({}));
   return { status: res.status, ...data };
@@ -2654,7 +2698,7 @@ async function clipToDiscord(file, note = '') {
   const ext = path.extname(file).slice(1).toLowerCase().replace('jpeg', 'jpg');
   if (!['png', 'jpg', 'webm', 'mp4'].includes(ext)) return { ok: false, error: 'Format non pris en charge (images PNG/JPG, vidéos WEBM/MP4).' };
   if (((await stat(file).catch(() => null))?.size ?? 0) > 60 * 1024 * 1024) return { ok: false, error: 'Fichier trop gros (60 Mo maximum).' };
-  pushCard({ id: `disc-${Date.now()}`, icon: '📤', title: 'Envoi sur Discord…', body: path.basename(file), actions: [], ttl: 5000 }, true);
+  pushCard({ id: `disc-${Date.now()}`, icon: '📤', title: 'Envoi sur Discord…', body: path.basename(file), actions: [], ttl: 5000, nolog: true }, true);
   const game = currentSession()?.name ?? path.basename(path.dirname(file));
   const q = new URLSearchParams({ type: ext, jeu: String(game ?? '').slice(0, 80), ...(note ? { texte: String(note).slice(0, 200) } : {}) });
   const r = await apiRaw(`/api/compte/discord/clip?${q}`, await readFile(file));
@@ -2783,3 +2827,48 @@ setTimeout(async () => {
 }, 40_000);
 
 app.whenReady().then(start).catch(async (err) => { await fatal(err); app.exit(1); });
+
+// =====================================================================================================
+// Centre de notifications : les 150 dernières notifications de l'appli et des amis, lues ou non
+// =====================================================================================================
+const NOTIF_KINDS_FRIENDS = ['msg', 'ask', 'invite', 'group', 'call', 'missed', 'reply', 'playing', 'share'];
+function logNotif(c) {
+  if (!c?.title) return;
+  const list = (store.data.notifLog ??= []);
+  const id = String(c.id ?? `n-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+  if (list.some((x) => x.id === id)) return;
+  const kind = c.kind ?? 'app';
+  const e = {
+    id, at: c.at ?? Date.now(), kind, cat: NOTIF_KINDS_FRIENDS.includes(kind) ? 'amis' : 'appli', icon: c.icon ?? '🔔', title: String(c.title).slice(0, 120), body: String(c.body ?? '').slice(0, 300),
+    from: c.from ?? null, game: c.game ?? null, join: c.join ?? null, callId: c.callId ?? null, share: c.share ?? null, file: c.file ?? null, read: false, done: null,
+  };
+  store.data.notifLog = [e, ...list].slice(0, 150);
+  store.save();
+  send('notifs:new', { entry: e, unread: store.data.notifLog.filter((x) => !x.read).length });
+}
+function markNotif(id, action) {
+  const e = (store.data.notifLog ?? []).find((x) => x.id === id);
+  if (!e) return;
+  e.read = true; e.done = action ?? e.done;
+  store.save();
+  send('notifs:changed', { unread: store.data.notifLog.filter((x) => !x.read).length });
+}
+ipcMain.handle('notifs:get', () => ({ list: store.data.notifLog ?? [], unread: (store.data.notifLog ?? []).filter((x) => !x.read).length }));
+ipcMain.handle('notifs:read', (_e, id) => {
+  for (const x of store.data.notifLog ?? []) if (!id || x.id === id) x.read = true;
+  store.save();
+  return { unread: (store.data.notifLog ?? []).filter((x) => !x.read).length };
+});
+ipcMain.handle('notifs:clear', (_e, cat) => {
+  store.data.notifLog = cat ? (store.data.notifLog ?? []).filter((x) => x.cat !== cat) : [];
+  store.save();
+  return { list: store.data.notifLog, unread: store.data.notifLog.filter((x) => !x.read).length };
+});
+// Action depuis le centre (mêmes actions que les cartes en bas à gauche)
+ipcMain.handle('notifs:act', async (_e, id, action) => {
+  const e = (store.data.notifLog ?? []).find((x) => x.id === String(id));
+  if (!e) return { ok: false };
+  if (e.kind === 'missed' && action === 'callback') { markNotif(e.id, action); return { ok: true, call: e.from }; }
+  await cardAction({ ...e, kind: e.kind === 'missed' ? 'msg' : e.kind }, String(action));
+  return { ok: true };
+});

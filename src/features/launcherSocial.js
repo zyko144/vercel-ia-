@@ -38,9 +38,32 @@ export function cleanJoin(j) {
   if (/^[a-z0-9]{4,10}$/.test(f) || /^\d{1,3}(\.\d{1,3}){3}:\d{2,5}$/.test(f)) return { fivem: f };
   return null;
 }
+// Boîte en « attente longue » : le launcher garde une requête ouverte (jusqu'à 25 s) et reçoit messages,
+// appels et invitations dès qu'ils arrivent, au lieu d'attendre la prochaine vérification
+const waiters = new Map(); // id compte -> Set(fonctions de réveil)
+function wake(id) {
+  const set = waiters.get(id);
+  if (!set) return;
+  waiters.delete(id);
+  for (const fn of set) fn();
+}
+function waitInbox(id, ms, req) {
+  return new Promise((resolve) => {
+    const set = waiters.get(id) ?? new Set();
+    const done = () => { clearTimeout(timer); set.delete(done); resolve(); };
+    const timer = setTimeout(done, ms);
+    set.add(done);
+    waiters.set(id, set);
+    req.once?.('close', done);
+  });
+}
 function pushInbox(d, to, item) {
   const now = Date.now();
-  d.inbox[to] = [...listOf(d.inbox, to), { id: randomUUID(), at: now, ...item }].filter((x) => now - x.at < INBOX_TTL).slice(-MAX_INBOX);
+  // Horodatage strictement croissant : deux éléments de la même milliseconde ne se perdent pas avec « apres »
+  const last = listOf(d.inbox, to).at(-1)?.at ?? 0;
+  const at = Math.max(now, last + 1);
+  d.inbox[to] = [...listOf(d.inbox, to), { id: randomUUID(), at, ...item }].filter((x) => now - x.at < INBOX_TTL).slice(-MAX_INBOX);
+  setImmediate(() => wake(to));
 }
 
 function view(d, accs, id) {
@@ -205,9 +228,18 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
   // Boîte de réception (messages, « on joue ? », invitations) + amis, en un seul appel (interrogé toutes les ~15 s)
   if (route === 'GET /api/compte/boite') {
     const after = Number(url.searchParams.get('apres')) || 0;
+    const wait = Math.max(0, Math.min(25, Number(url.searchParams.get('attente')) || 0)) * 1000;
     if (d.presence[id]) d.presence[id].seen = Date.now();
-    const items = listOf(d.inbox, id).filter((x) => x.at > after).map((x) => ({ ...x, pseudo: accs[x.from]?.pseudo ?? '?' }));
-    return done(200, { items, now: Date.now(), ...view(d, accs, id) });
+    const fresh = () => listOf(d.inbox, id).filter((x) => x.at > after);
+    if (wait && !fresh().length) {
+      await waitInbox(id, wait, req);
+      if (d.presence[id]) d.presence[id].seen = Date.now();
+    }
+    const names = wait ? await accounts() : accs;
+    const items = fresh().map((x) => ({ ...x, pseudo: names[x.from]?.pseudo ?? '?' }));
+    // « now » = dernier élément vu (et pas l'heure du serveur) : rien ne peut passer entre deux attentes
+    const now = Math.max(after, ...items.map((x) => x.at));
+    return done(200, { items, now, ...view(d, accs, id) });
   }
 
   const friendOf = (fid) => listOf(d.friends, id).includes(fid) && accs[fid];
