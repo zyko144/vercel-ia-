@@ -27,9 +27,20 @@ export function parseNvidiaSmi(text) {
   return { name, temp: n(temp), usage: n(util), vramUsed: n(used), vramTotal: n(total) };
 }
 
+// Pendant une partie : pas de requête WMI de température (elle peut provoquer des micro-saccades sur certains PC)
+// et la carte graphique n'est lue qu'une fois toutes les 15 s
+let quiet = false;
+export function setQuiet(on) { quiet = Boolean(on); }
+let lastGpu = { at: 0, value: null };
 let gpuMode = null; // 'nvidia' | 'counters' | 'none'
 async function gpuInfo() {
   if (process.platform !== 'win32') return null;
+  if (quiet && Date.now() - lastGpu.at < 15_000) return lastGpu.value;
+  const value = await gpuRead();
+  lastGpu = { at: Date.now(), value };
+  return value;
+}
+async function gpuRead() {
   if (gpuMode !== 'counters' && gpuMode !== 'none') {
     const r = await run('nvidia-smi', ['--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'], { windowsHide: true, timeout: 5000 }).catch(() => null);
     const g = parseNvidiaSmi(r?.stdout);
@@ -50,7 +61,7 @@ async function gpuInfo() {
 let cpuTempTried = 0;
 let cpuTempOk = true;
 async function cpuTemp() {
-  if (process.platform !== 'win32' || !cpuTempOk) return null;
+  if (process.platform !== 'win32' || !cpuTempOk || quiet) return null;
   const ps = "(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | Select-Object -First 1).CurrentTemperature";
   const k = Number(String(await psHost(ps, 6000).catch(() => '')).trim());
   if (!k) { if (++cpuTempTried >= 2) cpuTempOk = false; return null; }

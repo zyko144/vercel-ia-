@@ -171,6 +171,7 @@ contextBridge.exposeInMainWorld('launcher', {
   groupCreate: (nom, membres) => ipcRenderer.invoke('groups:create', nom, membres),
   groupNotify: (id, text) => ipcRenderer.invoke('groups:notify', id, text),
   groupParty: (id, text) => ipcRenderer.invoke('groups:party', id, text),
+  optiReset: () => ipcRenderer.invoke('opti:reset'),
   streamer: () => ipcRenderer.invoke('streamer:get'),
   onStreamer: (fn) => ipcRenderer.on('streamer:state', (_e, on) => fn(on)),
   groupLeave: (id) => ipcRenderer.invoke('groups:leave', id),

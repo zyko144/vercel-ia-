@@ -16,6 +16,9 @@ description: Règles pour toute fonction d'analyse, d'optimisation, de nettoyage
 - Réglages HKCU : `GAME_TWEAKS` (sans droits admin). Réglages HKLM / powercfg : `SYSTEM_TWEAKS` appliqués en un seul script administrateur **précédé d'un point de restauration** (`Checkpoint-Computer`).
 - Scripts administrateur : construits uniquement à partir de nos tables (jamais de texte venant de l'interface), passés en `-EncodedCommand` via `Start-Process -Verb RunAs`. Les identifiants externes (mises à jour Windows) sont validés par regex (GUID) avant d'entrer dans un script.
 - Réglages à éviter (inefficaces ou risqués) : désactiver Windows Defender, désactiver les mises à jour, supprimer des services système, `bcdedit` exotiques, « nettoyeurs de registre », désactivation de SysMain / Nagle présentée comme un gain garanti.
+- Retirés en 0.20.1 (ont fait bugger FiveM / GTA V chez des joueurs) : HAGS forcée (`HwSchMode`), `NetworkThrottlingIndex` / `SystemResponsiveness` (MMCSS), applis en arrière-plan coupées (`GlobalUserDisabled`), `VisualFXSetting`. Ils restent dans les tables avec `retired` (pour les remettre), ne sont plus proposés, et « Remettre Windows comme avant » (`resetPlan`, photo `settingsOriginal`) les rend à Windows.
+- Ne jamais vider les caches de shaders automatiquement (D3DSCache, NVIDIA/AMD DXCache…) : les jeux saccadent le temps de les recréer. Manuellement : décochés par défaut.
+- Pendant une partie : aucune fenêtre par-dessus le jeu (cartes gardées pour la fin), pas de requête WMI de température, mesures espacées (`setQuiet`).
 - Portables : ne pas proposer « Performances optimales » ni la désactivation de la veille prolongée sans le signaler.
 
 ## Outils Windows fiables (indépendants de la langue)

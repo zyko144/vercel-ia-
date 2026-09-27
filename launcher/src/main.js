@@ -11,9 +11,9 @@ import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend, createRemo
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
-import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, snapshot } from './core/monitor.js';
+import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
-import { applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
+import { applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
 import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from './core/deepscan.js';
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
@@ -784,7 +784,7 @@ let startupList = [];
 let lastScan = null;
 const scoreOf = (r) => healthScore({
   junkBytes: r.junk.reduce((n, x) => n + x.bytes, 0) + r.recycle, orphanBytes: r.orphans.reduce((n, x) => n + x.bytes, 0),
-  heavyStartup: r.startup.filter((x) => x.enabled && x.heavy).length, tweaksOff: r.tweaks.filter((t) => !t.on && !t.optional).length,
+  heavyStartup: r.startup.filter((x) => x.enabled && x.heavy).length, tweaksOff: r.tweaks.filter((t) => !t.on && !t.optional && !t.retired).length,
   freeRatio: r.free && r.disk ? r.free / r.disk : null,
 });
 async function optiScan(progress = () => {}) {
@@ -1000,12 +1000,14 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
 ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto !== false, last: store.data.optiAutoLast ?? null }; });
+// Caches de shaders : les vider fait saccader les jeux (FiveM surtout) le temps qu'ils se recréent
+const SHADER_CACHES = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 // Optimisation automatique chaque semaine : seulement les caches qui se recréent (système, pilotes, launchers), en silence
 setInterval(async () => {
   if (store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
   const scan = await optiScan().catch(() => null);
   if (!scan) return;
-  const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs').map((j) => j.id) }).catch(() => null);
+  const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs' && !SHADER_CACHES.includes(j.id)).map((j) => j.id) }).catch(() => null);
   store.data.optiAutoLast = Date.now();
   store.save();
   if (r?.freed > 200e6) notify('Optimisation automatique', `${(r.freed / 1e9).toFixed(1).replace('.', ',')} Go libérés cette semaine.`);
@@ -1273,7 +1275,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   for (const k of ['sfxOn', 'sfxNotif']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
   if ('sfxVol' in patch) store.data.settings.sfxVol = Math.max(0, Math.min(100, Math.round(Number(patch.sfxVol) || 0)));
   for (const k of ['dnd', 'tournament', 'compact', 'lock2fa']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
-  for (const k of ['batterySaver', 'widgetTop', 'gamepad', 'widgetGame', 'heatAlert', 'streamerAuto']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
+  for (const k of ['batterySaver', 'widgetTop', 'gamepad', 'widgetGame', 'gamePopups', 'streamerAuto']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
   if ('streamer' in patch) { store.data.settings.streamer = Boolean(patch.streamer); send('streamer:state', streaming()); }
   if ('promoDm' in patch) { store.data.settings.promoDm = Boolean(patch.promoDm); syncWatch().catch(() => {}); }
   if ('widget' in patch) { store.data.settings.widget = Boolean(patch.widget); setWidget(store.data.settings.widget); }
@@ -1497,8 +1499,16 @@ function armCard(c) {
   clearTimeout(notifTimers.get(c.id));
   notifTimers.set(c.id, setTimeout(() => (notifHover ? armCard({ ...c, ttl: 3000 }) : dropCard(c.id)), c.ttl ?? 10_000));
 }
+// Pendant une partie, aucune fenêtre ne s'affiche par-dessus le jeu (en plein écran, ça peut le faire saccader,
+// clignoter ou passer en fenêtré) : les cartes attendent la fin de la partie, sauf les appels
+let heldCards = [];
+function flushHeld() {
+  const list = heldCards; heldCards = [];
+  for (const { c, force } of list.slice(-4)) pushCard({ ...c, ttl: Math.max(c.ttl ?? 10_000, 12_000) }, force);
+}
 function pushCard(c, force = false) {
   if (!c || notifCards.some((x) => x.id === c.id)) return;
+  if (currentSession() && c.kind !== 'call' && store.data.settings.gamePopups !== true) { if (!heldCards.some((x) => x.c.id === c.id)) heldCards = [...heldCards, { c, force }].slice(-20); return; }
   if (!force && (store.data.settings.friendNotifs === false || store.data.settings.dnd || store.data.settings.tournament || gameDnd() || streaming())) return;
   if (force) c = { ...c, force: true };
   notifCards.push(c);
@@ -2440,6 +2450,7 @@ async function sessionStart(s) {
   const item = items.find((i) => i.id === s.id);
   coreLoad();
   sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null };
+  setQuiet(true); // mesures plus légères pendant le jeu (pas de requête WMI de température, carte graphique lue moins souvent)
   if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
   if (!item || store.data.settings.fps !== true || profileOf(item.id).fps === false || process.platform !== 'win32') return;
   const exe = (await runningPaths(0)).find((p) => item.installDir && p.startsWith(String(item.installDir).toLowerCase()) && /\.exe$/.test(p) && !/(crash|report|launcher|helper|updater|redist|unins)/i.test(p));
@@ -2459,6 +2470,8 @@ function verdict(stats, samples) {
 async function sessionEnd() {
   const s = sess; sess = null;
   if (!s) return;
+  setQuiet(false);
+  setTimeout(flushHeld, 3000);
   if (s.autoWidget && !store.data.settings.widget) setWidget(false);
   const minutes = (Date.now() - s.start) / 60_000;
   let stats = null;
@@ -2504,6 +2517,7 @@ ipcMain.handle('bench:quick', async () => {
 // ---------- 23. Réglages Windows sauvegardés avant chaque optimisation (retour arrière + rapport) ----------
 async function snapshotSettings(label) {
   const snap = { at: Date.now(), label, sys: await systemTweakStates().catch(() => []), game: await tweakStates().catch(() => []), startup: (await startupApps().catch(() => [])).map((x) => ({ name: x.name, enabled: x.enabled })) };
+  if (!store.data.settingsHistory?.length) store.data.settingsOriginal ??= snap; // l'état de Windows avant toute optimisation
   store.data.settingsHistory = [snap, ...(store.data.settingsHistory ?? [])].slice(0, 10);
   store.save();
   return snap;
@@ -2678,14 +2692,14 @@ async function graphicsFor(item) {
 const STREAM_APPS = /\\(obs64|obs32|obs|streamlabs obs|streamlabs desktop|twitch studio|xsplit\.core|xsplitbroadcaster)\.exe$/i;
 setInterval(async () => {
   if (store.data.settings.streamerAuto === false) { if (obsRunning) { obsRunning = false; send('streamer:state', streaming()); } return; }
-  const on = (await runningPaths(0).catch(() => [])).some((p) => STREAM_APPS.test(p));
+  const on = (await runningPaths().catch(() => [])).some((p) => STREAM_APPS.test(p));
   if (on !== obsRunning) {
     obsRunning = on;
     send('streamer:state', streaming());
     widgetPush();
     if (on) { notifCards = notifCards.filter((c) => c.force); notifSync(); }
   }
-}, 30_000);
+}, 60_000);
 ipcMain.handle('streamer:get', () => streaming());
 
 // ---------- Sauvegardes partagées entre amis ----------
@@ -2730,16 +2744,42 @@ async function receiveShare(shareId) {
 }
 ipcMain.handle('saves:receive', (_e, id) => receiveShare(id));
 
-// ---------- Surchauffe pendant une partie (2 mesures d'affilée, alerte toutes les 10 min au plus) ----------
+// ---------- Surchauffe pendant une partie : indicateur du widget (l'alerte « Ton PC chauffe » prévient déjà) ----------
 function heatCheck(s, snap) {
-  const cpuT = snap?.cpu?.temp ?? 0; const gpuT = snap?.gpu?.temp ?? 0;
-  const hot = cpuT >= 90 || gpuT >= 87;
+  const hot = (snap?.cpu?.temp ?? 0) >= 90 || (snap?.gpu?.temp ?? 0) >= 87;
   s.hot = hot ? (s.hot ?? 0) + 1 : 0;
-  if (s.hot < 2 || store.data.settings.heatAlert === false || Date.now() - (s.heatAt ?? 0) < 10 * 60_000) return;
-  s.heatAt = Date.now();
-  const what = [cpuT >= 90 ? `processeur ${cpuT} °C` : null, gpuT >= 87 ? `carte graphique ${gpuT} °C` : null].filter(Boolean).join(', ');
-  pushCard({ id: `heat-${Date.now()}`, icon: '🔥', title: 'PC en surchauffe', body: `${what} : le PC va baisser ses performances. Vérifie la ventilation et la poussière, ou limite les FPS.`, actions: [], ttl: 12_000 }, true);
-  widgetPush();
 }
+
+// =====================================================================================================
+// 0.20.1 : correctif « ça bug en jeu (FiveM…) après l'optimisation »
+// =====================================================================================================
+// Remettre Windows comme avant : chaque réglage revient à son état d'avant la première optimisation
+store.data.settingsOriginal ??= (store.data.settingsHistory ?? []).at(-1) ?? null;
+async function resetWindows({ ask = true } = {}) {
+  if (process.platform !== 'win32') return { ok: false, error: 'Windows seulement.' };
+  const [sys, game] = await Promise.all([systemTweakStates().catch(() => []), tweakStates().catch(() => [])]);
+  const plan = resetPlan(sys, game, store.data.settingsOriginal);
+  const labels = [...plan.sys, ...plan.game].map((c) => `${c.on ? '✓' : '↩'} ${[...sys, ...game].find((t) => t.id === c.id)?.label ?? c.id}`);
+  if (!labels.length) { await windowsToasts(true).catch(() => {}); return { ok: true, changed: 0 }; }
+  if (ask && !(await confirm('Remettre Windows comme avant ?', `Ces réglages reviennent à leur état d'origine :\n${labels.join('\n')}\n\nUn point de restauration est créé avant. Windows va demander l'autorisation administrateur.`))) return { ok: false, cancelled: true };
+  await snapshotSettings('Avant la remise comme avant').catch(() => {});
+  for (const c of plan.game) await setTweak(c.id, c.on).catch(() => {});
+  const sysOk = plan.sys.length ? await applySystemTweaks(plan.sys) : true;
+  await windowsToasts(true).catch(() => {});
+  return { ok: sysOk, changed: labels.length, reboot: plan.sys.some((c) => c.id === 'hags'), refused: !sysOk };
+}
+ipcMain.handle('opti:reset', () => resetWindows());
+// Une fois, au premier lancement de cette version : proposer de retirer les réglages qui font bugger les jeux
+setTimeout(async () => {
+  if (process.platform !== 'win32' || store.data.fixOffered === '0.20.1' || !(store.data.settingsHistory?.length || store.data.settingsOriginal)) return;
+  store.data.fixOffered = '0.20.1'; store.save();
+  const [sys, game] = await Promise.all([systemTweakStates().catch(() => []), tweakStates().catch(() => [])]);
+  const risky = riskyLeft(sys, game);
+  if (!risky.length) return;
+  const ok = await confirm('Correctif pour FiveM et les jeux', `Des réglages appliqués par une ancienne version de l'optimisation peuvent faire saccader ou planter certains jeux (FiveM, GTA V…) :\n${risky.map((t) => `• ${t.label}`).join('\n')}\n\nOn remet Windows comme avant ton optimisation ? (autorisation administrateur, puis redémarre le PC)`);
+  if (!ok) return;
+  const r = await resetWindows({ ask: false });
+  notify(r.ok ? '✅ Windows remis comme avant' : 'Correctif incomplet', r.ok ? 'Redémarre le PC pour finir : tes jeux retrouvent leur comportement normal.' : 'L’autorisation administrateur a été refusée : relance « Remettre Windows comme avant » dans Optimisation.');
+}, 40_000);
 
 app.whenReady().then(start).catch(async (err) => { await fatal(err); app.exit(1); });
