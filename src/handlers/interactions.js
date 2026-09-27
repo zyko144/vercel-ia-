@@ -102,6 +102,7 @@ export async function onInteraction(client, interaction) {
     }
     if (!interaction.isChatInputCommand() && !interaction.isMessageContextMenuCommand()) return;
     // Les 6 commandes principales ouvrent un panneau
+    if (interaction.commandName === 'launcher') return await (await import('../features/launcherDiscord.js')).handleLauncherCommand(client, interaction);
     if (isPanelCommand(interaction)) return await openPanel(client, interaction);
     return await runCommand(client, interaction);
   } catch (err) {

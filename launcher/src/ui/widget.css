@@ -1,0 +1,16 @@
+html, body { margin: 0; background: transparent; font: 12px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; color: #f4f1f6; user-select: none; overflow: hidden; }
+.w { margin: 6px; padding: 10px 12px; border-radius: 16px; background: linear-gradient(160deg, rgba(40, 60, 110, .78), rgba(14, 12, 22, .88)); border: 1px solid rgba(255, 255, 255, .14); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .12); -webkit-app-region: drag; }
+.top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.top b { color: #22d3ee; letter-spacing: .5px; }
+#game { flex: 1; color: #b8b0c2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#x { -webkit-app-region: no-drag; background: none; border: 0; color: #948d9c; cursor: pointer; font-size: 12px; }
+#x:hover { color: #fff; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.grid div { padding: 6px; border-radius: 10px; background: rgba(255, 255, 255, .06); text-align: center; }
+.grid small { display: block; color: #948d9c; font-size: 9.5px; white-space: nowrap; overflow: hidden; }
+.grid b { display: block; font-size: 15px; margin: 2px 0; white-space: nowrap; }
+.grid em { display: block; font-style: normal; font-size: 10px; color: #b8b0c2; white-space: nowrap; }
+.grid .fps b { color: #2ee07a; }
+.hot { color: #ff6b6b !important; }
+.friends { margin-top: 8px; color: #b8b0c2; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-app-region: no-drag; cursor: pointer; }
+.friends i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #2ee07a; margin-right: 5px; }

@@ -108,6 +108,7 @@ client.once(Events.ClientReady, async (c) => {
   startLevelLoops(c);
   startTreasury(c);
   (await import('./features/launcherReleases.js')).startLauncherReleases(c);
+  (await import('./features/launcherDiscord.js')).startLauncherDiscord(c);
   loadMaintenance().catch(() => {});
   startAssistant(c);
   startModeration(c);
