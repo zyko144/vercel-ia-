@@ -230,3 +230,104 @@ export function deepClean() {
     p.on('close', (code) => resolve(code === 0));
   });
 }
+
+// ===================== Réglages système pro (administrateur, réversibles) =====================
+
+// Chaque réglage : clé HKLM, valeurs « optimisé » et valeurs d'origine de Windows (null = valeur supprimée)
+export const SYSTEM_TWEAKS = [
+  { id: 'hags', label: 'Planification GPU accélérée (HAGS)', help: 'La carte graphique gère sa propre file d’attente : moins de latence sur les cartes récentes. Redémarrage nécessaire.', key: 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers', values: { HwSchMode: 2 }, off: { HwSchMode: 1 }, reboot: true },
+  { id: 'mmcss', label: 'Priorité maximale aux jeux (planificateur multimédia)', help: 'Windows réserve moins de processeur aux tâches de fond (10 % au lieu de 20 %) et lève le bridage réseau pendant le jeu.', key: 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile', values: { SystemResponsiveness: 10, NetworkThrottlingIndex: 4294967295 }, off: { SystemResponsiveness: 20, NetworkThrottlingIndex: 10 } },
+  { id: 'gamestask', label: 'Tâche « Games » en priorité haute', help: 'Processeur et carte graphique servent le jeu en premier (profil officiel « Games » de Windows).', key: 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games', values: { 'GPU Priority': 8, Priority: 6, 'Scheduling Category': 'High', 'SFIO Priority': 'High' }, off: { 'GPU Priority': 8, Priority: 2, 'Scheduling Category': 'Medium', 'SFIO Priority': 'Normal' } },
+  { id: 'dosvc', label: 'Partage des mises à jour avec d’autres PC coupé', help: 'Windows n’envoie plus tes mises à jour à des inconnus sur Internet (bande passante gardée pour le jeu).', key: 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization', values: { DODownloadMode: 0 }, off: { DODownloadMode: null } },
+  { id: 'telemetry', label: 'Télémétrie réduite au minimum', help: 'Windows envoie seulement les données obligatoires (moins d’activité en fond).', key: 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection', values: { AllowTelemetry: 1 }, off: { AllowTelemetry: null } },
+  { id: 'fth', label: 'Coupure des applis qui plantent en boucle désactivée', help: 'Le « Fault Tolerant Heap » ralentit définitivement un jeu qui a planté quelques fois : on le coupe.', key: 'HKLM\\SOFTWARE\\Microsoft\\FTH', values: { Enabled: 0 }, off: { Enabled: 1 } },
+];
+// Réglages utilisateur en plus (sans droits administrateur)
+GAME_TWEAKS.push(
+  { id: 'startdelay', label: 'Démarrage des applis sans délai', help: 'Windows attend quelques secondes avant de lancer les applis du démarrage : on supprime cette attente.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize', values: { StartupDelayInMSec: 0 }, off: { StartupDelayInMSec: 10000 } },
+  { id: 'menudelay', label: 'Menus instantanés', help: 'Les menus s’ouvrent sans attendre (400 ms → 50 ms).', optional: true, key: 'HKCU\\Control Panel\\Desktop', values: { MenuShowDelay: '50' }, off: { MenuShowDelay: '400' } },
+);
+
+const HIGH_PERF = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c';
+const ULTIMATE = 'e9a42b02-d5df-448d-aa00-03f14749eb61';
+const BALANCED = '381b4222-f694-41f0-9685-ff5bb260df2e';
+
+/** État des réglages système (lecture du registre : pas besoin d'administrateur). */
+export async function systemTweakStates() {
+  const list = [];
+  for (const t of SYSTEM_TWEAKS) {
+    const cur = win ? await readKey(t.key) : {};
+    list.push({ id: t.id, label: t.label, help: t.help, reboot: Boolean(t.reboot), on: tweakApplied(t, cur) });
+  }
+  const scheme = win ? String((await run('powercfg', ['/getactivescheme'], { windowsHide: true }).catch(() => null))?.stdout ?? '') : '';
+  const hib = win ? await readKey('HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power') : {};
+  list.push({ id: 'power', label: 'Mode d’alimentation « Performances optimales »', help: 'Le processeur reste à sa fréquence maximale, sans temps de réveil. Conseillé sur PC fixe (consomme plus sur portable).', on: scheme.toLowerCase().includes(ULTIMATE) || /performances optimales|ultimate/i.test(scheme) || scheme.toLowerCase().includes(HIGH_PERF) });
+  list.push({ id: 'hibernate', label: 'Veille prolongée désactivée', help: 'Supprime le fichier hiberfil.sys (souvent 6 à 25 Go sur le disque système). À éviter sur portable.', on: String(hib.HibernateEnabled ?? '') === '0' });
+  return list;
+}
+
+const regLine = (key, name, v) => (v === null
+  ? `reg delete "${key}" /v "${name}" /f`
+  : `reg add "${key}" /v "${name}" /t ${typeof v === 'number' ? 'REG_DWORD' : 'REG_SZ'} /d "${v}" /f`);
+
+/** Script administrateur fixe (tiré de nos tables, jamais du texte de l'interface), avec point de restauration avant. */
+export function systemTweakScript(changes) {
+  const lines = ["$ErrorActionPreference='SilentlyContinue'", "Checkpoint-Computer -Description 'History - avant optimisation' -RestorePointType MODIFY_SETTINGS"];
+  for (const { id, on } of changes) {
+    const t = SYSTEM_TWEAKS.find((x) => x.id === id);
+    if (t) for (const [k, v] of Object.entries(on ? t.values : t.off)) lines.push(regLine(t.key, k, v));
+    if (id === 'power') lines.push(on ? `powercfg -duplicatescheme ${ULTIMATE} ${ULTIMATE} | Out-Null; powercfg /setactive ${ULTIMATE}; if($LASTEXITCODE -ne 0){ powercfg /setactive ${HIGH_PERF} }` : `powercfg /setactive ${BALANCED}`);
+    if (id === 'hibernate') lines.push(on ? 'powercfg /hibernate off' : 'powercfg /hibernate on');
+  }
+  return lines.join('\n');
+}
+function runElevated(script) {
+  if (!win) return Promise.resolve(false);
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const outer = `Start-Process powershell.exe -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'`;
+  return new Promise((resolve) => {
+    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', outer], { windowsHide: true, stdio: 'ignore' });
+    p.on('error', () => resolve(false));
+    p.on('close', (code) => resolve(code === 0));
+  });
+}
+export async function applySystemTweaks(changes) {
+  const valid = changes.filter((c) => SYSTEM_TWEAKS.some((t) => t.id === c.id) || c.id === 'power' || c.id === 'hibernate');
+  if (!valid.length) return false;
+  return runElevated(systemTweakScript(valid.map((c) => ({ id: c.id, on: Boolean(c.on) }))));
+}
+
+// ===================== Stockage : TRIM des SSD, défragmentation des disques durs =====================
+export const STORAGE_SCRIPT = "$ErrorActionPreference='SilentlyContinue'; Get-Volume | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' } | ForEach-Object { Optimize-Volume -DriveLetter $_.DriveLetter -Verbose 4>&1 | Out-Null }";
+export const optimizeStorage = () => runElevated(STORAGE_SCRIPT);
+
+// ===================== Réparation de Windows (DISM + SFC) =====================
+/** Vérifie l'image de Windows, la répare si besoin, puis contrôle chaque fichier système (SFC). Résultat écrit dans un fichier. */
+export function repairScript(outFile) {
+  const f = outFile.replace(/'/g, "''");
+  return String.raw`
+$ErrorActionPreference='Continue'
+$f='${f}'
+function W($o){ $o | ConvertTo-Json -Compress | Set-Content -LiteralPath $f -Encoding UTF8 }
+W @{ step='dism-scan' }
+$h=(Repair-WindowsImage -Online -ScanHealth).ImageHealthState
+$fixed=$false
+if($h -ne 'Healthy'){ W @{ step='dism-repair'; health="$h" }; $r=Repair-WindowsImage -Online -RestoreHealth; $fixed=($r.ImageHealthState -eq 'Healthy'); $h=$r.ImageHealthState }
+W @{ step='sfc'; health="$h" }
+$o=(sfc /scannow) -join ' '
+$sfc=if($o -match 'did not find|n.a trouv. aucune|n.a d.tect. aucune'){ 'ok' } elseif($o -match 'successfully repaired|a r.par.'){ 'repare' } elseif($o -match 'unable to fix|n.a pas pu'){ 'echec' } else { 'inconnu' }
+W @{ step='done'; health="$h"; dismFixed=$fixed; sfc=$sfc }
+`;
+}
+export async function repairWindows(outFile, onProgress = () => {}) {
+  const poll = setInterval(async () => {
+    const t = await readFile(outFile, 'utf8').catch(() => null);
+    if (t) try { onProgress(JSON.parse(t.replace(/^﻿/, ''))); } catch { /* en cours d'écriture */ }
+  }, 1500);
+  const ok = await runElevated(repairScript(outFile));
+  clearInterval(poll);
+  const t = await readFile(outFile, 'utf8').catch(() => null);
+  await rm(outFile, { force: true }).catch(() => {});
+  if (!t) return { ok: false, error: ok ? 'Réparation interrompue.' : 'Autorisation administrateur refusée.' };
+  return { ok: true, ...JSON.parse(t.replace(/^﻿/, '')) };
+}

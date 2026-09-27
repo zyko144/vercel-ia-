@@ -690,6 +690,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.17.0': [
+    ['🔬', 'Analyse pro de tout le PC', 'Mon PC › Analyse pro : chaque fichier de chaque disque est lu un par un, les doublons sont confirmés par empreinte SHA-256, chaque fichier louche passe à l’antivirus et le journal de Windows est vérifié (écrans bleus, arrêts brutaux, erreurs disque).', ['[data-view=pc]', '[data-pctab=analyse]']],
+    ['⬆', 'Windows Update dans le launcher', 'Mon PC › Windows Update : recherche, choisis et installe tes mises à jour Windows, pilotes et Defender, avec l’avancement en direct.', ['[data-view=pc]', '[data-pctab=maj]']],
+    ['❤', 'Un seul score de santé', 'Le même score partout (Mon PC et Optimisation), détaillé : matériel et sécurité, entretien, fichiers, stabilité de Windows.', ['[data-view=pc]', 'wait2500']],
+    ['⚙', 'Optimisation pro', 'Réglages système en administrateur (priorité aux jeux, planification GPU, performances optimales, veille prolongée…) avec point de restauration, TRIM/défragmentation de tous les disques, réparation de Windows (DISM + SFC).', ['[data-view=optimisation]', '#optiScan', 'wait9000', '#sysTweaks']],
+    ['🗂', 'Mon PC rangé en onglets', 'Vue d’ensemble, Analyse pro, Windows Update, Composants, Sécurité, Performances, Réseau : tout est plus aéré.'],
+  ],
   '0.16.0': [
     ['🏅', 'Niveaux, badges et série de jours', 'Statistiques : ton niveau de joueur, ta série de jours d’affilée et 15 badges à débloquer (marathon, oiseau de nuit, machine de guerre…).', ['[data-view=stats]']],
     ['🕒', 'Quand tu joues', 'Tes heures de jeu sur 30 jours et le journal de tes sessions (début, durée), en plus des statistiques.'],
@@ -1035,7 +1042,10 @@ async function renderPc() {
 let pcTimer = null;
 async function openPc() {
   renderPc();
-  if (!$('pcScore').innerHTML) pcDiag(false);
+  if (!state.pcDiagDone) pcDiag(false);
+  refreshHealth();
+  api.scanLast?.().then(showScanLast).catch(() => {});
+  if (!state.demoShown) api.demo?.().then((d) => { if (!d) return; state.demoShown = true; renderScan(d.scan); showScanLast(d.scan); wu = d.wu; renderWu(); }).catch(() => {});
   renderTemps();
   api.pcBenchHistory?.().then((h) => h?.length && renderBench(h[0], h)).catch(() => {});
   clearInterval(pcTimer);
@@ -1049,9 +1059,10 @@ async function openPc() {
 const STATUS = { ok: 'En forme', warn: 'À surveiller', bad: 'Problème' };
 function renderDiag(d) {
   if (!d || d.error) { $('pcComps').innerHTML = `<div class="empty">${esc(d?.error ?? 'Diagnostic impossible.')}</div>`; return; }
-  const col = d.score >= 85 ? '#2ee07a' : d.score >= 65 ? '#22d3ee' : d.score >= 45 ? '#f59e0b' : '#ef4444';
-  $('pcScore').hidden = false;
-  $('pcScore').innerHTML = `<b class="big" style="color:${col}">${d.score}</b><div><b>Score de santé du PC</b><small class="hint" style="display:block">${esc(d.os.name)} · build ${esc(d.os.build)} · allumé depuis ${d.os.uptimeDays ?? '?'} j${d.board ? ` · carte mère ${esc(d.board)}` : ''}</small></div>`;
+  $('pcOs').textContent = `${d.os.name} · build ${d.os.build} · allumé depuis ${d.os.uptimeDays ?? '?'} j${d.board ? ` · carte mère ${d.board}` : ''}`;
+  state.pcDiagDone = true;
+  state.diag = d;
+  renderTop();
   $('pcComps').innerHTML = d.components.map((c) => `<div class="comp st-${c.status}">
     <div class="ch"><span>${c.icon}</span><div><small>${esc(c.title)}</small><b>${esc(c.name)}</b></div><em class="chip">${STATUS[c.status]}</em></div>
     <ul>${c.specs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -1066,9 +1077,9 @@ function renderBench(r, hist = []) {
   if (!r) return;
   const rows = [['Processeur (1 cœur)', r.scores.cpu1, `${r.cpu.single} Mo/s`], ['Processeur (tous)', r.scores.cpuN, `${r.cpu.multi} Mo/s · ${r.cpu.threads} threads`], ['Mémoire', r.scores.ram, `${r.ram.gbps} Go/s`], ['Disque', r.scores.disk, r.disk ? `${r.disk.write} / ${r.disk.read} Mo/s · ${r.disk.iops} IOPS` : 'n/d'], ['Carte graphique', r.scores.gpu, r.gpu?.fps ? `${r.gpu.fps} images/s` : 'n/d']];
   const max = Math.max(2000, ...rows.map(([, v]) => v ?? 0));
-  $('pcBench').innerHTML = `<div class="pcscore"><b class="big">${r.scores.total ?? '–'}</b><div><b>${esc(r.tier ?? '')}</b><small class="hint">le ${new Date(r.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · trait blanc = PC de référence (1000)</small></div></div>
+  $('pcBench').innerHTML = `<div class="pcscore"><b class="big">${r.scores.total ?? '–'}</b><div><b>${esc(r.tier ?? '')}</b><small class="hint" style="display:block">le ${new Date(r.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · trait blanc = PC de référence (1000)</small></div></div>
     <div class="benchbars">${rows.map(([n, v, raw]) => `<div class="bbar"><span>${n}</span><div class="t"><i style="width:${Math.min(100, (100 * (v ?? 0)) / max)}%"></i><b style="left:${(100 * 1000) / max}%"></b></div><b>${v ?? '–'}</b></div><small class="hint" style="margin:-4px 0 0 140px">${esc(raw)}</small>`).join('')}</div>
-    ${hist.length > 1 ? `<div class="bhist"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${spark([...hist].reverse().map((h) => h.scores.total), '#22d3ee', Math.max(...hist.map((h) => h.scores.total)) * 1.1)}</svg><small class="hint">Historique : ${[...hist].reverse().map((h) => h.scores.total).join(' → ')}</small></div>` : ''}`;
+    ${hist.length > 1 ? `<div class="bhist"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${spark([...hist].reverse().map((h) => h.scores.total - Math.min(...hist.map((x) => x.scores.total)) * 0.9), '#22d3ee', (Math.max(...hist.map((x) => x.scores.total)) - Math.min(...hist.map((x) => x.scores.total)) * 0.9) * 1.1)}</svg><small class="hint">Historique : ${[...hist].reverse().map((h) => h.scores.total).join(' → ')}</small></div>` : ''}`;
 }
 function spark(values, color, max = 100) {
   const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * 100},${100 - (Math.max(0, v ?? 0) / max) * 100}`).join(' ');
@@ -1145,15 +1156,6 @@ $('pcBenchBtn').addEventListener('click', async () => {
   renderBench(r, await api.pcBenchHistory());
 });
 $('pcReportBtn').addEventListener('click', async () => { toast('Rédaction du rapport…'); showReport(await api.pcReport()); });
-$('pcDeepBtn').addEventListener('click', async () => {
-  if (!(await ui.confirm({ title: 'Analyse complète du PC', text: 'Tout y passe : composants et durée de vie, programmes et fichiers louches, fichiers inutiles, analyse antivirus complète de Windows, benchmark et rapport détaillé. Compte 30 min à 1 h (l’antivirus est l’étape la plus longue) ; tu peux continuer à utiliser le PC.', ok: '🔬 Lancer l’analyse', icon: '🔬' }))) return;
-  const r = await api.pcDeep();
-  pcProgress({ step: 'done' });
-  if (r?.error) return toast(r.error);
-  renderDiag(r.diag); renderBench(r.bench, await api.pcBenchHistory()); renderProcs();
-  window.sfx?.play('success');
-  showReport(r.report, `Analyse complète · score ${r.diag.score}/100`);
-});
 $('procRefresh').addEventListener('click', renderProcs);
 document.querySelectorAll('[data-avscan]').forEach((b) => b.addEventListener('click', async () => {
   toast(b.dataset.avscan === 'full' ? 'Analyse complète lancée (longue)…' : 'Analyse rapide lancée…');
@@ -1201,12 +1203,13 @@ const catCard = (key, icon, title, desc, total, body, { checked = true, open = f
 const itemRow = (group, x, checked = true) => `<label class="check"><input type="checkbox" data-g="${group}" value="${esc(x.id)}" ${checked ? 'checked' : ''}><span>${esc(x.label)}${x.note ? ` <small class="hint">· ${esc(x.note)}</small>` : ''}</span><em>${gb(x.bytes)}</em></label>`;
 function renderOpti() {
   const o = opti;
-  setRing(o.score, o.label);
+  setRing(state.health?.score ?? o.score, state.health?.label ?? o.label);
   const junkTotal = o.junk.reduce((n, x) => n + x.bytes, 0);
   const orphanTotal = o.orphans.reduce((n, x) => n + x.bytes, 0);
   const tweaksOff = o.tweaks.filter((t) => !t.on && !t.optional);
   const heavyOn = o.startup.filter((x) => x.enabled && x.heavy);
   $('optiSum').innerHTML = `
+    <div><b>${o.score}/100</b><small>entretien</small></div>
     <div><b>${gb(junkTotal + orphanTotal + o.recycle)}</b><small>à libérer</small></div>
     <div><b>${heavyOn.length}</b><small>appli${heavyOn.length > 1 ? 's' : ''} lourde${heavyOn.length > 1 ? 's' : ''} au démarrage</small></div>
     <div><b>${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}</b><small>réglages optimisés</small></div>
@@ -1226,6 +1229,12 @@ function renderOpti() {
     `${o.startup.map((x) => `<label class="toggle small"><input type="checkbox" data-startup="${esc(x.name)}" ${x.enabled ? 'checked' : ''}><span></span>${esc(x.name)}${x.heavy ? ' <small class="warn">ralentit le démarrage</small>' : ''}</label>`).join('') || '<p class="hint">Aucune appli lancée au démarrage.</p>'}<p class="hint">Désactiver ne désinstalle rien (réversible ici ou dans le Gestionnaire des tâches).</p>`, { count: 'au démarrage', open: heavyOn.length > 0 }));
   cards.push(catCard('tweaks', '🎯', 'Réglages Windows pour les jeux', 'Réglages sûrs et réversibles qui donnent des FPS et de la réactivité.', `${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}`,
     o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.optional ? ' <small class="opt">facultatif</small>' : ''}<small class="hint">${esc(t.help)}</small></div></label>`).join(''), { count: tweaksOff.length ? `${tweaksOff.length} à faire` : 'optimisés', open: tweaksOff.length > 0 }));
+  cards.push(catCard('', '⚙', 'Réglages système pro', 'Priorité aux jeux, planification GPU, alimentation, veille prolongée, télémétrie… Un point de restauration est créé avant. Demande l’autorisation administrateur.', state.sys ? `${state.sys.filter((t) => t.on).length}/${state.sys.length}` : '…',
+    `<div id="sysTweaks">${sysTweaksHtml()}</div><div class="row"><button class="btn play" id="sysApply" type="button">Appliquer les réglages cochés</button></div><p class="hint">Chaque réglage est réversible : décoche puis applique pour revenir à la valeur de Windows.</p>`, { count: 'admin', open: Boolean(state.sys?.some((t) => !t.on)) }));
+  cards.push(catCard('', '💽', 'Stockage : TRIM et défragmentation', 'TRIM de chaque SSD (garde leurs performances d’écriture) et défragmentation des disques durs, comme l’outil officiel de Windows.', '',
+    '<button class="btn" id="optiStorage" type="button">Optimiser tous les disques</button>', { count: 'admin' }));
+  cards.push(catCard('', '🩺', 'Réparer Windows (DISM + SFC)', 'Vérifie l’image de Windows et la répare depuis Windows Update, puis contrôle chaque fichier système un par un et remplace ceux qui sont abîmés.', '',
+    '<button class="btn" id="optiRepair" type="button">Vérifier et réparer Windows</button><p class="hint">15 à 40 minutes. Utile après des plantages, écrans bleus ou erreurs bizarres.</p><div id="repairOut"></div>', { count: 'admin' }));
   cards.push(catCard('', '🛡', 'Nettoyage profond de Windows', 'Anciennes mises à jour, fichiers temporaires système, cache de distribution, TRIM du SSD, nettoyage des composants. Demande l’autorisation administrateur.', '',
     '<button class="btn" id="optiDeep" type="button">Lancer le nettoyage profond</button><p class="hint">Plusieurs minutes. Windows affiche une demande d’autorisation.</p>', { count: 'admin' }));
   $('optiBody').innerHTML = cards.join('');
@@ -1250,7 +1259,7 @@ async function optiScanUi() {
   state.optiDraw = null;
   showProgress(null);
   $('optiScan').disabled = false; $('optiScan').textContent = 'Analyser à nouveau';
-  if (opti?.error) { toast(opti.error); opti = null; } else if (opti) renderOpti(); else toast('Analyse impossible pour l’instant');
+  if (opti?.error) { toast(opti.error); opti = null; } else if (opti) { renderOpti(); refreshHealth(); } else toast('Analyse impossible pour l’instant');
 }
 let runLog = [];
 api.onOpti?.((p) => {
@@ -1275,7 +1284,8 @@ $('optiRun').addEventListener('click', async () => {
   $('optiRun').disabled = false; $('optiScan').disabled = false;
   if (!r?.ok) { showProgress(null); return ui.confirm({ title: 'L’optimisation s’est arrêtée', text: r?.error ? `Erreur : ${r.error}` : 'Réessaie dans un instant.', ok: 'OK', cancel: 'Fermer', icon: '⚠️' }); }
   if (r.scan) { opti = r.scan; renderOpti(); }
-  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks}</b><small>réglage${r.tweaks > 1 ? 's' : ''} appliqué${r.tweaks > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>score de santé</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>`);
+  await refreshHealth(true);
+  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks}</b><small>réglage${r.tweaks > 1 ? 's' : ''} appliqué${r.tweaks > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>`);
 });
 $('optiProgress').addEventListener('click', (e) => { if (e.target.closest('[data-closeprog]')) showProgress(null); });
 $('optiBody').addEventListener('change', async (e) => {
@@ -1287,6 +1297,36 @@ $('optiBody').addEventListener('change', async (e) => {
 $('optiBody').addEventListener('click', async (e) => {
   const tg = e.target.closest('[data-toggle]');
   if (tg) { tg.closest('.ocat').classList.toggle('open'); return; }
+  if (e.target.id === 'sysApply') {
+    const changes = [...document.querySelectorAll('#sysTweaks [data-sys]')].map((i) => ({ id: i.dataset.sys, on: i.checked })).filter((c) => state.sys.find((t) => t.id === c.id)?.on !== c.on);
+    if (!changes.length) return toast('Aucun changement à appliquer');
+    if (!(await ui.confirm({ title: 'Appliquer les réglages système ?', text: 'Un point de restauration Windows est créé juste avant. Windows va demander l’autorisation administrateur.', list: changes.map((c) => `${c.on ? '✓' : '↩'} ${state.sys.find((t) => t.id === c.id).label}`), ok: '⚙ Appliquer', icon: '⚙' }))) return;
+    e.target.disabled = true;
+    const r = await api.optiSysApply(changes);
+    e.target.disabled = false;
+    if (!r?.ok) return toast('Autorisation refusée : rien n’a été changé');
+    state.sys = r.states; $('sysTweaks').innerHTML = sysTweaksHtml();
+    toast(changes.some((c) => state.sys.find((t) => t.id === c.id)?.reboot) ? '✓ Appliqué : redémarre le PC pour finir' : '✓ Réglages appliqués');
+    return;
+  }
+  if (e.target.id === 'optiStorage') {
+    e.target.disabled = true; e.target.textContent = 'Optimisation des disques…';
+    const r = await api.optiStorage();
+    e.target.disabled = false; e.target.textContent = 'Optimiser tous les disques';
+    toast(r?.ok ? '✓ Disques optimisés (TRIM / défragmentation)' : 'Autorisation refusée');
+    return;
+  }
+  if (e.target.id === 'optiRepair') {
+    if (!(await ui.confirm({ title: 'Vérifier et réparer Windows ?', text: '15 à 40 minutes. Windows va demander l’autorisation administrateur. Tu peux continuer à utiliser le PC.', list: ['DISM : état de l’image de Windows, réparée depuis Windows Update si besoin', 'SFC : contrôle de chaque fichier système, remplacement de ceux qui sont abîmés'], ok: '🩺 Lancer', icon: '🩺' }))) return;
+    e.target.disabled = true;
+    $('repairOut').innerHTML = '<div class="gbar big indet"><i></i></div><small class="hint" id="repairStep">Démarrage…</small>';
+    const r = await api.optiRepair();
+    e.target.disabled = false;
+    const H = { Healthy: 'saine', Repairable: 'abîmée mais réparable', NonRepairable: 'abîmée et non réparable' };
+    const S = { ok: 'aucun fichier système abîmé', repare: 'fichiers abîmés trouvés et réparés', echec: 'fichiers abîmés que Windows n’a pas pu réparer', inconnu: 'contrôle terminé' };
+    $('repairOut').innerHTML = r?.ok ? `<div class="adv ${r.sfc === 'echec' || r.health === 'NonRepairable' ? 'p0' : 'p3'}"><div><b>✅ Vérification terminée</b><small>Image de Windows : ${esc(H[r.health] ?? r.health ?? '?')}${r.dismFixed ? ' (réparée)' : ''} · SFC : ${esc(S[r.sfc] ?? r.sfc)}.</small></div></div>` : `<p class="hint">${esc(r?.error ?? 'Réparation impossible')}</p>`;
+    return;
+  }
   if (e.target.id === 'optiDeep') {
     if (!(await ui.confirm({ title: 'Nettoyage profond de Windows ?', text: 'Windows va demander l’autorisation administrateur. Ça peut prendre plusieurs minutes.', list: ['Fichiers temporaires de Windows', 'Anciennes mises à jour téléchargées', 'Cache d’optimisation de la distribution', 'Rapports d’erreur système', 'TRIM du SSD et nettoyage des composants Windows'], ok: '🛡 Lancer', icon: '🛡' }))) return;
     showProgress('<div class="oprog"><b>Nettoyage profond en cours…</b><div class="gbar big indet"><i></i></div><div class="hint">Accepte la demande d’autorisation de Windows. Ça peut prendre plusieurs minutes.</div></div>');
@@ -1298,8 +1338,164 @@ $('optiBody').addEventListener('click', async (e) => {
 $('optiAuto').addEventListener('change', (e) => api.optiAuto?.(e.target.checked).then(() => toast(e.target.checked ? 'Optimisation automatique chaque semaine activée' : 'Optimisation automatique désactivée')));
 function openOpti() {
   api.optiAuto?.().then((a) => { $('optiAuto').checked = a?.on !== false; }).catch(() => {});
-  if (!opti) setRing(null);
+  if (!opti) setRing(state.health?.score ?? null, state.health?.label);
+  api.optiSys?.().then((l) => { state.sys = l; if (opti) renderOpti(); }).catch(() => {});
+  refreshHealth();
 }
+function sysTweaksHtml() {
+  if (!state.sys) return '<p class="hint">Lecture des réglages…</p>';
+  return state.sys.map((t) => `<label class="toggle small"><input type="checkbox" data-sys="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.on ? ' <small class="ok">actif</small>' : ''}${t.reboot ? ' <small class="opt">redémarrage</small>' : ''}<small class="hint">${esc(t.help)}</small></div></label>`).join('');
+}
+
+// ---------- Score de santé unique (Mon PC = Optimisation) ----------
+function paintRing(prefix, score, label) {
+  const C = 2 * Math.PI * 52;
+  const col = score == null ? 'var(--muted)' : score >= 90 ? '#2ee07a' : score >= 75 ? '#22d3ee' : score >= 55 ? '#f59e0b' : '#ef4444';
+  $(`${prefix}Val`).style.strokeDasharray = `${score == null ? 0 : (score / 100) * C} ${C}`;
+  $(`${prefix}Val`).style.stroke = col;
+  $(`${prefix}Num`).textContent = score ?? '–';
+  $(`${prefix}Num`).style.color = col;
+  $(`${prefix}Label`).textContent = label ?? 'Pas encore analysé';
+}
+async function refreshHealth(force = false) {
+  const h = await api.health?.(force).catch(() => null);
+  if (!h || h.error) return;
+  state.health = h;
+  paintRing('pcRing', h.score, h.label);
+  setRing(h.score, h.label);
+  $('healthParts').innerHTML = h.parts.map((p) => `<div><span>${esc(p.label)}</span><div class="lvlbar"><i style="width:${p.score}%"></i></div><b>${p.score}</b></div>`).join('') + (h.deepAt ? '' : '<small class="hint">Lance l’analyse pro pour ajouter la note des fichiers et du stockage.</small>');
+  renderTop();
+}
+function renderTop() {
+  const list = [...(state.health?.events?.findings ?? []), ...(state.diag?.advice ?? [])].sort((a, b) => a.prio - b.prio).slice(0, 4);
+  $('pcTop').innerHTML = list.length ? list.map((a) => `<div class="adv p${a.prio}"><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small>${a.gain ? `<em>↗ ${esc(a.gain)}</em>` : ''}</div></div>`).join('') : '<div class="empty">Rien d’urgent : ton PC est en forme 👌</div>';
+}
+
+// ---------- Mon PC : onglets ----------
+function pcTab(tab) {
+  document.querySelectorAll('#pcTabs [data-pctab]').forEach((b) => b.classList.toggle('on', b.dataset.pctab === tab));
+  document.querySelectorAll('#view-pc .pctab').forEach((el) => { el.hidden = el.dataset.pctab !== tab; });
+  state.pcTab = tab;
+  if (tab === 'securite' && !$('pcProcs').dataset.done) { $('pcProcs').dataset.done = '1'; renderProcs(); }
+}
+$('pcTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-pctab]'); if (b) { window.sfx?.play('nav'); pcTab(b.dataset.pctab); } });
+document.querySelector('#view-pc').addEventListener('click', (e) => { const b = e.target.closest('[data-gotab]'); if (b) pcTab(b.dataset.gotab); });
+
+// ---------- Analyse pro ----------
+const dur = (ms) => { const m = Math.round(ms / 60_000); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : m >= 1 ? `${m} min` : `${Math.max(1, Math.round(ms / 1000))} s`; };
+const num = (n) => Number(n ?? 0).toLocaleString('fr-FR');
+function showScanLast(l) {
+  $('scanLast').textContent = l ? `Dernière analyse le ${new Date(l.at).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} : ${num(l.files)} fichiers lus en ${dur(l.elapsed)}, note ${l.score}/100.` : 'Jamais lancée sur ce PC.';
+}
+api.onScan?.((p) => {
+  if (p.phase === 'done') { $('scanLive').hidden = true; return; }
+  $('scanLive').hidden = false;
+  const stepN = { prep: 1, walk: 1, hash: 2, suspects: 3, events: 4 }[p.phase] ?? 1;
+  const steps = ['Lecture de chaque fichier', 'Doublons (empreinte SHA-256)', 'Fichiers louches (signature + antivirus)', 'Journal de Windows'];
+  const pct = p.phase === 'hash' && p.total ? (100 * p.bytes) / p.total : p.phase === 'suspects' && p.total ? (100 * p.index) / p.total : null;
+  $('scanLive').innerHTML = `<div class="oprog"><b>Étape ${stepN}/4 · ${steps[stepN - 1]}</b>
+    <div class="gbar big ${pct == null ? 'indet' : ''}"><i style="width:${pct ?? 30}%"></i></div>
+    <div class="scanstats">${p.phase === 'walk' ? `<div><b>${num(p.files)}</b><small>fichiers lus</small></div><div><b>${num(p.dirs)}</b><small>dossiers</small></div><div><b>${gb(p.bytes)}</b><small>parcourus</small></div>` : ''}${p.phase === 'hash' ? `<div><b>${num(p.files)}</b><small>fichiers comparés</small></div><div><b>${gb(p.bytes)} / ${gb(p.total)}</b><small>lus en entier</small></div>` : ''}${p.elapsed ? `<div><b>${dur(p.elapsed)}</b><small>écoulé</small></div>` : ''}${p.eta != null ? `<div><b>≈ ${dur(p.eta * 1000)}</b><small>restant</small></div>` : ''}</div>
+    <small class="hint scanpath">${esc(p.label ?? p.current ?? '')}</small></div>`;
+});
+function renderScan(r) {
+  const cats = r.cats.sort((a, b) => b.bytes - a.bytes);
+  const max = Math.max(1, ...cats.map((c) => c.bytes));
+  const ev = r.events;
+  $('scanOut').innerHTML = `
+    <div class="scansum">
+      <div><b>${r.score}/100</b><small>note fichiers et stockage</small></div>
+      <div><b>${num(r.files)}</b><small>fichiers lus un par un</small></div>
+      <div><b>${gb(r.bytes)}</b><small>analysés en ${dur(r.elapsed)}</small></div>
+      <div><b>${gb(r.junkBytes)}</b><small>inutiles</small></div>
+      <div><b>${gb(r.dupWasted)}</b><small>en doublons</small></div>
+      <div class="${r.threats ? 'bad' : ''}"><b>${r.threats}</b><small>menace${r.threats > 1 ? 's' : ''} confirmée${r.threats > 1 ? 's' : ''}</small></div>
+    </div>
+    <div class="pcgrid">
+      <div class="panel"><h3>📊 Ce qui occupe tes disques</h3><div class="catbars">${cats.map((c) => `<div class="bbar"><span>${c.icon} ${esc(c.label)}</span><div class="t"><i style="width:${(100 * c.bytes) / max}%"></i></div><b>${gb(c.bytes)}</b></div>`).join('')}</div></div>
+      <div class="panel"><h3>🗑 Fichiers inutiles <small class="hint">cochés = supprimés</small></h3>${r.junk.length ? `<div class="checks">${r.junk.map((j) => `<label class="check"><input type="checkbox" data-junk="${esc(j.id)}" checked><span>${j.icon} ${esc(j.label)} <small class="hint">· ${num(j.files)} fichiers</small></span><em>${gb(j.bytes)}</em></label>`).join('')}</div><div class="row"><button class="btn play" id="scanClean" type="button">Nettoyer la sélection</button></div><small class="hint">Les installateurs vont à la corbeille (récupérables), le reste se recrée tout seul.</small>` : '<p class="hint">Aucun fichier inutile trouvé 👌</p>'}</div>
+    </div>
+    <div class="panel"><h3>⚠ Fichiers louches <small class="hint">non signés, vérifiés un par un par l’antivirus de Windows</small></h3>${r.suspects.length ? `<div class="flist">${r.suspects.map((x) => `<div class="${x.defender === 'menace' ? 'bad' : ''}"><div><b>${esc(x.path.split(/[\\/]/).pop())}</b> ${x.defender === 'menace' ? '<span class="bad">● menace confirmée</span>' : x.defender === 'propre' ? '<span class="ok">● antivirus : rien trouvé</span>' : ''}<small>${esc(x.reason)} · ${esc(x.path)}</small></div><button class="btn ghost sm" data-show="${esc(x.path)}">Voir</button><button class="btn ghost sm" data-trash="${esc(x.path)}">Corbeille</button></div>`).join('')}</div>` : '<p class="hint">Aucun fichier louche 👍</p>'}</div>
+    <div class="panel"><h3>👯 Doublons <small class="hint">contenu identique octet par octet (SHA-256)</small></h3>${r.duplicates.length ? `<div class="flist">${r.duplicates.slice(0, 30).map((d) => `<div class="dup"><div><b>${esc(d.paths[0].split(/[\\/]/).pop())}</b> <small class="hint">${d.paths.length} copies · ${gb(d.size)} chacune</small>${d.paths.map((p, i) => `<small>${i ? `<button class="linkbtn" data-trash="${esc(p)}">corbeille</button> ` : '<em class="ok">gardé</em> '}${esc(p)}</small>`).join('')}</div></div>`).join('')}</div>` : '<p class="hint">Aucun doublon de plus de 1 Mo dans tes dossiers 👍</p>'}</div>
+    <div class="pcgrid">
+      <div class="panel"><h3>🐘 Plus gros fichiers</h3><div class="flist">${r.largest.slice(0, 12).map((x) => `<div><div><b>${esc(x.path.split(/[\\/]/).pop())}</b><small>${esc(x.path)}</small></div><em>${gb(x.size)}</em><button class="btn ghost sm" data-show="${esc(x.path)}">Voir</button></div>`).join('') || '<p class="hint">—</p>'}</div>${r.old.files ? `<p class="hint">Et ${num(r.old.files)} gros fichiers pas modifiés depuis 2 ans (${gb(r.old.bytes)}).</p>` : ''}</div>
+      <div class="panel"><h3>🧾 Stabilité de Windows <small class="hint">7 derniers jours</small></h3>${ev ? `<div class="evgrid"><div class="${ev.bsod ? 'bad' : ''}"><b>${ev.bsod}</b><small>écrans bleus</small></div><div class="${ev.power ? 'warn' : ''}"><b>${ev.power}</b><small>arrêts brutaux</small></div><div class="${ev.whea ? 'bad' : ''}"><b>${ev.whea}</b><small>erreurs matérielles</small></div><div class="${ev.disk ? 'bad' : ''}"><b>${ev.disk}</b><small>erreurs disque</small></div><div class="${ev.gpu ? 'warn' : ''}"><b>${ev.gpu}</b><small>plantages pilote graphique</small></div></div>${ev.findings.map((f) => `<div class="adv p${f.prio}"><div><b>${esc(f.title)}</b><small>${esc(f.text)}</small></div></div>`).join('')}` : '<p class="hint">Journal de Windows illisible sur ce PC.</p>'}</div>
+    </div>
+    <small class="hint">${num(r.denied)} éléments protégés par Windows n’ont pas pu être lus (normal sans droits administrateur).</small>`;
+}
+$('scanBtn').addEventListener('click', async () => {
+  if (!(await ui.confirm({ title: 'Lancer l’analyse pro ?', text: 'Chaque fichier de chaque disque va être lu. Compte 10 à 30 minutes selon ton nombre de fichiers ; le PC reste utilisable (un peu plus lent pendant la lecture).', list: ['Lecture de chaque fichier (taille, date, type)', 'Doublons confirmés par empreinte SHA-256', 'Fichiers louches : signature + antivirus de Windows', 'Journal de Windows : écrans bleus, arrêts brutaux, erreurs disque'], ok: '🔬 Lancer', icon: '🔬' }))) return;
+  $('scanBtn').disabled = true; $('scanStop').hidden = false; $('scanOut').innerHTML = '';
+  const r = await api.scanStart();
+  $('scanBtn').disabled = false; $('scanStop').hidden = true; $('scanLive').hidden = true;
+  if (r?.error) return toast(r.error);
+  window.sfx?.play('success');
+  renderScan(r);
+  showScanLast({ at: r.at, files: r.files, elapsed: r.elapsed, score: r.score });
+  if (r.health) { state.health = r.health; paintRing('pcRing', r.health.score, r.health.label); refreshHealth(); }
+  pcDiag(true);
+});
+$('scanStop').addEventListener('click', () => api.scanStop());
+$('scanOut').addEventListener('click', async (e) => {
+  const sh = e.target.closest('[data-show]'); if (sh) return api.scanShow(sh.dataset.show);
+  const tr = e.target.closest('[data-trash]');
+  if (tr) { const r = await api.scanTrash([tr.dataset.trash]); if (r?.ok) { toast('Mis à la corbeille'); tr.closest('small, .flist > div')?.remove(); } return; }
+  if (e.target.id === 'scanClean') {
+    const kinds = [...document.querySelectorAll('#scanOut [data-junk]:checked')].map((i) => i.dataset.junk);
+    if (!kinds.length) return toast('Rien de coché');
+    e.target.disabled = true;
+    const r = await api.scanClean(kinds);
+    toast(r?.ok ? `🧹 ${num(r.n)} fichiers supprimés · ${gb(r.freed)} libérés` : 'Nettoyage impossible');
+    kinds.forEach((k) => document.querySelector(`#scanOut [data-junk="${k}"]`)?.closest('label')?.remove());
+    e.target.disabled = false;
+    refreshHealth(true);
+  }
+});
+
+// ---------- Windows Update ----------
+let wu = null;
+function renderWu() {
+  const groups = Object.entries(wu.kinds ?? {}).map(([k, [icon, label]]) => [k, icon, label, wu.updates.filter((u) => u.kind === k)]).filter(([, , , l]) => l.length);
+  $('wuOut').innerHTML = `${wu.reboot ? '<div class="adv p0"><div><b>Redémarrage en attente</b><small>Des mises à jour déjà installées attendent un redémarrage pour se terminer.</small></div><button class="btn play" id="wuReboot">Redémarrer</button></div>' : ''}
+    ${wu.updates.length ? `<div class="panel"><h3>${wu.updates.length} mise${wu.updates.length > 1 ? 's' : ''} à jour disponible${wu.updates.length > 1 ? 's' : ''} <small class="hint">${gb(wu.updates.reduce((n, u) => n + u.size, 0))} à télécharger au maximum</small></h3>
+      ${groups.map(([k, icon, label, l]) => `<b class="sub">${icon} ${esc(label)}</b><div class="checks">${l.map((u) => `<label class="check"><input type="checkbox" data-wu="${esc(u.id)}" ${u.optional ? '' : 'checked'}><span>${esc(u.title)}${u.optional ? ' <small class="opt">facultative</small>' : ''}${u.reboot ? ' <small class="hint">· redémarrage</small>' : ''}</span><em>${u.size ? gb(u.size) : ''}</em></label>`).join('')}</div>`).join('')}
+      <div class="row"><button class="btn play big" id="wuInstall" type="button">Installer la sélection</button></div></div>` : '<div class="empty">✅ Windows est à jour.</div>'}
+    ${wu.history.length ? `<div class="panel"><h3>🕘 Dernières installations</h3><div class="flist">${wu.history.slice(0, 10).map((h) => `<div><div><b>${esc(h.title)}</b><small>${h.date ? new Date(h.date).toLocaleDateString('fr-FR') : ''}</small></div><em class="${h.result === 'ok' ? 'ok' : 'bad'}">${{ ok: 'installée', echec: 'échec', annule: 'annulée' }[h.result] ?? h.result}</em></div>`).join('')}</div></div>` : ''}`;
+  $('wuBadge').textContent = wu.updates.filter((u) => !u.optional).length || '';
+}
+$('wuSearch').addEventListener('click', async () => {
+  $('wuSearch').disabled = true; $('wuSearch').textContent = 'Recherche en cours…';
+  $('wuOut').innerHTML = '<div class="oprog"><b>Windows Update cherche les mises à jour…</b><div class="gbar big indet"><i></i></div><small class="hint">La première recherche peut prendre quelques minutes.</small></div>';
+  const r = await api.wuSearch();
+  $('wuSearch').disabled = false; $('wuSearch').textContent = 'Rechercher à nouveau';
+  if (r?.error) { $('wuOut').innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
+  wu = r;
+  $('wuLast').textContent = `Dernière recherche : ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  renderWu();
+});
+api.onRepair?.((p) => { const el = document.getElementById('repairStep'); if (el) el.textContent = { 'dism-scan': 'DISM : vérification de l’image de Windows…', 'dism-repair': 'DISM : réparation depuis Windows Update…', sfc: 'SFC : contrôle de chaque fichier système…', done: 'Terminé' }[p.step] ?? '…'; });
+api.onWu?.((p) => {
+  $('wuLive').hidden = p.phase === 'done';
+  if (p.phase === 'done') return;
+  const pct = ((p.index - (p.phase === 'download' ? 1 : 0.5)) / Math.max(1, p.total)) * 100;
+  $('wuLive').innerHTML = `<div class="oprog"><b>${p.phase === 'download' ? 'Téléchargement' : 'Installation'} ${p.index}/${p.total}</b><div class="gbar big"><i style="width:${pct}%"></i></div><small class="hint">${esc(p.title ?? '')}</small></div>`;
+});
+$('wuOut').addEventListener('click', async (e) => {
+  if (e.target.id === 'wuReboot') return api.wuReboot();
+  if (e.target.id !== 'wuInstall') return;
+  const ids = [...document.querySelectorAll('#wuOut [data-wu]:checked')].map((i) => i.dataset.wu);
+  if (!ids.length) return toast('Coche au moins une mise à jour');
+  if (!(await ui.confirm({ title: `Installer ${ids.length} mise${ids.length > 1 ? 's' : ''} à jour ?`, text: 'Windows va demander l’autorisation administrateur. Tu peux continuer à utiliser le PC pendant l’installation.', ok: '⬆ Installer', icon: '⬆' }))) return;
+  e.target.disabled = true;
+  const r = await api.wuInstall(ids);
+  $('wuLive').hidden = true;
+  if (!r?.ok) { e.target.disabled = false; return toast(r?.error ?? 'Installation impossible'); }
+  const ok = r.results.filter((x) => x.ok).length;
+  window.sfx?.play(ok ? 'success' : 'error');
+  await ui.confirm({ title: ok === r.results.length ? '✅ Mises à jour installées' : 'Installation terminée', text: `${ok} sur ${r.results.length} installée${ok > 1 ? 's' : ''}.${r.reboot ? ' Un redémarrage est nécessaire pour finir.' : ''}`, list: r.results.map((x) => `${x.ok ? '✓' : '✗'} ${x.title}`), ok: 'OK', cancel: 'Fermer', icon: '⬆' });
+  if (r.reboot) api.wuReboot();
+  $('wuSearch').click();
+});
 
 function renderFree() {
   const list = state.free.slice(0, 5);
@@ -2209,7 +2405,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.16.0',
+    version: async () => '0.17.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},

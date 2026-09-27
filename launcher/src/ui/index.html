@@ -116,58 +116,92 @@
   </section>
 
   <section id="view-pc" class="view">
-    <div class="list-head"><h2>Mon PC</h2><small class="hint">Surveillance en direct · Ctrl+Alt+O : infos par-dessus le jeu</small></div>
-    <div class="gauges" id="pcGauges"></div>
-    <div class="pchero">
-      <div><b>🔬 Analyse de ton PC</b><small>Vraies mesures de Windows : santé et durée de vie des composants, points faibles, antivirus, programmes, benchmark.</small></div>
-      <div class="row">
-        <button class="btn" type="button" id="pcDiagBtn">⚡ Diagnostic rapide</button>
-        <button class="btn" type="button" id="pcBenchBtn">🏁 Benchmark</button>
-        <button class="btn" type="button" id="pcReportBtn">📄 Rapport détaillé</button>
-        <button class="btn play" type="button" id="pcDeepBtn">🔬 Analyse complète <em class="prem">PREMIUM</em></button>
-      </div>
-      <div class="pcprog" id="pcProg" hidden><div class="updbar"><i id="pcProgFill"></i></div><small id="pcProgText"></small></div>
-    </div>
-    <div id="pcScore" class="pcscore" hidden></div>
-    <h3 class="pch">🧩 Composants <small class="hint">santé et durée de vie estimée</small></h3>
-    <div class="comps" id="pcComps"><div class="empty">Lance un diagnostic pour voir tes composants.</div></div>
-    <h3 class="pch">💡 Améliorations conseillées</h3>
-    <div class="advice" id="pcAdvice"><div class="empty">Les conseils apparaîtront après le diagnostic.</div></div>
-    <div class="pcgrid">
-      <div class="panel">
-        <h3>🛡 Sécurité (antivirus de Windows)</h3>
-        <div id="pcAv" class="hint">Lance un diagnostic pour voir l’état de la protection.</div>
-        <div class="row"><button class="btn" type="button" data-avscan="quick">Analyse rapide</button><button class="btn" type="button" data-avscan="full">Analyse complète</button><button class="btn ghost" type="button" id="avRemove">Supprimer les menaces</button></div>
-      </div>
-      <div class="panel">
-        <h3>🏁 Benchmark History</h3>
-        <div id="pcBench" class="hint">Mesure réelle du processeur, de la mémoire, du disque et de la carte graphique. 1000 = PC de jeu milieu de gamme.</div>
+    <div class="list-head"><h2>Mon PC</h2>
+      <div class="tabs pctabs" id="pcTabs">
+        <button data-pctab="apercu" class="on">Vue d’ensemble</button><button data-pctab="analyse">🔬 Analyse pro</button><button data-pctab="maj">⬆ Windows Update<em class="navcount warnc" id="wuBadge"></em></button><button data-pctab="composants">🧩 Composants</button><button data-pctab="securite">🛡 Sécurité</button><button data-pctab="perf">🏁 Performances</button><button data-pctab="reseau">🌐 Réseau</button>
       </div>
     </div>
-    <div class="pcgrid">
-      <div class="panel"><h3>🌡 Dernières 24 h <small class="hint">processeur, carte graphique, mémoire</small></h3><div id="pcTemps" class="tchart"><div class="empty">Les mesures s’enregistrent chaque minute.</div></div></div>
+
+    <div class="pctab" data-pctab="apercu">
+      <div class="healthcard glass-p" id="healthCard">
+        <div class="ring small" id="pcRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="val" id="pcRingVal"/></svg><div><b id="pcRingNum">–</b><small id="pcRingLabel">Calcul…</small></div></div>
+        <div class="hinfo2"><b>Score de santé du PC</b><small class="hint" id="pcOs">Le même score que dans Optimisation : matériel et sécurité, entretien, fichiers et stabilité de Windows.</small><div class="hparts" id="healthParts"></div></div>
+        <div class="hacts"><button class="btn play" type="button" data-gotab="analyse">🔬 Analyse pro</button><button class="btn" type="button" data-view="optimisation">🚀 Optimiser</button><button class="btn ghost" type="button" id="pcReportBtn">📄 Rapport</button></div>
+      </div>
+      <div class="gauges" id="pcGauges"></div>
+      <div class="pcgrid">
+        <div class="panel"><h3>🌡 Dernières 24 h <small class="hint">processeur, carte graphique, mémoire</small></h3><div id="pcTemps" class="tchart"><div class="empty">Les mesures s’enregistrent chaque minute.</div></div></div>
+        <div class="panel"><h3>💡 À faire en priorité</h3><div class="advice compact" id="pcTop"><div class="empty">Calcul…</div></div></div>
+      </div>
+    </div>
+
+    <div class="pctab" data-pctab="analyse" hidden>
+      <div class="scanhero glass-p">
+        <div><b>🔬 Analyse pro de tout le PC</b><small class="hint">Chaque fichier de chaque disque est lu un par un. Les doublons sont confirmés par l’empreinte SHA-256 de leur contenu, chaque fichier louche est vérifié (signature numérique + antivirus de Windows) et le journal de Windows est passé au crible (écrans bleus, arrêts brutaux, erreurs disque et matériel). Compte 10 à 30 minutes selon le nombre de fichiers : tu peux continuer à utiliser le PC.</small><small class="hint" id="scanLast"></small></div>
+        <div class="row"><button class="btn play big" type="button" id="scanBtn">Lancer l’analyse pro</button><button class="btn ghost" type="button" id="scanStop" hidden>Arrêter</button></div>
+      </div>
+      <div id="scanLive" class="scanlive" hidden></div>
+      <div id="scanOut"></div>
+    </div>
+
+    <div class="pctab" data-pctab="maj" hidden>
+      <div class="scanhero glass-p">
+        <div><b>⬆ Windows Update</b><small class="hint">Recherche avec l’agent officiel de Windows, puis téléchargement et installation ici même (Windows demande l’autorisation administrateur).</small><small class="hint" id="wuLast"></small></div>
+        <div class="row"><button class="btn play big" type="button" id="wuSearch">Rechercher les mises à jour</button></div>
+      </div>
+      <div id="wuLive" hidden></div>
+      <div id="wuOut"></div>
+    </div>
+
+    <div class="pctab" data-pctab="composants" hidden>
+      <div class="row pcactions"><button class="btn" type="button" id="pcDiagBtn">⚡ Relire les composants</button></div>
+      <div class="comps" id="pcComps"><div class="empty">Lecture des composants…</div></div>
+      <h3 class="pch">💡 Améliorations conseillées</h3>
+      <div class="advice" id="pcAdvice"><div class="empty">Les conseils apparaîtront après la lecture des composants.</div></div>
+    </div>
+
+    <div class="pctab" data-pctab="securite" hidden>
+      <div class="pcgrid">
+        <div class="panel">
+          <h3>🛡 Antivirus de Windows</h3>
+          <div id="pcAv" class="hint">Lecture de l’état de la protection…</div>
+          <div class="row"><button class="btn" type="button" data-avscan="quick">Analyse rapide</button><button class="btn" type="button" data-avscan="full">Analyse complète</button><button class="btn ghost" type="button" id="avRemove">Supprimer les menaces</button></div>
+        </div>
+        <div class="panel">
+          <h3>🛟 Point de restauration</h3>
+          <p class="hint">Une photo de Windows pour revenir en arrière si un pilote ou un réglage pose problème. History en crée un tout seul avant chaque optimisation système.</p>
+          <div class="row"><button class="btn" type="button" id="restoreBtn">Créer un point de restauration</button></div>
+        </div>
+      </div>
+      <h3 class="pch">🧠 Programmes qui tournent <button class="btn ghost sm" type="button" id="procRefresh">Actualiser</button></h3>
+      <div class="procs" id="pcProcs"><div class="empty">Clique sur Actualiser pour voir ce qui tourne et qui l’a signé.</div></div>
+    </div>
+
+    <div class="pctab" data-pctab="perf" hidden>
+      <div class="pcgrid">
+        <div class="panel">
+          <h3>🏁 Benchmark History</h3>
+          <div id="pcBench" class="hint">Mesure réelle du processeur, de la mémoire, du disque et de la carte graphique. 1000 = PC de jeu milieu de gamme.</div>
+          <div class="row"><button class="btn play" type="button" id="pcBenchBtn">Lancer le benchmark</button><button class="btn ghost" type="button" id="rankBtn">🌍 Classement mondial</button></div>
+        </div>
+        <div class="panel">
+          <h3>⚡ Boost de jeu</h3>
+          <p class="hint">Pendant une partie lancée ici : Windows en « Performances élevées » et les applis cochées sont fermées. Tout est remis à la fin.</p>
+          <label class="toggle"><input type="checkbox" id="boostOn"><span></span>Activer le boost</label>
+          <label class="toggle"><input type="checkbox" id="boostPower"><span></span>Mode d’alimentation « Performances élevées »</label>
+          <label class="toggle"><input type="checkbox" id="boostRestore"><span></span>Rouvrir les applis fermées après la partie</label>
+          <label class="toggle"><input type="checkbox" id="heatAlerts"><span></span>M’alerter si le PC chauffe trop</label>
+          <b class="sub">Fermer pendant la partie</b>
+          <div class="checks" id="boostApps"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pctab" data-pctab="reseau" hidden>
       <div class="panel"><h3>🌐 Réseau</h3><p class="hint">Latence réelle vers les services de jeu et vitesse des serveurs DNS.</p><div class="row"><button class="btn" type="button" id="netPing">📶 Tester la latence</button><button class="btn" type="button" id="netDns">⚡ Trouver le DNS le plus rapide</button></div><div id="netOut"></div></div>
     </div>
-    <div class="row pcextra"><button class="btn ghost" type="button" id="restoreBtn">🛟 Créer un point de restauration</button><button class="btn ghost" type="button" id="rankBtn">🌍 Classement mondial des benchmarks</button></div>
-    <h3 class="pch">🧠 Programmes qui consomment <button class="btn ghost sm" type="button" id="procRefresh">Actualiser</button></h3>
-    <div class="procs" id="pcProcs"><div class="empty">Clique sur Actualiser pour voir ce qui tourne.</div></div>
-    <div class="pcgrid">
-      <div class="panel">
-        <h3>⚡ Boost de jeu</h3>
-        <p class="hint">Pendant une partie lancée ici : Windows en « Performances élevées » et les applis cochées sont fermées. Tout est remis à la fin.</p>
-        <label class="toggle"><input type="checkbox" id="boostOn"><span></span>Activer le boost</label>
-        <label class="toggle"><input type="checkbox" id="boostPower"><span></span>Mode d’alimentation « Performances élevées »</label>
-        <label class="toggle"><input type="checkbox" id="boostRestore"><span></span>Rouvrir les applis fermées après la partie</label>
-        <label class="toggle"><input type="checkbox" id="heatAlerts"><span></span>M’alerter si le PC chauffe trop</label>
-        <b class="sub">Fermer pendant la partie</b>
-        <div class="checks" id="boostApps"></div>
-      </div>
-      <div class="panel optilink" data-view="optimisation">
-        <h3>🚀 Optimisation complète</h3>
-        <p class="hint">Fichiers inutiles, restes de jeux, démarrage de Windows, réglages pour les jeux, nettoyage profond : tout est dans la page Optimisation, avec un score de santé de ton PC.</p>
-        <button class="btn play big" type="button" data-view="optimisation">Ouvrir l’optimisation</button>
-      </div>
-    </div>
+    <div class="pcprog" id="pcProg" hidden><div class="updbar"><i id="pcProgFill"></i></div><small id="pcProgText"></small></div>
+    <div id="pcScore" hidden></div>
   </section>
 
   <section id="view-optimisation" class="view">

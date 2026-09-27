@@ -27,12 +27,12 @@ export function notesFor(version, log = readChangelog()) {
 const illustrated = (version, log) => (log[version] ?? []).filter((e) => Array.isArray(e[3]) && e[3].length);
 export const shotCount = (version, log = readChangelog()) => illustrated(version, log).length;
 
-/** Script de mise en scène : ferme l'écran de connexion puis clique les éléments demandés par la n-ième nouveauté. */
+/** Script de mise en scène : ferme l'écran de connexion puis clique les éléments demandés par la n-ième nouveauté (« waitN » = attendre N ms). */
 export function shotScript(version, log = readChangelog(), n = 0) {
   const clicks = illustrated(version, log)[n]?.[3] ?? [];
   const safe = clicks.filter((c) => typeof c === 'string' && /^[#.\w\s\-=[\]"']{1,80}$/.test(c));
   // La fenêtre « Quoi de neuf » (premier lancement) est fermée avant de cliquer
-  return `document.getElementById('auth').hidden = true; const shut = () => ['modal', 'recapDlg'].forEach((id) => document.getElementById(id)?.open && document.getElementById(id).close()); [150, 700, 1100].forEach((t) => setTimeout(shut, t)); const sels = ${JSON.stringify(safe)}; sels.forEach((sel, i) => setTimeout(() => { if (i === 0) shut(); const el = document.querySelector(sel); el?.click(); if (i > 0) el?.scrollIntoView({ block: 'center' }); }, 300 + 250 * i)); new Promise((r) => setTimeout(r, 1500 + 250 * sels.length));`;
+  return `document.getElementById('auth').hidden = true; const shut = () => ['modal', 'recapDlg'].forEach((id) => document.getElementById(id)?.open && document.getElementById(id).close()); [150, 700, 1100].forEach((t) => setTimeout(shut, t)); const sels = ${JSON.stringify(safe)}; let t = 300; sels.forEach((sel, i) => { const w = /^wait(\\d+)$/.exec(sel); if (w) { t += Number(w[1]); return; } setTimeout(() => { if (i === 0) shut(); const el = document.querySelector(sel); el?.click(); if (i > 0 && !el?.closest('.tabs')) el?.scrollIntoView({ block: 'center' }); }, t); t += 250; }); new Promise((r) => setTimeout(r, t + 1500));`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
