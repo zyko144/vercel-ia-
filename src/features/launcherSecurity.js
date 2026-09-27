@@ -65,10 +65,26 @@ export function checkMailCode(rec, code) {
   return a.length === b.length && timingSafeEqual(a, b) ? 'ok' : 'bad';
 }
 
-export const mailReady = () => Boolean(process.env.RESEND_API_KEY);
+export const mailReady = () => Boolean(process.env.BREVO_API_KEY || process.env.RESEND_API_KEY);
 
-/** Envoie un e-mail avec Resend (clé RESEND_API_KEY dans l'environnement du serveur, jamais dans le code). */
+/**
+ * Envoie un e-mail (clés dans l'environnement du serveur, jamais dans le code) :
+ * - Brevo (BREVO_API_KEY + BREVO_FROM) : marche sans nom de domaine, avec une adresse Gmail vérifiée chez Brevo ;
+ * - sinon Resend (RESEND_API_KEY + RESEND_FROM sur un domaine vérifié).
+ */
 export async function sendMail(to, subject, html, fetchImpl = fetch) {
+  const fail = { ok: false, error: 'Envoi de l’e-mail impossible, réessaie plus tard.' };
+  if (process.env.BREVO_API_KEY) {
+    const from = process.env.BREVO_FROM;
+    if (!from) return { ok: false, error: 'E-mails non configurés sur le serveur.' };
+    const r = await fetchImpl('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST', headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ sender: { name: 'History', email: from }, to: [{ email: to }], subject, htmlContent: html }),
+      signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
+    if (!r?.ok) console.warn('[e-mail] Brevo a refusé l’envoi', r?.status);
+    return r?.ok ? { ok: true } : fail;
+  }
   const key = process.env.RESEND_API_KEY;
   if (!key) return { ok: false, error: 'E-mails non configurés sur le serveur.' };
   const r = await fetchImpl('https://api.resend.com/emails', {
@@ -76,7 +92,8 @@ export async function sendMail(to, subject, html, fetchImpl = fetch) {
     body: JSON.stringify({ from: process.env.RESEND_FROM || 'History <onboarding@resend.dev>', to: [to], subject, html }),
     signal: AbortSignal.timeout(10_000),
   }).catch(() => null);
-  return r?.ok ? { ok: true } : { ok: false, error: 'Envoi de l’e-mail impossible, réessaie plus tard.' };
+  if (!r?.ok) console.warn('[e-mail] Resend a refusé l’envoi', r?.status);
+  return r?.ok ? { ok: true } : fail;
 }
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
