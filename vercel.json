@@ -123,5 +123,17 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/launcher",
+      "destination": "https://historylauncher.vercel.app/",
+      "permanent": false
+    },
+    {
+      "source": "/launcher.html",
+      "destination": "https://historylauncher.vercel.app/",
+      "permanent": false
+    }
   ]
 }
