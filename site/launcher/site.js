@@ -41,10 +41,16 @@
   // Capture en 3D qui suit la souris
   const tilt = document.getElementById('tilt');
   if (tilt && matchMedia('(pointer:fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // Une mise à jour par image affichée (pas à chaque mouvement de souris), pour rester fluide
+    let pending = null;
     addEventListener('mousemove', (e) => {
-      const x = e.clientX / innerWidth - 0.5;
-      const y = e.clientY / innerHeight - 0.5;
-      tilt.style.transform = `rotateX(${10 - y * 10}deg) rotateY(${x * 14 - 4}deg) rotateZ(${x}deg)`;
+      if (!pending) requestAnimationFrame(() => {
+        const x = pending.clientX / innerWidth - 0.5;
+        const y = pending.clientY / innerHeight - 0.5;
+        tilt.style.transform = `rotateX(${10 - y * 10}deg) rotateY(${x * 14 - 4}deg) rotateZ(${x}deg)`;
+        pending = null;
+      });
+      pending = e;
     }, { passive: true });
   }
 
@@ -63,26 +69,30 @@
   const c = document.getElementById('stars');
   const ctx = c.getContext('2d');
   let stars = [];
+  // Résolution plafonnée et moins d'étoiles : le champ d'étoiles ne doit jamais ralentir la page
+  const dpr = Math.min(devicePixelRatio || 1, 1.5);
   const resize = () => {
-    c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio;
-    stars = Array.from({ length: Math.min(220, Math.round(innerWidth / 6)) }, () => ({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() }));
+    c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+    stars = Array.from({ length: Math.min(140, Math.round(innerWidth / 10)) }, () => ({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() }));
   };
   resize();
   addEventListener('resize', resize);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  (function frame() {
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !still) requestAnimationFrame(frame); });
+  function frame() {
     ctx.clearRect(0, 0, c.width, c.height);
     const cx = c.width / 2; const cy = c.height / 2;
     for (const s of stars) {
       if (!still) s.z -= 0.0012;
       if (s.z <= 0.02) { s.x = Math.random() * 2 - 1; s.y = Math.random() * 2 - 1; s.z = 1; }
       const px = cx + (s.x / s.z) * cx * 0.6; const py = cy + (s.y / s.z) * cy * 0.6;
-      const r = (1 - s.z) * 2.2 * devicePixelRatio;
+      const r = (1 - s.z) * 2.2 * dpr;
       ctx.fillStyle = `rgba(${150 + (1 - s.z) * 105}, ${200 + (1 - s.z) * 55}, 255, ${(1 - s.z) * 0.9})`;
       ctx.beginPath(); ctx.arc(px, py, r, 0, 6.283); ctx.fill();
     }
-    if (!still) requestAnimationFrame(frame);
-  })();
+    if (!still && !document.hidden) requestAnimationFrame(frame);
+  }
+  frame();
 
   // Consommation : seulement des mesures réelles (fichier mesures.json), jamais de chiffres inventés
   fetch('/launcher/mesures.json').then((r) => (r.ok ? r.json() : null)).then((m) => {
