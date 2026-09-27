@@ -74,6 +74,7 @@ await check('liaison Discord : code à usage unique, profil /launcher avec nivea
   assert.match(replies.at(-1).content, /inconnu ou expiré/);
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: c.code }));
   assert.match(replies.at(-1).content, /Noam/);
+  assert.equal(replies.at(-1).files[0].attachment.subarray(0, 4).toString(), 'GIF8', 'carte envoyée à la liaison');
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: c.code }));
   assert.match(replies.at(-1).content, /inconnu ou expiré/, 'code à usage unique');
   await handleLauncherCommand({}, inter('profil'));

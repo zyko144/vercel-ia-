@@ -60,9 +60,10 @@ export async function handleLauncherCommand(client, interaction) {
   if (sub === 'lier') {
     const r = await linkDiscord(interaction.options.getString('code', true), interaction.user.id);
     if (!r.ok) return interaction.reply({ content: `❌ ${r.error}`, ...PRIVATE });
-    await interaction.reply({ content: `✅ Ton compte Discord est lié au compte History **${r.pseudo}**. Tes rôles arrivent dans quelques secondes.`, ...PRIVATE });
-    syncMember(client, interaction.user.id, await profileOf(r.id)).catch(() => {});
-    return;
+    await interaction.deferReply(PRIVATE);
+    const p = await profileOf(r.id);
+    syncMember(client, interaction.user.id, p).catch(() => {});
+    return cardReply(interaction, { id: r.id, pseudo: r.pseudo }, interaction.user, p, `✅ Ton compte Discord est lié au compte History **${r.pseudo}**. Tes rôles arrivent dans quelques secondes.`);
   }
   const user = interaction.options.getUser('membre') ?? interaction.user;
   const acc = await accountByDiscord(user.id);
@@ -71,17 +72,20 @@ export async function handleLauncherCommand(client, interaction) {
   }
   const p = await profileOf(acc.id);
   // Carte animée aux couleurs du launcher (texte seul si trop de demandes ou si le rendu échoue)
-  if (allowAttempt('launcher-card', interaction.user.id, 4, 60_000)) {
-    await interaction.deferReply();
-    try {
-      const gif = await launcherCardGif({ ...p, pseudo: acc.pseudo }, { avatarUrl: user.displayAvatarURL({ extension: 'png', size: 128 }) });
-      return await interaction.editReply({ files: [new AttachmentBuilder(gif, { name: 'history-profil.gif' })] });
-    } catch (err) {
-      console.error('[launcher] carte profil :', err.message);
-      return interaction.editReply({ embeds: [profileEmbed(acc, user, p)] });
-    }
+  if (!allowAttempt('launcher-card', interaction.user.id, 4, 60_000)) return interaction.reply({ embeds: [profileEmbed(acc, user, p)] });
+  await interaction.deferReply();
+  return cardReply(interaction, acc, user, p);
+}
+
+/** Répond (après deferReply) avec la carte GIF, ou l'embed texte si le rendu échoue. */
+async function cardReply(interaction, acc, user, p, content = undefined) {
+  try {
+    const gif = await launcherCardGif({ ...p, pseudo: acc.pseudo }, { avatarUrl: user.displayAvatarURL({ extension: 'png', size: 128 }) });
+    return await interaction.editReply({ content, files: [new AttachmentBuilder(gif, { name: 'history-profil.gif' })] });
+  } catch (err) {
+    console.error('[launcher] carte profil :', err.message);
+    return interaction.editReply({ content, embeds: [profileEmbed(acc, user, p)] });
   }
-  return interaction.reply({ embeds: [profileEmbed(acc, user, p)] });
 }
 
 function profileEmbed(acc, user, p) {
