@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { load, save } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
-import { me } from './launcherAccounts.js';
+import { me, profileOf } from './launcherAccounts.js';
 
 const KEY = 'launcher-social';
 const MAX_FRIENDS = 200;
@@ -72,14 +72,14 @@ function view(d, accs, id) {
     const a = accs[fid];
     const p = d.presence[fid] ?? {};
     const online = now - (p.seen ?? 0) < ONLINE_MS;
-    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), bench: p.bench ?? null, playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, week: p.week ?? 0, top: p.top ?? null } : null;
+    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), ...profileOf(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), bench: p.bench ?? null, playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, week: p.week ?? 0, top: p.top ?? null } : null;
   };
   return {
     code: friendCode(accs[id]),
     amis: listOf(d.friends, id).map(person).filter(Boolean).sort((a, b) => (b.online - a.online) || a.pseudo.localeCompare(b.pseudo, 'fr')),
-    demandes: listOf(d.requests, id).map((fid) => accs[fid] && { id: fid, pseudo: accs[fid].pseudo, code: friendCode(accs[fid]) }).filter(Boolean),
-    moi: { week: d.presence[id]?.week ?? 0, top: d.presence[id]?.top ?? null },
-    groupes: Object.values(d.groups).filter((g) => g.members.includes(id)).map((g) => ({ id: g.id, name: g.name, owner: g.owner === id, members: g.members.filter((m) => accs[m]).map((m) => ({ id: m, pseudo: accs[m].pseudo, online: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS, playing: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS ? d.presence[m]?.playing ?? null : null })) })),
+    demandes: listOf(d.requests, id).map((fid) => accs[fid] && { id: fid, pseudo: accs[fid].pseudo, code: friendCode(accs[fid]), ...profileOf(accs[fid]) }).filter(Boolean),
+    moi: { week: d.presence[id]?.week ?? 0, top: d.presence[id]?.top ?? null, pseudo: accs[id]?.pseudo, ...profileOf(accs[id]) },
+    groupes: Object.values(d.groups).filter((g) => g.members.includes(id)).map((g) => ({ id: g.id, name: g.name, owner: g.owner === id, members: g.members.filter((m) => accs[m]).map((m) => ({ id: m, pseudo: accs[m].pseudo, ...profileOf(accs[m]), online: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS, playing: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS ? d.presence[m]?.playing ?? null : null })) })),
   };
 }
 

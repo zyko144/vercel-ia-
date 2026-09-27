@@ -33,8 +33,8 @@
 </aside>
 
 <header class="top">
-  <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Rechercher un jeu, une application…" autocomplete="off"></label>
   <button class="bell" id="bellBtn" type="button" title="Centre de notifications" popovertarget="notifCenter"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><em id="bellCount"></em></button>
+  <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Rechercher un jeu, une application…" autocomplete="off"></label>
   <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
 
@@ -86,43 +86,64 @@
   </section>
 
   <section id="view-amis" class="view">
-    <div class="list-head fhead"><h2>Amis</h2><div class="tabs" id="friendTabs"><button data-ftab="history" class="on">History</button><button data-ftab="steam">Steam</button></div>
-      <label class="fsearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="fSearch" type="search" placeholder="Chercher un ami…" autocomplete="off"></label>
-      <span id="friendsCount" class="fcount"></span>
-      <button class="btn play" id="fAddBtn" type="button">＋ Ajouter un ami</button>
-      <button class="btn ghost iconb" id="friendsRefresh" type="button" title="Actualiser">↻</button>
-    </div>
-    <div id="fHistory" class="fwrap">
-      <div class="fmain">
-        <div id="hRequests"></div>
-        <div id="hFriends"></div>
+    <div class="fx">
+      <div class="fxtop">
+        <h2>Amis</h2>
+        <nav class="fxnav" id="fxNav"><button type="button" data-fx="amis" class="on">Amis<em id="fxnAmis"></em></button><button type="button" data-fx="groupes">Groupes<em id="fxnGroupes"></em></button><button type="button" data-fx="soirees">Soirées<em id="fxnSoirees"></em></button></nav>
+        <div class="fxgrow"></div>
+        <button type="button" class="fxcode" id="copyCode" title="Copier ton code ami"><small>Ton code ami</small><b id="myCode">…</b></button>
+        <button type="button" class="btn play" id="fAddBtn">＋ Ajouter un ami</button>
       </div>
-      <aside class="fside">
-        <div class="fbox fme">
-          <div class="fmehead"><span class="pav big" id="meAv">?</span><div><b id="meName">Toi</b><small id="meSub" class="hint">Ton code ami</small></div></div>
-          <div class="fcode"><b id="myCode">…</b><button class="btn sm" type="button" id="copyCode">Copier</button><button class="btn ghost sm" type="button" id="copyInvite" title="Lien qui ouvre History et ajoute ton code">🔗 Lien</button></div>
-          <div class="finput"><input id="myStatus" placeholder="Ton statut (ex. Dispo pour jouer)" maxlength="60"><button class="btn sm" type="button" id="saveStatus">OK</button></div>
-          <div class="finput"><input id="addCode" placeholder="Code de ton pote (ex. Max#3F9A2C)" maxlength="40"><button class="btn play sm" type="button" id="addFriend">Ajouter</button></div>
+      <div class="fxbody">
+        <div class="fxleft">
+          <div class="fxpane" data-fx="amis">
+            <div class="fxadd" id="fxAdd" hidden>
+              <b>Ajouter un ami</b>
+              <div class="finput"><input id="addCode" placeholder="Son code (ex. Max#3F9A2C)" maxlength="40"><button class="btn play sm" type="button" id="addFriend">Envoyer</button></div>
+              <button type="button" class="linkbtn" id="copyInvite">🔗 Copier mon lien d’invitation</button>
+            </div>
+            <div class="fxtools">
+              <label class="fxsearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="fSearch" type="search" placeholder="Rechercher" autocomplete="off"></label>
+              <div class="fxsrc" id="friendTabs"><button type="button" data-ftab="history" class="on">History</button><button type="button" data-ftab="steam">Steam</button></div>
+            </div>
+            <div class="fxlist">
+              <div id="hRequests"></div>
+              <div id="hFriends"></div>
+              <div id="friendsBody" hidden></div>
+            </div>
+            <div class="fxme"><span class="pav sm" id="meAv">?</span><div><b id="meName">Toi</b><input id="myStatus" placeholder="Ton statut…" maxlength="60"></div><button class="btn ghost sm" type="button" id="saveStatus" title="Mettre ce statut">OK</button></div>
+          </div>
+          <div class="fxpane" data-fx="groupes" hidden>
+            <div class="fxlhead"><b>Tes groupes</b><button type="button" class="btn sm" id="groupNew">＋ Nouveau</button></div>
+            <div class="fxlist" id="hGroups"></div>
+          </div>
+          <div class="fxpane" data-fx="soirees" hidden>
+            <div class="fxlhead"><b>Soirées prévues</b><button type="button" class="btn sm" id="eNew">＋ Organiser</button></div>
+            <div class="fxlist" id="eventsList"></div>
+          </div>
         </div>
-        <div class="fbox">
-          <div class="fboxhead"><h3>👥 Groupes</h3><button class="btn ghost sm" type="button" id="groupNew">＋ Nouveau</button></div>
-          <div id="hGroups"><p class="hint">Crée un groupe (« Squad RL ») pour prévenir tout le monde d’un coup.</p></div>
-        </div>
-        <div class="fbox">
-          <div class="fboxhead"><h3>🎉 Soirées jeu</h3></div>
-          <div id="eventsList"></div>
-          <details class="neweve"><summary class="btn sm">＋ Organiser une soirée</summary>
+        <div class="fxright">
+          <div class="fxempty" id="fxEmpty"><b id="fxEmptyT">Choisis un ami</b><small id="fxEmptyS">Sa discussion, ce à quoi il joue et les boutons pour le rejoindre ou l’appeler s’affichent ici.</small></div>
+          <div class="fxchat" id="fxChat" hidden>
+            <div class="chathead"><span class="pav" id="chatAv">?</span><div class="chatwho"><b id="chatWho">…</b><small id="chatSub"></small></div>
+              <div class="chatacts"><button type="button" class="btn play sm" id="chatJoin" hidden>▶ Rejoindre</button><button type="button" class="btn sm" id="chatAsk" hidden>On joue ?</button><button type="button" class="btn sm" id="chatInvite" hidden>Inviter</button><button type="button" class="btn sm" id="chatCall">Appeler</button><button type="button" class="btn ghost sm" id="chatMore" title="Plus">•••</button></div></div>
+            <div class="chatfil" id="chatFil"></div>
+            <form class="chatin" id="chatForm"><textarea id="chatText" rows="1" maxlength="500" placeholder="Écris un message… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form>
+          </div>
+          <div class="fxdetail" id="fxDetail" hidden></div>
+          <div class="fxdetail" id="fxEventForm" hidden>
+            <h3>Organiser une soirée</h3>
+            <p class="hint">Tes amis invités la voient dans leur launcher et reçoivent un rappel 10 min avant.</p>
             <div class="eveform">
               <label>Jeu<select id="eGame"></select></label>
               <label>Quand<input type="datetime-local" id="eAt"></label>
               <b class="sub">Inviter</b><div class="checks" id="eInvites"></div>
-              <button class="btn play" type="button" id="eCreate">Envoyer les invitations</button>
+              <div class="row"><button class="btn play" type="button" id="eCreate">Envoyer les invitations</button><button class="btn ghost" type="button" id="eCancelForm">Annuler</button></div>
             </div>
-          </details>
+          </div>
         </div>
-      </aside>
+      </div>
     </div>
-    <div id="fSteam" hidden><div id="friendsBody"></div></div>
   </section>
 
   <section id="view-pc" class="view">
@@ -328,7 +349,7 @@
 
 <div id="callBar" class="callbar" popover="manual"><span class="cav" id="callAv">?</span><div><b id="callWho"></b><small id="callState">Sonnerie…</small></div><button class="cbtn" id="callMute" title="Couper le micro">🎙</button><button class="cbtn hang" id="callHang" title="Raccrocher">✆</button><audio id="callAudio" autoplay></audio></div>
 <div id="updScreen" class="updscreen" hidden><div class="updcard"><img src="logo.png" alt=""><h2 id="updTitle">Mise à jour</h2><p id="updText">Téléchargement…</p><div class="updbar"><i id="updFill"></i></div><small id="updPct">0 %</small></div></div>
-<dialog id="chatDlg" class="mdl"><div class="dlg modern chatbox"><div class="chathead"><span class="pav" id="chatAv">?</span><div class="chatwho"><b id="chatWho">Message</b><small id="chatSub">…</small></div><button type="button" class="btn sm" id="chatCall" title="Appel vocal">📞 Appeler</button><button type="button" class="btn ghost sm" id="chatJoin" hidden>Rejoindre</button><button type="button" class="fold" id="chatClose" title="Fermer">✕</button></div><div class="chatfil" id="chatFil"></div><form class="chatin" id="chatForm"><textarea id="chatText" rows="1" maxlength="500" placeholder="Écris un message… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form></div></dialog>
+
 <dialog id="modal" class="mdl"><form method="dialog" class="dlg modern" id="modalBox"></form></dialog>
 
 <div id="dropzone" hidden><div>Lâche le fichier .exe pour ajouter le jeu</div></div>

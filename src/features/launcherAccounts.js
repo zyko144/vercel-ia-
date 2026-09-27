@@ -73,7 +73,34 @@ async function newSession(d, id) {
   d.sessions[sha(token)] = { id, at: now, seen: now };
   return token;
 }
-const publicAccount = (a) => ({ id: a.id, pseudo: a.pseudo, email: a.email, createdAt: a.createdAt, verified: a.verified !== false, twoFactor: Boolean(a.totp?.on), discord: Boolean(a.discordId) });
+// Profil personnalisé : photo (servie à part, en cache), couleur, bio. Visible par les amis.
+export const PUBLIC_BASE = (process.env.PUBLIC_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
+export const profileOf = (a) => ({
+  avatar: a?.profile?.av ? `${PUBLIC_BASE}/api/compte/avatar/${a.id}?v=${a.profile.av}` : null,
+  color: a?.profile?.color ?? null, bio: a?.profile?.bio ?? null,
+});
+const publicAccount = (a) => ({ id: a.id, pseudo: a.pseudo, email: a.email, createdAt: a.createdAt, verified: a.verified !== false, twoFactor: Boolean(a.totp?.on), discord: Boolean(a.discordId), profile: profileOf(a) });
+const AVATAR_MAX = 150 * 1024;
+async function saveProfile(a, body) {
+  const p = (a.profile ??= {});
+  if ('couleur' in body) p.color = /^#[0-9a-f]{6}$/i.test(String(body.couleur ?? '')) ? String(body.couleur).toLowerCase() : null;
+  if ('bio' in body) p.bio = String(body.bio ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140) || null;
+  if ('avatar' in body) {
+    if (body.avatar === null) { delete p.av; save(`launcher-avatar-${a.id}`, {}); }
+    else {
+      const m = String(body.avatar).match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return 'Image illisible (PNG, JPG ou WEBP).';
+      const buf = Buffer.from(m[2], 'base64');
+      if (buf.length > AVATAR_MAX) return 'Image trop lourde (150 Ko maximum).';
+      // Vérifie la signature du fichier (pas seulement ce qu'il prétend être)
+      const ok = m[1] === 'png' ? buf.subarray(0, 4).toString('hex') === '89504e47' : m[1] === 'jpeg' ? buf.subarray(0, 2).toString('hex') === 'ffd8' : buf.subarray(8, 12).toString() === 'WEBP';
+      if (!ok) return 'Image illisible (PNG, JPG ou WEBP).';
+      save(`launcher-avatar-${a.id}`, { mime: `image/${m[1]}`, data: m[2] });
+      p.av = Date.now();
+    }
+  }
+  return null;
+}
 
 export async function register(body, ip) {
   if (!allowAttempt('compte-inscription', ip, 5, 60 * 60_000)) return { status: 429, error: 'Trop d’inscriptions depuis cette connexion, réessaie plus tard.' };
@@ -289,6 +316,25 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       d.discordCodes[code] = { id: a.id, exp: Date.now() + 10 * 60_000 };
       save(KEY, d);
       return send(res, 200, { ok: true, code, lie: Boolean(a.discordId) });
+    }
+    // Photo de profil : publique (identifiant aléatoire), gardée en cache par le navigateur
+    const avm = url.pathname.match(/^\/api\/compte\/avatar\/([\w-]{8,64})$/);
+    if (avm && req.method === 'GET') {
+      const img = await load(`launcher-avatar-${avm[1]}`, null);
+      if (!img?.data) return send(res, 404, { error: 'Pas de photo.' });
+      res.writeHead(200, { 'Content-Type': img.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+      res.end(Buffer.from(img.data, 'base64'));
+      return;
+    }
+    if (route === 'POST /api/compte/profil') {
+      const d = await data();
+      const a = await accountOf(d, token);
+      if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      if (!allowAttempt('compte-profil', a.id, 30, 60 * 60_000)) return send(res, 429, { error: 'Trop de changements, réessaie plus tard.' });
+      const err = await saveProfile(a, await readJson(req));
+      if (err) return send(res, 400, { error: err });
+      save(KEY, d);
+      return send(res, 200, { ok: true, compte: publicAccount(a) });
     }
     if (route === 'GET /api/compte/moi') { const c = await me(token); return c ? send(res, 200, { compte: c }) : send(res, 401, { error: 'Session expirée, reconnecte-toi.' }); }
     if (url.pathname === '/api/compte/sauvegarde' && ['GET', 'POST'].includes(req.method)) {

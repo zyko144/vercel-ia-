@@ -61,6 +61,9 @@ const LAUNCHERS = /^(steam|epic games launcher|ubisoft connect|ea app|ea desktop
 const GAME_PUBLISHERS = /riot games|ubisoft|electronic arts|blizzard|gog\.com|rockstar games|mojang|bethesda|cd projekt|square enix|bandai namco|capcom|sega|2k|activision|valve|hoyoverse|mihoyo|cognosphere|wargaming|bungie|embark|kuro games|epic games(?!.*launcher)/i;
 const GAME_PATHS = /\\(games|riot games|gog galaxy\\games|ubisoft game launcher\\games|ea games|origin games|battle\.net|rockstar games|xboxgames)\\/i;
 
+// Pas des jeux, même publiés par un éditeur de jeux : anti-triche, clients, outils (jamais « Joue à Riot Vanguard »)
+export const NOT_GAME = /vanguard|anti-?cheat|easy ?anti ?cheat|battl ?eye|punkbuster|riot client|launcher|updater|crash ?report|redist|overlay|companion|toolkit|mod ?manager|installer|uninstall|benchmark tool|character creator|dedicated server|\bsdk\b|editor\b/i;
+
 export function categoryOf(name) {
   if (MUSIC.test(name)) return 'musique';
   if (VIDEO.test(name)) return 'video';
@@ -85,7 +88,7 @@ export function programsFromRegistry(entries) {
     const installDir = String(v.InstallLocation ?? '').replace(/^"|"$/g, '');
     const publisher = String(v.Publisher ?? '');
     const launcher = LAUNCHERS.test(name);
-    const game = !launcher && (GAME_PUBLISHERS.test(publisher) || GAME_PATHS.test(`${installDir}\\`) || /^Riot Game /i.test(key.split('\\').pop()));
+    const game = !launcher && !NOT_GAME.test(name) && (GAME_PUBLISHERS.test(publisher) || GAME_PATHS.test(`${installDir}\\`) || /^Riot Game /i.test(key.split('\\').pop()));
     const source = /rockstar/i.test(publisher) ? 'rockstar' : /riot/i.test(publisher) ? 'riot' : /ubisoft/i.test(publisher) ? 'ubisoft' : /electronic arts/i.test(publisher) ? 'ea' : /blizzard/i.test(publisher) ? 'battlenet' : /gog/i.test(publisher) ? 'gog' : 'pc';
     const item = {
       id: `reg:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, source, kind: launcher ? 'launcher' : game ? 'game' : 'app',
