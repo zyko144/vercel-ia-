@@ -136,5 +136,19 @@ await check('double authentification : QR, activation, connexion en 2 étapes, c
 });
 
 server.close();
+await check('e-mails par Brevo (sans nom de domaine) quand BREVO_API_KEY est défini', async () => {
+  const { sendMail } = await import('../src/features/launcherSecurity.js');
+  const sent = [];
+  process.env.BREVO_API_KEY = 'cle-brevo-test'; process.env.BREVO_FROM = 'history.launcher@gmail.com';
+  const r = await sendMail('zoe@exemple.fr', 'Code', '<b>1</b>', async (u, o) => { sent.push({ u, o }); return new Response('{}', { status: 201 }); });
+  delete process.env.BREVO_API_KEY; delete process.env.BREVO_FROM;
+  assert.equal(r.ok, true);
+  assert.equal(sent[0].u, 'https://api.brevo.com/v3/smtp/email');
+  assert.equal(sent[0].o.headers['api-key'], 'cle-brevo-test');
+  const body = JSON.parse(sent[0].o.body);
+  assert.deepEqual(body.to, [{ email: 'zoe@exemple.fr' }]);
+  assert.equal(body.sender.email, 'history.launcher@gmail.com');
+});
+
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);
