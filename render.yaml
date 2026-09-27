@@ -21,4 +21,9 @@ services:
       # Token du bot Casinho (le casino). Sans lui, le casino reste simplement éteint.
       - key: TOKEN_CASINHO
         sync: false
+      # E-mails du launcher (codes de vérification) : Brevo, avec l'adresse expéditeur vérifiée chez Brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM
+        sync: false
       # Le reste a déjà les bonnes valeurs par défaut dans src/config.js
