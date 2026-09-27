@@ -24,9 +24,10 @@ export function demoFriends(now = Date.now()) {
   };
 }
 export function demoBench(now = Date.now()) {
-  const scores = { cpu1: 1310, cpuN: 1480, ram: 1220, disk: 1690, gpu: 1540, total: 1440 };
-  return [{ at: now - 3600_000, cpu: { single: 1965, multi: 10360, threads: 16 }, ram: { gbps: 14.6 }, disk: { write: 2540, read: 3380, iops: 33800 }, gpu: { fps: 185 }, scores, tier: 'Très haut de gamme' },
-    { at: now - 8 * 86_400_000, scores: { ...scores, total: 1310 }, tier: 'Très haut de gamme' }];
+  const r = { v: 2, at: now - 3600_000, cpu: { threads: 16, single: { sha: 1960, zip: 71, nbody: 402, sort: 12.1, path: 1260 }, multi: { sha: 14800, zip: 520, nbody: 2950, sort: 88, path: 9100 }, sustain: { slices: [9400, 9350, 9310, 9280, 9300, 9270], stability: 98 } },
+    ram: { gbps: 38.4, latency: 72 }, disk: { write: 3900, read: 5200, iopsR: 118000, iopsW: 9800, readSrc: 'jeu' }, gpu: { scenes: { geometry: 520, shader: 205, post: 390 }, renderer: 'NVIDIA GeForce RTX 4070' },
+    scores: { cpu1: 1375, cpuN: 2164, ram: 1886, disk: 2389, gpu: 1789, total: 1871 }, tier: 'Monstre de jeu' };
+  return [r, { ...r, at: now - 8 * 86_400_000, scores: { ...r.scores, total: 1720 } }];
 }
 /** Jours et sessions d'exemple (série de 9 jours, soirées surtout) pour les statistiques et les badges. */
 export function demoActivity(now = Date.now()) {

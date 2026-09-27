@@ -1,5 +1,6 @@
 // Temps passé sur chaque jeu ou appli : toutes les 60 s, on regarde les programmes ouverts et on
 // crédite une minute à ceux dont l'exécutable est dans le dossier d'un élément de la bibliothèque.
+import { ps } from './pshost.js';
 import { logSession } from './progress.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -13,8 +14,8 @@ export async function runningPaths(maxAgeMs = 8000) {
   if (process.platform !== 'win32') return [];
   if (Date.now() - procCache.at < maxAgeMs) return procCache.paths;
   if (procCache.pending) return procCache.pending;
-  procCache.pending = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Process | Where-Object Path | ForEach-Object Path'], { windowsHide: true, timeout: 20_000, maxBuffer: 8 * 1024 * 1024 })
-    .then(({ stdout }) => [...new Set(stdout.split(/\r?\n/).map((l) => l.trim().toLowerCase()).filter(Boolean))])
+  procCache.pending = ps('Get-Process | Where-Object Path | ForEach-Object Path', 20_000)
+    .then((stdout) => [...new Set(stdout.split(/\r?\n/).map((l) => l.trim().toLowerCase()).filter(Boolean))])
     .catch(() => procCache.paths)
     .then((paths) => { procCache = { at: Date.now(), paths, pending: null }; return paths; });
   return procCache.pending;

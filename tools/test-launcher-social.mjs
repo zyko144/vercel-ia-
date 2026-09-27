@@ -152,14 +152,16 @@ await check('statut, ne pas déranger, benchmark visible des amis et classement 
   assert.equal(f.dnd, true);
   assert.equal(f.bench, 1420);
   assert.equal((await call('benchmark', noam, { scores: { total: 'x' } })).status, 400);
-  await call('benchmark', noam, { scores: { total: 1200, gpu: 1300 }, cpu: 'Ryzen 5', gpu: 'RTX 3060' });
-  await call('benchmark', max, { scores: { total: 1500 } });
-  await call('benchmark', noam, { scores: { total: 900 } });
+  await call('benchmark', noam, { v: 2, scores: { total: 1200, gpu: 1300 }, raw: { gpu: { geometry: 310 } }, cpu: 'Ryzen 5', gpu: 'RTX 3060' });
+  await call('benchmark', max, { v: 2, scores: { total: 1500 } });
+  await call('benchmark', noam, { v: 2, scores: { total: 900 } });
+  await call('benchmark', noam, { scores: { total: 5000 } }); // ancienne version : pas dans le classement v2
   const r = await call('benchmark/classement', noam);
   assert.deepEqual(r.top.map((x) => x.total), [1500, 1200], 'meilleur score gardé');
   assert.equal(r.rang, 2);
   assert.equal(r.top[0].ami, true);
   assert.equal(r.top[1].moi, true);
+  assert.equal(r.top[1].raw, undefined, 'mesures brutes gardées côté serveur');
 });
 
 await check('retirer un ami : des deux côtés', async () => {

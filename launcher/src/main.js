@@ -41,7 +41,7 @@ import { demoActivity, demoBench, demoEvents, demoFriends, demoItems, demoScan, 
 import { captureDir, captureName } from './core/capture.js';
 import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core/gmod.js';
 import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
-import { cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
+import { VERSION as BENCH_VERSION, cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
 import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
 import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
 import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
@@ -106,8 +106,20 @@ function localUrls(art) {
 }
 app.on('second-instance', () => showWindow());
 
+// Mode léger : rangée dans la barre des tâches depuis 3 min, la fenêtre est libérée de la mémoire (≈ 150 Mo) ;
+// le suivi du temps, les amis et les mises à jour continuent. Elle se recrée en une seconde au prochain clic.
+let lightTimer = null;
+function scheduleLight() {
+  clearTimeout(lightTimer);
+  lightTimer = setTimeout(() => {
+    if (!win || win.isDestroyed() || win.isVisible() || quitting || process.env.LAUNCHER_SHOT) return;
+    if (benchRunning || deepAbort || wuBusy || asks.size) return scheduleLight(); // une tâche en cours : on attend
+    win.destroy();
+  }, 3 * 60_000);
+}
 function showWindow() {
-  if (!win) return createWindow();
+  clearTimeout(lightTimer);
+  if (!win || win.isDestroyed()) return createWindow();
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
@@ -138,6 +150,9 @@ function createWindow() {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   // Fermer la fenêtre la range dans la barre des tâches (le suivi du temps continue)
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
+  win.on('hide', scheduleLight);
+  win.on('show', () => clearTimeout(lightTimer));
+  win.on('closed', () => { win = null; });
 }
 
 function createTray() {
@@ -250,7 +265,7 @@ async function getAi() {
   if (aiCache.key !== `compte:${token}`) aiCache = { key: `compte:${token}`, ai: createRemoteAi((body) => api('/api/compte/ia', { method: 'POST', token, body })) };
   return aiCache.ai;
 }
-const send = (channel, payload) => win?.webContents.send(channel, payload);
+const send = (channel, payload) => (win && !win.isDestroyed() ? win.webContents.send(channel, payload) : undefined);
 async function remerge() {
   items = merge(raw, store.data, localUrls, timeOptions());
   await Promise.all(items.map(async (i) => { i.iconData = await iconOf(i); }));
@@ -355,7 +370,7 @@ let askSeq = 0;
 const asks = new Map();
 ipcMain.on('ui:answer', (_e, id, ok) => { asks.get(id)?.(Boolean(ok)); asks.delete(id); });
 async function confirm(message, detail, opts = {}) {
-  if (!win || win.isDestroyed()) return false;
+  if (!win || win.isDestroyed()) { showWindow(); await new Promise((r) => win.webContents.once('did-finish-load', () => setTimeout(r, 800))); }
   if (!win.isVisible()) showWindow();
   const id = ++askSeq;
   return new Promise((resolve) => {
@@ -481,23 +496,43 @@ ipcMain.handle('pc:kill', async (_e, pid, pathHint) => {
 ipcMain.handle('pc:defscan', async (_e, type) => { send('pc:progress', { step: 'defender', label: type === 'full' ? 'Analyse antivirus complète (peut durer une heure)…' : 'Analyse antivirus rapide…' }); const r = await defenderScan(type === 'full' ? 'full' : 'quick'); diagCache = null; return r; });
 ipcMain.handle('pc:defremove', async () => { const r = await defenderRemove(); diagCache = null; return r; });
 
+// Plus gros fichier d'un jeu installé (lu pour mesurer la vraie vitesse de lecture du disque, jamais modifié)
+async function bigGameFile() {
+  const { readdir: rd, stat: st } = await import('node:fs/promises');
+  let best = null;
+  for (const g of items.filter((i) => i.kind === 'game' && i.installed && i.installDir).slice(0, 12)) {
+    const stack = [[g.installDir, 0]]; let seen = 0;
+    while (stack.length && seen < 3000) {
+      const [dir, depth] = stack.pop();
+      for (const d of await rd(dir, { withFileTypes: true }).catch(() => [])) {
+        seen += 1;
+        const p = path.join(dir, d.name);
+        if (d.isDirectory() && depth < 4) stack.push([p, depth + 1]);
+        else if (d.isFile()) { const s = await st(p).catch(() => null); if (s && s.size > (best?.size ?? 1024 ** 3)) best = { path: p, size: s.size }; }
+      }
+    }
+  }
+  return best?.path ?? null;
+}
 async function runBench() {
-  const step = (s, pct, label) => send('pc:progress', { step: s, pct, label });
-  step('cpu', 5, 'Processeur (1 cœur puis tous les cœurs)…');
-  const cpu = await cpuBench(3000);
-  step('ram', 35, 'Mémoire vive…');
-  const ram = ramBench(2500);
-  step('disk', 50, 'Disque (écriture et lecture de 1 Go)…');
-  const disk = await diskBench(app.getPath('temp')).catch(() => null);
-  step('gpu', 75, 'Carte graphique (scène 3D pendant 8 s)…');
+  let pct = 0;
+  const step = (label, p = null) => { if (p != null) pct = p; else pct = Math.min(95, pct + 2.5); send('pc:progress', { step: 'bench', pct: Math.round(pct), label }); };
+  step('Préparation…', 1);
+  const cpu = await cpuBench({ onStep: (l) => step(l) });
+  step('Mémoire · débit et latence…', 50);
+  const ram = ramBench();
+  step('Recherche d’un gros fichier de jeu à lire…', 55);
+  const readFile = await bigGameFile().catch(() => null);
+  const disk = await diskBench(app.getPath('temp'), { readFile, onStep: (l) => step(l) }).catch(() => null);
+  step('Carte graphique · 3 scènes en 2560×1440…', 70);
   const gpu = await gpuBench().catch(() => null);
-  const r = { at: Date.now(), cpu, ram, disk, gpu, cpuName: os.cpus()[0]?.model?.trim() ?? null };
+  const r = { v: BENCH_VERSION, at: Date.now(), cpu, ram, disk, gpu, cpuName: os.cpus()[0]?.model?.trim() ?? null };
   r.scores = scores(r);
   r.tier = tier(r.scores.total);
   store.data.bench = [r, ...(store.data.bench ?? [])].slice(0, 12);
   store.save();
   submitBench(r).catch(() => {});
-  step('done', 100, 'Terminé');
+  send('pc:progress', { step: 'done', pct: 100, label: 'Terminé' });
   return r;
 }
 function gpuBench() {
@@ -508,10 +543,15 @@ function gpuBench() {
     w.webContents.on('will-navigate', (e) => e.preventDefault());
     let done = false;
     const finish = (r) => { if (done) return; done = true; ipcMain.removeListener('bench:gpu', onRes); if (!w.isDestroyed()) w.close(); resolve(r); };
-    const onRes = (e, r) => { if (e.sender === w.webContents) finish({ fps: Number(r?.fps) || null, width: r?.width, height: r?.height, error: r?.error }); };
+    const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+    const onRes = (e, r) => {
+      if (e.sender !== w.webContents) return;
+      const scenes = { geometry: num(r?.scenes?.geometry), shader: num(r?.scenes?.shader), post: num(r?.scenes?.post) };
+      finish({ scenes, renderer: typeof r?.renderer === 'string' ? r.renderer.slice(0, 120) : null, msaa: Number(r?.msaa) || 0, hdr: Boolean(r?.hdr), error: r?.error ?? null });
+    };
     ipcMain.on('bench:gpu', onRes);
-    w.on('closed', () => finish({ fps: null, error: 'fenêtre fermée' }));
-    setTimeout(() => finish({ fps: null, error: 'trop long' }), 25_000);
+    w.on('closed', () => finish({ scenes: {}, error: 'fenêtre fermée' }));
+    setTimeout(() => finish({ scenes: {}, error: 'trop long' }), 180_000);
     w.loadFile(path.join(here, 'ui', 'bench-gpu.html'));
   });
 }
@@ -663,7 +703,7 @@ async function submitBench(r) {
   const token = secret('account');
   if (!token || !r?.scores?.total) return;
   const diag = diagCache?.data;
-  await api('/api/compte/benchmark', { method: 'POST', token, body: { scores: r.scores, cpu: diag?.cpu?.name ?? r.cpuName ?? null, gpu: diag?.gpus?.[0]?.name ?? null } }).catch(() => {});
+  await api('/api/compte/benchmark', { method: 'POST', token, body: { v: r.v ?? 1, scores: r.scores, raw: r.v === BENCH_VERSION ? { gpu: r.gpu?.scenes ?? null, ramLat: r.ram?.latency ?? null } : null, cpu: diag?.cpu?.name ?? r.cpuName ?? null, gpu: diag?.gpus?.[0]?.name ?? r.gpu?.renderer ?? null } }).catch(() => {});
 }
 ipcMain.handle('bench:ranking', () => social('/api/compte/benchmark/classement'));
 
@@ -1201,7 +1241,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('friendNotifs' in patch) store.data.settings.friendNotifs = Boolean(patch.friendNotifs);
   for (const k of ['sfxOn', 'sfxNotif']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
   if ('sfxVol' in patch) store.data.settings.sfxVol = Math.max(0, Math.min(100, Math.round(Number(patch.sfxVol) || 0)));
-  for (const k of ['dnd', 'tournament', 'compact']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
+  for (const k of ['dnd', 'tournament', 'compact', 'lock2fa']) if (k in patch) store.data.settings[k] = Boolean(patch[k]);
   if ('status' in patch) { store.data.settings.status = String(patch.status ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 60) || null; lastPresence = 0; }
   if ('textScale' in patch) { const z = [0.9, 1, 1.1, 1.25].includes(Number(patch.textScale)) ? Number(patch.textScale) : 1; store.data.settings.textScale = z; win?.webContents.setZoomFactor(z); }
   if ('replay' in patch) { store.data.settings.replay = Boolean(patch.replay); setReplay(store.data.settings.replay).catch(() => {}); }
@@ -2014,6 +2054,7 @@ ipcMain.handle('account:2faStart', async () => {
   const qr = await QR.toDataURL(r.url, { margin: 1, width: 240, color: { dark: '#0b0910', light: '#ffffff' } });
   return { ok: true, qr, secret: r.secret };
 });
+ipcMain.handle('account:unlock', (_e, code) => secu('/api/compte/2fa/verifier', { code: code6(code) }));
 ipcMain.handle('account:2faOn', (_e, code) => secu('/api/compte/2fa/activer', { code: code6(code) }));
 ipcMain.handle('account:2faOff', (_e, motDePasse, code) => secu('/api/compte/2fa/desactiver', { motDePasse: String(motDePasse ?? '').slice(0, 128), code: code6(code) }));
 // ---------- Sauvegarde en ligne (compte History) : toutes les 30 min, à la fermeture, et restauration sur un nouveau PC ----------
@@ -2143,7 +2184,12 @@ async function startUpdater() {
   updater.autoDownload = false;
   updater.autoInstallOnAppQuit = true;
   updater.logger = null;
-  updater.on('update-available', (info) => updateState({ state: 'available', version: info.version, error: null }));
+  updater.on('update-available', (info) => {
+    updateState({ state: 'available', version: info.version, error: null });
+    // Filet de sécurité : sans réponse à « Mettre à jour maintenant ? » en 10 min, elle se télécharge en fond
+    // et s'installe à la prochaine fermeture (une mise à jour n'est jamais bloquée par l'interface)
+    setTimeout(() => { if (updateInfo.state === 'available' && updateInfo.version === info.version) downloadUpdate(false); }, 10 * 60_000);
+  });
   updater.on('update-not-available', () => { if (updateInfo.state === 'checking') updateState({ state: 'uptodate' }); });
   updater.on('download-progress', (p) => updateState({ state: 'progress', percent: Math.round(p.percent) }));
   updater.on('update-downloaded', (info) => {
@@ -2198,7 +2244,8 @@ async function start() {
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media' && wc === win?.webContents));
   await store.load();
   applyAutostart();
-  createWindow();
+  // Lancé avec Windows : directement dans la barre des tâches, sans fenêtre (rien en mémoire tant qu'on ne l'ouvre pas)
+  if (!process.argv.includes('--au-demarrage')) createWindow();
   createTray();
   startUpdater().catch((err) => fatalLog(err));
   // Temps de jeu réel : rien n'est compté quand le PC est verrouillé ou en veille

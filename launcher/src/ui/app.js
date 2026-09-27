@@ -690,6 +690,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.18.0': [
+    ['🏁', 'Benchmark extrême', 'Processeur : 5 vraies épreuves (SHA-256, compression, physique, tri, IA) sur 1 cœur puis tous, + 30 s d’endurance pour voir s’il chauffe. Mémoire : débit et latence. Disque : 2 Go, lecture d’un vrai fichier de jeu, 4 Ko aléatoires. Carte graphique : 3 scènes en 2560×1440 (150 000 cubes, raymarching, HDR + bloom). Nouveau classement mondial.', ['[data-view=pc]', '[data-pctab=perf]']],
+    ['⬆', 'Mises à jour réparées', 'La fenêtre « Nouvelle version disponible » s’affiche enfin, le bouton « Rechercher une mise à jour » marche, et une mise à jour se télécharge toute seule si tu ne réponds pas.'],
+    ['🔒', 'Double authentification à chaque ouverture', 'Avec la double authentification, le launcher demande le code de ton application à chaque ouverture (réglable), et les autres PC sont déconnectés quand tu l’actives.'],
+    ['🪶', 'Beaucoup plus léger', 'Moins de processeur (plus de PowerShell relancé toutes les 5 s, animations en pause en arrière-plan) et moins de mémoire (la fenêtre se libère quand le launcher est dans la barre des tâches, démarrage de Windows sans fenêtre).'],
+  ],
   '0.17.1': [
     ['🌐', 'Nouveau site du launcher', 'historylauncher.vercel.app : toutes les fonctions, l’analyse pro, Windows Update et le journal des versions. Paramètres › À propos › Site du launcher.', ['#openSettings', '.setnav [data-pane=about]']],
   ],
@@ -889,7 +895,7 @@ function renderUpdateRow(u) {
     : u.state === 'uptodate' ? `${cur} · à jour ✓`
     : u.state === 'error' ? `${cur} · erreur : ${u.error ?? '?'}` : cur;
 }
-api.onAppUpdate?.((u) => {
+function handleAppUpdate(u) {
   renderUpdateRow({ ...u, packaged: true, current: appVersion });
   if (u.state === 'available' && updAsked !== u.version && !u.installNow) {
     updAsked = u.version;
@@ -912,8 +918,9 @@ api.onAppUpdate?.((u) => {
       .then((yes) => { if (yes) { $('updScreen').hidden = false; $('updFill').style.width = '100%'; $('updPct').textContent = '100 %'; $('updText').textContent = 'Installation… le launcher redémarre tout seul.'; setTimeout(() => api.installUpdate(), 600); } });
   }
   if (u.state === 'error' && u.installNow) toast(`Mise à jour impossible : ${u.error ?? 'réessaie plus tard'}`);
-});
-api.updateInfo?.().then((u) => { appVersion = u?.current ?? ''; renderUpdateRow(u); }).catch(() => {});
+}
+api.onAppUpdate?.(handleAppUpdate);
+api.updateInfo?.().then((u) => { appVersion = u?.current ?? ''; renderUpdateRow(u); if (['available', 'ready'].includes(u?.state)) handleAppUpdate(u); }).catch(() => {});
 $('openSite').addEventListener('click', () => api.openLink('site'));
 $('checkUpd').addEventListener('click', async () => {
   const r = await api.checkUpdate?.(false);
@@ -1077,13 +1084,30 @@ function renderDiag(d) {
   const threats = (d.threats ?? []).filter((t) => !t.removed);
   $('pcAv').innerHTML = av ? `${av.on && av.realtime ? '<span class="ok">● Protection en temps réel active</span>' : '<span class="bad">● Protection désactivée</span>'} · définitions de ${av.sigAge ?? '?'} j · dernière analyse rapide il y a ${av.quickAge ?? '?'} j, complète il y a ${av.fullAge ?? 'jamais'} j${threats.length ? `<br><b class="bad">${threats.length} menace(s) à supprimer :</b> ${threats.map((t) => esc(t.files[0] ?? t.id)).join(', ')}` : '<br>Aucune menace active.'}` : 'Antivirus de Windows introuvable (un autre antivirus est peut-être installé).';
 }
+const n1 = (v) => (v == null ? 'n/d' : Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 }));
+function benchRows(r) {
+  if (r.v !== 2) {
+    return [['Processeur (1 cœur)', r.scores.cpu1, `${r.cpu.single} Mo/s`], ['Processeur (tous)', r.scores.cpuN, `${r.cpu.multi} Mo/s · ${r.cpu.threads} threads`], ['Mémoire', r.scores.ram, `${r.ram.gbps} Go/s`], ['Disque', r.scores.disk, r.disk ? `${r.disk.write} / ${r.disk.read} Mo/s · ${r.disk.iops} IOPS` : 'n/d'], ['Carte graphique', r.scores.gpu, r.gpu?.fps ? `${r.gpu.fps} images/s` : 'n/d']];
+  }
+  const c = r.cpu ?? {}; const s = c.single ?? {}; const m = c.multi ?? {}; const g = r.gpu?.scenes ?? {}; const d = r.disk;
+  return [
+    ['Processeur (1 cœur)', r.scores.cpu1, `SHA-256 ${n1(s.sha)} Mo/s · compression ${n1(s.zip)} Mo/s · physique ${n1(s.nbody)} M interactions/s · IA ${n1(s.path)} chemins/s`],
+    ['Processeur (tous)', r.scores.cpuN, `${c.threads} threads · SHA-256 ${n1(m.sha)} Mo/s · physique ${n1(m.nbody)} M/s · tenue en charge ${c.sustain?.stability ?? '?'} %`],
+    ['Mémoire', r.scores.ram, `${n1(r.ram?.gbps)} Go/s · latence ${n1(r.ram?.latency)} ns`],
+    ['Disque', r.scores.disk, d ? `écriture ${n1(d.write)} Mo/s · lecture ${n1(d.read)} Mo/s${d.readSrc === 'jeu' ? ' (vrai fichier de jeu)' : ''} · 4 Ko : ${n1(d.iopsR)} IOPS lecture, ${n1(d.iopsW)} écritures synchronisées/s` : 'n/d'],
+    ['Carte graphique', r.scores.gpu, r.gpu?.scenes ? `2560×1440 · géométrie ${n1(g.geometry)} i/s · shaders ${n1(g.shader)} i/s · post-traitement ${n1(g.post)} i/s${r.gpu.renderer ? ` · ${r.gpu.renderer}` : ''}` : esc(r.gpu?.error ?? 'n/d')],
+  ];
+}
 function renderBench(r, hist = []) {
   if (!r) return;
-  const rows = [['Processeur (1 cœur)', r.scores.cpu1, `${r.cpu.single} Mo/s`], ['Processeur (tous)', r.scores.cpuN, `${r.cpu.multi} Mo/s · ${r.cpu.threads} threads`], ['Mémoire', r.scores.ram, `${r.ram.gbps} Go/s`], ['Disque', r.scores.disk, r.disk ? `${r.disk.write} / ${r.disk.read} Mo/s · ${r.disk.iops} IOPS` : 'n/d'], ['Carte graphique', r.scores.gpu, r.gpu?.fps ? `${r.gpu.fps} images/s` : 'n/d']];
+  const rows = benchRows(r);
+  const same = hist.filter((h) => (h.v ?? 1) === (r.v ?? 1));
   const max = Math.max(2000, ...rows.map(([, v]) => v ?? 0));
-  $('pcBench').innerHTML = `<div class="pcscore"><b class="big">${r.scores.total ?? '–'}</b><div><b>${esc(r.tier ?? '')}</b><small class="hint" style="display:block">le ${new Date(r.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · trait blanc = PC de référence (1000)</small></div></div>
-    <div class="benchbars">${rows.map(([n, v, raw]) => `<div class="bbar"><span>${n}</span><div class="t"><i style="width:${Math.min(100, (100 * (v ?? 0)) / max)}%"></i><b style="left:${(100 * 1000) / max}%"></b></div><b>${v ?? '–'}</b></div><small class="hint" style="margin:-4px 0 0 140px">${esc(raw)}</small>`).join('')}</div>
-    ${hist.length > 1 ? `<div class="bhist"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${spark([...hist].reverse().map((h) => h.scores.total - Math.min(...hist.map((x) => x.scores.total)) * 0.9), '#22d3ee', (Math.max(...hist.map((x) => x.scores.total)) - Math.min(...hist.map((x) => x.scores.total)) * 0.9) * 1.1)}</svg><small class="hint">Historique : ${[...hist].reverse().map((h) => h.scores.total).join(' → ')}</small></div>` : ''}`;
+  const warm = r.v === 2 && r.cpu?.sustain?.stability != null && r.cpu.sustain.stability < 85;
+  $('pcBench').innerHTML = `<div class="pcscore"><b class="big">${r.scores.total ?? '–'}</b><div><b>${esc(r.tier ?? '')}</b><small class="hint" style="display:block">le ${new Date(r.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${r.v === 2 ? 'benchmark extrême' : 'ancien benchmark'} · trait blanc = PC de référence (1000)</small></div></div>
+    ${warm ? `<div class="adv p1"><div><b>Le processeur ralentit sous la charge</b><small>Après 30 s à fond, il ne tient que ${r.cpu.sustain.stability} % de ses performances : il chauffe trop. Nettoie la poussière, vérifie le ventirad et la pâte thermique.</small></div></div>` : ''}
+    <div class="benchbars">${rows.map(([n, v, raw]) => `<div class="bbar"><span>${n}</span><div class="t"><i style="width:${Math.min(100, (100 * (v ?? 0)) / max)}%"></i><b style="left:${(100 * 1000) / max}%"></b></div><b>${v ?? '–'}</b></div><small class="hint bdetail">${raw}</small>`).join('')}</div>
+    ${same.length > 1 ? `<div class="bhist"><svg viewBox="0 0 100 100" preserveAspectRatio="none">${spark([...same].reverse().map((h) => h.scores.total - Math.min(...same.map((x) => x.scores.total)) * 0.9), '#22d3ee', (Math.max(...same.map((x) => x.scores.total)) - Math.min(...same.map((x) => x.scores.total)) * 0.9) * 1.1)}</svg><small class="hint">Historique : ${[...same].reverse().map((h) => h.scores.total).join(' → ')}</small></div>` : ''}`;
 }
 function spark(values, color, max = 100) {
   const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * 100},${100 - (Math.max(0, v ?? 0) / max) * 100}`).join(' ');
@@ -1152,7 +1176,7 @@ function showReport(r, title = 'Rapport détaillé') {
 }
 $('pcDiagBtn').addEventListener('click', () => pcDiag(true));
 $('pcBenchBtn').addEventListener('click', async () => {
-  if (!(await ui.confirm({ title: 'Lancer le benchmark ?', text: 'Environ 30 secondes. Ferme tes jeux pour un résultat juste : une fenêtre 3D s’ouvre pendant l’épreuve graphique.', ok: '🏁 C’est parti', icon: '🏁' }))) return;
+  if (!(await ui.confirm({ title: 'Lancer le benchmark extrême ?', text: 'Environ 2 min 30 à pleine puissance : le PC va chauffer et souffler, c’est normal. Ferme tes jeux et applis pour un résultat juste.', list: ['Processeur : 5 épreuves (SHA-256, compression, physique, tri, IA) sur 1 cœur puis tous, + 30 s d’endurance', 'Mémoire : débit et latence', 'Disque : 2 Go écrits, lecture d’un vrai fichier de jeu, accès aléatoires 4 Ko', 'Carte graphique : 3 scènes en 2560×1440 (géométrie, shaders, post-traitement)'], ok: '🏁 C’est parti', icon: '🏁' }))) return;
   const r = await api.pcBench();
   pcProgress({ step: 'done' });
   if (r?.error) return toast(r.error);
@@ -1698,7 +1722,7 @@ function tickProgress() {
   $('pDur').textContent = sg.duration ? mmss(sg.duration) : '–:––';
   $('pFill').style.width = sg.duration ? `${Math.min(100, (elapsed / sg.duration) * 100)}%` : '0';
 }
-setInterval(tickProgress, 1000);
+setInterval(() => { if (!document.hidden) tickProgress(); }, 1000);
 
 // ---------- Navigation ----------
 function showView(name) {
@@ -2221,6 +2245,7 @@ function loggedInUi(r, isNew) {
 // Étapes : code de double authentification, vérification de l'e-mail, mot de passe oublié
 let step = null;
 const STEPS = {
+  lock: { title: '🔒 Déverrouille History', text: 'Ton compte est protégé par la double authentification : entre le code à 6 chiffres de ton application (ou un code de secours) pour ouvrir le launcher.', go: 'Déverrouiller', resend: false, back: 'Se déconnecter' },
   '2fa': { title: '🛡 Double authentification', text: 'Entre le code à 6 chiffres de ton application d’authentification (ou un code de secours).', go: 'Se connecter', resend: false },
   verif: { title: '✉ Vérifie ton e-mail', text: 'On t’a envoyé un code à 6 chiffres par e-mail (regarde aussi les spams).', go: 'Valider mon e-mail', resend: true },
   oubli: { title: '🔑 Mot de passe oublié', text: 'Entre ton e-mail : on t’envoie un code pour choisir un nouveau mot de passe.', go: 'Recevoir le code', resend: false, email: true, nocode: true },
@@ -2236,6 +2261,7 @@ function openStep(kind, data = {}) {
   $('stepEmailF').hidden = !d.email; $('stepPassF').hidden = !d.pass; $('stepCode').hidden = Boolean(d.nocode);
   $('stepResend').hidden = !d.resend; $('stepErr').textContent = ''; $('stepCode').value = ''; $('stepPass').value = '';
   if (d.email) $('stepEmail').value = $('aEmail').value;
+  $('stepBack').textContent = d.back ?? 'Retour';
   setTimeout(() => (d.email ? $('stepEmail') : $('stepCode')).focus(), 50);
 }
 function closeStep() {
@@ -2243,7 +2269,10 @@ function closeStep() {
   $('authStep').hidden = true; $('authForm').hidden = false; $('authTabs').hidden = false; $('authForgot').hidden = false;
 }
 $('authForgot').addEventListener('click', () => openStep('oubli'));
-$('stepBack').addEventListener('click', () => { if (step?.kind === 'verif') { closeStep(); showAuth(false); toast('Tu pourras vérifier ton e-mail dans Paramètres › Compte'); } else closeStep(); });
+$('stepBack').addEventListener('click', async () => {
+  if (step?.kind === 'lock') { await api.logout?.(); setAccount(null); closeStep(); showAuth(true); return toast('Déconnecté'); }
+  if (step?.kind === 'verif') { closeStep(); showAuth(false); toast('Tu pourras vérifier ton e-mail dans Paramètres › Compte'); } else closeStep();
+});
 $('stepResend').addEventListener('click', async () => { const r = await api.verifyResend(); toast(r?.ok ? 'Nouveau code envoyé ✉' : r?.error ?? 'Impossible'); });
 $('authStep').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2252,6 +2281,7 @@ $('authStep').addEventListener('submit', async (e) => {
   const code = $('stepCode').value.trim();
   let r;
   if (step.kind === '2fa') r = await api.login2fa(step.ticket, code);
+  if (step.kind === 'lock') r = await api.unlock2fa(code);
   if (step.kind === 'verif') r = await api.verifyEmail(code);
   if (step.kind === 'oubli') r = await api.forgotPassword($('stepEmail').value.trim());
   if (step.kind === 'reset') {
@@ -2261,6 +2291,7 @@ $('authStep').addEventListener('submit', async (e) => {
   $('stepGo').disabled = false;
   if (!r?.ok) { $('stepErr').textContent = r?.error ?? 'Erreur.'; window.sfx?.play('error'); return; }
   if (step.kind === '2fa') { closeStep(); return loggedInUi(r, false); }
+  if (step.kind === 'lock') { closeStep(); showAuth(false); window.sfx?.play('success'); toast(`🔓 Content de te revoir, ${state.account?.pseudo ?? ''} !`); if (r.recoveryLeft != null) toast(`Code de secours utilisé : il t’en reste ${r.recoveryLeft}`); return; }
   if (step.kind === 'verif') { closeStep(); setAccount(r.compte); showAuth(false); window.sfx?.play('success'); return toast('E-mail vérifié ✓'); }
   if (step.kind === 'oubli') { if (r.mail === false) { $('stepErr').textContent = 'L’envoi d’e-mails n’est pas encore activé sur le serveur.'; return; } return openStep('reset', { email: $('stepEmail').value.trim() }); }
   if (step.kind === 'reset') { const mail = step.email; closeStep(); window.sfx?.play('success'); $('aEmail').value = mail; toast('Mot de passe changé : connecte-toi avec le nouveau'); }
@@ -2272,7 +2303,10 @@ function showSecurity() {
   $('secVerify').hidden = !c || c.verified !== false;
   $('sec2fa').hidden = !c;
   $('sec2fa').textContent = c?.twoFactor ? '🛡 Désactiver la double authentification' : '🛡 Activer la double authentification';
+  $('lock2faRow').hidden = !c?.twoFactor;
+  api.settings?.().then((s) => { $('lock2fa').checked = s?.lock2fa !== false; }).catch(() => {});
 }
+$('lock2fa').addEventListener('change', (e) => api.setSettings({ lock2fa: e.target.checked }).then(() => toast(e.target.checked ? '🔒 Le code sera demandé à chaque ouverture' : 'Le code ne sera demandé qu’à la connexion')));
 $('secVerify').addEventListener('click', async () => { $('settings').close(); await api.verifyResend(); openStep('verif'); });
 $('sec2fa').addEventListener('click', async () => {
   $('settings').close();
@@ -2315,7 +2349,13 @@ $('profileBtn').addEventListener('click', async () => {
   setAccount(null);
   showAuth(true);
 });
-api.account?.().then((r) => { setAccount(r.compte); if (!r.compte && !r.skipped) showAuth(true); }).catch(() => {});
+api.account?.().then(async (r) => {
+  setAccount(r.compte);
+  if (!r.compte && !r.skipped) return showAuth(true);
+  // Double authentification : l'appli se verrouille à chaque ouverture tant que le code n'est pas donné
+  const s = await api.settings?.().catch(() => null);
+  if (r.compte?.twoFactor && s?.lock2fa !== false) openStep('lock');
+}).catch(() => {});
 
 // ---------- Données ----------
 function renderAll() {
@@ -2364,7 +2404,10 @@ load().then(() => {
   if (h?.includes('verif')) api.verify(state.items[0].id);
 });
 refreshMusic();
-setInterval(refreshMusic, 5000);
+// Musique : vérifiée seulement quand la fenêtre est visible (rien ne tourne pour rien en arrière-plan)
+setInterval(() => { if (!document.hidden) refreshMusic(); }, 8000);
+const idle = () => document.body.classList.toggle('idle', document.hidden || !document.hasFocus());
+addEventListener('blur', idle); addEventListener('focus', idle); document.addEventListener('visibilitychange', () => { idle(); if (!document.hidden) refreshMusic(); });
 setInterval(() => { if (state.view === 'stats') renderStats(); if (state.view === 'classement') renderRanking(); }, 60_000);
 
 // ---------- Aperçu hors Electron (données d'exemple, images locales du dossier demo/) ----------
@@ -2409,7 +2452,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.17.1',
+    version: async () => '0.18.0',
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => ({ autostart: true, gemini: true }), setSettings: async (s) => s, win: () => {},
