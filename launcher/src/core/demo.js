@@ -14,14 +14,14 @@ export function demoItems(now = Date.now()) {
 }
 export function demoFriends(now = Date.now()) {
   return {
-    code: 'Noam#3F9A2C', demandes: [], moi: { week: 640, top: 'Rocket League' },
+    code: 'Alex#3F9A2C', demandes: [], moi: { week: 640, top: 'Rocket League' },
     amis: [
       { id: 'd1', pseudo: 'Max', code: 'Max#A1B2C3', online: true, playing: 'FiveM', join: { fivem: 'abc123' }, since: now - 42 * 60_000, week: 780, status: 'Soirée RP 🚓', bench: 1420 },
       { id: 'd2', pseudo: 'Zoé', code: 'Zoe#D4E5F6', online: true, playing: 'Rocket League', join: { steam: '252950' }, since: now - 12 * 60_000, week: 540, status: null, bench: 1180 },
       { id: 'd3', pseudo: 'Lucas', code: 'Lucas#778899', online: true, playing: null, week: 300, status: 'Dispo pour jouer', bench: 960 },
       { id: 'd4', pseudo: 'Inès', code: 'Ines#112233', online: false, playing: null, week: 90, status: null },
     ],
-    groupes: [{ id: 'g1', name: 'Squad RL', owner: true, members: [{ id: 'me', pseudo: 'Noam', online: true, playing: null }, { id: 'd2', pseudo: 'Zoé', online: true, playing: 'Rocket League' }, { id: 'd3', pseudo: 'Lucas', online: true, playing: null }] }],
+    groupes: [{ id: 'g1', name: 'Squad RL', owner: true, members: [{ id: 'me', pseudo: 'Alex', online: true, playing: null }, { id: 'd2', pseudo: 'Zoé', online: true, playing: 'Rocket League' }, { id: 'd3', pseudo: 'Lucas', online: true, playing: null }] }],
   };
 }
 export function demoBench(now = Date.now()) {
@@ -66,9 +66,9 @@ export function demoScan(now = Date.now()) {
     cats: [['jeux', '🎮', 'Fichiers de jeux', 612], ['videos', '🎬', 'Vidéos', 248], ['systeme', '⚙', 'Windows et programmes', 187], ['archives', '📦', 'Archives et images disque', 96], ['installeurs', '💿', 'Installateurs et programmes', 64], ['images', '🖼', 'Images', 38], ['musique', '🎵', 'Musique', 12], ['documents', '📄', 'Documents', 6], ['autres', '🗂', 'Autres', 223]].map(([id, icon, label, gb]) => ({ id, icon, label, files: Math.round(gb * 900), bytes: gb * G })),
     junk: [{ id: 'installer', icon: '💿', label: 'Installateurs déjà utilisés (Téléchargements, plus d’un mois)', files: 38, bytes: 11.4 * G }, { id: 'temp', icon: '🗑', label: 'Fichiers temporaires de plus de 7 jours', files: 18_420, bytes: 6.2 * G }, { id: 'dump', icon: '💥', label: 'Rapports de plantage (dumps)', files: 64, bytes: 3.1 * G }, { id: 'log', icon: '📜', label: 'Gros journaux (logs) anciens', files: 22, bytes: 1.4 * G }],
     junkBytes: 22.1 * G,
-    duplicates: [{ size: 4.2 * G, paths: ['D:\\Vidéos\\Montage finale.mp4', 'C:\\Users\\Noam\\Desktop\\Montage finale (1).mp4'] }, { size: 1.9 * G, paths: ['C:\\Users\\Noam\\Downloads\\GTA5-mods.zip', 'D:\\Backup\\GTA5-mods.zip', 'E:\\Old\\GTA5-mods.zip'] }],
+    duplicates: [{ size: 4.2 * G, paths: ['D:\\Vidéos\\Montage finale.mp4', 'C:\\Users\\Alex\\Desktop\\Montage finale (1).mp4'] }, { size: 1.9 * G, paths: ['C:\\Users\\Alex\\Downloads\\GTA5-mods.zip', 'D:\\Backup\\GTA5-mods.zip', 'E:\\Old\\GTA5-mods.zip'] }],
     dupWasted: 8 * G, hashed: { files: 4_812, bytes: 96 * G },
-    suspects: [{ path: 'C:\\Users\\Noam\\AppData\\Roaming\\winupdt.exe', size: 2.1e6, reason: 'Programme caché dans un dossier temporaire ou à la racine d’AppData', defender: 'menace' }, { path: 'C:\\Users\\Noam\\Downloads\\skins_gratuits.pdf.exe', size: 840e3, reason: 'Double extension (ex. facture.pdf.exe) : technique classique des virus', defender: 'propre' }],
+    suspects: [{ path: 'C:\\Users\\Alex\\AppData\\Roaming\\winupdt.exe', size: 2.1e6, reason: 'Programme caché dans un dossier temporaire ou à la racine d’AppData', defender: 'menace' }, { path: 'C:\\Users\\Alex\\Downloads\\skins_gratuits.pdf.exe', size: 840e3, reason: 'Double extension (ex. facture.pdf.exe) : technique classique des virus', defender: 'propre' }],
     largest: [{ path: 'D:\\SteamLibrary\\steamapps\\common\\Call of Duty\\data\\data.0101', size: 38 * G }, { path: 'C:\\hiberfil.sys', size: 25.6 * G }, { path: 'D:\\Vidéos\\Montage finale.mp4', size: 4.2 * G }],
     old: { files: 412, bytes: 57 * G }, events: demoEvents(),
   };
