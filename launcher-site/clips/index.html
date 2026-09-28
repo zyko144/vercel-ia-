@@ -13,7 +13,7 @@
 <style>
 :root { --bg: #0a0806; --text: #fbf6ec; --muted: #a79c8a; --y: #ffc233; --o: #ff8a00; --line: rgba(255, 255, 255, .1); --font: "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, sans-serif; }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: clip; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); overflow-x: hidden; }
 body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: radial-gradient(900px 600px at 85% -10%, rgba(255, 194, 51, .2), transparent 60%), radial-gradient(800px 600px at -10% 30%, rgba(255, 138, 0, .14), transparent 60%), radial-gradient(700px 500px at 50% 110%, rgba(255, 194, 51, .1), transparent 60%); }
@@ -39,25 +39,21 @@ header nav a:hover { color: var(--y); }
 header .btn { padding: 10px 18px; }
 
 /* Héros */
-.herobg { position: absolute; z-index: -2; left: 50%; width: 100vw; transform: translateX(-50%); top: -120px; height: calc(100% + 200px); overflow: hidden; perspective: 1400px; pointer-events: none; -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent); mask-image: linear-gradient(180deg, #000 45%, transparent); }
-.herobg img { position: absolute; width: 62vw; max-width: 1100px; border-radius: 18px; border: 1px solid rgba(255, 194, 51, .25); box-shadow: 0 40px 120px -20px rgba(255, 194, 51, .45); opacity: .2; }
-.herobg .b1 { left: -12vw; top: 90px; transform: rotateY(24deg) rotateX(8deg) rotateZ(-4deg); }
-.herobg .b2 { right: -14vw; top: 40px; transform: rotateY(-26deg) rotateX(8deg) rotateZ(4deg); }
-@media (max-width: 760px) { .herobg img { width: 110vw; } .herobg .b2 { display: none; } }
-.hero { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 50px; align-items: center; padding: 90px 0 70px; }
+.herobg { position: absolute; z-index: -2; left: 50%; width: 100vw; transform: translateX(-50%) rotate(-6deg); top: -40px; height: calc(100% + 80px); display: flex; flex-direction: column; justify-content: center; gap: 18px; overflow: hidden; pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 50%, #000 25%, transparent 80%); mask-image: radial-gradient(ellipse 75% 70% at 50% 50%, #000 25%, transparent 80%); }
+.tape { display: flex; gap: 18px; width: max-content; animation: tape 70s linear infinite; }
+.tape.rev { animation-direction: reverse; animation-duration: 85s; }
+.tape img { width: 170px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 14px; border: 1px solid rgba(255, 194, 51, .2); box-shadow: 0 20px 50px -20px rgba(255, 194, 51, .45); opacity: .42; filter: saturate(1.15); }
+@keyframes tape { to { transform: translateX(-50%); } }
+.hero::before { content: ''; position: absolute; inset: 10% 15%; z-index: -1; background: radial-gradient(closest-side, rgba(10, 8, 6, .85), transparent); pointer-events: none; }
+.hero { position: relative; display: grid; justify-items: center; text-align: center; padding: 110px 0 100px; }
 .rec { display: inline-flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: 99px; border: 1px solid rgba(255, 194, 51, .35); background: rgba(255, 194, 51, .08); color: #ffe2a0; font-size: 14px; font-weight: 600; }
 .rec b { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 12px #ef4444; animation: blink 1.6s infinite; }
 @keyframes blink { 50% { opacity: .3; } }
 h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; margin: 20px 0 18px; letter-spacing: -.02em; }
-.lead { font-size: 19px; color: #d9cfbf; max-width: 540px; margin: 0 0 30px; }
-.ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+.lead { font-size: 19px; color: #d9cfbf; max-width: 620px; margin: 0 auto 30px; }
+.ctas { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .meta { margin-top: 18px; color: var(--muted); font-size: 14px; }
-.visual { position: relative; perspective: 1400px; }
-.halo { position: absolute; width: 90%; aspect-ratio: 1; left: 50%; top: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle, rgba(255, 194, 51, .45), transparent 65%); filter: blur(30px); }
-.big { position: relative; width: min(420px, 80%); display: block; margin: 0 auto; filter: drop-shadow(0 0 40px rgba(255, 194, 51, .5)); animation: float 6s ease-in-out infinite; }
-@keyframes float { 50% { transform: translateY(-14px) rotate(-2deg); } }
-.shot { position: relative; display: block; width: 112%; margin-left: -4%; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 30px 70px -20px #000, 0 0 50px -20px var(--y); transform: rotateY(-14deg) rotateX(6deg); cursor: zoom-in; transition: transform .4s; }
-.shot:hover { transform: rotateY(-6deg) rotateX(2deg) scale(1.03); }
 
 /* Touche F8 */
 .keybar { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 26px; flex-wrap: wrap; text-align: center; }
@@ -118,7 +114,7 @@ footer a:hover { color: var(--y); }
   .hero, .show, .show.rev { grid-template-columns: 1fr; }
   .show.rev .pic { order: 0; }
   .hero { padding-top: 50px; text-align: center; } .lead { margin-inline: auto; } .ctas { justify-content: center; }
-  .visual { margin-bottom: 40px; } .shot { width: 100%; margin-left: 0; }
+  .tape img { width: 120px; }
   .feats, .steps { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; } }
@@ -133,7 +129,7 @@ footer a:hover { color: var(--y); }
   </div></header>
 
   <div class="hero">
-    <div class="herobg" aria-hidden="true"><img class="b1" src="tout.webp" alt=""><img class="b2" src="jeu.webp" alt=""></div>
+    <div class="herobg" aria-hidden="true"><div class="tape"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252950/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/730/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252490/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/578080/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/359550/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/570/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252950/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/730/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252490/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/578080/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/359550/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/570/library_600x900.jpg" alt="" loading="lazy"></div><div class="tape rev"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/578080/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/359550/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/570/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252950/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/730/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252490/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/578080/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/359550/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/570/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252950/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/730/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/252490/library_600x900.jpg" alt="" loading="lazy"><img src="https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg" alt="" loading="lazy"></div></div>
     <div>
       <span class="rec"><b></b>Replay toujours prêt</span>
       <h1>Ton meilleur moment,<br><span class="grad">gardé en un appui.</span></h1>
@@ -143,10 +139,6 @@ footer a:hover { color: var(--y); }
         <a class="btn" href="#apercu">Voir l’appli</a>
       </div>
       <p class="meta">Gratuit · Windows 10 / 11 · mises à jour automatiques</p>
-    </div>
-    <div class="visual">
-      <div class="halo"></div>
-      <img class="shot zoom" src="home.webp" alt="Accueil de History Clips">
     </div>
   </div>
 
@@ -217,6 +209,7 @@ footer a:hover { color: var(--y); }
 </div>
 <div id="lb"><img alt=""></div>
 <script>
+document.querySelectorAll('.tape img').forEach((i) => i.addEventListener('error', () => i.remove()));
 const lb = document.getElementById('lb');
 document.addEventListener('click', (e) => { const z = e.target.closest('.zoom'); if (z) { lb.querySelector('img').src = z.src; lb.classList.add('on'); } else if (e.target.closest('#lb')) lb.classList.remove('on'); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') lb.classList.remove('on'); });
