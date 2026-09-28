@@ -14,3 +14,8 @@ html, body { margin: 0; background: transparent; font: 12px "Segoe UI Variable D
 .hot { color: #ff6b6b !important; }
 .friends { margin-top: 8px; color: #b8b0c2; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-app-region: no-drag; cursor: pointer; }
 .friends i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #2ee07a; margin-right: 5px; }
+
+.wping { margin-top: 6px; font-size: 11.5px; color: #9fe8b4; }
+.wping.warn { color: #fcd34d; }
+.wping.bad { color: #fca5a5; }
+.wping[hidden] { display: none; }

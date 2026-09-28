@@ -21,6 +21,7 @@ async function data() {
   d.sessions ??= {}; // empreinte du jeton -> { id, at, seen }
   d.tickets ??= {}; // étape double authentification : empreinte -> { id, exp, tries }
   d.discordCodes ??= {}; // code de liaison Discord -> { id, exp }
+  d.pairs ??= {}; // connexion par code depuis un autre PC : empreinte du ticket -> { code, exp, device, id, name }
   return d;
 }
 
@@ -95,7 +96,7 @@ export const profileOf = (a) => {
 const publicAccount = (a) => ({ id: a.id, pseudo: a.pseudo, email: a.email, createdAt: a.createdAt, verified: a.verified !== false, twoFactor: Boolean(a.totp?.on), discord: Boolean(a.discordId), profile: profileOf(a) });
 const AVATAR_MAX = 150 * 1024;
 /** Image envoyée par le launcher : format annoncé ET signature du fichier vérifiés, taille plafonnée. */
-function checkImage(dataUrl, max) {
+export function checkImage(dataUrl, max) {
   const m = String(dataUrl ?? '').match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
   if (!m) return 'Image illisible (PNG, JPG ou WEBP).';
   const buf = Buffer.from(m[2], 'base64');
@@ -360,6 +361,44 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
     if (url.pathname.startsWith('/api/compte/verif') || url.pathname.startsWith('/api/compte/mdp') || url.pathname.startsWith('/api/compte/2fa') || route === 'POST /api/compte/connexion/2fa') {
       const r = await securityRoute(route, await readJson(req), token, ip); return send(res, r.status, r);
     }
+    // Connexion par code : le nouveau PC affiche un code, un PC déjà connecté le valide (pas de mot de passe à taper)
+    if (route === 'POST /api/compte/lien/demande') {
+      if (!allowAttempt('compte-lien-demande', ip, 10, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie dans quelques minutes.' });
+      const body = await readJson(req);
+      const d = await data();
+      for (const [k, x] of Object.entries(d.pairs)) if (Date.now() > x.exp) delete d.pairs[k];
+      const code = Array.from(randomBytes(8), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('').replace(/^(.{4})/, '$1-');
+      const ticket = randomBytes(24).toString('base64url');
+      d.pairs[sha(ticket)] = { code, exp: Date.now() + 5 * 60_000, device: cleanDevice(body.appareil), name: String(body.nom ?? 'PC').replace(/[^\w .'-]/g, '').slice(0, 40) || 'PC', id: null };
+      save(KEY, d);
+      return send(res, 200, { ok: true, code, ticket, exp: d.pairs[sha(ticket)].exp });
+    }
+    if (route === 'GET /api/compte/lien/attente') {
+      const d = await data();
+      const k = sha(String(url.searchParams.get('ticket') ?? ''));
+      const pr = d.pairs[k];
+      if (!pr || Date.now() > pr.exp) { delete d.pairs[k]; return send(res, 410, { error: 'Code expiré, demande-en un nouveau.' }); }
+      if (!pr.id) return send(res, 200, { waiting: true });
+      const a = d.accounts[pr.id];
+      delete d.pairs[k];
+      if (!a) return send(res, 410, { error: 'Compte introuvable.' });
+      const tok = await newSession(d, a.id);
+      if (pr.device) { const h = sha(`appareil:${pr.device}`); a.devices = [...(a.devices ?? []).filter((x) => x.h !== h), { h, at: Date.now() }].slice(-20); }
+      save(KEY, d);
+      return send(res, 200, { ok: true, token: tok, compte: publicAccount(a) });
+    }
+    if (route === 'POST /api/compte/lien/valider') {
+      const d = await data();
+      const a = await accountOf(d, token);
+      if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      if (!allowAttempt('compte-lien-valider', a.id, 10, 10 * 60_000)) return send(res, 429, { error: 'Trop d’essais, réessaie dans quelques minutes.' });
+      const code = String((await readJson(req)).code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^(.{4})/, '$1-');
+      const pr = Object.values(d.pairs).find((x) => x.code === code && Date.now() <= x.exp && !x.id);
+      if (!pr) return send(res, 404, { error: 'Code inconnu ou expiré.' });
+      pr.id = a.id;
+      save(KEY, d);
+      return send(res, 200, { ok: true, nom: pr.name });
+    }
     if (route === 'POST /api/compte/discord/code' || route === 'POST /api/compte/discord/delier') {
       const d = await data();
       const a = await accountOf(d, token);
@@ -372,7 +411,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       return send(res, 200, { ok: true, code, lie: Boolean(a.discordId) });
     }
     // Photo de profil : publique (identifiant aléatoire), gardée en cache par le navigateur
-    const avm = url.pathname.match(/^\/api\/compte\/(avatar|banniere)\/([\w-]{8,64})$/);
+    const avm = url.pathname.match(/^\/api\/compte\/(avatar|banniere|img)\/([\w-]{8,64})$/);
     if (avm && req.method === 'GET') {
       const img = await load(`launcher-${avm[1]}-${avm[2]}`, null);
       if (!img?.data) return send(res, 404, { error: 'Pas de photo.' });

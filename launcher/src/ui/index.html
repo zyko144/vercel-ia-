@@ -42,6 +42,7 @@
 <main id="main">
   <section id="view-accueil" class="view on">
     <div class="hero" id="hero"></div>
+    <div id="diskAlert"></div>
     <div class="row-head"><h2>Tes jeux les plus joués</h2><small class="hint">Installés en premier</small><button class="seeall" data-go="jeux">Voir tout ›</button></div>
     <div class="cards" id="topGames"></div>
     <div id="rediscBlock" hidden><div class="row-head"><h2>À redécouvrir</h2><small class="hint">Tu y as beaucoup joué, mais pas depuis un mois</small></div><div class="cards" id="rediscover"></div></div>
@@ -128,14 +129,16 @@
             <div class="chathead"><span class="pav" id="chatAv">?</span><div class="chatwho"><b id="chatWho">…</b><small id="chatSub"></small></div>
               <div class="chatacts"><button type="button" class="btn play sm" id="chatJoin" hidden>▶ Rejoindre</button><button type="button" class="btn sm" id="chatAsk" hidden>On joue ?</button><button type="button" class="btn sm" id="chatInvite" hidden>Inviter</button><button type="button" class="btn sm" id="chatCall">Appeler</button><button type="button" class="btn ghost sm" id="chatMore" title="Plus">•••</button></div></div>
             <div class="chatfil" id="chatFil"></div>
-            <form class="chatin" id="chatForm"><textarea id="chatText" rows="1" maxlength="500" placeholder="Écris un message… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form>
+            <div class="ctyping" id="chatTyping"></div><div class="cscheds" id="chatScheds"></div><div class="creplybar" id="chatReplyBar" hidden></div>
+            <form class="chatin" id="chatForm"><button type="button" class="cbtn" data-catt title="Envoyer une capture ou une image">📎</button><button type="button" class="cbtn" data-csched title="Programmer ce message">⏰</button><textarea id="chatText" rows="1" maxlength="500" placeholder="Écris un message… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form>
           </div>
           <div class="fxchat" id="fxGroup" hidden>
             <div class="chathead"><span class="gstack big" id="gAv"></span><div class="chatwho"><b id="gWho">…</b><small id="gSub"></small></div>
               <div class="chatacts"><button type="button" class="btn sm" id="gNotify" title="Envoie une notification à tout le groupe">🔔 Prévenir</button><button type="button" class="btn sm" id="gParty">Discord</button><button type="button" class="btn sm" id="gMembersBtn">👥 Membres</button><button type="button" class="btn ghost sm" id="gMore" title="Plus">•••</button></div></div>
             <div class="gmembers" id="gMembers" hidden></div>
             <div class="chatfil" id="gFil"></div>
-            <form class="chatin" id="gForm"><textarea id="gText" rows="1" maxlength="500" placeholder="Écris au groupe… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form>
+            <div class="ctyping" id="gTyping"></div><div class="cscheds" id="gScheds"></div><div class="creplybar" id="gReplyBar" hidden></div>
+            <form class="chatin" id="gForm"><button type="button" class="cbtn" data-catt title="Envoyer une capture ou une image">📎</button><button type="button" class="cbtn" data-csched title="Programmer ce message">⏰</button><textarea id="gText" rows="1" maxlength="500" placeholder="Écris au groupe… (Entrée pour envoyer)" autocomplete="off"></textarea><button class="btn play" title="Envoyer">➤</button></form>
           </div>
           <div class="fxdetail" id="fxDetail" hidden></div>
           <div class="fxdetail" id="fxEventForm" hidden>
@@ -193,6 +196,7 @@
     </div>
 
     <div class="pctab" data-pctab="composants" hidden>
+      <div class="panel"><h3>💽 Santé des disques</h3><p class="hint">Usure des SSD, température et erreurs de lecture, lues sans rien modifier.</p><div id="diskHealth"><button class="btn" type="button" id="diskHealthBtn">Vérifier mes disques</button></div></div>
       <div class="row pcactions"><button class="btn" type="button" id="pcDiagBtn">⚡ Relire les composants</button></div>
       <div id="pcDriver"></div>
       <div class="comps" id="pcComps"><div class="empty">Lecture des composants…</div></div>
@@ -238,6 +242,7 @@
     </div>
 
     <div class="pctab" data-pctab="reseau" hidden>
+      <div class="panel"><h3>🚀 Test de connexion</h3><p class="hint">Ping, stabilité, paquets perdus, débit et type de connexion (Wi-Fi ou câble), avec un conseil clair. Environ 30 secondes.</p><div class="row"><button class="btn play" type="button" id="netTest">▶ Lancer le test</button></div><div id="netTestOut"></div></div>
       <div class="panel"><h3>🌐 Réseau</h3><p class="hint">Latence réelle vers les services de jeu et vitesse des serveurs DNS.</p><div class="row"><button class="btn" type="button" id="netPing">📶 Tester la latence</button><button class="btn" type="button" id="netDns">⚡ Trouver le DNS le plus rapide</button></div><div id="netOut"></div></div>
     </div>
     <div class="pcprog" id="pcProg" hidden><div class="updbar"><i id="pcProgFill"></i></div><small id="pcProgText"></small></div>
@@ -325,6 +330,8 @@
       <button class="btn play big" id="stepGo">Valider</button>
       <div class="steplinks"><button type="button" class="linkbtn" id="stepResend">Renvoyer le code</button><button type="button" class="linkbtn" id="stepBack">Retour</button></div>
     </form>
+    <div class="authpair" id="authPair" hidden><h2>💻 Connexion depuis un autre PC</h2><p class="sub">Sur un PC déjà connecté : clique sur ton nom en bas à gauche › <b>Connecter un autre PC</b>, puis entre ce code.</p><div class="paircode" id="pairCode">····-····</div><small class="hint" id="pairHint">Valable 5 minutes.</small><button type="button" class="linkbtn" id="pairBack">Retour</button></div>
+    <button class="btn ghost" type="button" id="authPairBtn">💻 Se connecter avec un autre PC (sans mot de passe)</button>
     <button class="linkbtn" id="authForgot">Mot de passe oublié ?</button>
     <button class="linkbtn" id="authSkip">Continuer sans compte</button>
   </div>
