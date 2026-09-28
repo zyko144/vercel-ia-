@@ -831,15 +831,6 @@ async function openProfileEditor() {
     loadHistory();
   };
 }
-// Optimisation en pause : seul « Remettre Windows comme avant » reste disponible
-$('maintReset').addEventListener('click', async (e) => {
-  e.target.disabled = true;
-  const r = await api.optiReset?.().catch(() => null);
-  e.target.disabled = false;
-  if (r?.cancelled) return;
-  if (!r?.ok) return toast(r?.refused ? 'Autorisation refusée : rien n’a été changé' : r?.error ?? 'Impossible');
-  toast(r.changed ? `↩ ${r.changed} réglage(s) remis comme avant : redémarre le PC` : 'Tout est déjà comme Windows d’origine 👍');
-});
 $('meAv').addEventListener('click', openProfileEditor);
 $('meName').addEventListener('click', openProfileEditor);
 
@@ -1627,6 +1618,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.38.0': [
+    ['🎯', 'Optimisation par jeu', 'FiveM, Garry’s Mod, Fortnite, Rainbow Six Siege, Rocket League et tes autres jeux : chaque action montre son risque (Sûr, Modéré, Avancé), le chemin exact touché et ce qu’elle libère. Mods, plugins, addons et sauvegardes ne sont jamais touchés.', ['[data-view=optimisation]', 'wait1800']],
+    ['↩', 'Tout est annulable', 'Chaque fichier de jeu et valeur du registre est sauvegardé avant : « Annuler la dernière optimisation » ou « Tout remettre par défaut » en un clic.'],
+    ['🧾', 'Résumé avant, rapport après', 'Avant : le nombre de changements, de fichiers et la place libérée. Après : ce qui est fait, ce qui a échoué (jeu ouvert, fichier en lecture seule…) et le bouton Annuler.'],
+    ['🕹', 'Jeux avec anti-triche détectés', 'R6, Fortnite, Rocket League… sont maintenant bien repérés quand ils tournent : temps de jeu, FPS, et aucun fichier modifié tant que le jeu est ouvert.'],
+  ],
   '0.37.3': [
     ['🟦', 'Fortnite avec ses vraies images', 'Logo, jaquette et grand fond officiels lus dans le catalogue Epic de ton PC (même hors ligne), avec nouvel essai du magasin Epic toutes les 6 h si besoin.', ['[data-view=jeux]', 'wait900']],
     ['⏱', 'Temps de jeu Fortnite, Rocket League…', 'Les jeux avec anti-triche sont enfin reconnus en cours : temps de jeu, « En cours », mini-compteur de FPS.'],
@@ -2490,6 +2487,10 @@ const catCard = (key, icon, title, desc, total, body, { checked = true, open = f
   </div>`;
 const SHADERS = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 const itemRow = (group, x, checked = true) => `<label class="check"><input type="checkbox" data-g="${group}" value="${esc(x.id)}" ${checked ? 'checked' : ''}><span>${esc(x.label)}${x.note ? ` <small class="hint">· ${esc(x.note)}</small>` : ''}</span><em>${gb(x.bytes)}</em></label>`;
+const OPTI_SECTIONS = [['A', 'Tes jeux', 'Profils par jeu : caches, réglages du jeu, carte graphique'], ['B', 'Nettoyage', 'Fichiers inutiles, corbeille, restes de jeux, place prise'], ['C', 'Windows', 'Réglages pour les jeux, démarrage, réglages système'], ['D', 'Entretien', 'Disques, réparation et nettoyage profond de Windows'], ['E', 'Annuler et historique', 'Retour arrière en un clic, photos de tes réglages']];
+const GAME_ICONS = { FiveM: '🚓', 'Garry’s Mod': '🔧', Fortnite: '🪂', 'Rainbow Six Siege': '🎯', 'Rocket League': '🚗' };
+const RISKS = { safe: ['Sûr', 'ok'], moderate: ['Modéré', 'mid'], advanced: ['Avancé', 'warn'] };
+const gameRow = (a) => `<label class="check"><input type="checkbox" data-g="games" value="${esc(a.id)}" ${a.on && !a.applied && !a.readonly ? 'checked' : ''} ${a.applied || a.readonly ? 'disabled' : ''}><span>${esc(a.label)} <small class="risk ${RISKS[a.risk][1]}">${RISKS[a.risk][0]}</small>${a.reboot ? ' <small class="opt">redémarrage</small>' : ''}${a.applied ? ' <small class="opt">déjà appliqué</small>' : ''}<small class="hint">${esc(a.help)}</small><small class="opath">${esc((a.paths ?? []).join(' · '))}</small></span><em>${a.kind === 'clean' ? `${gb(a.bytes ?? 0)} · ${a.files ?? 0} fichier${a.files > 1 ? 's' : ''}` : ''}</em></label>`;
 function renderOpti() {
   const o = opti;
   setRing(state.health?.score ?? o.score, state.health?.label ?? o.label);
@@ -2505,39 +2506,48 @@ function renderOpti() {
     ${o.free != null ? `<div><b>${gb(o.free)}</b><small>libres${o.disk ? ` sur ${gb(o.disk)}` : ''}</small></div>` : ''}`;
   $('optiRun').hidden = false;
   $('optiRun').classList.add('play'); $('optiScan').classList.remove('play');
-  const cards = [];
-  cards.push(catCard('', '↩', 'Un jeu bug depuis l’optimisation ?', 'Remets tous les réglages de Windows exactement comme avant ta première optimisation (FiveM, GTA V et les autres jeux retrouvent leur comportement normal). Tes fichiers ne sont pas touchés.', '',
-    '<button class="btn play" id="optiReset" type="button">↩ Remettre Windows comme avant</button><p class="hint">Point de restauration créé avant. Windows demande l’autorisation administrateur, puis redémarre le PC.</p>', { count: 'réparer', open: [...o.tweaks, ...(state.sys ?? [])].some((t) => t.retired) }));
+  const S = { A: [], B: [], C: [], D: [], E: [] };
+  S.E.push(catCard('', '↩', 'Annuler ou tout remettre par défaut', 'Chaque fichier de jeu et chaque valeur du registre modifiés sont sauvegardés avant (même ceux qui n’existaient pas) : reviens exactement à l’état d’avant.', '',
+    '<div class="row"><button class="btn" data-undo="1" type="button">↩ Annuler la dernière optimisation</button><button class="btn play" id="optiReset" type="button">Tout remettre par défaut</button></div><p class="hint">« Tout remettre » annule toutes les optimisations et remet Windows comme avant la première (point de restauration créé avant les réglages système, autorisation administrateur).</p>', { count: 'réparer', open: [...o.tweaks, ...(state.sys ?? [])].some((t) => t.retired) }));
   for (const [key, icon, title, desc] of GROUPS) {
     const list = o.junk.filter((x) => x.group === key);
     if (!list.length) continue;
-    cards.push(catCard(key, icon, title, desc, gb(list.reduce((n, x) => n + x.bytes, 0)), `<div class="checks">${list.map((x) => itemRow('junk', SHADERS.includes(x.id) ? { ...x, note: 'À vider seulement si un jeu saccade après une mise à jour du pilote : sinon les jeux saccadent le temps de le recréer' } : x, !SHADERS.includes(x.id))).join('')}</div>`, { count: `${list.length} élément${list.length > 1 ? 's' : ''}` }));
+    S.B.push(catCard(key, icon, title, desc, gb(list.reduce((n, x) => n + x.bytes, 0)), `<div class="checks">${list.map((x) => itemRow('junk', SHADERS.includes(x.id) ? { ...x, note: 'À vider seulement si un jeu saccade après une mise à jour du pilote : sinon les jeux saccadent le temps de le recréer' } : x, !SHADERS.includes(x.id))).join('')}</div>`, { count: `${list.length} élément${list.length > 1 ? 's' : ''}` }));
   }
-  if (o.recycle > 0) cards.push(catCard('recycle', '♻', 'Corbeille', 'Fichiers déjà supprimés qui prennent encore de la place.', gb(o.recycle), '<p class="hint">Elle sera vidée définitivement.</p>'));
-  cards.push(catCard('orphans', '🧩', 'Restes de jeux désinstallés', 'Dossiers de jeux Steam qui ne sont plus installés.', gb(orphanTotal),
+  if (o.recycle > 0) S.B.push(catCard('recycle', '♻', 'Corbeille', 'Fichiers déjà supprimés qui prennent encore de la place.', gb(o.recycle), '<p class="hint">Elle sera vidée définitivement.</p>'));
+  S.B.push(catCard('orphans', '🧩', 'Restes de jeux désinstallés', 'Dossiers de jeux Steam qui ne sont plus installés.', gb(orphanTotal),
     o.orphans.length ? `<div class="checks">${o.orphans.map((x) => itemRow('orphans', x, false)).join('')}</div><p class="hint">Décochés par défaut : coche ceux que tu veux supprimer.</p>` : '<p class="hint">Aucun reste trouvé 👍</p>', { checked: false, count: `${o.orphans.length} dossier${o.orphans.length > 1 ? 's' : ''}` }));
-  cards.push(catCard('', '⏻', 'Démarrage de Windows', 'Moins d’applis au démarrage = PC prêt plus vite et plus de mémoire libre.', `${o.startup.filter((x) => x.enabled).length}`,
+  S.C.push(catCard('', '⏻', 'Démarrage de Windows', 'Moins d’applis au démarrage = PC prêt plus vite et plus de mémoire libre.', `${o.startup.filter((x) => x.enabled).length}`,
     `${o.startup.map((x) => `<label class="toggle small"><input type="checkbox" data-startup="${esc(x.name)}" ${x.enabled ? 'checked' : ''}><span></span>${esc(x.name)}${x.heavy ? ' <small class="warn">ralentit le démarrage</small>' : ''}</label>`).join('') || '<p class="hint">Aucune appli lancée au démarrage.</p>'}<p class="hint">Désactiver ne désinstalle rien (réversible ici ou dans le Gestionnaire des tâches).</p>`, { count: 'au démarrage', open: heavyOn.length > 0 }));
-  cards.push(catCard('tweaks', '🎯', 'Réglages Windows pour les jeux', 'Réglages sûrs et réversibles qui donnent des FPS et de la réactivité.', `${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}`,
+  S.C.push(catCard('tweaks', '🎯', 'Réglages Windows pour les jeux', 'Réglages sûrs et réversibles qui donnent des FPS et de la réactivité.', `${o.tweaks.filter((t) => t.on).length}/${o.tweaks.length}`,
     o.tweaks.map((t) => `<label class="toggle small"><input type="checkbox" data-tweak="${esc(t.id)}" ${t.on ? 'checked' : ''}><span></span><div class="tlabel">${esc(t.label)}${t.optional ? ' <small class="opt">facultatif</small>' : ''}${t.retired ? ' <small class="warn">déconseillé : décoche-le</small>' : ''}<small class="hint">${esc(t.retired ?? t.help)}</small></div></label>`).join(''), { count: tweaksOff.length ? `${tweaksOff.length} à faire` : 'optimisés', open: tweaksOff.length > 0 }));
+  // Profils par jeu : chaque action avec son risque, son chemin exact et ce qu'elle libère
+  const byGame = {};
+  for (const a of o.games ?? []) (byGame[a.game] ??= []).push(a);
+  Object.entries(byGame).forEach(([game, list], n) => {
+    const bytes = list.reduce((t, a) => t + (a.bytes ?? 0), 0);
+    S.A.push(catCard(`game${n}`, GAME_ICONS[game] ?? '🎮', game, game === 'Autres jeux' ? 'Réglages sûrs de Windows pour chaque jeu.' : 'Profil de ce jeu : fichiers sauvegardés avant chaque changement, annulables en un clic.', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
+      `<div class="checks">${list.map(gameRow).join('')}</div>`, { count: `${list.length} action${list.length > 1 ? 's' : ''}` }));
+  });
   // Place prise par chaque jeu installé (et ceux pas lancés depuis 6 mois)
   const games = state.items.filter((x) => x.kind === 'game' && x.installed && x.size > 0).sort((a, b) => b.size - a.size);
   const stale = games.filter((g) => !g.lastPlayed || Date.now() - g.lastPlayed > 182 * 86_400_000);
   if (games.length) {
     const maxG = games[0].size;
-    cards.push(catCard('', '🎮', 'Place prise par tes jeux', stale.length ? `${stale.length} jeu${stale.length > 1 ? 'x' : ''} pas lancé${stale.length > 1 ? 's' : ''} depuis 6 mois (${gb(stale.reduce((n, g) => n + g.size, 0))}) : désinstalle-les pour faire de la place.` : 'Tous tes jeux installés ont servi ces 6 derniers mois.', gb(games.reduce((n, g) => n + g.size, 0)),
+    S.B.push(catCard('', '🎮', 'Place prise par tes jeux', stale.length ? `${stale.length} jeu${stale.length > 1 ? 'x' : ''} pas lancé${stale.length > 1 ? 's' : ''} depuis 6 mois (${gb(stale.reduce((n, g) => n + g.size, 0))}) : désinstalle-les pour faire de la place.` : 'Tous tes jeux installés ont servi ces 6 derniers mois.', gb(games.reduce((n, g) => n + g.size, 0)),
       `<div class="gamesize">${games.slice(0, 20).map((g) => { const old = stale.includes(g); return `<div class="${old ? 'stale' : ''}"><span>${esc(g.name)}</span><div class="t"><i style="width:${(100 * g.size) / maxG}%"></i></div><b>${gb(g.size)}</b><small>${g.lastPlayed ? `joué ${ago(g.lastPlayed).toLowerCase()}` : 'jamais lancé ici'}</small>${old ? `<button class="btn ghost sm" data-uninst="${esc(g.id)}">Désinstaller</button>` : '<span></span>'}</div>`; }).join('')}</div>`, { count: `${games.length} jeux`, open: stale.length > 0 }));
   }
-  cards.push(catCard('', '🕘', 'Réglages sauvegardés', 'Avant chaque changement de réglages Windows, History garde une photo de tes réglages : reviens en arrière en un clic ou exporte le rapport avant / après.', '', '<div id="setHist"><p class="hint">Chargement…</p></div>', { count: 'historique' }));
-  cards.push(catCard('', '⚙', 'Réglages système pro', 'Priorité aux jeux, planification GPU, alimentation, veille prolongée, télémétrie… Un point de restauration est créé avant. Demande l’autorisation administrateur.', state.sys ? `${state.sys.filter((t) => t.on).length}/${state.sys.length}` : '…',
+  S.E.push(catCard('', '🕘', 'Réglages sauvegardés', 'Avant chaque changement de réglages Windows, History garde une photo de tes réglages : reviens en arrière en un clic ou exporte le rapport avant / après.', '', '<div id="setHist"><p class="hint">Chargement…</p></div>', { count: 'historique' }));
+  S.C.push(catCard('', '⚙', 'Réglages système pro', 'Priorité aux jeux, planification GPU, alimentation, veille prolongée, télémétrie… Un point de restauration est créé avant. Demande l’autorisation administrateur.', state.sys ? `${state.sys.filter((t) => t.on).length}/${state.sys.length}` : '…',
     `<div id="sysTweaks">${sysTweaksHtml()}</div><div class="row"><button class="btn play" id="sysApply" type="button">Appliquer les réglages cochés</button></div><p class="hint">Chaque réglage est réversible : décoche puis applique pour revenir à la valeur de Windows.</p>`, { count: 'admin', open: Boolean(state.sys?.some((t) => !t.on)) }));
-  cards.push(catCard('', '💽', 'Stockage : TRIM et défragmentation', 'TRIM de chaque SSD (garde leurs performances d’écriture) et défragmentation des disques durs, comme l’outil officiel de Windows.', '',
+  S.D.push(catCard('', '💽', 'Stockage : TRIM et défragmentation', 'TRIM de chaque SSD (garde leurs performances d’écriture) et défragmentation des disques durs, comme l’outil officiel de Windows.', '',
     '<button class="btn" id="optiStorage" type="button">Optimiser tous les disques</button>', { count: 'admin' }));
-  cards.push(catCard('', '🩺', 'Réparer Windows (DISM + SFC)', 'Vérifie l’image de Windows et la répare depuis Windows Update, puis contrôle chaque fichier système un par un et remplace ceux qui sont abîmés.', '',
+  S.D.push(catCard('', '🩺', 'Réparer Windows (DISM + SFC)', 'Vérifie l’image de Windows et la répare depuis Windows Update, puis contrôle chaque fichier système un par un et remplace ceux qui sont abîmés.', '',
     '<button class="btn" id="optiRepair" type="button">Vérifier et réparer Windows</button><p class="hint">15 à 40 minutes. Utile après des plantages, écrans bleus ou erreurs bizarres.</p><div id="repairOut"></div>', { count: 'admin' }));
-  cards.push(catCard('', '🛡', 'Nettoyage profond de Windows', 'Anciennes mises à jour, fichiers temporaires système, cache de distribution, TRIM du SSD, nettoyage des composants. Demande l’autorisation administrateur.', '',
+  S.D.push(catCard('', '🛡', 'Nettoyage profond de Windows', 'Anciennes mises à jour, fichiers temporaires système, cache de distribution, TRIM du SSD, nettoyage des composants. Demande l’autorisation administrateur.', '',
     '<button class="btn" id="optiDeep" type="button">Lancer le nettoyage profond</button><p class="hint">Plusieurs minutes. Windows affiche une demande d’autorisation.</p>', { count: 'admin' }));
-  $('optiBody').innerHTML = cards.join('');
+  // Rangé en 5 parties aérées : jeux, nettoyage, Windows, entretien, annuler
+  $('optiBody').innerHTML = OPTI_SECTIONS.filter(([k]) => S[k].length).map(([k, t, d]) => `<section class="osec"><h3><span>${k}</span>${t}<small>${d}</small></h3>${S[k].join('')}</section>`).join('');
   renderSetHist();
 }
 async function renderSetHist() {
@@ -2556,7 +2566,7 @@ function diffSettings(a, b) {
 function planFromUi() {
   const on = (k) => document.querySelector(`[data-catcheck="${k}"]`)?.checked;
   const ids = (g) => [...document.querySelectorAll(`#optiBody input[data-g="${g}"]:checked`)].filter((i) => on(i.closest('.ocat')?.dataset.cat)).map((i) => i.value);
-  return { junk: ids('junk'), orphans: ids('orphans'), recycle: Boolean(on('recycle')) && opti.recycle > 0, tweaks: on('tweaks') ? opti.tweaks.filter((t) => !t.on && !t.optional && !t.retired).map((t) => t.id) : [] };
+  return { games: ids('games'), junk: ids('junk'), orphans: ids('orphans'), recycle: Boolean(on('recycle')) && opti.recycle > 0, tweaks: on('tweaks') ? opti.tweaks.filter((t) => !t.on && !t.optional && !t.retired).map((t) => t.id) : [] };
 }
 const SCAN_STEPS = [['junk', 'Fichiers inutiles'], ['recycle', 'Corbeille'], ['orphans', 'Restes de jeux'], ['startup', 'Démarrage de Windows'], ['tweaks', 'Réglages pour les jeux']];
 function showProgress(html) { $('optiProgress').hidden = !html; $('optiProgress').innerHTML = html ?? ''; }
@@ -2580,17 +2590,23 @@ api.onOpti?.((p) => {
   if (p.phase === 'scan') { scanDone.add(p.step); state.optiDraw?.(); return; }
   if (p.phase !== 'run') return;
   if (p.status === 'fait') runLog[p.index] = { label: p.label, got: p.got };
+  if (p.status === 'erreur') runLog[p.index] = { label: p.label, error: p.error };
   const pct = ((p.index + (p.status === 'fait' ? 1 : 0.5)) / p.total) * 100;
   showProgress(`<div class="oprog"><b>Optimisation en cours… ${Math.floor(pct)} %</b><span class="ofreed">${gb(p.freed)} libérés</span>
     <div class="gbar big"><i style="width:${pct}%"></i></div>
-    <div class="olog">${runLog.map((r) => r && `<div class="ok">✓ ${esc(r.label)}${r.got ? ` <em>${gb(r.got)}</em>` : ''}</div>`).filter(Boolean).slice(-6).join('')}${p.status === 'en cours' ? `<div class="run"><i class="spin"></i> ${esc(p.label)}</div>` : ''}</div></div>`);
+    <div class="olog">${runLog.map((r) => r && (r.error ? `<div class="err">✗ ${esc(r.label)} : ${esc(r.error)}</div>` : `<div class="ok">✓ ${esc(r.label)}${r.got ? ` <em>${gb(r.got)}</em>` : ''}</div>`)).filter(Boolean).slice(-6).join('')}${p.status === 'en cours' ? `<div class="run"><i class="spin"></i> ${esc(p.label)}</div>` : ''}</div></div>`);
 });
 $('optiScan').addEventListener('click', optiScanUi);
 $('optiRun').addEventListener('click', async () => {
   const plan = planFromUi();
-  const list = [plan.junk.length && `${plan.junk.length} cache(s) et fichiers temporaires`, plan.recycle && 'la corbeille', plan.orphans.length && `${plan.orphans.length} reste(s) de jeux désinstallés`, plan.tweaks.length && `${plan.tweaks.length} réglage(s) Windows pour les jeux`].filter(Boolean);
+  // Résumé exact avant d'appliquer : chaque dossier vidé (chemin, fichiers, taille) et chaque changement
+  const dels = [...opti.junk.filter((x) => plan.junk.includes(x.id)), ...opti.orphans.filter((x) => plan.orphans.includes(x.id)), ...(opti.games ?? []).filter((a) => a.kind === 'clean' && plan.games.includes(a.id))];
+  const changes = [...plan.tweaks.map((id) => opti.tweaks.find((t) => t.id === id)?.label), ...(opti.games ?? []).filter((a) => a.kind !== 'clean' && plan.games.includes(a.id)).map((a) => `${a.game} : ${a.label}`)].filter(Boolean);
+  const files = dels.reduce((n, x) => n + (x.files ?? 0), 0);
+  const bytes = dels.reduce((n, x) => n + (x.bytes ?? 0), 0) + (plan.recycle ? opti.recycle : 0);
+  const list = [...changes.map((c) => `⚙ ${c}`), ...dels.map((x) => `🗑 ${x.dir ?? x.label} — ${x.files != null ? `${x.files} fichier${x.files > 1 ? 's' : ''}, ` : ''}${gb(x.bytes)}`), ...(plan.recycle ? [`🗑 Corbeille — ${gb(opti.recycle)}`] : [])];
   if (!list.length) return toast('Rien de coché à optimiser');
-  if (!(await ui.confirm({ title: 'Lancer l’optimisation ?', text: 'Tes jeux installés, sauvegardes, mots de passe et fichiers perso ne sont pas touchés.', list, ok: '⚡ Optimiser', icon: '🚀' }))) return;
+  if (!(await ui.confirm({ title: 'Lancer l’optimisation ?', text: `${changes.length} changement${changes.length > 1 ? 's' : ''}, ${files} fichier${files > 1 ? 's' : ''} (${gb(bytes)}) supprimé${files > 1 ? 's' : ''}. Une sauvegarde de chaque fichier et réglage modifié est créée avant : tout est annulable. Tes jeux, mods, sauvegardes et fichiers perso ne sont pas touchés.`, list, ok: '⚡ Optimiser', icon: '🚀' }))) return;
   const before = opti.score;
   runLog = [];
   const gain = $('optiGain').checked;
@@ -2606,9 +2622,17 @@ $('optiRun').addEventListener('click', async () => {
   let benchAfter = null;
   if (gain && benchBefore && !benchBefore.error) { showProgress('<div class="oprog"><b>Mesure après optimisation (≈ 10 s)…</b><div class="gbar big indet"><i></i></div></div>'); benchAfter = await api.benchQuick().catch(() => null); }
   const delta = benchAfter?.total && benchBefore?.total ? Math.round((100 * (benchAfter.total - benchBefore.total)) / benchBefore.total) : null;
-  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks}</b><small>réglage${r.tweaks > 1 ? 's' : ''} appliqué${r.tweaks > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div>${delta != null ? `<div><b>${benchBefore.total} → ${benchAfter.total}</b><small>mini-benchmark (${delta >= 0 ? '+' : ''}${delta} %${Math.abs(delta) <= 2 ? ', dans la marge de mesure' : ''})</small></div>` : ''}</div><button class="btn ghost" data-closeprog="1">Fermer</button></div>`);
+  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks + (r.games ?? 0)}</b><small>changement${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''} appliqué${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div>${delta != null ? `<div><b>${benchBefore.total} → ${benchAfter.total}</b><small>mini-benchmark (${delta >= 0 ? '+' : ''}${delta} %${Math.abs(delta) <= 2 ? ', dans la marge de mesure' : ''})</small></div>` : ''}</div>${r.errors?.length ? `<div class="olog">${r.errors.map((x) => `<div class="err">✗ ${esc(x)}</div>`).join('')}</div>` : ''}<div class="row">${r.undo ? '<button class="btn" data-undo="1" type="button">↩ Annuler cette optimisation</button>' : ''}<button class="btn ghost" data-closeprog="1">Fermer</button></div></div>`);
 });
 $('optiProgress').addEventListener('click', (e) => { if (e.target.closest('[data-closeprog]')) showProgress(null); });
+// Annuler la dernière optimisation (depuis le rapport ou la carte « Annuler ») : fichiers et réglages reviennent comme avant
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-undo]')) return;
+  const r = await api.optiUndo().catch(() => null);
+  if (r?.cancelled) return;
+  toast(r?.ok ? '↩ Optimisation annulée : tout est revenu comme avant' : r?.error ?? 'Impossible');
+  if (r?.ok) { showProgress(null); optiScanUi(); }
+});
 $('optiBody').addEventListener('change', async (e) => {
   const el = e.target;
   if (el.dataset.startup) { const r = await api.optiStartup(el.dataset.startup, el.checked); if (r?.ok) { opti.startup = r.startup; toast(el.checked ? `${el.dataset.startup} se lancera au démarrage` : `${el.dataset.startup} ne se lancera plus au démarrage`); } }
@@ -2627,7 +2651,7 @@ $('optiBody').addEventListener('click', async (e) => {
   }
   if (e.target.id === 'optiReset') {
     e.target.disabled = true;
-    const r = await api.optiReset();
+    const r = await api.optiUndoAll();
     e.target.disabled = false;
     if (r?.cancelled) return;
     if (!r?.ok) return toast(r?.refused ? 'Autorisation refusée : les réglages système n’ont pas été remis' : r?.error ?? 'Impossible');
@@ -2675,9 +2699,6 @@ $('optiBody').addEventListener('click', async (e) => {
 });
 $('optiAuto').addEventListener('change', (e) => api.optiAuto?.(e.target.checked).then(() => toast(e.target.checked ? 'Optimisation automatique chaque semaine activée' : 'Optimisation automatique désactivée')));
 function openOpti() {
-  // Les bandes de chantier arrivent et se collent à chaque ouverture de la page
-  const m = document.querySelector('#view-optimisation .maint');
-  if (m) { m.classList.remove('go'); void m.offsetWidth; m.classList.add('go'); }
   api.optiAuto?.().then((a) => { $('optiAuto').checked = a?.on !== false; }).catch(() => {});
   if (!opti) setRing(state.health?.score ?? null, state.health?.label);
   api.optiSys?.().then((l) => { state.sys = l; if (opti) renderOpti(); }).catch(() => {});
@@ -4007,12 +4028,12 @@ function demoApi() {
     boost: async () => ({ enabled: true, power: true, restore: true, heatAlerts: true, close: ['chrome'], apps: [{ id: 'chrome', label: 'Google Chrome' }, { id: 'edge', label: 'Microsoft Edge' }, { id: 'onedrive', label: 'OneDrive' }, { id: 'office', label: 'Word / Excel / PowerPoint' }] }),
     setBoost: async (b) => b,
     optiAuto: async () => ({ on: true }),
-    optiScan: async () => ({ score: 58, label: 'Moyen', free: 84e9, disk: 512e9, recycle: 2.1e9, junk: [{ id: 'temp', group: 'systeme', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'inetcache', group: 'systeme', label: 'Cache Internet de Windows', bytes: 0.6e9 }, { id: 'chrome-Default', group: 'navigateurs', label: 'Cache de Google Chrome', bytes: 1.3e9, note: 'Mots de passe et historique gardés' }, { id: 'nv-install', group: 'pilotes', label: 'Restes d’installation NVIDIA', bytes: 1.9e9, note: 'Anciens pilotes décompressés' }, { id: 'steam-logs', group: 'jeux', label: 'Journaux de Steam', bytes: 0.2e9 }], orphans: [{ id: 'o1', label: 'Apex Legends', bytes: 12.4e9 }], startup: [{ name: 'Discord', enabled: true, heavy: true }, { name: 'Steam', enabled: true, heavy: true }, { name: 'Pilote tablette', enabled: true, heavy: false }], tweaks: [{ id: 'gamemode', label: 'Mode Jeu de Windows activé', help: 'Windows donne la priorité au jeu en cours.', on: true }, { id: 'dvr', label: 'Enregistrement en arrière-plan de la Xbox Game Bar coupé', help: 'Évite que Windows filme en continu pendant les parties (gain de FPS).', on: false }] }),
+    optiScan: async () => ({ score: 58, label: 'Moyen', free: 84e9, disk: 512e9, recycle: 2.1e9, junk: [{ id: 'temp', group: 'systeme', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'inetcache', group: 'systeme', label: 'Cache Internet de Windows', bytes: 0.6e9 }, { id: 'chrome-Default', group: 'navigateurs', label: 'Cache de Google Chrome', bytes: 1.3e9, note: 'Mots de passe et historique gardés' }, { id: 'nv-install', group: 'pilotes', label: 'Restes d’installation NVIDIA', bytes: 1.9e9, note: 'Anciens pilotes décompressés' }, { id: 'steam-logs', group: 'jeux', label: 'Journaux de Steam', bytes: 0.2e9 }], orphans: [{ id: 'o1', label: 'Apex Legends', bytes: 12.4e9 }], startup: [{ name: 'Discord', enabled: true, heavy: true }, { name: 'Steam', enabled: true, heavy: true }, { name: 'Pilote tablette', enabled: true, heavy: false }], tweaks: [{ id: 'gamemode', label: 'Mode Jeu de Windows activé', help: 'Windows donne la priorité au jeu en cours.', on: true }, { id: 'dvr', label: 'Enregistrement en arrière-plan de la Xbox Game Bar coupé', help: 'Évite que Windows filme en continu pendant les parties (gain de FPS).', on: false }], }),
     optiRun: async () => ({ ok: true, freed: 20.8e9, tweaks: 1, score: 93 }), optiStartup: async () => ({ ok: true, startup: [] }), optiTweak: async () => ({ ok: true, tweaks: [] }), optiDeep: async () => ({ ok: true, freed: 6e9 }),
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.37.3',
+    version: async () => '0.38.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

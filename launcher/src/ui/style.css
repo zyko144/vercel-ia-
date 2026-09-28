@@ -891,7 +891,7 @@ body.compact main { padding-top: 4px; }
 #wuOut { display: grid; gap: 16px; }
 #wuOut .sub { display: block; margin: 12px 0 6px; }
 @media (max-width: 1250px) { .healthcard { grid-template-columns: auto 1fr; } .hacts { grid-column: 1 / -1; grid-auto-flow: column; } .scanhero { grid-template-columns: 1fr; } }
-.tlabel small.opt, .tlabel small.ok { display: inline-block !important; width: auto !important; margin-left: 6px; vertical-align: 1px; }
+.tlabel small.opt, .tlabel small.ok { display: inline-block !important; width: auto !important; margin-left: 6px; vertical-align: 1px; justify-self: start; }
 #sysTweaks { display: grid; gap: 12px; }
 
 .bdetail { display: block; margin: -4px 0 4px 140px; line-height: 1.4; }
@@ -1505,23 +1505,9 @@ body.idle .nfx-arcenciel { animation-play-state: paused; }
 .gmembers { max-height: 240px; overflow-y: auto; padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.02); display: grid; gap: 4px; }
 .gmembers[hidden] { display: none; }
 .fxrow.grp .funread, .fxrow .funread { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font-style: normal; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
-/* Optimisation en travaux */
-#view-optimisation.paused > :not(.maint) { display: none !important; }
 #optiBadge { display: none; }
-.maint { position: relative; max-width: 720px; margin: 40px auto; padding: 46px 36px 40px; border-radius: 22px; text-align: center; overflow: hidden;
   background: linear-gradient(160deg, rgba(239,68,68,.22), rgba(127,29,29,.18)), rgba(20,10,12,.6); border: 1px solid rgba(248,113,113,.45);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 30px 80px -30px rgba(239,68,68,.6); backdrop-filter: blur(18px) saturate(140%); display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.maint h2 { margin: 6px 0 0; font-size: 26px; color: #fff; }
-.maint p { margin: 0; max-width: 520px; font-size: 15px; line-height: 1.5; color: #fde2e2; }
-.maint small { max-width: 520px; color: #fca5a5; font-size: 12.5px; margin-top: 6px; }
-.maint .btn { margin-top: 4px; }
-.maintsign svg { width: 86px; height: 86px; filter: drop-shadow(0 0 18px rgba(239,68,68,.7)); animation: maintpulse 2.4s ease-in-out infinite; }
-.maintsign path:first-child { fill: #ef4444; stroke: #fff; stroke-width: 3; stroke-linejoin: round; }
-.maintsign .ln { fill: none; stroke: #fff; stroke-width: 6; stroke-linecap: round; }
-.mainttape { position: absolute; left: -10%; right: -10%; top: 16px; height: 16px; transform: rotate(-2deg); background: repeating-linear-gradient(45deg, #ef4444 0 18px, #1a0a0a 18px 36px); opacity: .85; }
-.mainttape.b { top: auto; bottom: 16px; transform: rotate(2deg); }
-@keyframes maintpulse { 50% { transform: scale(1.05); filter: drop-shadow(0 0 28px rgba(239,68,68,.9)); } }
-body.idle .maintsign svg { animation: none; }
 .plink2.pl-discord, .plinkrow.pl-discord { --lc: #5865f2; } .plink2.pl-twitch, .plinkrow.pl-twitch { --lc: #9146ff; } .plink2.pl-youtube, .plinkrow.pl-youtube { --lc: #ff0033; }
 .plink2.pl-tiktok, .plinkrow.pl-tiktok { --lc: #25f4ee; } .plink2.pl-steam, .plinkrow.pl-steam { --lc: #1b2838; } .plink2.pl-instagram, .plinkrow.pl-instagram { --lc: #e1306c; }
 .pl-steam .plico { background: linear-gradient(135deg, #1b2838, #2a475e); box-shadow: inset 0 0 0 1px #66c0f455; }
@@ -1660,17 +1646,6 @@ body.idle .maintsign svg { animation: none; }
 #ambient { inset: auto; left: -4vw; top: -4vh; width: 27vw; height: 27vh; transform: scale(4); transform-origin: 0 0; filter: blur(18px) saturate(1.5) brightness(.4); }
 .grid > [data-id] { content-visibility: auto; contain-intrinsic-size: auto 290px; }
 
-/* Optimisation en travaux : les bandes arrivent et se collent sur la carte à chaque ouverture */
-.maint.go .mainttape { animation: tapeL .6s cubic-bezier(.2, 1.35, .45, 1) both, taperoll 1.1s .6s linear infinite; }
-.maint.go .mainttape.b { animation: tapeR .6s .12s cubic-bezier(.2, 1.35, .45, 1) both, taperoll 1.1s .72s linear infinite reverse; }
-/* Les traits rouges et noirs défilent (seulement quand la page Optimisation est affichée : ailleurs elle est cachée) */
-@keyframes taperoll { to { background-position: 50.9px 0; } }
-body.idle .maint.go .mainttape { animation-play-state: paused; }
-@keyframes tapeL { 0% { transform: translateX(-110%) rotate(-14deg) scale(1.15); } 70% { transform: translateX(1.5%) rotate(-1.2deg) scaleY(1.3); } 85% { transform: translateX(-.5%) rotate(-2.4deg) scaleY(.8); } 100% { transform: rotate(-2deg); } }
-@keyframes tapeR { 0% { transform: translateX(110%) rotate(14deg) scale(1.15); } 70% { transform: translateX(-1.5%) rotate(1.2deg) scaleY(1.3); } 85% { transform: translateX(.5%) rotate(2.4deg) scaleY(.8); } 100% { transform: rotate(2deg); } }
-@media (prefers-reduced-motion: reduce) { .maint.go .mainttape { animation: none !important; } }
-/* Menu : logo danger rouge à gauche d'« Optimisation » */
-#nav .navwork svg.danger { stroke: #ef4444; fill: rgba(239, 68, 68, .18); filter: drop-shadow(0 0 4px rgba(239, 68, 68, .6)); }
 
 /* Fond de l'appli (Paramètres › Général) : dégradé animé aux couleurs du thème */
 body[data-bg="anime"]::before { content: ""; position: fixed; inset: -20%; z-index: 0; pointer-events: none; background: radial-gradient(40% 40% at 20% 20%, color-mix(in srgb, var(--blue) 45%, transparent), transparent 70%), radial-gradient(35% 35% at 80% 70%, color-mix(in srgb, var(--cyan) 35%, transparent), transparent 70%); filter: blur(40px); opacity: .5; animation: bgdrift 24s ease-in-out infinite alternate; }
@@ -1688,26 +1663,6 @@ body.idle[data-bg="anime"]::before { animation-play-state: paused; }
 .clipcard figcaption { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; }
 .clipcard figcaption small { display: block; opacity: .7; }
 
-/* ---------- Optimisation « presque prêt » (orange, qui donne envie) ---------- */
-.maint { background: linear-gradient(160deg, rgba(255, 159, 67, .24), rgba(180, 83, 9, .16)), rgba(22, 14, 8, .6) !important; border-color: rgba(255, 176, 90, .5) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 30px 80px -30px rgba(255, 140, 40, .65) !important; }
-.maint p { color: #ffe8d1 !important; } .maint small { color: #ffc998 !important; }
-.maintsign svg { filter: drop-shadow(0 0 18px rgba(255, 150, 50, .75)) !important; }
-.maintsign path:first-child { fill: #ff9f43 !important; }
-.mainttape { background: repeating-linear-gradient(45deg, #ff9f43 0 18px, #1a0f06 18px 36px) !important; }
-#nav .navwork svg.danger { stroke: #ff9f43 !important; fill: rgba(255, 159, 67, .2) !important; filter: drop-shadow(0 0 4px rgba(255, 159, 67, .6)) !important; }
-.soon { padding: 5px 14px; border-radius: 99px; background: linear-gradient(90deg, #ff9f43, #ffc233); color: #1a0f06; font-weight: 800; font-size: 13px; letter-spacing: .03em; box-shadow: 0 0 22px -4px #ff9f43; animation: soonpulse 2s ease-in-out infinite; }
-@keyframes soonpulse { 50% { box-shadow: 0 0 34px 0 #ff9f43; } }
-.maintbar { position: relative; width: min(460px, 100%); height: 12px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
-.maintbar i { position: absolute; inset: 0 15% 0 0; border-radius: inherit; background: linear-gradient(90deg, #ff9f43, #ffc233); box-shadow: 0 0 14px #ff9f43; }
-.maintbar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent); animation: shine 2.2s linear infinite; }
-@keyframes shine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-.maintbar span { position: absolute; right: 8px; top: -18px; font-size: 11px; color: #ffc998; }
-.maintlist { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; text-align: left; width: min(560px, 100%); }
-.maintlist li { padding: 9px 12px; border-radius: 12px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 176, 90, .18); color: #ffe8d1; font-size: 13.5px; display: flex; gap: 8px; align-items: center; }
-.maintlist em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 99px; }
-.maintlist .done em { background: #2ee07a; color: #06200f; } .maintlist .wip em { background: rgba(255, 159, 67, .25); color: #ffb169; }
-.maintlist .wip em::before { content: '● '; animation: blink 1.2s infinite; }
-@keyframes blink { 50% { opacity: .2; } }
 /* ---------- Bouton ⚡ à côté de « Jouer » ---------- */
 /* ---------- Fenêtre « Optimiser et jouer » ---------- */
 .optidlg .dlg { width: min(560px, 92vw); display: flex; flex-direction: column; gap: 12px; }
@@ -1735,9 +1690,6 @@ body.idle[data-bg="anime"]::before { animation-play-state: paused; }
 .dcbtn .dc { width: 19px; height: 19px; fill: currentColor; stroke: none; }
 .dcbtn + .winbtns { margin-left: 4px; }
 .odrun[hidden], .odchecks[hidden], .odstats[hidden], .odfoot[hidden] { display: none !important; }
-.maintlist li { display: flex !important; align-items: center; gap: 12px; line-height: 1.5; }
-.maintlist li > span { flex: 1; }
-.maintlist em { flex: none; }
 
 .odspark { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: 4px; height: 58px; padding: 8px 12px 20px !important; position: relative; }
 .odspark i { flex: 1; border-radius: 4px 4px 1px 1px; background: rgba(120, 160, 255, .55); }
@@ -1765,3 +1717,18 @@ body.gaming #ambient, body.gaming .neon { display: none !important; }
 .homesep::before, .homesep::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line-2), transparent); }
 .homesep:not(:has(~ :is(#newsBlock, #dealBlock, #freeBlock):not([hidden]))) { display: none; }
 .storehead { grid-column: 1 / -1; margin-top: 22px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+/* Optimisation par jeu : niveau de risque, chemin exact, erreurs du journal */
+.risk { font-size: 10.5px; font-weight: 800; border-radius: 6px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
+.risk.ok { background: rgba(46, 224, 122, .16); color: #2ee07a; } .risk.mid { background: rgba(255, 176, 60, .16); color: #ffb03c; } .risk.warn { background: rgba(255, 90, 79, .16); color: #ff5a4f; }
+.opath { display: block; font-size: 11px; color: var(--muted); opacity: .75; word-break: break-all; }
+.olog .err { color: #ff8a80; }
+/* Optimisation aérée : 5 parties (A à E) bien séparées */
+.opticats { gap: 34px; }
+.osec { display: grid; gap: 14px; }
+.osec h3 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 2px; font-size: 19px; color: #fff; }
+.osec h3 span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--accent, #3b82f6); color: #fff; font-size: 15px; font-weight: 900; }
+.osec h3 small { flex-basis: 100%; margin-left: 42px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.osec .ocat .ohead { padding: 16px 18px; }
+.osec .obody { padding: 4px 18px 18px 74px; }
+.osec .checks { gap: 10px; }
+.osec .check small.hint { display: block; margin: 3px 0 1px; }

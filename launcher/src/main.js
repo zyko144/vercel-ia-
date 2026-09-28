@@ -30,7 +30,8 @@ import { steamPath } from './core/library.js';
 import { epicActions, epicStoreSearch } from './core/epic.js';
 import { steamActions, steamDetails } from './core/steam.js';
 import { createStore } from './core/store.js';
-import { safeGameDir, uninstallFiles } from './core/manage.js';
+import { folderSize, safeGameDir, uninstallFiles } from './core/manage.js';
+import { applyAction, gameActions, revertEntries } from './core/gameopti.js';
 import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
@@ -40,7 +41,7 @@ import { badges, hourly, levelOf, rediscover, streakOf } from './core/progress.j
 import { dnsTest, pingHosts } from './core/net.js';
 import { checkReq, parseReq } from './core/reqs.js';
 import { gogGames, ubisoftGames } from './core/stores.js';
-import { demoActivity, demoBench, demoEvents, demoFriends, demoItems, demoPerf, demoScan, demoTemps, demoWu } from './core/demo.js';
+import { demoActivity, demoBench, demoEvents, demoFriends, demoGameActs, demoItems, demoPerf, demoScan, demoTemps, demoWu } from './core/demo.js';
 import { captureDir, captureName } from './core/capture.js';
 import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core/gmod.js';
 import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
@@ -931,6 +932,7 @@ ipcMain.handle('clean:run', async (_e, ids) => {
 // ---------- Optimisation complète (avancement envoyé en direct à l'interface) ----------
 let orphanList = [];
 let startupList = [];
+let gameActList = [];
 let lastScan = null;
 const scoreOf = (r) => healthScore({
   junkBytes: r.junk.reduce((n, x) => n + x.bytes, 0) + r.recycle, orphanBytes: r.orphans.reduce((n, x) => n + x.bytes, 0),
@@ -950,9 +952,13 @@ async function optiScan(progress = () => {}) {
   orphanList = orphans.map((o) => ({ ...o, libs }));
   startupList = startup;
   const r = {
-    junk: cleanList.map(({ id, label, bytes, note }) => ({ id, label, bytes, note, group: groupOf(id) })).sort((a, b) => b.bytes - a.bytes),
+    junk: cleanList.map(({ id, label, bytes, files, note, dir }) => ({ id, label, bytes, files, note, dir, group: groupOf(id) })).sort((a, b) => b.bytes - a.bytes),
     recycle, orphans: orphans.map(({ id, label, bytes }) => ({ id, label, bytes })), startup, tweaks, free, disk, at: Date.now(),
   };
+  // Profils par jeu : taille et nombre de fichiers exacts de chaque cache avant de demander l'accord
+  gameActList = process.env.LAUNCHER_DEMO ? demoGameActs() : await gameActions(items, { docs: app.getPath('documents') }).catch(() => []);
+  for (const a of gameActList) if (a.kind === 'clean' && a.dir) Object.assign(a, await folderSize(a.dir));
+  r.games = gameActList;
   r.score = scoreOf(r);
   r.label = scoreLabel(r.score);
   lastScan = r;
@@ -965,7 +971,12 @@ async function optiApply(plan, progress = () => {}) {
   const junk = cleanList.filter((t) => plan?.junk?.includes(t.id));
   const orphans = orphanList.filter((o) => plan?.orphans?.includes(o.id));
   const tweaks = (plan?.tweaks ?? []).map(String).filter((id) => !GAME_TWEAKS.find((t) => t.id === id)?.retired);
-  const steps = [...junk.map((t) => ({ kind: 'junk', label: t.label, t })), ...(plan?.recycle ? [{ kind: 'recycle', label: 'Corbeille' }] : []), ...orphans.map((o) => ({ kind: 'orphan', label: `Reste de jeu : ${o.label}`, o })), ...tweaks.map((id) => ({ kind: 'tweak', label: `Réglage : ${id}`, id }))];
+  const games = gameActList.filter((a) => plan?.games?.includes(a.id) && !a.applied);
+  const steps = [...junk.map((t) => ({ kind: 'junk', label: t.label, t })), ...(plan?.recycle ? [{ kind: 'recycle', label: 'Corbeille' }] : []), ...orphans.map((o) => ({ kind: 'orphan', label: `Reste de jeu : ${o.label}`, o })), ...tweaks.map((id) => ({ kind: 'tweak', label: GAME_TWEAKS.find((t) => t.id === id)?.label ?? id, id })), ...games.map((a) => ({ kind: 'game', label: `${a.game} : ${a.label}`, a }))];
+  // Photo des réglages + journal de chaque fichier / valeur touché : « Annuler » remet exactement l'état d'avant
+  if (tweaks.length) await snapshotSettings('Avant l’optimisation').catch(() => {});
+  const journal = { at: Date.now(), entries: [], tweaks: (await tweakStates().catch(() => [])).filter((t) => tweaks.includes(t.id)).map((t) => ({ id: t.id, was: t.on })), done: [], errors: [] };
+  const paths = games.length ? await runningPaths(0).catch(() => []) : [];
   const before = await freeSpace();
   let freed = 0;
   for (const [i, st] of steps.entries()) {
@@ -976,15 +987,29 @@ async function optiApply(plan, progress = () => {}) {
       if (st.kind === 'orphan') got = await removeOrphan(st.o, st.o.libs);
       if (st.kind === 'recycle') { const size = lastScan?.recycle ?? 0; await emptyRecycleBin(); got = size; }
       if (st.kind === 'tweak') await setTweak(st.id, true);
-    } catch (err) { fatalLog(err); } // un élément bloqué (fichier ouvert, droits) n'arrête pas le reste
+      if (st.kind === 'game') {
+        // Jeu (ou son launcher) ouvert : on ne touche pas à ses fichiers
+        const item = items.find((x) => x.id === st.a.itemId);
+        if (item && (activeItems([item], paths).size || (await runningGameExes(item).catch(() => [])).length)) throw new Error(`ferme ${item.name} d’abord`);
+        const r = await applyAction(st.a);
+        journal.entries.push(...r.entries);
+        got = r.freed;
+      }
+      journal.done.push(st.label);
+    } catch (err) {
+      // Un élément bloqué (jeu ouvert, fichier en lecture seule, droits) s'arrête seul : le reste continue
+      journal.errors.push(`${st.label} : ${err.message}`);
+      progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'erreur', error: err.message, freed });
+      continue;
+    }
     freed += got;
     progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'fait', got, freed });
   }
+  if (journal.entries.length || journal.tweaks.length) { store.data.optiJournal = [journal, ...(store.data.optiJournal ?? [])].slice(0, 20); store.save(); }
   const after = await freeSpace();
-  return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: tweaks.length };
+  return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: tweaks.length, games: games.length, errors: journal.errors, undo: Boolean(journal.entries.length || journal.tweaks.length) };
 }
 ipcMain.handle('opti:run', async (_e, plan) => {
-  if (OPTI_PAUSED) return { error: 'L’optimisation est en pause le temps qu’on la corrige.' };
   try {
     const r = await optiApply(plan, (p) => send('opti:progress', p));
     // L'optimisation corrige aussi les réglages d'anciennes versions qui font bugger les jeux
@@ -1161,13 +1186,33 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
 ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto !== false, last: store.data.optiAutoLast ?? null }; });
-// Optimisation en pause : on la retravaille (des réglages faisaient bugger certains jeux). La correction des anciens réglages reste active.
-const OPTI_PAUSED = true;
+// Annuler : la dernière optimisation (ou toutes) revient exactement à l'état d'avant (fichiers, registre, réglages)
+async function undoOpti(all = false) {
+  const list = store.data.optiJournal ?? [];
+  const todo = all ? list : list.slice(0, 1);
+  for (const j of todo) {
+    await revertEntries(j.entries ?? []).catch((err) => fatalLog(err));
+    for (const t of j.tweaks ?? []) await setTweak(t.id, t.was).catch(() => {});
+  }
+  store.data.optiJournal = all ? [] : list.slice(1);
+  store.save();
+  return { ok: true, undone: todo.length };
+}
+ipcMain.handle('opti:undo', async () => {
+  if (!store.data.optiJournal?.length) return { ok: false, error: 'Rien à annuler.' };
+  if (!(await confirm('Annuler la dernière optimisation ?', 'Chaque fichier de jeu et chaque réglage modifié revient exactement comme avant (les caches vidés, eux, se recréent tout seuls).'))) return { ok: false, cancelled: true };
+  return undoOpti(false);
+});
+ipcMain.handle('opti:undoAll', async () => {
+  if (!(await confirm('Tout remettre par défaut ?', 'Toutes les optimisations sont annulées (fichiers de jeux, réglages) et Windows revient à son état d’avant ta première optimisation. Un point de restauration est créé avant les réglages système.'))) return { ok: false, cancelled: true };
+  await undoOpti(true);
+  return resetWindows({ ask: false });
+});
 // Caches de shaders : les vider fait saccader les jeux (FiveM surtout) le temps qu'ils se recréent
 const SHADER_CACHES = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 // Optimisation automatique chaque semaine : seulement les caches qui se recréent (système, pilotes, launchers), en silence
 setInterval(async () => {
-  if (OPTI_PAUSED || store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
+  if (store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
   const scan = await optiScan().catch(() => null);
   if (!scan) return;
   const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs' && !SHADER_CACHES.includes(j.id)).map((j) => j.id) }).catch(() => null);
@@ -3365,7 +3410,6 @@ async function resetWindows({ ask = true } = {}) {
   await windowsToasts(true).catch(() => {});
   return { ok: sysOk, changed: labels.length, reboot: plan.sys.some((c) => c.id === 'hags'), refused: !sysOk };
 }
-ipcMain.handle('opti:reset', () => resetWindows());
 /** Retire les réglages qui peuvent faire bugger les jeux (remis comme Windows). Sans administrateur si possible. */
 async function fixRisky({ ask = true, reason = '' } = {}) {
   if (process.platform !== 'win32') return null;

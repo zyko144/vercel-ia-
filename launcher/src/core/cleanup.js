@@ -26,7 +26,7 @@ export function cleanTargets(env = process.env, steamRoot = null) {
 }
 
 export async function measureTargets(targets) {
-  return Promise.all(targets.map(async (x) => ({ ...x, bytes: (await stat(x.dir).catch(() => null))?.isDirectory() ? (await folderSize(x.dir)).bytes : 0 })));
+  return Promise.all(targets.map(async (x) => ({ ...x, ...((await stat(x.dir).catch(() => null))?.isDirectory() ? await folderSize(x.dir) : { bytes: 0, files: 0 }) })));
 }
 
 /** Vide un dossier de la liste (jamais le dossier lui-même, jamais en dehors). Renvoie les octets libérés. */
