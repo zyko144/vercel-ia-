@@ -74,9 +74,6 @@ p { margin: 0; }
 .tilt { transform-style: preserve-3d; transform: rotateX(14deg) rotateY(-8deg) rotateZ(1deg); transition: transform .35s cubic-bezier(.2, .8, .2, 1); border-radius: 20px; position: relative; }
 .tilt img { border-radius: 20px; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 60px 120px -30px rgba(0, 0, 0, .9), 0 0 120px -30px var(--blue); }
 .tilt::after { content: ""; position: absolute; inset: 0; border-radius: 20px; background: linear-gradient(115deg, rgba(255, 255, 255, .18), transparent 30%, transparent 70%, rgba(255, 255, 255, .06)); pointer-events: none; }
-.float { position: absolute; padding: 12px 16px; border-radius: 16px; font-size: 13.5px; font-weight: 600; transform: translateZ(80px); display: flex; align-items: center; gap: 10px; white-space: nowrap; animation: bob 6s ease-in-out infinite; }
-.float span { font-size: 22px; }
-.f1 { left: -3%; top: 18%; } .f2 { right: -4%; top: 38%; animation-delay: -2s; } .f3 { left: 8%; bottom: -5%; animation-delay: -4s; }
 @keyframes bob { 50% { translate: 0 -10px; } }
 
 /* Sections */
@@ -163,7 +160,6 @@ footer a { color: #cfe7ff; }
   .nav nav { display: none; }
   .split, .split.rev, .bench { grid-template-columns: 1fr; }
   .split.rev .txt { order: 0; }
-  .float { display: none; }
   .tilt { transform: none !important; }
   .bar { grid-template-columns: 110px 1fr 46px; }
 }
@@ -194,9 +190,6 @@ footer a { color: #cfe7ff; }
     <div class="stage">
       <div class="tilt" id="tilt">
         <img src="assets/accueil.webp" alt="L’accueil de History Launcher : la bibliothèque de jeux avec Rainbow Six Siege en vedette" width="1600" height="859">
-        <div class="float glass f1"><span>🟢</span>Max joue maintenant à FiveM · <b>Rejoindre</b></div>
-        <div class="float glass f2"><span>🔬</span>Score de santé du PC · <b>75/100</b></div>
-        <div class="float glass f3"><span>🛡</span>Double authentification activée</div>
       </div>
     </div>
   </section>
@@ -301,7 +294,7 @@ footer a { color: #cfe7ff; }
       <div class="txt rv">
         <span class="kicker">Social</span>
         <h2>Tes potes, en direct</h2>
-        <p>Quand un ami lance un jeu, tu le sais tout de suite. Les messages, invitations et « On joue ? » arrivent en bas à gauche de l’écran, comme sur Steam, même pendant une partie.</p>
+        <p>Quand un ami lance un jeu, tu le sais tout de suite. Les messages, invitations et « On joue ? » arrivent en bas à gauche de l’écran, même pendant une partie.</p>
         <ul><li>Rejoindre en un clic : jeu Steam ou serveur FiveM</li><li>Messages entre amis et invitations</li><li>Soirées jeu organisées avec rappel</li></ul>
       </div>
       <figure class="shot glass rv"><img src="assets/notifications.webp" alt="Notifications d’amis en bas à gauche : demande de jeu, message, ami qui lance FiveM" loading="lazy" width="360" height="353" style="max-width:420px;margin:auto"></figure>
@@ -320,19 +313,19 @@ footer a { color: #cfe7ff; }
   </section>
 
   <section id="comparatif" class="wrap">
-    <div class="head rv"><span class="kicker">Comparatif</span><h2>Ce que les autres ne font pas</h2><p>Comparaison des fonctions présentes de base dans chaque application (sans extension).</p></div>
+    <div class="head rv"><span class="kicker">Comparatif</span><h2>Ce que les autres ne font pas</h2><p>Comparaison avec ce que proposent de base les launchers de jeux habituels (sans extension).</p></div>
     <div class="tablewrap glass rv">
       <table class="cmp">
-        <thead><tr><th>Fonction</th><th class="us">History</th><th>Steam</th><th>Epic Games</th><th>Playnite</th></tr></thead>
+        <thead><tr><th>Fonction</th><th class="us">History</th><th>Launchers de jeux classiques</th></tr></thead>
         <tbody>
-          <tr><td>Jeux de plusieurs plateformes réunis</td><td class="us y">✓</td><td class="p">partiel</td><td class="n">—</td><td class="y">✓</td></tr>
-          <tr><td>Analyse de santé et durée de vie du PC</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
-          <tr><td>Benchmark intégré</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
-          <tr><td>Nettoyage et optimisation de Windows</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
-          <tr><td>Heures FiveM réelles et serveurs</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
-          <tr><td>Amis, messages, rejoindre</td><td class="us y">✓</td><td class="y">✓</td><td class="p">partiel</td><td class="n">—</td></tr>
-          <tr><td>Assistant IA et commandes vocales</td><td class="us y">✓</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
-          <tr><td>Captures et replay</td><td class="us y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Jeux de plusieurs plateformes réunis</td><td class="us y">✓</td><td class="p">partiel</td></tr>
+          <tr><td>Analyse de santé et durée de vie du PC</td><td class="us y">✓</td><td class="n">—</td></tr>
+          <tr><td>Benchmark intégré</td><td class="us y">✓</td><td class="n">—</td></tr>
+          <tr><td>Nettoyage et optimisation de Windows</td><td class="us y">✓</td><td class="n">—</td></tr>
+          <tr><td>Heures FiveM réelles et serveurs</td><td class="us y">✓</td><td class="n">—</td></tr>
+          <tr><td>Amis, messages, rejoindre</td><td class="us y">✓</td><td class="p">partiel</td></tr>
+          <tr><td>Assistant IA et commandes vocales</td><td class="us y">✓</td><td class="n">—</td></tr>
+          <tr><td>Captures et replay</td><td class="us y">✓</td><td class="p">partiel</td></tr>
         </tbody>
       </table>
     </div>
