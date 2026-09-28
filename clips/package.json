@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.6.1",
-  "releaseNotes": "Correctif important : les clips se lisent à nouveau. Ils sont maintenant réencodés proprement (par ta carte graphique quand c’est possible), et un ancien clip illisible est réparé tout seul quand tu l’ouvres. Son du PC : s’il manque, l’appli le récupère autrement et te prévient si Windows le bloque. L’export vertical « zoom » et « flou » créent deux fichiers séparés. La suppression passe par une fenêtre de l’appli, plus par l’alerte de Windows.",
+  "version": "0.6.2",
+  "releaseNotes": "Sécurité renforcée : fenêtres en bac à sable, aucune navigation vers l’extérieur, l’appli refuse de démarrer si ses fichiers ont été modifiés, et chaque installateur est publié avec son empreinte SHA-256 pour vérifier qu’il est original.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
@@ -23,9 +23,16 @@
   "build": {
     "appId": "fr.historyia.clips",
     "productName": "History Clips",
-    "files": ["src/**/*"],
-    "asarUnpack": ["node_modules/ffmpeg-static/**"],
-    "win": { "target": "nsis", "icon": "src/ui/icon.png" },
+    "files": [
+      "src/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/ui/icon.png"
+    },
     "nsis": {
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,
@@ -37,7 +44,22 @@
       "perMachine": false,
       "runAfterFinish": true
     },
-    "directories": { "output": "dist" },
-    "publish": [{ "provider": "generic", "url": "https://github.com/zyko144/vercel-ia-/releases/download/clips-latest" }]
+    "directories": {
+      "output": "dist"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/zyko144/vercel-ia-/releases/download/clips-latest"
+      }
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    }
   }
 }

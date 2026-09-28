@@ -1,0 +1,5 @@
+# Toute modification du dépôt doit être validée par le propriétaire (à activer : Settings › Branches › « Require review from Code Owners »)
+* @zyko144
+/.github/ @zyko144
+/launcher/ @zyko144
+/clips/ @zyko144

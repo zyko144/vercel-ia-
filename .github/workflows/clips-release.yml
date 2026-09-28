@@ -61,7 +61,9 @@ jobs:
         run: |
           V="${{ steps.v.outputs.version }}"
           cp "dist/History-Clips-Setup-$V.exe" dist/History-Clips-Setup.exe
-          FILES=(dist/History-Clips-Setup-$V.exe dist/*.exe.blockmap dist/latest.yml)
+          # Empreintes SHA-256 : chacun peut vérifier que l'installateur téléchargé est bien l'original
+          (cd dist && sha256sum History-Clips-Setup.exe "History-Clips-Setup-$V.exe" > SHA256SUMS.txt)
+          FILES=(dist/History-Clips-Setup-$V.exe dist/*.exe.blockmap dist/latest.yml dist/SHA256SUMS.txt)
           git tag "clips-v$V" "$GITHUB_SHA" 2>/dev/null || true
           git push origin "clips-v$V" || true
           gh release view "clips-v$V" >/dev/null 2>&1 || gh release create "clips-v$V" --verify-tag --latest=false --title "History Clips $V" --notes "$(node -p "require('./package.json').releaseNotes || 'History Clips ' + require('./package.json').version")"

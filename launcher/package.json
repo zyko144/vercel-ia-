@@ -1,7 +1,7 @@
 {
   "name": "history-launcher",
   "productName": "History Launcher",
-  "version": "0.36.0",
+  "version": "0.36.1",
   "description": "Toute la bibliothèque du PC (Steam, Epic, applis) au même endroit, triée par temps de jeu",
   "main": "src/main.js",
   "type": "module",
@@ -46,7 +46,15 @@
         "repo": "vercel-ia-",
         "releaseType": "release"
       }
-    ]
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    }
   },
   "dependencies": {
     "@google/genai": "^2.22.0",

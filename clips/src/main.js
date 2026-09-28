@@ -19,6 +19,16 @@ const API = 'https://vercel-ia.onrender.com';
 const SITE = 'https://zyko144.github.io/vercel-ia-/clips/';
 if (!app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId('fr.historyia.clips');
+// Sécurité : bac à sable pour toutes les fenêtres, aucune navigation / fenêtre / webview vers l'extérieur,
+// outils développeur fermés dans la version installée (personne ne peut injecter de code dans l'appli)
+if (process.platform === 'win32') app.enableSandbox();
+app.on('web-contents-created', (_e, wc) => {
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+  wc.on('will-navigate', (ev, url) => { if (!String(url).startsWith('file:')) ev.preventDefault(); });
+  wc.on('will-attach-webview', (ev) => ev.preventDefault());
+  if (app.isPackaged) wc.on('devtools-opened', () => wc.closeDevTools());
+});
+
 app.commandLine.appendSwitch('disable-features', 'SpareRendererForSitePerProcess,MediaSessionService,HardwareMediaKeyHandling,Translate');
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256');
 protocol.registerSchemesAsPrivileged([{ scheme: 'clip', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
