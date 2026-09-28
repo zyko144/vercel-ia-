@@ -1720,15 +1720,22 @@ body.gaming #ambient, body.gaming .neon { display: none !important; }
 /* Optimisation par jeu : niveau de risque, chemin exact, erreurs du journal */
 .risk { font-size: 10.5px; font-weight: 800; border-radius: 6px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
 .risk.ok { background: rgba(46, 224, 122, .16); color: #2ee07a; } .risk.mid { background: rgba(255, 176, 60, .16); color: #ffb03c; } .risk.warn { background: rgba(255, 90, 79, .16); color: #ff5a4f; }
-.opath { display: block; font-size: 11px; color: var(--muted); opacity: .75; word-break: break-all; }
 .olog .err { color: #ff8a80; }
 /* Optimisation aérée : 5 parties (A à E) bien séparées */
 .opticats { gap: 34px; }
 .osec { display: grid; gap: 14px; }
 .osec h3 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 2px; font-size: 19px; color: #fff; }
 .osec h3 span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--accent, #3b82f6); color: #fff; font-size: 15px; font-weight: 900; }
-.osec h3 small { flex-basis: 100%; margin-left: 42px; font-size: 13px; font-weight: 500; color: var(--muted); }
 .osec .ocat .ohead { padding: 16px 18px; }
 .osec .obody { padding: 4px 18px 18px 74px; }
 .osec .checks { gap: 10px; }
-.osec .check small.hint { display: block; margin: 3px 0 1px; }
+/* Mise en page D : menu A-E fixe à gauche, peu de texte (les explications sont dans les bulles et la confirmation) */
+#optiBody { grid-template-columns: 190px 1fr; align-items: start; }
+#optiBody > .empty { grid-column: 1 / -1; }
+.onav { grid-row: 1 / span 9; position: sticky; top: 10px; display: grid; gap: 6px; padding: 12px; border-radius: 16px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.onav a { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; }
+.onav a:hover { background: rgba(255, 255, 255, .06); }
+.onav a b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: rgba(255, 255, 255, .08); }
+.onav a.on { background: rgba(59, 130, 246, .22); } .onav a.on b { background: var(--accent, #3b82f6); }
+.osec { grid-column: 2; scroll-margin-top: 10px; }
+.osec .otitle small, #optiIntro { display: none; }

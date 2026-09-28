@@ -1619,9 +1619,9 @@ requestAnimationFrame(padLoop);
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
   '0.38.0': [
-    ['🎯', 'Optimisation par jeu', 'FiveM, Garry’s Mod, Fortnite, Rainbow Six Siege, Rocket League et tes autres jeux : chaque action montre son risque (Sûr, Modéré, Avancé), le chemin exact touché et ce qu’elle libère. Mods, plugins, addons et sauvegardes ne sont jamais touchés.', ['[data-view=optimisation]', 'wait1800']],
+    ['🎯', 'Optimisation par jeu', 'FiveM, Garry’s Mod, Fortnite, Rainbow Six Siege, Rocket League et tes autres jeux : page rangée en 5 parties (menu A à E), chaque action avec son risque (Sûr, Modéré, Avancé) et ce qu’elle libère. Mods, plugins, addons et sauvegardes ne sont jamais touchés.', ['[data-view=optimisation]', 'wait1800']],
     ['↩', 'Tout est annulable', 'Chaque fichier de jeu et valeur du registre est sauvegardé avant : « Annuler la dernière optimisation » ou « Tout remettre par défaut » en un clic.'],
-    ['🧾', 'Résumé avant, rapport après', 'Avant : le nombre de changements, de fichiers et la place libérée. Après : ce qui est fait, ce qui a échoué (jeu ouvert, fichier en lecture seule…) et le bouton Annuler.'],
+    ['🧾', 'Résumé avant, rapport après', 'Avant : les changements, les chemins exacts, le nombre de fichiers et la place libérée. Après : ce qui est fait, ce qui a échoué (jeu ouvert, fichier en lecture seule…) et le bouton Annuler.'],
     ['🕹', 'Jeux avec anti-triche détectés', 'R6, Fortnite, Rocket League… sont maintenant bien repérés quand ils tournent : temps de jeu, FPS, et aucun fichier modifié tant que le jeu est ouvert.'],
   ],
   '0.37.3': [
@@ -2487,10 +2487,10 @@ const catCard = (key, icon, title, desc, total, body, { checked = true, open = f
   </div>`;
 const SHADERS = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 const itemRow = (group, x, checked = true) => `<label class="check"><input type="checkbox" data-g="${group}" value="${esc(x.id)}" ${checked ? 'checked' : ''}><span>${esc(x.label)}${x.note ? ` <small class="hint">· ${esc(x.note)}</small>` : ''}</span><em>${gb(x.bytes)}</em></label>`;
-const OPTI_SECTIONS = [['A', 'Tes jeux', 'Profils par jeu : caches, réglages du jeu, carte graphique'], ['B', 'Nettoyage', 'Fichiers inutiles, corbeille, restes de jeux, place prise'], ['C', 'Windows', 'Réglages pour les jeux, démarrage, réglages système'], ['D', 'Entretien', 'Disques, réparation et nettoyage profond de Windows'], ['E', 'Annuler et historique', 'Retour arrière en un clic, photos de tes réglages']];
+const OPTI_SECTIONS = [['A', 'Tes jeux'], ['B', 'Nettoyage'], ['C', 'Windows'], ['D', 'Entretien'], ['E', 'Annuler']];
 const GAME_ICONS = { FiveM: '🚓', 'Garry’s Mod': '🔧', Fortnite: '🪂', 'Rainbow Six Siege': '🎯', 'Rocket League': '🚗' };
 const RISKS = { safe: ['Sûr', 'ok'], moderate: ['Modéré', 'mid'], advanced: ['Avancé', 'warn'] };
-const gameRow = (a) => `<label class="check"><input type="checkbox" data-g="games" value="${esc(a.id)}" ${a.on && !a.applied && !a.readonly ? 'checked' : ''} ${a.applied || a.readonly ? 'disabled' : ''}><span>${esc(a.label)} <small class="risk ${RISKS[a.risk][1]}">${RISKS[a.risk][0]}</small>${a.reboot ? ' <small class="opt">redémarrage</small>' : ''}${a.applied ? ' <small class="opt">déjà appliqué</small>' : ''}<small class="hint">${esc(a.help)}</small><small class="opath">${esc((a.paths ?? []).join(' · '))}</small></span><em>${a.kind === 'clean' ? `${gb(a.bytes ?? 0)} · ${a.files ?? 0} fichier${a.files > 1 ? 's' : ''}` : ''}</em></label>`;
+const gameRow = (a) => `<label class="check" title="${esc(a.help)}"><input type="checkbox" data-g="games" value="${esc(a.id)}" ${a.on && !a.applied && !a.readonly ? 'checked' : ''} ${a.applied || a.readonly ? 'disabled' : ''}><span>${esc(a.label)} <small class="risk ${RISKS[a.risk][1]}">${RISKS[a.risk][0]}</small>${a.reboot ? ' <small class="opt">redémarrage</small>' : ''}${a.applied ? ' <small class="opt">déjà appliqué</small>' : ''}</span><em>${a.kind === 'clean' ? `${gb(a.bytes ?? 0)} · ${a.files ?? 0} fichier${a.files > 1 ? 's' : ''}` : ''}</em></label>`;
 function renderOpti() {
   const o = opti;
   setRing(state.health?.score ?? o.score, state.health?.label ?? o.label);
@@ -2526,7 +2526,7 @@ function renderOpti() {
   for (const a of o.games ?? []) (byGame[a.game] ??= []).push(a);
   Object.entries(byGame).forEach(([game, list], n) => {
     const bytes = list.reduce((t, a) => t + (a.bytes ?? 0), 0);
-    S.A.push(catCard(`game${n}`, GAME_ICONS[game] ?? '🎮', game, game === 'Autres jeux' ? 'Réglages sûrs de Windows pour chaque jeu.' : 'Profil de ce jeu : fichiers sauvegardés avant chaque changement, annulables en un clic.', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
+    S.A.push(catCard(`game${n}`, GAME_ICONS[game] ?? '🎮', game, '', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
       `<div class="checks">${list.map(gameRow).join('')}</div>`, { count: `${list.length} action${list.length > 1 ? 's' : ''}` }));
   });
   // Place prise par chaque jeu installé (et ceux pas lancés depuis 6 mois)
@@ -2547,7 +2547,9 @@ function renderOpti() {
   S.D.push(catCard('', '🛡', 'Nettoyage profond de Windows', 'Anciennes mises à jour, fichiers temporaires système, cache de distribution, TRIM du SSD, nettoyage des composants. Demande l’autorisation administrateur.', '',
     '<button class="btn" id="optiDeep" type="button">Lancer le nettoyage profond</button><p class="hint">Plusieurs minutes. Windows affiche une demande d’autorisation.</p>', { count: 'admin' }));
   // Rangé en 5 parties aérées : jeux, nettoyage, Windows, entretien, annuler
-  $('optiBody').innerHTML = OPTI_SECTIONS.filter(([k]) => S[k].length).map(([k, t, d]) => `<section class="osec"><h3><span>${k}</span>${t}<small>${d}</small></h3>${S[k].join('')}</section>`).join('');
+  // Menu A-E à gauche (fixe), contenu à droite
+  const secs = OPTI_SECTIONS.filter(([k]) => S[k].length);
+  $('optiBody').innerHTML = `<nav class="onav">${secs.map(([k, t], i) => `<a data-osec="${k}" class="${i ? '' : 'on'}"><b>${k}</b>${t}</a>`).join('')}</nav>${secs.map(([k, t]) => `<section class="osec" id="osec${k}"><h3><span>${k}</span>${t}</h3>${S[k].join('')}</section>`).join('')}`;
   renderSetHist();
 }
 async function renderSetHist() {
@@ -2640,6 +2642,8 @@ $('optiBody').addEventListener('change', async (e) => {
   if (el.dataset.catcheck) el.closest('.ocat').classList.toggle('off', !el.checked);
 });
 $('optiBody').addEventListener('click', async (e) => {
+  const nav = e.target.closest('[data-osec]');
+  if (nav) { document.querySelectorAll('.onav a').forEach((a) => a.classList.toggle('on', a === nav)); return $(`osec${nav.dataset.osec}`)?.scrollIntoView({ behavior: 'smooth' }); }
   const tg = e.target.closest('[data-toggle]');
   if (tg) { tg.closest('.ocat').classList.toggle('open'); return; }
   if (e.target.dataset.uninst) { const it = state.items.find((x) => x.id === e.target.dataset.uninst); if (it) { state.sel = it; const r = await api.action(it.id, 'uninstall'); if (r && !r.ok && r.error) toast(r.error); } return; }
