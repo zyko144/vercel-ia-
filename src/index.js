@@ -83,17 +83,20 @@ client.once(Events.ClientReady, async (c) => {
     status: 'online',
   });
 
+  // Anciennes commandes du bot gardées dans le code (commands/definitions.js) : OLD_COMMANDS=1 pour les remettre.
+  // Sinon, seule /launcher est proposée (profil, lier, comparer, fps, telecharger, installer).
+  const old = process.env.OLD_COMMANDS === '1';
   try {
-    await c.application.commands.set(commandDefinitions.map((cmd) => cmd.toJSON()));
-    console.log(`📜 ${commandDefinitions.length} commandes enregistrées`);
+    await c.application.commands.set(old ? commandDefinitions.map((cmd) => cmd.toJSON()) : []);
+    console.log(old ? `📜 ${commandDefinitions.length} commandes enregistrées` : '📜 Anciennes commandes retirées (OLD_COMMANDS=1 pour les remettre)');
   } catch (err) {
     console.error('❌ Enregistrement des commandes impossible :', err);
   }
   // /play sur chaque serveur : visible tout de suite, sans attendre la mise à jour globale de Discord
-  const guildPayload = guildCommandDefinitions.map((cmd) => cmd.toJSON());
+  const guildPayload = (old ? guildCommandDefinitions : guildCommandDefinitions.filter((cmd) => cmd.name === 'launcher')).map((cmd) => cmd.toJSON());
   const registerOn = (guild) => guild.commands.set(guildPayload).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
   await Promise.all([...c.guilds.cache.values()].map(registerOn));
-  console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
+  console.log(`▶️ ${guildPayload.map((x) => `/${x.name}`).join(' ')} enregistrée(s) sur ${c.guilds.cache.size} serveur(s)`);
   c.on(Events.GuildCreate, (guild) => registerOn(guild));
   // Résumé des commandes « !! » dans le salon agora (une fois par version)
   import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));
