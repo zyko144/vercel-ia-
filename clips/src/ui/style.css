@@ -28,8 +28,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 /* ---------- Barre de gauche : fond flou animé aux couleurs du thème ---------- */
 .side { grid-area: side; position: relative; display: flex; flex-direction: column; padding: 18px 14px; overflow: hidden auto; border-right: 1px solid rgba(255, 255, 255, .1); background: #0d0a0c;
   box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .12), inset -1px 0 0 rgba(255, 255, 255, .05); isolation: isolate; }
-.sidebg { position: absolute; inset: 0; z-index: -1; overflow: hidden; filter: blur(38px) saturate(150%); opacity: .75; }
-.sidebg i { position: absolute; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, var(--accent), transparent 68%); animation: blob 16s ease-in-out infinite alternate; }
+.sidebg { position: absolute; inset: 0; z-index: -1; overflow: hidden; opacity: .75; }
+.sidebg i { position: absolute; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, var(--accent), transparent 68%); filter: blur(30px); will-change: transform; animation: blob 16s ease-in-out infinite alternate; }
 .sidebg i:nth-child(1) { top: -80px; left: -60px; }
 .sidebg i:nth-child(2) { top: 38%; left: 40px; background: radial-gradient(circle, var(--accent-2), transparent 68%); animation-duration: 21s; animation-delay: -6s; opacity: .7; }
 .sidebg i:nth-child(3) { bottom: -100px; left: -40px; animation-duration: 25s; animation-delay: -12s; opacity: .55; }
@@ -258,3 +258,22 @@ dialog::backdrop { background: rgba(4, 3, 6, .7); backdrop-filter: blur(8px); }
 
 /* Fenêtre sans le focus (souvent : tu es en jeu) : toutes les animations en pause, 0 travail pour la carte graphique */
 body.idle *, body.idle *::before, body.idle *::after { animation-play-state: paused !important; }
+
+/* ---------- Lien History Launcher (bleu), bouton Discord ---------- */
+.launchlink { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 12px; margin-top: 6px; border: 1px solid rgba(47, 139, 255, .4); border-radius: 12px; cursor: pointer; color: #8cc0ff; font-weight: 700; text-align: left; background: linear-gradient(120deg, rgba(47, 139, 255, .22), rgba(21, 84, 209, .08)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15), 0 8px 22px -14px #2f8bff; transition: filter .2s, transform .2s; }
+.launchlink:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.launchlink img { width: 24px; height: 24px; filter: drop-shadow(0 0 8px rgba(47, 139, 255, .7)); }
+.launchlink em { margin-left: auto; font-style: normal; opacity: .7; }
+.dcbtn { width: 36px; height: 36px; border-radius: 11px; border: 1px solid rgba(88, 101, 242, .5); background: rgba(88, 101, 242, .18); display: grid; place-items: center; cursor: pointer; color: #c9ceff; transition: background .2s; }
+.dcbtn:hover { background: #5865f2; color: #fff; }
+.dcbtn .dc { width: 20px; height: 20px; fill: currentColor; stroke: none; }
+.rng { display: flex; align-items: center; gap: 10px; } .rng input { accent-color: var(--accent); width: 180px; }
+/* ---------- Montage ---------- */
+.montagebar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; padding: 10px 14px; background-color: rgba(22, 18, 24, .92); }
+body.picking .card { outline: 2px dashed rgba(var(--rgb), .35); outline-offset: -2px; }
+.card .pickn { position: absolute; right: 8px; bottom: 8px; z-index: 3; min-width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: var(--on); background: var(--accent); box-shadow: 0 0 14px var(--accent); }
+.upddlg { text-align: center; } .upddlg img { width: 72px; filter: drop-shadow(0 0 18px rgba(var(--rgb), .7)); } .upddlg h2 { margin: 6px 0; }
+/* ---------- Découpe : grosses poignées faciles à attraper ---------- */
+.sel .h { width: 18px; } .sel .h[data-h=a] { left: -9px; } .sel .h[data-h=b] { right: -9px; }
+.sel .h::before { content: ''; position: absolute; inset: -6px -10px; }
+.tl.dragging, .tl.dragging * { cursor: grabbing !important; }

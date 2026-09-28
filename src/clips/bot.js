@@ -133,6 +133,15 @@ export async function postClipToClipsServer({ discordId, pseudo, buf, ext, game,
   await msg.react('🔥').catch(() => {});
   return { ok: true, url: msg.url };
 }
+/** Invitation permanente vers le serveur History Clips (salon bienvenue). */
+let inviteUrl = null;
+export async function clipsInvite() {
+  if (inviteUrl) return inviteUrl;
+  const c = chan('bienvenue') ?? chan('general');
+  const inv = c ? await c.createInvite({ maxAge: 0, maxUses: 0, unique: false, reason: 'Bouton Discord de l’appli' }).catch(() => null) : null;
+  inviteUrl = inv?.url ?? null;
+  return inviteUrl;
+}
 export const clipsBotReady = () => Boolean(client?.isReady() && chan('clips'));
 
 // 🔥 × HOT : le clip est reposté dans #meilleurs-clips (une seule fois)

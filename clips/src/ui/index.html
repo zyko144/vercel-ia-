@@ -21,6 +21,7 @@
   <h5>Tes jeux</h5>
   <nav id="games" class="games-nav"></nav>
   <div class="grow"></div>
+  <button type="button" class="launchlink" id="launcherLink" title="Ouvrir History Launcher (ou le télécharger)"><img src="launcher.png" alt="">History Launcher<em>↗</em></button>
   <button class="navlike" data-v="reglages"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Paramètres</button>
   <button class="profile" id="profile" title="Mon compte"><span class="avatar" id="avatar">?</span><div><b id="pName">Invité</b><small id="pSub">Se connecter</small></div></button>
 </aside>
@@ -30,13 +31,14 @@
   <span class="pill" id="replayPill" title="État du replay"><b></b><span></span></span>
   <button type="button" class="updpill" id="updPill" hidden></button>
   <button type="button" class="btn play sm" id="saveNow">🎬 Garder un clip</button>
+  <button type="button" class="dcbtn" id="discordBtn" title="Rejoindre le serveur Discord History Clips"><svg class="dc" viewBox="0 0 24 24"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.9 19.9 0 0 0 6 3l1.3-2a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2a19.8 19.8 0 0 0 6-3c.5-5.2-.8-9.7-3.7-13.7zM8.3 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></button>
   <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
 
 <div id="ambient" aria-hidden="true"></div>
 <main id="main">
   <section class="view on" id="v-home"></section>
-  <section class="view" id="v-list"><div class="list-head"><h1 id="listTitle">Mes clips</h1><div class="seg" id="sort"><button data-s="new" class="on">Récents</button><button data-s="old">Anciens</button><button data-s="big">Plus lourds</button></div></div><div class="grid" id="grid"></div></section>
+  <section class="view" id="v-list"><div class="list-head"><h1 id="listTitle">Mes clips</h1><button type="button" class="btn sm" id="montageBtn" title="Choisis plusieurs clips et assemble-les en un seul">🎞 Montage</button><div class="seg" id="sort"><button data-s="new" class="on">Récents</button><button data-s="old">Anciens</button><button data-s="big">Plus lourds</button></div></div><div class="grid" id="grid"></div></section>
   <section class="view" id="v-jeux"><div class="list-head"><h1>Jeux</h1><small class="hint">Tes clips rangés par jeu</small></div><div class="gamegrid" id="gamegrid"></div></section>
   <section class="view" id="v-game"><div class="ghero" id="ghero"></div><div class="grid" id="ggrid"></div></section>
   <section class="view" id="v-reglages">
@@ -55,6 +57,8 @@
           <div class="row"><span>Qualité</span><select id="sHeight"><option value="720">720p (léger)</option><option value="1080">1080p</option><option value="1440">1440p (lourd)</option></select></div>
           <div class="row"><span>Images par seconde</span><select id="sFps"><option value="30">30 i/s (léger)</option><option value="60">60 i/s (fluide)</option></select></div>
           <label class="toggle"><input type="checkbox" id="sAudio"><span></span>Enregistrer le son du PC</label>
+          <label class="toggle"><input type="checkbox" id="sMic"><span></span>Enregistrer mon micro (sur une piste à part : coupable au montage)</label>
+          <div class="row"><span>Volume du micro dans le clip</span><span class="rng"><input type="range" id="sMicVol" min="0" max="200" step="10"><output id="oMicVol">100 %</output></span></div>
           <label class="toggle"><input type="checkbox" id="sSound"><span></span>Petit son de confirmation quand un clip est gardé</label>
         </div>
         <div class="pane glass" data-p="perf">
@@ -146,6 +150,8 @@
   <div class="vbar">
     <button type="button" class="btn play" id="vDiscord">📤 Discord</button>
     <button type="button" class="btn" id="vExport">⬇ Exporter en MP4</button>
+    <button type="button" class="btn" id="vVertical">📱 Vertical</button>
+    <button type="button" class="btn" id="vLink">🔗 Lien</button>
     <button type="button" class="btn" id="vCopy" hidden>📋 Copier l’image</button>
     <button type="button" class="btn ghost" id="vFav">⭐ Favori</button>
     <button type="button" class="btn ghost" id="vRename">✏ Renommer</button>
@@ -156,6 +162,8 @@
 
 <dialog id="modal" class="modal"><div id="modalBox"></div></dialog>
 <div id="updScreen" class="updscreen" hidden><div class="updcard"><img src="icon.png" alt=""><h2 id="updTitle">Mise à jour</h2><p id="updText">Téléchargement…</p><div class="updbar"><i id="updFill"></i></div></div></div>
+<div class="montagebar glass" id="montageBar" hidden><b id="montageCount">0 clip choisi</b><span class="hint">Clique sur les clips dans l’ordre voulu</span><button type="button" class="btn ghost sm" id="montageCancel">Annuler</button><button type="button" class="btn play sm" id="montageGo">🎞 Assembler</button></div>
+<dialog id="updDlg" class="modal upddlg"><img src="icon.png" alt=""><h2 id="updDlgTitle">Nouvelle version</h2><p class="fine" id="updDlgNotes"></p><div class="choice"><button type="button" class="btn play" id="updYes">⬆ Mettre à jour maintenant<small>moins d’une minute</small></button><button type="button" class="btn" id="updLater">Plus tard<small>installée à la fermeture</small></button></div></dialog>
 <div id="toast" hidden></div>
 <script src="app.js"></script>
 </body>

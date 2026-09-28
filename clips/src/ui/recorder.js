@@ -1,8 +1,9 @@
 // Replay : UN seul encodage vidéo, découpé en morceaux d'une seconde envoyés tout de suite au processus principal
-// (qui les écrit sur le disque dans un tampon tournant). Rien n'est gardé en mémoire ici : quelques Mo au lieu de centaines.
+// (qui les écrit sur le disque dans un tampon tournant). Rien n'est gardé en mémoire ici.
+// Micro (option) : enregistré À PART, démarré au même instant, pour être une piste séparée dans le clip.
 const MIME = ['video/webm;codecs=h264,opus', 'video/webm;codecs=h264', 'video/webm;codecs=vp8,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
-let stream = null;
-let mr = null;
+let streams = [];
+let recs = [];
 
 window.rec.onStart(async (id, o = {}) => {
   const h = [720, 1080, 1440].includes(o.height) ? o.height : 1080;
@@ -10,25 +11,33 @@ window.rec.onStart(async (id, o = {}) => {
   const bitrate = Math.round((h === 1440 ? 16 : h === 1080 ? 10 : 5) * (fps === 60 ? 1 : 0.65) * 1_000_000);
   try {
     const video = { width: { max: Math.round((h * 16) / 9) }, height: { max: h }, frameRate: { ideal: fps, max: fps } };
-    stream = await navigator.mediaDevices.getDisplayMedia({ video, audio: o.audio !== false })
+    const screen = await navigator.mediaDevices.getDisplayMedia({ video, audio: o.audio !== false })
       .catch(() => navigator.mediaDevices.getDisplayMedia({ video, audio: false }))
       // Repli : ancienne méthode d'Electron (sans geste de l'utilisateur)
       .catch(() => { const legacy = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: Math.round((h * 16) / 9), maxHeight: h, maxFrameRate: fps } };
         return navigator.mediaDevices.getUserMedia({ audio: o.audio === false ? false : { mandatory: { chromeMediaSource: 'desktop' } }, video: legacy }).catch(() => navigator.mediaDevices.getUserMedia({ audio: false, video: legacy })); });
+    streams.push(screen);
+    const mic = o.mic ? await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).catch(() => null) : null;
+    if (mic) streams.push(mic);
     // Une image clé par seconde : on peut couper le replay à n'importe quelle seconde
-    mr = new MediaRecorder(stream, { mimeType: MIME, videoBitsPerSecond: bitrate, audioBitsPerSecond: 160_000, videoKeyFrameIntervalDuration: 1000 });
-    mr.ondataavailable = async (e) => { if (e.data.size) window.rec.chunk(await e.data.arrayBuffer()); };
-    mr.onerror = (e) => window.rec.state(`error:${e.error?.message ?? 'encodeur'}`);
-    mr.start(1000);
-    window.rec.state('on');
+    const v = new MediaRecorder(screen, { mimeType: MIME, videoBitsPerSecond: bitrate, audioBitsPerSecond: 160_000, videoKeyFrameIntervalDuration: 1000 });
+    const m = mic ? new MediaRecorder(mic, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 96_000 }) : null;
+    for (const [r, kind] of [[v, 'video'], [m, 'mic']]) {
+      if (!r) continue;
+      r.ondataavailable = async (e) => { if (e.data.size) window.rec.chunk(await e.data.arrayBuffer(), kind); };
+      r.onerror = (e) => window.rec.state(`error:${e.error?.message ?? 'encodeur'}`);
+      recs.push(r);
+    }
+    for (const r of recs) r.start(1000); // même instant : les deux pistes restent calées
+    window.rec.state(mic ? 'on' : o.mic ? 'on:nomic' : 'on');
   } catch (err) {
     window.rec.state(`error:${err?.message ?? err}`);
   }
 });
 
 window.rec.onStop(() => {
-  if (mr && mr.state !== 'inactive') mr.stop();
-  mr = null;
-  stream?.getTracks().forEach((t) => t.stop());
-  stream = null;
+  for (const r of recs) if (r.state !== 'inactive') r.stop();
+  recs = [];
+  for (const s of streams) s.getTracks().forEach((t) => t.stop());
+  streams = [];
 });

@@ -3,6 +3,8 @@
 // un enregistreur caché qui ne tourne que pendant les parties (option) et passe après le jeu (priorité basse).
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, screen, session, shell, Tray } from 'electron';
 import { spawn } from 'node:child_process';
+import { createReadStream } from 'node:fs';
+import { Readable } from 'node:stream';
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -23,7 +25,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'clip', privileges: { standard: 
 
 // ---------- Réglages (fichier JSON dans le dossier de l'appli) ----------
 const DEFAULTS = { replay: true, seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', autostart: true, favs: [], names: {},
-  source: 'screen', onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art2: {}, exes: {} };
+  source: 'screen', mic: false, micVol: 100, onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art2: {}, exes: {} };
 const SET_FILE = () => path.join(app.getPath('userData'), 'reglages.json');
 let st = { ...DEFAULTS };
 const saveSt = () => writeFile(SET_FILE(), JSON.stringify(st)).catch(() => {});
@@ -128,7 +130,7 @@ async function setReplay(on, keepSetting = false) {
   const me = recWin; recWin.on('closed', () => { if (recWin === me) recWin = null; });
   resetRing();
   await recWin.loadFile(path.join(here, 'ui', 'recorder.html'));
-  recWin.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio });
+  recWin.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio, mic: st.mic });
   tray?.setToolTip(`History Clips · replay actif (${st.hotClip} pour garder les ${st.seconds} dernières secondes)`);
 }
 let restarting = null;
@@ -143,29 +145,43 @@ ipcMain.on('rec:state', (e, s) => {
   if (e.sender !== recWin?.webContents) return;
   if (s === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
   recState = s; changed();
-  if (s === 'on') lowerPriority();
+  if (s === 'on:nomic') { recState = 'on'; notify('Micro introuvable', 'Le replay tourne, mais sans ton micro (vérifie qu’il est branché et autorisé dans Windows).'); }
+  if (recState === 'on') lowerPriority();
   if (s.startsWith('error')) notify('Replay indisponible', `L’enregistrement n’a pas démarré (${s.slice(6, 120)}).`);
 });
 
 // ---------- Tampon tournant sur le disque : 1 fichier par seconde de vidéo, les plus vieux sont effacés ----------
 const RING = () => path.join(app.getPath('temp'), 'history-clips-replay');
-let ring = []; let head = null; let ringGen = 0;
+// Deux tampons : la vidéo (image + son du PC) et le micro. Le morceau n° k des deux couvre la même seconde.
+let tracks = { video: { head: null, ring: [], n: 0 }, mic: { head: null, ring: [], n: 0 } }; let ringGen = 0;
 function resetRing() {
-  ringGen++; ring = []; head = null;
+  ringGen++; tracks = { video: { head: null, ring: [], n: 0 }, mic: { head: null, ring: [], n: 0 } };
   rm(RING(), { recursive: true, force: true }).then(() => mkdir(RING(), { recursive: true })).catch(() => {});
 }
 const CLUSTER = Buffer.from([0x1f, 0x43, 0xb6, 0x75]); // début d'un « cluster » WebM
-ipcMain.on('rec:chunk', async (e, ab) => {
+ipcMain.on('rec:chunk', async (e, ab, kind) => {
   if (e.sender !== recWin?.webContents) return;
-  const gen = ringGen; let buf = Buffer.from(ab);
+  const t = tracks[kind === 'mic' ? 'mic' : 'video']; const gen = ringGen; let buf = Buffer.from(ab);
   // Le tout premier morceau contient l'en-tête du fichier : gardé à part pour recoller n'importe quelle fin de replay
-  if (!head) { const at = buf.indexOf(CLUSTER); if (at < 0) return; head = buf.subarray(0, at); buf = buf.subarray(at); }
-  const file = path.join(RING(), `${Date.now()}.bin`);
+  if (!t.head) { const at = buf.indexOf(CLUSTER); if (at < 0) return; t.head = buf.subarray(0, at); buf = buf.subarray(at); }
+  const n = t.n++;
+  const file = path.join(RING(), `${kind === 'mic' ? 'm' : 'v'}${n}.bin`);
   await writeFile(file, buf).catch(() => null);
   if (gen !== ringGen) return rm(file, { force: true }).catch(() => {});
-  ring.push({ file, at: Date.now() });
-  while (ring.length > st.seconds + 4) rm(ring.shift().file, { force: true }).catch(() => {});
+  t.ring.push({ file, n });
+  while (t.ring.length > st.seconds + 4) rm(t.ring.shift().file, { force: true }).catch(() => {});
 });
+/** Durée, début et présence de son d'un fichier (lu dans ce qu'affiche ffmpeg). */
+async function probe(f) {
+  const bin = await FFMPEG();
+  const out = await new Promise((ok) => { let err = ''; const p = spawn(bin, ['-hide_banner', '-i', f], { windowsHide: true }); p.stderr.on('data', (d) => { err += d; }); p.on('close', () => ok(err)); p.on('error', () => ok('')); });
+  const d = /Duration: (\d+):(\d+):([\d.]+)/.exec(out); const st0 = /start: ([\d.-]+)/.exec(out);
+  return { dur: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : 0, start: st0 ? Number(st0[1]) : 0, audio: /Stream #.*Audio:/.test(out) };
+}
+async function concatTrack(t, from, dest) {
+  await writeFile(dest, t.head);
+  for (const p of t.ring.filter((x) => x.n >= from)) await appendFile(dest, await readFile(p.file).catch(() => Buffer.alloc(0)));
+}
 
 async function saveClip(game) {
   if (!recWin || recState !== 'on') {
@@ -174,23 +190,37 @@ async function saveClip(game) {
     setReplay(true).catch(() => {});
     return notify('Replay activé', `Il enregistre maintenant : rappuie sur ${st.hotClip} pour garder les dernières secondes.`);
   }
-  if (!head || ring.length < 2) return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
+  const V = tracks.video; const M = tracks.mic;
+  if (!V.head || V.ring.length < 2) return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
   const label = safeName(game ?? (inGame() ? fg.game : 'Bureau')) || 'Clip';
-  // On attend la seconde en cours, puis on recolle en-tête + dernières secondes (le disque, pas la mémoire)
+  // On attend la seconde en cours, puis on recolle en-tête + dernières secondes (depuis le disque, pas la mémoire)
   await new Promise((ok) => setTimeout(ok, 1100));
-  const parts = ring.slice(-(st.seconds + 1));
+  const from = V.ring[Math.max(0, V.ring.length - (st.seconds + 1))].n;
   try {
     const dir = path.join(ROOT(), label);
     await mkdir(dir, { recursive: true });
     const tmp = path.join(dir, `.${Date.now()}.webm`);
-    await writeFile(tmp, head);
-    for (const p of parts) await appendFile(tmp, await readFile(p.file).catch(() => Buffer.alloc(0)));
+    await concatTrack(V, from, tmp);
     const out = path.join(dir, clipName(label, 'mp4'));
-    await toMp4(tmp, out, { fixup: true }).catch(async () => { await rename(tmp, out.replace(/\.mp4$/, '.webm')); });
-    await rm(tmp, { force: true });
+    const micTmp = M.head && M.ring.some((x) => x.n >= from) ? `${tmp}.micro.webm` : null;
+    if (micTmp) await concatTrack(M, from - 12, micTmp);
+    if (micTmp) await withMic(tmp, micTmp, out).catch(() => toMp4(tmp, out, { fixup: true }));
+    else await toMp4(tmp, out, { fixup: true }).catch(async () => { await rename(tmp, out.replace(/\.mp4$/, '.webm')); });
+    await rm(tmp, { force: true }); if (micTmp) await rm(micTmp, { force: true });
     notify('🎬 Clip enregistré', `${label} · ouvre History Clips pour le couper ou l’envoyer.`);
     changed(); saveSt(); prune().catch(() => {});
   } catch (err) { notify('Clip non enregistré', err.message); }
+}
+/** Clip avec micro : piste 1 = jeu + micro (volume réglable), piste 2 = micro seul (pour le montage). */
+async function withMic(video, mic, out) {
+  const [pv, pm] = await Promise.all([probe(video), probe(mic)]);
+  const delta = pm.start - pv.start; // le micro commence un peu après / avant la vidéo : on recale
+  const shift = delta >= 0 ? `adelay=${Math.round(delta * 1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
+  const vol = Math.max(0, Math.min(2, (st.micVol ?? 100) / 100));
+  const graph = pv.audio ? `[1:a]${shift},volume=${vol}[m];[m]asplit[m1][m2];[0:a][m1]amix=inputs=2:duration=first:normalize=0[mix]` : `[1:a]${shift},volume=${vol}[m];[m]asplit[mix][m2]`;
+  const common = ['-filter_complex', graph, '-map', '0:v', '-map', '[mix]', '-map', '[m2]', '-c:a', 'aac', '-b:a', '192k', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', ...(pv.dur ? ['-t', pv.dur.toFixed(2)] : []), '-movflags', '+faststart', out];
+  const inputs = ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic];
+  try { await runFfmpeg([...inputs, '-c:v', 'copy', ...common]); } catch { await runFfmpeg([...inputs, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', ...common]); }
 }
 const FFMPEG = async () => unpacked((await import('ffmpeg-static')).default);
 const runFfmpeg = async (args) => { const bin = await FFMPEG(); return new Promise((resolve, reject) => { const p = spawn(bin, args, { windowsHide: true, stdio: 'ignore' }); try { os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`)))); }); };
@@ -252,6 +282,18 @@ async function prune() {
   changed();
 }
 const fileOf = (t) => tokens.get(String(t));
+/** Sert un fichier par morceaux (en-tête Range) : indispensable pour avancer dans une vidéo sans tout charger. */
+async function serveRange(f, range) {
+  const s = await stat(f).catch(() => null);
+  if (!s) return new Response('introuvable', { status: 404 });
+  const type = /\.png$/i.test(f) ? 'image/png' : /\.webm$/i.test(f) ? 'video/webm' : 'video/mp4';
+  const m = /bytes=(\d*)-(\d*)/.exec(range ?? '');
+  if (!m) return new Response(Readable.toWeb(createReadStream(f)), { status: 200, headers: { 'Content-Type': type, 'Content-Length': String(s.size), 'Accept-Ranges': 'bytes' } });
+  const start = m[1] ? Number(m[1]) : Math.max(0, s.size - Number(m[2]));
+  const end = m[1] && m[2] ? Math.min(Number(m[2]), s.size - 1) : Math.min(start + 4 * 1024 * 1024 - 1, s.size - 1);
+  if (start >= s.size) return new Response('', { status: 416, headers: { 'Content-Range': `bytes */${s.size}` } });
+  return new Response(Readable.toWeb(createReadStream(f, { start, end })), { status: 206, headers: { 'Content-Type': type, 'Content-Length': String(end - start + 1), 'Content-Range': `bytes ${start}-${end}/${s.size}`, 'Accept-Ranges': 'bytes' } });
+}
 // Miniature d'un clip : faite une seule fois (petit JPG dans .miniatures), une à la fois pour ne pas charger le processeur
 const thumbJobs = new Map(); let thumbChain = Promise.resolve();
 function thumbOf(f) {
@@ -298,6 +340,38 @@ ipcMain.handle('clips:trim', async (_e, t, start, end, mode) => {
   if (st.favs.includes(f)) st.favs = [...st.favs.filter((x) => x !== f), dest];
   tokens.delete(String(t)); saveSt(); changed();
   return { ok: true, token: tokenOf(dest) };
+});
+// Montage : plusieurs clips mis bout à bout en un seul (1080p 60 i/s, son gardé ou silence si le clip n'en a pas)
+ipcMain.handle('clips:montage', async (_e, list) => {
+  const files = (Array.isArray(list) ? list : []).map(fileOf).filter((f) => f && !/\.png$/i.test(f)).slice(0, 20);
+  if (files.length < 2) return { ok: false, error: 'Choisis au moins 2 clips.' };
+  const info = await Promise.all(files.map(probe));
+  const parts = files.map((_, i) => `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=60,format=yuv420p[v${i}];${info[i].audio ? `[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}]` : `aevalsrc=0|0:d=${info[i].dur || 1}:s=48000[a${i}]`}`);
+  const graph = `${parts.join(';')};${files.map((_, i) => `[v${i}][a${i}]`).join('')}concat=n=${files.length}:v=1:a=1[v][a]`;
+  const dir = path.join(ROOT(), 'Montages'); await mkdir(dir, { recursive: true });
+  const out = path.join(dir, clipName('Montage', 'mp4'));
+  try { await runFfmpeg(['-y', ...files.flatMap((f) => ['-i', f]), '-filter_complex', graph, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]); changed(); return { ok: true }; }
+  catch (err) { return { ok: false, error: `Montage impossible (${err.message}).` }; }
+});
+// Vertical 9:16 (TikTok, Shorts) : « flou » = toute l'image au centre sur un fond flouté, « zoom » = recadré au centre
+ipcMain.handle('clips:vertical', async (_e, t, mode) => {
+  const f = fileOf(t); if (!f) return { ok: false };
+  const vf = mode === 'zoom' ? 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
+    : 'split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:2[bg];[b]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1';
+  const out = path.join(path.dirname(f), `${path.basename(f).replace(/\.(mp4|webm)$/i, '')} (vertical).mp4`);
+  try { await runFfmpeg(['-y', '-i', f, '-filter_complex', vf, '-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]); changed(); shell.showItemInFolder(out); return { ok: true }; }
+  catch (err) { return { ok: false, error: `Export vertical impossible (${err.message}).` }; }
+});
+// Lien de partage web : le clip (allégé) est mis en ligne 7 jours, lien copié
+ipcMain.handle('clips:link', async (_e, t) => {
+  const f = fileOf(t); if (!f) return { ok: false };
+  if (!tokenGet()) return { ok: false, error: 'Connecte ton compte History pour créer un lien.' };
+  const ext = /\.png$/i.test(f) ? 'png' : 'mp4';
+  const q = new URLSearchParams({ type: ext, nom: path.basename(f).slice(0, 80), jeu: path.basename(path.dirname(f)).slice(0, 80) });
+  const r = await api(`/api/compte/clip/lien?${q}`, { method: 'POST', raw: await readFile(f) });
+  if (!r.url) return { ok: false, error: r.error ?? 'Lien impossible.' };
+  clipboard.writeText(r.url);
+  return { ok: true, url: r.url };
 });
 ipcMain.handle('clips:export', async (_e, t) => {
   const f = fileOf(t);
@@ -432,7 +506,8 @@ ipcMain.handle('settings:set', (_e, p) => {
   if (['screen', 'game'].includes(p.source)) { st.source = p.source; restart = true; }
   if ([0, 10, 20, 50, 100].includes(Number(p.maxGB))) { st.maxGB = Number(p.maxGB); prune().catch(() => {}); }
   if (['jaune', 'bleu', 'rouge', 'violet', 'vert', 'rose'].includes(p.theme)) st.theme = p.theme;
-  for (const k of ['audio', 'onlyGame', 'gamePriority', 'sound']) if (k in p) { st[k] = Boolean(p[k]); if (k !== 'sound') restart = true; }
+  for (const k of ['audio', 'mic', 'onlyGame', 'gamePriority', 'sound']) if (k in p) { st[k] = Boolean(p[k]); if (k !== 'sound') restart = true; }
+  if ('micVol' in p) st.micVol = Math.max(0, Math.min(200, Math.round(Number(p.micVol) || 0)));
   if ('autostart' in p) { st.autostart = Boolean(p.autostart); if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: st.autostart, args: ['--demarrage'] }); }
   for (const k of ['hotClip', 'hotShot']) {
     if (!(k in p)) continue;
@@ -450,6 +525,10 @@ ipcMain.handle('settings:folder', async () => {
   st.dir = r.filePaths[0]; saveSt(); return st.dir;
 });
 ipcMain.handle('app:site', () => shell.openExternal(SITE));
+// Bouton Discord : invitation vers le serveur History Clips (créée par le bot)
+ipcMain.handle('app:discord', async () => { const r = await api('/api/discord/invite?app=clips', { token: null }); await shell.openExternal(r.url ?? SITE); return Boolean(r.url); });
+// Lien bleu History Launcher : ouvre le launcher s'il est installé, sinon sa page de téléchargement
+ipcMain.handle('app:launcher', async () => { const has = Boolean(app.getApplicationNameForProtocol('history://')); await shell.openExternal(has ? 'history://ouvrir' : 'https://zyko144.github.io/vercel-ia-/'); return has; });
 
 // ---------- Mises à jour (comme le launcher : « Mettre à jour maintenant ? », sinon installée à la fermeture) ----------
 const updater = updaterMod.autoUpdater;
@@ -457,17 +536,29 @@ let upd = { state: 'idle', version: null, percent: 0 };
 const updState = (p) => { upd = { ...upd, ...p }; send('update:state', upd); };
 function startUpdater() {
   if (!app.isPackaged) return;
-  updater.autoDownload = false; updater.autoInstallOnAppQuit = true; updater.logger = null;
-  updater.on('update-available', (i) => { updState({ state: 'available', version: i.version }); setTimeout(() => { if (upd.state === 'available') updater.downloadUpdate().catch(() => {}); }, 10 * 60_000); });
+  updater.autoDownload = false; updater.autoInstallOnAppQuit = true;
+  updater.logger = { info: () => {}, warn: () => {}, debug: () => {}, error: (e) => { st.updError = String(e?.message ?? e).slice(0, 200); } };
+  updater.on('update-available', (i) => {
+    const fresh = upd.version !== i.version;
+    updState({ state: 'available', version: i.version, notes: typeof i.releaseNotes === 'string' ? i.releaseNotes.replace(/<[^>]+>/g, '').slice(0, 600) : null });
+    // Fenêtre fermée : notification Windows (clic = ouvrir l'appli sur la question « Mettre à jour ? »)
+    if (fresh && (!win || win.isDestroyed() || !win.isVisible()) && Notification.isSupported()) {
+      const n = new Notification({ title: `History Clips ${i.version} est disponible`, body: 'Clique pour mettre à jour maintenant (moins d’une minute).', icon: ICON });
+      n.on('click', () => { showWindow(); setTimeout(() => send('update:state', upd), 1500); }); n.show();
+    }
+    // Sans réponse en 10 min : téléchargée en fond, installée à la prochaine fermeture
+    setTimeout(() => { if (upd.state === 'available') updater.downloadUpdate().catch(() => {}); }, 10 * 60_000);
+  });
   updater.on('update-not-available', () => { if (upd.state === 'checking') updState({ state: 'uptodate' }); });
   updater.on('download-progress', (p) => updState({ state: 'progress', percent: Math.round(p.percent) }));
   updater.on('update-downloaded', (i) => { updState({ state: 'ready', version: i.version }); if (upd.now) setTimeout(() => { app.quitting = true; updater.quitAndInstall(true, true); }, 1200); });
-  updater.on('error', (err) => updState({ state: 'error', error: String(err?.message ?? err).slice(0, 160) }));
+  updater.on('error', (err) => { st.updError = String(err?.message ?? err).slice(0, 200); updState({ state: 'error', error: st.updError.slice(0, 160) }); });
   const check = () => { if (!['progress', 'ready'].includes(upd.state)) updater.checkForUpdates().catch(() => {}); };
   setTimeout(check, 8000); setInterval(check, 30 * 60_000);
 }
 ipcMain.handle('update:get', () => ({ ...upd, current: app.getVersion(), packaged: app.isPackaged }));
 ipcMain.handle('update:check', () => { if (!app.isPackaged) return { dev: true }; updState({ state: 'checking' }); updater.checkForUpdates().catch((e) => updState({ state: 'error', error: String(e?.message ?? e) })); return true; });
+ipcMain.handle('update:later', () => { if (upd.state === 'available') { updState({ state: 'progress', percent: 0, now: false }); updater.downloadUpdate().catch(() => {}); } return true; });
 ipcMain.handle('update:now', () => { if (upd.state === 'ready') { app.quitting = true; updater.quitAndInstall(true, true); return true; } updState({ now: true, state: 'progress', percent: 0 }); updater.downloadUpdate().catch(() => {}); return true; });
 
 // ---------- Liens history-clips:// (ouvert par History Launcher) ----------
@@ -499,7 +590,7 @@ app.whenReady().then(async () => {
     const f = fileOf(u.pathname.replace(/^\//, '').replace(/\.\w+$/, ''));
     if (!f) return new Response('introuvable', { status: 404 });
     if (u.hostname === 't') { const jpg = await thumbOf(f); return jpg ? net.fetch(pathToFileURL(jpg).toString()) : new Response('', { status: 404 }); }
-    return net.fetch(pathToFileURL(f).toString(), { headers: req.headers });
+    return serveRange(f, req.headers.get('range'));
   });
   if (app.isPackaged) { app.setLoginItemSettings({ openAtLogin: st.autostart, args: ['--demarrage'] }); app.setAsDefaultProtocolClient('history-clips'); }
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));

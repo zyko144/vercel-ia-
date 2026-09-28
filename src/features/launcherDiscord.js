@@ -370,6 +370,18 @@ async function announceDeals(client, fetchImpl = fetch) {
   save('launcher-bons-plans', { ...st, dealsDay: today, dealsSeen: [...seen, ...deals.map((x) => `${x.id}:${x.final_price}`)].slice(-300) });
 }
 
+/** Invitation permanente vers le serveur History Launcher (créée une fois par le bot, puis réutilisée). */
+export async function launcherInvite() {
+  const saved = await load('launcher-invite', null);
+  if (saved?.url) return saved.url;
+  const { HOME_GUILD } = await import('./launcherServers.js');
+  const g = clientRef?.guilds.cache.get(HOME_GUILD);
+  const ch = g && (g.systemChannel ?? g.channels.cache.find((c) => c.isTextBased?.() && c.type === 0));
+  const inv = ch ? await ch.createInvite({ maxAge: 0, maxUses: 0, unique: false, reason: 'Bouton Discord de l’appli' }).catch(() => null) : null;
+  if (inv?.url) save('launcher-invite', { url: inv.url });
+  return inv?.url ?? null;
+}
+
 export function startLauncherDiscord(client) {
   clientRef = client;
   setTimeout(() => checkWatch(client).catch((err) => console.warn('[promos mp]', err.message)), 8 * 60_000).unref();
