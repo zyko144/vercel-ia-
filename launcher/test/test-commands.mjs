@@ -107,3 +107,11 @@ check('actions du launcher : amis, optimisation, réglages', () => {
 });
 
 console.log(`\n${passed} vérifications passées.`);
+{
+  const { understand } = await import('../src/core/commands.js');
+  const a = understand('baisse le son de Discord', []);
+  assert.equal(a.action, 'appvol'); assert.equal(a.value, 'down'); assert.equal(a.target, 'discord');
+  assert.equal(understand('coupe le son du jeu', []).value, 'mute');
+  assert.equal(understand('remets le son de spotify', []).value, 'up');
+  console.log('✅ Volume d’une appli à la voix : 5 vérifications');
+}

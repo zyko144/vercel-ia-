@@ -123,6 +123,9 @@ export function understand(text, items, { music = null } = {}) {
   if (/(retire|enleve).*(des favoris)/.test(t)) { const item = findItem(items, raw.replace(/^(retire|enl[eè]ve)\s+/i, '').replace(/\s+des\s+favoris.*$/i, '')); return item ? { action: 'unfavorite', itemId: item.id, reply: `${item.name} retiré des favoris.` } : { action: 'answer', reply: 'Je ne trouve pas ce jeu.' }; }
 
   // Musique et volume
+  // Volume d'une appli : « baisse le son de Discord », « coupe le son du jeu », « remets le son de Spotify »
+  const av = t.match(/^(baisse|diminue|monte|augmente|coupe|mute|remets?)\s+(le |la )?(son|volume)\s+(de |d |du |sur )(la |le |l )?([a-z0-9 .-]{2,40})$/);
+  if (av) { const mode = /^(baisse|diminue)/.test(av[1]) ? 'down' : /^(coupe|mute)/.test(av[1]) ? 'mute' : 'up'; const app = av[6].trim(); return { action: 'appvol', value: mode, target: app, reply: `${mode === 'down' ? 'Je baisse' : mode === 'mute' ? 'Je coupe' : 'Je remets'} le son de ${app}.` }; }
   if (/\b(pause|stop)\b.*(musique|son|chanson|spotify|deezer)?|mets? (la musique )?en pause/.test(t) && !/lance|ouvre/.test(t)) return { action: 'music', value: 'pause', reply: 'Musique en pause.' };
   if (/(chanson|musique|titre|son) suivant|\bsuivant(e)?\b|\bnext\b|passe (la|le|a la)/.test(t)) return { action: 'music', value: 'next', reply: 'Titre suivant.' };
   if (/precedent|reviens|\bprevious\b/.test(t)) return { action: 'music', value: 'previous', reply: 'Titre précédent.' };

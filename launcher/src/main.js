@@ -52,7 +52,9 @@ import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBe
 import { readRegistry } from './core/registry.js';
 import { directEnv, insideDir, launchPlan, hasAntiCheat } from './core/direct.js';
 import { findItem as findByName, similarity, stripWake, understand } from './core/commands.js';
-import { speak, startListening } from './core/voice.js';
+import { listVoices, speak as speakRaw, startListening } from './core/voice.js';
+// Réponses à voix haute : coupables, voix au choix (Paramètres › Général)
+const speak = (t) => { if (store.data.settings.voiceReply !== false) speakRaw(t, store.data.settings.voiceName); };
 import { session } from 'electron';
 import { enrich } from './core/art.js';
 import { startTracker } from './core/tracker.js';
@@ -60,6 +62,7 @@ import { crashesFor, diskAlerts, diskHealth, loadVerdict, netAdvice, parsePing, 
 import nodeNet from 'node:net';
 import { ps } from './core/pshost.js';
 import { collectConfigs, mergeConfigs, restoreConfigs } from './core/gameconfigs.js';
+import { setAppVolume } from './core/appvolume.js';
 import { lanAddress, newPin, REMOTE_PORT, startRemote } from './core/remote.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -103,7 +106,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 // Images de la bibliothèque Steam sur le PC, servies par « libimg:// » : seulement les fichiers que le scan a trouvés
 // (une liste blanche de jetons), jamais un chemin choisi par l'interface.
-protocol.registerSchemesAsPrivileged([{ scheme: 'libimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+protocol.registerSchemesAsPrivileged([{ scheme: 'libimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'libvid', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 const localFiles = new Map(); // jeton -> chemin
 function localUrls(art) {
   if (!art) return {};
@@ -1290,7 +1293,11 @@ async function closeItem(item) {
   for (const exe of targets) {
     spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Process | Where-Object { $_.Path -and $_.Path.ToLower() -eq $env:HL_CLOSE } | Stop-Process -Force'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, HL_CLOSE: exe } });
   }
-  return targets.length > 0;
+  if (targets.length) return true;
+  // Jeux avec anti-triche (Rocket League, Fortnite…) : Windows cache leur chemin, on les ferme par le nom du programme
+  const exe = path.win32.basename(String(item.exe ?? ''));
+  if (process.platform !== 'win32' || !/^[\w .()-]+\.exe$/i.test(exe)) return false;
+  return new Promise((resolve) => execFile('taskkill.exe', ['/IM', exe, '/F'], { windowsHide: true, timeout: 10_000 }, (err) => resolve(!err)));
 }
 
 ipcMain.handle('lib:scan', () => scan());
@@ -1350,6 +1357,8 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   if ('preloadSteam' in patch) store.data.settings.preloadSteam = Boolean(patch.preloadSteam);
   if ('nightUpdates' in patch) store.data.settings.nightUpdates = Boolean(patch.nightUpdates);
+  if ('voiceReply' in patch) store.data.settings.voiceReply = Boolean(patch.voiceReply);
+  if ('voiceName' in patch) store.data.settings.voiceName = String(patch.voiceName ?? '').slice(0, 80);
   if ('remote' in patch) { store.data.settings.remote = Boolean(patch.remote); setRemote(); }
   try {
     if ('steamKey' in patch) setSecret('steam', patch.steamKey);
@@ -2085,7 +2094,14 @@ const LAUNCHER_ACTIONS = ['add_friend', 'accept_friends', 'friends_status', 'emp
 async function execAction(c) {
   const a = c.action;
   if (a === 'screenshot') { await new Promise((r) => setTimeout(r, 400)); const f = await takeScreenshot(); return `📸 Capture enregistrée : ${path.basename(f)}.`; }
-  if (a === 'clip') return saveClip() ? '🎬 Je garde les 30 dernières secondes.' : 'Le replay est désactivé : active-le dans les Paramètres.';
+  if (a === 'clip') return saveClip() ? '🎬 Je garde les 30 dernières secondes.' : 'Replay activé : redemande le clip dans quelques secondes.';
+  if (a === 'appvol') {
+    // « le jeu » : le jeu en cours ; sinon le nom de l'appli (Discord, Spotify, Chrome…)
+    const s = currentSession(); const game = s ? items.find((i) => i.id === s.id) : null;
+    const app = /^(jeu|game|la partie)$/.test(c.target) && game?.exe ? path.win32.basename(game.exe, '.exe') : c.target;
+    const n = await setAppVolume(app, c.value);
+    return n ? c.reply : `Je n’ai pas trouvé ${c.target} en train de faire du son.`;
+  }
   if (a === 'update') {
     const r = await checkUpdate(true);
     if (r.dev) return `Tu utilises la version développeur (${r.current}) : lance « restaurer-launcher.bat » ou « demarrer-launcher.bat » pour la mettre à jour.`;
@@ -2274,6 +2290,8 @@ function setVoice(on) {
 }
 // La liste d'écoute suit la bibliothèque (nouveaux jeux installés)
 setInterval(() => { if (stopListening && listenNames().join('|') !== voiceNames) setVoice(true); }, 60_000);
+ipcMain.handle('voice:list', () => listVoices());
+ipcMain.handle('voice:say', (_e, name) => speakRaw('Salut, je suis la voix de History Launcher.', String(name ?? '')));
 ipcMain.handle('voice:set', (_e, on) => { store.data.settings.voice = Boolean(on); store.save(); setVoice(Boolean(on)); return { ok: true }; });
 ipcMain.handle('voice:transcribe', async (_e, audio, mime) => {
   const ai = await getAi();
@@ -2469,7 +2487,10 @@ function registerHotkeys() {
 }
 ipcMain.handle('hotkeys:get', () => Object.fromEntries(Object.keys(HOTKEYS).map((k) => [k, hotkeyOf(k)])));
 ipcMain.handle('hotkeys:set', (_e, key, accel) => {
-  if (!HOTKEYS[key] || (accel !== null && !/^(CommandOrControl|Alt|Shift)(\+(CommandOrControl|Alt|Shift))*\+[A-Z0-9]$|^(CommandOrControl|Alt|Shift)(\+(CommandOrControl|Alt|Shift))*\+(F\d{1,2}|Space|Tab|Up|Down|Left|Right)$|^F\d{1,2}$/.test(String(accel)))) return { ok: false, error: 'Combinaison non valable.' };
+  const KEY = /^([A-Z0-9]|F([1-9]|1\d|2[0-4])|Space|Tab|Up|Down|Left|Right|PrintScreen|Insert|Delete|Home|End|PageUp|PageDown|Backspace|Return|Capslock|Numlock|Scrolllock|num[0-9]|numdec|numadd|numsub|nummult|numdiv|Plus|[;=,\-./`'\[\]\\])$/;
+  const parts = String(accel ?? '').split('+'); const k = parts.pop(); const mods = parts;
+  const valid = accel === null || (KEY.test(k) && mods.every((m) => ['CommandOrControl', 'Alt', 'Shift'].includes(m)) && new Set(mods).size === mods.length && (mods.length > 0 || !/^[A-Z0-9 ]$|^(Space|Tab|Backspace|Return|Capslock)$/.test(k)));
+  if (!HOTKEYS[key] || !valid) return { ok: false, error: 'Combinaison non valable (une lettre ou un chiffre seul bloquerait ton clavier : ajoute Ctrl, Alt ou Maj).' };
   if (accel && Object.keys(HOTKEYS).some((k) => k !== key && hotkeyOf(k) === accel)) return { ok: false, error: 'Déjà utilisée par un autre raccourci.' };
   const hk = { ...(store.data.settings.hotkeys ?? {}) };
   if (accel) hk[key] = accel; else delete hk[key];
@@ -2934,13 +2955,17 @@ app.whenReady().then(() => setTimeout(async () => { if (store.data.settings.prel
 
 
 async function start() {
+  protocol.handle('libvid', (req) => {
+    const file = captureFiles.get(new URL(req.url).pathname.replace(/^\//, '').replace(/\.(webm|mp4)$/, ''));
+    return file ? net.fetch(pathToFileURL(file).toString(), { headers: req.headers }) : new Response('introuvable', { status: 404 });
+  });
   protocol.handle('libimg', (req) => {
     const token = new URL(req.url).pathname.replace(/^\//, '').replace(/\.(png|jpg)$/, '');
     const file = localFiles.get(token);
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response('introuvable', { status: 404 });
   });
   // Micro : autorisé seulement pour la fenêtre du launcher (bouton micro de l'assistant)
-  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media' && wc === win?.webContents));
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media' && (wc === win?.webContents || (recWin && !recWin.isDestroyed() && wc === recWin.webContents))));
   await store.load();
   applyAutostart();
   // Lancé avec Windows : directement dans la barre des tâches, sans fenêtre (rien en mémoire tant qu'on ne l'ouvre pas)
@@ -3381,6 +3406,27 @@ ipcMain.handle('captures:recent', async () => {
     return { token, at: c.at, game: c.game, url: localUrls({ x: c.file }).x };
   });
 });
+// Catégorie Clips : tous les clips du launcher (Vidéos\<jeu>\… .webm), du plus récent au plus ancien
+ipcMain.handle('clips:list', async () => {
+  const { readdir, stat } = await import('node:fs/promises');
+  const root = path.join(os.homedir(), 'Videos');
+  const out = [];
+  for (const d of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+    if (!d.isDirectory()) continue;
+    for (const f of await readdir(path.join(root, d.name)).catch(() => [])) {
+      if (!/ \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.(webm|mp4)$/.test(f)) continue;
+      const file = path.join(root, d.name, f);
+      const st = await stat(file).catch(() => null);
+      if (st) out.push({ file, game: d.name, at: st.mtimeMs, size: st.size });
+    }
+  }
+  return out.sort((a, b) => b.at - a.at).slice(0, 80).map((c) => {
+    const token = createHash('sha1').update(c.file).digest('hex').slice(0, 24);
+    captureFiles.set(token, c.file);
+    return { token, game: c.game, at: c.at, size: c.size, name: path.basename(c.file), url: `libvid://v/${token}${path.extname(c.file)}` };
+  });
+});
+ipcMain.handle('clips:open', (_e, token, how) => { const f = captureFiles.get(String(token)); if (!f) return false; if (how === 'folder') shell.showItemInFolder(f); else shell.openPath(f); return true; });
 ipcMain.handle('captures:data', (_e, token) => {
   const f = captureFiles.get(String(token));
   if (!f) return null;

@@ -1677,3 +1677,9 @@ body.idle[data-bg="anime"]::before { animation-play-state: paused; }
 .cfile b { word-break: break-all; } .cfile small { opacity: .7; } .cfile:hover { background: rgba(255, 255, 255, .1); }
 /* Collections retirées du menu de gauche */
 .colhead[hidden], #collections[hidden] { display: none !important; }
+/* Catégorie Clips */
+.clipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; padding-bottom: 30px; }
+.clipcard { margin: 0; border-radius: 16px; overflow: hidden; background: rgba(255, 255, 255, .04); border: 1px solid var(--line, rgba(255, 255, 255, .1)); }
+.clipcard video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.clipcard figcaption { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; }
+.clipcard figcaption small { display: block; opacity: .7; }

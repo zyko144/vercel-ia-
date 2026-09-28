@@ -7,7 +7,7 @@ let recs = [];
 let cycle = null;
 
 function startOne() {
-  const r = { mr: new MediaRecorder(stream, { mimeType: MIME, videoBitsPerSecond: 8_000_000 }), chunks: [], at: Date.now() };
+  const r = { mr: new MediaRecorder(stream, { mimeType: MIME, videoBitsPerSecond: 12_000_000, audioBitsPerSecond: 192_000 }), chunks: [], at: Date.now() };
   r.mr.ondataavailable = (e) => { if (e.data.size) r.chunks.push(e.data); };
   r.mr.start(1000);
   recs.push(r);
@@ -17,7 +17,7 @@ function startOne() {
 
 window.rec.onStart(async (id) => {
   try {
-    const video = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: 1920, maxHeight: 1080, maxFrameRate: 30 } };
+    const video = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: 1920, maxHeight: 1080, minFrameRate: 30, maxFrameRate: 60 } };
     stream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video })
       .catch(() => navigator.mediaDevices.getUserMedia({ audio: false, video }));
     startOne();
