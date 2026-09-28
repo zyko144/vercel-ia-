@@ -43,6 +43,9 @@ export async function installHere(guild) {
       if (mine?.content !== INFO_MESSAGE) await (mine ? mine.edit({ content: INFO_MESSAGE }) : c.send({ content: INFO_MESSAGE, allowedMentions: { parse: [] } }));
     }
   }
+  // Un salon général où les membres peuvent discuter
+  const talk = find('💬 Communauté', ChannelType.GuildCategory) ?? await guild.channels.create({ name: '💬 Communauté', type: ChannelType.GuildCategory, reason: 'History Launcher' });
+  if (!find('💬・général', ChannelType.GuildText)) await guild.channels.create({ name: '💬・général', type: ChannelType.GuildText, parent: talk.id, topic: 'Discute avec les autres joueurs History Launcher.', reason: 'History Launcher' });
   const list = ((await load(KEY, null)) ?? []).filter((x) => x.guildId !== guild.id);
   const fresh = !((await load(KEY, null)) ?? []).some((x) => x.guildId === guild.id);
   await save(KEY, [...list, entry]);
