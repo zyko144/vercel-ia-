@@ -187,7 +187,7 @@ export async function handleLauncherAutocomplete(interaction) {
 let clientRef = null;
 const DISCORD_MAX = 9.5 * 1024 * 1024;
 /** Discord refuse plus de 10 Mo : une vidéo trop lourde est réencodée en 720p H.264 (sans perdre la fin du clip). */
-async function fitForDiscord(buf, ext) {
+async function fitForDiscord(buf, ext, seconds = 45) {
   if (buf.length <= DISCORD_MAX) return { buf, ext };
   if (!['webm', 'mp4'].includes(ext)) throw new Error('image trop lourde (10 Mo maximum)');
   const [{ default: ffmpeg }, fs, os, path, { spawn }] = await Promise.all([import('ffmpeg-static'), import('node:fs/promises'), import('node:os'), import('node:path'), import('node:child_process')]);
@@ -195,10 +195,13 @@ async function fitForDiscord(buf, ext) {
   try {
     const src = path.join(dir, `in.${ext}`);
     await fs.writeFile(src, buf);
-    for (const kbps of [2200, 1100, 600]) {
+    // Débit calculé pour remplir au mieux les 10 Mo de Discord (au lieu d'un débit fixe bas) : 1080p si ça tient, sinon 720p
+    const best = Math.min(8000, Math.floor(((DISCORD_MAX * 8) / 1000 / Math.max(5, seconds)) * 0.92 - 128));
+    for (const kbps of [best, Math.round(best * 0.7), Math.round(best * 0.45)].filter((k) => k >= 250)) {
       const out = path.join(dir, `out-${kbps}.mp4`);
+      const height = kbps >= 4000 ? 1080 : 720;
       await new Promise((resolve, reject) => {
-        const p = spawn(ffmpeg, ['-y', '-i', src, '-t', '60', '-vf', "scale=-2:'min(720,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', `${kbps}k`, '-maxrate', `${Math.round(kbps * 1.2)}k`, '-bufsize', `${kbps * 2}k`, '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', out], { stdio: 'ignore' });
+        const p = spawn(ffmpeg, ['-y', '-i', src, '-t', '120', '-vf', `scale=-2:'min(${height},ih)'`, '-c:v', 'libx264', '-preset', 'faster', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-b:v', `${kbps}k`, '-maxrate', `${Math.round(kbps * 1.15)}k`, '-bufsize', `${kbps * 2}k`, '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out], { stdio: 'ignore' });
         p.on('error', reject);
         p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`réencodage impossible (${code})`))));
       });
@@ -210,17 +213,18 @@ async function fitForDiscord(buf, ext) {
     await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 }
-export async function postClip({ discordId, pseudo, buf, ext, game, note }) {
+export async function postClip({ discordId, pseudo, buf, ext, game, note, toDiscordId = null, seconds = 45 }) {
   if (!clientRef) return { ok: false, error: 'Le bot Discord démarre, réessaie dans une minute.' };
-  const channel = await clipsChannel(clientRef);
-  if (!channel?.isTextBased?.()) return { ok: false, error: 'Salon des clips introuvable sur Discord.' };
-  const file = await fitForDiscord(buf, ext);
+  // À un ami précis : en message privé ; sinon dans le salon des clips
+  const channel = toDiscordId ? await clientRef.users.fetch(toDiscordId).catch(() => null) : await clipsChannel(clientRef);
+  if (!channel?.send) return { ok: false, error: toDiscordId ? 'Impossible de joindre ton ami sur Discord.' : 'Salon des clips introuvable sur Discord.' };
+  const file = await fitForDiscord(buf, ext, seconds);
   const kind = ['webm', 'mp4'].includes(file.ext) ? '🎬 un clip' : '📸 une capture';
   const msg = await channel.send({
     content: `**${pseudo}** (<@${discordId}>) partage ${kind}${game ? ` de **${game}**` : ''}${note ? `\n> ${note}` : ''}\n-# Envoyé depuis History Launcher`,
     files: [new AttachmentBuilder(file.buf, { name: `history-${Date.now()}.${file.ext}` })], allowedMentions: { parse: [] },
   });
-  return { ok: true, url: msg.url };
+  return { ok: true, url: msg.url ?? null };
 }
 
 // ---------- Parties de groupe : mention des membres liés + boutons « Je viens » / « Pas dispo » ----------

@@ -276,7 +276,7 @@
   </section>
 
   <section id="view-clips" class="view">
-    <div class="list-head"><h2>🎬 Mes clips</h2><small class="hint">Garde les 30 dernières secondes avec ton raccourci (Paramètres › Général). Clique pour regarder avec le son.</small></div>
+    <div class="list-head"><h2>🎬 Mes clips</h2><small class="hint">Garde les dernières secondes avec ton raccourci de clip (Paramètres › Clips &amp; captures). Clique pour regarder, double-clic ou ⛶ pour le plein écran.</small></div>
     <div class="clipgrid" id="clipGrid"></div>
   </section>
   <section id="view-classement" class="view">
@@ -426,7 +426,12 @@
     <aside class="setnav">
       <h2>Paramètres</h2>
       <button type="button" data-pane="general" class="on">⚙ Général</button>
+      <button type="button" data-pane="apparence">🎨 Apparence</button>
       <button type="button" data-pane="jeux">🎮 Jeux</button>
+      <button type="button" data-pane="clips">🎬 Clips & captures</button>
+      <button type="button" data-pane="raccourcis">⌨ Raccourcis</button>
+      <button type="button" data-pane="assistant">🎙 Assistant vocal</button>
+      <button type="button" data-pane="telephone">📱 Téléphone</button>
       <button type="button" data-pane="social">👥 Amis & partage</button>
       <button type="button" data-pane="sons">🔊 Sons</button>
       <button type="button" data-pane="compte">☁ Compte & sauvegarde</button>
@@ -436,19 +441,42 @@
     <div class="setbody">
     <section class="setpane" data-pane="general">
       <h3>⚙ Général</h3>
-      <div class="setrow"><span>Taille du texte</span><select id="textScale"><option value="0.9">Petite</option><option value="1">Normale</option><option value="1.1">Grande</option><option value="1.25">Très grande</option></select></div>
-      <label class="toggle"><input type="checkbox" id="compact"><span></span>Mode compact (plus de jeux à l’écran)</label>
       <label class="toggle"><input type="checkbox" id="dnd"><span></span>Ne pas déranger (aucune notification d’amis ni son)</label>
       <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
-      <label class="toggle"><input type="checkbox" id="remoteOn"><span></span>📱 Contrôle depuis le téléphone (même Wi-Fi) : voir le PC et lancer un jeu</label>
-      <p class="hint sethint" id="remoteInfo" hidden></p>
-      <label class="toggle"><input type="checkbox" id="voiceReply"><span></span>🔊 L’assistant répond à voix haute</label>
-      <div class="setrow"><span>Voix de l’assistant</span><select id="voiceName"><option value="">Voix française par défaut</option></select><button type="button" class="btn ghost sm" id="voiceTest">▶ Écouter</button></div>
-      <b class="sub">⌨ Raccourcis (marchent aussi en jeu) : clique puis appuie sur ta combinaison</b>
-      <div id="hotkeys"></div>
+      <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
+    </section>
+    <section class="setpane" data-pane="apparence" hidden>
+      <h3>🎨 Apparence</h3>
+      <div class="setrow"><span>Taille du texte</span><select id="textScale"><option value="0.9">Petite</option><option value="1">Normale</option><option value="1.1">Grande</option><option value="1.25">Très grande</option></select></div>
+      <label class="toggle"><input type="checkbox" id="compact"><span></span>Mode compact (plus de jeux à l’écran)</label>
       <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option><option value="perso">Ma couleur…</option></select><input type="color" id="themeColor" value="#2f8bff" hidden></div>
       <div class="setrow"><span>Fond de l’appli</span><select id="bgMode"><option value="jeu">Jaquette floue du jeu sélectionné</option><option value="anime">Dégradé animé</option><option value="sobre">Sobre (noir)</option></select></div>
-      <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
+    </section>
+    <section class="setpane" data-pane="clips" hidden>
+      <h3>🎬 Clips & captures</h3>
+      <label class="toggle"><input type="checkbox" id="replay"><span></span>Replay : enregistrer l’écran en continu pour garder les dernières secondes avec le raccourci du clip (utilise un peu la carte graphique)</label>
+      <div class="setrow"><span>🎬 Durée des clips</span><select id="clipSeconds"><option value="15">15 secondes</option><option value="30">30 secondes</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></div>
+      <div class="setrow"><span>Qualité</span><select id="clipQuality"><option value="720">720p (léger)</option><option value="1080">1080p</option><option value="1440">1440p (lourd)</option></select></div>
+      <div class="setrow"><span>Images par seconde</span><select id="clipFps"><option value="30">30 i/s (léger)</option><option value="60">60 i/s (fluide)</option></select></div>
+      <label class="toggle"><input type="checkbox" id="clipAudio"><span></span>Enregistrer le son du PC dans les clips</label>
+      <p class="hint sethint">Les clips et captures sont rangés dans Vidéos › nom du jeu, et dans la page Clips du menu. Les raccourcis se changent dans ⌨ Raccourcis.</p>
+      <div class="row"><button type="button" class="btn ghost" id="clipsFolder">📁 Ouvrir le dossier Vidéos</button></div>
+    </section>
+    <section class="setpane" data-pane="raccourcis" hidden>
+      <h3>⌨ Raccourcis</h3>
+      <b class="sub">⌨ Raccourcis (marchent aussi en jeu) : clique puis appuie sur ta combinaison</b>
+      <div id="hotkeys"></div>
+    </section>
+    <section class="setpane" data-pane="assistant" hidden>
+      <h3>🎙 Assistant vocal</h3>
+      <label class="toggle"><input type="checkbox" id="voiceReply"><span></span>🔊 L’assistant répond à voix haute</label>
+      <div class="setrow"><span>Voix de l’assistant</span><select id="voiceName"><option value="">Voix française par défaut</option></select><button type="button" class="btn ghost sm" id="voiceTest">▶ Écouter</button></div>
+      <p class="hint sethint">Dis « Hey History » puis ta demande : « lance Rocket League », « baisse le son de Discord », « clip ça »… (écoute à activer dans la bulle de l’assistant).</p>
+    </section>
+    <section class="setpane" data-pane="telephone" hidden>
+      <h3>📱 Téléphone</h3>
+      <label class="toggle"><input type="checkbox" id="remoteOn"><span></span>📱 Contrôle depuis le téléphone (même Wi-Fi) : voir le PC et lancer un jeu</label>
+      <p class="hint sethint" id="remoteInfo" hidden></p>
     </section>
     <section class="setpane" data-pane="jeux" hidden>
       <h3>🎮 Jeux</h3>
@@ -458,7 +486,6 @@
       <label class="toggle"><input type="checkbox" id="preloadSteam"><span></span>⚡ Préparer Steam en fond au démarrage (les jeux Steam se lancent plus vite)</label>
       <p class="hint sethint">Les jeux avec anti-triche (Rocket League, Rainbow Six…) passent toujours par Steam / Epic.</p>
       <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher une fois un jeu lancé (jamais pour les applis)</label>
-      <label class="toggle"><input type="checkbox" id="replay"><span></span>Replay : garder les 30 dernières secondes avec <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd> (enregistre l’écran en continu, utilise un peu la carte graphique)</label>
       <div class="setrow"><span>Limite de jeu par jour</span><select id="dailyLimit"><option value="0">Aucune</option><option value="60">1 h</option><option value="120">2 h</option><option value="180">3 h</option><option value="240">4 h</option><option value="360">6 h</option></select></div>
       <div id="setGamesNew"></div>
       <label class="toggle"><input type="checkbox" id="fpsOn"><span></span>📈 Mesurer les vrais FPS de mes parties (PresentMon) : moyenne, 1 % low, saccades, qui limite</label>

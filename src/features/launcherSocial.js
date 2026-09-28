@@ -563,7 +563,16 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
     if (!['png', 'jpg', 'webm', 'mp4'].includes(ext)) return send(res, 400, { error: 'Format non pris en charge.' });
     const buf = await readBinary(req, CLIP_MAX).catch(() => null);
     if (!buf?.length) return send(res, 413, { error: 'Fichier trop gros (60 Mo maximum).' });
-    const r = await (await import('./launcherDiscord.js')).postClip({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, game: text(url.searchParams.get('jeu'), 80) || null, note: text(url.searchParams.get('texte'), 200) || null })
+    // Envoi à un ami précis (en message privé Discord) : il doit être ton ami History et avoir lié son Discord
+    const to = String(url.searchParams.get('a') ?? '');
+    let toDiscordId = null;
+    if (to) {
+      const d = await data();
+      if (!listOf(d.friends, id).includes(to)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
+      toDiscordId = accs[to]?.discordId ?? null;
+      if (!toDiscordId) return send(res, 400, { error: 'Ton ami n’a pas lié son compte Discord (Paramètres › Compte › Lier Discord).' });
+    }
+    const r = await (await import('./launcherDiscord.js')).postClip({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, toDiscordId, seconds: Number(url.searchParams.get('duree')) || 45, game: text(url.searchParams.get('jeu'), 80) || null, note: text(url.searchParams.get('texte'), 200) || null })
       .catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
     return send(res, r.ok ? 200 : 502, r);
   }
