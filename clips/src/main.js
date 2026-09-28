@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import updaterMod from 'electron-updater';
-import { artMatch, artTerm, clipName, ffmpegArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
+import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(here, 'ui', 'icon.png');
@@ -145,6 +145,8 @@ ipcMain.on('rec:state', (e, s) => {
   if (e.sender !== recWin?.webContents) return;
   if (s === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
   recState = s; changed();
+  if (s === 'on:noaudio') { recState = 'on'; st.noAudio = true; notify('Son du PC indisponible', 'Le replay filme, mais Windows ne donne pas le son. Vérifie ta sortie audio par défaut (Paramètres Windows › Son), puis redémarre History Clips.'); }
+  else if (s === 'on') st.noAudio = false;
   if (s === 'on:nomic') { recState = 'on'; notify('Micro introuvable', 'Le replay tourne, mais sans ton micro (vérifie qu’il est branché et autorisé dans Windows).'); }
   if (recState === 'on') lowerPriority();
   if (s.startsWith('error')) notify('Replay indisponible', `L’enregistrement n’a pas démarré (${s.slice(6, 120)}).`);
@@ -204,8 +206,8 @@ async function saveClip(game) {
     const out = path.join(dir, clipName(label, 'mp4'));
     const micTmp = M.head && M.ring.some((x) => x.n >= from) ? `${tmp}.micro.webm` : null;
     if (micTmp) await concatTrack(M, from - 12, micTmp);
-    if (micTmp) await withMic(tmp, micTmp, out).catch(() => toMp4(tmp, out, { fixup: true }));
-    else await toMp4(tmp, out, { fixup: true }).catch(async () => { await rename(tmp, out.replace(/\.mp4$/, '.webm')); });
+    if (micTmp) await withMic(tmp, micTmp, out).catch(() => clean(tmp, out, { fixup: true }));
+    else await clean(tmp, out, { fixup: true }).catch(async () => { await rename(tmp, out.replace(/\.mp4$/, '.webm')); });
     await rm(tmp, { force: true }); if (micTmp) await rm(micTmp, { force: true });
     notify('🎬 Clip enregistré', `${label} · ouvre History Clips pour le couper ou l’envoyer.`);
     changed(); saveSt(); prune().catch(() => {});
@@ -220,14 +222,46 @@ async function withMic(video, mic, out) {
   const graph = pv.audio ? `[1:a]${shift},volume=${vol}[m];[m]asplit[m1][m2];[0:a][m1]amix=inputs=2:duration=first:normalize=0[mix]` : `[1:a]${shift},volume=${vol}[m];[m]asplit[mix][m2]`;
   const common = ['-filter_complex', graph, '-map', '0:v', '-map', '[mix]', '-map', '[m2]', '-c:a', 'aac', '-b:a', '192k', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', ...(pv.dur ? ['-t', pv.dur.toFixed(2)] : []), '-movflags', '+faststart', out];
   const inputs = ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic];
-  try { await runFfmpeg([...inputs, '-c:v', 'copy', ...common]); } catch { await runFfmpeg([...inputs, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', ...common]); }
+  const enc = await bestEncoder();
+  try { await runFfmpeg([...inputs, ...encArgs(enc), '-fps_mode', 'vfr', ...common]); } catch { await runFfmpeg([...inputs, ...encArgs('libx264'), '-fps_mode', 'vfr', ...common]); }
 }
 const FFMPEG = async () => unpacked((await import('ffmpeg-static')).default);
 const runFfmpeg = async (args) => { const bin = await FFMPEG(); return new Promise((resolve, reject) => { const p = spawn(bin, args, { windowsHide: true, stdio: 'ignore' }); try { os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`)))); }); };
 /** WebM du navigateur → MP4 (durée connue, lecture partout) ; vidéo copiée si possible, sinon réencodée. */
 async function toMp4(src, out, opts = {}) {
-  try { await runFfmpeg(ffmpegArgs(src, out, opts)); } catch { await runFfmpeg(ffmpegArgs(src, out, { ...opts, reencode: true })); }
+  try { await runFfmpeg(ffmpegArgs(src, out, opts)); } catch { await clean(src, out, opts); }
 }
+// Encodeur vidéo : on teste une fois ceux de la carte graphique (rapides, n'enlèvent pas de FPS), sinon le processeur
+let encoder = null;
+async function bestEncoder() {
+  if (encoder) return encoder;
+  for (const enc of ['h264_nvenc', 'h264_qsv', 'h264_amf']) {
+    const ok = await runFfmpeg(['-y', '-f', 'lavfi', '-i', 'color=black:s=320x240:d=0.3', ...encArgs(enc), '-f', 'null', '-']).then(() => true, () => false);
+    if (ok) { encoder = enc; return enc; }
+  }
+  encoder = 'libx264'; return encoder;
+}
+/** MP4 réencodé proprement (lisible partout, horodatage net) : carte graphique d'abord, processeur en secours. */
+async function clean(src, out, opts = {}) {
+  const enc = await bestEncoder();
+  try { await runFfmpeg(ffmpegArgs(src, out, { ...opts, reencode: true, enc })); } catch (err) {
+    if (enc === 'libx264') throw err;
+    await runFfmpeg(ffmpegArgs(src, out, { ...opts, reencode: true, enc: 'libx264' }));
+  }
+}
+// Réparer un clip illisible : réencodé à la place de l'original (l'ancien part à la corbeille)
+ipcMain.handle('clips:repair', async (_e, t) => {
+  const f = fileOf(t); if (!f || /\.png$/i.test(f)) return { ok: false };
+  const tmp = path.join(path.dirname(f), `.${Date.now()}.mp4`);
+  try { await clean(f, tmp, { fixup: true }); } catch (err) { await rm(tmp, { force: true }); return { ok: false, error: `Réparation impossible (${err.message}).` }; }
+  const dest = f.replace(/\.(webm|mp4)$/i, '.mp4');
+  await shell.trashItem(f).catch(() => rm(f, { force: true }));
+  await rename(tmp, dest);
+  if (st.names[f]) { st.names[dest] = st.names[f]; delete st.names[f]; }
+  if (st.favs.includes(f)) st.favs = [...st.favs.filter((x) => x !== f), dest];
+  tokens.delete(String(t)); saveSt(); changed();
+  return { ok: true, token: tokenOf(dest) };
+});
 async function screenshot() {
   const d = screen.getPrimaryDisplay();
   const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
@@ -318,8 +352,6 @@ ipcMain.handle('clips:rename', (_e, t, name) => { const f = fileOf(t); if (!f) r
 ipcMain.handle('clips:delete', async (_e, t) => {
   const f = fileOf(t);
   if (!f) return false;
-  const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Supprimer', 'Annuler'], defaultId: 1, cancelId: 1, title: 'Supprimer', message: 'Supprimer ce clip ?', detail: 'Il part dans la corbeille (tu peux encore le récupérer).' });
-  if (r.response !== 0) return false;
   await shell.trashItem(f); tokens.delete(String(t)); st.favs = st.favs.filter((x) => x !== f); saveSt();
   return true;
 });
@@ -330,7 +362,7 @@ ipcMain.handle('clips:trim', async (_e, t, start, end, mode) => {
   if (!f || !(end > start)) return { ok: false, error: 'Choisis un début avant la fin.' };
   const base = path.basename(f).replace(/\.(mp4|webm)$/i, '');
   const out = path.join(path.dirname(f), mode === 'replace' ? `.${Date.now()}.mp4` : `${base} (coupé).mp4`);
-  try { await runFfmpeg(ffmpegArgs(f, out, { start, end, reencode: true })); } catch (err) { return { ok: false, error: `Découpe impossible (${err.message}).` }; }
+  try { await clean(f, out, { start, end }); } catch (err) { return { ok: false, error: `Découpe impossible (${err.message}).` }; }
   if (mode !== 'replace') return { ok: true };
   const dest = path.join(path.dirname(f), `${base}.mp4`);
   await shell.trashItem(f).catch(() => rm(f, { force: true }));
@@ -358,8 +390,10 @@ ipcMain.handle('clips:vertical', async (_e, t, mode) => {
   const f = fileOf(t); if (!f) return { ok: false };
   const vf = mode === 'zoom' ? 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
     : 'split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:2[bg];[b]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1';
-  const out = path.join(path.dirname(f), `${path.basename(f).replace(/\.(mp4|webm)$/i, '')} (vertical).mp4`);
-  try { await runFfmpeg(['-y', '-i', f, '-filter_complex', vf, '-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]); changed(); shell.showItemInFolder(out); return { ok: true }; }
+  // Un fichier par mode (avant : les deux écrivaient le même « (vertical) », l'un écrasait l'autre)
+  const out = path.join(path.dirname(f), `${path.basename(f).replace(/\.(mp4|webm)$/i, '')} (vertical ${mode === 'zoom' ? 'zoom' : 'flou'}).mp4`);
+  const run = (enc) => runFfmpeg(['-y', '-fflags', '+genpts+discardcorrupt', '-i', f, '-filter_complex', `[0:v]${vf}[v]`, '-map', '[v]', '-map', '0:a?', ...encArgs(enc), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]);
+  try { await run(await bestEncoder()).catch(() => run('libx264')); changed(); shell.showItemInFolder(out); return { ok: true }; }
   catch (err) { return { ok: false, error: `Export vertical impossible (${err.message}).` }; }
 });
 // Lien de partage web : le clip (allégé) est mis en ligne 7 jours, lien copié
@@ -496,7 +530,7 @@ ipcMain.handle('clips:discord', async (_e, t, to, guild) => {
 });
 
 // ---------- Réglages ----------
-ipcMain.handle('settings:get', () => ({ ...st, token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
+ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
 ipcMain.handle('settings:set', (_e, p) => {
   let replayChanged = false; let restart = false;
   if ('replay' in p) { st.replay = Boolean(p.replay); replayChanged = true; }

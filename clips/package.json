@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.6.0",
-  "releaseNotes": "Montage : choisis plusieurs clips et assemble-les en un seul. Export vertical pour TikTok et Shorts (image entière sur fond flouté, ou zoom). Lien de partage web : un lien copié en un clic, le clip se regarde sans rien installer (7 jours). Ton micro sur une piste à part, avec son volume réglable. Bouton Discord pour rejoindre le serveur History Clips, et lien bleu vers History Launcher. Corrections : on peut avancer dans les clips, le clic droit marche (supprimer, ouvrir…), la découpe se glisse sans à-coups. Fenêtre « Nouvelle version » quand une mise à jour sort. Fond animé plus léger pour la carte graphique.",
+  "version": "0.6.1",
+  "releaseNotes": "Correctif important : les clips se lisent à nouveau. Ils sont maintenant réencodés proprement (par ta carte graphique quand c’est possible), et un ancien clip illisible est réparé tout seul quand tu l’ouvres. Son du PC : s’il manque, l’appli le récupère autrement et te prévient si Windows le bloque. L’export vertical « zoom » et « flou » créent deux fichiers séparés. La suppression passe par une fenêtre de l’appli, plus par l’alerte de Windows.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

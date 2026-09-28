@@ -90,7 +90,7 @@ function renderHome() {
   const bg = art[g ?? top]?.hero ?? art[g ?? top]?.img;
   $('v-home').innerHTML = `<section class="hero glass">${bg ? `<div class="hbg" style="background-image:url('${esc(bg)}')"></div>` : ''}<div class="recdot ${on ? 'on' : wait ? 'wait' : ''}"><i></i></div>
     <div><h2>${on ? `Replay actif${g ? ` · ${esc(g)}` : ''}` : wait ? 'Prêt : en attente d’un jeu' : settings.replay ? 'Replay en démarrage…' : 'Replay en pause'}</h2>
-    <p>${wait ? 'Le replay démarre tout seul dès qu’un jeu passe en plein écran (0 ressource utilisée d’ici là).<br>' : ''}Appuie sur ${keyText(settings.hotClip)} pour garder les ${settings.seconds} dernières secondes · ${keyText(settings.hotShot)} pour une capture.<br>${settings.source === 'game' ? '🎮 Le jeu seulement' : '🖥 Écran entier'} · ${settings.height}p · ${settings.fps} i/s${settings.audio ? ' · son du PC' : ' · sans son'}</p>${err ? `<p class="err">⚠ L’enregistrement n’a pas démarré : ${esc(err)}</p>` : ''}</div>
+    <p>${wait ? 'Le replay démarre tout seul dès qu’un jeu passe en plein écran (0 ressource utilisée d’ici là).<br>' : ''}Appuie sur ${keyText(settings.hotClip)} pour garder les ${settings.seconds} dernières secondes · ${keyText(settings.hotShot)} pour une capture.<br>${settings.source === 'game' ? '🎮 Le jeu seulement' : '🖥 Écran entier'} · ${settings.height}p · ${settings.fps} i/s${settings.audio ? ' · son du PC' : ' · sans son'}</p>${err ? `<p class="err">⚠ L’enregistrement n’a pas démarré : ${esc(err)}</p>` : ''}${settings.noAudio && on ? '<p class="err">🔇 Windows ne donne pas le son du PC : vérifie ta sortie audio par défaut (Paramètres Windows › Son) puis redémarre History Clips.</p>' : ''}</div>
     <div class="heroact"><button type="button" class="btn" data-act="toggle">${settings.replay ? '⏸ Pause' : '▶ Activer'}</button><button type="button" class="btn" data-v="reglages">⚙ Réglages</button></div></section>
   <div class="stats"><div class="glass"><b>${vids.length}</b><small>clips</small></div><div class="glass"><b>${clips.length - vids.length}</b><small>captures</small></div><div class="glass"><b>${games().length}</b><small>jeux</small></div><div class="glass"><b>${size(clips.reduce((t, c) => t + c.size, 0))}</b><small>sur le disque</small></div></div>
   <div class="row-head"><h2>Derniers clips</h2>${vids.length > 6 ? '<button class="seeall" data-v="tout">Voir tout ›</button>' : ''}</div><div class="grid">${vids.slice(0, 6).map(card).join('') || emptyMsg()}</div>
@@ -149,6 +149,16 @@ function paintTrim() {
 }
 const setA = (t) => { tA = Math.max(0, Math.min(t, tB - 0.5)); paintTrim(); };
 const setB = (t) => { tB = Math.min(dur, Math.max(t, tA + 0.5)); paintTrim(); };
+// Clip illisible (souvent un ancien replay aux horodatages abîmés) : réparé tout seul puis rouvert
+const repaired = new Set();
+V.addEventListener('error', async () => {
+  if (!cur || cur.image || !V.getAttribute('src') || repaired.has(cur.token)) return;
+  repaired.add(cur.token); toast('🛠 Ce clip ne se lit pas : réparation en cours…');
+  const r = await api.repair(cur.token).catch(() => null);
+  if (!r?.ok) return toast(r?.error ?? 'Réparation impossible');
+  await load(); const c = clips.find((x) => x.token === r.token);
+  if (c && $('viewer').open) { repaired.add(c.token); openViewer(c); toast('✅ Clip réparé'); }
+});
 V.addEventListener('loadedmetadata', () => { dur = Number.isFinite(V.duration) ? V.duration : 0; tA = 0; tB = dur; paintTrim(); filmstrip(cur); });
 V.addEventListener('timeupdate', () => {
   $('tlPh').style.left = pct(V.currentTime);
@@ -228,7 +238,14 @@ $('vRename').addEventListener('click', () => ask('✏ Renommer le clip', `<input
 $('vFolder').addEventListener('click', () => api.open(cur.token, 'folder'));
 $('vCopy').addEventListener('click', async () => toast((await api.copy(cur.token)) ? '📋 Image copiée' : 'Copie impossible'));
 $('vExport').addEventListener('click', async () => { toast('⬇ Export en MP4…'); const r = await api.exportMp4(cur.token); if (!r?.cancelled) toast(r?.ok ? '⬇ Exporté en MP4' : r?.error ?? 'Export impossible'); });
-$('vDelete').addEventListener('click', async () => { if (await api.remove(cur.token)) { $('viewer').close(); toast('🗑 Clip supprimé'); load(); } });
+// Suppression : notre propre fenêtre de confirmation (plus l'alerte Windows)
+function confirmDelete(c, after) {
+  ask('🗑 Supprimer ce clip ?', `<p class="fine">« ${esc(c.name)} » part dans la corbeille : tu peux encore le récupérer.</p><div class="choice"><button type="button" class="btn danger" data-to="yes">🗑 Supprimer</button><button type="button" class="btn" data-to="no">Annuler</button></div>`, null, async (v) => {
+    if (v !== 'yes') return;
+    if (await api.remove(c.token)) { toast('🗑 Clip supprimé'); after?.(); load(); } else toast('Suppression impossible');
+  });
+}
+$('vDelete').addEventListener('click', () => confirmDelete(cur, () => $('viewer').close()));
 $('viewer').addEventListener('close', () => { $('vVideo').pause(); $('vVideo').removeAttribute('src'); $('vVideo').load(); });
 
 // ---------- Discord ----------
@@ -304,7 +321,7 @@ document.addEventListener('contextmenu', (e) => {
     else if (m === 'folder') api.open(c.token, 'folder');
     else if (m === 'link') shareLink(c);
     else if (m === 'vertical') vertical(c);
-    else if (m === 'delete' && await api.remove(c.token)) { toast('🗑 Clip supprimé'); load(); }
+    else if (m === 'delete') confirmDelete(c);
   };
 });
 addEventListener('pointerdown', (e) => { if (!menu.contains(e.target)) menu.hidden = true; }, true);
