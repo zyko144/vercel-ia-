@@ -69,8 +69,9 @@ ${r.created.length ? `**${r.created.length}** salon(s) créé(s)` : 'Tout exista
 
 /** Au démarrage : une seule installation automatique par serveur (jamais refaite si on supprime les salons). */
 export async function autoInstallBotChannels(client) {
+  const { HOME_GUILD } = await import('./launcherServers.js');
   for (const guild of client.guilds.cache.values()) {
-    if (cfg(guild.id, 'botChannels.installedAt')) continue;
+    if (guild.id === HOME_GUILD || cfg(guild.id, 'botChannels.installedAt')) continue; // serveur du launcher : pas de salons de l'IA
     await installBotChannels(guild).catch(() => {});
   }
 }
