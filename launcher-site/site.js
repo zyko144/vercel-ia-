@@ -117,4 +117,20 @@
     io.observe(box.closest('.rv') ?? box);
     box.querySelectorAll('[data-w]').forEach((i) => requestAnimationFrame(() => { i.style.width = `${i.dataset.w}%`; }));
   }).catch(() => {});
+
+  // Visite guidée : la capture change au clic, ou toute seule toutes les 5 s (pause au survol)
+  const tour = document.getElementById('tour');
+  if (tour) {
+    const items = [...tour.querySelectorAll('.tour-item')], shots = [...tour.querySelectorAll('.scr img')], bar = tour.querySelector('.bar b');
+    const auto = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let cur = 0;
+    const show = (i) => {
+      cur = (i + items.length) % items.length;
+      items.forEach((b, k) => { b.classList.toggle('on', k === cur); b.setAttribute('aria-selected', String(k === cur)); });
+      shots.forEach((im, k) => im.classList.toggle('on', k === cur));
+      if (auto) { bar.classList.remove('run'); void bar.offsetWidth; bar.classList.add('run'); }
+    };
+    items.forEach((b, k) => b.addEventListener('click', () => show(k)));
+    if (auto) { bar.addEventListener('animationend', () => show(cur + 1)); bar.classList.add('run'); }
+  }
 })();

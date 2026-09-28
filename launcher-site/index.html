@@ -82,6 +82,27 @@ section { padding: 90px 0; }
 .kicker { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--cyan); font-weight: 800; }
 .head h2 { font-size: clamp(30px, 4.4vw, 50px); margin: 10px 0 14px; }
 .head p { color: var(--muted); font-size: 17.5px; }
+.tour { display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 28px; align-items: start; margin-bottom: 56px; }
+.tour-list { display: flex; flex-direction: column; gap: 6px; }
+.tour-item { all: unset; box-sizing: border-box; cursor: pointer; display: block; padding: 16px 18px; border-radius: 18px; border: 1px solid transparent; transition: background .25s, border-color .25s; }
+.tour-item:hover { background: rgba(255, 255, 255, .03); }
+.tour-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.tour-item h3 { margin: 0; font-size: 19px; display: flex; align-items: baseline; gap: 12px; }
+.tour-item h3 small { font-size: 13px; color: var(--muted); letter-spacing: .08em; font-weight: 700; }
+.tour-item p { margin: 0; max-height: 0; overflow: hidden; opacity: 0; color: var(--muted); font-size: 15px; padding-left: 30px; transition: max-height .4s, opacity .3s, margin .3s; }
+.tour-item.on { background: linear-gradient(160deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02)); border-color: var(--line); box-shadow: inset 3px 0 0 var(--blue), inset 0 1px 0 rgba(255, 255, 255, .12); }
+.tour-item.on h3 small { color: var(--cyan); }
+.tour-item.on p { max-height: 140px; opacity: 1; margin-top: 10px; }
+.tour-view { padding: 14px; border-radius: 22px; position: relative; }
+.tour-view .dots { display: flex; gap: 7px; margin: 2px 4px 12px; } .tour-view .dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, .15); }
+.tour-view .scr { position: relative; aspect-ratio: 1600 / 859; border-radius: 12px; overflow: hidden; background: #0b0a10; }
+.tour-view .scr img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; opacity: 0; transform: scale(1.02); transition: opacity .5s, transform .6s; }
+.tour-view .scr img.on { opacity: 1; transform: none; }
+.tour-view .bar { height: 3px; margin-top: 12px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.tour-view .bar b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), var(--cyan)); }
+.tour-view .bar b.run { animation: tourbar 5s linear forwards; } .tour:hover .tour-view .bar b.run { animation-play-state: paused; }
+@keyframes tourbar { to { width: 100%; } }
+@media (max-width: 860px) { .tour { grid-template-columns: 1fr; } .tour-view { order: -1; } }
 .bento { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(190px, auto); gap: 16px; }
 .card { padding: 24px; position: relative; overflow: hidden; transition: transform .35s cubic-bezier(.2, .8, .2, 1), box-shadow .35s; }
 .card:hover { transform: translateY(-5px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 40px 70px -30px rgba(0, 0, 0, .9), 0 0 50px -24px var(--c, var(--blue)); }
@@ -207,14 +228,32 @@ footer a { color: #cfe7ff; }
   </section>
 
   <section id="fonctions" class="wrap">
-    <div class="head rv"><span class="kicker">Tout-en-un</span><h2>Un seul launcher pour tout</h2><p>Chaque fonction est là pour de vrai dans l’application : rien n’est promis sans être construit.</p></div>
+    <div class="head rv"><span class="kicker">Visite guidée</span><h2>Découvre le launcher</h2><p>Clique sur une partie pour la voir en vrai. Chaque fonction existe dans l’application : rien n’est promis sans être construit.</p></div>
+    <div class="tour" id="tour">
+      <div class="tour-list rv" role="tablist">
+        <button class="tour-item on" type="button" data-i="0" aria-selected="true"><h3><small>01</small>Bibliothèque</h3><p>Tous tes jeux et applis réunis (Steam, Epic, Xbox, EA, FiveM, Roblox…), triés par temps de jeu, avec les vraies jaquettes.</p></button>
+        <button class="tour-item" type="button" data-i="1" aria-selected="false"><h3><small>02</small>Amis en direct</h3><p>Vois qui joue à quoi, rejoins sa partie en un clic ou demande « On joue ? ». Les messages arrivent même en jeu.</p></button>
+        <button class="tour-item" type="button" data-i="2" aria-selected="false"><h3><small>03</small>Mon PC</h3><p>Composants, températures, disques et score de santé sur 100, avec les améliorations conseillées.</p></button>
+        <button class="tour-item" type="button" data-i="3" aria-selected="false"><h3><small>04</small>Analyse pro</h3><p>Chaque fichier de chaque disque lu un par un : doublons confirmés, fichiers louches passés à l’antivirus, journal de Windows vérifié.</p></button>
+        <button class="tour-item" type="button" data-i="4" aria-selected="false"><h3><small>05</small>Windows Update</h3><p>Recherche, choisis et installe tes mises à jour Windows, pilotes et Defender sans ouvrir les Paramètres.</p></button>
+        <button class="tour-item" type="button" data-i="5" aria-selected="false"><h3><small>06</small>Réglages</h3><p>Thème, sons, démarrage avec Windows, compte, double authentification et liaisons Discord / Spotify.</p></button>
+      </div>
+      <div class="tour-view glass rv">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="scr">
+          <img src="assets/accueil.webp" alt="Bibliothèque" class="on" width="1600" height="859">
+          <img src="assets/notifications.webp" alt="Amis en direct" loading="lazy" width="1600" height="859">
+          <img src="assets/pc.webp" alt="Mon PC" loading="lazy" width="1600" height="859">
+          <img src="assets/analyse.webp" alt="Analyse pro" loading="lazy" width="1600" height="859">
+          <img src="assets/maj.webp" alt="Windows Update" loading="lazy" width="1600" height="859">
+          <img src="assets/settings.webp" alt="Réglages" loading="lazy" width="1600" height="859">
+        </div>
+        <div class="bar"><b></b></div>
+      </div>
+    </div>
     <div class="bento">
-      <div class="card glass rv shot w2 h2" style="--c:#2f8bff"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="4"/><path d="M8 10v4M6 12h4"/><circle cx="15.5" cy="11" r=".6"/><circle cx="17.5" cy="13" r=".6"/></svg></div><h3>Toute ta bibliothèque</h3><p>Steam, Epic, Xbox Game Pass, EA, FiveM, Roblox et tes applis, avec jaquettes, temps de jeu officiel et collections.</p><img src="assets/accueil.webp" alt="Bibliothèque de jeux du launcher" loading="lazy"></div>
-      <div class="card glass rv shot w2" style="--c:#2ee07a"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.6.2 4.4 1.8 5 4.8"/></svg></div><h3>Amis en direct</h3><p>Vois qui lance un jeu, rejoins sa partie en un clic ou demande « On joue ? ». Les messages arrivent en bas à gauche, même en jeu.</p><img src="assets/notifications.webp" alt="Amis et notifications" loading="lazy"></div>
       <div class="card glass rv" style="--c:#9b6bff"><div class="ic big"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6Z"/><rect x="9" y="11" width="6" height="4.6" rx="1"/><path d="M10.2 11V9.6a1.8 1.8 0 0 1 3.6 0V11"/></svg></div><h3>Double authentification</h3><p>Code par QR code, e-mail vérifié, mot de passe oublié et sauvegarde en ligne : ton compte est protégé.</p></div>
       <div class="card glass rv" style="--c:#ff4d6d"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg></div><h3>Score de santé du PC</h3><p>Une note unique sur 100 qui résume disques, température, pilotes et Windows.</p><div class="stat">75<small>/100</small></div></div>
-      <div class="card glass rv shot w2" style="--c:#22d3ee"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="11" cy="11" r="3.5"/><path d="m13.6 13.6 2.9 2.9"/></svg></div><h3>Analyse pro du PC</h3><p>Chaque fichier de chaque disque lu un par un : doublons confirmés par SHA-256, fichiers louches passés à l’antivirus, journal de Windows vérifié.</p><img src="assets/analyse.webp" alt="Analyse du PC" loading="lazy"></div>
-      <div class="card glass rv shot w2" style="--c:#2f8bff"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.5h-4.5"/><path d="M12 8.5v5l3 1.8"/></svg></div><h3>Windows Update intégré</h3><p>Recherche, choisis et installe tes mises à jour Windows, pilotes et Defender sans ouvrir les Paramètres.</p><img src="assets/maj.webp" alt="Mises à jour Windows" loading="lazy"></div>
       <div class="card glass rv" style="--c:#2ee07a"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16"/><path d="M5 15l4-4 3 3 6-7"/><path d="M15 7h3v3"/></svg></div><h3>Vrais FPS et goulot</h3><p>FPS moyens, 1 % low et saccades mesurés avec PresentMon à chaque partie, et qui limite : processeur ou carte graphique.</p></div>
       <div class="card glass rv" style="--c:#ff8a3d"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a3.5 3.5 0 0 0 4.3 4.3L20 12l-8 8-3.5-3.5 8-8Z"/><path d="m4 4 5 5M4 4v3M4 4h3"/></svg></div><h3>Outils de chaque jeu</h3><p>Profil automatique, sauvegardes des parties, réparation des saccades, déplacement vers un autre disque.</p></div>
       <div class="card glass rv w2" style="--c:#ff8a3d"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5S9.7 5.9 12 3.5Z"/></svg></div><h3>FiveM comme il faut</h3><p>Tes vraies heures (depuis les journaux), heures par serveur, favoris avec joueurs en ligne, rejoindre en un clic.</p><div class="live"><b></b>Max joue maintenant à FiveM · Rejoindre</div></div>
@@ -225,8 +264,8 @@ footer a { color: #cfe7ff; }
       <div class="card glass rv w2" style="--c:#9b6bff"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></div><h3>Assistant IA et voix</h3><p>« Lance Rocket League », « fais une opti », « clip ça » : il le fait à ta place, au clavier ou à la voix.</p></div>
       <div class="card glass rv" style="--c:#9b6bff"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7.5c1.3-.5 2.6-.7 4-.7s2.7.2 4 .7c1.6 2.3 2.4 4.9 2.3 8.2-1.3 1-2.6 1.6-4 2l-.9-1.6M8.6 16.1l-.9 1.6c-1.4-.4-2.7-1-4-2-.1-3.3.7-5.9 2.3-8.2"/><circle cx="9.5" cy="12.5" r="1.1"/><circle cx="14.5" cy="12.5" r="1.1"/></svg></div><h3>History sur Discord</h3><p>/launcher profil, rôles automatiques selon ton niveau et ton PC, jeux gratuits Epic annoncés, groupes de jeu.</p></div>
       <div class="card glass rv" style="--c:#ff5ed1"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></div><h3>Sons premium</h3><p>Un vrai sound design pour la navigation, les lancements, les notifications et les appels (désactivable).</p></div>
-      <div class="card glass rv w2" style="--c:#2f8bff"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/></svg></div><h3>Mises à jour toutes seules</h3><p>« Mettre à jour maintenant ? » puis installation silencieuse et redémarrage, avec la liste des nouveautés.</p></div>
-      <div class="card glass rv w2" style="--c:#2ee07a"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></svg></div><h3>Anti-triche respecté</h3><p>Rocket League, Rainbow Six et les jeux avec Easy Anti-Cheat ou BattlEye passent toujours par leur plateforme.</p></div>
+      <div class="card glass rv" style="--c:#2f8bff"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/></svg></div><h3>Mises à jour toutes seules</h3><p>« Mettre à jour maintenant ? » puis installation silencieuse et redémarrage, avec la liste des nouveautés.</p></div>
+      <div class="card glass rv" style="--c:#2ee07a"><div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></svg></div><h3>Anti-triche respecté</h3><p>Rocket League, Rainbow Six et les jeux avec Easy Anti-Cheat ou BattlEye passent toujours par leur plateforme.</p></div>
     </div>
   </section>
 
