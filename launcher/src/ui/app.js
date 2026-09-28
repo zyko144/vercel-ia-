@@ -246,11 +246,13 @@ $('main').addEventListener('scroll', hideCtx, { passive: true });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx(); });
 
 // Fenêtres du launcher (confirmation, saisie) : même style partout, jamais les fenêtres grises de Windows
+// Taille de la fenêtre commune : chaque ouverture repart de la taille normale (sauf si elle demande « large »)
+function setModal(...cls) { $('modalBox').classList.remove('wide', 'fp'); if (cls.length) $('modalBox').classList.add(...cls); }
 const ui = {
   confirm({ title, text = '', ok = 'Confirmer', cancel = 'Annuler', danger = false, icon = '⚠️', list = [] }) {
     window.sfx?.play('pop');
     return new Promise((resolve) => {
-      $('modalBox').innerHTML = `<div class="mhead"><span class="micon ${danger ? 'danger' : ''}">${esc(icon)}</span><h2>${esc(title)}</h2></div>
+      setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon ${danger ? 'danger' : ''}">${esc(icon)}</span><h2>${esc(title)}</h2></div>
         ${text ? `<p class="mtext">${esc(text).replace(/\n/g, '<br>')}</p>` : ''}
         ${list.length ? `<ul class="mlist">${list.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
         <div class="row end"><button type="button" class="btn ghost" data-m="0">${esc(cancel)}</button><button type="button" class="btn ${danger ? 'dangerbtn' : 'play'}" data-m="1">${esc(ok)}</button></div>`;
@@ -264,7 +266,7 @@ const ui = {
   },
   prompt({ title, text = '', value = '', placeholder = '', ok = 'Valider', icon = '✏️' }) {
     return new Promise((resolve) => {
-      $('modalBox').innerHTML = `<div class="mhead"><span class="micon">${esc(icon)}</span><h2>${esc(title)}</h2></div>
+      setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">${esc(icon)}</span><h2>${esc(title)}</h2></div>
         ${text ? `<p class="mtext">${esc(text)}</p>` : ''}
         <input class="minput" id="mInput" maxlength="80" placeholder="${esc(placeholder)}" value="${esc(value)}">
         <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">${esc(ok)}</button></div>`;
@@ -492,7 +494,7 @@ function renderGroupDetail() {
 $('groupNew').addEventListener('click', async () => {
   const amis = state.hist?.amis ?? [];
   if (!amis.length) return toast('Ajoute d’abord des amis History');
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">👥</span><h2>Nouveau groupe</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">👥</span><h2>Nouveau groupe</h2></div>
     <input class="minput" id="gName" maxlength="40" placeholder="Nom du groupe (ex. Squad RL)">
     <div class="checks">${amis.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}">${esc(a.pseudo)}</label>`).join('')}</div>
     <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Créer</button></div>`;
@@ -541,7 +543,7 @@ $('secDiscord').addEventListener('click', async () => {
   const r = await api.discordCode();
   if (!r?.ok) return toast(r?.error ?? 'Connecte-toi d’abord');
   $('settings').close();
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🔗</span><h2>Lier ton compte Discord</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🔗</span><h2>Lier ton compte Discord</h2></div>
     <p class="mtext">Sur le serveur Discord, tape la commande :</p><div class="codebox big"><b>/launcher lier code:${esc(r.code)}</b></div>
     <p class="hint">Le code est valable 10 minutes. Ensuite : <b>/launcher profil</b> montre ton niveau, ton benchmark et ton jeu du moment, et tu reçois automatiquement les rôles de ton niveau et de ton PC.${r.lie ? '<br>Ton compte est déjà lié : le lier à nouveau remplace l’ancien compte Discord.' : ''}</p>
     <div class="row end">${r.lie ? '<button type="button" class="btn ghost" data-unlink="1">Délier</button>' : ''}<button type="button" class="btn" data-copy="1">Copier la commande</button><button type="button" class="btn play" data-m="1">OK</button></div>`;
@@ -602,15 +604,8 @@ const NAMEFX = [['aucun', 'Normal'], ['degrade', 'Dégradé'], ['neon', 'Néon']
 const BANNERS = [['nuit', 'Nuit'], ['aurore', 'Aurore'], ['coucher', 'Coucher de soleil'], ['ocean', 'Océan'], ['foret', 'Forêt'], ['lave', 'Lave'], ['neige', 'Neige'], ['synthwave', 'Synthwave'], ['carbone', 'Carbone'], ['rose', 'Rose']];
 const BADGES = { fondateur: ['🏅', 'Fondateur'], nuit: ['🌙', 'Oiseau de nuit'], rp: ['🚓', 'Rôliste'], fps: ['🎯', 'Chasseur de FPS'], streamer: ['🎥', 'Streamer'], collection: ['📚', 'Collectionneur'], social: ['🤝', 'Pote de tout le monde'], compet: ['🏆', 'Compétiteur'], chill: ['🛋', 'Joueur chill'], createur: ['🛠', 'Créateur'], speedrun: ['⏱', 'Speedrunner'], coop: ['🧩', 'Fan de coop'] };
 const LINKS = [['discord', 'Discord', 'pseudo ou lien d’invitation'], ['twitch', 'Twitch', 'twitch.tv/… ou pseudo'], ['youtube', 'YouTube', 'youtube.com/@… ou @chaîne'], ['tiktok', 'TikTok', 'tiktok.com/@… ou @compte'], ['steam', 'Steam', 'lien du profil Steam'], ['instagram', 'Instagram', 'instagram.com/… ou @compte']];
-// Logos officiels des réseaux (Simple Icons, domaine public)
-const LINK_ICONS = {
-  discord: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>',
-  twitch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>',
-  youtube: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
-  tiktok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>',
-  steam: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>',
-  instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077"/></svg>',
-};
+// Logos officiels des réseaux (fichiers dans brands/social)
+const LINK_ICONS = Object.fromEntries(['discord', 'twitch', 'youtube', 'tiktok', 'steam', 'instagram'].map((k) => [k, `<img src="brands/social/${k}.png" alt="" draggable="false">`]));
 // Pseudo ou lien collé -> pseudo gardé + vrai lien (mêmes règles que le serveur)
 const LINK_URL = {
   twitch: /^(?:https?:\/\/)?(?:www\.|m\.)?twitch\.tv\/([\w.-]+)/i,
@@ -672,8 +667,7 @@ function openFriendProfile(id) {
   const f = (state.hist?.amis ?? []).find((a) => a.id === id);
   if (!f) return;
   const live = f.playing ? { cls: 'g', text: `Joue à ${f.playing}` } : f.online ? { cls: 'on', text: 'En ligne' } : { cls: 'off', text: 'Hors ligne' };
-  $('modalBox').classList.add('wide', 'fp');
-  $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn play" data-m="1" autofocus>Fermer</button></div>`;
+  setModal('wide', 'fp'), $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn play" data-m="1" autofocus>Fermer</button></div>`;
   $('modal').showModal();
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) setTimeout(() => $('modal').close(), 0); };
 }
@@ -727,7 +721,6 @@ async function openProfileEditor() {
   const change = {};
   let tab = 'look';
   const gamesList = [...new Set(games().filter((i) => i.installed || i.minutes).sort((a, b) => b.minutes - a.minutes).map((i) => i.name))].slice(0, 60);
-  $('modalBox').classList.add('wide');
   const paint = () => {
     $('peCard').innerHTML = profileCard(d);
     document.querySelectorAll('#modalBox [data-ptab]').forEach((b) => b.classList.toggle('on', b.dataset.ptab === tab));
@@ -751,7 +744,7 @@ async function openProfileEditor() {
     }
   };
   const sample = (fx) => `<span class="nfx-${fx}" style="--pc:${esc(d.color)}">${esc(d.pseudo)}</span>`;
-  $('modalBox').innerHTML = `<div class="pedit2">
+  setModal('wide'), $('modalBox').innerHTML = `<div class="pedit2">
     <div class="pe2prev"><div id="peCard"></div><small class="hint">Aperçu : c’est ce que tes amis voient.</small></div>
     <div class="pe2ctl">
       <div class="mhead"><h2>Mon profil</h2></div>
@@ -1109,7 +1102,7 @@ for (const fil of ['chatFil', 'gFil']) {
     if (t.dataset.mreply) { const m = (threads.get(key) ?? []).find((x) => x.id === t.dataset.mreply); if (m) { replyTo.set(key, m); paintReply(key); $(composerIds(key).text).focus(); } return; }
     if (t.dataset.mpick) return reactPicker(t.closest('.cmsg'), t.dataset.mpick);
     if (t.dataset.mreact) return react(key, t.dataset.rid, t.dataset.mreact);
-    if (t.dataset.mview) { $('modalBox').classList.add('wide'); $('modalBox').innerHTML = `<img class="cimgbig" src="${esc(t.dataset.mview)}" alt=""><div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`; $('modal').showModal(); $('modalBox').onclick = (ev) => { if (ev.target.closest('[data-m]')) $('modal').close(); }; return; }
+    if (t.dataset.mview) { setModal('wide'), $('modalBox').innerHTML = `<img class="cimgbig" src="${esc(t.dataset.mview)}" alt=""><div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`; $('modal').showModal(); $('modalBox').onclick = (ev) => { if (ev.target.closest('[data-m]')) $('modal').close(); }; return; }
     if (t.dataset.mjump) { const el = $(fil).querySelector(`[data-mid="${CSS.escape(t.dataset.mjump)}"]`); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
     const mid = t.dataset.mdel;
     if (!(await ui.confirm({ title: 'Supprimer ce message ?', text: key[0] === 'g' ? 'Il disparaît pour tout le groupe.' : 'Il disparaît aussi chez ton ami.', ok: 'Supprimer', danger: true, icon: '🗑' }))) return;
@@ -1136,7 +1129,7 @@ async function scheduleMsg(key) {
   const area = $(composerIds(key).text);
   const d = new Date(Date.now() + 60 * 60_000); d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0);
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">⏰</span><h2>Programmer un message</h2></div><p class="hint">Il part tout seul à l’heure choisie (le launcher doit être ouvert, même réduit).</p>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">⏰</span><h2>Programmer un message</h2></div><p class="hint">Il part tout seul à l’heure choisie (le launcher doit être ouvert, même réduit).</p>
     <textarea class="minput" id="schText" rows="3" maxlength="500" placeholder="Ex. On lance la partie, connectez-vous !">${esc(area.value.trim())}</textarea>
     <label class="field"><span>Quand</span><input type="datetime-local" class="minput" id="schAt" value="${local}"></label>
     <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Programmer</button></div>`;
@@ -1177,8 +1170,7 @@ function attachMenu(key, btn) {
       return inp.click();
     }
     const list = await api.capturesRecent?.().catch(() => []) ?? [];
-    $('modalBox').classList.add('wide');
-    $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📷</span><h2>Envoyer une capture</h2></div>${list.length ? `<div class="shotpick">${list.map((c) => `<button type="button" data-shot="${esc(c.token)}"><img src="${esc(c.url)}" alt="" loading="lazy"><small>${esc(c.game)} · ${new Date(c.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</small></button>`).join('')}</div>` : '<p class="hint">Pas encore de capture : Ctrl+Alt+S pendant une partie.</p>'}
+    setModal('wide'), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📷</span><h2>Envoyer une capture</h2></div>${list.length ? `<div class="shotpick">${list.map((c) => `<button type="button" data-shot="${esc(c.token)}"><img src="${esc(c.url)}" alt="" loading="lazy"><small>${esc(c.game)} · ${new Date(c.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</small></button>`).join('')}</div>` : '<p class="hint">Pas encore de capture : Ctrl+Alt+S pendant une partie.</p>'}
       <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button></div>`;
     $('modal').showModal();
     $('modalBox').onclick = async (ev) => {
@@ -1614,6 +1606,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.27.2': [
+    ['✨', 'Tes logos sur les profils', 'Discord, Twitch, YouTube, TikTok, Steam et Instagram utilisent maintenant les logos que tu as fournis (TikTok recadré, sans fond à damier).'],
+    ['🪟', 'Fenêtres remises à la bonne taille', 'La fenêtre de mise à jour (et les autres confirmations) ne s’affiche plus en très large après avoir ouvert un profil.'],
+  ],
   '0.27.1': [
     ['🏷', 'Nom « History Launcher » partout', 'Les notifications de Windows, le gestionnaire des tâches et l’écran de connexion affichent maintenant « History Launcher » (plus « Electron »).'],
   ],
@@ -1816,7 +1812,7 @@ async function openGmod(found = null) {
   const r = await api.gmodAddons?.().catch(() => null);
   const list = r?.list ?? [];
   const card = found && !found.error ? `<div class="wscard">${found.preview ? `<img src="${esc(found.preview)}" alt="">` : ''}<div><b>${esc(found.title)}</b><small>${found.size ? `${(found.size / 1e6).toFixed(1).replace('.', ',')} Mo · ` : ''}${found.subs.toLocaleString('fr-FR')} abonnés${found.tags.length ? ` · ${esc(found.tags.join(', '))}` : ''}</small><button type="button" class="btn play sm" data-gminst="${esc(found.id)}">⬇ Installer (via Steam)</button></div></div>` : found?.error ? `<p class="autherr">${esc(found.error)}</p>` : '';
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🧩</span><h2>Addons Garry’s Mod</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🧩</span><h2>Addons Garry’s Mod</h2></div>
     <div class="row"><input id="wsLink" class="wsin" placeholder="Colle le lien d’un addon du Workshop" value="${esc(found?.id ?? '')}"><button type="button" class="btn" id="wsGo">Voir</button></div>
     ${card}
     <p class="hint">Steam télécharge l’addon et le garde à jour ; il est disponible au prochain lancement de Garry’s Mod.</p>
@@ -1886,7 +1882,7 @@ async function openTools(item, tab = 'profil') {
       : `<p class="hint">Joue une partie de plus de 3 minutes : tes FPS (si la mesure est activée), la charge du processeur et de la carte graphique et le composant qui limite s’afficheront ici.</p>`}
       ${d.fps ? '' : '<div class="row"><button class="btn" data-tact="fps">📈 Activer la mesure des vrais FPS</button></div>'}`,
   };
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🎛</span><h2>${esc(item.name)}</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🎛</span><h2>${esc(item.name)}</h2></div>
     <div class="tabs toolstabs">${tabs.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="toolsbody">${body[tab] ?? ''}</div>
     <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
@@ -1932,7 +1928,7 @@ async function shareSaves(item) {
   const r = await api.hFriends().catch(() => null);
   const amis = r?.amis ?? [];
   if (!amis.length) return toast('Ajoute d’abord des amis History (onglet Amis)');
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📤</span><h2>Envoyer ma sauvegarde</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📤</span><h2>Envoyer ma sauvegarde</h2></div>
     <p class="hint">${esc(item.name)} : ton ami la reçoit dans son launcher (valable 24 h). Sa partie à lui est copiée avant d’être remplacée.</p>
     <div class="flist">${amis.map((a) => `<div><div><b>${a.online ? '🟢' : '⚫'} ${esc(a.pseudo)}</b></div><button class="btn play sm" data-sendto="${esc(a.id)}">Envoyer</button></div>`).join('')}</div>
     <div class="row end"><button type="button" class="btn ghost" data-back="1">Retour</button></div>`;
@@ -1952,14 +1948,14 @@ async function enableFps() {
 
 async function openReqs(item) {
   hideCtx();
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>${esc(item.name)}</h2></div><p class="hint">Comparaison avec ton PC…</p>`;
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>${esc(item.name)}</h2></div><p class="hint">Comparaison avec ton PC…</p>`;
   if (!$('modal').open) $('modal').showModal();
   const r = await api.gameReqs(item.id);
   const row = (label, c, unit = ' Go') => (c?.need == null ? '' : `<div class="reqrow"><span>${label}</span><b>${Math.round(c.need * 10) / 10}${unit}</b><b>${c.have == null ? '?' : `${Math.round(c.have * 10) / 10}${unit}`}</b><em class="${c.ok ? 'ok' : c.ok === false ? 'bad' : ''}">${c.ok ? '✓' : c.ok === false ? '✗' : '?'}</em></div>`);
   const block = (title, v) => (v ? `<div class="reqblock"><h3>${title} ${v.pass === true ? '<span class="ok">● OK</span>' : v.pass === false ? '<span class="bad">● insuffisant</span>' : ''}</h3>
     <div class="reqrow head"><span></span><b>Demandé</b><b>Ton PC</b><em></em></div>${row('Mémoire', v.checks.ram)}${row('Place libre', v.checks.disk)}${row('Mémoire vidéo', v.checks.vram)}
     ${v.cpu ? `<small class="hint">Processeur demandé : ${esc(v.cpu)}</small>` : ''}${v.gpu ? `<small class="hint">Carte graphique demandée : ${esc(v.gpu)}</small>` : ''}</div>` : '');
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>${esc(item.name)} sur ton PC</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>${esc(item.name)} sur ton PC</h2></div>
     ${r?.error ? `<p class="hint">${esc(r.error)}</p>` : `${block('Minimum', r.min)}${block('Recommandé', r.rec)}
     <small class="hint">Ton PC : ${esc(r.mine.cpu ?? '?')} · ${esc(r.mine.gpu ?? '?')}</small>
     ${r.ai ? `<div class="reporttxt">🤖 ${esc(r.ai)}</div>` : ''}`}
@@ -1968,7 +1964,7 @@ async function openReqs(item) {
 }
 async function openFivemServers() {
   hideCtx();
-  $('modalBox').innerHTML = '<div class="mhead"><span class="micon">🌐</span><h2>Mes serveurs FiveM</h2></div><p class="hint">Chargement…</p>';
+  setModal(), $('modalBox').innerHTML = '<div class="mhead"><span class="micon">🌐</span><h2>Mes serveurs FiveM</h2></div><p class="hint">Chargement…</p>';
   if (!$('modal').open) $('modal').showModal();
   const r = await api.fivemServers?.().catch(() => null);
   const list = (r?.list ?? []).sort((a, b) => (b.fav - a.fav) || (b.minutes - a.minutes));
@@ -1976,7 +1972,7 @@ async function openFivemServers() {
       <button type="button" class="star ${x.fav ? 'on' : ''}" data-ffav="${esc(x.code)}" data-on="${x.fav ? '' : '1'}" title="${x.fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${x.fav ? '★' : '☆'}</button>
       <div class="fmeta"><b>${esc(x.name ?? x.code)}</b><small>${x.online === false ? '<span class="off">● Hors ligne</span>' : x.online ? `<span class="ok">● ${x.players}${x.max ? ` / ${x.max}` : ''} joueurs</span>` : '● ?'} · ${x.minutes ? `${hours(x.minutes)} de jeu` : 'pas encore joué'} · <code>${esc(x.code)}</code></small></div>
       <button type="button" class="btn play sm" data-fjoin="${esc(x.code)}">Rejoindre</button></div>`;
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🌐</span><h2>Mes serveurs FiveM</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🌐</span><h2>Mes serveurs FiveM</h2></div>
     <div class="fsrvs">${list.length ? list.map(row).join('') : '<p class="hint">Aucun serveur pour l’instant : ajoute un favori ou joue une partie, tes serveurs apparaîtront ici avec tes heures.</p>'}</div>
     ${r?.unknownMinutes > 30 ? `<p class="hint">${hours(r.unknownMinutes)} de jeu sans serveur reconnu (vieux journaux ou connexion directe).</p>` : ''}
     <div class="row end"><button type="button" class="btn ghost" data-fadd="1">＋ Ajouter un favori</button><button type="button" class="btn" data-m="1">Fermer</button></div>`;
@@ -2003,7 +1999,7 @@ async function showWhatsNew(force = false) {
   const versions = Object.keys(CHANGELOG).filter((k) => force || vnum(k) > vnum(seen)).sort((a, b) => vnum(b) - vnum(a));
   const list = versions.flatMap((k) => CHANGELOG[k]).slice(0, force ? 20 : 6);
   if (!list.length) return;
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✨</span><h2>${force ? 'Quoi de neuf' : 'Mise à jour installée'}${v ? ` · v${esc(v)}` : ''}</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✨</span><h2>${force ? 'Quoi de neuf' : 'Mise à jour installée'}${v ? ` · v${esc(v)}` : ''}</h2></div>
     <div class="wnew ${force ? '' : 'short'}">${list.map(([ic, t, d]) => `<div><span>${ic}</span><div><b>${esc(t)}</b>${force ? `<small>${esc(d)}</small>` : ''}</div></div>`).join('')}</div>
     <div class="row end"><button type="button" class="btn play" data-m="1">C’est parti</button></div>`;
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); };
@@ -2274,7 +2270,7 @@ $('restoreBtn').addEventListener('click', async () => {
 });
 $('rankBtn').addEventListener('click', async () => {
   const r = await api.benchRanking();
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🌍</span><h2>Classement mondial des benchmarks</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🌍</span><h2>Classement mondial des benchmarks</h2></div>
     ${r?.top ? `<p class="hint">${r.rang ? `Tu es ${r.rang}${r.rang === 1 ? 'er' : 'e'} sur ${r.total}.` : 'Fais un benchmark pour entrer dans le classement.'}</p><div class="ranklist2">${r.top.map((x, n) => `<div class="${x.moi ? 'me' : x.ami ? 'friend' : ''}"><span>${n + 1}</span><b>${esc(x.pseudo)}${x.ami ? ' 👥' : ''}</b><small>${esc([x.cpu, x.gpuName].filter(Boolean).join(' · '))}</small><em>${x.total}</em></div>`).join('')}</div>` : `<p class="hint">${esc(r?.error ?? 'Connecte-toi pour voir le classement.')}</p>`}
     <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
@@ -2300,7 +2296,7 @@ async function pcDiag(force) {
   return d;
 }
 function showReport(r, title = 'Rapport détaillé') {
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📄</span><h2>${esc(title)}</h2></div><div class="reporttxt">${esc(r?.text ?? r?.error ?? 'Rapport indisponible.')}</div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📄</span><h2>${esc(title)}</h2></div><div class="reporttxt">${esc(r?.text ?? r?.error ?? 'Rapport indisponible.')}</div>
     <small class="hint">${r?.ai ? 'Rédigé par l’IA à partir des vraies mesures de ton PC.' : 'Rapport automatique (connecte-toi pour la version rédigée par l’IA).'}</small>
     <div class="row end"><button type="button" class="btn" id="repPdf">📄 PDF</button><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
@@ -3540,7 +3536,7 @@ api.onSettingsChanged?.((c) => { if ('widget' in c) { $('widgetOn').checked = c.
 async function openPrices() {
   const list = await api.priceList().catch(() => []);
   const eur = (v) => (v == null ? '?' : `${Number(v).toFixed(2).replace('.', ',')} €`);
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">💸</span><h2>Alertes de prix</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">💸</span><h2>Alertes de prix</h2></div>
     <p class="hint">Tu es prévenu dès qu’un jeu passe sous ton prix sur Steam (vérifié toutes les 6 h). Le meilleur prix ailleurs (Epic, GOG, Humble…) vient de CheapShark, en dollars.</p>
     <div class="addfriend"><input id="priceQ" placeholder="Nom du jeu ou lien Steam" maxlength="120"><button class="btn play" type="button" id="priceFind">Chercher</button></div>
     <div class="flist" id="priceRes"></div>
@@ -3583,7 +3579,7 @@ $('sec2fa').addEventListener('click', async () => {
   }
   const s = await api.twoFaStart();
   if (!s?.ok) return toast(s?.error ?? 'Impossible');
-  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🛡</span><h2>Double authentification</h2></div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🛡</span><h2>Double authentification</h2></div>
     <div class="qrwrap"><img src="${esc(s.qr)}" alt="QR code"><div><p>1. Ouvre ton application d’authentification (Google Authenticator, Microsoft Authenticator, Authy, 2FAS…).</p><p>2. Scanne ce QR code, ou entre la clé :</p><code>${esc(s.secret.replace(/(.{4})/g, '$1 ').trim())}</code></div></div>
     <p>3. Entre le code à 6 chiffres affiché :</p><input id="tfCode" class="codein" inputmode="numeric" maxlength="6" placeholder="000000"><p class="autherr" id="tfErr"></p>
     <div class="row end"><button type="button" class="btn ghost" data-m="1">Annuler</button><button type="button" class="btn play" id="tfGo">Activer</button></div>`;
@@ -3596,7 +3592,7 @@ $('sec2fa').addEventListener('click', async () => {
     if (!r?.ok) { $('tfErr').textContent = r?.error ?? 'Code incorrect'; window.sfx?.play('error'); return; }
     setAccount(r.compte);
     window.sfx?.play('success');
-    $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>Double authentification activée</h2></div>
+    setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">✅</span><h2>Double authentification activée</h2></div>
       <p>Garde ces <b>codes de secours</b> en lieu sûr : chacun marche une seule fois si tu perds ton téléphone.</p>
       <div class="recov">${r.recovery.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
       <div class="row end"><button type="button" class="btn" id="tfCopy">Copier</button><button type="button" class="btn play" data-m="1">J’ai noté mes codes</button></div>`;
@@ -3767,7 +3763,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.27.1',
+    version: async () => '0.27.2',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
