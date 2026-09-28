@@ -144,6 +144,8 @@ function createWindow() {
   win.loadFile(path.join(here, 'ui', 'index.html'));
   win.once('ready-to-show', () => win.show());
   win.webContents.on('did-finish-load', () => { const z = store.data.settings?.textScale; if (z && z !== 1) win.webContents.setZoomFactor(z); });
+  // Bancs d'essai : LAUNCHER_METRICS=ms affiche la mémoire de chaque processus puis quitte
+  if (process.env.LAUNCHER_METRICS) setTimeout(() => { console.log(`HEAP ${JSON.stringify(Object.fromEntries(Object.entries(process.memoryUsage()).map(([k, v]) => [k, Math.round(v / 1e6)])))}`); console.log(`METRICS ${JSON.stringify(app.getAppMetrics().map((m) => ({ type: m.type, name: m.name ?? '', mo: Math.round(m.memory.workingSetSize / 1024) })))}`); app.exit(0); }, Number(process.env.LAUNCHER_METRICS) || 20_000);
   // Bancs d'essai : LAUNCHER_SHOT=fichier.png fait une capture de la fenêtre puis quitte
   if (process.env.LAUNCHER_SHOT) {
     win.webContents.once('did-finish-load', () => setTimeout(async () => {
@@ -160,7 +162,8 @@ function createWindow() {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   // Fermer la fenêtre la range dans la barre des tâches (le suivi du temps continue)
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
-  win.on('hide', scheduleLight);
+  win.on('hide', () => { scheduleLight(); win?.webContents.send('ui:trim'); });
+  win.on('minimize', () => win?.webContents.send('ui:trim'));
   win.on('show', () => clearTimeout(lightTimer));
   win.on('closed', () => { win = null; });
 }
@@ -1498,11 +1501,18 @@ async function sendPresence(s) {
 
 // ---------- Amis en direct : notifications en bas à gauche (comme Steam), messages, « on joue ? », rejoindre ----------
 let notifWin = null;
+let notifFree = null;
 let notifCards = [];
 let notifHover = false;
 const notifTimers = new Map();
 function notifSync() {
-  if (!notifCards.length) { if (notifWin && !notifWin.isDestroyed()) notifWin.hide(); return; }
+  if (!notifCards.length) {
+    if (notifWin && !notifWin.isDestroyed()) notifWin.hide();
+    // Plus de carte depuis 45 s : on ferme la fenêtre (recréée à la prochaine notification) pour libérer la mémoire
+    clearTimeout(notifFree); notifFree = setTimeout(() => { if (!notifCards.length && notifWin && !notifWin.isDestroyed()) { notifWin.destroy(); notifWin = null; } }, 45_000);
+    return;
+  }
+  clearTimeout(notifFree);
   const area = screen.getPrimaryDisplay().workArea;
   const h = Math.min(4, notifCards.length) * 118 + 24;
   if (!notifWin || notifWin.isDestroyed()) {
@@ -1524,6 +1534,7 @@ function notifSync() {
 }
 // Bulle de message en haut à droite : visible même en jeu, on clique pour répondre sans quitter la partie
 let bubbleWin = null;
+let bubbleFree = null;
 let bubble = null; // { key, title, group, avatar, color, msgs }
 let bubbleHover = false;
 let bubbleTyping = false;
@@ -1536,7 +1547,10 @@ function bubbleArm() {
 function bubbleHide() {
   clearTimeout(bubbleTimer);
   bubbleTyping = false; bubble = null;
-  if (bubbleWin && !bubbleWin.isDestroyed()) { bubbleWin.setFocusable(false); bubbleWin.hide(); bubbleWin.webContents.send('bubble:data', null); }
+  if (bubbleWin && !bubbleWin.isDestroyed()) {
+    bubbleWin.setFocusable(false); bubbleWin.hide(); bubbleWin.webContents.send('bubble:data', null);
+    clearTimeout(bubbleFree); bubbleFree = setTimeout(() => { if (!bubble && bubbleWin && !bubbleWin.isDestroyed()) { bubbleWin.destroy(); bubbleWin = null; } }, 60_000);
+  }
 }
 function bubblePlace() {
   const area = screen.getPrimaryDisplay().workArea;
@@ -1555,6 +1569,7 @@ function bubbleMsg(x) {
   if (bubble?.key === key) bubble.msgs = [...bubble.msgs, m].slice(-3);
   else if (!bubbleTyping) bubble = { key, from: x.from, gid: x.gid ?? null, title: group ? (g?.name ?? x.group ?? 'Groupe') : m.pseudo, group, avatar: group ? null : f?.avatar ?? null, color: f?.color ?? '#3b82f6', msgs: [m] };
   else return false; // en train de répondre à quelqu'un d'autre : la carte classique prend le relais
+  clearTimeout(bubbleFree);
   const data = { ...bubble, sound: st.sfxNotif !== false, vol: (st.sfxVol ?? 60) / 100 };
   if (!bubbleWin || bubbleWin.isDestroyed()) {
     bubbleWin = new BrowserWindow({

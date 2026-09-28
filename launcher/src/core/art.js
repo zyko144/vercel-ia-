@@ -7,7 +7,7 @@ import { norm } from './sort.js';
 
 const DAY = 86_400_000;
 export const CACHE_DAYS = 14;
-const ART_V = 2; // change à chaque correction de la recherche d'images : les anciennes recherches sont refaites
+const ART_V = 3; // change à chaque correction de la recherche d'images : les anciennes recherches sont refaites
 const json = (fetchImpl, url, opts = {}) => fetchImpl(url, { ...opts, signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /**

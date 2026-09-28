@@ -128,7 +128,8 @@ function probeImg(u) {
 }
 async function bestBackdrop(i) {
   const a = i.art ?? {};
-  const list = [a.hero, a.heroAlt, i.details?.background, a.header, a.headerAlt, a.cover, a.coverAlt].filter((u, n, all) => u && all.indexOf(u) === n);
+  const big = window.innerWidth * (window.devicePixelRatio || 1) > 2200;
+  const list = [big ? a.hero2x : null, a.hero, a.heroAlt, i.details?.background, a.header, a.headerAlt, a.cover, a.coverAlt].filter((u, n, all) => u && all.indexOf(u) === n);
   for (const u of list) { const r = await probeImg(u); if (r.ok && r.w >= 120) return { u, ...r }; }
   return null;
 }
@@ -143,7 +144,7 @@ async function paintHeroBg(i) {
   el.style.backgroundImage = url(b.u);
   el.innerHTML = wide ? '' : `<div class="hfit" style="background-image:${url(b.u)}"></div>`;
   el.classList.add('ready');
-  if (!i.brand?.bg) $('ambient').style.setProperty('--amb', url(b.u));
+  if (!i.brand?.bg) $('ambient').style.setProperty('--amb', url(i.art?.header ?? i.art?.cover ?? b.u)); // fond flou : une petite image suffit
 }
 function renderHero() {
   const i = state.sel;
@@ -1606,6 +1607,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.28.0': [
+    ['🪶', 'Launcher plus léger', 'Moins de mémoire utilisée : images des jeux en taille normale (au lieu de ×2) sauf sur grand écran, fond flou dessiné en petit, jeux hors de l’écran non dessinés, fenêtres de notification et de message libérées quand elles ne servent plus, et mémoire vidée quand le launcher est réduit.'],
+    ['🚧', 'Chantier sur Optimisation', 'Nouveau panneau de travaux avec ses lampes qui clignotent, et les bandes « TRAVAUX » qui arrivent et se collent à chaque ouverture.'],
+  ],
   '0.27.2': [
     ['✨', 'Tes logos sur les profils', 'Discord, Twitch, YouTube, TikTok, Steam et Instagram utilisent maintenant les logos que tu as fournis (TikTok recadré, sans fond à damier).'],
     ['🪟', 'Fenêtres remises à la bonne taille', 'La fenêtre de mise à jour (et les autres confirmations) ne s’affiche plus en très large après avoir ouvert un profil.'],
@@ -2543,6 +2548,9 @@ $('optiBody').addEventListener('click', async (e) => {
 });
 $('optiAuto').addEventListener('change', (e) => api.optiAuto?.(e.target.checked).then(() => toast(e.target.checked ? 'Optimisation automatique chaque semaine activée' : 'Optimisation automatique désactivée')));
 function openOpti() {
+  // Les bandes de chantier arrivent et se collent à chaque ouverture de la page
+  const m = document.querySelector('#view-optimisation .maint');
+  if (m) { m.classList.remove('go'); void m.offsetWidth; m.classList.add('go'); }
   api.optiAuto?.().then((a) => { $('optiAuto').checked = a?.on !== false; }).catch(() => {});
   if (!opti) setRing(state.health?.score ?? null, state.health?.label);
   api.optiSys?.().then((l) => { state.sys = l; if (opti) renderOpti(); }).catch(() => {});
@@ -3763,7 +3771,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.27.2',
+    version: async () => '0.28.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
