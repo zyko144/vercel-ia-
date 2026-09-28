@@ -104,7 +104,9 @@ document.addEventListener('click', (e) => {
   const w = t.closest('[data-win]'); if (w) return api.win(w.dataset.win);
   const v = t.closest('[data-v]'); if (v) return show(v.dataset.v);
   const g = t.closest('[data-g]'); if (g) return show('game', g.dataset.g);
-  const c = t.closest('[data-t]'); if (c) return openViewer(clips.find((x) => x.token === c.dataset.t));
+  const c = t.closest('[data-t]');
+  if (c && picks && !c.closest('dialog')) { const k = picks.indexOf(c.dataset.t); if (k >= 0) picks.splice(k, 1); else picks.push(c.dataset.t); return paintPicks(); }
+  if (c) return openViewer(clips.find((x) => x.token === c.dataset.t));
   const s = t.closest('#sort [data-s]'); if (s) { sortBy = s.dataset.s; document.querySelectorAll('#sort button').forEach((b) => b.classList.toggle('on', b === s)); return render(); }
   const act = t.closest('[data-act]')?.dataset.act;
   if (act === 'toggle') setP({ replay: !settings.replay }, settings.replay ? '⏸ Replay en pause' : '🔴 Replay actif');
@@ -166,19 +168,32 @@ async function filmstrip(c) {
   v.removeAttribute('src'); v.load();
 }
 // Glisser : une poignée, toute la sélection, ou un clic pour placer la lecture
+// Glisser : une poignée, toute la sélection, ou un simple clic pour placer la lecture (même dans la sélection).
+// La vidéo ne suit qu'une fois par image affichée (pas à chaque mouvement de souris) : glissé fluide, sans à-coups.
+let seekTo = null;
+const seek = (t) => { if (seekTo == null) requestAnimationFrame(() => { if (seekTo != null) V.currentTime = seekTo; seekTo = null; }); seekTo = t; };
 $('tl').addEventListener('pointerdown', (e) => {
-  if (!dur) return;
-  const r = $('tl').getBoundingClientRect(); const at = (x) => Math.max(0, Math.min(dur, ((x - r.left) / r.width) * dur));
-  const h = e.target.closest('[data-h]')?.dataset.h; const onSel = !h && e.target.closest('#tlSel'); const t0 = at(e.clientX); const a0 = tA; const b0 = tB;
-  if (!h && !onSel) { V.currentTime = t0; return; }
-  $('tl').setPointerCapture(e.pointerId);
+  if (!dur || e.button !== 0) return;
+  e.preventDefault();
+  const tl = $('tl'); const r = tl.getBoundingClientRect(); const at = (x) => Math.max(0, Math.min(dur, ((x - r.left) / r.width) * dur));
+  const h = e.target.closest('[data-h]')?.dataset.h; const onSel = !h && e.target.closest('#tlSel'); const x0 = e.clientX; const t0 = at(x0); const a0 = tA; const b0 = tB;
+  let moved = false;
+  tl.setPointerCapture(e.pointerId); tl.classList.add('dragging');
+  if (!h && !onSel) { seek(t0); }
   const move = (ev) => {
+    if (!moved && Math.abs(ev.clientX - x0) < 4) return; // petit tremblement = simple clic
+    moved = true;
     const t = at(ev.clientX);
-    if (h === 'a') { setA(t); V.currentTime = tA; } else if (h === 'b') { setB(t); V.currentTime = tB; }
-    else { const d = Math.max(-a0, Math.min(dur - b0, t - t0)); tA = a0 + d; tB = b0 + d; paintTrim(); V.currentTime = tA; }
+    if (h === 'a') { setA(t); seek(tA); } else if (h === 'b') { setB(t); seek(tB); }
+    else if (onSel) { const d = Math.max(-a0, Math.min(dur - b0, t - t0)); tA = a0 + d; tB = b0 + d; paintTrim(); seek(tA); }
+    else seek(t);
   };
-  const up = () => { $('tl').removeEventListener('pointermove', move); $('tl').removeEventListener('pointerup', up); };
-  $('tl').addEventListener('pointermove', move); $('tl').addEventListener('pointerup', up);
+  const up = () => {
+    tl.classList.remove('dragging');
+    if (!moved && onSel) seek(t0); // clic dans la sélection : on se place là
+    tl.removeEventListener('pointermove', move); tl.removeEventListener('pointerup', up); tl.removeEventListener('pointercancel', up);
+  };
+  tl.addEventListener('pointermove', move); tl.addEventListener('pointerup', up); tl.addEventListener('pointercancel', up);
 });
 $('setA').addEventListener('click', () => setA(V.currentTime));
 $('setB').addEventListener('click', () => setB(V.currentTime));
@@ -231,13 +246,50 @@ async function shareDiscord(c) {
   });
 }
 
+// ---------- Vertical (TikTok, Shorts) et lien de partage ----------
+function vertical(c) {
+  ask('📱 Exporter en vertical (9:16)', '<div class="choice"><button type="button" class="btn play" data-to="flou">🌫 Image entière<small>sur un fond flouté</small></button><button type="button" class="btn" data-to="zoom">🔍 Zoom au centre<small>plein écran, bords coupés</small></button></div>', null, async (mode) => {
+    toast('📱 Export vertical en cours…');
+    const r = await api.vertical(c.token, mode); toast(r?.ok ? '📱 Clip vertical prêt (dans le même dossier)' : r?.error ?? 'Export impossible'); if (r?.ok) load();
+  });
+}
+async function shareLink(c) {
+  if (!compte) { toast('Connecte ton compte History pour créer un lien'); return openAuth(); }
+  toast('🔗 Mise en ligne du clip…');
+  const r = await api.link(c.token);
+  toast(r?.ok ? '🔗 Lien copié ! Colle-le où tu veux (valable 7 jours)' : r?.error ?? 'Lien impossible');
+}
+$('vVertical').addEventListener('click', () => vertical(cur));
+$('vLink').addEventListener('click', () => shareLink(cur));
+
+// ---------- Montage : choisir plusieurs clips dans l'ordre, puis les assembler ----------
+let picks = null;
+function paintPicks() {
+  document.body.classList.toggle('picking', Boolean(picks)); $('montageBar').hidden = !picks;
+  document.querySelectorAll('.card .pickn').forEach((x) => x.remove());
+  if (!picks) return;
+  picks.forEach((t, i) => document.querySelector(`.card[data-t="${CSS.escape(t)}"] .thumb`)?.insertAdjacentHTML('beforeend', `<span class="pickn">${i + 1}</span>`));
+  $('montageCount').textContent = `${picks.length} clip${picks.length > 1 ? 's' : ''} choisi${picks.length > 1 ? 's' : ''}`;
+}
+$('montageBtn').addEventListener('click', () => { picks = picks ? null : []; paintPicks(); if (picks) toast('🎞 Clique sur les clips à assembler, dans l’ordre'); });
+$('montageCancel').addEventListener('click', () => { picks = null; paintPicks(); });
+$('montageGo').addEventListener('click', async () => {
+  if ((picks?.length ?? 0) < 2) return toast('Choisis au moins 2 clips.');
+  const list = picks; picks = null; paintPicks(); toast(`🎞 Montage de ${list.length} clips en cours…`);
+  const r = await api.montage(list); toast(r?.ok ? '🎞 Montage prêt : dossier « Montages »' : r?.error ?? 'Montage impossible'); if (r?.ok) load();
+});
+
+// ---------- Discord et History Launcher ----------
+$('discordBtn').addEventListener('click', async () => { toast('🎮 Ouverture du serveur Discord…'); await api.discordInvite(); });
+$('launcherLink').addEventListener('click', async () => { const has = await api.launcher(); toast(has ? '🚀 Ouverture de History Launcher…' : '⬇ Page de téléchargement de History Launcher'); });
+
 // ---------- Clic droit sur un clip ----------
 const menu = document.createElement('div'); menu.className = 'ctx glass'; menu.hidden = true; document.body.append(menu);
 document.addEventListener('contextmenu', (e) => {
   const el = e.target.closest('[data-t]'); if (!el) return;
   e.preventDefault();
   const c = clips.find((x) => x.token === el.dataset.t); if (!c) return;
-  menu.innerHTML = `<b>${esc(c.name)}</b><button data-m="open">▶ Ouvrir</button>${c.image ? '<button data-m="copy">📋 Copier l’image</button>' : '<button data-m="discord">📤 Envoyer sur Discord</button><button data-m="export">⬇ Exporter en MP4</button>'}<button data-m="fav">${c.fav ? '⭐ Retirer des favoris' : '⭐ Ajouter aux favoris'}</button><button data-m="rename">✏ Renommer</button><button data-m="folder">📁 Afficher dans le dossier</button><hr><button data-m="delete" class="danger">🗑 Supprimer</button>`;
+  menu.innerHTML = `<b>${esc(c.name)}</b><button data-m="open">▶ Ouvrir</button>${c.image ? '<button data-m="copy">📋 Copier l’image</button>' : '<button data-m="discord">📤 Envoyer sur Discord</button><button data-m="link">🔗 Copier un lien de partage</button><button data-m="vertical">📱 Exporter en vertical</button><button data-m="export">⬇ Exporter en MP4</button>'}<button data-m="fav">${c.fav ? '⭐ Retirer des favoris' : '⭐ Ajouter aux favoris'}</button><button data-m="rename">✏ Renommer</button><button data-m="folder">📁 Afficher dans le dossier</button><hr><button data-m="delete" class="danger">🗑 Supprimer</button>`;
   menu.hidden = false;
   menu.style.left = `${Math.min(e.clientX, innerWidth - menu.offsetWidth - 8)}px`; menu.style.top = `${Math.min(e.clientY, innerHeight - menu.offsetHeight - 8)}px`;
   menu.onclick = async (ev) => {
@@ -250,10 +302,13 @@ document.addEventListener('contextmenu', (e) => {
     else if (m === 'fav') { await api.fav(c.token); load(); }
     else if (m === 'rename') ask('✏ Renommer le clip', `<input type="text" id="mName" maxlength="80" value="${esc(c.name)}">`, async () => { await api.rename(c.token, $('mName').value); load(); });
     else if (m === 'folder') api.open(c.token, 'folder');
+    else if (m === 'link') shareLink(c);
+    else if (m === 'vertical') vertical(c);
     else if (m === 'delete' && await api.remove(c.token)) { toast('🗑 Clip supprimé'); load(); }
   };
 });
-for (const ev of ['click', 'blur']) addEventListener(ev, (e) => { if (!menu.contains(e.target)) menu.hidden = true; }, true);
+addEventListener('pointerdown', (e) => { if (!menu.contains(e.target)) menu.hidden = true; }, true);
+addEventListener('blur', (e) => { if (e.target === window) menu.hidden = true; });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') menu.hidden = true; });
 
 // Petite fenêtre : ok() pour « Valider », pick(valeur) pour les boutons data-to
@@ -335,7 +390,7 @@ async function paintSettings() {
   settings = await api.settings() ?? settings;
   const s = settings;
   $('sReplay').checked = s.replay; $('sSeconds').value = String(s.seconds); $('sHeight').value = String(s.height); $('sFps').value = String(s.fps);
-  $('sAudio').checked = s.audio; $('sSound').checked = s.sound; $('sOnlyGame').checked = s.onlyGame; $('sPriority').checked = s.gamePriority; $('sAuto').checked = s.autostart;
+  $('sAudio').checked = s.audio; $('sMic').checked = Boolean(s.mic); $('sMicVol').value = String(s.micVol ?? 100); $('oMicVol').textContent = `${s.micVol ?? 100} %`; $('sSound').checked = s.sound; $('sOnlyGame').checked = s.onlyGame; $('sPriority').checked = s.gamePriority; $('sAuto').checked = s.autostart;
   $('sMax').value = String(s.maxGB ?? 0); $('sDir').textContent = s.dir; $('sVer').textContent = `History Clips ${s.version}`;
   document.querySelectorAll('#sSource button').forEach((b) => b.classList.toggle('on', b.dataset.val === s.source));
   document.querySelectorAll('[data-hk]').forEach((b) => { b.innerHTML = keyText(s[b.dataset.hk]); });
@@ -346,7 +401,9 @@ async function paintSettings() {
 const setP = async (p, msg) => { const r = await api.setSettings(p); if (r?.ok === false) toast(r.error); else if (msg) toast(msg); settings = await api.settings() ?? settings; paintPill(); render(); return r; };
 $('sReplay').addEventListener('change', (e) => setP({ replay: e.target.checked }, e.target.checked ? '🔴 Replay actif' : '⏸ Replay en pause'));
 for (const [id, k] of [['sSeconds', 'seconds'], ['sHeight', 'height'], ['sFps', 'fps'], ['sMax', 'maxGB']]) $(id).addEventListener('change', (e) => setP({ [k]: Number(e.target.value) }, '✅ Réglage enregistré'));
-for (const [id, k] of [['sAudio', 'audio'], ['sSound', 'sound'], ['sOnlyGame', 'onlyGame'], ['sPriority', 'gamePriority'], ['sAuto', 'autostart']]) $(id).addEventListener('change', (e) => setP({ [k]: e.target.checked }, '✅ Réglage enregistré'));
+$('sMicVol').addEventListener('input', (e) => { $('oMicVol').textContent = `${e.target.value} %`; });
+$('sMicVol').addEventListener('change', (e) => setP({ micVol: Number(e.target.value) }, '🎙 Volume du micro enregistré'));
+for (const [id, k] of [['sMic', 'mic'], ['sAudio', 'audio'], ['sSound', 'sound'], ['sOnlyGame', 'onlyGame'], ['sPriority', 'gamePriority'], ['sAuto', 'autostart']]) $(id).addEventListener('change', (e) => setP({ [k]: e.target.checked }, '✅ Réglage enregistré'));
 $('sSource').addEventListener('click', async (e) => { const b = e.target.closest('[data-val]'); if (b) { await setP({ source: b.dataset.val }, b.dataset.val === 'game' ? '🎮 Seul le jeu sera filmé' : '🖥 Tout l’écran sera filmé'); paintSettings(); } });
 $('sPreset').addEventListener('click', async (e) => {
   const v = e.target.closest('[data-val]')?.dataset.val; if (!v) return;
@@ -385,8 +442,14 @@ function paintPill() {
 }
 
 // ---------- Mises à jour (comme le launcher) ----------
+let askedVersion = null;
 function paintUpdate(u) {
   if (!u) return;
+  if (u.state === 'available' && askedVersion !== u.version) {
+    askedVersion = u.version; $('updDlgTitle').textContent = `🎉 History Clips ${u.version} est disponible`;
+    $('updDlgNotes').textContent = u.notes || 'Nouveautés et corrections. La mise à jour prend moins d’une minute.';
+    if (!$('updDlg').open) $('updDlg').showModal();
+  }
   $('updPill').hidden = !['available', 'ready'].includes(u.state);
   $('updPill').textContent = u.state === 'ready' ? `⬆ Redémarrer pour la v${u.version}` : `⬆ Mettre à jour (v${u.version})`;
   $('updScreen').hidden = !(u.state === 'progress' && u.now);
@@ -394,6 +457,8 @@ function paintUpdate(u) {
   $('updStatus').textContent = { checking: 'Recherche…', uptodate: '✅ Tu as la dernière version.', available: `Nouvelle version v${u.version} disponible.`, progress: `Téléchargement ${u.percent ?? 0} %…`, ready: `v${u.version} prête : elle s’installe au redémarrage.`, error: `Erreur : ${u.error ?? ''}` }[u.state] ?? 'Les mises à jour s’installent toutes seules.';
 }
 $('updPill').addEventListener('click', () => api.updNow());
+$('updYes').addEventListener('click', () => { $('updDlg').close(); api.updNow(); });
+$('updLater').addEventListener('click', () => { $('updDlg').close(); api.updLater(); toast('⬆ Téléchargée en fond, installée à la fermeture'); });
 $('updCheck').addEventListener('click', async () => { const r = await api.updCheck(); if (r?.dev) $('updStatus').textContent = 'Version développeur : pas de mise à jour automatique.'; });
 api.onUpdate(paintUpdate);
 

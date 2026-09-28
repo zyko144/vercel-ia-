@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.5.0",
-  "releaseNotes": "Mémoire divisée : le replay n’utilise plus qu’un seul encodage vidéo et range chaque seconde sur le disque au lieu de la garder en mémoire (comme les logiciels de clips pros). Correction d’une fuite : un ancien enregistreur pouvait rester ouvert en fond et faire monter la mémoire. Moins de processeur utilisé pendant tes parties.",
+  "version": "0.6.0",
+  "releaseNotes": "Montage : choisis plusieurs clips et assemble-les en un seul. Export vertical pour TikTok et Shorts (image entière sur fond flouté, ou zoom). Lien de partage web : un lien copié en un clic, le clip se regarde sans rien installer (7 jours). Ton micro sur une piste à part, avec son volume réglable. Bouton Discord pour rejoindre le serveur History Clips, et lien bleu vers History Launcher. Corrections : on peut avancer dans les clips, le clic droit marche (supprimer, ouvrir…), la découpe se glisse sans à-coups. Fenêtre « Nouvelle version » quand une mise à jour sort. Fond animé plus léger pour la carte graphique.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

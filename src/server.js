@@ -247,6 +247,17 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       const r = await (await import('./features/launcherReleases.js')).announceNow(url.searchParams.get('version')).catch((err) => ({ ok: false, error: err.message }));
       return send(res, 200, r);
     }
+    // Bouton Discord des applis : lien d'invitation vers le serveur History Launcher ou History Clips
+    if (url.pathname === '/api/discord/invite' && req.method === 'GET') {
+      const clips = url.searchParams.get('app') === 'clips';
+      const link = clips ? await (await import('./clips/bot.js')).clipsInvite().catch(() => null) : await (await import('./features/launcherDiscord.js')).launcherInvite().catch(() => null);
+      return send(res, link ? 200 : 503, link ? { url: link } : { error: 'Invitation indisponible pour le moment.' });
+    }
+    // Lien de partage d'un clip (History Clips) : page publique 7 jours
+    if (url.pathname.startsWith('/c/') && req.method === 'GET') {
+      const { clipLinkRoute } = await import('./features/launcherSocial.js');
+      return clipLinkRoute(req, res, url, { send });
+    }
     if ((url.pathname === '/api/public' || url.pathname === '/api/classement') && req.method === 'GET') {
       const { publicStats, publicRanking } = await import('./features/publicStats.js');
       allowSiteOrigin(req, res);

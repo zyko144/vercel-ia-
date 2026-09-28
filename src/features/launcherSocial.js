@@ -590,6 +590,24 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
       .catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
     return send(res, r.ok ? 200 : 502, r);
   }
+  // Lien de partage web d'un clip (History Clips) : allégé pour tenir sous 10 Mo, gardé 7 jours
+  if (route === 'POST /api/compte/clip/lien') {
+    if (!allowAttempt('clip-lien', id, 20, 86_400_000)) return send(res, 429, { error: 'Trop de liens aujourd’hui, réessaie demain.' });
+    const ext = String(url.searchParams.get('type') ?? '').toLowerCase();
+    if (!['png', 'mp4', 'webm'].includes(ext)) return send(res, 400, { error: 'Format non pris en charge.' });
+    const raw = await readBinary(req, CLIP_MAX).catch(() => null);
+    if (!raw?.length) return send(res, 413, { error: 'Fichier trop gros (60 Mo maximum).' });
+    const file = await (await import('./launcherDiscord.js')).fitForDiscord(raw, ext, 60).catch(() => null);
+    if (!file) return send(res, 413, { error: 'Clip trop long pour un lien : coupe-le d’abord.' });
+    const lid = randomUUID().replace(/-/g, '').slice(0, 12);
+    await putBlob(`lien/${lid}`, file.buf, file.ext === 'png' ? 'image/png' : 'video/mp4');
+    const links = (await load('clip-liens', {})) ?? {};
+    for (const [k, x] of Object.entries(links)) if (Date.now() > x.exp) { delete links[k]; delBlob(`lien/${k}`).catch(() => {}); }
+    const acc = (await accounts())[id];
+    links[lid] = { ext: file.ext, pseudo: acc?.pseudo ?? 'Un joueur', jeu: text(url.searchParams.get('jeu'), 80) || null, nom: text(url.searchParams.get('nom'), 80) || null, exp: Date.now() + 7 * 86_400_000 };
+    save('clip-liens', links);
+    return send(res, 200, { ok: true, url: `https://vercel-ia.onrender.com/c/${lid}` });
+  }
   if (route === 'POST /api/compte/fichier') {
     if (!allowAttempt('launcher-fichier', id, 30, 86_400_000)) return send(res, 429, { error: 'Trop de fichiers aujourd’hui.' });
     const buf = await readBinary(req, FILE_MAX).catch(() => null);
@@ -644,3 +662,30 @@ export async function notifyAccount(to, item) {
 /** Pour le bot : suivis de prix, FPS partagés. */
 export async function socialData() { return data(); }
 export const saveSocial = (d) => save(KEY, d);
+
+// Page publique d'un lien de clip : /c/<id> (lecteur) et /c/<id>/f (le fichier, lu par morceaux)
+const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+export async function clipLinkRoute(req, res, url, { send }) {
+  const [, , lid, part] = url.pathname.split('/');
+  const x = /^[a-f0-9]{12}$/.test(lid ?? '') ? ((await load('clip-liens', {})) ?? {})[lid] : null;
+  if (!x || Date.now() > x.exp) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<meta charset="utf-8"><body style="background:#0b090e;color:#f6f3ee;font-family:sans-serif;text-align:center;padding:80px">🎬 Ce clip a expiré (les liens durent 7 jours).</body>'); return true; }
+  if (part === 'f') {
+    const blob = await getBlob(`lien/${lid}`);
+    if (!blob) return send(res, 404, { error: 'introuvable' });
+    const size = blob.buf.length; const m = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
+    const type = x.ext === 'png' ? 'image/png' : 'video/mp4';
+    if (!m) { res.writeHead(200, { 'Content-Type': type, 'Content-Length': size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=86400' }); res.end(blob.buf); return true; }
+    const start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2])); const end = m[1] && m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+    res.writeHead(206, { 'Content-Type': type, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes' });
+    res.end(blob.buf.subarray(start, end + 1)); return true;
+  }
+  const title = `${x.pseudo}${x.jeu ? ` · ${x.jeu}` : ''}`;
+  const media = x.ext === 'png' ? `<img src="/c/${lid}/f" alt="">` : `<video src="/c/${lid}/f" controls autoplay playsinline></video>`;
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)} · History Clips</title>
+<meta property="og:title" content="🎬 ${escHtml(title)}"><meta property="og:description" content="Un clip partagé avec History Clips"><meta property="og:image" content="https://zyko144.github.io/vercel-ia-/clips/logo.png">
+${x.ext === 'png' ? `<meta property="og:image" content="https://vercel-ia.onrender.com/c/${lid}/f">` : `<meta property="og:video" content="https://vercel-ia.onrender.com/c/${lid}/f"><meta property="og:video:type" content="video/mp4">`}
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(900px 500px at 50% 0%,rgba(255,194,51,.18),transparent 60%),#0b090e;color:#f6f3ee;font:15px/1.5 system-ui,sans-serif}main{width:min(1100px,94vw);text-align:center}video,img{width:100%;max-height:78vh;border-radius:16px;background:#000;box-shadow:0 30px 80px -20px #000,0 0 50px -20px #ffc233}h1{font-size:20px;margin:0 0 14px}a{display:inline-block;margin-top:16px;padding:10px 18px;border-radius:12px;background:linear-gradient(135deg,#ffc233,#ff8a00);color:#1a1206;font-weight:700;text-decoration:none}small{display:block;margin-top:10px;color:#9a9389}</style></head>
+<body><main><h1>🎬 ${escHtml(title)}</h1>${media}<a href="https://zyko144.github.io/vercel-ia-/clips/">Garder tes clips avec History Clips</a><small>Lien valable jusqu’au ${new Date(x.exp).toLocaleDateString('fr-FR')}</small></main></body></html>`);
+  return true;
+}
