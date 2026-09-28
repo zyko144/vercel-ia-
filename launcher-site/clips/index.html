@@ -7,104 +7,216 @@
 <meta name="description" content="History Clips enregistre ta partie en fond : un appui sur F8 garde les dernières secondes. Découpe, galerie par jeu et envoi sur Discord. Gratuit, léger, pour Windows.">
 <meta property="og:title" content="History Clips">
 <meta property="og:description" content="Un appui, et ton meilleur moment est gardé. Découpe, galerie par jeu, partage Discord.">
-<meta property="og:image" content="https://zyko144.github.io/vercel-ia-/assets/banniere.jpg">
-<meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="../assets/logo.png">
+<meta property="og:image" content="https://zyko144.github.io/vercel-ia-/clips/logo.png">
+<meta name="theme-color" content="#ffc233">
+<link rel="icon" href="logo.png">
 <style>
-:root { --bg: #07060b; --text: #f4f1f6; --muted: #a39cab; --line: rgba(255, 255, 255, .1); --blue: #2f8bff; --blue-2: #1554d1; --cyan: #22d3ee; --red: #ef4444; --font: 'Segoe UI', system-ui, -apple-system, Inter, sans-serif; }
+:root { --bg: #0a0806; --text: #fbf6ec; --muted: #a79c8a; --y: #ffc233; --o: #ff8a00; --line: rgba(255, 255, 255, .1); --font: "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, sans-serif; }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-a { color: inherit; }
-.wrap { width: min(1120px, 92vw); margin: 0 auto; }
-.nav { position: sticky; top: 12px; z-index: 5; margin-top: 12px; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-radius: 18px; border: 1px solid var(--line); background: rgba(12, 10, 18, .7); backdrop-filter: blur(14px); }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; text-decoration: none; }
-.brand img { width: 30px; height: 30px; }
-.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: #fff; font: 700 15.5px var(--font); text-decoration: none; transition: transform .2s, box-shadow .2s; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); overflow-x: hidden; }
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(900px 600px at 85% -10%, rgba(255, 194, 51, .2), transparent 60%), radial-gradient(800px 600px at -10% 30%, rgba(255, 138, 0, .14), transparent 60%), radial-gradient(700px 500px at 50% 110%, rgba(255, 194, 51, .1), transparent 60%); }
+a { color: inherit; text-decoration: none; }
+.wrap { width: min(1180px, 100% - 32px); margin: 0 auto; }
+.glass { background: linear-gradient(135deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02) 55%, rgba(255, 255, 255, .05)), linear-gradient(120deg, rgba(255, 194, 51, .1), transparent 60%);
+  border: 1px solid rgba(255, 255, 255, .12); border-radius: 22px; backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .15), inset 0 -1px 0 rgba(0, 0, 0, .3), 0 24px 60px -30px #000; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 14px; font-weight: 700; border: 1px solid var(--line); background: rgba(255, 255, 255, .06); transition: transform .2s, filter .2s; }
 .btn:hover { transform: translateY(-2px); }
-.btn.main { border: 0; background: linear-gradient(100deg, var(--blue), var(--blue-2)); box-shadow: 0 14px 34px -10px var(--blue); }
-.btn.sm { padding: 8px 14px; font-size: 14px; }
-.hero { position: relative; isolation: isolate; text-align: center; padding: 110px 0 60px; }
-.hero::before { content: ""; position: absolute; z-index: -1; left: 50%; width: 100vw; transform: translateX(-50%); top: -140px; height: calc(100% + 200px); background: radial-gradient(40% 50% at 12% 0%, rgba(239, 68, 68, .35), transparent 70%), radial-gradient(40% 50% at 92% 40%, rgba(47, 139, 255, .45), transparent 70%), radial-gradient(60% 60% at 50% 30%, rgba(21, 84, 209, .3), transparent 75%); -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent); mask-image: linear-gradient(180deg, #000 55%, transparent); }
-.rec { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: rgba(255, 255, 255, .05); font-size: 13.5px; font-weight: 600; }
-.rec b { width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 12px var(--red); animation: rec 1.6s infinite; }
-@keyframes rec { 50% { opacity: .3; } }
-h1 { font-size: clamp(40px, 7vw, 76px); line-height: 1.02; margin: 22px 0 18px; letter-spacing: -.02em; }
-.grad { background: linear-gradient(90deg, #fff, #9ecbff 40%, var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.lead { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 660px; margin: 0 auto 30px; }
-kbd { display: inline-block; padding: 1px 9px; border-radius: 8px; border: 1px solid var(--line); background: #110f17; font: 700 .9em ui-monospace, monospace; color: #fff; }
-.meta { color: var(--muted); font-size: 13.5px; margin-top: 14px; }
-section { padding: 70px 0; }
-h2 { font-size: clamp(28px, 4vw, 42px); margin: 0 0 10px; text-align: center; }
-.sub { color: var(--muted); text-align: center; margin: 0 auto 38px; max-width: 620px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-.card { padding: 22px; border-radius: 20px; border: 1px solid var(--line); background: linear-gradient(160deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02)); }
-.card h3 { margin: 14px 0 6px; font-size: 18px; } .card p { margin: 0; color: var(--muted); font-size: 15px; }
-.ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: var(--c); background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--c) 45%, transparent), color-mix(in srgb, var(--c) 8%, transparent) 70%); border: 1px solid color-mix(in srgb, var(--c) 45%, rgba(255, 255, 255, .1)); }
-.ic svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; counter-reset: s; }
-.step { padding: 22px; border-radius: 20px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); }
-.step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--blue-2)); font-weight: 800; margin-bottom: 12px; }
-.step b { display: block; font-size: 17px; } .step p { margin: 4px 0 0; color: var(--muted); }
-details { border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; margin: 10px auto; max-width: 760px; background: rgba(255, 255, 255, .03); }
-summary { cursor: pointer; font-weight: 700; } details p { color: var(--muted); margin: 10px 0 0; }
-.cta { text-align: center; padding: 60px 20px; border-radius: 26px; border: 1px solid var(--line); background: radial-gradient(60% 80% at 50% 0%, rgba(47, 139, 255, .25), transparent 70%), rgba(255, 255, 255, .03); }
-footer { color: var(--muted); font-size: 13.5px; text-align: center; padding: 40px 0 60px; }
-@media (max-width: 640px) { .nav .links { display: none; } .hero { padding-top: 70px; } }
+.btn.y { border: 0; color: #1a1206; background: linear-gradient(135deg, var(--y), var(--o)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 16px 40px -14px var(--y); }
+.btn.y:hover { filter: brightness(1.08); }
+kbd { display: inline-block; padding: 2px 9px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(0, 0, 0, .4); font: 700 .9em ui-monospace, monospace; color: var(--y); box-shadow: inset 0 -2px 0 rgba(255, 255, 255, .08); }
+.grad { background: linear-gradient(120deg, #fff 10%, var(--y) 55%, var(--o)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Barre du haut */
+header { position: sticky; top: 12px; z-index: 20; margin-top: 12px; }
+header .glass { display: flex; align-items: center; gap: 18px; padding: 10px 12px 10px 16px; border-radius: 18px; }
+.logo { display: flex; align-items: center; gap: 10px; white-space: nowrap; font-weight: 800; font-size: 18px; margin-right: auto; }
+.logo img { width: 38px; height: 38px; filter: drop-shadow(0 0 12px rgba(255, 194, 51, .6)); }
+header nav { display: flex; gap: 22px; color: #d9cfbf; font-size: 15px; }
+header nav a:hover { color: var(--y); }
+header .btn { padding: 10px 18px; }
+
+/* Héros */
+.hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 50px; align-items: center; padding: 90px 0 70px; }
+.rec { display: inline-flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: 99px; border: 1px solid rgba(255, 194, 51, .35); background: rgba(255, 194, 51, .08); color: #ffe2a0; font-size: 14px; font-weight: 600; }
+.rec b { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 12px #ef4444; animation: blink 1.6s infinite; }
+@keyframes blink { 50% { opacity: .3; } }
+h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; margin: 20px 0 18px; letter-spacing: -.02em; }
+.lead { font-size: 19px; color: #d9cfbf; max-width: 540px; margin: 0 0 30px; }
+.ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+.meta { margin-top: 18px; color: var(--muted); font-size: 14px; }
+.visual { position: relative; perspective: 1400px; }
+.halo { position: absolute; width: 70%; aspect-ratio: 1; left: 50%; top: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle, rgba(255, 194, 51, .45), transparent 65%); filter: blur(30px); }
+.big { position: relative; width: min(420px, 80%); display: block; margin: 0 auto; filter: drop-shadow(0 0 40px rgba(255, 194, 51, .5)); animation: float 6s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-14px) rotate(-2deg); } }
+.shot { position: absolute; right: -4%; bottom: -8%; width: 62%; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 30px 70px -20px #000, 0 0 50px -20px var(--y); transform: rotateY(-14deg) rotateX(6deg); cursor: zoom-in; transition: transform .4s; }
+.shot:hover { transform: rotateY(-6deg) rotateX(2deg) scale(1.03); }
+
+/* Touche F8 */
+.keybar { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 26px; flex-wrap: wrap; text-align: center; }
+.keycap { font: 800 34px ui-monospace, monospace; color: #1a1206; padding: 14px 24px; border-radius: 16px; background: linear-gradient(180deg, #ffe08a, var(--y) 60%, var(--o)); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .6), 0 8px 0 #b86400, 0 20px 40px -10px var(--y); animation: press 2.4s infinite; }
+@keyframes press { 0%, 70%, 100% { transform: translateY(0); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .6), 0 8px 0 #b86400, 0 20px 40px -10px var(--y); } 78% { transform: translateY(6px); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .6), 0 2px 0 #b86400, 0 10px 30px -10px var(--y); } }
+.keybar p { margin: 0; font-size: 20px; max-width: 560px; }
+
+section { padding: 80px 0 0; }
+.kicker { color: var(--y); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; font-size: 13px; }
+h2 { font-size: clamp(30px, 4vw, 44px); margin: 8px 0 12px; letter-spacing: -.01em; }
+.sub { color: #cfc5b4; max-width: 640px; margin: 0 0 34px; }
+.feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.feat { padding: 26px; transition: transform .25s; }
+.feat:hover { transform: translateY(-4px); }
+.ico { width: 50px; height: 50px; border-radius: 14px; display: grid; place-items: center; margin-bottom: 14px; background: linear-gradient(135deg, rgba(255, 194, 51, .3), rgba(255, 138, 0, .12)); border: 1px solid rgba(255, 194, 51, .35); box-shadow: 0 0 24px -8px var(--y); }
+.ico svg { width: 24px; height: 24px; fill: none; stroke: var(--y); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.feat h3 { margin: 0 0 6px; font-size: 19px; }
+.feat p { margin: 0; color: #cfc5b4; font-size: 15px; }
+
+.show { display: grid; grid-template-columns: 1.3fr 1fr; gap: 44px; align-items: center; margin-bottom: 60px; }
+.show.rev { grid-template-columns: 1fr 1.3fr; }
+.show.rev .pic { order: 2; }
+.pic { padding: 10px; border-radius: 24px; perspective: 1200px; }
+.pic img { width: 100%; display: block; border-radius: 16px; cursor: zoom-in; transition: transform .4s; }
+.pic:hover img { transform: scale(1.015); }
+.show h3 { font-size: 28px; margin: 0 0 10px; }
+.show p { color: #cfc5b4; margin: 0 0 14px; }
+.show ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.show li::before { content: '✦'; color: var(--y); margin-right: 10px; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: s; }
+.step { padding: 26px; position: relative; }
+.step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; margin-bottom: 12px; font-weight: 800; color: #1a1206; background: linear-gradient(135deg, var(--y), var(--o)); box-shadow: 0 0 24px -6px var(--y); }
+.step h3 { margin: 0 0 6px; } .step p { margin: 0; color: #cfc5b4; }
+
+.faq { display: grid; gap: 12px; max-width: 820px; }
+details { padding: 18px 22px; border-radius: 18px; }
+summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+summary::after { content: '+'; color: var(--y); font-size: 22px; line-height: 1; transition: transform .2s; }
+details[open] summary::after { transform: rotate(45deg); }
+details p { margin: 10px 0 0; color: #cfc5b4; }
+
+.cta { margin: 90px 0 40px; padding: 56px 30px; text-align: center; position: relative; overflow: hidden; }
+.cta::before { content: ''; position: absolute; inset: -40% 20% auto; height: 120%; background: radial-gradient(circle, rgba(255, 194, 51, .3), transparent 60%); pointer-events: none; }
+.cta img { width: 96px; filter: drop-shadow(0 0 24px rgba(255, 194, 51, .6)); position: relative; }
+.cta h2 { position: relative; } .cta p { position: relative; color: #d9cfbf; margin: 0 0 26px; }
+footer { padding: 26px 0 40px; color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); }
+footer a:hover { color: var(--y); }
+
+#lb { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: rgba(5, 4, 3, .88); backdrop-filter: blur(10px); cursor: zoom-out; padding: 16px; }
+#lb.on { display: grid; }
+#lb img { max-width: 100%; max-height: 92vh; border-radius: 16px; box-shadow: 0 30px 80px #000; }
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s, transform .7s; }
+.reveal.in { opacity: 1; transform: none; }
+
+@media (max-width: 900px) {
+  header nav { display: none; }
+  .hero, .show, .show.rev { grid-template-columns: 1fr; }
+  .show.rev .pic { order: 0; }
+  .hero { padding-top: 50px; text-align: center; } .lead { margin-inline: auto; } .ctas { justify-content: center; }
+  .visual { margin-bottom: 40px; }
+  .feats, .steps { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; } }
 </style>
 </head>
-<body>
+<body id="top">
 <div class="wrap">
-  <header class="nav">
-    <a class="brand" href="#top"><img src="../assets/logo.png" alt="">History Clips</a>
-    <div class="links"><a class="btn sm" href="../">History Launcher</a> <a class="btn sm main" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">Télécharger</a></div>
-  </header>
+  <header><div class="glass">
+    <a class="logo" href="#top"><img src="logo.png" alt="">History Clips</a>
+    <nav><a href="#fonctions">Fonctions</a><a href="#apercu">Aperçu</a><a href="#faq">FAQ</a><a href="../">History Launcher</a></nav>
+    <a class="btn y" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">Télécharger</a>
+  </div></header>
 
-  <section class="hero" id="top">
-    <span class="rec"><b></b>Enregistre en fond, sans te gêner</span>
-    <h1>Ton meilleur moment,<br><span class="grad">gardé en un appui.</span></h1>
-    <p class="lead">History Clips tourne en fond pendant que tu joues. Appuie sur <kbd>F8</kbd> : les dernières secondes sont gardées, rangées par jeu, prêtes à couper et à envoyer sur Discord.</p>
-    <a class="btn main" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">⬇ Télécharger pour Windows</a>
-    <p class="meta">Gratuit · Windows 10 et 11 · mises à jour automatiques · même compte que History Launcher</p>
-  </section>
-
-  <section id="fonctions">
-    <h2>Fait pour une seule chose : tes clips</h2>
-    <p class="sub">Léger, rapide, et sans rien de compliqué.</p>
-    <div class="cards">
-      <div class="card" style="--c:#ef4444"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg></div><h3>Replay en fond</h3><p>Garde les 15 s à 2 min qui viennent de se passer, en 720p à 1440p, 30 ou 60 images/s, avec le son du PC.</p></div>
-      <div class="card" style="--c:#2f8bff"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><h3>Galerie par jeu</h3><p>Chaque clip est rangé tout seul dans le dossier de son jeu. Favoris, recherche, renommer, supprimer.</p></div>
-      <div class="card" style="--c:#22d3ee"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 7.5 20 17M8 16.5 20 7"/></svg></div><h3>Découpe en deux clics</h3><p>Choisis le début et la fin, garde le passage : un nouveau clip en MP4 haute qualité, l’original reste.</p></div>
-      <div class="card" style="--c:#9b6bff"><div class="ic"><svg viewBox="0 0 24 24"><path d="M8 7.5c1.3-.5 2.6-.7 4-.7s2.7.2 4 .7c1.6 2.3 2.4 4.9 2.3 8.2-1.3 1-2.6 1.6-4 2l-.9-1.6M8.6 16.1l-.9 1.6c-1.4-.4-2.7-1-4-2-.1-3.3.7-5.9 2.3-8.2"/><circle cx="9.5" cy="12.5" r="1.1"/><circle cx="14.5" cy="12.5" r="1.1"/></svg></div><h3>Partage sur Discord</h3><p>Dans le salon des clips du serveur History, ou en privé à un ami. Qualité optimisée pour la limite de Discord.</p></div>
-      <div class="card" style="--c:#2ee07a"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg></div><h3>Touches au choix</h3><p><kbd>F8</kbd> pour un clip, <kbd>F9</kbd> pour une capture… ou n’importe quelle touche que tu préfères.</p></div>
-      <div class="card" style="--c:#ffd23f"><div class="ic"><svg viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6Z"/></svg></div><h3>Léger</h3><p>Une appli à part, sans tout le launcher : elle ne garde en mémoire que l’enregistreur quand sa fenêtre est fermée.</p></div>
+  <div class="hero">
+    <div>
+      <span class="rec"><b></b>Replay toujours prêt</span>
+      <h1>Ton meilleur moment,<br><span class="grad">gardé en un appui.</span></h1>
+      <p class="lead">History Clips filme ta partie en fond. Tu fais une dinguerie ? Appuie sur <kbd>F8</kbd> : les 30 dernières secondes sont gardées en MP4, rangées par jeu, prêtes à couper et envoyer sur Discord.</p>
+      <div class="ctas">
+        <a class="btn y" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">⬇ Télécharger pour Windows</a>
+        <a class="btn" href="#apercu">Voir l’appli</a>
+      </div>
+      <p class="meta">Gratuit · Windows 10 / 11 · mises à jour automatiques</p>
     </div>
-  </section>
-
-  <section>
-    <h2>Comment ça marche</h2>
-    <p class="sub">Trois étapes, c’est tout.</p>
-    <div class="steps">
-      <div class="step"><b>Installe History Clips</b><p>Un clic, il démarre avec Windows et attend en fond (icône près de l’horloge).</p></div>
-      <div class="step"><b>Joue normalement</b><p>Un beau moment ? Appuie sur <kbd>F8</kbd> : les dernières secondes sont gardées.</p></div>
-      <div class="step"><b>Coupe et partage</b><p>Ouvre History Clips, garde le meilleur passage et envoie-le sur Discord.</p></div>
+    <div class="visual">
+      <div class="halo"></div>
+      <img class="big" src="logo.png" alt="Logo History Clips">
+      <img class="shot zoom" src="home.webp" alt="Accueil de History Clips">
     </div>
-  </section>
-
-  <section>
-    <h2>Questions</h2>
-    <details><summary>Est-ce que ça baisse mes FPS ?</summary><p>Très peu : l’enregistrement utilise l’encodeur vidéo de ta carte graphique. Tu peux choisir 720p et 30 images/s pour le rendre encore plus léger, ou mettre le replay en pause depuis l’icône.</p></details>
-    <details><summary>Où sont mes clips ?</summary><p>Dans Vidéos › History Clips › nom du jeu (modifiable dans les réglages), en MP4 lisibles partout.</p></details>
-    <details><summary>J’ai History Launcher, il me faut les deux ?</summary><p>Les clips ne sont plus dans le launcher : History Clips est fait pour ça et bien plus léger. Les deux utilisent le même compte History.</p></details>
-    <details><summary>C’est gratuit ?</summary><p>Oui, entièrement.</p></details>
-  </section>
-
-  <div class="cta">
-    <h2>Prêt à garder tes meilleurs moments ?</h2>
-    <p class="sub">Gratuit, pour Windows 10 et 11.</p>
-    <a class="btn main" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">⬇ Télécharger History Clips</a>
   </div>
-  <footer>History Clips · fait par History · <a href="../">History Launcher</a></footer>
+
+  <div class="keybar glass reveal"><span class="keycap">F8</span><p>Un appui en pleine partie = <b class="grad">un clip de 15 s à 2 min</b>, sans couper le jeu. <kbd>F9</kbd> pour une capture d’écran.</p></div>
+
+  <section id="fonctions" class="reveal">
+    <span class="kicker">Fonctions</span>
+    <h2>Tout pour tes clips, <span class="grad">rien de trop</span></h2>
+    <p class="sub">Une appli légère qui tourne en fond et se fait oublier jusqu’au moment où tu en as besoin.</p>
+    <div class="feats">
+      <div class="feat glass"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></div><h3>Replay en fond</h3><p>Garde les 15 s, 30 s, 1 min ou 2 min qui viennent de se passer. Rien n’est écrit sur ton disque tant que tu n’appuies pas.</p></div>
+      <div class="feat glass"><div class="ico"><svg viewBox="0 0 24 24"><path d="M6 3v12M18 9v12M3 6h6M15 18h6"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/></svg></div><h3>Découpe précise</h3><p>Choisis le début et la fin au dixième de seconde : un nouveau clip est créé, l’original reste intact.</p></div>
+      <div class="feat glass"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="4" width="7" height="7" rx="2"/><rect x="3" y="15" width="7" height="6" rx="2"/><rect x="14" y="15" width="7" height="6" rx="2"/></svg></div><h3>Galerie par jeu</h3><p>Chaque clip est rangé dans le dossier du jeu au premier plan. Favoris, recherche, captures à part.</p></div>
+      <div class="feat glass"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 5L3 11l7 3 3 7z"/><path d="M10 14l4-4"/></svg></div><h3>Envoi Discord</h3><p>Dans le salon des clips du serveur History ou en privé à un ami, en un clic, avec une qualité optimisée.</p></div>
+      <div class="feat glass"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div><h3>Qualité au choix</h3><p>720p, 1080p ou 1440p, 30 ou 60 images par seconde, avec ou sans le son du PC.</p></div>
+      <div class="feat glass"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></div><h3>Tes touches</h3><p>F8 et F9 par défaut, mais tu mets la touche ou la combinaison que tu veux.</p></div>
+    </div>
+  </section>
+
+  <section id="apercu">
+    <span class="kicker reveal">Aperçu</span>
+    <h2 class="reveal">Le même style que <span class="grad">History Launcher</span></h2>
+    <p class="sub reveal">Verre dépoli, dégradé doré, tout est à portée de clic. Clique sur une image pour l’agrandir.</p>
+    <div class="show reveal">
+      <div class="pic glass"><img class="zoom" src="home.webp" alt="Accueil" loading="lazy"></div>
+      <div><h3>Un accueil qui te dit tout</h3><p>L’état du replay en direct, ta touche, tes stats et tes derniers clips.</p><ul><li>Voyant REC quand ça enregistre</li><li>Bouton « Garder un clip » à tout moment</li><li>Espace utilisé sur ton disque</li></ul></div>
+    </div>
+    <div class="show rev reveal">
+      <div class="pic glass"><img class="zoom" src="tout.webp" alt="Galerie de clips" loading="lazy"></div>
+      <div><h3>Ta galerie, rangée toute seule</h3><p>Survole un clip pour le voir bouger, ouvre-le pour le couper, l’exporter ou l’envoyer.</p><ul><li>Tri par jeu dans le menu</li><li>Favoris et recherche</li><li>Suppression vers la corbeille</li></ul></div>
+    </div>
+    <div class="show reveal">
+      <div class="pic glass"><img class="zoom" src="set.webp" alt="Réglages" loading="lazy"></div>
+      <div><h3>Des réglages simples</h3><p>Durée, qualité, images par seconde, son, touches, dossier et démarrage avec Windows.</p><ul><li>Même compte que History Launcher</li><li>Démarrage discret en fond</li></ul></div>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <span class="kicker">En 3 étapes</span>
+    <h2>Prêt en <span class="grad">une minute</span></h2>
+    <div class="steps">
+      <div class="step glass"><h3>Installe</h3><p>Télécharge History Clips et lance l’installateur. Il se met ensuite à jour tout seul.</p></div>
+      <div class="step glass"><h3>Joue</h3><p>Le replay tourne en fond pendant que tu joues, sans rien te demander.</p></div>
+      <div class="step glass"><h3>Appuie sur F8</h3><p>Le clip est gardé, rangé par jeu et prêt à partager.</p></div>
+    </div>
+  </section>
+
+  <section id="faq" class="reveal">
+    <span class="kicker">Questions</span>
+    <h2>FAQ</h2>
+    <div class="faq">
+      <details class="glass"><summary>C’est gratuit ?</summary><p>Oui, History Clips est entièrement gratuit.</p></details>
+      <details class="glass"><summary>Ça fait ramer mes jeux ?</summary><p>L’enregistrement utilise l’encodeur vidéo de ta carte graphique quand il existe. Si tu veux l’alléger encore, passe en 720p ou en 30 images par seconde dans les réglages.</p></details>
+      <details class="glass"><summary>Où sont mes clips ?</summary><p>Dans <b>Vidéos › History Clips</b>, un dossier par jeu. Tu peux changer le dossier dans les réglages.</p></details>
+      <details class="glass"><summary>Il faut History Launcher ?</summary><p>Non, History Clips marche tout seul. Le compte History sert seulement à envoyer tes clips sur Discord.</p></details>
+      <details class="glass"><summary>Windows affiche un avertissement à l’installation</summary><p>C’est normal pour une petite appli pas encore connue de Windows : clique sur « Informations complémentaires » puis « Exécuter quand même ».</p></details>
+    </div>
+  </section>
+
+  <div class="cta glass reveal">
+    <img src="logo.png" alt="">
+    <h2>Ne rate plus <span class="grad">aucun moment</span></h2>
+    <p>Installe History Clips et garde ta prochaine action en un appui.</p>
+    <a class="btn y" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">⬇ Télécharger History Clips</a>
+  </div>
+
+  <footer><span>© History · History Clips</span><span><a href="../">History Launcher</a> · <a href="#top">Haut de page</a></span></footer>
 </div>
+<div id="lb"><img alt=""></div>
+<script>
+const lb = document.getElementById('lb');
+document.addEventListener('click', (e) => { const z = e.target.closest('.zoom'); if (z) { lb.querySelector('img').src = z.src; lb.classList.add('on'); } else if (e.target.closest('#lb')) lb.classList.remove('on'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') lb.classList.remove('on'); });
+const io = new IntersectionObserver((es) => es.forEach((x) => { if (x.isIntersecting) { x.target.classList.add('in'); io.unobserve(x.target); } }), { threshold: .12 });
+document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+</script>
 </body>
 </html>
