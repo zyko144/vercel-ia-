@@ -1607,6 +1607,15 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.30.0': [
+    ['⚡', 'Mode Performance de Fortnite', 'Dans Outils du jeu › Réglages conseillés : active en un clic le mode officiel « Performance » de Fortnite (beaucoup plus de FPS, moins de freezes). Tes anciens réglages sont gardés et remis en un clic.'],
+    ['🧊', 'Cache FiveM en un clic', 'Outils du jeu › Saccades vide les caches que FiveM retélécharge tout seul (cache, server-cache). Tes mods, packs graphiques et fichiers de GTA ne sont jamais touchés.'],
+    ['🔎', 'Qui fait freezer ta partie', 'Pendant le boost, le launcher repère les programmes qui prennent du processeur et te les donne à la fin de la partie, avec la durée et les applis fermées.'],
+    ['📈', 'Le boost prouvé', 'Après une partie, tu vois combien de FPS le boost te fait gagner par rapport à tes parties sans boost.'],
+    ['☁', 'OneDrive en pause pendant le jeu', 'Si tu coches OneDrive dans le boost, sa synchro est mise en pause proprement puis reprend à la fin.'],
+    ['🖥', 'Écran bridé repéré', 'Mon PC te prévient si ton écran tourne à 60 Hz alors qu’il peut monter à 144 Hz ou plus.'],
+    ['🚀', 'Steam prêt en fond', 'Nouvelle option dans Paramètres › Jeux : Steam se prépare discrètement au démarrage, les jeux Steam se lancent plus vite.', ['#openSettings', 'wait600', '[data-pane=jeux]', 'wait800']],
+  ],
   '0.29.0': [
     ['🎯', 'Priorité au jeu', 'Pendant le boost : le jeu passe devant les autres programmes, les navigateurs se mettent en retrait (fini les freezes quand Chrome ou Edge tournent), les tâches Windows inutiles en jeu (widgets, Lien avec le téléphone) sont fermées, et Windows utilise la carte graphique puissante pour ce jeu (gros gain sur les portables). Tout est remis à la fin, désactivable dans Mon PC › Performances.', ['[data-view=pc]', '[data-pctab=perf]', 'wait1200']],
   ],
@@ -1884,7 +1893,8 @@ async function openTools(item, tab = 'profil') {
       ${d.received?.length ? `<b class="sub">Reçues de tes amis</b><div class="flist">${d.received.map((x) => `<div><div><b>💾 ${esc(x.from)} · ${esc(x.name)}</b><small>${new Date(x.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · valable 24 h</small></div><button class="btn play sm" data-recv="${esc(x.id)}">Recevoir</button></div>`).join('')}</div>` : ''}
       <div class="row"><button class="btn" data-tact="share" ${d.saveDirs.length ? '' : 'disabled'}>📤 Envoyer ma sauvegarde à un ami</button></div>
       <b class="sub">Copies</b><div class="flist">${d.backups.length ? d.backups.map((b) => `<div><div><b>${new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</b><small>${gb(b.bytes)}</small></div><button class="btn ghost sm" data-restore="${esc(b.id)}">Restaurer</button></div>`).join('') : '<p class="hint">Pas encore de copie.</p>'}</div>`,
-    graph: graphicsHtml(d.graphics),
+    graph: graphicsHtml(d.graphics) + (d.fortnite ? `<b class="sub">⚡ Mode Performance de Fortnite</b><p class="hint">Le mode officiel du jeu (moteur léger) : beaucoup plus de FPS et moins de freezes, graphismes plus simples. Tes anciens réglages sont gardés et remis si tu le désactives.</p>
+      <div class="row"><button class="btn ${d.fortnite.on ? 'ghost' : 'play'}" data-tact="fnperf">${d.fortnite.on ? '↩ Revenir à mes réglages' : '⚡ Activer le mode Performance'}</button></div>` : ''),
     sante: santeHtml(item, care, withApps),
     shaders: `<p class="hint">Un cache de shaders abîmé ou trop vieux donne des saccades (surtout après une mise à jour du jeu ou du pilote). Il se recrée tout seul : les premières minutes peuvent saccader le temps qu’il se reconstruise.</p>
       <div class="checks">${d.caches.map((c) => `<label class="check"><input type="checkbox" data-cache="${esc(c.id)}" ${c.own ? 'checked' : ''}><span>${esc(c.label)}</span><em>${gb(c.bytes)}</em></label>`).join('')}</div>
@@ -1918,6 +1928,7 @@ async function openTools(item, tab = 'profil') {
     if (a === 'backup') { t.disabled = true; const r = await api.savesBackup(item.id); toast(r?.ok ? `💾 Copie faite (${gb(r.bytes)})` : r?.error ?? 'Impossible'); return openTools(item, 'saves'); }
     if (a === 'pick') { await api.savesPick(item.id); return openTools(item, 'saves'); }
     if (a === 'openSaves') return api.savesOpen();
+    if (a === 'fnperf') { const r = await api.fortnitePerf(item.id, !d.fortnite.on); toast(r?.ok ? (d.fortnite.on ? '↩ Réglages de Fortnite remis' : '⚡ Mode Performance activé') : r?.error ?? 'Impossible'); return openTools(item, 'graph'); }
     if (a === 'shaders') { const which = [...document.querySelectorAll('#modalBox [data-cache]:checked')].map((x) => x.dataset.cache); if (!which.length) return toast('Rien de coché'); const r = await api.shadersClear(item.id, which); toast(r?.ok ? `🧊 ${gb(r.freed)} de cache vidés` : r?.error ?? 'Impossible'); return openTools(item, 'shaders'); }
     if (a === 'fps') return enableFps();
     if (a === 'bench') { $('modal').close(); return showView('pc'); }
@@ -3258,6 +3269,7 @@ function showKeys(s) {
   applySidebar();
   $('autostart').checked = Boolean(s.autostart);
   $('directLaunch').checked = s.directLaunch !== false;
+  $('preloadSteam').checked = Boolean(s.preloadSteam);
   $('gameMode').checked = s.gameMode !== false;
   $('dealAlerts').checked = s.dealAlerts !== false;
   $('widgetGame').checked = Boolean(s.widgetGame); $('gamePopups').checked = s.gamePopups === true; $('promoDm').checked = s.promoDm !== false;
@@ -3293,6 +3305,7 @@ $('backupRestore').addEventListener('click', async () => {
 document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); api.openLink?.(b.dataset.link); }));
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
+$('preloadSteam').addEventListener('change', (e) => api.setSettings({ preloadSteam: e.target.checked }));
 $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
 $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: e.target.checked }));
 for (const [id, key] of [['widgetGame', 'widgetGame'], ['gamePopups', 'gamePopups'], ['promoDm', 'promoDm'], ['streamerAuto', 'streamerAuto'], ['streamerOn', 'streamer']]) $(id).addEventListener('change', (e) => api.setSettings({ [key]: e.target.checked }).then(() => api.streamer?.()).then((on) => { if (on != null) document.body.classList.toggle('streamer', Boolean(on)); }));
@@ -3780,7 +3793,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.29.0',
+    version: async () => '0.30.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

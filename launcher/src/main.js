@@ -10,7 +10,7 @@ import { LAUNCHER_NAMES, SOURCES, creditLive, findExe, merge, playtimeOf, scanAl
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend, createRemoteAi } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
-import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme, tuneScript, untuneScript } from './core/boost.js';
+import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme, tuneScript, untuneScript, CPU_SCRIPT, parseCpu, cpuHogs } from './core/boost.js';
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
 import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
@@ -18,7 +18,7 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
-import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, steamPrice, windowsToasts } from './core/gametools.js';
+import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
 import { listEpicAccounts } from './core/epic.js';
@@ -459,13 +459,21 @@ async function startBoost(item) {
   const closed = await closeApps(boostPlan(await runningPaths(), [...new Set([...b.close, ...(prof.enabled ? prof.close : [])])]));
   // Profil du jeu : notifications de Windows coupées pendant la partie (remises à la fin)
   const quiet = Boolean(prof.enabled && prof.quiet) && await windowsToasts(false);
-  boosted = { item, scheme, closed, quiet, start: Date.now(), misses: 0 };
+  boosted = { item, scheme, closed, quiet, start: Date.now(), misses: 0, hogs: {} };
+  (store.data.boostedAt ??= {})[item.id] = Date.now();
   notify('Boost activé', `${item.name} : performances élevées${closed.length ? `, ${closed.length} appli(s) fermée(s)` : ''}.`);
   boosted.timer = setInterval(async () => {
     const paths = await runningPaths();
+    if (!boosted) return;
     // Dès que le jeu tourne : priorité au jeu (une fois)
     const mine = paths.filter((p) => activeItems([item], [p]).size);
     if (mine.length && !boosted.tuned && b.tune) { boosted.tuned = true; ps(tuneScript(mine)).catch(() => {}); }
+    // Freezes : qui prend du processeur pendant la partie
+    if (mine.length) {
+      const cur = parseCpu(await ps(CPU_SCRIPT).catch(() => ''));
+      if (boosted?.cpu) for (const h of cpuHogs(boosted.cpu.map, cur, (Date.now() - boosted.cpu.at) / 1000, os.cpus().length, mine.map((p) => path.win32.basename(p, '.exe')))) boosted.hogs[h.name] = Math.max(boosted.hogs[h.name] ?? 0, h.pct);
+      if (boosted) boosted.cpu = { map: cur, at: Date.now() };
+    }
     if (Date.now() - boosted.start < 90_000) return; // le jeu a le temps de démarrer
     const running = mine.length > 0;
     boosted.misses = running ? 0 : boosted.misses + 1;
@@ -474,7 +482,7 @@ async function startBoost(item) {
 }
 async function endBoost({ silent = false } = {}) {
   if (!boosted) return;
-  const { scheme, closed, timer, quiet, tuned } = boosted;
+  const { scheme, closed, timer, quiet, tuned, hogs, start } = boosted;
   if (quiet) await windowsToasts(true);
   if (tuned) ps(untuneScript()).catch(() => {});
   const changed = Boolean((scheme && scheme !== HIGH_PERFORMANCE) || closed.length);
@@ -483,7 +491,10 @@ async function endBoost({ silent = false } = {}) {
   playSession = null;
   if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(scheme);
   if (boostSettings().restore) for (const c of closed) spawn(c.path, [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
-  if (changed && !silent) notify('Boost terminé', 'Partie finie : ton PC est revenu à ses réglages habituels.');
+  // Rapport de fin de partie : durée, applis fermées, et ce qui a pris du processeur (cause probable des freezes)
+  const top = Object.entries(hogs).sort((a, b) => b[1] - a[1]).slice(0, 2);
+  const mins = Math.round((Date.now() - start) / 60_000);
+  if ((changed || top.length) && !silent) notify('Boost terminé', `${mins} min de jeu${closed.length ? `, ${closed.length} appli(s) fermée(s) puis rouvertes` : ''}. PC remis comme avant.${top.length ? ` ⚠ Ont pris du processeur pendant la partie : ${top.map(([n, p]) => `${n} (${p} %)`).join(', ')} : ferme-les avant de jouer si ça a freezé.` : ''}`);
 }
 ipcMain.handle('boost:get', () => ({ ...boostSettings(), heatAlerts: store.data.settings.heatAlerts !== false, apps: BOOST_APPS.map(({ id, label }) => ({ id, label })) }));
 ipcMain.handle('boost:set', (_e, patch) => {
@@ -1334,6 +1345,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('dealAlerts' in patch) store.data.settings.dealAlerts = Boolean(patch.dealAlerts);
   if ('gameMode' in patch) store.data.settings.gameMode = Boolean(patch.gameMode);
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
+  if ('preloadSteam' in patch) store.data.settings.preloadSteam = Boolean(patch.preloadSteam);
   try {
     if ('steamKey' in patch) setSecret('steam', patch.steamKey);
     if ('gridKey' in patch) { setSecret('grid', patch.gridKey); store.data.art = {}; }
@@ -2568,6 +2580,7 @@ ipcMain.handle('tools:get', async (_e, id) => {
     perf: process.env.LAUNCHER_DEMO ? demoPerf() : (store.data.perf?.[item.id] ?? []).slice(-30), fps: process.env.LAUNCHER_DEMO ? true : store.data.settings.fps === true,
     received: (store.data.sharesIn ?? []).filter((x) => Date.now() - x.at < 86_400_000 && norm(x.game) === norm(item.name)),
     graphics: await graphicsFor(item).catch(() => null),
+    fortnite: /fortnite/i.test(item.name) ? { on: await fortniteState() } : null,
   };
 });
 ipcMain.handle('tools:profile', (_e, id, patch) => {
@@ -2606,6 +2619,12 @@ ipcMain.handle('shaders:clear', async (_e, id, which) => {
   let freed = 0;
   for (const c of shaderCaches(item, { library: lib }).filter((x) => (Array.isArray(which) ? which : []).includes(x.id))) freed += await clearDir(c.dir);
   return { ok: true, freed };
+});
+ipcMain.handle('fortnite:perf', async (_e, id, on) => {
+  const item = items.find((i) => i.id === String(id));
+  if (!item || !/fortnite/i.test(item.name)) return { ok: false };
+  if ((await runningPaths(0)).some((p) => /fortnite/i.test(p))) return { ok: false, error: 'Ferme Fortnite d’abord (il réécrit ses réglages en quittant).' };
+  return fortnitePerf(Boolean(on));
 });
 ipcMain.handle('steam:move', async (_e, id, toLib) => {
   const item = items.find((i) => i.id === String(id));
@@ -2710,14 +2729,19 @@ async function sessionEnd() {
   setTimeout(() => crashCheck(s).catch(() => {}), 8000);
   if (minutes < 3) return;
   const v = verdict(stats?.error ? null : stats, s.samples);
-  const rec = { at: Date.now(), minutes: Math.round(minutes), ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
+  const rec = { at: Date.now(), minutes: Math.round(minutes), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
   ((store.data.perf ??= {})[s.id] ??= []).push(rec);
   store.data.perf[s.id] = store.data.perf[s.id].slice(-60);
   store.save();
   // FPS partagés avec les joueurs History (/launcher fps sur Discord), si le partage d'activité est activé
   if (rec.avg && minutes >= 5 && store.data.settings.shareActivity !== false) social('/api/compte/fps', { jeu: s.name, avg: rec.avg, low1: rec.low1, minutes: Math.round(minutes) }).catch(() => {});
+  // Preuve du boost : FPS moyens des parties avec boost comparés à celles sans
+  const avgOf = (l) => (l.length ? l.reduce((a, r) => a + r.avg, 0) / l.length : null);
+  const withAvg = store.data.perf[s.id].filter((r) => r.avg);
+  const on = avgOf(withAvg.filter((r) => r.boost)), off = avgOf(withAvg.filter((r) => !r.boost));
+  const gain = rec.boost && on && off ? Math.round(((on - off) / off) * 100) : null;
   const B = { cpu: 'le processeur limite tes FPS', gpu: 'la carte graphique travaille à fond (normal pour un jeu exigeant)', mixte: 'processeur et carte graphique sont équilibrés' };
-  if (rec.avg || rec.bound) notify(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s) repérée(s).` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
+  if (rec.avg || rec.bound) notify(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s) repérée(s).` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
 }
 ipcMain.handle('fps:enable', async () => {
   if (process.platform !== 'win32') return { ok: false, error: 'Windows seulement.' };
@@ -2821,6 +2845,8 @@ function setWidget(on) {
 ipcMain.on('widget:open', () => showWindow());
 ipcMain.on('widget:close', () => { store.data.settings.widget = false; store.save(); setWidget(false); send('settings:changed', { widget: false }); });
 app.whenReady().then(() => setTimeout(() => { if (store.data.settings.widget) setWidget(true); }, 3000));
+// Steam préchargé en fond (option) : « Jouer » démarre tout de suite au lieu d'attendre que Steam s'ouvre
+app.whenReady().then(() => setTimeout(async () => { if (store.data.settings.preloadSteam && !(await runningPaths()).some((p) => /\\steam\.exe$/.test(p))) runSilentSteam([]).catch(() => {}); }, 15_000));
 
 
 async function start() {

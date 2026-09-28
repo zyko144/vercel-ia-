@@ -102,6 +102,9 @@ export function shaderCaches(game, { env = process.env, library = null } = {}) {
   const local = env.LOCALAPPDATA ?? '';
   const list = [];
   if (game.source === 'steam' && game.steamId && library) list.push({ id: 'steam', label: 'Cache de shaders Steam de ce jeu', dir: path.join(library, 'shadercache', String(game.steamId)), own: true });
+  // FiveM : seulement ce que FiveM retélécharge tout seul. Jamais game-storage (fichiers de GTA), mods, plugins ni citizen :
+  // les packs graphiques et mods restent intacts.
+  if (game.source === 'fivem' && game.installDir) for (const d of ['cache', 'server-cache', 'server-cache-priv']) list.push({ id: `fivem-${d}`, label: `FiveM : ${d} (retéléchargé tout seul, mods et packs graphiques gardés)`, dir: path.join(game.installDir, 'FiveM.app', 'data', d), own: true });
   list.push(
     { id: 'd3d', label: 'Cache de shaders DirectX (tous les jeux)', dir: path.join(local, 'D3DSCache') },
     { id: 'nv', label: 'Cache de shaders NVIDIA (tous les jeux)', dir: path.join(local, 'NVIDIA', 'DXCache') },
@@ -265,4 +268,33 @@ export async function unpackSaves(pack, targets) {
     }
   }
   return n;
+}
+
+// ===================== Fortnite : mode Performance =====================
+// C'est le mode officiel du jeu (Paramètres › Vidéo › Mode de rendu › Performance) : PreferredFeatureLevel=es31.
+// L'ancien fichier est copié à côté et remis tel quel quand on désactive.
+export const fortniteIni = (env = process.env) => path.join(env.LOCALAPPDATA ?? '', 'FortniteGame', 'Saved', 'Config', 'WindowsClient', 'GameUserSettings.ini');
+export const perfModeOn = (text) => /^\s*PreferredFeatureLevel\s*=\s*es31\s*$/im.test(String(text));
+export function withPerfMode(text) {
+  const lines = String(text).split(/\r?\n/).filter((l) => !/^\s*Preferred(RHI|FeatureLevel)\s*=/i.test(l));
+  const at = lines.findIndex((l) => /^\s*\[D3DRHIPreference\]\s*$/i.test(l));
+  const add = ['PreferredRHI=dx11', 'PreferredFeatureLevel=es31'];
+  if (at >= 0) lines.splice(at + 1, 0, ...add); else lines.push('', '[D3DRHIPreference]', ...add);
+  return lines.join('\r\n');
+}
+export const fortniteState = async (file = fortniteIni()) => perfModeOn(await readFile(file, 'utf8').catch(() => ''));
+export async function fortnitePerf(on, file = fortniteIni()) {
+  const bak = `${file}.history-bak`;
+  const text = await readFile(file, 'utf8').catch(() => null);
+  if (text == null) return { ok: false, error: 'Lance Fortnite une fois pour créer ses réglages.' };
+  if (on) {
+    if (perfModeOn(text)) return { ok: true };
+    await writeFile(bak, text);
+    await writeFile(file, withPerfMode(text));
+  } else {
+    const old = await readFile(bak, 'utf8').catch(() => null);
+    await writeFile(file, old ?? String(text).split(/\r?\n/).filter((l) => !/^\s*Preferred(RHI|FeatureLevel)\s*=/i.test(l)).join('\r\n'));
+    await rm(bak, { force: true });
+  }
+  return { ok: true };
 }
