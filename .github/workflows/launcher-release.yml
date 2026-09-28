@@ -81,7 +81,9 @@ jobs:
           V="${{ steps.v.outputs.version }}"
           git tag "v$V" "$GITHUB_SHA" 2>/dev/null || true
           git push origin "v$V" || true
-          FILES=(dist/*.exe dist/*.exe.blockmap dist/latest.yml)
+          # Empreintes SHA-256 : chacun peut vérifier que l'installateur téléchargé est bien l'original
+          (cd dist && sha256sum *.exe > SHA256SUMS.txt)
+          FILES=(dist/*.exe dist/*.exe.blockmap dist/latest.yml dist/SHA256SUMS.txt)
           for f in dist/apercu*.png; do [ -f "$f" ] && FILES+=("$f"); done
           if gh release view "v$V" >/dev/null 2>&1; then
             gh release upload "v$V" "${FILES[@]}" --clobber

@@ -1627,6 +1627,9 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.36.1': [
+    ['🔒', 'Sécurité renforcée', 'Fenêtres en bac à sable, aucune navigation vers l’extérieur, le launcher refuse de démarrer si ses fichiers ont été modifiés, et chaque installateur est publié avec son empreinte SHA-256 (SHA256SUMS.txt) pour vérifier qu’il est original.', ['#openSettings', 'wait700']],
+  ],
   '0.36.0': [
     ['⚡', 'Optimiser et jouer', 'Nouveau bouton ⚡ à côté de « Jouer » : le launcher vérifie ton PC (applis lourdes, mémoire, disque, pilote), prépare la partie et te montre ce qu’il fait. Tout est temporaire et remis comme avant à la fin.', ['.playbtn .optiplay', 'wait900']],
     ['📊', 'Mini-compteur en jeu', 'Tout petit en haut à gauche : tes FPS, avec une flèche verte ou rouge pour le gain ou la perte par rapport à tes parties d’avant. Ctrl+Alt+P pour le cacher.'],
@@ -3967,7 +3970,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.36.0',
+    version: async () => '0.36.1',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

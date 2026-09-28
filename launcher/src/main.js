@@ -103,6 +103,16 @@ process.on('unhandledRejection', (err) => { fatal(err); });
 // jamais « Electron ». L'identifiant est le même que celui de l'installateur (raccourcis du menu Démarrer).
 app.setName('History Launcher');
 if (process.platform === 'win32') app.setAppUserModelId('fr.historyia.launcher');
+// Sécurité : bac à sable pour toutes les fenêtres, aucune navigation / fenêtre / webview vers l'extérieur,
+// outils développeur fermés dans la version installée (personne ne peut injecter de code dans l'appli)
+if (process.platform === 'win32') app.enableSandbox();
+app.on('web-contents-created', (_e, wc) => {
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+  wc.on('will-navigate', (ev, url) => { if (!String(url).startsWith('file:')) ev.preventDefault(); });
+  wc.on('will-attach-webview', (ev) => ev.preventDefault());
+  if (app.isPackaged) wc.on('devtools-opened', () => wc.closeDevTools());
+});
+
 if (!app.requestSingleInstanceLock()) app.quit();
 
 // Images de la bibliothèque Steam sur le PC, servies par « libimg:// » : seulement les fichiers que le scan a trouvés
