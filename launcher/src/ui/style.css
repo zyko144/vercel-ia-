@@ -1647,3 +1647,7 @@ body.idle .maintsign svg { animation: none; }
 .pl-tiktok .plico { background: #000; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); } .pl-tiktok .plico svg { filter: drop-shadow(-1.2px -1.2px 0 #25F4EE) drop-shadow(1.2px 1.2px 0 #FE2C55); }
 .pl-steam .plico { background: linear-gradient(135deg, #111d2e, #1b2838 55%, #2a475e); box-shadow: inset 0 0 0 1px rgba(102,192,244,.35); }
 .pl-instagram .plico { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+
+/* Logos officiels en image : pas de pastille de couleur derrière */
+.plico, .pl-discord .plico, .pl-twitch .plico, .pl-youtube .plico, .pl-tiktok .plico, .pl-steam .plico, .pl-instagram .plico { background: none !important; box-shadow: none !important; border-radius: 0; }
+.plico img { width: 100%; height: 100%; object-fit: contain; display: block; }
