@@ -132,7 +132,9 @@ main { grid-area: main; overflow-y: auto; padding: 22px 26px 34px; position: rel
 .card { padding: 0; cursor: pointer; overflow: hidden; display: block; text-align: left; color: var(--text); transition: transform .2s, box-shadow .2s; }
 .card:hover { transform: translateY(-3px); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .14), 0 18px 40px -18px rgba(var(--rgb), .45); }
 .thumb { position: relative; aspect-ratio: 16 / 9; background: #000 center / cover; }
-.thumb video, .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.thumb video, .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.thumb video { z-index: 1; }
+.thumb .tag, .thumb .star, .thumb .dur { z-index: 2; }
 .tag { position: absolute; top: 8px; left: 8px; display: flex; align-items: center; gap: 6px; padding: 2px 9px 2px 3px; border-radius: 8px; background: rgba(0, 0, 0, .55); backdrop-filter: blur(8px); font-size: 11.5px; }
 .tag .gico { width: 18px; height: 18px; border-radius: 5px; font-size: 9px; }
 .star { position: absolute; top: 8px; right: 8px; }
@@ -182,15 +184,30 @@ select { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line-2)
 kbd { display: inline-block; padding: 1px 7px; margin: 0 2px; border-radius: 6px; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .35); font: 12px ui-monospace, monospace; color: var(--text); }
 dialog { border: 1px solid rgba(255, 255, 255, .14); border-radius: 22px; background: linear-gradient(160deg, rgba(34, 28, 24, .94), rgba(16, 13, 18, .96)); color: var(--text); padding: 18px; box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .12), 0 40px 100px -30px #000, 0 0 60px -30px var(--accent); }
 dialog::backdrop { background: rgba(4, 3, 6, .7); backdrop-filter: blur(8px); }
-.viewer { width: min(1100px, 94vw); }
+.viewer { width: min(1100px, 94vw); max-height: 96vh; overflow-y: auto; }
 .vhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .vhead h2 { margin: 0; font-size: 18px; }
 .x { border: 0; background: none; cursor: pointer; padding: 4px 10px; border-radius: 8px; } .x:hover { background: rgba(255, 255, 255, .08); }
-#vVideo, #vImg { width: 100%; max-height: 62vh; border-radius: 14px; background: #000; display: block; }
-.trim { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 12px 0; padding: 12px 14px; }
-.trim label { display: flex; align-items: center; gap: 8px; color: var(--muted); flex: 1; min-width: 220px; }
-.trim input[type=range] { flex: 1; accent-color: var(--accent); }
-.trim output { color: var(--text); min-width: 52px; }
+#vVideo, #vImg { width: 100%; max-height: 52vh; border-radius: 14px; background: #000; display: block; }
+.trim { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; padding: 12px 14px; }
+.trimhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tsel { margin-left: auto; color: var(--accent); font-weight: 700; }
+.tl { position: relative; height: 62px; border-radius: 10px; overflow: hidden; background: #000; cursor: pointer; touch-action: none; }
+.strip { position: absolute; inset: 0; display: flex; }
+.strip canvas { flex: 1; min-width: 0; height: 100%; object-fit: cover; }
+.shade { position: absolute; top: 0; bottom: 0; background: rgba(0, 0, 0, .65); pointer-events: none; }
+.shade.l { left: 0; } .shade.r { right: 0; }
+.sel { position: absolute; top: 0; bottom: 0; border-top: 3px solid var(--accent); border-bottom: 3px solid var(--accent); box-shadow: 0 0 18px -4px var(--accent); cursor: grab; }
+.sel .h { position: absolute; top: -3px; bottom: -3px; width: 14px; background: var(--accent); cursor: ew-resize; display: grid; place-items: center; }
+.sel .h::after { content: ''; width: 2px; height: 22px; border-radius: 2px; background: var(--on); opacity: .6; }
+.sel .h[data-h=a] { left: -7px; border-radius: 8px 0 0 8px; } .sel .h[data-h=b] { right: -7px; border-radius: 0 8px 8px 0; }
+.ph { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 8px #fff; pointer-events: none; }
+.trimbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trimbar #doTrim { margin-left: auto; }
+.tc { font: 600 13px ui-monospace, monospace; color: var(--text); padding: 4px 8px; border-radius: 8px; background: rgba(0, 0, 0, .35); }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.choice button { flex-direction: column; padding: 16px; gap: 4px; white-space: normal; text-align: center; }
+.choice small { font-weight: 400; opacity: .8; }
 .vbar { display: flex; gap: 8px; flex-wrap: wrap; }
 .modal { width: min(460px, 92vw); }
 .modal input { width: 100%; margin: 4px 0; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .35); color: var(--text); }
@@ -228,3 +245,16 @@ dialog::backdrop { background: rgba(4, 3, 6, .7); backdrop-filter: blur(8px); }
 .updbar { width: 100%; height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
 .updbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
+
+/* ---------- Clic droit ---------- */
+.ctx { position: fixed; z-index: 85; min-width: 230px; padding: 6px; display: flex; flex-direction: column; border-radius: 14px; background-color: rgba(22, 18, 24, .95); }
+.ctx b { padding: 6px 10px 8px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.ctx button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 9px; cursor: pointer; }
+.ctx button:hover { background: rgba(var(--rgb), .16); color: var(--accent); }
+.ctx .danger { color: #ff8b8b; } .ctx .danger:hover { background: rgba(239, 68, 68, .16); color: #ff8b8b; }
+.ctx hr { border: 0; border-top: 1px solid var(--line-2); margin: 4px 0; width: 100%; }
+.gicon { width: 20px; height: 20px; border-radius: 50%; }
+.pick .btn { justify-content: flex-start; }
+
+/* Fenêtre sans le focus (souvent : tu es en jeu) : toutes les animations en pause, 0 travail pour la carte graphique */
+body.idle *, body.idle *::before, body.idle *::after { animation-play-state: paused !important; }

@@ -17,6 +17,8 @@ const API = 'https://vercel-ia.onrender.com';
 const SITE = 'https://zyko144.github.io/vercel-ia-/clips/';
 if (!app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId('fr.historyia.clips');
+app.commandLine.appendSwitch('disable-features', 'SpareRendererForSitePerProcess,MediaSessionService,HardwareMediaKeyHandling,Translate');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256');
 protocol.registerSchemesAsPrivileged([{ scheme: 'clip', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 // ---------- Réglages (fichier JSON dans le dossier de l'appli) ----------
@@ -45,7 +47,8 @@ function createWindow() {
   win.loadFile(path.join(here, 'ui', 'index.html'));
   win.once('ready-to-show', () => win.show());
   win.on('close', (e) => { if (!app.quitting) { e.preventDefault(); win.hide(); } });
-  win.on('hide', () => { clearTimeout(freeTimer); freeTimer = setTimeout(() => { if (win && !win.isDestroyed() && !win.isVisible()) { win.destroy(); win = null; } }, 120_000); });
+  win.on('hide', () => { clearTimeout(freeTimer); freeTimer = setTimeout(() => { if (win && !win.isDestroyed() && !win.isVisible()) { win.destroy(); win = null; } }, 30_000); });
+  win.on('blur', () => send('win:focus', false)); win.on('focus', () => send('win:focus', true));
   win.on('maximize', () => send('win:max', true));
   win.on('unmaximize', () => send('win:max', false));
 }
@@ -67,7 +70,7 @@ while ($true) {
   $full = [int]($r.L -le $mi.M.L -and $r.T -le $mi.M.T -and $r.R -ge $mi.M.R -and $r.B -ge $mi.M.B)
   $line = "$h|$p|$full"
   if ($line -ne $last) { $x=Get-Process -Id $p; $last=$line; [Console]::WriteLine("FG|$line|" + $x.MainModule.FileVersionInfo.FileDescription + '|' + $x.MainWindowTitle + '|' + $x.ProcessName + '|' + $x.Path) }
-  Start-Sleep -Milliseconds 2500
+  Start-Sleep -Milliseconds 3000
 }`;
 let fg = { hwnd: '0', full: false, game: 'Bureau', exe: '' };
 let fgProc = null; let noGameTimer = null;
@@ -203,7 +206,7 @@ const tokenOf = (f) => { const t = createHash('sha1').update(f).digest('hex').sl
 async function listFiles() {
   const out = [];
   for (const d of await readdir(ROOT(), { withFileTypes: true }).catch(() => [])) {
-    if (!d.isDirectory()) continue;
+    if (!d.isDirectory() || d.name.startsWith('.')) continue;
     for (const f of await readdir(path.join(ROOT(), d.name)).catch(() => [])) {
       if (!isMedia(f) || f.startsWith('.')) continue;
       const file = path.join(ROOT(), d.name, f);
@@ -215,7 +218,7 @@ async function listFiles() {
 }
 ipcMain.handle('clips:list', async () => (await listFiles()).map(({ file, dir, f, s }) => {
   const t = tokenOf(file);
-  return { token: t, game: dir, name: st.names[file] ?? f.replace(/\.(mp4|webm|png)$/i, ''), file: f, at: s.mtimeMs, size: s.size, image: /\.png$/i.test(f), fav: st.favs.includes(file), url: `clip://f/${t}${path.extname(f)}` };
+  return { token: t, game: dir, name: st.names[file] ?? f.replace(/\.(mp4|webm|png)$/i, ''), file: f, at: s.mtimeMs, size: s.size, image: /\.png$/i.test(f), fav: st.favs.includes(file), url: `clip://f/${t}${path.extname(f)}`, thumb: /\.png$/i.test(f) ? null : `clip://t/${t}.jpg?v=${Math.round(s.mtimeMs)}` };
 }).sort((a, b) => b.at - a.at));
 // Espace maximum : les plus vieux clips (hors favoris) partent à la corbeille
 async function prune() {
@@ -230,6 +233,22 @@ async function prune() {
   changed();
 }
 const fileOf = (t) => tokens.get(String(t));
+// Miniature d'un clip : faite une seule fois (petit JPG dans .miniatures), une à la fois pour ne pas charger le processeur
+const thumbJobs = new Map(); let thumbChain = Promise.resolve();
+function thumbOf(f) {
+  const jpg = path.join(ROOT(), '.miniatures', `${createHash('sha1').update(f).digest('hex').slice(0, 20)}.jpg`);
+  if (!thumbJobs.has(jpg)) {
+    const job = thumbChain.then(async () => {
+      const [a, b] = await Promise.all([stat(jpg).catch(() => null), stat(f).catch(() => null)]);
+      if (a && b && a.mtimeMs >= b.mtimeMs) return jpg;
+      await mkdir(path.dirname(jpg), { recursive: true });
+      await runFfmpeg(['-y', '-ss', '1', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]).catch(() => runFfmpeg(['-y', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]));
+      return jpg;
+    }).catch(() => null).finally(() => setTimeout(() => thumbJobs.delete(jpg), 60_000));
+    thumbChain = job; thumbJobs.set(jpg, job);
+  }
+  return thumbJobs.get(jpg);
+}
 ipcMain.handle('clips:open', (_e, t, how) => { const f = fileOf(t); if (!f) return false; if (how === 'folder') shell.showItemInFolder(f); else shell.openPath(f); return true; });
 ipcMain.handle('clips:root', () => { mkdir(ROOT(), { recursive: true }).then(() => shell.openPath(ROOT())).catch(() => {}); return true; });
 ipcMain.handle('clips:copy', async (_e, t) => { const f = fileOf(t); if (!f || !/\.png$/i.test(f)) return false; clipboard.writeImage(nativeImage.createFromPath(f)); return true; });
@@ -244,11 +263,22 @@ ipcMain.handle('clips:delete', async (_e, t) => {
   return true;
 });
 // Découpe : nouveau fichier « (coupé) » réencodé en bonne qualité, l'original est gardé
-ipcMain.handle('clips:trim', async (_e, t, start, end) => {
+// Découpe réencodée en bonne qualité : en nouveau clip « (coupé) », ou à la place de l'original (qui part à la corbeille)
+ipcMain.handle('clips:trim', async (_e, t, start, end, mode) => {
   const f = fileOf(t);
   if (!f || !(end > start)) return { ok: false, error: 'Choisis un début avant la fin.' };
-  const out = path.join(path.dirname(f), `${path.basename(f).replace(/\.(mp4|webm)$/i, '')} (coupé).mp4`);
-  try { await runFfmpeg(ffmpegArgs(f, out, { start, end, reencode: true })); return { ok: true }; } catch (err) { return { ok: false, error: `Découpe impossible (${err.message}).` }; }
+  const base = path.basename(f).replace(/\.(mp4|webm)$/i, '');
+  const out = path.join(path.dirname(f), mode === 'replace' ? `.${Date.now()}.mp4` : `${base} (coupé).mp4`);
+  try { await runFfmpeg(ffmpegArgs(f, out, { start, end, reencode: true })); } catch (err) { return { ok: false, error: `Découpe impossible (${err.message}).` }; }
+  if (mode !== 'replace') return { ok: true };
+  const dest = path.join(path.dirname(f), `${base}.mp4`);
+  await shell.trashItem(f).catch(() => rm(f, { force: true }));
+  await rename(out, dest);
+  // Le nom choisi et le favori suivent le clip
+  if (st.names[f]) { st.names[dest] = st.names[f]; delete st.names[f]; }
+  if (st.favs.includes(f)) st.favs = [...st.favs.filter((x) => x !== f), dest];
+  tokens.delete(String(t)); saveSt(); changed();
+  return { ok: true, token: tokenOf(dest) };
 });
 ipcMain.handle('clips:export', async (_e, t) => {
   const f = fileOf(t);
@@ -356,7 +386,8 @@ async function autoLink() {
   return linking;
 }
 ipcMain.handle('account:launcher', () => autoLink());
-ipcMain.handle('clips:discord', async (_e, t, to) => {
+ipcMain.handle('account:servers', async () => (await api('/api/compte/discord/serveurs')).serveurs ?? []);
+ipcMain.handle('clips:discord', async (_e, t, to, guild) => {
   const f = fileOf(t);
   if (!f) return { ok: false };
   if (!tokenGet()) return { ok: false, error: 'Connecte ton compte History pour envoyer sur Discord.' };
@@ -365,7 +396,7 @@ ipcMain.handle('clips:discord', async (_e, t, to) => {
   const s = await stat(file).catch(() => null);
   if (!s || s.size > 60 * 1024 * 1024) return { ok: false, error: 'Clip trop gros (60 Mo maximum) : coupe-le d’abord.' };
   const ext = path.extname(file).slice(1).toLowerCase();
-  const q = new URLSearchParams({ type: ext, jeu: path.basename(path.dirname(f)).slice(0, 80), duree: String(st.seconds), source: 'clips', ...(to ? { a: String(to) } : {}) });
+  const q = new URLSearchParams({ type: ext, jeu: path.basename(path.dirname(f)).slice(0, 80), duree: String(st.seconds), source: 'clips', ...(to ? { a: String(to) } : {}), ...(/^\d{15,25}$/.test(String(guild ?? '')) ? { serveur: String(guild) } : {}) });
   const r = await api(`/api/compte/discord/clip?${q}`, { method: 'POST', raw: await readFile(file) });
   if (tmp) rm(tmp, { force: true }).catch(() => {});
   return r.ok ? { ok: true } : { ok: false, error: r.error ?? 'Envoi impossible.' };
@@ -444,7 +475,13 @@ app.whenReady().then(async () => {
     const src = all.find((s) => s.id === recSource) ?? all.find((s) => s.id.startsWith('screen:'));
     cb(src ? { video: src, ...(st.audio && process.platform === 'win32' ? { audio: 'loopback' } : {}) } : {});
   });
-  protocol.handle('clip', (req) => { const f = fileOf(new URL(req.url).pathname.replace(/^\//, '').replace(/\.\w+$/, '')); return f ? net.fetch(pathToFileURL(f).toString(), { headers: req.headers }) : new Response('introuvable', { status: 404 }); });
+  protocol.handle('clip', async (req) => {
+    const u = new URL(req.url);
+    const f = fileOf(u.pathname.replace(/^\//, '').replace(/\.\w+$/, ''));
+    if (!f) return new Response('introuvable', { status: 404 });
+    if (u.hostname === 't') { const jpg = await thumbOf(f); return jpg ? net.fetch(pathToFileURL(jpg).toString()) : new Response('', { status: 404 }); }
+    return net.fetch(pathToFileURL(f).toString(), { headers: req.headers });
+  });
   if (app.isPackaged) { app.setLoginItemSettings({ openAtLogin: st.autostart, args: ['--demarrage'] }); app.setAsDefaultProtocolClient('history-clips'); }
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
   tray.setContextMenu(Menu.buildFromTemplate([

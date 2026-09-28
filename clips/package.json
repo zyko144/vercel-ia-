@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.3.1",
-  "releaseNotes": "Clips rangés dans le bon jeu : hors partie ils vont dans « Bureau », et les images viennent seulement du vrai jeu (plus de jeu au hasard). Connexion automatique avec History Launcher : rien à faire, History Clips se relie tout seul à ton compte.",
+  "version": "0.4.0",
+  "releaseNotes": "Nouvelle découpe : une timeline avec des poignées à glisser, une bande d’images et la lecture de la sélection. Après la découpe, tu choisis d’enregistrer un nouveau clip ou de remplacer l’original. Clic droit sur un clip pour l’ouvrir, l’envoyer, le renommer ou le supprimer. Partage sur tous les serveurs où le bot History Clips est invité, dans un salon clips-history créé tout seul. Connexion automatique avec History Launcher. Chaque clip est rangé dans le bon jeu, avec la bonne image. Beaucoup moins de mémoire et de processeur : miniatures légères, vidéo chargée seulement au survol, animations en pause pendant que tu joues.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

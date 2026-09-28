@@ -17,7 +17,7 @@ const LAYOUT = [
   { cat: '📌 INFOS', channels: [
     { name: 'bienvenue', topic: 'Bienvenue sur le serveur de History Clips', lecture: true },
     { name: 'annonces', topic: 'Les nouveautés de History Clips', lecture: true },
-    { name: 'mises-a-jour', topic: 'Chaque nouvelle version de l’appli, annoncée ici automatiquement', lecture: true },
+    { name: 'nouveautés', topic: 'Chaque nouvelle version de History Clips, annoncée ici automatiquement', lecture: true },
     { name: 'regles', topic: 'Les règles du serveur', lecture: true },
   ] },
   { cat: '🎬 CLIPS', channels: [
@@ -39,6 +39,9 @@ const chan = (name) => { const g = client?.guilds.cache.get(config.clips.guildId
 
 async function setupServer(guild) {
   const everyone = guild.roles.everyone;
+  // Ancien nom du salon des versions : renommé plutôt que recréé
+  const old = byName(guild, 'mises-a-jour', ChannelType.GuildText);
+  if (old && !byName(guild, 'nouveautés', ChannelType.GuildText)) await old.setName('nouveautés').catch(() => {});
   for (const block of LAYOUT) {
     let cat = byName(guild, block.cat, ChannelType.GuildCategory);
     if (!cat) cat = await guild.channels.create({ name: block.cat, type: ChannelType.GuildCategory }).catch(() => null);
@@ -75,25 +78,51 @@ async function postInfos() {
   ].join('\n')));
 }
 
-// Nouvelles versions de l'appli (releases GitHub « clips-vX »), annoncées une seule fois chacune
+// Nouvelles versions de l'appli (releases GitHub « clips-vX ») dans #nouveautés, comme le launcher : une seule fois chacune
 async function announceReleases() {
-  const c = chan('mises-a-jour');
+  const c = chan('nouveautés');
   if (!c) return;
   const list = await fetch(RELEASES, { headers: { 'User-Agent': 'history-clips-bot' }, signal: AbortSignal.timeout(15_000) }).then((r) => r.json()).catch(() => []);
   const rel = (Array.isArray(list) ? list : []).filter((r) => /^clips-v\d/.test(r.tag_name) && !r.draft).slice(0, 3).reverse();
   const last = await c.messages.fetch({ limit: 50 }).catch(() => null);
   for (const r of rel) {
     const v = r.tag_name.replace('clips-v', '');
-    const title = `⬆ History Clips ${v}`;
-    if (last?.some((m) => m.embeds[0]?.title === title)) continue;
+    const title = `🎬 History Clips ${v} est disponible`;
+    if (last?.some((m) => m.embeds[0]?.title === title || m.embeds[0]?.title === `⬆ History Clips ${v}`)) continue;
+    // Notes en liste à puces aérée (une phrase = une nouveauté)
+    const notes = String(r.body ?? '').split(/(?<=[.!])\s+(?=[A-ZÀ-Ü«])/).map((x) => x.trim()).filter(Boolean).map((x) => `✨ ${x}`).join('\n\n').slice(0, 3500);
     await c.send({ embeds: [new EmbedBuilder().setColor(YELLOW).setThumbnail(LOGO).setTitle(title).setURL(SITE)
-      .setDescription(`${String(r.body ?? '').slice(0, 1500) || 'Nouvelle version disponible.'}\n\nL’appli se met à jour toute seule. Pas encore installée ? [Télécharger](${SETUP})`).setTimestamp(new Date(r.published_at ?? Date.now()))] }).catch(() => {});
+      .setDescription(`## Les nouveautés\n${notes || '✨ Améliorations et corrections.'}\n\n### ⬇ Mise à jour\nL’appli se met à jour toute seule. Pas encore installée ? **[Télécharger History Clips](${SETUP})**`)
+      .setFooter({ text: 'History Clips · mises à jour automatiques' }).setTimestamp(new Date(r.published_at ?? Date.now()))] }).catch(() => {});
   }
 }
 
-/** Clip envoyé depuis History Clips : dans #clips du serveur History Clips, avec 🔥 pour voter. */
-export async function postClipToClipsServer({ discordId, pseudo, buf, ext, game, seconds = 45 }) {
-  const c = chan(ext === 'png' || ext === 'jpg' ? 'captures' : 'clips') ?? chan('clips');
+// Autres serveurs où le bot est invité (ex. DDV) : un salon « clips-history » créé une seule fois pour les partages
+const SHARE = 'clips-history';
+async function shareChannel(guild) {
+  await guild.channels.fetch().catch(() => {});
+  return byName(guild, SHARE, ChannelType.GuildText) ?? guild.channels.create({ name: SHARE, type: ChannelType.GuildText, topic: '🎬 Les clips partagés depuis History Clips · réagis 🔥' }).catch((err) => { console.warn(`🎬 Salon ${SHARE} sur ${guild.name} :`, err.message); return null; });
+}
+/** Serveurs où le bot est ET dont ce joueur est membre (pour le choix dans l'appli). */
+export async function clipsServers(discordId) {
+  if (!client?.isReady() || !discordId) return [];
+  const out = [];
+  for (const g of client.guilds.cache.values()) {
+    const m = await g.members.fetch(discordId).catch(() => null);
+    if (m) out.push({ id: g.id, name: g.name, icon: g.iconURL({ size: 64 }) ?? null, home: g.id === config.clips.guildId });
+  }
+  return out.sort((a, b) => Number(b.home) - Number(a.home) || a.name.localeCompare(b.name));
+}
+
+/** Clip envoyé depuis History Clips : dans #clips du serveur History Clips (ou le salon clips-history d'un autre serveur), avec 🔥 pour voter. */
+export async function postClipToClipsServer({ discordId, pseudo, buf, ext, game, seconds = 45, guildId = null }) {
+  let c;
+  if (guildId && guildId !== config.clips.guildId) {
+    const g = client?.guilds.cache.get(String(guildId));
+    if (!g || !(await g.members.fetch(discordId).catch(() => null))) return { ok: false, error: 'Tu n’es pas sur ce serveur, ou le bot History Clips n’y est plus.' };
+    c = await shareChannel(g);
+    if (!c) return { ok: false, error: 'Le bot n’a pas le droit de créer ou d’écrire dans le salon des clips sur ce serveur.' };
+  } else c = chan(ext === 'png' || ext === 'jpg' ? 'captures' : 'clips') ?? chan('clips');
   if (!c) return null;
   const file = await fitForDiscord(buf, ext, seconds);
   const kind = ['webm', 'mp4'].includes(file.ext) ? '🎬 un clip' : '📸 une capture';
@@ -149,7 +178,10 @@ export async function startClipsBot() {
     await postInfos();
     await announceReleases();
     setInterval(() => announceReleases().catch(() => {}), 30 * 60_000);
+    for (const g of c.guilds.cache.values()) if (g.id !== config.clips.guildId) await shareChannel(g);
   });
+  // Invité sur un nouveau serveur : il y crée son salon de partage
+  client.on(Events.GuildCreate, (g) => { if (g.id !== config.clips.guildId) shareChannel(g).catch(() => {}); });
   client.on(Events.InteractionCreate, (i) => { if (i.isChatInputCommand()) onCommand(i).catch((err) => console.error('[clips:commande]', err)); });
   client.on(Events.MessageReactionAdd, (r) => { onReaction(r).catch(() => {}); });
   client.on(Events.Error, (err) => console.error('[clips]', err.message));

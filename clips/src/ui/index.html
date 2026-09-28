@@ -126,10 +126,22 @@
   <div class="vhead"><h2 id="vTitle"></h2><button type="button" class="x" data-close>✕</button></div>
   <video id="vVideo" controls></video><img id="vImg" alt="" hidden>
   <div class="trim glass" id="trim">
-    <b>✂ Découper</b>
-    <label>Début <input type="range" id="tStart" min="0" step="0.1" value="0"><output id="oStart">0,0 s</output></label>
-    <label>Fin <input type="range" id="tEnd" min="0" step="0.1" value="0"><output id="oEnd">0,0 s</output></label>
-    <button type="button" class="btn" id="doTrim">✂ Garder ce passage</button>
+    <div class="trimhead"><b>✂ Découper</b><span class="hint">Glisse les poignées jaunes · <kbd>I</kbd> début ici · <kbd>O</kbd> fin ici · <kbd>Espace</kbd> lecture</span><span class="tsel" id="tSel"></span></div>
+    <div class="tl" id="tl">
+      <div class="strip" id="strip"></div>
+      <div class="shade l" id="shadeL"></div><div class="shade r" id="shadeR"></div>
+      <div class="sel" id="tlSel"><i class="h" data-h="a"></i><i class="h" data-h="b"></i></div>
+      <div class="ph" id="tlPh"></div>
+    </div>
+    <div class="trimbar">
+      <span class="tc" id="oStart">0,0 s</span>
+      <button type="button" class="btn sm" id="setA">⏮ Début ici</button>
+      <button type="button" class="btn sm" id="playSel">▶ Lire la sélection</button>
+      <button type="button" class="btn sm" id="setB">Fin ici ⏭</button>
+      <span class="tc" id="oEnd">0,0 s</span>
+      <button type="button" class="btn sm ghost" id="resetSel">↺ Tout</button>
+      <button type="button" class="btn play" id="doTrim">✂ Découper…</button>
+    </div>
   </div>
   <div class="vbar">
     <button type="button" class="btn play" id="vDiscord">📤 Discord</button>
