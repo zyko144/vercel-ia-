@@ -111,6 +111,8 @@ client.once(Events.ClientReady, async (c) => {
   startLevelLoops(c);
   startTreasury(c);
   (await import('./features/launcherReleases.js')).startLauncherReleases(c);
+  (await import('./features/launcherServers.js')).autoInstall(c).catch(() => {});
+  c.on(Events.GuildCreate, () => import('./features/launcherServers.js').then((m) => m.autoInstall(c)).catch(() => {}));
   (await import('./features/launcherDiscord.js')).startLauncherDiscord(c);
   loadMaintenance().catch(() => {});
   startAssistant(c);

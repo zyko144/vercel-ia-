@@ -49,3 +49,12 @@ export async function broadcast(client, kind, payload, except = null) {
     await c?.send?.({ allowedMentions: { parse: [] }, ...payload }).catch((err) => console.warn(`[launcher] annonce ${kind} :`, err.message));
   }
 }
+
+// Serveur officiel du launcher : installé tout seul au démarrage du bot (sans taper /launcher installer)
+export const HOME_GUILD = process.env.LAUNCHER_SERVEUR || '1554084922665205780';
+export async function autoInstall(client) {
+  if ((await load(KEY, null))?.some?.((x) => x.guildId === HOME_GUILD)) return;
+  const guild = await client.guilds.fetch(HOME_GUILD).catch(() => null);
+  if (!guild) return console.warn('[launcher] le bot n’est pas encore sur le serveur', HOME_GUILD);
+  await installHere(guild).then(() => console.log('🚀 Salons du launcher installés sur', guild.name)).catch((err) => console.warn('[launcher] installation :', err.message));
+}
