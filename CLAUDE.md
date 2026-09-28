@@ -3,6 +3,7 @@
 ## Économie de tokens
 - Répondre en français, court : le résultat + 2-3 lignes max. Pas de récap, pas de liste d'options non demandée.
 - Skill `ponytail` active : plus petite modif qui marche, réutiliser l'existant, pas d'abstraction inutile.
+- Toujours viser le MOINS de code possible pour EXACTEMENT le même résultat (même rendu, même comportement). Si moins de code change le résultat, garder la version complète.
 - Lire seulement la partie utile d'un fichier (grep / sed -n / offset), jamais un gros fichier en entier (`launcher/src/ui/app.js`, `style.css`).
 - Grouper les commandes indépendantes dans un seul appel ; pas de relecture d'un fichier juste édité.
 - Pas de sous-agent sauf demande. Captures Playwright seulement quand c'est visuel.
