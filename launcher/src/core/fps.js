@@ -70,9 +70,11 @@ export function csvReader(onFrame) {
  * onLive(stats) toutes les 2 s ; renvoie { stop(), done: Promise<stats|{error}> }.
  */
 export function captureFps(exePath, processName, onLive = () => {}) {
-  if (!/^[\w .()-]{1,80}\.exe$/i.test(processName)) return { stop() {}, done: Promise.resolve({ error: 'nom de jeu invalide' }) };
+  // Un jeu peut avoir plusieurs exe (ex. Fortnite : le jeu + son anti-triche) : on les mesure tous
+  const names = [processName].flat().filter((n) => /^[\w .()-]{1,80}\.exe$/i.test(String(n))).slice(0, 6);
+  if (!names.length) return { stop() {}, done: Promise.resolve({ error: 'nom de jeu invalide' }) };
   const frames = []; const gpu = [];
-  const p = spawn(exePath, ['--process_name', processName, '--output_stdout', '--no_console_stats', '--terminate_on_proc_exit', '--stop_existing_session', '--session_name', 'HistoryFPS', '--no_track_display', '--no_track_input'], { windowsHide: true });
+  const p = spawn(exePath, [...names.flatMap((n) => ['--process_name', n]), '--output_stdout', '--no_console_stats', '--terminate_on_proc_exit', '--stop_existing_session', '--session_name', 'HistoryFPS', '--no_track_display', '--no_track_input'], { windowsHide: true });
   let err = '';
   const read = csvReader((ft, gb) => { frames.push(ft); gpu.push(gb); if (frames.length > 200_000) { frames.splice(0, 50_000); gpu.splice(0, 50_000); } });
   p.stdout.setEncoding('utf8'); p.stdout.on('data', read);

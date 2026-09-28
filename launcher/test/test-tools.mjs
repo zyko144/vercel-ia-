@@ -124,3 +124,19 @@ console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, p
   ok(prelaunchChecks({ power: 'b', high: 'b' }).find((x) => x.id === 'power').level === 'ok', 'mode déjà au maximum : rien à changer');
   console.log('✅ Optimiser avant de jouer (référence, gain, mini-barre, vérifications) : 5 vérifications');
 }
+{
+  // Jeux Epic : logo et grand fond officiels récupérés sur le magasin Epic quand le catalogue local ne les a pas
+  const { enrich } = await import('../src/core/art.js');
+  const fake = async (url) => ({ ok: true, json: async () => (String(url).includes('graphql.epicgames.com') ? { data: { Catalog: { searchStore: { elements: [{ title: 'Fortnite', keyImages: [{ type: 'DieselGameBoxLogo', url: 'https://cdn/logo.png' }, { type: 'DieselStoreFrontWide', url: 'https://cdn/wide.jpg' }, { type: 'DieselGameBoxTall', url: 'https://cdn/tall.jpg' }] }] } } } } : { items: [] }) });
+  const e = await enrich({ id: 'epic:Fortnite', source: 'epic', kind: 'game', name: 'Fortnite', art: { cover: 'https://local/cover.jpg' } }, { fetchImpl: fake });
+  assert.equal(e.art.logo, 'https://cdn/logo.png'); assert.equal(e.art.hero, 'https://cdn/wide.jpg');
+  console.log('✅ Jeux Epic : logo et fond officiels (magasin Epic)');
+}
+{
+  const { prelaunchChecks } = await import('../src/core/prelaunch.js');
+  const fn = prelaunchChecks({ game: 'fortnite', fnPerf: false, tweaks: [{ id: 'gamemode', on: false, label: 'Mode Jeu' }, { id: 'dvr', on: false, label: 'DVR' }] });
+  assert.equal(fn.find((x) => x.id === 'wintweaks').on, true); assert.equal(fn.find((x) => x.id === 'fnperf').on, false, 'Fortnite : mode performance proposé mais pas coché (change les graphismes)');
+  assert.equal(prelaunchChecks({ game: 'fivem' }).find((x) => x.id === 'fivemcache').on, false, 'cache FiveM jamais vidé sans le demander');
+  assert.equal(prelaunchChecks({ tweaks: [{ id: 'gamemode', on: true }, { id: 'dvr', on: true }] }).find((x) => x.id === 'wintweaks').level, 'ok');
+  console.log('✅ Gains de FPS par jeu (réglages sûrs, rien d’imposé)');
+}

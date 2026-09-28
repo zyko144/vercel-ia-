@@ -66,6 +66,16 @@ export async function steamNews(appid, count = 3, fetchImpl = fetch) {
   }));
 }
 
+/** Actus officielles de Fortnite (blog Epic) : Fortnite n'est pas sur Steam, il avait donc zéro actu. */
+export async function fortniteNews(count = 3, fetchImpl = fetch) {
+  const r = await fetchImpl(`https://www.fortnite.com/api/blog/getPosts?category=&postsPerPage=${count}&offset=0&locale=fr&rootPageSlug=blog`, { signal: AbortSignal.timeout(10_000) }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  return (r?.blogList ?? []).filter((b) => b.title && b.slug).slice(0, count).map((b) => ({
+    appid: null, gid: String(b.slug).slice(0, 120), game: 'Fortnite', title: cleanNews(b.title, 120), text: cleanNews(b.shareDescription ?? b.short ?? ''),
+    at: Date.parse(b.date ?? b.lastModified ?? '') || Date.now(), image: b.trendingImage ?? b.shareImage ?? b.image ?? null,
+    url: `https://www.fortnite.com/news/${encodeURIComponent(b.slug)}?lang=fr`, patch: /mise à jour|patch|v\d+\.\d+|notes/i.test(b.title),
+  }));
+}
+
 // ===================== Couleur principale d'une image =====================
 
 /** Couleur dominante (vive) d'une image en pixels BGRA, pour le thème automatique. */

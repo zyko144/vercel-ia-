@@ -167,7 +167,7 @@ function renderHero() {
     ${i.brand?.bg ? `<div class="hbg brandimg" style="background-image:url('${esc(i.brand.bg)}')"></div>` : i.brand && isApp ? `<div class="hbg brandbg" style="--b:${esc(i.brand.color)}"></div>` : bg ? `<div class="hbg" data-hbg="${esc(i.id)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
     ${title}
     <div class="hbottom">
-      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button>${i.installed && !isApp ? '<button class="optiplay" data-action="optiplay" title="Optimiser puis jouer (vérifie le PC, tout est remis à la fin)">⚡</button>' : ''}<button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>
+      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>${i.installed && !isApp ? '<button class="optiplay" data-action="optiplay" title="Vérifie ton PC et prépare la partie (tout est remis comme avant à la fin)"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Optimiser</button>' : ''}
       <div class="hstat"><small>${CLOCK}${isApp ? 'Temps d’utilisation' : 'Temps de jeu'}</small><b>${hours(i.minutes)}</b><em class="tsrc" title="D’où vient ce temps">${esc(timeSource(i))}</em></div>
       <div class="hstat"><small>${CLOCK}Dernière session</small><b>${state.active.has(i.id) ? '<span class="ok">En cours</span>' : ago(i.lastPlayed)}</b></div>
     </div>
@@ -344,7 +344,7 @@ function renderUpdates() {
 function renderNews(list) {
   $('newsBlock').hidden = !list?.length;
   const day = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
-  $('news').innerHTML = (list ?? []).slice(0, 6).map((n) => `<div class="newscard" data-news="${esc(n.appid)}" data-gid="${esc(n.gid)}">
+  $('news').innerHTML = (list ?? []).slice(0, 6).map((n) => `<div class="newscard" ${n.url ? `data-nurl="${esc(n.url)}"` : `data-news="${esc(n.appid)}" data-gid="${esc(n.gid)}"`}>
     ${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy">` : ''}<div><small>${esc(n.game)} · ${day(n.at)}${n.patch ? ' · <span class="upd">Mise à jour</span>' : ''}</small><b>${esc(n.title)}</b><p>${esc(n.text)}</p></div></div>`).join('');
 }
 
@@ -1627,15 +1627,22 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.37.0': [
+    ['⚡', 'Nouveau bouton Optimiser', 'À côté de Jouer : un clic règle Windows pour ton jeu (Mode Jeu, capture Xbox en fond coupée, photo des réglages avant) puis le lance.', ['#hero .optiplay', 'wait900']],
+    ['🎯', 'Vrais gains de FPS', 'Options sûres par jeu : mode Performance de Fortnite, cache FiveM à refaire, priorité au jeu et carte graphique puissante. Tout est décoché si risqué et réversible.'],
+    ['📊', 'FPS avec flèches', 'Le mini-compteur affiche tes FPS avec une flèche verte ou rouge, et dit pourquoi s’ils manquent.'],
+    ['🟦', 'Jeux Epic au complet', 'Fortnite et les jeux Epic ont leur logo, fond et jaquette officiels, et les jeux Epic manquants sont retrouvés.'],
+    ['📰', 'Accueil plus aéré', 'Les actus de tes jeux (patchs Fortnite inclus), promos et jeux gratuits de la semaine passent tout en bas et se mettent à jour seuls.'],
+  ],
   '0.36.2': [
-    ['📊', 'Tes FPS dans le mini-compteur', 'Cocher le mini-compteur dans ⚡ Optimiser et jouer active aussi la mesure des FPS (Windows demande l’autorisation une seule fois, puis reconnecte-toi à Windows).', ['.playbtn .optiplay', 'wait900']],
+    ['📊', 'Tes FPS dans le mini-compteur', 'Cocher le mini-compteur dans ⚡ Optimiser et jouer active aussi la mesure des FPS (Windows demande l’autorisation une seule fois, puis reconnecte-toi à Windows).', ['#hero .optiplay', 'wait900']],
     ['🎮', 'Carte graphique libérée', 'Pendant une partie, le launcher coupe toutes ses animations et effets de flou, et la bordure néon ne tourne plus : toute la carte graphique pour ton jeu.'],
   ],
   '0.36.1': [
     ['🔒', 'Sécurité renforcée', 'Fenêtres en bac à sable, aucune navigation vers l’extérieur, le launcher refuse de démarrer si ses fichiers ont été modifiés, et chaque installateur est publié avec son empreinte SHA-256 (SHA256SUMS.txt) pour vérifier qu’il est original.', ['#openSettings', 'wait700']],
   ],
   '0.36.0': [
-    ['⚡', 'Optimiser et jouer', 'Nouveau bouton ⚡ à côté de « Jouer » : le launcher vérifie ton PC (applis lourdes, mémoire, disque, pilote), prépare la partie et te montre ce qu’il fait. Tout est temporaire et remis comme avant à la fin.', ['.playbtn .optiplay', 'wait900']],
+    ['⚡', 'Optimiser et jouer', 'Nouveau bouton ⚡ à côté de « Jouer » : le launcher vérifie ton PC (applis lourdes, mémoire, disque, pilote), prépare la partie et te montre ce qu’il fait. Tout est temporaire et remis comme avant à la fin.', ['#hero .optiplay', 'wait900']],
     ['📊', 'Mini-compteur en jeu', 'Tout petit en haut à gauche : tes FPS, avec une flèche verte ou rouge pour le gain ou la perte par rapport à tes parties d’avant. Ctrl+Alt+P pour le cacher.'],
     ['☁', 'Sauvegardes de jeux en ligne', 'Les jeux sans cloud (hors Steam) envoient leur sauvegarde après chaque partie. Récupère-la sur n’importe quel PC depuis Outils du jeu › Sauvegardes.'],
     ['💾', 'Alerte disque plein', 'Prévenu avant qu’une mise à jour de jeu échoue faute de place.'],
@@ -3200,7 +3207,7 @@ async function act(action) {
 
 // ---------- Événements ----------
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal], [data-news]');
+  const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal], [data-news], [data-nurl]');
   const inCtx = Boolean(t?.closest('#ctx'));
   if (!t) { hideCtx(); return; }
   if (t.id === 'moreBtn') { if ($('ctx').hidden) openCtx(state.sel, 0, 0, t); else hideCtx(); return; }
@@ -3234,6 +3241,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
   if (t.dataset.upd) { const r = await api.action(t.dataset.upd, 'update'); return toast(r?.ok ? 'Steam fait la mise à jour puis lance le jeu' : r?.error ?? 'Impossible pour l’instant'); }
+  if (t.dataset.nurl) return api.newsUrl?.(t.dataset.nurl).then(() => toast('Article ouvert'));
   if (t.dataset.news) return api.openNews(t.dataset.news, t.dataset.gid).then(() => toast('Article ouvert'));
   if (t.dataset.boostgame && state.sel) {
     const r = await api.setBoost({ game: { id: state.sel.id, mode: t.dataset.boostgame } });
@@ -3424,7 +3432,7 @@ async function openOptiPlay(item) {
     const max = Math.max(...hist.map((r) => r.avg));
     $('odStats').insertAdjacentHTML('beforeend', `<div class="odspark" title="FPS moyens de tes dernières parties (orange = avec optimisation)">${hist.map((r) => `<i class="${r.boost ? 'b' : ''}" style="height:${Math.max(8, Math.round((100 * r.avg) / max))}%" title="${r.avg} FPS"></i>`).join('')}<small>FPS de tes ${hist.length} dernières parties</small></div>`);
   }
-  const icon = { close: '🧹', power: '🔋', priority: '🎯', quiet: '🔕', perfbar: '📊', ram: '🧠', disk: '💾', heat: '🌡', driver: '🖥' };
+  const icon = { wintweaks: '🎮', fnperf: '🚀', fivemcache: '🧊', close: '🧹', power: '🔋', priority: '🎯', quiet: '🔕', perfbar: '📊', ram: '🧠', disk: '💾', heat: '🌡', driver: '🖥' };
   $('odChecks').innerHTML = d.checks.map((c) => `<label class="odck ${c.level}" ${c.apps ? `data-apps="${esc(c.apps.join(','))}"` : ''}><span class="ico">${c.level === 'ok' ? '✅' : c.level === 'warn' ? '⚠' : icon[c.id] ?? '⚡'}</span><span><b>${esc(c.label)}</b>${c.detail ? `<small>${esc(c.detail)}</small>` : ''}</span>${c.level === 'act' ? `<input type="checkbox" data-ck="${c.id}" ${c.on ? 'checked' : ''}>` : ''}</label>`).join('');
   $('odRun').hidden = true; $('odChecks').hidden = false; $('odFoot').hidden = false; $('odStats').hidden = false;
   $('odLog').innerHTML = ''; $('odFill').style.width = '0';
@@ -3435,7 +3443,7 @@ $('odPlain').addEventListener('click', () => { $('optiDlg').close(); if (odItem)
 $('odGo').addEventListener('click', async () => {
   if (!odItem) return;
   const on = (k) => Boolean(document.querySelector(`[data-ck="${k}"]`)?.checked);
-  const choice = { close: on('close') ? (document.querySelector('.odck[data-apps]')?.dataset.apps ?? '').split(',').filter(Boolean) : [], power: on('power'), priority: on('priority'), quiet: on('quiet'), perfbar: on('perfbar') };
+  const choice = { wintweaks: on('wintweaks'), fnperf: on('fnperf'), fivemcache: on('fivemcache'), close: on('close') ? (document.querySelector('.odck[data-apps]')?.dataset.apps ?? '').split(',').filter(Boolean) : [], power: on('power'), priority: on('priority'), quiet: on('quiet'), perfbar: on('perfbar') };
   $('odChecks').hidden = true; $('odFoot').hidden = true; $('odStats').hidden = true; $('odRun').hidden = false;
   const r = await api.optiLaunch?.(odItem.id, choice).catch(() => null);
   if (r?.ok === false && r.error) toast(`Impossible : ${r.error}`);
@@ -3874,6 +3882,8 @@ async function load() {
   loadFriends();
   renderUpdates();
   api.news?.().then(renderNews).catch(() => {});
+  // Actus, promos et jeux gratuits : remis à jour tout seuls (toutes les 30 min, quand la fenêtre est visible)
+  setInterval(() => { if (document.hidden) return; api.news?.().then(renderNews).catch(() => {}); api.freeGames?.().then((f) => { state.free = f ?? []; renderFree(); }).catch(() => {}); }, 30 * 60_000);
   api.recap?.().then((r) => { if (r?.fresh) showRecap(r); else showWhatsNew(); }).catch(() => showWhatsNew());
   api.collections?.().then((c) => { state.cols = c ?? {}; renderCollections(); }).catch(() => {});
 }
@@ -3976,7 +3986,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.36.2',
+    version: async () => '0.37.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

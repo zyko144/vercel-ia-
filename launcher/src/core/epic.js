@@ -17,8 +17,22 @@ export function epicArt(images) {
     cover: pickImage(images, 'DieselGameBoxTall', 'OfferImageTall', 'Thumbnail'),
     hero: pickImage(images, 'DieselGameBox', 'OfferImageWide', 'DieselStoreFrontWide', 'featuredMedia'),
     header: pickImage(images, 'DieselGameBox', 'OfferImageWide', 'DieselStoreFrontWide'),
-    logo: pickImage(images, 'DieselGameBoxLogo', 'ProductLogo'),
+    logo: pickImage(images, 'DieselGameBoxLogo', 'ProductLogo', 'Logo', 'LogoImage'),
   };
+}
+
+/**
+ * Images officielles d'un jeu sur le magasin Epic (recherche par nom) : pour Fortnite & co quand le catalogue
+ * local n'a pas tout (logo, grand fond). `same` compare les noms (celui d'art.js).
+ */
+export async function epicStoreArt(title, same, fetchImpl = fetch) {
+  const query = 'query searchStoreQuery($keywords: String, $country: String!, $locale: String) { Catalog { searchStore(keywords: $keywords, country: $country, locale: $locale, count: 10) { elements { title keyImages { type url } } } } }';
+  const r = await fetchImpl('https://graphql.epicgames.com/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables: { keywords: String(title ?? '').slice(0, 80), country: 'FR', locale: 'fr' } }), signal: AbortSignal.timeout(10_000) })
+    .then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  const hit = (r?.data?.Catalog?.searchStore?.elements ?? []).find((e) => same(e.title, title));
+  if (!hit) return null;
+  const art = epicArt(hit.keyImages);
+  return Object.values(art).some(Boolean) ? art : null;
 }
 
 /** Le catalogue Epic : tous les jeux possédés, avec leurs images et leur fiche. */
@@ -55,6 +69,17 @@ export async function scanEpic(manifestDir, catalogDir = null) {
       installDir: m.InstallLocation ?? '', manifest: path.join(manifestDir, file), exe: m.InstallLocation && m.LaunchExecutable ? path.join(m.InstallLocation, m.LaunchExecutable) : null,
       size: Number(m.InstallSize ?? 0), minutes: 0, lastPlayed: 0, art: cat?.art ?? {}, details: cat?.details ?? null, epicKey: key,
     });
+  }
+  // Jeux installés qui n'ont pas (ou plus) de fichier .item : la liste d'installation d'Epic les connaît quand même
+  const datFile = path.join(path.dirname(path.dirname(path.dirname(manifestDir))), 'UnrealEngineLauncher', 'LauncherInstalled.dat');
+  let dat = null;
+  try { dat = JSON.parse(await readFile(datFile, 'utf8')); } catch { /* pas de liste */ }
+  const have = new Set(items.map((i) => i.id));
+  for (const x of dat?.InstallationList ?? []) {
+    if (!x.AppName || !x.InstallLocation || have.has(`epic:${x.AppName}`) || /^(UE_|UnrealEngine)/i.test(x.AppName)) continue;
+    const cat = byApp.get(x.AppName);
+    items.push({ id: `epic:${x.AppName}`, source: 'epic', kind: 'game', name: cat?.title ?? path.basename(x.InstallLocation), installed: true, installDir: x.InstallLocation, exe: null, size: 0, minutes: 0, lastPlayed: 0, art: cat?.art ?? {}, details: cat?.details ?? null, epicKey: `${x.NamespaceId ?? ''}%3A${x.ItemId ?? ''}%3A${x.AppName}` });
+    have.add(`epic:${x.AppName}`);
   }
   // Jeux possédés mais pas installés
   const installed = new Set(items.map((i) => i.id));
