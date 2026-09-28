@@ -1343,7 +1343,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('batterySaver' in patch && !patch.batterySaver && onBattery) batteryMode(false).catch(() => {});
   if ('status' in patch) { store.data.settings.status = String(patch.status ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 60) || null; lastPresence = 0; }
   if ('textScale' in patch) { const z = [0.9, 1, 1.1, 1.25].includes(Number(patch.textScale)) ? Number(patch.textScale) : 1; store.data.settings.textScale = z; win?.webContents.setZoomFactor(z); }
-  if ('replay' in patch) { store.data.settings.replay = Boolean(patch.replay); setReplay(store.data.settings.replay).catch(() => {}); }
+  if ('replay' in patch) { store.data.settings.replay = Boolean(patch.replay); setReplay(store.data.settings.replay && (store.data.settings.replayAlways === true || Boolean(sess))).catch(() => {}); }
   if ('sidebar' in patch) {
     const sb = patch.sidebar ?? {};
     const ids = (v, re) => [...new Set((Array.isArray(v) ? v : []).map(String).filter((x) => re.test(x)))].slice(0, 40);
@@ -1363,7 +1363,8 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('clipQuality' in patch && [720, 1080, 1440].includes(Number(patch.clipQuality))) { store.data.settings.clipQuality = Number(patch.clipQuality); clipChanged = true; }
   if ('clipFps' in patch && [30, 60].includes(Number(patch.clipFps))) { store.data.settings.clipFps = Number(patch.clipFps); clipChanged = true; }
   if ('clipAudio' in patch) { store.data.settings.clipAudio = Boolean(patch.clipAudio); clipChanged = true; }
-  if (clipChanged) { if (store.data.settings.replay) setReplay(false).then(() => setTimeout(() => setReplay(true).catch(() => {}), 800)).catch(() => {}); }
+  if ('replayAlways' in patch) { store.data.settings.replayAlways = Boolean(patch.replayAlways); if (store.data.settings.replay) setReplay(Boolean(patch.replayAlways) || Boolean(sess)).catch(() => {}); }
+  if (clipChanged) { if (recWin && !recWin.isDestroyed()) setReplay(false).then(() => setTimeout(() => setReplay(true).catch(() => {}), 800)).catch(() => {}); }
   if ('voiceReply' in patch) store.data.settings.voiceReply = Boolean(patch.voiceReply);
   if ('voiceName' in patch) store.data.settings.voiceName = String(patch.voiceName ?? '').slice(0, 80);
   if ('remote' in patch) { store.data.settings.remote = Boolean(patch.remote); setRemote(); }
@@ -1770,8 +1771,10 @@ function saveClip() {
   if (!recWin || recState !== 'on') {
     // Replay coupé : on l'active tout de suite (le prochain appui gardera le clip)
     if (!store.data.settings.replay) { store.data.settings.replay = true; store.save(); send('settings:changed', {}); }
+    // Hors partie (et replay « seulement en jeu ») : il démarrera avec ton prochain jeu
+    if (!sess && store.data.settings.replayAlways !== true) { notify('Replay activé', 'Il tourne pendant tes parties : en jeu, appuie sur le raccourci du clip pour garder les dernières secondes.'); return false; }
     setReplay(true).catch(() => {});
-    notify('Replay activé', 'L’enregistrement des 30 dernières secondes tourne maintenant : rappuie sur le raccourci du clip pour garder ce qui vient de se passer.');
+    notify('Replay activé', 'L’enregistrement tourne maintenant : rappuie sur le raccourci du clip pour garder ce qui vient de se passer.');
     return false;
   }
   recWin.webContents.send('rec:save');
@@ -2789,6 +2792,7 @@ async function sessionStart(s) {
   const item = items.find((i) => i.id === s.id);
   coreLoad();
   sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null, pings: [] };
+  if (store.data.settings.replay) setReplay(true).catch(() => {}); // replay : démarre avec la partie
   sessionPing(sess, item);
   setQuiet(true); // mesures plus légères pendant le jeu (pas de requête WMI de température, carte graphique lue moins souvent)
   if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
@@ -2810,6 +2814,7 @@ function verdict(stats, samples) {
 async function sessionEnd() {
   const s = sess; sess = null;
   if (!s) return;
+  if (store.data.settings.replayAlways !== true) setTimeout(() => { if (!sess) setReplay(false).catch(() => {}); }, 60_000); // la mémoire du replay est rendue 1 min après la partie
   setQuiet(false);
   setTimeout(flushHeld, 3000);
   if (s.autoWidget && !store.data.settings.widget) setWidget(false);
@@ -2988,7 +2993,7 @@ async function start() {
   powerMonitor.on('suspend', () => { pcAway = true; });
   powerMonitor.on('resume', () => { pcAway = false; });
   registerHotkeys();
-  if (store.data.settings.replay) setTimeout(() => setReplay(true).catch(() => {}), 8000);
+  if (store.data.settings.replay && store.data.settings.replayAlways === true) setTimeout(() => setReplay(true).catch(() => {}), 8000);
   if (app.isPackaged) app.setAsDefaultProtocolClient('history');
   setTimeout(() => handleInvite(process.argv), 3000);
   setTimeout(() => checkDeals().catch(() => {}), 60_000);

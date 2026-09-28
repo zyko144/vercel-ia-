@@ -1,5 +1,5 @@
-// Replay : pour une durée D choisie (15 s à 2 min), un nouvel enregistreur démarre toutes les D/2 et on en garde 3.
-// Au moment de sauvegarder, on prend le plus jeune qui a au moins D : le clip dure entre D et 1,5 × D.
+// Replay : pour une durée D choisie (15 s à 2 min), deux enregistreurs décalés (un nouveau toutes les D, 2 gardés :
+// deux encodages au lieu de trois, moins de mémoire). On sauvegarde le plus jeune qui a au moins D.
 let D = 30_000;
 let BITRATE = 12_000_000;
 const MIME = ['video/webm;codecs=h264', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
@@ -13,7 +13,7 @@ function startOne() {
   r.mr.start(1000);
   recs.push(r);
   // On garde les deux plus récents ; le plus vieux (≥ 60 s) est jeté
-  while (recs.length > 3) { const old = recs.shift(); if (old.mr.state !== 'inactive') old.mr.stop(); old.chunks = []; }
+  while (recs.length > 2) { const old = recs.shift(); if (old.mr.state !== 'inactive') old.mr.stop(); old.chunks = []; }
 }
 
 window.rec.onStart(async (id, o = {}) => {
@@ -26,7 +26,7 @@ window.rec.onStart(async (id, o = {}) => {
     stream = await navigator.mediaDevices.getUserMedia({ audio: o.audio === false ? false : { mandatory: { chromeMediaSource: 'desktop' } }, video })
       .catch(() => navigator.mediaDevices.getUserMedia({ audio: false, video }));
     startOne();
-    cycle = setInterval(startOne, D / 2);
+    cycle = setInterval(startOne, D);
     window.rec.state('on');
   } catch (err) {
     window.rec.state(`error:${err?.message ?? err}`);
