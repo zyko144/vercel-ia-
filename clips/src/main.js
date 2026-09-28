@@ -50,21 +50,21 @@ function showWindow() { clearTimeout(freeTimer); if (!win || win.isDestroyed()) 
 async function setReplay(on) {
   if (!on) {
     if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); setTimeout(() => recWin?.destroy(), 500); }
-    recWin = null; recState = 'off'; tray?.setToolTip('History Clips · replay en pause'); return;
+    recWin = null; recState = 'off'; send('clips:changed'); tray?.setToolTip('History Clips · replay en pause'); return;
   }
   if (recWin && !recWin.isDestroyed()) return;
   recWin = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { preload: path.join(here, 'recorder.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   recWin.on('closed', () => { recWin = null; });
   await recWin.loadFile(path.join(here, 'ui', 'recorder.html'));
   const src = (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }))[0];
-  if (src) recWin.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio });
+  recWin.webContents.send('rec:start', src?.id ?? '', { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio });
   tray?.setToolTip(`History Clips · replay actif (${st.hotClip} pour garder les ${st.seconds} dernières secondes)`);
 }
 const restartReplay = () => { if (st.replay) setReplay(false).then(() => setTimeout(() => setReplay(true).catch(() => {}), 800)); };
 ipcMain.on('rec:state', (e, s) => {
   if (e.sender !== recWin?.webContents) return;
   if (s === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
-  recState = s;
+  recState = s; send('clips:changed');
   if (s.startsWith('error')) notify('Replay indisponible', `L’enregistrement de l’écran n’a pas démarré (${s.slice(6, 120)}).`);
 });
 
@@ -76,13 +76,13 @@ const foregroundGame = () => new Promise((resolve) => {
 });
 
 let pendingGame = null;
-async function saveClip() {
+async function saveClip(game) {
   if (!recWin || recState !== 'on') {
     if (!st.replay) { st.replay = true; saveSt(); }
     setReplay(true).catch(() => {});
     return notify('Replay activé', `Il enregistre maintenant : rappuie sur ${st.hotClip} pour garder les dernières secondes.`);
   }
-  pendingGame = foregroundGame();
+  pendingGame = game ?? foregroundGame();
   recWin.webContents.send('rec:save');
 }
 const FFMPEG = async () => unpacked((await import('ffmpeg-static')).default);
@@ -206,7 +206,7 @@ ipcMain.handle('clips:discord', async (_e, t, to) => {
 });
 
 // ---------- Réglages ----------
-ipcMain.handle('settings:get', () => ({ ...st, token: undefined, dir: ROOT(), version: app.getVersion() }));
+ipcMain.handle('settings:get', () => ({ ...st, token: undefined, rec: recState, dir: ROOT(), version: app.getVersion() }));
 ipcMain.handle('settings:set', (_e, p) => {
   let replayChanged = false; let restart = false;
   if ('replay' in p) { st.replay = Boolean(p.replay); replayChanged = true; }
@@ -230,6 +230,7 @@ ipcMain.handle('settings:folder', async () => {
   if (r.canceled || !r.filePaths[0]) return null;
   st.dir = r.filePaths[0]; saveSt(); return st.dir;
 });
+ipcMain.handle('clips:save', () => saveClip('Clip'));
 ipcMain.handle('app:site', () => shell.openExternal(SITE));
 
 // ---------- Démarrage ----------
@@ -240,6 +241,12 @@ app.on('will-quit', () => globalShortcut.unregisterAll());
 app.whenReady().then(async () => {
   try { st = { ...DEFAULTS, ...JSON.parse(await readFile(SET_FILE(), 'utf8')) }; } catch { /* premier lancement */ }
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb((perm === 'media' && wc === recWin?.webContents) || (perm === 'fullscreen' && wc === win?.webContents)));
+  // Capture de l'écran pour l'enregistreur (API moderne d'Electron, avec le son du PC en « loopback »)
+  session.defaultSession.setDisplayMediaRequestHandler(async (req, cb) => {
+    if (req.frame !== recWin?.webContents.mainFrame) return cb({});
+    const [src] = await desktopCapturer.getSources({ types: ['screen'] }).catch(() => []);
+    cb(src ? { video: src, ...(st.audio && process.platform === 'win32' ? { audio: 'loopback' } : {}) } : {});
+  });
   protocol.handle('clip', (req) => { const f = fileOf(new URL(req.url).pathname.replace(/^\//, '').replace(/\.\w+$/, '')); return f ? net.fetch(pathToFileURL(f).toString(), { headers: req.headers }) : new Response('introuvable', { status: 404 }); });
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: st.autostart, args: ['--demarrage'] });
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));

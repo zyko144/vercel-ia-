@@ -8,28 +8,34 @@
 </head>
 <body>
 <aside class="side">
-  <div class="brand"><img src="icon.png" alt=""><b>History Clips</b></div>
+  <div class="brand"><img src="icon.png" alt=""><div><b>History</b><small>Clips</small></div></div>
   <nav id="nav">
-    <button data-f="tout" class="on">🎬 Tous les clips<em id="nTout"></em></button>
-    <button data-f="favs">⭐ Favoris<em id="nFavs"></em></button>
-    <button data-f="captures">📸 Captures<em id="nCaps"></em></button>
+    <button data-f="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Accueil</button>
+    <button data-f="tout"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg>Mes clips<em id="nTout"></em></button>
+    <button data-f="favs"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>Favoris<em id="nFavs"></em></button>
+    <button data-f="captures"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Captures<em id="nCaps"></em></button>
   </nav>
   <h5>Jeux</h5>
   <nav id="games"></nav>
-  <button class="setbtn" id="openSet">⚙ Réglages</button>
+  <div class="grow"></div>
+  <button class="navlike" id="openSet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Réglages</button>
+  <button class="profile" id="profile"><span class="avatar" id="avatar">?</span><span><b id="pName">Non connecté</b><small id="pSub">Compte History</small></span></button>
 </aside>
-<main>
-  <header class="top">
-    <div><h1 id="title">Tous les clips</h1><span class="pill" id="replayPill"><b></b><span></span></span></div>
-    <input id="search" type="search" placeholder="Rechercher un clip, un jeu…">
-  </header>
-  <div class="grid" id="grid"></div>
+<header class="top">
+  <h1 id="title">Accueil</h1>
+  <input id="search" type="search" placeholder="Rechercher un clip, un jeu…">
+  <span class="pill" id="replayPill"><b></b><span></span></span>
+  <button type="button" class="btn play" id="saveNow">🎬 Garder un clip</button>
+</header>
+<main id="view">
+  <div id="home"></div>
+  <div class="grid" id="grid" hidden></div>
 </main>
 
 <dialog id="viewer" class="viewer">
   <div class="vhead"><h2 id="vTitle"></h2><button type="button" class="x" data-close>✕</button></div>
   <video id="vVideo" controls></video><img id="vImg" alt="" hidden>
-  <div class="trim" id="trim">
+  <div class="trim glass" id="trim">
     <b>✂ Découper</b>
     <label>Début <input type="range" id="tStart" min="0" step="0.1" value="0"><output id="oStart">0,0 s</output></label>
     <label>Fin <input type="range" id="tEnd" min="0" step="0.1" value="0"><output id="oEnd">0,0 s</output></label>
@@ -50,7 +56,7 @@
 <dialog id="settings" class="modal wide">
   <div class="vhead"><h2>⚙ Réglages</h2><button type="button" class="x" data-close>✕</button></div>
   <div class="sets">
-    <section>
+    <section class="glass">
       <h3>🎬 Replay</h3>
       <label class="toggle"><input type="checkbox" id="sReplay"><span></span>Replay actif (enregistre en fond pour garder les dernières secondes)</label>
       <div class="row"><span>Durée d’un clip</span><select id="sSeconds"><option value="15">15 secondes</option><option value="30">30 secondes</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></div>
@@ -58,17 +64,17 @@
       <div class="row"><span>Images par seconde</span><select id="sFps"><option value="30">30 i/s (léger)</option><option value="60">60 i/s (fluide)</option></select></div>
       <label class="toggle"><input type="checkbox" id="sAudio"><span></span>Enregistrer le son du PC</label>
     </section>
-    <section>
+    <section class="glass">
       <h3>⌨ Raccourcis <small>(clique puis appuie sur ta touche)</small></h3>
       <div class="row"><span>🎬 Garder un clip</span><button type="button" class="btn ghost sm" data-hk="hotClip"></button></div>
       <div class="row"><span>📸 Capture d’écran</span><button type="button" class="btn ghost sm" data-hk="hotShot"></button></div>
     </section>
-    <section>
+    <section class="glass">
       <h3>📁 Rangement</h3>
       <div class="row"><span id="sDir"></span><button type="button" class="btn ghost sm" id="sPick">Changer</button></div>
       <label class="toggle"><input type="checkbox" id="sAuto"><span></span>Démarrer avec Windows (en fond, prêt à clipper)</label>
     </section>
-    <section>
+    <section class="glass" id="acctSec">
       <h3>👤 Compte History <small>(pour envoyer sur Discord)</small></h3>
       <div id="acct"></div>
     </section>
