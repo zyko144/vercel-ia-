@@ -35,6 +35,7 @@
 <header class="top">
   <button class="bell" id="bellBtn" type="button" title="Centre de notifications" popovertarget="notifCenter"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><em id="bellCount"></em></button>
   <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Rechercher un jeu, une application…" autocomplete="off"></label>
+  <span class="netpill" id="netPill" hidden title="Le serveur History ne répond pas : messages et amis reviennent dès que la connexion revient">⚠ Hors ligne · reconnexion…</span>
   <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
 
@@ -475,6 +476,7 @@
     </section>
     <section class="setpane" data-pane="compte" hidden>
       <h3>☁ Compte & sauvegarde</h3>
+      <div class="cloudstate" id="cloudState"><span>☁</span><div><b>Vérification de la sauvegarde…</b><small></small></div></div>
       <div class="row"><button type="button" class="btn" id="libExport">📤 Exporter ma bibliothèque</button><button type="button" class="btn ghost" id="libImport">📥 Importer</button></div>
       <div class="secbox"><div><b>🔐 Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">✉ Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">🛡 Double authentification</button><button type="button" class="btn" id="secDiscord">🔗 Lier Discord</button></div></div>
       <label class="toggle" id="lock2faRow" hidden><input type="checkbox" id="lock2fa"><span></span>🔒 Demander le code de l’application à chaque ouverture du launcher</label>

@@ -1731,13 +1731,20 @@ async function joinGame(join, game) {
 // qu'un message, un appel ou une invitation arrive. La liste d'amis se met à jour au passage.
 let socialPrev = null;
 let socialLive = null;
+let netFails = 0;
+let netOnline = true;
 async function socialTick(wait = 0) {
   if (process.env.LAUNCHER_DEMO) { const r = demoFriends(); socialLive = r; send('social:live', { ...r, messages: [] }); return true; }
   const token = secret('account');
   if (!token) { socialPrev = null; return false; }
   const after = store.data.inboxAt ?? Date.now() - 60_000;
   const r = await api(`/api/compte/boite?apres=${after}${wait ? `&attente=${wait}` : ''}`, { token, timeout: (wait + 15) * 1000 }).catch(() => null);
-  if (!r || r.status !== 200) return false;
+  // Serveur injoignable (Wi-Fi coupé, serveur qui redémarre) : l'interface l'affiche, et le dit quand c'est revenu
+  const up = Boolean(r && r.status === 200);
+  if (r?.status !== 401) { netFails = up ? 0 : netFails + 1; const online = netFails < 2; if (online !== netOnline) { netOnline = online; send('net:state', { online }); } }
+  if (!up) return false;
+  // Nouveau message, fenêtre pas au premier plan : la barre des tâches clignote (comme Discord)
+  if ((r.items ?? []).some((x) => x.type === 'msg' || x.type === 'gmsg') && win && !win.isDestroyed() && !win.isFocused()) win.flashFrame(true);
   store.data.inboxAt = Math.max(after, Number(r.now) || 0, ...(r.items ?? []).map((x) => x.at));
   socialLive = r;
   for (const x of r.items ?? []) {
@@ -3295,3 +3302,7 @@ ipcMain.handle('account:pairApprove', async (_e, code) => {
   const r = await social('/api/compte/lien/valider', { code: c });
   return r.ok ? { ok: true, nom: r.nom } : { ok: false, error: r.error ?? 'Code refusé.' };
 });
+
+// Où sont gardés les comptes (Supabase ou pas), sans rien de secret
+ipcMain.handle('account:cloud', () => (process.env.LAUNCHER_DEMO ? { stockage: 'Supabase', supabase: true, comptes: 128 } : api('/api/compte/etat').catch(() => ({ status: 0 }))));
+ipcMain.handle('net:state', () => ({ online: netOnline }));

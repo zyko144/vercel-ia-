@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { load, save } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
-import { PUBLIC_BASE, checkImage, me, profileOf } from './launcherAccounts.js';
+import { PUBLIC_BASE, checkImage, dropImage, me, profileOf, saveImage } from './launcherAccounts.js';
 
 const KEY = 'launcher-social';
 const MAX_FRIENDS = 200;
@@ -269,10 +269,9 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     const img = checkImage(raw, 1_200_000);
     if (typeof img === 'string') return { error: img };
     const imgId = randomUUID();
-    save(`launcher-img-${imgId}`, img);
-    return { img: imgId };
+    return saveImage('image', imgId, img).then(() => ({ img: imgId }), () => ({ error: 'Image non envoyée, réessaie dans un instant.' }));
   };
-  const dropImg = (m) => { if (m?.img) save(`launcher-img-${m.img}`, {}); };
+  const dropImg = (m) => { if (m?.img) dropImage('image', m.img); };
 
   if (route === 'POST /api/compte/messages') {
     const to = String(body.to ?? '');
@@ -284,7 +283,7 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     const fil = listOf(d.threads, key);
     if (fil.some((m) => m.id === mid)) return send(res, 200, { ok: true, id: mid, fil: withIds(fil) });
     if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
-    const a = attach(body.image);
+    const a = await attach(body.image);
     if (a.error) return send(res, 400, { error: a.error });
     const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}) };
     const kept = [...fil, m];
@@ -379,7 +378,7 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     const fil = listOf(d.gthreads, g.id);
     if (fil.some((m) => m.id === mid)) return send(res, 200, { ok: true, id: mid, fil });
     if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
-    const a = attach(body.image);
+    const a = await attach(body.image);
     if (a.error) return send(res, 400, { error: a.error });
     const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}) };
     const kept = [...fil, m];

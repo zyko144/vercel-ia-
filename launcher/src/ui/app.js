@@ -1572,6 +1572,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.26.0': [
+    ['☁', 'Comptes reliés à Supabase', 'Comptes, amis, messages et groupes sont gardés sur Supabase ; tes photos, bannières et images de discussion vont dans Supabase Storage. Paramètres › Compte montre si tout est bien sauvegardé.'],
+    ['📶', 'Hors ligne visible', 'Si le serveur ne répond plus, une pastille « Hors ligne » s’affiche en haut, puis « De retour en ligne » quand ça revient.'],
+    ['🔔', 'Barre des tâches qui clignote', 'Un ami t’écrit pendant que le launcher est derrière une autre fenêtre : son icône clignote dans la barre des tâches.'],
+    ['↩', 'Dernière page rouverte', 'Le launcher rouvre la page où tu étais (Amis, Mon PC, Statistiques…).'],
+  ],
   '0.25.0': [
     ['⏱', 'Temps de jeu en direct', 'Le temps de jeu monte chaque minute pendant la partie, même pour Steam et FiveM (qui ne l’écrivent qu’à la fermeture du jeu), sans jamais compter deux fois.'],
     ['💬', 'Messages : Vu, écrit…, réponses, réactions', '« Vu à 21 h 04 » sous ton message, « Max écrit… » en direct, ↩ pour répondre à un message précis, 😀 pour réagir (👍 😂 🔥 ❤️ 😮 😢), en privé et en groupe.'],
@@ -3709,7 +3715,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.25.0',
+    version: async () => '0.26.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
@@ -3829,3 +3835,27 @@ $('authPairBtn').addEventListener('click', async () => {
     if (p?.status === 410) { clearInterval(pairTimer); $('pairHint').textContent = 'Code expiré : clique sur Retour pour en demander un nouveau.'; }
   }, 2500);
 });
+
+// Paramètres › Compte : les comptes sont-ils bien gardés sur Supabase ?
+async function renderCloudState() {
+  const r = await api.cloudState?.().catch(() => null);
+  const el = $('cloudState'); if (!el) return;
+  const [icon, title, sub, cls] = !r || r.status === 0 ? ['⚠', 'Serveur injoignable', 'Impossible de vérifier la sauvegarde pour l’instant.', 'warn']
+    : r.supabase ? ['✅', 'Comptes sauvegardés sur Supabase', `Ton compte, tes amis, tes messages et tes images sont gardés en ligne, même quand le serveur redémarre.`, 'ok']
+      : ['⛔', 'Comptes non reliés à Supabase', 'Le serveur garde les comptes sur son disque : ils peuvent disparaître à une mise à jour. À régler côté serveur (Render › Environment).', 'bad'];
+  el.className = `cloudstate ${cls}`;
+  el.innerHTML = `<span>${icon}</span><div><b>${esc(title)}</b><small>${esc(sub)}</small></div>`;
+}
+document.addEventListener('click', (e) => { if (e.target.closest('button[data-pane="compte"]')) setTimeout(renderCloudState, 50); });
+setTimeout(renderCloudState, 6000);
+
+// Hors ligne : petite pastille en haut, et « De retour en ligne » quand ça revient
+api.onNetState?.((d) => { $('netPill').hidden = d.online; if (d.online) toast('✅ De retour en ligne'); });
+// La dernière page ouverte revient au démarrage (Amis, Mon PC…)
+const LAST_VIEW_OK = ['accueil', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis', 'pc'];
+document.addEventListener('click', (e) => { const b = e.target.closest('#nav [data-view]'); if (b && LAST_VIEW_OK.includes(b.dataset.view)) { try { localStorage.setItem('hl-lastview', b.dataset.view); } catch { /* stockage bloqué */ } } });
+setTimeout(() => {
+  if (!window.launcher || state.view !== 'accueil') return;
+  let v = null; try { v = localStorage.getItem('hl-lastview'); } catch { /* stockage bloqué */ }
+  if (v && v !== 'accueil' && LAST_VIEW_OK.includes(v)) go(v);
+}, 1500);
