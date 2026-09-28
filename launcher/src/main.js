@@ -530,7 +530,14 @@ ipcMain.handle('opti:launch', async (_e, id, choice = {}) => {
     if (c.quiet) step('Notifications Windows en pause pendant la partie…', 65);
     if (c.priority) step('Priorité au jeu (dès qu’il démarre)…', 75);
   }
-  if (choice.perfbar) { store.data.settings.perfbar = true; store.save(); }
+  if (choice.perfbar) {
+    store.data.settings.perfbar = true; store.save();
+    if (store.data.settings.fps !== true && process.platform === 'win32') {
+      step('Activation de la mesure des FPS (Windows demande l’autorisation une seule fois)…', 82);
+      const f = await enableFps().catch(() => ({ ok: false }));
+      if (f.relog) notify('Mesure des FPS activée', 'Reconnecte-toi à Windows une fois (ou redémarre le PC) : ensuite tes FPS s’affichent dans le mini-compteur.');
+    }
+  }
   step('Lancement du jeu…', 90);
   const r = await doAction(item.id, 'launch').catch((err) => ({ ok: false, error: err.message }));
   step(r?.ok === false ? 'Lancement impossible' : 'Prêt ! Bon jeu 🎮', 100);
@@ -2871,6 +2878,7 @@ async function sessionStart(s) {
   setQuiet(true); // mesures plus légères pendant le jeu (pas de requête WMI de température, carte graphique lue moins souvent)
   if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
   if (store.data.settings.perfbar) setPerfbar(true);
+  send('ui:gaming', true);
   if (!item || store.data.settings.fps !== true || profileOf(item.id).fps === false || process.platform !== 'win32') return;
   const exe = (await runningPaths(0)).find((p) => item.installDir && p.startsWith(String(item.installDir).toLowerCase()) && /\.exe$/.test(p) && !/(crash|report|launcher|helper|updater|redist|unins)/i.test(p));
   if (!exe) return;
@@ -2891,6 +2899,7 @@ async function sessionEnd() {
   if (!s) return;
   setQuiet(false);
   setPerfbar(false);
+  send('ui:gaming', false);
   setTimeout(flushHeld, 3000);
   if (s.autoWidget && !store.data.settings.widget) setWidget(false);
   const minutes = (Date.now() - s.start) / 60_000;
@@ -2917,7 +2926,8 @@ async function sessionEnd() {
   const B = { cpu: 'le processeur limite tes FPS', gpu: 'la carte graphique travaille à fond (normal pour un jeu exigeant)', mixte: 'processeur et carte graphique sont équilibrés' };
   if (rec.avg || rec.bound) notify(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s) repérée(s).` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
 }
-ipcMain.handle('fps:enable', async () => {
+ipcMain.handle('fps:enable', () => enableFps());
+async function enableFps() {
   if (process.platform !== 'win32') return { ok: false, error: 'Windows seulement.' };
   try { await ensurePresentMon(path.join(app.getPath('userData'), 'outils')); } catch (err) { return { ok: false, error: err.message }; }
   const encoded = Buffer.from(PERF_GROUP_SCRIPT, 'utf16le').toString('base64');
@@ -2927,7 +2937,7 @@ ipcMain.handle('fps:enable', async () => {
   });
   store.data.settings.fps = true; store.save();
   return { ok, relog: ok };
-});
+}
 ipcMain.handle('fps:disable', () => { store.data.settings.fps = false; store.save(); return true; });
 
 // ---------- 11. Gain mesuré : mini-benchmark avant / après une optimisation ----------

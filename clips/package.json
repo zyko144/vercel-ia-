@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.6.2",
-  "releaseNotes": "Sécurité renforcée : fenêtres en bac à sable, aucune navigation vers l’extérieur, l’appli refuse de démarrer si ses fichiers ont été modifiés, et chaque installateur est publié avec son empreinte SHA-256 pour vérifier qu’il est original.",
+  "version": "0.6.3",
+  "releaseNotes": "Moins de travail pour la carte graphique : la bordure néon ne tourne plus en continu, et l’appli reste au repos pendant que tu joues.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
