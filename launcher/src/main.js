@@ -18,6 +18,7 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
+import { perfBaseline, perfDelta, perfLine, prelaunchChecks } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
@@ -452,21 +453,21 @@ class Notif extends Notification {
 function notify(title, body) {
   if (Notification.isSupported()) new Notif({ title, body, icon: ICON, silent: true }).show();
 }
-async function startBoost(item) {
-  const b = boostSettings();
+async function startBoost(item, force = null) {
+  const b = force ? { ...boostSettings(), enabled: true, close: force.close ?? [], power: Boolean(force.power), tune: Boolean(force.priority) } : boostSettings();
   // Réglage par jeu : « toujours » (même si l'opti auto est coupée) ou « jamais » pour ce jeu
   const perGame = b.games?.[item.id];
   const prof = profileOf(item.id);
-  if (perGame === false || (!b.enabled && perGame !== true && !prof.enabled && !store.data.settings.tournament) || boosted || process.platform !== 'win32') return;
-  const power = prof.enabled ? prof.power !== 'none' : b.power;
+  if ((!force && (perGame === false || (!b.enabled && perGame !== true && !prof.enabled && !store.data.settings.tournament))) || boosted || process.platform !== 'win32') return;
+  const power = force ? b.power : prof.enabled ? prof.power !== 'none' : b.power;
   const scheme = power ? await activeScheme() : null;
   if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(HIGH_PERFORMANCE);
-  const closed = await closeApps(boostPlan(await runningPaths(), [...new Set([...b.close, ...(prof.enabled ? prof.close : [])])]));
+  const closed = await closeApps(boostPlan(await runningPaths(), force ? b.close : [...new Set([...b.close, ...(prof.enabled ? prof.close : [])])]));
   // Profil du jeu : notifications de Windows coupées pendant la partie (remises à la fin)
-  const quiet = Boolean(prof.enabled && prof.quiet) && await windowsToasts(false);
+  const quiet = Boolean(force ? force.quiet : prof.enabled && prof.quiet) && await windowsToasts(false);
   boosted = { item, scheme, closed, quiet, start: Date.now(), misses: 0, hogs: {} };
   (store.data.boostedAt ??= {})[item.id] = Date.now();
-  notify('Boost activé', `${item.name} : performances élevées${closed.length ? `, ${closed.length} appli(s) fermée(s)` : ''}.`);
+  if (!force) notify('Boost activé', `${item.name} : performances élevées${closed.length ? `, ${closed.length} appli(s) fermée(s)` : ''}.`);
   boosted.timer = setInterval(async () => {
     const paths = await runningPaths();
     if (!boosted) return;
@@ -485,6 +486,79 @@ async function startBoost(item) {
     if (boosted.misses >= 2) endBoost().catch(() => {});
   }, 20_000);
 }
+// ---------- « Optimiser et jouer » : vérifications, puis réglages temporaires appliqués un par un (tout est remis à la fin) ----------
+ipcMain.handle('opti:prepare', async (_e, id) => {
+  const item = items.find((i) => i.id === id);
+  if (!item) return null;
+  const [paths, pc, power] = await Promise.all([runningPaths().catch(() => []), snapshot().catch(() => null), process.platform === 'win32' ? activeScheme().catch(() => null) : null]);
+  const running = new Set(boostPlan(paths, BOOST_APPS.map((a) => a.id)).map((x) => x.exe));
+  const apps = BOOST_APPS.filter((a) => [a.exe].flat().some((e) => running.has(e)) && !(a.id === 'epicbg' && item.source === 'epic')).map(({ id: aid, label }) => ({ id: aid, label }));
+  const { statfs } = await import('node:fs/promises');
+  const fsInfo = item.installDir ? await statfs(item.installDir).catch(() => null) : null;
+  const checks = prelaunchChecks({
+    apps, power, high: HIGH_PERFORMANCE, fpsOn: store.data.settings.fps === true,
+    ramUsedPct: pc?.ram ? Math.round((100 * pc.ram.used) / pc.ram.total) : null, temp: pc?.cpu?.temp ?? null,
+    diskFreeGb: fsInfo ? (fsInfo.bavail * fsInfo.bsize) / 1e9 : null, driverOld: Boolean(driverInfo),
+  });
+  const base = perfBaseline(store.data.perf?.[id] ?? []);
+  const withAvg = (store.data.perf?.[id] ?? []).filter((r) => r.avg);
+  const on = withAvg.filter((r) => r.boost); const off = withAvg.filter((r) => !r.boost);
+  const mean = (l) => (l.length ? l.reduce((a, r) => a + r.avg, 0) / l.length : null);
+  const gain = on.length && off.length ? perfDelta(mean(on), mean(off)) : null;
+  return { name: item.name, checks, base, gain, history: withAvg.slice(-10).map((r) => ({ avg: r.avg, boost: Boolean(r.boost) })), boosted: Boolean(boosted), windows: process.platform === 'win32' };
+});
+ipcMain.handle('opti:launch', async (_e, id, choice = {}) => {
+  const item = items.find((i) => i.id === id && i.installed);
+  if (!item) return { ok: false };
+  const step = (text, pct) => send('opti:step', { text, pct });
+  const c = { close: Array.isArray(choice.close) ? choice.close.map(String).filter((x) => BOOST_APPS.some((a) => a.id === x)) : [], power: Boolean(choice.power), priority: Boolean(choice.priority), quiet: Boolean(choice.quiet) };
+  step('Analyse de ton PC…', 10);
+  if (process.platform === 'win32' && !boosted) {
+    if (c.close.length) step(`Fermeture de ${c.close.length} appli${c.close.length > 1 ? 's' : ''} en arrière-plan…`, 30);
+    if (c.power) step('Passage en mode « Performances élevées »…', 50);
+    await startBoost(item, c).catch(() => {});
+    if (c.quiet) step('Notifications Windows en pause pendant la partie…', 65);
+    if (c.priority) step('Priorité au jeu (dès qu’il démarre)…', 75);
+  }
+  if (choice.perfbar) { store.data.settings.perfbar = true; store.save(); }
+  step('Lancement du jeu…', 90);
+  const r = await doAction(item.id, 'launch').catch((err) => ({ ok: false, error: err.message }));
+  step(r?.ok === false ? 'Lancement impossible' : 'Prêt ! Bon jeu 🎮', 100);
+  return r ?? { ok: true };
+});
+
+// ---------- Mini-barre de performances en jeu (toute petite, lisible, cachable avec Ctrl+Alt+P) ----------
+let perfbar = null;
+function perfbarData() {
+  if (!sess) return null;
+  const base = perfBaseline(store.data.perf?.[sess.id] ?? []);
+  const last = sess.samples.at(-1) ?? {};
+  const fps = sess.live?.avg ? Math.round(sess.live.avg) : null;
+  return { game: sess.name, fps, gpu: last.gpu != null ? Math.round(last.gpu) : null, delta: perfDelta(sess.live?.avg, base?.avg), text: perfLine({ fps, delta: perfDelta(sess.live?.avg, base?.avg), gpu: last.gpu }) };
+}
+function perfbarPush() { if (perfbar && !perfbar.isDestroyed()) { const d = perfbarData(); if (d) perfbar.webContents.send('perfbar:data', d); } }
+function setPerfbar(on) {
+  if (!on) { if (perfbar && !perfbar.isDestroyed()) perfbar.close(); perfbar = null; return; }
+  if (perfbar && !perfbar.isDestroyed()) return;
+  const area = screen.getPrimaryDisplay().workArea;
+  perfbar = new BrowserWindow({ width: 190, height: 30, x: area.x + 10, y: area.y + 8, frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, hasShadow: false, show: false,
+    webPreferences: { preload: path.join(here, 'perfbar.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false } });
+  perfbar.setAlwaysOnTop(true, 'screen-saver');
+  perfbar.setIgnoreMouseEvents(true); // les clics passent au jeu
+  perfbar.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  perfbar.webContents.on('will-navigate', (e) => e.preventDefault());
+  perfbar.loadFile(path.join(here, 'ui', 'perfbar.html'));
+  perfbar.once('ready-to-show', () => { perfbar?.showInactive(); perfbarPush(); });
+  perfbar.on('closed', () => { perfbar = null; });
+}
+function togglePerfbar() {
+  const on = !(perfbar && !perfbar.isDestroyed());
+  store.data.settings.perfbar = on; store.save();
+  if (on && !sess) { notify('Mini-compteur de performances', 'Il s’affichera pendant ta prochaine partie (Ctrl+Alt+P pour le cacher).'); return; }
+  setPerfbar(on);
+}
+ipcMain.handle('perfbar:set', (_e, on) => { store.data.settings.perfbar = Boolean(on); store.save(); if (sess) setPerfbar(Boolean(on)); return Boolean(on); });
+
 async function endBoost({ silent = false } = {}) {
   if (!boosted) return;
   const { scheme, closed, timer, quiet, tuned, hogs, start } = boosted;
@@ -1746,6 +1820,8 @@ const openClipsApp = () => {
 };
 ipcMain.handle('capture:clip', () => ({ ok: openClipsApp() }));
 ipcMain.handle('clips:site', () => openClipsApp());
+// Bouton Discord : invitation vers le serveur History Launcher (créée par le bot)
+ipcMain.handle('app:discord', async () => { const r = await api('/api/discord/invite?app=launcher').catch(() => ({})); await shell.openExternal(r.url ?? 'https://zyko144.github.io/vercel-ia-/'); return Boolean(r.url); });
 // History Clips demande à se connecter à ce compte (lien history://clips/CODE) : validé tout seul si on vient de l'ouvrir d'ici,
 // sinon on demande (un site ne peut pas relier son propre History Clips à ton compte en douce)
 async function approveClips(code) {
@@ -2476,6 +2552,7 @@ const HOTKEYS = {
   palette: ['CommandOrControl+Alt+Space', () => { showWindow(); send('palette:open', {}); }],
   shot: ['CommandOrControl+Alt+S', () => { takeScreenshot().catch((err) => notify('Capture impossible', err.message)); }],
   toggle: ['CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow())],
+  perfbar: ['CommandOrControl+Alt+P', () => togglePerfbar()],
 };
 const hotkeyOf = (k) => store.data.settings.hotkeys?.[k] || HOTKEYS[k][0];
 function registerHotkeys() {
@@ -2772,6 +2849,8 @@ async function sessionTick(s) {
   const snap = await snapshot().catch(() => null);
   const c = coreLoad();
   sess.samples.push({ gpu: snap?.gpu?.usage ?? null, core: c.max, cpu: c.avg });
+  sess.cpuT = snap?.cpu?.temp ?? sess.cpuT ?? null;
+  perfbarPush();
   heatCheck(sess, snap);
 }
 async function sessionStart(s) {
@@ -2781,12 +2860,13 @@ async function sessionStart(s) {
   sessionPing(sess, item);
   setQuiet(true); // mesures plus légères pendant le jeu (pas de requête WMI de température, carte graphique lue moins souvent)
   if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
+  if (store.data.settings.perfbar) setPerfbar(true);
   if (!item || store.data.settings.fps !== true || profileOf(item.id).fps === false || process.platform !== 'win32') return;
   const exe = (await runningPaths(0)).find((p) => item.installDir && p.startsWith(String(item.installDir).toLowerCase()) && /\.exe$/.test(p) && !/(crash|report|launcher|helper|updater|redist|unins)/i.test(p));
   if (!exe) return;
   const pm = await ensurePresentMon(path.join(app.getPath('userData'), 'outils')).catch(() => null);
   if (!pm || !sess) return;
-  sess.cap = captureFps(pm, path.win32.basename(exe), (live) => { if (sess) { sess.live = live; widgetPush(); } });
+  sess.cap = captureFps(pm, path.win32.basename(exe), (live) => { if (sess) { sess.live = live; widgetPush(); perfbarPush(); } });
 }
 function verdict(stats, samples) {
   const g = samples.map((x) => x.gpu).filter((x) => x != null);
@@ -2800,6 +2880,7 @@ async function sessionEnd() {
   const s = sess; sess = null;
   if (!s) return;
   setQuiet(false);
+  setPerfbar(false);
   setTimeout(flushHeld, 3000);
   if (s.autoWidget && !store.data.settings.widget) setWidget(false);
   const minutes = (Date.now() - s.start) / 60_000;
@@ -2809,6 +2890,8 @@ async function sessionEnd() {
   clearInterval(s.pingTimer);
   setTimeout(() => crashCheck(s).catch(() => {}), 8000);
   if (minutes < 3) return;
+  const played = items.find((i) => i.id === s.id);
+  if (played && played.source !== 'steam' && minutes >= 5) setTimeout(() => cloudSaveUp(played).catch(() => {}), 20_000);
   const v = verdict(stats?.error ? null : stats, s.samples);
   const rec = { at: Date.now(), minutes: Math.round(minutes), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
   ((store.data.perf ??= {})[s.id] ??= []).push(rec);
@@ -3123,6 +3206,55 @@ async function receiveShare(shareId) {
   return { ok: true, files: n, folder: dest };
 }
 ipcMain.handle('saves:receive', (_e, id) => receiveShare(id));
+
+// ---------- Sauvegardes dans le cloud (jeux sans cloud : hors Steam) : envoyées après chaque partie, récupérables partout ----------
+async function cloudSaveUp(item) {
+  if (!secret('account') || item.source === 'steam') return { ok: false };
+  const dirs = await saveDirsOf(item);
+  if (!dirs.length) return { ok: false, error: 'Dossier de sauvegarde inconnu.' };
+  const buf = await packSaves(item.name, dirs).catch(() => null);
+  if (!buf || buf.length > 50 * 1024 * 1024) return { ok: false, error: 'Sauvegarde trop grosse pour le cloud (50 Mo).' };
+  const r = await apiRaw(`/api/compte/saves?jeu=${encodeURIComponent(item.name.slice(0, 80))}`, buf, { timeout: 120_000 });
+  if (r.ok) { (store.data.cloudSavesAt ??= {})[item.id] = r.at; store.save(); }
+  return r.ok ? { ok: true, at: r.at, bytes: buf.length } : { ok: false, error: r.error ?? 'Envoi impossible.' };
+}
+ipcMain.handle('saves:cloudUp', async (_e, id) => { const item = items.find((i) => i.id === String(id)); return item ? cloudSaveUp(item) : { ok: false }; });
+ipcMain.handle('saves:cloudDown', async (_e, id) => {
+  const item = items.find((i) => i.id === String(id)); const token = secret('account');
+  if (!item || !token) return { ok: false, error: 'Connecte-toi à ton compte History.' };
+  const dirs = await saveDirsOf(item);
+  if (!dirs.length) return { ok: false, error: 'Dossier de sauvegarde inconnu : choisis-le d’abord (Outils du jeu › Sauvegardes).' };
+  if (activeItems([item], await runningPaths(0)).size) return { ok: false, error: 'Ferme le jeu avant de récupérer la sauvegarde.' };
+  let pack;
+  try {
+    const res = await fetch(`${API}/api/compte/saves?jeu=${encodeURIComponent(item.name.slice(0, 80))}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(120_000) });
+    if (!res.ok) return { ok: false, error: (await res.json().catch(() => ({}))).error ?? 'Aucune sauvegarde en ligne.' };
+    pack = await readPack(Buffer.from(await res.arrayBuffer()));
+  } catch (err) { return { ok: false, error: err.message }; }
+  if (!(await confirm(`Remettre la sauvegarde en ligne de ${item.name} ?`, 'Ta partie actuelle est d’abord copiée à côté (Outils du jeu › Sauvegardes) : tu pourras revenir dessus.'))) return { ok: false, cancelled: true };
+  await savesBackup(item);
+  return { ok: true, files: await unpackSaves(pack, dirs) };
+});
+
+// ---------- Disque presque plein : prévenu avant qu'une mise à jour de jeu échoue (une fois par jour et par disque) ----------
+async function diskWatch() {
+  if (process.platform !== 'win32') return;
+  const { statfs } = await import('node:fs/promises');
+  const roots = [...new Set(items.filter((i) => i.installed && i.installDir).map((i) => path.win32.parse(String(i.installDir)).root.toUpperCase()).filter(Boolean))];
+  const today = new Date().toDateString();
+  for (const root of roots) {
+    const fs1 = await statfs(root).catch(() => null);
+    if (!fs1) continue;
+    const free = (fs1.bavail * fs1.bsize) / 1e9; const pct = (100 * fs1.bavail) / Math.max(1, fs1.blocks);
+    if (free >= 15 && pct >= 5) continue;
+    if ((store.data.diskWarned ??= {})[root] === today) continue;
+    store.data.diskWarned[root] = today; store.save();
+    const n = new Notif({ title: `Disque ${root.replace('\\', '')} presque plein`, body: `Plus que ${Math.round(free)} Go libres : les mises à jour de jeux risquent d’échouer. Clique pour voir quoi nettoyer ou déplacer.`, icon: ICON });
+    n.on('click', () => showWindow()); n.show();
+  }
+}
+setTimeout(() => diskWatch().catch(() => {}), 5 * 60_000);
+setInterval(() => diskWatch().catch(() => {}), 3 * 3_600_000);
 
 // ---------- Surchauffe pendant une partie : indicateur du widget (l'alerte « Ton PC chauffe » prévient déjà) ----------
 function heatCheck(s, snap) {

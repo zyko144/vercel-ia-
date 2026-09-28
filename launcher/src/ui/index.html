@@ -35,6 +35,7 @@
   <button class="bell" id="bellBtn" type="button" title="Centre de notifications" popovertarget="notifCenter"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><em id="bellCount"></em></button>
   <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Rechercher un jeu, une application…" autocomplete="off"></label>
   <span class="netpill" id="netPill" hidden title="Le serveur History ne répond pas : messages et amis reviennent dès que la connexion revient">⚠ Hors ligne · reconnexion…</span>
+  <button type="button" class="dcbtn" id="discordBtn" title="Rejoindre le serveur Discord History Launcher"><svg class="dc" viewBox="0 0 24 24"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.9 19.9 0 0 0 6 3l1.3-2a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2a19.8 19.8 0 0 0 6-3c.5-5.2-.8-9.7-3.7-13.7zM8.3 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></button>
   <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
 
@@ -253,9 +254,18 @@
     <div class="maint">
       <div class="maintsign"><svg viewBox="0 0 64 64"><path d="M32 5 61 57H3Z"/><path d="M32 23v17M32 47v1" class="ln"/></svg></div>
       <div class="mainttape"></div>
-      <h2>Optimisation en travaux</h2>
-      <p>Nous rencontrons des problèmes avec les optimisations. On les remettra au plus vite, pour que tout soit parfait à leur retour.</p>
-      <small>En attendant, rien n’est modifié sur ton PC. Si un jeu bug depuis une ancienne optimisation, remets les réglages de Windows comme à l’origine :</small>
+      <span class="soon">🔥 Presque prêt</span>
+      <h2>La nouvelle optimisation arrive</h2>
+      <p>On termine une optimisation complète, testée jeu par jeu : plus de FPS, moins de saccades, et <b>rien d’irréversible</b> sur ton PC.</p>
+      <div class="maintbar"><i></i><span>85 %</span></div>
+      <ul class="maintlist">
+        <li class="done"><span>⚡ <b>Optimiser et jouer</b> : vérifie ton PC et prépare la partie en un clic</span> <em>dispo</em></li>
+        <li class="done"><span>📊 <b>Mini-compteur en jeu</b> : tes FPS et le gain ou la perte, tout petit (<kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>P</kbd>)</span> <em>dispo</em></li>
+        <li class="wip"><span>🛠 <b>Réglages Windows sûrs</b> : testés sur chaque jeu, un par un</span> <em>en cours</em></li>
+        <li class="wip"><span>↩ <b>Retour arrière en 1 clic</b> pour chaque réglage</span> <em>en cours</em></li>
+        <li class="wip"><span>🎯 <b>Profils par jeu</b> automatiques (FiveM, Fortnite, Rocket League…)</span> <em>en cours</em></li>
+      </ul>
+      <small>En attendant : bouton ⚡ à côté de « Jouer ». Si un jeu bug depuis une ancienne optimisation, remets Windows comme avant :</small>
       <button class="btn" type="button" id="maintReset">↩ Remettre Windows comme avant</button>
       <div class="mainttape b"></div>
     </div>
@@ -386,6 +396,16 @@
   </form>
 </dialog>
 
+<dialog id="optiDlg" class="optidlg">
+  <div class="dlg">
+    <div class="odhead"><span class="odbolt">⚡</span><div><h2 id="odTitle">Optimiser et jouer</h2><small class="hint" id="odSub">Tout est remis comme avant à la fin de la partie</small></div><button type="button" class="x" id="odClose">✕</button></div>
+    <div id="odStats" class="odstats"></div>
+    <div id="odChecks" class="odchecks"></div>
+    <div id="odRun" class="odrun" hidden><div class="odbar"><i id="odFill"></i></div><p id="odStep">Préparation…</p><ul id="odLog"></ul></div>
+    <div class="odfoot" id="odFoot"><button type="button" class="btn ghost" id="odPlain">Jouer sans optimiser</button><button type="button" class="btn play" id="odGo">⚡ Optimiser et jouer</button></div>
+  </div>
+</dialog>
+
 <dialog id="keys">
   <form method="dialog" class="dlg">
     <h2>Raccourcis clavier</h2>
@@ -393,6 +413,7 @@
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>H</kbd></span><span>Afficher / ranger le launcher (partout, même en jeu)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>S</kbd></span><span>Capture d’écran (rangée dans Vidéos › nom du jeu)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>O</kbd></span><span>Infos par-dessus le jeu (PC, musique, amis)</span></div>
+      <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>P</kbd></span><span>Afficher / cacher le mini-compteur de performances en jeu</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>Espace</kbd></span><span>Recherche rapide : lance n’importe quoi (<kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Espace</kbd> depuis Windows)</span></div>
       <div class="krow"><span class="kk"><kbd>F11</kbd></span><span>Mode grand écran (TV, manette)</span></div>
       <div class="krow"><span class="kk"><kbd>Ctrl</kbd><kbd>F</kbd></span><span>Rechercher (ou <kbd>/</kbd>)</span></div>

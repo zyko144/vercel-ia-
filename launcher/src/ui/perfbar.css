@@ -1,0 +1,8 @@
+/* Mini-barre en jeu : petite, lisible sur n'importe quel décor (fond sombre translucide, texte net) */
+html, body { margin: 0; background: transparent; overflow: hidden; user-select: none; }
+#bar { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 9px; background: rgba(8, 10, 16, .62); border: 1px solid rgba(255, 255, 255, .1);
+  font: 600 12.5px/1.2 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; color: #f2f4f8; text-shadow: 0 1px 2px #000; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#txt b { font-size: 13.5px; }
+.arr { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; font-weight: 800; }
+.arr svg { width: 11px; height: 13px; fill: currentColor; filter: drop-shadow(0 0 4px currentColor); }
+.arr.up { color: #2ee07a; } .arr.down { color: #ff5a4f; }

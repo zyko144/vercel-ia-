@@ -1,6 +1,6 @@
 // Côté social des comptes History Launcher : amis (par code ami), présence (jeu en cours), classement de la semaine
 // entre amis, soirées jeu. Tout passe par la session du compte ; on ne voit que ses amis, jamais les autres comptes.
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { delBlob, getBlob, load, putBlob, save } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
 import { PUBLIC_BASE, checkImage, dropImage, me, profileOf, saveImage } from './launcherAccounts.js';
@@ -589,6 +589,28 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
     const r = await (await import('./launcherDiscord.js')).postClip({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, toDiscordId, seconds: Number(url.searchParams.get('duree')) || 45, game: text(url.searchParams.get('jeu'), 80) || null, note: text(url.searchParams.get('texte'), 200) || null })
       .catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
     return send(res, r.ok ? 200 : 502, r);
+  }
+  // Sauvegardes de jeux dans le cloud (jeux sans cloud : FiveM, jeux hors Steam…) : la dernière de chaque jeu, 50 Mo maximum
+  if (url.pathname === '/api/compte/saves' || route === 'GET /api/compte/saves/liste') {
+    const key = (j) => createHash('sha1').update(String(j ?? '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '')).digest('hex').slice(0, 24);
+    const all = (await load('cloud-saves', {})) ?? {};
+    const mine = (all[id] ??= {});
+    if (route === 'GET /api/compte/saves/liste') return send(res, 200, { saves: Object.values(mine) });
+    const jeu = text(url.searchParams.get('jeu'), 80);
+    if (!jeu) return send(res, 400, { error: 'Jeu manquant.' });
+    if (req.method === 'POST') {
+      if (!allowAttempt('cloud-saves', id, 60, 86_400_000)) return send(res, 429, { error: 'Trop de sauvegardes aujourd’hui.' });
+      const buf = await readBinary(req, 50 * 1024 * 1024).catch(() => null);
+      if (!buf?.length) return send(res, 413, { error: 'Sauvegarde trop grosse (50 Mo maximum).' });
+      await putBlob(`saves/${id}/${key(jeu)}`, buf, 'application/octet-stream');
+      mine[key(jeu)] = { jeu, at: Date.now(), size: buf.length };
+      save('cloud-saves', all);
+      return send(res, 200, { ok: true, at: mine[key(jeu)].at });
+    }
+    const blob = mine[key(jeu)] ? await getBlob(`saves/${id}/${key(jeu)}`) : null;
+    if (!blob) return send(res, 404, { error: 'Aucune sauvegarde en ligne pour ce jeu.' });
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': blob.buf.length, 'Cache-Control': 'no-store', 'X-Save-At': String(mine[key(jeu)].at) });
+    res.end(blob.buf); return true;
   }
   // Lien de partage web d'un clip (History Clips) : allégé pour tenir sous 10 Mo, gardé 7 jours
   if (route === 'POST /api/compte/clip/lien') {

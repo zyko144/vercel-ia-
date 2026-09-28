@@ -112,3 +112,15 @@ console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, p
   assert.ok(!existsSync(path.join(b, '..', 'evil.txt')), 'chemin inconnu ignoré');
   console.log('✅ Réglages des jeux dans le cloud : 6 vérifications');
 }
+{
+  const { perfBaseline, perfDelta, perfLine, prelaunchChecks } = await import('../src/core/prelaunch.js');
+  const recs = [{ avg: 100, low1: 70 }, { avg: 110, low1: 80 }, { avg: 130, low1: 95, boost: true }, { minutes: 5 }];
+  const b = perfBaseline(recs);
+  ok(b.avg === 105 && b.low1 === 75 && b.plain === true && perfBaseline([]) === null, 'référence FPS sans optimisation');
+  ok(perfDelta(126, 105) === 20 && perfDelta(90, 100) === -10 && perfDelta(0, 100) === null && perfDelta(5000, 10) === null, 'gain / perte en %');
+  ok(perfLine({ fps: 144.4, delta: 9, gpu: 97 }) === '144 FPS ▲ +9 %' && perfLine({ fps: 60, delta: -4 }) === '60 FPS ▼ -4 %' && perfLine({ gpu: 96.6 }) === 'GPU 97 %' && perfLine() === '…', 'mini-barre courte');
+  const c = prelaunchChecks({ apps: [{ id: 'chrome', label: 'Google Chrome' }], ramUsedPct: 91, power: 'a', high: 'b', diskFreeGb: 8 });
+  ok(c.find((x) => x.id === 'close').on && c.find((x) => x.id === 'power').level === 'act' && c.some((x) => x.id === 'ram' && x.level === 'warn') && c.some((x) => x.id === 'disk'), 'vérifications avant de jouer');
+  ok(prelaunchChecks({ power: 'b', high: 'b' }).find((x) => x.id === 'power').level === 'ok', 'mode déjà au maximum : rien à changer');
+  console.log('✅ Optimiser avant de jouer (référence, gain, mini-barre, vérifications) : 5 vérifications');
+}
