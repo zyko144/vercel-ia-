@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, stat } from 'node:fs/prom
 import os from 'node:os';
 import path from 'node:path';
 import { csvReader, frameStats } from '../src/core/fps.js';
+import { nvidiaProduct } from '../src/core/gametools.js';
 import { backupSaves, clearDir, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, safeRel, shaderCaches, unpackSaves } from '../src/core/gametools.js';
 import { gameDemand, graphicsAdvice } from '../src/core/graphics.js';
 import { cardFor } from '../src/core/friendsync.js';
@@ -58,6 +59,11 @@ ok(!(await moveSteamGame({ appId: '10', installDir: '../x', fromLib: from, toLib
 
 // Prix et pilotes
 ok(priceAlert({ target: 20 }, { price: 19.99 }) && !priceAlert({ target: 20, lastNotified: 15 }, { price: 19 }) && !priceAlert({ target: 20 }, { price: 25 }), 'alerte de prix');
+{
+  const xml = '<LookupValueSearch><LookupValues><LookupValue ParentID="127" RequiresProduct="True"><Name>GeForce RTX 5090</Name><Value>1066</Value></LookupValue><LookupValue ParentID="112" RequiresProduct="True"><Name>GeForce GTX 1660 SUPER</Name><Value>910</Value></LookupValue><LookupValue ParentID="112"><Name>GeForce GTX 1660</Name><Value>895</Value></LookupValue></LookupValues></LookupValueSearch>';
+  const p = nvidiaProduct(xml, 'NVIDIA GeForce GTX 1660 SUPER');
+  ok(p?.psid === '112' && p?.pfid === '910' && nvidiaProduct(xml, 'NVIDIA GeForce GTX 1660')?.pfid === '895' && nvidiaProduct(xml, 'AMD Radeon') === null, 'pilote NVIDIA de la bonne carte');
+}
 ok(nvidiaVersion('32.0.15.8129') === '581.29' && nvidiaVersion('31.0.15.5222') === '552.22', 'version NVIDIA');
 ok(newerVersion('581.42', '581.29') && !newerVersion('581.29', '581.29'), 'comparaison de versions');
 // Partage de sauvegardes : paquet compressé, chemins vérifiés, écrit dans les dossiers du destinataire

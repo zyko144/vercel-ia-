@@ -170,9 +170,22 @@ export function priceAlert(alert, now) {
   return now.price <= alert.target && (alert.lastNotified == null || now.price < alert.lastNotified);
 }
 
-// ===================== 12. Dernier pilote NVIDIA (Game Ready, le même pour toutes les GeForce de bureau) =====================
-export async function nvidiaLatest(fetchImpl = fetch) {
-  const url = 'https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=127&pfid=1017&osID=135&languageCode=1036&isWHQL=1&dch=1&sort1=0&numberOfResults=1';
+// ===================== 12. Dernier pilote NVIDIA pour LA carte du PC =====================
+// Avant : toujours le pilote de la gamme la plus récente, proposé même à une GTX 1660 qui n'en veut pas.
+// Maintenant : on retrouve la carte dans la liste officielle NVIDIA (série + produit), puis son pilote à elle.
+const normGpu = (v) => String(v ?? '').replace(/^nvidia\s+/i, '').replace(/&amp;/g, '&').replace(/[^a-z0-9]/gi, '').toLowerCase();
+/** { psid, pfid } de la carte dans la liste NVIDIA (XML de lookupValueSearch TypeID=3), ou null si inconnue. */
+export function nvidiaProduct(xml, gpuName) {
+  const want = normGpu(gpuName);
+  if (!want) return null;
+  for (const m of String(xml ?? '').matchAll(/<LookupValue\b[^>]*ParentID="(\d+)"[^>]*>\s*<Name>([^<]+)<\/Name>\s*<Value>(\d+)<\/Value>/g)) if (normGpu(m[2]) === want) return { psid: m[1], pfid: m[3] };
+  return null;
+}
+export async function nvidiaLatest(gpuName, fetchImpl = fetch) {
+  const xml = await fetchImpl('https://www.nvidia.com/Download/API/lookupValueSearch.aspx?TypeID=3', { signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+  const p = nvidiaProduct(xml, gpuName);
+  if (!p) return null; // carte pas trouvée : on ne propose rien plutôt qu'un pilote qui n'est peut-être pas le sien
+  const url = `https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&psid=${p.psid}&pfid=${p.pfid}&osID=135&languageCode=1036&isWHQL=1&dch=1&sort1=0&numberOfResults=1`;
   const j = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const d = j?.IDS?.[0]?.downloadInfo;
   if (!d?.Version) return null;
