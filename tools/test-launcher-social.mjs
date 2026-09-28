@@ -279,6 +279,11 @@ await check('profil : cadre à sa couleur, liens collés ramenés au pseudo', as
   assert.equal(r.compte.profile.frame, 'perso'); assert.equal(r.compte.profile.frameColor, '#22c55e');
   assert.deepEqual(r.compte.profile.links, { discord: 'gg/abcDEF', twitch: 'noam_tv', youtube: 'Noam.TV', steam: '76561198000000000' });
   assert.equal((await call('profil', noam, { cadreCouleur: 'red' })).compte.profile.frameColor, null);
+  const f = await call('profil', noam, { fond: '#1E1B2E', cacher: ['semaine', 'top', 'hack'] });
+  assert.equal(f.compte.profile.cardBg, '#1e1b2e'); assert.deepEqual(f.compte.profile.hide, ['semaine', 'top']);
+  await call('presence', noam, { playing: null, week: 300, top: 'FiveM', bench: 1200 });
+  const seen = (await call('amis', max)).amis.find((a) => a.pseudo === 'Noam');
+  assert.equal(seen.top, null, 'jeu le plus joué masqué pour les amis'); assert.equal(seen.bench, 1200); assert.deepEqual(seen.hide, ['semaine', 'top']);
 });
 
 await check('lu, écrit, réponse, réaction, image : tout arrive chez l’ami', async () => {

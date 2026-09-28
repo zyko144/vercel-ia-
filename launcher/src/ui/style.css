@@ -1619,3 +1619,31 @@ body.idle .maintsign svg { animation: none; }
 .netpill { margin-left: 10px; padding: 5px 11px; border-radius: 99px; font-size: 12px; font-weight: 600; color: #fecaca; background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.45); white-space: nowrap; animation: netpulse 2s ease-in-out infinite; }
 .netpill[hidden] { display: none; }
 @keyframes netpulse { 50% { opacity: .6; } }
+
+/* ---------- 0.27 : grand fond des jeux bien cadré (grands écrans compris) ---------- */
+.hero { height: clamp(330px, 24vw, 560px); }
+.hero .hbg { background-position: center 22%; transform: none; opacity: 0; transition: opacity .45s ease; }
+.hero .hbg.ready, .hero .hbg.blur, .hero .hbg.brandbg, .hero .hbg.brandimg { opacity: 1; }
+.hero .hbg:not(.brandbg) { animation: kenburns2 40s ease-in-out infinite alternate; }
+@keyframes kenburns2 { from { scale: 1; } to { scale: 1.035; } }
+/* Petite image (bannière, jaquette) : jamais étirée, posée nette sur son propre fond flou */
+.hero .hbg.low { background-size: cover; filter: blur(34px) saturate(1.3) brightness(.5); animation: none; }
+.hero .hbg.low { filter: none; }
+.hero .hbg.low::before { content: ''; position: absolute; inset: -40px; background: inherit; background-size: cover; filter: blur(34px) saturate(1.3) brightness(.5); }
+.hero .hbg.low .hfit { position: absolute; inset: 0 0 0 38%; background-size: contain; background-repeat: no-repeat; background-position: right center; -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%); mask-image: linear-gradient(90deg, transparent, #000 30%); }
+@media (min-width: 2000px) { .hero .hbg { background-position: center 18%; } }
+
+/* ---------- 0.27 : fond de carte au choix, logos officiels des réseaux ---------- */
+.pc2.custombg { background: linear-gradient(165deg, color-mix(in srgb, var(--cb) 70%, #0b0910), color-mix(in srgb, var(--cb) 38%, #0b0910)); }
+.pc2.custombg .pav.xl { box-shadow: 0 0 0 5px color-mix(in srgb, var(--cb) 70%, #0b0910); }
+.pc2.custombg .pc2box { background: rgba(0,0,0,.18); border-color: rgba(255,255,255,.08); }
+.pcol.bgpick { border-radius: 8px; }
+.pcol.bgpick.auto { background: repeating-linear-gradient(45deg, #2a2533 0 6px, #1b1822 6px 12px); color: #cfc8d8; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.phide { display: grid; gap: 6px; }
+.plico svg { width: 18px; height: 18px; fill: #fff; }
+.pl-discord .plico { background: #5865F2; }
+.pl-twitch .plico { background: #9146FF; }
+.pl-youtube .plico { background: #fff; } .pl-youtube .plico svg { fill: #FF0000; width: 20px; height: 20px; }
+.pl-tiktok .plico { background: #000; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); } .pl-tiktok .plico svg { filter: drop-shadow(-1.2px -1.2px 0 #25F4EE) drop-shadow(1.2px 1.2px 0 #FE2C55); }
+.pl-steam .plico { background: linear-gradient(135deg, #111d2e, #1b2838 55%, #2a475e); box-shadow: inset 0 0 0 1px rgba(102,192,244,.35); }
+.pl-instagram .plico { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }

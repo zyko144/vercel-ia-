@@ -87,7 +87,11 @@ document.addEventListener('error', (e) => {
   if (img.tagName !== 'IMG') return;
   const host = img.closest('[data-id]');
   const item = state.items.find((i) => i.id === host?.dataset.id) ?? (img.closest('#hero') ? state.sel : null);
-  if (img.classList.contains('cov')) { img.parentElement.querySelector('.front')?.classList.add('show'); img.remove(); return; }
+  if (img.classList.contains('cov')) {
+    const alt = item?.art?.coverAlt;
+    if (alt && img.getAttribute('src') !== alt) { img.src = alt; return; } // adresse de secours avant l'initiale
+    img.parentElement.querySelector('.front')?.classList.add('show'); img.remove(); return;
+  }
   if (img.classList.contains('hlogo')) { img.replaceWith(Object.assign(document.createElement('h1'), { className: 'htitle', textContent: item?.name ?? '' })); return; }
   if (!item || !img.closest('.front')) { img.removeAttribute('src'); img.style.visibility = 'hidden'; return; }
   const next = img.classList.contains('logo') && item.art?.header ? `<img class="banner" src="${esc(item.art.header)}" alt="">`
@@ -115,12 +119,38 @@ function renderPlatforms() {
 const games = () => state.items.filter((i) => i.kind === 'game' && !i.hidden);
 const apps = () => state.items.filter((i) => i.kind !== 'game' && !i.hidden);
 
+// Grand fond du jeu : la meilleure image qui charge vraiment (grand fond, adresse de secours, fond du magasin,
+// bannière, jaquette). Une petite image n'est jamais étirée : elle est posée nette sur un fond flou.
+const imgProbe = new Map();
+function probeImg(u) {
+  if (!imgProbe.has(u)) imgProbe.set(u, new Promise((res) => { const im = new Image(); im.onload = () => res({ ok: true, w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => res({ ok: false }); im.src = u; }));
+  return imgProbe.get(u);
+}
+async function bestBackdrop(i) {
+  const a = i.art ?? {};
+  const list = [a.hero, a.heroAlt, i.details?.background, a.header, a.headerAlt, a.cover, a.coverAlt].filter((u, n, all) => u && all.indexOf(u) === n);
+  for (const u of list) { const r = await probeImg(u); if (r.ok && r.w >= 120) return { u, ...r }; }
+  return null;
+}
+async function paintHeroBg(i) {
+  const el = document.querySelector(`#hero [data-hbg="${CSS.escape(i.id)}"]`);
+  if (!el) return;
+  const b = await bestBackdrop(i);
+  if (!el.isConnected || state.sel?.id !== i.id) return;
+  if (!b) { el.classList.add('blur'); el.style.backgroundImage = i.art?.icon || i.iconData ? url(i.art?.icon ?? i.iconData) : 'none'; return; }
+  const wide = b.w / b.h >= 2.3 && b.w >= 1400;
+  el.classList.toggle('low', !wide);
+  el.style.backgroundImage = url(b.u);
+  el.innerHTML = wide ? '' : `<div class="hfit" style="background-image:${url(b.u)}"></div>`;
+  el.classList.add('ready');
+  if (!i.brand?.bg) $('ambient').style.setProperty('--amb', url(b.u));
+}
 function renderHero() {
   const i = state.sel;
   const hero = $('hero');
   if (!i) { hero.innerHTML = '<h1 class="htitle">Ta bibliothèque se remplit…</h1>'; return; }
   const a = i.art ?? {};
-  const bg = i.details?.background ?? a.hero ?? a.header ?? a.cover ?? null;
+  const bg = a.hero ?? a.heroAlt ?? i.details?.background ?? a.header ?? a.cover ?? null;
   const isApp = i.kind !== 'game';
   const amb = i.brand?.bg ?? bg ?? a.cover ?? null;
   $('ambient').style.setProperty('--amb', amb ? url(amb) : 'none');
@@ -133,7 +163,7 @@ function renderHero() {
   const ach = d.achievements ? `<dt>Succès</dt><dd>${d.achievements.done} / ${d.achievements.total}</dd>` : '';
   const main = i.installed ? (isApp ? 'Ouvrir' : 'Jouer') : 'Installer';
   hero.innerHTML = `
-    ${i.brand?.bg ? `<div class="hbg brandimg" style="background-image:url('${esc(i.brand.bg)}')"></div>` : i.brand && isApp ? `<div class="hbg brandbg" style="--b:${esc(i.brand.color)}"></div>` : bg ? `<div class="hbg" style="background-image:${url(bg)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
+    ${i.brand?.bg ? `<div class="hbg brandimg" style="background-image:url('${esc(i.brand.bg)}')"></div>` : i.brand && isApp ? `<div class="hbg brandbg" style="--b:${esc(i.brand.color)}"></div>` : bg ? `<div class="hbg" data-hbg="${esc(i.id)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
     ${title}
     <div class="hbottom">
       <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>
@@ -150,6 +180,7 @@ function renderHero() {
       </dl>
       <div class="thumbs">${(d.screenshots ?? []).slice(0, 3).map((s) => `<img src="${esc(s)}" alt="">`).join('')}<button data-sheet="1" title="Fiche complète">•••</button></div>
     </div>`;
+  paintHeroBg(i);
 }
 
 // Menu d'actions d'un jeu ou d'une appli : bouton ▾ du grand bandeau ET clic droit partout
@@ -571,14 +602,14 @@ const NAMEFX = [['aucun', 'Normal'], ['degrade', 'Dégradé'], ['neon', 'Néon']
 const BANNERS = [['nuit', 'Nuit'], ['aurore', 'Aurore'], ['coucher', 'Coucher de soleil'], ['ocean', 'Océan'], ['foret', 'Forêt'], ['lave', 'Lave'], ['neige', 'Neige'], ['synthwave', 'Synthwave'], ['carbone', 'Carbone'], ['rose', 'Rose']];
 const BADGES = { fondateur: ['🏅', 'Fondateur'], nuit: ['🌙', 'Oiseau de nuit'], rp: ['🚓', 'Rôliste'], fps: ['🎯', 'Chasseur de FPS'], streamer: ['🎥', 'Streamer'], collection: ['📚', 'Collectionneur'], social: ['🤝', 'Pote de tout le monde'], compet: ['🏆', 'Compétiteur'], chill: ['🛋', 'Joueur chill'], createur: ['🛠', 'Créateur'], speedrun: ['⏱', 'Speedrunner'], coop: ['🧩', 'Fan de coop'] };
 const LINKS = [['discord', 'Discord', 'pseudo ou lien d’invitation'], ['twitch', 'Twitch', 'twitch.tv/… ou pseudo'], ['youtube', 'YouTube', 'youtube.com/@… ou @chaîne'], ['tiktok', 'TikTok', 'tiktok.com/@… ou @compte'], ['steam', 'Steam', 'lien du profil Steam'], ['instagram', 'Instagram', 'instagram.com/… ou @compte']];
-// Logos simplifiés des réseaux (SVG maison)
+// Logos officiels des réseaux (Simple Icons, domaine public)
 const LINK_ICONS = {
-  discord: '<svg viewBox="0 0 24 24"><path d="M19.6 5.3A17 17 0 0 0 15.4 4l-.5 1a15.6 15.6 0 0 0-5.8 0l-.5-1a17 17 0 0 0-4.2 1.3C1.7 9.3 1 13.2 1.3 17a17 17 0 0 0 5.2 2.6l1.1-1.8c-.6-.2-1.2-.5-1.8-.9l.4-.3a12.2 12.2 0 0 0 11.6 0l.4.3c-.6.4-1.2.7-1.8.9l1.1 1.8a17 17 0 0 0 5.2-2.6c.4-4.4-.7-8.3-3.1-11.7ZM8.5 14.7c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1Zm7 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1Z"/></svg>',
-  twitch: '<svg viewBox="0 0 24 24"><path d="M4.3 2 3 5.4v13.8h4.7V22h2.6l2.7-2.8h3.8l5.2-5.2V2H4.3Zm15.4 11.2-3 3h-4.7l-2.6 2.6v-2.6H5.4V3.9h14.3v9.3ZM16.8 7v5.3h-1.9V7h1.9Zm-5 0v5.3H9.9V7h1.9Z"/></svg>',
-  youtube: '<svg viewBox="0 0 24 24"><path d="M23 7.2a3 3 0 0 0-2.1-2.1C19 4.6 12 4.6 12 4.6s-7 0-8.9.5A3 3 0 0 0 1 7.2 31 31 0 0 0 .5 12a31 31 0 0 0 .5 4.8 3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.8 31 31 0 0 0-.5-4.8ZM9.7 15V9l5.8 3-5.8 3Z"/></svg>',
-  tiktok: '<svg viewBox="0 0 24 24"><path d="M16.6 2h-3.4v13.5a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9.3a6.3 6.3 0 1 0 5.4 6.2V8.7a8 8 0 0 0 4.6 1.5V6.8a4.6 4.6 0 0 1-4.6-4.8Z"/></svg>',
-  steam: '<svg viewBox="0 0 24 24"><path d="M12 1.5A10.5 10.5 0 0 0 1.6 11l5.6 2.3a3 3 0 0 1 1.9-.5l2.5-3.6v-.1a4 4 0 1 1 4 4h-.1l-3.6 2.6a3 3 0 0 1-5.9.6l-4-1.7A10.5 10.5 0 1 0 12 1.5Zm-4.4 16 1.3.5a2.2 2.2 0 1 0 1.2-2.9l-1.3-.5a1.6 1.6 0 1 1-1.2 2.9Zm10.1-8.4a2.7 2.7 0 1 0-5.4 0 2.7 2.7 0 0 0 5.4 0Zm-4.7 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z"/></svg>',
-  instagram: '<svg viewBox="0 0 24 24"><path d="M12 7.3a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4Zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm6-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0ZM21.9 8c0-1.6-.4-3-1.6-4.2S17.6 2.1 16 2.1c-1.6-.1-6.4-.1-8 0-1.6 0-3 .4-4.2 1.6S2.1 6.4 2.1 8c-.1 1.6-.1 6.4 0 8 0 1.6.4 3 1.6 4.2s2.6 1.6 4.2 1.6c1.6.1 6.4.1 8 0 1.6 0 3-.4 4.2-1.6s1.6-2.6 1.6-4.2c.1-1.6.1-6.4 0-8Zm-2.1 9.7a3.3 3.3 0 0 1-1.8 1.8c-1.3.5-4.4.4-5.9.4s-4.6.1-5.9-.4a3.3 3.3 0 0 1-1.8-1.8c-.5-1.3-.4-4.4-.4-5.7s-.1-4.5.4-5.8a3.3 3.3 0 0 1 1.8-1.8c1.3-.5 4.4-.4 5.9-.4s4.6-.1 5.9.4a3.3 3.3 0 0 1 1.8 1.8c.5 1.3.4 4.4.4 5.8s.1 4.4-.4 5.7Z"/></svg>',
+  discord: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>',
+  twitch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>',
+  youtube: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
+  tiktok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>',
+  steam: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077"/></svg>',
 };
 // Pseudo ou lien collé -> pseudo gardé + vrai lien (mêmes règles que le serveur)
 const LINK_URL = {
@@ -616,7 +647,9 @@ function profileCard(p, { live = null } = {}) {
   const game = p.favGame ? state.items.find((i) => i.name.toLowerCase() === p.favGame.toLowerCase()) : null;
   const since = p.since ? new Date(p.since).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : null;
   const links = LINKS.filter(([k]) => p.links?.[k]);
-  return `<div class="pc2" style="--pc:${col}">
+  const cb = /^#[0-9a-f]{6}$/i.test(p.cardBg ?? '') ? p.cardBg : null;
+  const hide = new Set(p.hide ?? []);
+  return `<div class="pc2 ${cb ? 'custombg' : ''}" style="--pc:${col};${cb ? `--cb:${cb}` : ''}">
     <div class="pc2ban ban-${esc(p.banner ?? 'nuit')}" ${ban ? `style="background-image:url('${esc(ban)}')"` : ''}></div>
     <div class="pc2main">
       <div class="pc2top">${p.avatarData ? `<span class="pav xl img ${p.frame ? `fr-${esc(p.frame)}` : ''}" style="background-image:url('${esc(p.avatarData)}');${/^#[0-9a-f]{6}$/i.test(p.frameColor ?? '') ? `--fc:${p.frameColor}` : ''}"></span>` : avatar(p, `xl ${p.frame ? `fr-${p.frame}` : ''}`)}
@@ -627,9 +660,9 @@ function profileCard(p, { live = null } = {}) {
       ${(p.badges ?? []).length ? `<div class="pc2badges">${p.badges.filter((b) => BADGES[b]).map((b) => `<span class="pbadge"><i>${BADGES[b][0]}</i>${esc(BADGES[b][1])}</span>`).join('')}</div>` : ''}
       <div class="pc2grid">
         ${p.favGame ? `<div class="pc2box fav">${game?.art?.cover ? `<img src="${esc(game.art.cover)}" alt="">` : '<span class="pc2ico">🎮</span>'}<div><small>Jeu préféré</small><b>${esc(p.favGame)}</b></div></div>` : ''}
-        ${p.week ? `<div class="pc2box"><span class="pc2ico">⏱</span><div><small>Cette semaine</small><b>${hours(p.week)}</b></div></div>` : ''}
-        ${p.bench ? `<div class="pc2box"><span class="pc2ico">🏁</span><div><small>Benchmark</small><b>${p.bench}</b></div></div>` : ''}
-        ${p.top && p.top !== p.favGame ? `<div class="pc2box"><span class="pc2ico">🔥</span><div><small>Le plus joué (7 j)</small><b>${esc(p.top)}</b></div></div>` : ''}
+        ${p.week && !hide.has('semaine') ? `<div class="pc2box"><span class="pc2ico">⏱</span><div><small>Cette semaine</small><b>${hours(p.week)}</b></div></div>` : ''}
+        ${p.bench && !hide.has('bench') ? `<div class="pc2box"><span class="pc2ico">🏁</span><div><small>Benchmark</small><b>${p.bench}</b></div></div>` : ''}
+        ${p.top && !hide.has('top') && p.top !== p.favGame ? `<div class="pc2box"><span class="pc2ico">🔥</span><div><small>Le plus joué (7 j)</small><b>${esc(p.top)}</b></div></div>` : ''}
       </div>
       ${links.length ? `<div class="pc2links">${links.map(([k, label]) => { const h = p.links[k]; const url = linkUrl(k, h); return `<button type="button" class="plink2 pl-${k}" ${url ? `data-plopen="${esc(k)}" data-plh="${esc(h)}" title="Ouvrir ${esc(label)}"` : `data-copytext="${esc(h)}" data-copied="${esc(label)} copié : ${esc(h)}" title="Copier le pseudo"`}><i class="plico">${LINK_ICONS[k]}</i><span><small>${esc(label)}</small><b>${esc(linkShown(k, h))}</b></span><em>${url ? '↗' : '⧉'}</em></button>`; }).join('')}</div>` : ''}
     </div></div>`;
@@ -687,6 +720,7 @@ async function openProfileEditor() {
     pseudo: state.account.pseudo, code: state.hist?.code, since: state.account.createdAt, week: moi.week, top: moi.top,
     avatar: cur.avatar, bannerImg: cur.bannerImg, color: cur.color ?? '#3b82f6', bio: cur.bio ?? '', frame: cur.frame, frameColor: cur.frameColor ?? cur.color ?? '#3b82f6', nameFx: cur.nameFx, banner: cur.banner ?? 'nuit',
     favGame: cur.favGame ?? '', badges: [...(cur.badges ?? [])], links: { ...(cur.links ?? {}) },
+    cardBg: cur.cardBg ?? null, hide: [...(cur.hide ?? [])], bench: state.hist?.moi?.bench ?? null,
   };
   const files = { avatar: null, banner: null };
   const raw = Object.fromEntries(LINKS.map(([k]) => [k, d.links[k] ? (linkUrl(k, d.links[k]) ?? d.links[k]) : '']));
@@ -699,6 +733,7 @@ async function openProfileEditor() {
     document.querySelectorAll('#modalBox [data-ptab]').forEach((b) => b.classList.toggle('on', b.dataset.ptab === tab));
     document.querySelectorAll('#modalBox .ptabpane').forEach((p) => { p.hidden = p.dataset.ptab !== tab; });
     document.querySelectorAll('#modalBox [data-pcol]').forEach((b) => b.classList.toggle('on', b.dataset.pcol === d.color));
+    document.querySelectorAll('#modalBox [data-pbg]').forEach((b) => b.classList.toggle('on', (b.dataset.pbg === 'auto' && !d.cardBg) || b.dataset.pbg === d.cardBg));
     document.querySelectorAll('#modalBox [data-pframe]').forEach((b) => b.classList.toggle('on', b.dataset.pframe === (d.frame ?? 'aucun')));
     document.querySelectorAll('#modalBox [data-pfx]').forEach((b) => b.classList.toggle('on', b.dataset.pfx === (d.nameFx ?? 'aucun')));
     document.querySelectorAll('#modalBox [data-pban]').forEach((b) => b.classList.toggle('on', !d.bannerImg && !d.bannerData && b.dataset.pban === d.banner));
@@ -731,6 +766,8 @@ async function openProfileEditor() {
         <b class="sub">Bannière</b>
         <div class="pbanners">${BANNERS.map(([k, l]) => `<button type="button" class="pban ban-${k}" data-pban="${k}" title="${l}"></button>`).join('')}<button type="button" class="pban up" id="peBanUp" title="Ta propre image"><span>＋ Ton image</span></button><input type="file" id="peBanFile" accept="image/png,image/jpeg,image/webp" hidden></div>
         <button type="button" class="btn sm" id="peBanAdj" hidden>✂ Recadrer la bannière</button>
+        <b class="sub">Fond de la carte</b>
+        <div class="pcolors">${['', '#1e1b2e', '#0f172a', '#1e293b', '#3b0764', '#4c0519', '#052e16', '#172554', '#431407', '#18181b', '#e2e8f0'].map((c) => `<button type="button" class="pcol bgpick ${c ? '' : 'auto'}" data-pbg="${c || 'auto'}" style="${c ? `background:${c}` : ''}" title="${c ? c : 'Automatique'}">${c ? '' : 'Auto'}</button>`).join('')}<label class="pcol custom" title="Autre couleur de fond"><input type="color" id="peBg" value="${esc(d.cardBg ?? '#1e1b2e')}"></label></div>
         <b class="sub">Couleur du profil</b>
         <div class="pcolors">${PCOLORS.map((c) => `<button type="button" class="pcol" data-pcol="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="pcol custom" title="Autre couleur"><input type="color" id="peColor" value="${esc(d.color)}"></label></div>
         <b class="sub">Effet du pseudo</b>
@@ -741,6 +778,8 @@ async function openProfileEditor() {
         <textarea id="peBioIn" maxlength="140" rows="3" placeholder="Ex. RP tous les soirs, main support sur Overwatch…">${esc(d.bio)}</textarea>
         <b class="sub">Jeu préféré</b>
         <input class="minput" id="peGame" list="peGames" maxlength="60" placeholder="Ex. FiveM" value="${esc(d.favGame)}"><datalist id="peGames">${gamesList.map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
+        <b class="sub">Afficher sur mon profil</b>
+        <div class="phide">${[['semaine', '⏱ Temps de jeu cette semaine'], ['top', '🔥 Jeu le plus joué (7 jours)'], ['bench', '🏁 Score du benchmark']].map(([k, l]) => `<label class="toggle small"><input type="checkbox" data-phide="${k}" ${d.hide.includes(k) ? '' : 'checked'}><span></span>${l}</label>`).join('')}</div>
         <b class="sub">Badges <small class="hint" id="peBadgeCount"></small></b>
         <div class="pbadgepick">${Object.entries(BADGES).map(([k, [i, l]]) => `<button type="button" class="pbadge pick" data-pbadge="${k}"><i>${i}</i>${esc(l)}</button>`).join('')}</div>
       </div>
@@ -762,6 +801,8 @@ async function openProfileEditor() {
   $('peBanFile').onchange = () => { const f = $('peBanFile').files?.[0]; $('peBanFile').value = ''; if (f) pickBanner(f); };
   $('peBanAdj').onclick = () => files.banner && pickBanner(files.banner);
   $('peColor').oninput = (e) => { d.color = e.target.value; change.couleur = d.color; paint(); };
+  $('peBg').oninput = (e) => { d.cardBg = e.target.value; change.fond = d.cardBg; paint(); };
+  document.querySelectorAll('#modalBox [data-phide]').forEach((c) => { c.onchange = () => { d.hide = [...document.querySelectorAll('#modalBox [data-phide]')].filter((x) => !x.checked).map((x) => x.dataset.phide); change.cacher = [...d.hide]; paint(); }; });
   $('peFrameColor').oninput = (e) => { d.frameColor = e.target.value; change.cadreCouleur = d.frameColor; paint(); };
   $('peBioIn').oninput = (e) => { d.bio = e.target.value; change.bio = d.bio; paint(); };
   $('peGame').oninput = (e) => { d.favGame = e.target.value; change.jeu = d.favGame; paint(); };
@@ -776,6 +817,7 @@ async function openProfileEditor() {
     const t = e.target.closest('button'); if (!t) return;
     if (t.dataset.ptab) { tab = t.dataset.ptab; return paint(); }
     if (t.dataset.pcol) { d.color = t.dataset.pcol; change.couleur = d.color; return paint(); }
+    if (t.dataset.pbg) { d.cardBg = t.dataset.pbg === 'auto' ? null : t.dataset.pbg; change.fond = d.cardBg; return paint(); }
     if (t.dataset.pframe) { d.frame = t.dataset.pframe === 'aucun' ? null : t.dataset.pframe; change.cadre = t.dataset.pframe; if (d.frame === 'perso') change.cadreCouleur = d.frameColor; return paint(); }
     if (t.dataset.pfx) { d.nameFx = t.dataset.pfx === 'aucun' ? null : t.dataset.pfx; change.effet = t.dataset.pfx; return paint(); }
     if (t.dataset.pban) { d.banner = t.dataset.pban; d.bannerImg = null; d.bannerData = null; files.banner = null; change.banniere = d.banner; change.banniereImg = null; return paint(); }
@@ -1572,6 +1614,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.27.0': [
+    ['🖼', 'Fonds des jeux réparés', 'Le grand fond de chaque jeu prend la meilleure image qui charge vraiment (Rainbow Six Siege, GTA V, CS2, Left 4 Dead 2…), avec une adresse de secours si la première ne répond pas.'],
+    ['🎯', 'Mieux cadré, même en grand écran', 'Plus de zoom excessif : une petite image n’est jamais étirée (elle est posée nette sur un fond flou), et la bannière s’adapte aux grands écrans.'],
+    ['🎨', 'Fond de ta carte de profil', 'Choisis la couleur du fond de ta carte (ou « Auto »).'],
+    ['🙈', 'Ce que tu montres', 'À propos › Afficher sur mon profil : cache ton temps de la semaine, ton jeu le plus joué ou ton benchmark.'],
+    ['✨', 'Logos officiels', 'Discord, Twitch, YouTube, TikTok, Steam et Instagram ont leurs vrais logos sur les profils.'],
+  ],
   '0.26.0': [
     ['☁', 'Comptes reliés à Supabase', 'Comptes, amis, messages et groupes sont gardés sur Supabase ; tes photos, bannières et images de discussion vont dans Supabase Storage. Paramètres › Compte montre si tout est bien sauvegardé.'],
     ['📶', 'Hors ligne visible', 'Si le serveur ne répond plus, une pastille « Hors ligne » s’affiche en haut, puis « De retour en ligne » quand ça revient.'],
@@ -3715,7 +3764,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.26.0',
+    version: async () => '0.27.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

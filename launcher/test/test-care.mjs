@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { knownSteamId } from '../src/core/art.js';
 import { crashCause, crashesFor, diskAlerts, loadVerdict, netAdvice, parseDiskHealth, parsePing } from '../src/core/gamecare.js';
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n += 1; };
@@ -40,4 +41,8 @@ ok(parsePing('Reply from 1.1.1.1: bytes=32 time=9ms TTL=58\nPackets: Sent = 1, R
 ok(netAdvice({ ping: 12, jitter: 2, loss: 0, down: 300, up: 50, wifi: false }).grade === 'Excellente', 'connexion parfaite');
 const bad = netAdvice({ ping: 95, jitter: 30, loss: 8, down: 10, wifi: true });
 ok(bad.grade === 'Mauvaise' && bad.tips.some((t) => /câble/.test(t)), 'connexion mauvaise en Wi-Fi : conseil câble');
+// Images : jeux renommés / installés ailleurs retrouvés sur Steam
+ok(knownSteamId("Tom Clancy's Rainbow Six® Siege") === '359550' && knownSteamId('Rainbow Six Siege X') === '359550', 'Rainbow Six Siege (même renommé)');
+ok(knownSteamId('Grand Theft Auto V Enhanced') === '271590' && knownSteamId('FiveM') === '271590', 'GTA V et FiveM');
+ok(knownSteamId('Left 4 Dead 2') === '550' && knownSteamId('Counter-Strike 2') === '730' && knownSteamId('Portal 2') === null, 'L4D2, CS2, et pas les autres');
 console.log(`✅ Plantages, démarrage, disques, connexion : ${n} vérifications`);

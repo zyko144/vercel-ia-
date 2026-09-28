@@ -123,7 +123,7 @@ export const profileOf = (a) => {
   return {
     avatar: p.av ? `${PUBLIC_BASE}/api/compte/avatar/${a.id}?v=${p.av}` : null,
     bannerImg: p.bv ? `${PUBLIC_BASE}/api/compte/banniere/${a.id}?v=${p.bv}` : null,
-    color: p.color ?? null, bio: p.bio ?? null, banner: p.banner ?? null, frame: p.frame ?? null, frameColor: p.frameColor ?? null, nameFx: p.nameFx ?? null,
+    color: p.color ?? null, bio: p.bio ?? null, banner: p.banner ?? null, frame: p.frame ?? null, frameColor: p.frameColor ?? null, cardBg: p.cardBg ?? null, hide: p.hide ?? [], nameFx: p.nameFx ?? null,
     favGame: p.favGame ?? null, badges: p.badges ?? [], links: p.links ?? {}, since: a?.createdAt ?? null,
   };
 };
@@ -161,6 +161,8 @@ async function saveProfile(a, body) {
   if ('bio' in body) p.bio = String(body.bio ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140) || null;
   const pick = (v, list) => (list.includes(String(v)) && String(v) !== 'aucun' ? String(v) : null);
   if ('cadre' in body) p.frame = pick(body.cadre, PROFILE_CHOICES.frame);
+  if ('fond' in body) p.cardBg = /^#[0-9a-f]{6}$/i.test(String(body.fond ?? '')) ? String(body.fond).toLowerCase() : null;
+  if ('cacher' in body) p.hide = [...new Set((Array.isArray(body.cacher) ? body.cacher : []).map(String))].filter((x) => ['semaine', 'top', 'bench'].includes(x));
   if ('cadreCouleur' in body) p.frameColor = /^#[0-9a-f]{6}$/i.test(String(body.cadreCouleur ?? '')) ? String(body.cadreCouleur).toLowerCase() : null;
   if ('effet' in body) p.nameFx = pick(body.effet, PROFILE_CHOICES.nameFx);
   if ('banniere' in body) p.banner = pick(body.banniere, PROFILE_CHOICES.banner);
