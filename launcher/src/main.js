@@ -59,6 +59,8 @@ import { startTracker } from './core/tracker.js';
 import { crashesFor, diskAlerts, diskHealth, loadVerdict, netAdvice, parsePing, readCrashes, windowScript } from './core/gamecare.js';
 import nodeNet from 'node:net';
 import { ps } from './core/pshost.js';
+import { collectConfigs, mergeConfigs, restoreConfigs } from './core/gameconfigs.js';
+import { lanAddress, newPin, REMOTE_PORT, startRemote } from './core/remote.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Sons des notifications (fenêtre en bas à gauche) : jouables sans clic préalable
@@ -1346,6 +1348,8 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('gameMode' in patch) store.data.settings.gameMode = Boolean(patch.gameMode);
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   if ('preloadSteam' in patch) store.data.settings.preloadSteam = Boolean(patch.preloadSteam);
+  if ('nightUpdates' in patch) store.data.settings.nightUpdates = Boolean(patch.nightUpdates);
+  if ('remote' in patch) { store.data.settings.remote = Boolean(patch.remote); setRemote(); }
   try {
     if ('steamKey' in patch) setSecret('steam', patch.steamKey);
     if ('gridKey' in patch) { setSecret('grid', patch.gridKey); store.data.art = {}; }
@@ -2362,6 +2366,8 @@ let lastBackupHash = null;
 async function backupNow(force = false) {
   const token = secret('account');
   if (!token) return { ok: false, error: 'Connecte-toi à ton compte History.' };
+  // Réglages des jeux (touches, graphismes) ajoutés à la sauvegarde
+  store.data.gameConfigs = mergeConfigs(store.data.gameConfigs, await collectConfigs(cfgDirs()).catch(() => ({})));
   const data = pickBackup(store.data);
   const json = JSON.stringify(data);
   const hash = `${json.length}:${json.slice(0, 64)}:${json.slice(-256)}`;
@@ -2398,6 +2404,14 @@ async function autoRestore() {
   store.save();
   if (r.ok) notify('Sauvegarde retrouvée ☁', `Tes collections, favoris, réglages et heures${r.pc ? ` (depuis ${r.pc})` : ''} sont de retour.`);
 }
+const cfgDirs = () => ({ local: process.env.LOCALAPPDATA, appdata: app.getPath('appData'), docs: app.getPath('documents') });
+ipcMain.handle('configs:restore', async () => {
+  const saved = store.data.gameConfigs ?? {};
+  const games = [...new Set(Object.values(saved).map((v) => v.game))];
+  if (!games.length) return { ok: false, error: 'Aucun réglage de jeu sauvegardé pour l’instant.' };
+  if (!(await confirm('Remettre tes réglages de jeux sur ce PC ?', `${games.join(', ')} : touches, sensibilité et graphismes. Ferme ces jeux avant. Les réglages actuels sont gardés à côté (.history-bak).`))) return { ok: false, cancelled: true };
+  return { ok: true, games: await restoreConfigs(cfgDirs(), saved) };
+});
 ipcMain.handle('backup:get', () => ({ at: store.data.backupAt ?? null, logged: Boolean(secret('account')) }));
 ipcMain.handle('backup:now', () => backupNow(true));
 ipcMain.handle('backup:restore', () => restoreNow());
@@ -2845,6 +2859,29 @@ function setWidget(on) {
 ipcMain.on('widget:open', () => showWindow());
 ipcMain.on('widget:close', () => { store.data.settings.widget = false; store.save(); setWidget(false); send('settings:changed', { widget: false }); });
 app.whenReady().then(() => setTimeout(() => { if (store.data.settings.widget) setWidget(true); }, 3000));
+// Mises à jour des jeux la nuit (option) : entre 3 h et 6 h, PC inutilisé depuis 15 min et jeux Steam à mettre à jour :
+// Steam est ouvert en fond et télécharge tout seul les mises à jour en attente.
+setInterval(async () => {
+  const h = new Date().getHours();
+  if (!store.data.settings.nightUpdates || process.platform !== 'win32' || h < 3 || h >= 6 || powerMonitor.getSystemIdleTime() < 900) return;
+  if (!items.some((i) => i.source === 'steam' && i.installed && i.updatePending)) return;
+  if (!(await runningPaths()).some((p) => /\\steam\.exe$/.test(p))) runSilentSteam([]).catch(() => {});
+}, 10 * 60_000).unref?.();
+// Contrôle depuis le téléphone (option) : voir le PC et lancer un jeu depuis le même Wi-Fi
+let remoteSrv = null;
+function setRemote() {
+  remoteSrv?.close(); remoteSrv = null;
+  if (!store.data.settings.remote) return;
+  store.data.settings.remotePin ??= newPin(); store.save();
+  const recent = () => { const ids = [...new Set((store.data.sessions ?? []).slice().reverse().map((x) => x.id))]; const games = items.filter((i) => i.kind === 'game' && i.installed); return [...ids.map((id) => games.find((g) => g.id === id)).filter(Boolean), ...games].filter((g, k, a) => a.indexOf(g) === k).slice(0, 12); };
+  remoteSrv = startRemote({
+    pin: store.data.settings.remotePin,
+    state: async () => { const s = await snapshot().catch(() => null); const deg = (t) => (t == null ? null : `${Math.round(t)} °C`); return { cpu: deg(s?.cpu?.temp) ?? (s ? `${Math.round(s.cpu.usage)} %` : null), gpu: deg(s?.gpu?.temp), ram: s ? `${Math.round((s.ram.used / s.ram.total) * 100)} %` : null, jeu: playSession?.name ?? null, jeux: recent().map((g) => ({ id: g.id, name: g.name })) }; },
+    launch: async (id) => (items.some((i) => i.id === id && i.installed) ? doAction(id, 'launch') : { ok: false }),
+  });
+}
+app.whenReady().then(setRemote);
+ipcMain.handle('remote:get', () => ({ on: Boolean(store.data.settings.remote), url: lanAddress() ? `http://${lanAddress()}:${REMOTE_PORT}` : null, pin: store.data.settings.remotePin ?? null }));
 // Steam préchargé en fond (option) : « Jouer » démarre tout de suite au lieu d'attendre que Steam s'ouvre
 app.whenReady().then(() => setTimeout(async () => { if (store.data.settings.preloadSteam && !(await runningPaths()).some((p) => /\\steam\.exe$/.test(p))) runSilentSteam([]).catch(() => {}); }, 15_000));
 

@@ -1535,13 +1535,20 @@ async function themeFor(item) {
   const c = await api.colorOf?.(item.id).catch(() => null);
   applyTheme(c ?? THEMES.bleu);
 }
-$('themeSel').addEventListener('change', (e) => { themeName = e.target.value; api.setSettings({ theme: themeName }); if (themeName === 'auto') themeFor(state.sel); else applyTheme(THEMES[themeName]); });
+$('themeSel').addEventListener('change', (e) => { themeName = e.target.value; api.setSettings({ theme: themeName }); $('themeColor').hidden = themeName !== 'perso'; if (themeName === 'auto') themeFor(state.sel); else applyTheme(themeName === 'perso' ? $('themeColor').value : THEMES[themeName]); });
+$('themeColor').addEventListener('input', (e) => { applyTheme(e.target.value); api.setSettings({ themeColor: e.target.value }); });
+// Fond de l'appli : jaquette floue du jeu, dégradé animé ou sobre
+const setBg = (m) => { document.body.dataset.bg = m; document.body.dataset.ambient = m === 'jeu' ? 'on' : 'off'; if (m !== 'jeu') $('ambient').classList.remove('on'); };
+$('bgMode').addEventListener('change', (e) => { setBg(e.target.value); api.setSettings({ bgMode: e.target.value }); });
 $('dailyLimit').addEventListener('change', (e) => api.setSettings({ dailyLimit: Number(e.target.value) }).then(() => toast(Number(e.target.value) ? 'Limite enregistrée' : 'Pas de limite')));
 $('breakEvery').addEventListener('change', (e) => api.setSettings({ breakEvery: Number(e.target.value) }));
 api.settings?.().then((s) => {
   themeName = s?.theme ?? 'bleu';
   $('themeSel').value = themeName; $('dailyLimit').value = String(s?.dailyLimit ?? 0); $('breakEvery').value = String(s?.breakEvery ?? 0);
-  if (themeName !== 'auto') applyTheme(THEMES[themeName] ?? THEMES.bleu);
+  if (s?.themeColor) $('themeColor').value = s.themeColor;
+  $('themeColor').hidden = themeName !== 'perso';
+  if (themeName !== 'auto') applyTheme(themeName === 'perso' ? $('themeColor').value : THEMES[themeName] ?? THEMES.bleu);
+  $('bgMode').value = s?.bgMode ?? 'jeu'; setBg($('bgMode').value);
 }).catch(() => {});
 
 // ---------- Manette (Xbox, PlayStation…) : navigation dans tout le launcher ----------
@@ -1607,6 +1614,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.31.0': [
+    ['📱', 'Contrôle depuis le téléphone', 'Paramètres › Général : active-le, ouvre l’adresse affichée sur ton téléphone (même Wi-Fi) et entre le code. Tu vois les températures du PC et tu lances un jeu à distance.', ['#openSettings', 'wait600', '[data-pane=general]', 'wait800']],
+    ['🌙', 'Mises à jour la nuit', 'Paramètres › Jeux : entre 3 h et 6 h, si le PC est allumé et ne sert pas, Steam s’ouvre en fond et télécharge les mises à jour de tes jeux. Au réveil, tout est prêt.'],
+    ['🎮', 'Réglages de jeux dans le cloud', 'Touches, sensibilité et graphismes de Fortnite, FiveM, GTA V, Rocket League et Minecraft partent dans ta sauvegarde. Sur un nouveau PC : Paramètres › Compte › « Remettre mes réglages de jeux ».'],
+    ['🎨', 'Ta couleur et ton fond', 'Paramètres › Général : choisis n’importe quelle couleur pour l’appli, et le fond (jaquette floue du jeu, dégradé animé ou sobre).'],
+  ],
   '0.30.0': [
     ['⚡', 'Mode Performance de Fortnite', 'Dans Outils du jeu › Réglages conseillés : active en un clic le mode officiel « Performance » de Fortnite (beaucoup plus de FPS, moins de freezes). Tes anciens réglages sont gardés et remis en un clic.'],
     ['🧊', 'Cache FiveM en un clic', 'Outils du jeu › Saccades vide les caches que FiveM retélécharge tout seul (cache, server-cache). Tes mods, packs graphiques et fichiers de GTA ne sont jamais touchés.'],
@@ -3270,6 +3283,8 @@ function showKeys(s) {
   $('autostart').checked = Boolean(s.autostart);
   $('directLaunch').checked = s.directLaunch !== false;
   $('preloadSteam').checked = Boolean(s.preloadSteam);
+  $('nightUpdates').checked = Boolean(s.nightUpdates);
+  $('remoteOn').checked = Boolean(s.remote); showRemote();
   $('gameMode').checked = s.gameMode !== false;
   $('dealAlerts').checked = s.dealAlerts !== false;
   $('widgetGame').checked = Boolean(s.widgetGame); $('gamePopups').checked = s.gamePopups === true; $('promoDm').checked = s.promoDm !== false;
@@ -3306,6 +3321,14 @@ document.querySelectorAll('[data-link]').forEach((b) => b.addEventListener('clic
 $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.target.checked }));
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('preloadSteam').addEventListener('change', (e) => api.setSettings({ preloadSteam: e.target.checked }));
+$('nightUpdates').addEventListener('change', (e) => api.setSettings({ nightUpdates: e.target.checked }));
+async function showRemote() {
+  const r = await api.remoteGet?.().catch(() => null);
+  $('remoteInfo').hidden = !r?.on;
+  if (r?.on) $('remoteInfo').innerHTML = r.url ? `Sur ton téléphone (même Wi-Fi), ouvre <b>${esc(r.url)}</b> et entre le code <b>${esc(r.pin)}</b>. Windows peut demander l’autorisation du pare-feu la première fois : clique « Autoriser ».` : 'Aucun réseau Wi-Fi ou Ethernet trouvé sur ce PC.';
+}
+$('remoteOn').addEventListener('change', async (e) => { await api.setSettings({ remote: e.target.checked }); showRemote(); });
+$('configsRestore').addEventListener('click', async () => { const r = await api.configsRestore(); if (r?.ok) toast(`🎮 Réglages remis : ${r.games.join(', ')}`); else if (!r?.cancelled) toast(r?.error ?? 'Impossible'); });
 $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
 $('dealAlerts').addEventListener('change', (e) => api.setSettings({ dealAlerts: e.target.checked }));
 for (const [id, key] of [['widgetGame', 'widgetGame'], ['gamePopups', 'gamePopups'], ['promoDm', 'promoDm'], ['streamerAuto', 'streamerAuto'], ['streamerOn', 'streamer']]) $(id).addEventListener('change', (e) => api.setSettings({ [key]: e.target.checked }).then(() => api.streamer?.()).then((on) => { if (on != null) document.body.classList.toggle('streamer', Boolean(on)); }));
@@ -3793,7 +3816,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.30.0',
+    version: async () => '0.31.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

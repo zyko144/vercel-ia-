@@ -108,6 +108,8 @@ contextBridge.exposeInMainWorld('launcher', {
   backupInfo: () => ipcRenderer.invoke('backup:get'),
   backupNow: () => ipcRenderer.invoke('backup:now'),
   backupRestore: () => ipcRenderer.invoke('backup:restore'),
+  configsRestore: () => ipcRenderer.invoke('configs:restore'),
+  remoteGet: () => ipcRenderer.invoke('remote:get'),
   pcDiag: (force) => ipcRenderer.invoke('pc:diag', Boolean(force)),
   pcProcs: () => ipcRenderer.invoke('pc:procs'),
   pcKill: (pid, p) => ipcRenderer.invoke('pc:kill', pid, p),

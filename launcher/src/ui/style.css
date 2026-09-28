@@ -1667,3 +1667,8 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) { .maint.go .mainttape { animation: none !important; } }
 /* Menu : logo danger rouge à gauche d'« Optimisation » */
 #nav .navwork svg.danger { stroke: #ef4444; fill: rgba(239, 68, 68, .18); filter: drop-shadow(0 0 4px rgba(239, 68, 68, .6)); }
+
+/* Fond de l'appli (Paramètres › Général) : dégradé animé aux couleurs du thème */
+body[data-bg="anime"]::before { content: ""; position: fixed; inset: -20%; z-index: 0; pointer-events: none; background: radial-gradient(40% 40% at 20% 20%, color-mix(in srgb, var(--blue) 45%, transparent), transparent 70%), radial-gradient(35% 35% at 80% 70%, color-mix(in srgb, var(--cyan) 35%, transparent), transparent 70%); filter: blur(40px); opacity: .5; animation: bgdrift 24s ease-in-out infinite alternate; }
+@keyframes bgdrift { to { transform: translate(6%, -4%) rotate(8deg); } }
+body.idle[data-bg="anime"]::before { animation-play-state: paused; }
