@@ -88,3 +88,21 @@ const vl = graphicsAdvice({ name: 'VALORANT', gpuScore: 2000, gpuName: 'Radeon R
 ok(vl.esport && vl.target === 240 && vl.level <= 2, 'jeu compétitif : FPS avant tout');
 ok(graphicsAdvice({ name: 'FiveM', gpuScore: 1000, cpu1: 700 }).tips.some((t) => /processeur/.test(t)), 'jeu gourmand en processeur');
 console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, pilotes) : ${n} vérifications`);
+
+// Réglages des jeux : sauvegarde, fusion (le plus récent gagne) et remise sur un autre PC
+{
+  const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } = await import('node:fs');
+  const os = await import('node:os'); const path = await import('node:path');
+  const { collectConfigs, mergeConfigs, restoreConfigs } = await import('../src/core/gameconfigs.js');
+  const a = mkdtempSync(path.join(os.tmpdir(), 'cfgA-')); const b = mkdtempSync(path.join(os.tmpdir(), 'cfgB-'));
+  const dirsA = { local: a, appdata: a, docs: a }; const dirsB = { local: b, appdata: b, docs: b };
+  mkdirSync(path.join(a, 'CitizenFX'), { recursive: true }); writeFileSync(path.join(a, 'CitizenFX', 'fivem.cfg'), 'bind keyboard F1 menu');
+  const got = await collectConfigs(dirsA);
+  assert.equal(got['appdata/CitizenFX/fivem.cfg'].game, 'FiveM');
+  assert.deepEqual(mergeConfigs({ k: { text: 'vieux', at: 1 } }, { k: { text: 'neuf', at: 2 } }).k.text, 'neuf');
+  assert.deepEqual(mergeConfigs({ k: { text: 'neuf', at: 2 } }, { k: { text: 'vieux', at: 1 } }).k.text, 'neuf');
+  assert.deepEqual(await restoreConfigs(dirsB, { ...got, 'appdata/../../evil.txt': { game: 'x', text: 'x' } }), ['FiveM']);
+  assert.equal(readFileSync(path.join(b, 'CitizenFX', 'fivem.cfg'), 'utf8'), 'bind keyboard F1 menu');
+  assert.ok(!existsSync(path.join(b, '..', 'evil.txt')), 'chemin inconnu ignoré');
+  console.log('✅ Réglages des jeux dans le cloud : 6 vérifications');
+}

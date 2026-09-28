@@ -1,6 +1,8 @@
 // Sauvegarde en ligne : ce qui part sur le compte (réglages, collections, favoris, temps suivi par le launcher,
 // historique, serveurs FiveM) et comment on le fusionne au retour sans rien perdre.
-export const BACKUP_KEYS = ['settings', 'collections', 'items', 'names', 'time', 'timeBy', 'offSteam', 'days', 'fivemFavs', 'fivemSessions', 'fivemLogs', 'fivemNames', 'priceAlerts', 'sessions', 'crashes', 'loadTimes'];
+import { mergeConfigs } from './gameconfigs.js';
+
+export const BACKUP_KEYS = ['settings', 'collections', 'items', 'names', 'time', 'timeBy', 'offSteam', 'days', 'fivemFavs', 'fivemSessions', 'fivemLogs', 'fivemNames', 'priceAlerts', 'sessions', 'crashes', 'loadTimes', 'gameConfigs'];
 // Réglages propres à ce PC : jamais copiés d'un PC à l'autre
 const LOCAL_SETTINGS = ['autostart', 'lastAccount', 'skipAccount', 'steamAccount', 'epicAccount'];
 
@@ -41,6 +43,7 @@ export function mergeBackup(local, remote) {
     out.items = { ...(local.items ?? {}) };
     for (const [id, v] of Object.entries(remote.items)) out.items[id] = { ...(out.items[id] ?? {}), ...v };
   }
+  if (isObj(remote.gameConfigs)) out.gameConfigs = mergeConfigs(local.gameConfigs, remote.gameConfigs); // réglages des jeux : le plus récent gagne
   if (isObj(remote.names)) out.names = { ...(local.names ?? {}), ...remote.names };
   for (const k of ['time', 'timeBy', 'offSteam', 'days', 'fivemLogs', 'fivemNames']) if (isObj(remote[k])) out[k] = maxMerge(local[k] ?? {}, remote[k]);
   if (Array.isArray(remote.fivemFavs)) out.fivemFavs = [...new Set([...(local.fivemFavs ?? []), ...remote.fivemFavs])].slice(0, 30);

@@ -435,13 +435,17 @@
       <label class="toggle"><input type="checkbox" id="compact"><span></span>Mode compact (plus de jeux à l’écran)</label>
       <label class="toggle"><input type="checkbox" id="dnd"><span></span>Ne pas déranger (aucune notification d’amis ni son)</label>
       <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
-      <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option></select></div>
+      <label class="toggle"><input type="checkbox" id="remoteOn"><span></span>📱 Contrôle depuis le téléphone (même Wi-Fi) : voir le PC et lancer un jeu</label>
+      <p class="hint sethint" id="remoteInfo" hidden></p>
+      <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option><option value="perso">Ma couleur…</option></select><input type="color" id="themeColor" value="#2f8bff" hidden></div>
+      <div class="setrow"><span>Fond de l’appli</span><select id="bgMode"><option value="jeu">Jaquette floue du jeu sélectionné</option><option value="anime">Dégradé animé</option><option value="sobre">Sobre (noir)</option></select></div>
       <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
     </section>
     <section class="setpane" data-pane="jeux" hidden>
       <h3>🎮 Jeux</h3>
       <label class="toggle"><input type="checkbox" id="tournament"><span></span>🏆 Mode tournoi : boost sur chaque partie, aucune notification, rien ne dérange</label>
       <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
+      <label class="toggle"><input type="checkbox" id="nightUpdates"><span></span>🌙 Mettre à jour les jeux Steam la nuit (entre 3 h et 6 h, si le PC est allumé et ne sert pas)</label>
       <label class="toggle"><input type="checkbox" id="preloadSteam"><span></span>⚡ Préparer Steam en fond au démarrage (les jeux Steam se lancent plus vite)</label>
       <p class="hint sethint">Les jeux avec anti-triche (Rocket League, Rainbow Six…) passent toujours par Steam / Epic.</p>
       <label class="toggle"><input type="checkbox" id="gameMode"><span></span>Mode jeu : ranger le launcher une fois un jeu lancé (jamais pour les applis)</label>
@@ -483,6 +487,8 @@
       <div class="secbox"><div><b>🔐 Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">✉ Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">🛡 Double authentification</button><button type="button" class="btn" id="secDiscord">🔗 Lier Discord</button></div></div>
       <label class="toggle" id="lock2faRow" hidden><input type="checkbox" id="lock2fa"><span></span>🔒 Demander le code de l’application à chaque ouverture du launcher</label>
       <p class="hint sethint">Tes collections, favoris, réglages et heures sont sauvegardés sur ton compte History toutes les 30 min et à la fermeture.</p>
+      <p class="hint sethint">🎮 Tes réglages de jeux (Fortnite, FiveM, GTA V, Rocket League, Minecraft : touches, sensibilité, graphismes) partent aussi dans la sauvegarde.</p>
+      <div class="row"><button type="button" class="btn ghost" id="configsRestore">🎮 Remettre mes réglages de jeux sur ce PC</button></div>
       <div class="row updrow"><button type="button" class="btn" id="backupNow">☁ Sauvegarder maintenant</button><button type="button" class="btn ghost" id="backupRestore">Restaurer</button><small class="hint" id="backupStatus"></small></div>
     </section>
     <section class="setpane" data-pane="about" hidden>
