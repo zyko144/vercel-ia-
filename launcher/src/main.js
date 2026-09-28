@@ -492,7 +492,8 @@ async function endBoost({ silent = false } = {}) {
   boosted = null;
   playSession = null;
   if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(scheme);
-  if (boostSettings().restore) for (const c of closed) spawn(c.path, [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  // Réouverture discrète : Epic et Steam repartent en fond (sans fenêtre en grand), les autres comme avant
+  if (boostSettings().restore) for (const c of closed) spawn(c.path, /epicgameslauncher|steam\.exe/i.test(c.exe) ? ['-silent'] : [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
   // Rapport de fin de partie : durée, applis fermées, et ce qui a pris du processeur (cause probable des freezes)
   const top = Object.entries(hogs).sort((a, b) => b[1] - a[1]).slice(0, 2);
   const mins = Math.round((Date.now() - start) / 60_000);
