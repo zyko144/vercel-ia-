@@ -156,3 +156,29 @@ console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, p
   assert.equal(r.length, 1); assert.equal(r[0].url, 'https://store.epicgames.com/fr/p/fortnite');
   console.log('✅ Recherche : jeux du magasin Epic même non installés');
 }
+
+{
+  const { scanEpic } = await import('../src/core/epic.js');
+  const fs = await import('node:fs/promises'); const os = await import('node:os'); const p = await import('node:path');
+  const root = await fs.mkdtemp(p.join(os.tmpdir(), 'epic-'));
+  const man = p.join(root, 'Manifests'); const cat = p.join(root, 'Catalog');
+  await fs.mkdir(man); await fs.mkdir(cat);
+  await fs.writeFile(p.join(man, 'fn.item'), JSON.stringify({ DisplayName: 'Fortnite', AppName: 'Fortnite', CatalogItemId: 'fnid', CatalogNamespace: 'fn', InstallLocation: 'C:\\Epic\\Fortnite', AppCategories: ['public', 'games'] }));
+  const entry = { id: 'fnid', namespace: 'fn', title: 'Fortnite', categories: [{ path: 'applications' }], releaseInfo: [{ appId: 'FortniteReleaseBuilds' }, { appId: 'Fortnite' }], keyImages: [{ type: 'DieselGameBoxTall', url: 'https://cdn1.epicgames.com/tall.jpg' }, { type: 'DieselGameBoxLogo', url: 'https://cdn1.epicgames.com/logo.png' }] };
+  await fs.writeFile(p.join(cat, 'catcache.bin'), Buffer.from(JSON.stringify([entry])).toString('base64'));
+  const items = await scanEpic(man, cat);
+  assert.equal(items.length, 1, 'pas de doublon « possédé non installé »');
+  assert.ok(items[0].art.logo && items[0].art.cover, 'Fortnite installé : images du catalogue Epic du PC');
+  console.log('✅ Fortnite : images officielles depuis le catalogue Epic du PC');
+}
+
+{
+  const { activeItems, learnExes } = await import('../src/core/tracker.js');
+  const tree = { 'C:\\Epic\\Fortnite': [['FortniteGame', 1]], 'C:\\Epic\\Fortnite\\FortniteGame': [['Binaries', 1]], 'C:\\Epic\\Fortnite\\FortniteGame\\Binaries': [['Win64', 1]], 'C:\\Epic\\Fortnite\\FortniteGame\\Binaries\\Win64': [['FortniteClient-Win64-Shipping.exe', 0], ['FortniteLauncher.exe', 0]] };
+  const readdir = async (d) => (tree[d] ?? []).map(([name, dir]) => ({ name, isDirectory: () => Boolean(dir) }));
+  const fn = { id: 'epic:Fortnite', kind: 'game', installed: true, installDir: 'C:\\Epic\\Fortnite' };
+  await learnExes([fn], readdir);
+  assert.ok(activeItems([fn], ['fortniteclient-win64-shipping.exe']).has(fn.id), 'Fortnite (anti-triche, sans chemin) reconnu en cours');
+  assert.equal(activeItems([fn], ['fortnitelauncher.exe']).size, 0, 'le petit lanceur ne compte pas comme une partie');
+  console.log('✅ Jeux anti-triche reconnus en cours (temps de jeu, FPS)');
+}

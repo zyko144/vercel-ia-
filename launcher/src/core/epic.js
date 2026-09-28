@@ -27,7 +27,7 @@ export function epicArt(images) {
  */
 export async function epicStoreArt(title, same, fetchImpl = fetch) {
   const query = 'query searchStoreQuery($keywords: String, $country: String!, $locale: String) { Catalog { searchStore(keywords: $keywords, country: $country, locale: $locale, count: 10) { elements { title keyImages { type url } } } } }';
-  const r = await fetchImpl('https://graphql.epicgames.com/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables: { keywords: String(title ?? '').slice(0, 80), country: 'FR', locale: 'fr' } }), signal: AbortSignal.timeout(10_000) })
+  const r = await fetchImpl('https://graphql.epicgames.com/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, body: JSON.stringify({ query, variables: { keywords: String(title ?? '').slice(0, 80), country: 'FR', locale: 'fr' } }), signal: AbortSignal.timeout(10_000) })
     .then((x) => (x.ok ? x.json() : null)).catch(() => null);
   const hit = (r?.data?.Catalog?.searchStore?.elements ?? []).find((e) => same(e.title, title));
   if (!hit) return null;
@@ -41,11 +41,10 @@ export async function readEpicCatalog(catalogDir) {
   if (!raw) return [];
   let list;
   try { list = JSON.parse(Buffer.from(raw.trim(), 'base64').toString('utf8')); } catch { return []; }
-  return (Array.isArray(list) ? list : []).filter((c) => {
-    const cats = (c.categories ?? []).map((x) => x.path);
-    return c.title && !c.mainGameItem && cats.includes('games') && !cats.some((x) => /addons|digitalextras|engines|plugins/.test(x));
-  }).map((c) => ({
-    appName: c.releaseInfo?.[0]?.appId ?? null, namespace: c.namespace, catalogId: c.id, title: c.title,
+  return (Array.isArray(list) ? list : []).filter((c) => c.title && !c.mainGameItem).map((c) => ({
+    // game : vrai jeu (sinon l'entrée sert seulement à retrouver les images d'un jeu installé, ex. Fortnite)
+    game: ((cats) => cats.includes('games') && !cats.some((x) => /addons|digitalextras|engines|plugins/.test(x)))((c.categories ?? []).map((x) => x.path)),
+    appName: c.releaseInfo?.[0]?.appId ?? null, appIds: (c.releaseInfo ?? []).map((r) => r.appId).filter(Boolean), namespace: c.namespace, catalogId: c.id, title: c.title,
     art: epicArt(c.keyImages),
     details: { description: String(c.description ?? '').slice(0, 600), developers: c.developer ? [c.developer] : [], genres: [], released: null, screenshots: [] },
   })).filter((c) => c.appName);
@@ -53,7 +52,8 @@ export async function readEpicCatalog(catalogDir) {
 
 export async function scanEpic(manifestDir, catalogDir = null) {
   const catalog = catalogDir ? await readEpicCatalog(catalogDir) : [];
-  const byApp = new Map(catalog.map((c) => [c.appName, c]));
+  // Un jeu installé retrouve sa fiche par son identifiant de catalogue ou n'importe lequel de ses AppName
+  const byApp = new Map(catalog.flatMap((c) => [[c.catalogId, c], ...c.appIds.map((a) => [a, c])]));
   const items = [];
   for (const file of await readdir(manifestDir).catch(() => [])) {
     if (!file.endsWith('.item')) continue;
@@ -63,7 +63,7 @@ export async function scanEpic(manifestDir, catalogDir = null) {
     // Les modules (DLC, plugins Unreal) ne sont pas des jeux à part
     if ((m.AppCategories ?? []).some((c) => /plugins|engines|addons/i.test(c)) && !(m.AppCategories ?? []).includes('games')) continue;
     const key = `${m.CatalogNamespace}%3A${m.CatalogItemId}%3A${m.AppName}`;
-    const cat = byApp.get(m.AppName);
+    const cat = byApp.get(m.CatalogItemId) ?? byApp.get(m.AppName);
     items.push({
       id: `epic:${m.AppName}`, source: 'epic', kind: 'game', name: m.DisplayName, installed: true,
       installDir: m.InstallLocation ?? '', manifest: path.join(manifestDir, file), exe: m.InstallLocation && m.LaunchExecutable ? path.join(m.InstallLocation, m.LaunchExecutable) : null,
@@ -77,14 +77,14 @@ export async function scanEpic(manifestDir, catalogDir = null) {
   const have = new Set(items.map((i) => i.id));
   for (const x of dat?.InstallationList ?? []) {
     if (!x.AppName || !x.InstallLocation || have.has(`epic:${x.AppName}`) || /^(UE_|UnrealEngine)/i.test(x.AppName)) continue;
-    const cat = byApp.get(x.AppName);
+    const cat = byApp.get(x.ItemId) ?? byApp.get(x.AppName);
     items.push({ id: `epic:${x.AppName}`, source: 'epic', kind: 'game', name: cat?.title ?? path.basename(x.InstallLocation), installed: true, installDir: x.InstallLocation, exe: null, size: 0, minutes: 0, lastPlayed: 0, art: cat?.art ?? {}, details: cat?.details ?? null, epicKey: `${x.NamespaceId ?? ''}%3A${x.ItemId ?? ''}%3A${x.AppName}` });
     have.add(`epic:${x.AppName}`);
   }
   // Jeux possédés mais pas installés
   const installed = new Set(items.map((i) => i.id));
   for (const c of catalog) {
-    if (installed.has(`epic:${c.appName}`)) continue;
+    if (!c.game || installed.has(`epic:${c.appName}`) || c.appIds.some((a) => installed.has(`epic:${a}`))) continue;
     items.push({
       id: `epic:${c.appName}`, source: 'epic', kind: 'game', name: c.title, installed: false, size: 0, minutes: 0, lastPlayed: 0,
       art: c.art, details: c.details, epicKey: `${c.namespace}%3A${c.catalogId}%3A${c.appName}`,
@@ -118,7 +118,7 @@ export async function listEpicAccounts(localAppData = process.env.LOCALAPPDATA) 
 /** Jeux du magasin Epic pour la recherche (même non possédés) : nom, image et lien de la fiche. */
 export async function epicStoreSearch(term, fetchImpl = fetch) {
   const query = 'query searchStoreQuery($keywords: String, $country: String!, $locale: String) { Catalog { searchStore(keywords: $keywords, country: $country, locale: $locale, count: 8, category: "games/edition/base") { elements { title productSlug urlSlug catalogNs { mappings { pageSlug } } keyImages { type url } } } } }';
-  const r = await fetchImpl('https://graphql.epicgames.com/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables: { keywords: String(term ?? '').slice(0, 80), country: 'FR', locale: 'fr' } }), signal: AbortSignal.timeout(10_000) })
+  const r = await fetchImpl('https://graphql.epicgames.com/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, body: JSON.stringify({ query, variables: { keywords: String(term ?? '').slice(0, 80), country: 'FR', locale: 'fr' } }), signal: AbortSignal.timeout(10_000) })
     .then((x) => (x.ok ? x.json() : null)).catch(() => null);
   return (r?.data?.Catalog?.searchStore?.elements ?? []).map((e) => {
     const slug = String(e.catalogNs?.mappings?.[0]?.pageSlug ?? e.productSlug ?? e.urlSlug ?? '').replace(/\/home$/, '');

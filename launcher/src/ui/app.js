@@ -1627,6 +1627,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.37.3': [
+    ['🟦', 'Fortnite avec ses vraies images', 'Logo, jaquette et grand fond officiels lus dans le catalogue Epic de ton PC (même hors ligne), avec nouvel essai du magasin Epic toutes les 6 h si besoin.', ['[data-view=jeux]', 'wait900']],
+    ['⏱', 'Temps de jeu Fortnite, Rocket League…', 'Les jeux avec anti-triche sont enfin reconnus en cours : temps de jeu, « En cours », mini-compteur de FPS.'],
+  ],
   '0.37.2': [
     ['🔎', 'Fortnite trouvé dans la recherche', 'Un jeu déjà connu du launcher mais masqué ou filtré n’empêchait plus sa fiche magasin d’apparaître : tape « fortnite », il est là.', ['[data-view=jeux]', 'wait900']],
   ],
@@ -4008,7 +4012,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.37.2',
+    version: async () => '0.37.3',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
