@@ -29,14 +29,18 @@ ${SITE}
 \`/launcher telecharger\` : dernière version`;
 
 /** Crée (ou retrouve) la catégorie et les 3 salons dans ce serveur, puis l'enregistre pour les annonces. */
-export async function installHere(guild) {
+export async function installHere(guild, { create = true } = {}) {
   const everyone = guild.roles.everyone.id;
   const readOnly = [{ id: everyone, deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.CreatePublicThreads] }, { id: guild.client.user.id, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks] }];
   const find = (name, type) => guild.channels.cache.find((c) => c.name === name && c.type === type);
-  const cat = find('🚀 History Launcher', ChannelType.GuildCategory) ?? await guild.channels.create({ name: '🚀 History Launcher', type: ChannelType.GuildCategory, reason: 'History Launcher' });
+  // create=false (redémarrage du bot) : on retrouve les salons existants, rien n'est créé ni reposté
+  const cat = find('🚀 History Launcher', ChannelType.GuildCategory) ?? (create ? await guild.channels.create({ name: '🚀 History Launcher', type: ChannelType.GuildCategory, reason: 'History Launcher' }) : null);
   const entry = { guildId: guild.id };
+  let newNews = false;
   for (const [key, name, topic] of SALONS) {
-    const c = find(name, ChannelType.GuildText) ?? await guild.channels.create({ name, type: ChannelType.GuildText, parent: cat.id, topic, permissionOverwrites: readOnly, reason: 'History Launcher' });
+    let c = find(name, ChannelType.GuildText);
+    if (!c && !create) continue;
+    if (!c) { c = await guild.channels.create({ name, type: ChannelType.GuildText, parent: cat?.id, topic, permissionOverwrites: readOnly, reason: 'History Launcher' }); if (key === 'news') newNews = true; }
     entry[key] = c.id;
     if (key === 'infos') { // message mis à jour s'il a changé
       const mine = (await c.messages.fetch({ limit: 10 }).catch(() => null))?.find((m) => m.author.id === guild.client.user.id);
@@ -44,13 +48,14 @@ export async function installHere(guild) {
     }
   }
   // Un salon général où les membres peuvent discuter
-  const talk = find('💬 Communauté', ChannelType.GuildCategory) ?? await guild.channels.create({ name: '💬 Communauté', type: ChannelType.GuildCategory, reason: 'History Launcher' });
-  if (!find('💬・général', ChannelType.GuildText)) await guild.channels.create({ name: '💬・général', type: ChannelType.GuildText, parent: talk.id, topic: 'Discute avec les autres joueurs History Launcher.', reason: 'History Launcher' });
+  if (create && !find('💬・général', ChannelType.GuildText)) {
+    const talk = find('💬 Communauté', ChannelType.GuildCategory) ?? await guild.channels.create({ name: '💬 Communauté', type: ChannelType.GuildCategory, reason: 'History Launcher' });
+    await guild.channels.create({ name: '💬・général', type: ChannelType.GuildText, parent: talk.id, topic: 'Discute avec les autres joueurs History Launcher.', reason: 'History Launcher' });
+  }
   const list = ((await load(KEY, null)) ?? []).filter((x) => x.guildId !== guild.id);
-  const fresh = !((await load(KEY, null)) ?? []).some((x) => x.guildId === guild.id);
   await save(KEY, [...list, entry]);
-  // Première installation : les 3 dernières mises à jour, pour que le salon ne soit pas vide
-  if (fresh) {
+  // Salon des nouveautés tout juste créé : les 3 dernières mises à jour, pour qu'il ne soit pas vide
+  if (newNews) {
     const { recentReleases, releasePayload } = await import('./launcherReleases.js');
     const news = await guild.channels.fetch(entry.news).catch(() => null);
     for (const rel of await recentReleases(3)) await news?.send({ ...(await releasePayload(rel)), allowedMentions: { parse: [] } }).catch(() => {});
@@ -74,5 +79,17 @@ export const HOME_GUILD = process.env.LAUNCHER_SERVEUR || '1554084922665205780';
 export async function autoInstall(client) {
   const guild = await client.guilds.fetch(HOME_GUILD).catch(() => null);
   if (!guild) return console.warn('[launcher] le bot n’est pas encore sur le serveur', HOME_GUILD);
-  await installHere(guild).then(() => console.log('🚀 Salons du launcher installés sur', guild.name)).catch((err) => console.warn('[launcher] installation :', err.message));
+  // Déjà installé (au moins un salon du launcher existe) : on se contente de le retrouver, rien n'est recréé
+  const known = SALONS.some(([, name]) => guild.channels.cache.some((c) => c.name === name));
+  await installHere(guild, { create: !known }).then(() => console.log('🚀 Salons du launcher installés sur', guild.name)).catch((err) => console.warn('[launcher] installation :', err.message));
+}
+
+/** Vrai si un des salons « kind » contient déjà ce texte parmi ses 20 derniers messages. */
+export async function alreadyPosted(client, kind, needle) {
+  for (const s of (await load(KEY, null)) ?? []) {
+    const c = s[kind] && await client.channels.fetch(s[kind]).catch(() => null);
+    const msgs = await c?.messages?.fetch({ limit: 20 }).catch(() => null);
+    if (msgs?.some?.((m) => String(m.content).includes(needle))) return true;
+  }
+  return false;
 }

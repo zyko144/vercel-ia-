@@ -3,7 +3,7 @@
 // PNG de la nouveauté, avec le lien de téléchargement.
 import { AttachmentBuilder } from 'discord.js';
 import { load, save } from '../storage.js';
-import { broadcast } from './launcherServers.js';
+import { alreadyPosted, broadcast } from './launcherServers.js';
 
 const KEY = 'launcher-annonces';
 const REPO = 'zyko144/vercel-ia-';
@@ -62,6 +62,8 @@ async function tick(client, fetchImpl = fetch, want = null) {
   const st = (await load(KEY, null)) ?? {};
   // Déjà annoncée, ou plus ancienne que la dernière annonce (« latest » en retard) : rien
   if (st.last === rel.tag_name || (st.last && vnum(rel.tag_name) < vnum(st.last))) return false;
+  // Mémoire vidée (redéploiement) mais version déjà dans le salon : on la note sans la reposter
+  if (!st.last && await alreadyPosted(client, 'news', `Version ${String(rel.tag_name).replace(/^v/, '')} `)) { save(KEY, { last: rel.tag_name, at: Date.now() }); return false; }
   const channel = RELEASES_CHANNEL ? await client.channels.fetch(RELEASES_CHANNEL).catch(() => null) : null;
   const payload = await releasePayload(rel, fetchImpl);
   if (channel?.isTextBased?.()) await channel.send({ ...payload, allowedMentions: { parse: [] } });

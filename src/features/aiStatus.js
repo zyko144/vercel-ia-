@@ -102,6 +102,7 @@ async function broadcast(kind) {
   }
 }
 
+// Salon retiré (il n'annonçait que des pannes) : plus d'alertes, et l'ancien salon est supprimé des serveurs
 export function startAiStatus(c) {
-  client = c;
+  for (const g of c.guilds.cache.values()) g.channels.cache.find((x) => x.type === ChannelType.GuildText && x.name === CHANNEL)?.delete('Salon IA status retiré').catch(() => {});
 }
