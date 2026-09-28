@@ -63,7 +63,13 @@ p { margin: 0; }
 /* Héros */
 .hero { padding: 90px 0 40px; text-align: center; position: relative; isolation: isolate; }
 /* Image de fond en haut du site, fondue dans le noir vers le bas */
-.hero::before { content: ""; position: absolute; z-index: -1; left: 50%; width: 100vw; transform: translateX(-50%); top: -120px; aspect-ratio: 1672 / 941; background: linear-gradient(180deg, rgba(7, 6, 11, .2), rgba(7, 6, 11, .45)), url(assets/fond.webp) top center / 100% auto no-repeat; -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent); mask-image: linear-gradient(180deg, #000 55%, transparent); }
+.hero::before { content: ""; position: absolute; z-index: -1; left: 50%; width: 100vw; transform: translateX(-50%); top: -120px; height: calc(100% + 200px); background: radial-gradient(40% 50% at 8% 0%, rgba(168, 85, 247, .55), transparent 70%), radial-gradient(35% 45% at 95% 70%, rgba(47, 139, 255, .45), transparent 70%), radial-gradient(60% 60% at 50% 40%, rgba(21, 84, 209, .35), transparent 75%); -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent); mask-image: linear-gradient(180deg, #000 55%, transparent); }
+/* Décor : vraies captures de l'appli, nettes, inclinées en 3D (comme la bannière) */
+.herobg { position: absolute; z-index: -2; left: 50%; width: 100vw; transform: translateX(-50%); top: -120px; height: calc(100% + 200px); overflow: hidden; perspective: 1400px; pointer-events: none; -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent); mask-image: linear-gradient(180deg, #000 45%, transparent); }
+.herobg img { position: absolute; width: 62vw; max-width: 1100px; border-radius: 18px; border: 1px solid rgba(120, 160, 255, .25); box-shadow: 0 40px 120px -20px rgba(47, 139, 255, .6); opacity: .22; filter: saturate(1.2) hue-rotate(-8deg); }
+.herobg .b1 { left: -12vw; top: 90px; transform: rotateY(24deg) rotateX(8deg) rotateZ(-4deg); }
+.herobg .b2 { right: -14vw; top: 40px; transform: rotateY(-26deg) rotateX(8deg) rotateZ(4deg); }
+@media (max-width: 760px) { .herobg img { width: 110vw; } .herobg .b2 { display: none; } }
 .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 30px; font-size: 13.5px; font-weight: 600; color: #cfe7ff; }
 .pill b { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
 .hero h1 { font-size: clamp(40px, 7vw, 84px); font-weight: 850; margin: 22px auto 18px; max-width: 900px; }
@@ -200,6 +206,7 @@ footer a { color: #cfe7ff; }
 
 <main id="top">
   <section class="hero wrap">
+    <div class="herobg" aria-hidden="true"><img class="b1" src="assets/accueil.webp" alt=""><img class="b2" src="assets/pc.webp" alt=""></div>
     <span class="pill glass"><b></b><span id="verPill">Nouvelle version disponible</span></span>
     <h1>Tous tes jeux. <span class="grad">Ton PC au top.</span></h1>
     <p class="lead">Steam, Epic, Xbox, FiveM, Roblox et tes applis réunis dans un launcher en verre liquide, qui analyse ton PC pour de vrai, mesure ses performances et te connecte à tes amis en direct.</p>
