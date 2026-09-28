@@ -4,6 +4,7 @@
   "installCommand": "echo \"Site statique : rien à installer\"",
   "buildCommand": "echo \"Site statique : rien à construire\"",
   "outputDirectory": "site",
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ]; then exit 0; fi; git diff --quiet HEAD^ HEAD -- site vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
