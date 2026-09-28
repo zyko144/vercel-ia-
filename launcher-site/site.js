@@ -108,6 +108,9 @@
       box.innerHTML = '<div class="empty">Mesures en cours sur PC Windows : le graphique s’affichera dès qu’elles seront publiées.</div>';
       return;
     }
+    // Pas de nom de concurrent : les autres applications sont affichées « Launcher A, B, C… »
+    let n = 0;
+    for (const a of rows) if (!/history/i.test(a.nom)) a.nom = `Launcher ${String.fromCharCode(65 + n++)}`;
     const max = Math.max(...rows.map((a) => a.ramMo));
     box.innerHTML = `<div class="bars">${rows.sort((a, b) => a.ramMo - b.ramMo).map((a) => `<div class="bar"><span>${a.nom}</span><div class="t"><i data-w="${(100 * a.ramMo) / max}"></i></div><em>${a.ramMo} Mo</em></div>`).join('')}</div>
       <p class="note">${m.pc ?? ''}${m.date ? ` · mesuré le ${m.date}` : ''}${rows.some((a) => a.cpu != null) ? ` · processeur au repos : ${rows.map((a) => `${a.nom} ${a.cpu} %`).join(', ')}` : ''}</p>`;

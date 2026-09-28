@@ -62,3 +62,11 @@ assert.match(releaseMessage(fb).content, /# 🛡 Double authentification/, 'note
 assert.equal(releaseMessage(fb).images.length, 2);
 console.log('✅ Annonces du launcher : 17 vérifications');
 process.exit(0);
+
+// Chaque version doit avoir sa propre image : au moins une nouveauté avec des éléments à cliquer pour la capture
+{
+  const { shotCount } = await import('./launcher-notes.mjs');
+  const { readFileSync } = await import('node:fs');
+  const { version } = JSON.parse(readFileSync(new URL('../launcher/package.json', import.meta.url)));
+  assert.ok(shotCount(version) > 0, `v${version} : ajoute ['sélecteur', 'waitN'] à une nouveauté du CHANGELOG pour capturer son image`);
+}

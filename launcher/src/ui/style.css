@@ -1657,8 +1657,11 @@ body.idle .maintsign svg { animation: none; }
 .grid > [data-id] { content-visibility: auto; contain-intrinsic-size: auto 290px; }
 
 /* Optimisation en travaux : les bandes arrivent et se collent sur la carte à chaque ouverture */
-.maint.go .mainttape { animation: tapeL .6s cubic-bezier(.2, 1.35, .45, 1) both; }
-.maint.go .mainttape.b { animation: tapeR .6s .12s cubic-bezier(.2, 1.35, .45, 1) both; }
+.maint.go .mainttape { animation: tapeL .6s cubic-bezier(.2, 1.35, .45, 1) both, taperoll 1.1s .6s linear infinite; }
+.maint.go .mainttape.b { animation: tapeR .6s .12s cubic-bezier(.2, 1.35, .45, 1) both, taperoll 1.1s .72s linear infinite reverse; }
+/* Les traits rouges et noirs défilent (seulement quand la page Optimisation est affichée : ailleurs elle est cachée) */
+@keyframes taperoll { to { background-position: 50.9px 0; } }
+body.idle .maint.go .mainttape { animation-play-state: paused; }
 @keyframes tapeL { 0% { transform: translateX(-110%) rotate(-14deg) scale(1.15); } 70% { transform: translateX(1.5%) rotate(-1.2deg) scaleY(1.3); } 85% { transform: translateX(-.5%) rotate(-2.4deg) scaleY(.8); } 100% { transform: rotate(-2deg); } }
 @keyframes tapeR { 0% { transform: translateX(110%) rotate(14deg) scale(1.15); } 70% { transform: translateX(-1.5%) rotate(1.2deg) scaleY(1.3); } 85% { transform: translateX(.5%) rotate(2.4deg) scaleY(.8); } 100% { transform: rotate(2deg); } }
 @media (prefers-reduced-motion: reduce) { .maint.go .mainttape { animation: none !important; } }
