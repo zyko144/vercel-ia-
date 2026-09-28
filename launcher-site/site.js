@@ -133,4 +133,15 @@
     items.forEach((b, k) => b.addEventListener('click', () => show(k)));
     if (auto) { bar.addEventListener('animationend', () => show(cur + 1)); bar.classList.add('run'); }
   }
+
+  // Agrandir une capture au clic (y compris les images des versions ajoutées plus tard)
+  const box = document.getElementById('lightbox');
+  const zoomSel = '.tilt img, .tour-view .scr img, .shot img, .vcard img';
+  const mark = () => document.querySelectorAll(zoomSel).forEach((im) => im.classList.add('zoomable'));
+  mark(); new MutationObserver(mark).observe(document.body, { childList: true, subtree: true });
+  document.addEventListener('click', (e) => {
+    const im = e.target.closest?.(zoomSel);
+    if (im) { box.querySelector('img').src = im.currentSrc || im.src; box.querySelector('img').alt = im.alt; box.showModal(); }
+    else if (e.target.closest?.('#lightbox')) box.close();
+  });
 })();

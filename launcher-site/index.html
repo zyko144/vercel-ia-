@@ -82,8 +82,7 @@ p { margin: 0; }
 /* Capture en 3D qui suit la souris */
 .stage { perspective: 1600px; margin: 64px auto 0; width: min(1120px, 100%); }
 .tilt { transform-style: preserve-3d; transform: rotateX(14deg) rotateY(-8deg) rotateZ(1deg); transition: transform .35s cubic-bezier(.2, .8, .2, 1); border-radius: 20px; position: relative; }
-.tilt img { border-radius: 20px; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 60px 120px -30px rgba(0, 0, 0, .9), 0 0 120px -30px var(--blue); }
-.tilt::after { content: ""; position: absolute; inset: 0; border-radius: 20px; background: linear-gradient(115deg, rgba(255, 255, 255, .18), transparent 30%, transparent 70%, rgba(255, 255, 255, .06)); pointer-events: none; }
+.tilt img { box-shadow: 0 60px 120px -30px rgba(0, 0, 0, .9), 0 0 120px -30px var(--blue); }
 @keyframes bob { 50% { translate: 0 -10px; } }
 
 /* Sections */
@@ -92,6 +91,11 @@ section { padding: 90px 0; }
 .kicker { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--cyan); font-weight: 800; }
 .head h2 { font-size: clamp(30px, 4.4vw, 50px); margin: 10px 0 14px; }
 .head p { color: var(--muted); font-size: 17.5px; }
+/* Toutes les captures : image telle quelle, bords arrondis, ombre ; clic = agrandir */
+.zoomable { border-radius: 16px; box-shadow: 0 40px 90px -35px rgba(0, 0, 0, .9), 0 0 80px -40px var(--blue); cursor: zoom-in; display: block; }
+.lightbox { outline: none; border: 0; padding: 0; background: transparent; max-width: 94vw; max-height: 92vh; }
+.lightbox::backdrop { background: rgba(4, 4, 8, .85); backdrop-filter: blur(6px); }
+.lightbox img { display: block; max-width: 94vw; max-height: 92vh; border-radius: 16px; cursor: zoom-out; }
 .tour { display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 28px; align-items: start; }
 .tour-list { display: flex; flex-direction: column; gap: 6px; }
 .tour-item { all: unset; box-sizing: border-box; cursor: pointer; display: block; padding: 16px 18px; border-radius: 18px; border: 1px solid transparent; transition: background .25s, border-color .25s; }
@@ -103,11 +107,12 @@ section { padding: 90px 0; }
 .tour-item.on { background: linear-gradient(160deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02)); border-color: var(--line); box-shadow: inset 3px 0 0 var(--blue), inset 0 1px 0 rgba(255, 255, 255, .12); }
 .tour-item.on h3 small { color: var(--cyan); }
 .tour-item.on p { max-height: 140px; opacity: 1; margin-top: 10px; }
-.tour-view { padding: 14px; border-radius: 22px; position: relative; }
-.tour-view .dots { display: flex; gap: 7px; margin: 2px 4px 12px; } .tour-view .dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, .15); }
-.tour-view .scr { position: relative; aspect-ratio: 1600 / 859; border-radius: 12px; overflow: hidden; background: #0b0a10; }
-.tour-view .scr img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transform: scale(1.02); transition: opacity .5s, transform .6s; }
-.tour-view .scr img.on { opacity: 1; transform: none; }
+.tour-view { position: relative; perspective: 1400px; }
+.tour-view .scr { display: grid; transform: rotateY(-7deg) rotateX(4deg); transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+.tour-view:hover .scr { transform: none; }
+.tour-view .scr img { grid-area: 1 / 1; width: 100%; height: auto; opacity: 0; transition: opacity .5s; }
+.tour-view .scr img.on { opacity: 1; }
+.tour-view .scr img:not(.on) { pointer-events: none; }
 .tour-view .bar { height: 3px; margin-top: 12px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
 .tour-view .bar b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), var(--cyan)); }
 .tour-view .bar b.run { animation: tourbar 5s linear forwards; } .tour:hover .tour-view .bar b.run { animation-play-state: paused; }
@@ -125,8 +130,9 @@ section { padding: 90px 0; }
 .txt ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .txt li { display: flex; gap: 12px; align-items: flex-start; }
 .txt li::before { content: "✓"; flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 13px; font-weight: 900; color: #06121f; background: linear-gradient(135deg, var(--cyan), var(--blue)); margin-top: 2px; }
-.shot { padding: 10px; border-radius: 24px; }
-.shot img { border-radius: 16px; }
+.shot { margin: 0; perspective: 1400px; }
+.shot img { transform: rotateY(-6deg) rotateX(4deg); transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+.shot:hover img { transform: none; }
 .shot figcaption { color: var(--muted); font-size: 13px; text-align: center; padding: 10px 6px 2px; }
 
 /* Benchmark */
@@ -149,7 +155,7 @@ section { padding: 90px 0; }
 .vcard h3 { font-size: 20px; margin-bottom: 4px; } .vcard time { color: var(--muted); font-size: 13px; }
 .vcard ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
 .vcard li b { display: block; } .vcard li span { color: var(--muted); font-size: 14.5px; }
-.vcard img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.vcard img { width: 100%; }
 @media (max-width: 760px) { .vcard { grid-template-columns: 1fr; } }
 
 /* Comparatif */
@@ -233,8 +239,7 @@ footer a { color: #cfe7ff; }
         <button class="tour-item" type="button" data-i="4" aria-selected="false"><h3><small>05</small>Windows Update</h3><p>Recherche, choisis et installe tes mises à jour Windows, pilotes et Defender sans ouvrir les Paramètres.</p></button>
         <button class="tour-item" type="button" data-i="5" aria-selected="false"><h3><small>06</small>Réglages</h3><p>Mode tournoi, jeux lancés sans ouvrir Steam / Epic, replay des 30 dernières secondes, limite de jeu par jour, vrais FPS, widget sur le bureau…</p></button>
       </div>
-      <div class="tour-view glass rv">
-        <div class="dots"><i></i><i></i><i></i></div>
+      <div class="tour-view rv">
         <div class="scr">
           <img src="assets/accueil.webp" alt="Bibliothèque" class="on" width="1600" height="859">
           <img src="assets/amis.webp" alt="Amis en direct" loading="lazy" width="1367" height="841">
@@ -264,7 +269,7 @@ footer a { color: #cfe7ff; }
           <li>Rapport détaillé rédigé par l’IA à partir des seules mesures</li>
         </ul>
       </div>
-      <figure class="shot glass rv"><img src="assets/pc.webp" alt="Mon PC : score de santé détaillé, jauges en direct, courbes des 24 dernières heures et conseils" loading="lazy" width="1280" height="798"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
+      <figure class="shot rv"><img src="assets/pc.webp" alt="Mon PC : score de santé détaillé, jauges en direct, courbes des 24 dernières heures et conseils" loading="lazy" width="1280" height="798"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
     </div>
   </section>
 
@@ -280,7 +285,7 @@ footer a { color: #cfe7ff; }
           <li><span><b>Nettoyage sûr</b> : les fichiers perso vont à la corbeille, il reste toujours une copie de chaque doublon</span></li>
         </ul>
       </div>
-      <figure class="shot glass rv"><img src="assets/analyse.webp" alt="Analyse pro : fichiers lus, place occupée par type, fichiers inutiles, doublons et fichiers louches" loading="lazy" width="1280" height="798"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
+      <figure class="shot rv"><img src="assets/analyse.webp" alt="Analyse pro : fichiers lus, place occupée par type, fichiers inutiles, doublons et fichiers louches" loading="lazy" width="1280" height="798"><figcaption>Capture de démonstration (PC d’exemple)</figcaption></figure>
     </div>
     <div class="split rev" style="margin-top:40px">
       <div class="txt rv">
@@ -288,7 +293,7 @@ footer a { color: #cfe7ff; }
         <h2>Tes mises à jour, ici</h2>
         <p>Le launcher interroge l’agent officiel Windows Update, range les mises à jour (sécurité, Defender, pilotes, .NET) et les installe avec l’avancement en direct. Il te prévient quand un redémarrage est nécessaire.</p>
       </div>
-      <figure class="shot glass rv"><img src="assets/maj.webp" alt="Windows Update dans History Launcher : mises à jour rangées par type, installation de la sélection" loading="lazy" width="1280" height="798"></figure>
+      <figure class="shot rv"><img src="assets/maj.webp" alt="Windows Update dans History Launcher : mises à jour rangées par type, installation de la sélection" loading="lazy" width="1280" height="798"></figure>
     </div>
   </section>
 
@@ -328,7 +333,7 @@ footer a { color: #cfe7ff; }
         <p>Quand un ami lance un jeu, tu le sais tout de suite. Les messages, invitations et « On joue ? » arrivent en bas à gauche de l’écran, même pendant une partie.</p>
         <ul><li>Rejoindre en un clic : jeu Steam ou serveur FiveM</li><li>Messages entre amis et invitations</li><li>Soirées jeu organisées avec rappel</li></ul>
       </div>
-      <figure class="shot glass rv"><img src="assets/notifications.webp" alt="Notifications d’amis en bas à gauche : demande de jeu, message, ami qui lance FiveM" loading="lazy" width="360" height="353" style="max-width:420px;margin:auto"></figure>
+      <figure class="shot rv"><img src="assets/notifications.webp" alt="Notifications d’amis en bas à gauche : demande de jeu, message, ami qui lance FiveM" loading="lazy" width="360" height="353" style="max-width:420px;margin:auto"></figure>
     </div>
   </section>
 
@@ -339,7 +344,7 @@ footer a { color: #cfe7ff; }
         <h2>Propre, rangé, à ton goût</h2>
         <p>Paramètres classés par catégories, sons réglables, thème, compte et sauvegarde en ligne pour tout retrouver sur un autre PC.</p>
       </div>
-      <figure class="shot glass rv"><img src="assets/settings.webp" alt="Paramètres de History Launcher, catégorie Sons" loading="lazy" width="1280" height="860"></figure>
+      <figure class="shot rv"><img src="assets/settings.webp" alt="Paramètres de History Launcher, catégorie Sons" loading="lazy" width="1280" height="860"></figure>
     </div>
   </section>
 
@@ -395,5 +400,6 @@ footer a { color: #cfe7ff; }
 <footer><a href="/">History IA</a> · <a href="/mentions">Mentions légales</a> · <a href="/confidentialite">Confidentialité</a></footer>
 
 <script src="site.js" defer></script>
+<dialog class="lightbox" id="lightbox"><img alt=""></dialog>
 </body>
 </html>
