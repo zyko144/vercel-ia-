@@ -7,7 +7,8 @@ import { broadcast } from './launcherServers.js';
 
 const KEY = 'launcher-annonces';
 const REPO = 'zyko144/vercel-ia-';
-export const RELEASES_CHANNEL = process.env.LAUNCHER_ANNONCES_SALON || '1553051501578948769';
+// Ancien salon (ddv) coupé : tout le launcher est sur son serveur (launcherServers.js). Variable pour en ajouter un.
+export const RELEASES_CHANNEL = process.env.LAUNCHER_ANNONCES_SALON || '';
 
 /** Message Discord (2000 caractères max) à partir de la release GitHub. */
 export function releaseMessage(rel) {
@@ -61,12 +62,12 @@ async function tick(client, fetchImpl = fetch, want = null) {
   const st = (await load(KEY, null)) ?? {};
   // Déjà annoncée, ou plus ancienne que la dernière annonce (« latest » en retard) : rien
   if (st.last === rel.tag_name || (st.last && vnum(rel.tag_name) < vnum(st.last))) return false;
-  const channel = await client.channels.fetch(RELEASES_CHANNEL).catch(() => null);
-  if (!channel?.isTextBased?.()) { console.warn('[annonces launcher] salon introuvable ou inaccessible :', RELEASES_CHANNEL); return false; }
+  const channel = RELEASES_CHANNEL ? await client.channels.fetch(RELEASES_CHANNEL).catch(() => null) : null;
   const payload = await releasePayload(rel, fetchImpl);
-  await channel.send({ ...payload, allowedMentions: { parse: [] } });
+  if (channel?.isTextBased?.()) await channel.send({ ...payload, allowedMentions: { parse: [] } });
+  const sent = await broadcast(client, 'news', payload, channel?.id); // serveur du launcher (et autres serveurs installés)
+  if (!channel && !sent) return false; // aucun salon prêt : on réessaie plus tard
   save(KEY, { last: rel.tag_name, at: Date.now() });
-  await broadcast(client, 'news', payload, channel.id); // aussi dans les serveurs installés avec /launcher installer
   return true;
 }
 /** Texte + captures d'une version, prêts à envoyer. */

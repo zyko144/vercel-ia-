@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+process.env.LAUNCHER_ANNONCES_SALON = '1553051501578948769';
 process.env.DISCORD_TOKEN = ['T'.repeat(26), 'E'.repeat(6), 'S'.repeat(30)].join('.');
 process.env.GEMINI_API_KEY ||= 'essai';
 process.env.SUPABASE_URL = '';

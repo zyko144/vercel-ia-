@@ -9,7 +9,9 @@
 <meta name="theme-color" content="#07060b">
 <meta property="og:title" content="History Launcher">
 <meta property="og:description" content="Tous tes jeux au même endroit, ton PC analysé pour de vrai, tes amis en direct.">
-<meta property="og:image" content="assets/accueil.webp">
+<meta property="og:image" content="https://historylauncher.vercel.app/assets/banniere.jpg">
+<meta property="og:image:width" content="1672"><meta property="og:image:height" content="941">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://historylauncher.vercel.app/assets/banniere.jpg">
 <style>
 :root {
   color-scheme: dark;
@@ -59,7 +61,9 @@ p { margin: 0; }
 .btn.sm { padding: 9px 14px; font-size: 14px; border-radius: 12px; }
 
 /* Héros */
-.hero { padding: 90px 0 40px; text-align: center; position: relative; }
+.hero { padding: 90px 0 40px; text-align: center; position: relative; isolation: isolate; }
+/* Image de fond en haut du site, fondue dans le noir vers le bas */
+.hero::before { content: ""; position: absolute; z-index: -1; left: 50%; width: 100vw; transform: translateX(-50%); top: -120px; height: min(900px, calc(100% + 120px)); background: linear-gradient(180deg, rgba(7, 6, 11, .35), rgba(7, 6, 11, .55) 55%, var(--bg)), url(assets/banniere.jpg) center 30% / cover no-repeat; }
 .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 30px; font-size: 13.5px; font-weight: 600; color: #cfe7ff; }
 .pill b { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
 .hero h1 { font-size: clamp(40px, 7vw, 84px); font-weight: 850; margin: 22px auto 18px; max-width: 900px; }
