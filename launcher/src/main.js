@@ -1084,7 +1084,7 @@ async function checkDriver() {
   driverInfo = oldDriver(drivers);
   // NVIDIA : comparaison avec le dernier pilote Game Ready publié (notes de version + lien direct)
   const nv = drivers.find((d) => d.vendor === 'nvidia');
-  const latest = nv ? await nvidiaLatest().catch(() => null) : null;
+  const latest = nv ? await nvidiaLatest(nv.name).catch(() => null) : null;
   const mine = nv ? nvidiaVersion(nv.version) : null;
   if (latest && mine && newerVersion(latest.version, mine)) {
     driverInfo = { name: nv.name, vendor: 'nvidia', version: mine, latest: latest.version, notes: latest.notes, download: latest.download, date: latest.date, link: latest.notes ?? DRIVER_LINKS[0] };

@@ -1627,6 +1627,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.35.0': [
+    ['🖥', 'Le bon pilote pour ta carte', 'L’alerte « nouveau pilote NVIDIA » cherche maintenant le pilote de TA carte graphique (ex. GTX 1660 SUPER), plus celui des cartes récentes qui n’était pas compatible.', ['.side [data-view=pc]', 'wait900']],
+    ['🧹', 'Menu allégé', 'Les catégories Applications et Statistiques sont retirées : le launcher va à l’essentiel et utilise moins de mémoire.'],
+    ['⌨', 'Nouveaux raccourcis', 'Ctrl+L relance ton dernier jeu, Ctrl+Maj+R choisit un jeu au hasard, Ctrl+Maj+C ouvre History Clips, Ctrl+Maj+O l’optimisation. Touche « ? » pour tous les voir.'],
+  ],
   '0.34.2': [
     ['🔗', 'History Clips se connecte tout seul', 'Connecté au launcher = History Clips est relié à ton compte automatiquement, sans code ni mot de passe.', ['#openSettings', 'wait700', '.setnav [data-pane=clips]', 'wait800']],
   ],
@@ -3295,7 +3300,7 @@ $('q').addEventListener('input', (e) => {
 });
 document.querySelectorAll('[data-win]').forEach((b) => b.addEventListener('click', () => api.win(b.dataset.win)));
 // ---------- Raccourcis clavier (liste complète : touche « ? ») ----------
-const VIEW_KEYS = ['accueil', 'bibliotheque', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis', 'pc', 'optimisation'];
+const VIEW_KEYS = ['accueil', 'bibliotheque', 'jeux', 'favoris', 'classement', 'amis', 'pc', 'optimisation'];
 function visibleItems() {
   return [...document.querySelectorAll(state.view === 'liste' ? '#grid [data-id]' : '#topGames [data-id], #topApps [data-id]')].map((el) => state.items.find((i) => i.id === el.dataset.id)).filter(Boolean);
 }
@@ -3307,7 +3312,13 @@ document.addEventListener('keydown', (e) => {
   if (ctrl && e.key.toLowerCase() === 'f') { e.preventDefault(); $('q').focus(); return; }
   if (ctrl && e.key.toLowerCase() === 'k') { e.preventDefault(); openAssistant(true); return; }
   if (ctrl && e.key === ',') { e.preventDefault(); $('openSettings').click(); return; }
-  if (ctrl && /^[0-9]$/.test(e.key)) { e.preventDefault(); go(VIEW_KEYS[e.key === '0' ? 9 : Number(e.key) - 1]); return; }
+  if (ctrl && /^[1-8]$/.test(e.key)) { e.preventDefault(); go(VIEW_KEYS[Number(e.key) - 1]); return; }
+  // Relancer le dernier jeu, jeu au hasard, History Clips, optimisation rapide
+  const playable = () => games().filter((i) => i.installed);
+  if (ctrl && !e.shiftKey && e.key.toLowerCase() === 'l') { e.preventDefault(); const g = playable().sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0))[0]; if (g) { select(g); act('launch'); toast(`▶ ${g.name}`); } return; }
+  if (ctrl && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); const l = playable(); const g = l[Math.floor(Math.random() * l.length)]; if (g) { go('accueil'); select(g); toast(`🎲 ${g.name} · Entrée pour jouer`); } return; }
+  if (ctrl && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); api.clipsSite?.(); return; }
+  if (ctrl && e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); go('optimisation'); return; }
   if (ctrl && e.key.toLowerCase() === 'd' && state.sel) {
     e.preventDefault();
     const on = !state.sel.favorite;
@@ -3903,7 +3914,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.34.2',
+    version: async () => '0.35.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

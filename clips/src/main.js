@@ -4,7 +4,7 @@
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, screen, session, shell, Tray } from 'electron';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -116,7 +116,7 @@ async function pickSource() {
 async function setReplay(on, keepSetting = false) {
   if (!on) {
     if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); const w = recWin; setTimeout(() => { if (!w.isDestroyed()) w.destroy(); }, 500); }
-    recWin = null; recSource = null; recState = keepSetting && st.replay ? 'wait' : 'off'; changed();
+    recWin = null; recSource = null; recState = keepSetting && st.replay ? 'wait' : 'off'; changed(); resetRing();
     tray?.setToolTip(recState === 'wait' ? 'History Clips · en attente d’un jeu' : 'History Clips · replay en pause'); return;
   }
   if (st.onlyGame && process.platform === 'win32' && !inGame()) { recState = 'wait'; changed(); tray?.setToolTip('History Clips · en attente d’un jeu'); return; }
@@ -125,7 +125,8 @@ async function setReplay(on, keepSetting = false) {
   if (!src) { recState = 'error:aucun écran trouvé'; changed(); return; }
   recSource = src.id;
   recWin = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { preload: path.join(here, 'recorder.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
-  recWin.on('closed', () => { recWin = null; });
+  const me = recWin; recWin.on('closed', () => { if (recWin === me) recWin = null; });
+  resetRing();
   await recWin.loadFile(path.join(here, 'ui', 'recorder.html'));
   recWin.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio });
   tray?.setToolTip(`History Clips · replay actif (${st.hotClip} pour garder les ${st.seconds} dernières secondes)`);
@@ -146,7 +147,26 @@ ipcMain.on('rec:state', (e, s) => {
   if (s.startsWith('error')) notify('Replay indisponible', `L’enregistrement n’a pas démarré (${s.slice(6, 120)}).`);
 });
 
-let pendingGame = null;
+// ---------- Tampon tournant sur le disque : 1 fichier par seconde de vidéo, les plus vieux sont effacés ----------
+const RING = () => path.join(app.getPath('temp'), 'history-clips-replay');
+let ring = []; let head = null; let ringGen = 0;
+function resetRing() {
+  ringGen++; ring = []; head = null;
+  rm(RING(), { recursive: true, force: true }).then(() => mkdir(RING(), { recursive: true })).catch(() => {});
+}
+const CLUSTER = Buffer.from([0x1f, 0x43, 0xb6, 0x75]); // début d'un « cluster » WebM
+ipcMain.on('rec:chunk', async (e, ab) => {
+  if (e.sender !== recWin?.webContents) return;
+  const gen = ringGen; let buf = Buffer.from(ab);
+  // Le tout premier morceau contient l'en-tête du fichier : gardé à part pour recoller n'importe quelle fin de replay
+  if (!head) { const at = buf.indexOf(CLUSTER); if (at < 0) return; head = buf.subarray(0, at); buf = buf.subarray(at); }
+  const file = path.join(RING(), `${Date.now()}.bin`);
+  await writeFile(file, buf).catch(() => null);
+  if (gen !== ringGen) return rm(file, { force: true }).catch(() => {});
+  ring.push({ file, at: Date.now() });
+  while (ring.length > st.seconds + 4) rm(ring.shift().file, { force: true }).catch(() => {});
+});
+
 async function saveClip(game) {
   if (!recWin || recState !== 'on') {
     if (!st.replay) { st.replay = true; saveSt(); }
@@ -154,8 +174,23 @@ async function saveClip(game) {
     setReplay(true).catch(() => {});
     return notify('Replay activé', `Il enregistre maintenant : rappuie sur ${st.hotClip} pour garder les dernières secondes.`);
   }
-  pendingGame = game ?? (inGame() ? fg.game : 'Bureau');
-  recWin.webContents.send('rec:save');
+  if (!head || ring.length < 2) return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
+  const label = safeName(game ?? (inGame() ? fg.game : 'Bureau')) || 'Clip';
+  // On attend la seconde en cours, puis on recolle en-tête + dernières secondes (le disque, pas la mémoire)
+  await new Promise((ok) => setTimeout(ok, 1100));
+  const parts = ring.slice(-(st.seconds + 1));
+  try {
+    const dir = path.join(ROOT(), label);
+    await mkdir(dir, { recursive: true });
+    const tmp = path.join(dir, `.${Date.now()}.webm`);
+    await writeFile(tmp, head);
+    for (const p of parts) await appendFile(tmp, await readFile(p.file).catch(() => Buffer.alloc(0)));
+    const out = path.join(dir, clipName(label, 'mp4'));
+    await toMp4(tmp, out, { fixup: true }).catch(async () => { await rename(tmp, out.replace(/\.mp4$/, '.webm')); });
+    await rm(tmp, { force: true });
+    notify('🎬 Clip enregistré', `${label} · ouvre History Clips pour le couper ou l’envoyer.`);
+    changed(); saveSt(); prune().catch(() => {});
+  } catch (err) { notify('Clip non enregistré', err.message); }
 }
 const FFMPEG = async () => unpacked((await import('ffmpeg-static')).default);
 const runFfmpeg = async (args) => { const bin = await FFMPEG(); return new Promise((resolve, reject) => { const p = spawn(bin, args, { windowsHide: true, stdio: 'ignore' }); try { os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`)))); }); };
@@ -163,22 +198,6 @@ const runFfmpeg = async (args) => { const bin = await FFMPEG(); return new Promi
 async function toMp4(src, out, opts = {}) {
   try { await runFfmpeg(ffmpegArgs(src, out, opts)); } catch { await runFfmpeg(ffmpegArgs(src, out, { ...opts, reencode: true })); }
 }
-ipcMain.on('rec:clip', async (e, buf) => {
-  if (e.sender !== recWin?.webContents) return;
-  try {
-    const game = safeName(pendingGame ?? 'Clip') || 'Clip';
-    const dir = path.join(ROOT(), game);
-    await mkdir(dir, { recursive: true });
-    const tmp = path.join(dir, `.${Date.now()}.webm`);
-    await writeFile(tmp, Buffer.from(buf));
-    const out = path.join(dir, clipName(game, 'mp4'));
-    await toMp4(tmp, out).catch(async () => { await rename(tmp, out.replace(/\.mp4$/, '.webm')); });
-    await rm(tmp, { force: true });
-    notify('🎬 Clip enregistré', `${game} · ouvre History Clips pour le couper ou l’envoyer.`);
-    changed(); saveSt(); prune().catch(() => {});
-  } catch (err) { notify('Clip non enregistré', err.message); }
-});
-
 async function screenshot() {
   const d = screen.getPrimaryDisplay();
   const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };

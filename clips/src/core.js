@@ -21,8 +21,9 @@ export function gameLabel({ desc = '', title = '', proc = '' } = {}) {
 }
 
 /** Arguments ffmpeg : remise en MP4 (durée et avance rapide corrects), avec ou sans découpe. */
-export function ffmpegArgs(src, out, { start = null, end = null, reencode = false } = {}) {
-  const a = ['-y'];
+export function ffmpegArgs(src, out, { start = null, end = null, reencode = false, fixup = false } = {}) {
+  // fixup : replay recollé (en-tête + dernières secondes) → horodatage refait, début abîmé ignoré
+  const a = fixup ? ['-y', '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err'] : ['-y'];
   if (start != null) a.push('-ss', String(Math.max(0, start)));
   a.push('-i', src);
   if (end != null) a.push('-t', String(Math.max(0.5, end - (start ?? 0))));
