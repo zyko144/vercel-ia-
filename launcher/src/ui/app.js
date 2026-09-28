@@ -1627,6 +1627,14 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.32.0': [
+    ['🎬', 'Catégorie Clips', 'Nouvelle page Clips dans le menu : tous tes clips, à regarder dans l’appli en bonne qualité avec le son, à envoyer sur Discord ou ouvrir dans leur dossier.', ['[data-view=clips]', 'wait1200']],
+    ['🛠', 'Clips réparés', 'Windows refusait l’accès à l’écran à l’enregistreur du replay : les clips marchent maintenant, en 1080p jusqu’à 60 images/s, avec le son du PC.'],
+    ['⌨', 'N’importe quelle touche', 'Raccourcis : F1-F24, Impr. écran, Inser, pavé numérique… seuls, ou n’importe quelle touche avec Ctrl / Alt / Maj.'],
+    ['🎙', 'Volume à la voix', '« Hey History, baisse le son de Discord », « coupe le son du jeu », « remets le son de Spotify » : le volume de chaque appli, même en pleine partie.'],
+    ['🗣', 'Voix de l’assistant', 'Paramètres › Général : choisis la voix de l’assistant (toutes celles installées sur Windows) ou coupe complètement ses réponses à voix haute.'],
+    ['❌', '« Ferme Rocket League » marche', 'Les jeux avec anti-triche (Rocket League, Fortnite…) étaient invisibles pour la commande « ferme » : ils se ferment maintenant.'],
+  ],
   '0.31.3': [
     ['🪟', 'Epic Games ne s’ouvre plus en grand', 'Après une partie avec le boost, Epic Games était rouvert en plein écran : il repart maintenant discrètement en fond, comme au démarrage de Windows.', ['[data-view=optimisation]', 'wait1200']],
   ],
@@ -3000,12 +3008,26 @@ function go(view) {
   if (state.view === 'liste') renderList();
   if (state.view === 'stats') renderStats();
   if (state.view === 'classement') renderRanking();
+  if (state.view === 'clips') renderClips();
   if (state.view === 'amis') showFriendTab(state.ftab);
   if (state.view === 'pc') openPc();
   if (state.view === 'optimisation') openOpti();
   $('main').scrollTop = 0;
 }
 
+// Catégorie Clips : lecture dans l'appli (image et son d'origine), envoi sur Discord, dossier
+async function renderClips() {
+  const list = await api.clipsList?.().catch(() => []) ?? [];
+  $('clipGrid').innerHTML = list.length ? list.map((c) => `<figure class="clipcard"><video src="${esc(c.url)}" controls preload="metadata"></video>
+    <figcaption><div><b>${esc(c.game)}</b><small>${new Date(c.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · ${gb(c.size)}</small></div>
+    <div class="row"><button type="button" class="btn sm" data-clipd="${esc(c.token)}">Discord</button><button type="button" class="btn ghost sm" data-clipf="${esc(c.token)}">📁</button></div></figcaption></figure>`).join('')
+    : '<div class="empty">Aucun clip pour l’instant. Active le replay (Paramètres › Jeux), puis appuie sur ton raccourci de clip en jeu.</div>';
+}
+$('clipGrid').addEventListener('click', async (e) => {
+  const d = e.target.closest('[data-clipd]'); const f = e.target.closest('[data-clipf]');
+  if (f) return api.clipsOpen(f.dataset.clipf, 'folder');
+  if (d) { d.disabled = true; const r = await api.captureDiscord(d.dataset.clipd).catch(() => null); d.disabled = false; toast(r?.ok ? '✅ Envoyé sur Discord' : r?.error ?? 'Envoi impossible'); }
+});
 function select(item) {
   if (!item) return;
   state.sel = item;
@@ -3310,6 +3332,8 @@ function showKeys(s) {
   $('directLaunch').checked = s.directLaunch !== false;
   $('preloadSteam').checked = Boolean(s.preloadSteam);
   $('nightUpdates').checked = Boolean(s.nightUpdates);
+  $('voiceReply').checked = s.voiceReply !== false;
+  api.voiceList?.().then((vs) => { $('voiceName').innerHTML = '<option value="">Voix française par défaut</option>' + (vs ?? []).map((v) => `<option value="${esc(v.name)}">${esc(v.name.replace(/^Microsoft /, ''))} · ${esc(v.lang)}${v.gender === 'Female' ? ' · femme' : v.gender === 'Male' ? ' · homme' : ''}</option>`).join(''); $('voiceName').value = s.voiceName ?? ''; }).catch(() => {});
   $('remoteOn').checked = Boolean(s.remote); showRemote();
   $('gameMode').checked = s.gameMode !== false;
   $('dealAlerts').checked = s.dealAlerts !== false;
@@ -3348,6 +3372,9 @@ $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('preloadSteam').addEventListener('change', (e) => api.setSettings({ preloadSteam: e.target.checked }));
 $('nightUpdates').addEventListener('change', (e) => api.setSettings({ nightUpdates: e.target.checked }));
+$('voiceReply').addEventListener('change', (e) => api.setSettings({ voiceReply: e.target.checked }));
+$('voiceName').addEventListener('change', (e) => { api.setSettings({ voiceName: e.target.value }); api.voiceSay?.(e.target.value); });
+$('voiceTest').addEventListener('click', () => api.voiceSay?.($('voiceName').value));
 async function showRemote() {
   const r = await api.remoteGet?.().catch(() => null);
   $('remoteInfo').hidden = !r?.on;
@@ -3355,7 +3382,7 @@ async function showRemote() {
 }
 // Raccourcis modifiables : clic sur un raccourci, puis la nouvelle combinaison (Échap annule, Retour arrière = par défaut)
 const HK = { clip: '🎬 Garder les 30 dernières secondes', shot: '📸 Capture d’écran', overlay: '📊 Infos en jeu', toggle: '🪟 Afficher / ranger le launcher', palette: '🔎 Recherche rapide' };
-const hkText = (a) => a.replace('CommandOrControl', 'Ctrl').split('+').map((k) => `<kbd>${esc(k)}</kbd>`).join('');
+const hkText = (a) => a.replace('CommandOrControl', 'Ctrl').replace('Shift', 'Maj').replace('PrintScreen', 'Impr. écran').replace(/num(\d)/, 'Pavé $1').split('+').map((k) => `<kbd>${esc(k)}</kbd>`).join('');
 async function showHotkeys() {
   const cur = await api.hotkeysGet?.().catch(() => null);
   if (!cur) return;
@@ -3369,9 +3396,11 @@ $('hotkeys').addEventListener('click', (e) => {
     if (['Control', 'Alt', 'Shift', 'Meta'].includes(ev.key)) return;
     document.removeEventListener('keydown', onKey, true);
     if (ev.key === 'Escape') return showHotkeys();
-    const key = ev.key === ' ' ? 'Space' : ev.key.startsWith('Arrow') ? ev.key.slice(5) : /^F\d{1,2}$/.test(ev.key) ? ev.key : ev.key.length === 1 ? ev.key.toUpperCase() : null;
+    const NAMED = { ' ': 'Space', Tab: 'Tab', PrintScreen: 'PrintScreen', Insert: 'Insert', Delete: 'Delete', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown', Enter: 'Return', '+': 'Plus' };
+    const pad = /^Numpad(\d)$/.exec(ev.code)?.[1] ?? { NumpadAdd: 'add', NumpadSubtract: 'sub', NumpadMultiply: 'mult', NumpadDivide: 'div', NumpadDecimal: 'dec' }[ev.code];
+    const key = pad != null ? `num${pad}` : NAMED[ev.key] ?? (ev.key.startsWith('Arrow') ? ev.key.slice(5) : /^F\d{1,2}$/.test(ev.key) ? ev.key : ev.key.length === 1 ? ev.key.toUpperCase() : null);
     const accel = ev.key === 'Backspace' ? null : key && [ev.ctrlKey && 'CommandOrControl', ev.altKey && 'Alt', ev.shiftKey && 'Shift', key].filter(Boolean).join('+');
-    if (accel === undefined || (accel && !key)) { toast('Touche non prise en charge'); return showHotkeys(); }
+    if (accel !== null && !key) { toast('Touche non prise en charge'); return showHotkeys(); }
     const r = await api.hotkeysSet(b.dataset.hk, accel);
     toast(r?.ok ? '⌨ Raccourci enregistré' : r?.error ?? 'Impossible'); showHotkeys();
   };
@@ -3868,7 +3897,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.31.3',
+    version: async () => '0.32.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

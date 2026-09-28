@@ -2,7 +2,7 @@
 //  - écoute « Hey History … » : reconnaissance vocale française de Windows, qui envoie chaque phrase entendue ;
 //  - réponse à voix haute : voix française de Windows (Hortense, Paul…).
 // Aucun texte venu de l'utilisateur n'est collé dans une commande : il passe par une variable d'environnement.
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 
 // Écoute guidée : Windows reconnaît bien mieux une liste de phrases précises (« Hey History, lance <un de tes jeux> »)
 // qu'une dictée libre. La dictée reste en secours pour le reste ; « Hey History » seul déclenche l'écoute par Gemini.
@@ -85,8 +85,15 @@ export function startListening(onText, onState, { names = [] } = {}) {
 }
 
 /** Réponse à voix haute (voix française de Windows). */
-export function speak(text) {
+/** Voix choisie (nom exact d'une voix installée), sinon la première voix française. */
+export function speak(text, voice = '') {
   if (process.platform !== 'win32' || !text) return;
-  const cmd = "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $v = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'fr*' } | Select-Object -First 1; if ($v) { $s.SelectVoice($v.VoiceInfo.Name) }; $s.Rate = 1; $s.Speak($env:HL_SAY)";
-  spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], { windowsHide: true, stdio: 'ignore', env: { ...process.env, HL_SAY: String(text).slice(0, 400) } });
+  const cmd = "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $all = $s.GetInstalledVoices() | Where-Object { $_.Enabled }; $v = $all | Where-Object { $_.VoiceInfo.Name -eq $env:HL_VOICE } | Select-Object -First 1; if (-not $v) { $v = $all | Where-Object { $_.VoiceInfo.Culture.Name -like 'fr*' } | Select-Object -First 1 }; if ($v) { $s.SelectVoice($v.VoiceInfo.Name) }; $s.Rate = 1; $s.Speak($env:HL_SAY)";
+  spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], { windowsHide: true, stdio: 'ignore', env: { ...process.env, HL_SAY: String(text).slice(0, 400), HL_VOICE: String(voice ?? '').slice(0, 80) } });
+}
+/** Voix installées sur Windows ([{ name, lang, gender }]). */
+export function listVoices() {
+  if (process.platform !== 'win32') return Promise.resolve([]);
+  const cmd = "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object { $_.VoiceInfo.Name + '|' + $_.VoiceInfo.Culture.Name + '|' + $_.VoiceInfo.Gender }";
+  return new Promise((resolve) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], { windowsHide: true, timeout: 15_000 }, (err, out) => resolve(err ? [] : String(out).split(/\r?\n/).map((l) => l.trim().split('|')).filter((x) => x[0]).map(([name, lang, gender]) => ({ name, lang, gender })))));
 }
