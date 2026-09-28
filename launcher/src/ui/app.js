@@ -167,7 +167,7 @@ function renderHero() {
     ${i.brand?.bg ? `<div class="hbg brandimg" style="background-image:url('${esc(i.brand.bg)}')"></div>` : i.brand && isApp ? `<div class="hbg brandbg" style="--b:${esc(i.brand.color)}"></div>` : bg ? `<div class="hbg" data-hbg="${esc(i.id)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
     ${title}
     <div class="hbottom">
-      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>
+      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button>${i.installed && !isApp ? '<button class="optiplay" data-action="optiplay" title="Optimiser puis jouer (vérifie le PC, tout est remis à la fin)">⚡</button>' : ''}<button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>
       <div class="hstat"><small>${CLOCK}${isApp ? 'Temps d’utilisation' : 'Temps de jeu'}</small><b>${hours(i.minutes)}</b><em class="tsrc" title="D’où vient ce temps">${esc(timeSource(i))}</em></div>
       <div class="hstat"><small>${CLOCK}Dernière session</small><b>${state.active.has(i.id) ? '<span class="ok">En cours</span>' : ago(i.lastPlayed)}</b></div>
     </div>
@@ -1627,6 +1627,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.36.0': [
+    ['⚡', 'Optimiser et jouer', 'Nouveau bouton ⚡ à côté de « Jouer » : le launcher vérifie ton PC (applis lourdes, mémoire, disque, pilote), prépare la partie et te montre ce qu’il fait. Tout est temporaire et remis comme avant à la fin.', ['.playbtn .optiplay', 'wait900']],
+    ['📊', 'Mini-compteur en jeu', 'Tout petit en haut à gauche : tes FPS, avec une flèche verte ou rouge pour le gain ou la perte par rapport à tes parties d’avant. Ctrl+Alt+P pour le cacher.'],
+    ['☁', 'Sauvegardes de jeux en ligne', 'Les jeux sans cloud (hors Steam) envoient leur sauvegarde après chaque partie. Récupère-la sur n’importe quel PC depuis Outils du jeu › Sauvegardes.'],
+    ['💾', 'Alerte disque plein', 'Prévenu avant qu’une mise à jour de jeu échoue faute de place.'],
+    ['🎮', 'Bouton Discord', 'En haut à droite : rejoins le serveur History Launcher en un clic.'],
+  ],
   '0.35.0': [
     ['🖥', 'Le bon pilote pour ta carte', 'L’alerte « nouveau pilote NVIDIA » cherche maintenant le pilote de TA carte graphique (ex. GTX 1660 SUPER), plus celui des cartes récentes qui n’était pas compatible.', ['.side [data-view=pc]', 'wait900']],
     ['🧹', 'Menu allégé', 'Les catégories Applications et Statistiques sont retirées : le launcher va à l’essentiel et utilise moins de mémoire.'],
@@ -1961,6 +1968,7 @@ async function openTools(item, tab = 'profil') {
     saves: `<p class="hint">Copie de tes parties dans Documents › History › Sauvegardes de jeux (les 5 dernières sont gardées). Avant une restauration, ta partie actuelle est mise de côté.</p>
       <div class="flist">${d.saveDirs.length ? d.saveDirs.map((x) => `<div><div><b>📁 ${esc(x.split(/[\\\\/]/).pop())}</b><small>${esc(x)}</small></div></div>`).join('') : '<div><div><b>Dossier non trouvé</b><small>Choisis-le à la main (Documents, AppData, Saved Games…)</small></div></div>'}</div>
       <div class="row"><button class="btn play" data-tact="backup" ${d.saveDirs.length ? '' : 'disabled'}>💾 Sauvegarder maintenant</button><button class="btn ghost" data-tact="pick">📁 ${d.savesCustom || d.saveDirs.length ? 'Changer le dossier' : 'Choisir le dossier'}</button><button class="btn ghost" data-tact="openSaves">Ouvrir le dossier des copies</button></div>
+      <div class="row"><button class="btn" data-tact="cloudup" ${d.saveDirs.length ? '' : 'disabled'}>☁ Envoyer en ligne</button><button class="btn ghost" data-tact="clouddown" ${d.saveDirs.length ? '' : 'disabled'}>☁ Récupérer la sauvegarde en ligne</button><small class="hint">Jeux hors Steam : envoyée toute seule après chaque partie (compte History)</small></div>
       ${d.received?.length ? `<b class="sub">Reçues de tes amis</b><div class="flist">${d.received.map((x) => `<div><div><b>💾 ${esc(x.from)} · ${esc(x.name)}</b><small>${new Date(x.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · valable 24 h</small></div><button class="btn play sm" data-recv="${esc(x.id)}">Recevoir</button></div>`).join('')}</div>` : ''}
       <div class="row"><button class="btn" data-tact="share" ${d.saveDirs.length ? '' : 'disabled'}>📤 Envoyer ma sauvegarde à un ami</button></div>
       <b class="sub">Copies</b><div class="flist">${d.backups.length ? d.backups.map((b) => `<div><div><b>${new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</b><small>${gb(b.bytes)}</small></div><button class="btn ghost sm" data-restore="${esc(b.id)}">Restaurer</button></div>`).join('') : '<p class="hint">Pas encore de copie.</p>'}</div>`,
@@ -1998,6 +2006,8 @@ async function openTools(item, tab = 'profil') {
     if (a === 'with') { const list = [...document.querySelectorAll('#modalBox [data-with]:checked')].map((x) => x.dataset.with); const r = await api.gameWith(item.id, list); toast(r?.ok ? (list.length ? `▶ ${list.length} appli(s) lancée(s) avec ${item.name}` : 'Plus rien ne se lance avec le jeu') : 'Impossible'); return; }
     if (a === 'backup') { t.disabled = true; const r = await api.savesBackup(item.id); toast(r?.ok ? `💾 Copie faite (${gb(r.bytes)})` : r?.error ?? 'Impossible'); return openTools(item, 'saves'); }
     if (a === 'pick') { await api.savesPick(item.id); return openTools(item, 'saves'); }
+    if (a === 'cloudup') { t.disabled = true; const r = await api.savesCloudUp?.(item.id); toast(r?.ok ? `☁ Sauvegarde en ligne (${gb(r.bytes)})` : r?.error ?? 'Envoi impossible'); t.disabled = false; return; }
+    if (a === 'clouddown') { const r = await api.savesCloudDown?.(item.id); if (!r?.cancelled) toast(r?.ok ? `☁ ${r.files} fichier(s) récupéré(s)` : r?.error ?? 'Impossible'); return; }
     if (a === 'openSaves') return api.savesOpen();
     if (a === 'fnperf') { const r = await api.fortnitePerf(item.id, !d.fortnite.on); toast(r?.ok ? (d.fortnite.on ? '↩ Réglages de Fortnite remis' : '⚡ Mode Performance activé') : r?.error ?? 'Impossible'); return openTools(item, 'graph'); }
     if (a === 'shaders') { const which = [...document.querySelectorAll('#modalBox [data-cache]:checked')].map((x) => x.dataset.cache); if (!which.length) return toast('Rien de coché'); const r = await api.shadersClear(item.id, which); toast(r?.ok ? `🧊 ${gb(r.freed)} de cache vidés` : r?.error ?? 'Impossible'); return openTools(item, 'shaders'); }
@@ -3166,6 +3176,7 @@ $('vRepair').addEventListener('click', async () => {
 async function act(action) {
   const item = state.sel;
   if (!item) return;
+  if (action === 'optiplay') return openOptiPlay(item);
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
   const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
   // Mise à jour en attente : la faire d'abord plutôt que d'attendre devant l'écran de chargement
@@ -3389,6 +3400,46 @@ $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaun
 $('preloadSteam').addEventListener('change', (e) => api.setSettings({ preloadSteam: e.target.checked }));
 $('nightUpdates').addEventListener('change', (e) => api.setSettings({ nightUpdates: e.target.checked }));
 $('clipsLink').addEventListener('click', () => api.clipsSite?.());
+$('discordBtn').addEventListener('click', () => { toast('🎮 Ouverture du serveur Discord…'); api.discordInvite?.(); });
+
+// ---------- ⚡ Optimiser et jouer : vérifie le PC, applique des réglages temporaires, lance le jeu ----------
+let odItem = null;
+async function openOptiPlay(item) {
+  odItem = item;
+  const d = await api.optiPrepare?.(item.id).catch(() => null);
+  if (!d) { act('launch'); return; }
+  $('odTitle').textContent = `Optimiser ${d.name}`;
+  $('odSub').textContent = d.windows ? 'Réglages temporaires : tout est remis comme avant à la fin de la partie' : 'Optimisation disponible sous Windows';
+  const g = d.gain;
+  $('odStats').innerHTML = `<div><b>${d.base?.avg ?? '–'}</b><small>FPS habituels${d.base ? ` (${d.base.games} partie${d.base.games > 1 ? 's' : ''})` : ''}</small></div><div><b>${d.base?.low1 ?? '–'}</b><small>1 % low habituel</small></div><div class="${g > 0 ? 'up' : g < 0 ? 'down' : ''}"><b>${g != null ? `<svg class="garr" viewBox="0 0 12 14"><path d="${g >= 0 ? 'M6 1 11 7H7.6v6H4.4V7H1Z' : 'M6 13 1 7h3.4V1h3.2v6H11Z'}"/></svg>${g > 0 ? '+' : ''}${g} %` : '–'}</b><small>${g != null ? 'avec l’optimisation' : 'gain mesuré après 2 parties'}</small></div>`;
+  const hist = (d.history ?? []).filter((r) => r.avg);
+  if (hist.length >= 2) {
+    const max = Math.max(...hist.map((r) => r.avg));
+    $('odStats').insertAdjacentHTML('beforeend', `<div class="odspark" title="FPS moyens de tes dernières parties (orange = avec optimisation)">${hist.map((r) => `<i class="${r.boost ? 'b' : ''}" style="height:${Math.max(8, Math.round((100 * r.avg) / max))}%" title="${r.avg} FPS"></i>`).join('')}<small>FPS de tes ${hist.length} dernières parties</small></div>`);
+  }
+  const icon = { close: '🧹', power: '🔋', priority: '🎯', quiet: '🔕', perfbar: '📊', ram: '🧠', disk: '💾', heat: '🌡', driver: '🖥' };
+  $('odChecks').innerHTML = d.checks.map((c) => `<label class="odck ${c.level}" ${c.apps ? `data-apps="${esc(c.apps.join(','))}"` : ''}><span class="ico">${c.level === 'ok' ? '✅' : c.level === 'warn' ? '⚠' : icon[c.id] ?? '⚡'}</span><span><b>${esc(c.label)}</b>${c.detail ? `<small>${esc(c.detail)}</small>` : ''}</span>${c.level === 'act' ? `<input type="checkbox" data-ck="${c.id}" ${c.on ? 'checked' : ''}>` : ''}</label>`).join('');
+  $('odRun').hidden = true; $('odChecks').hidden = false; $('odFoot').hidden = false; $('odStats').hidden = false;
+  $('odLog').innerHTML = ''; $('odFill').style.width = '0';
+  $('optiDlg').showModal();
+}
+$('odClose').addEventListener('click', () => $('optiDlg').close());
+$('odPlain').addEventListener('click', () => { $('optiDlg').close(); if (odItem) { state.sel = odItem; act('launch'); } });
+$('odGo').addEventListener('click', async () => {
+  if (!odItem) return;
+  const on = (k) => Boolean(document.querySelector(`[data-ck="${k}"]`)?.checked);
+  const choice = { close: on('close') ? (document.querySelector('.odck[data-apps]')?.dataset.apps ?? '').split(',').filter(Boolean) : [], power: on('power'), priority: on('priority'), quiet: on('quiet'), perfbar: on('perfbar') };
+  $('odChecks').hidden = true; $('odFoot').hidden = true; $('odStats').hidden = true; $('odRun').hidden = false;
+  const r = await api.optiLaunch?.(odItem.id, choice).catch(() => null);
+  if (r?.ok === false && r.error) toast(`Impossible : ${r.error}`);
+  setTimeout(() => $('optiDlg').close(), 1600);
+});
+let lastStep = null;
+api.onOptiStep?.((s) => {
+  $('odFill').style.width = `${s.pct}%`; $('odStep').textContent = s.text;
+  if (lastStep && lastStep !== s.text) $('odLog').insertAdjacentHTML('beforeend', `<li>${esc(lastStep.replace(/…$/, ''))}</li>`);
+  lastStep = s.pct >= 100 ? null : s.text;
+});
 $('clipsDownload').addEventListener('click', () => api.clipsSite?.());
 $('voiceReply').addEventListener('change', (e) => api.setSettings({ voiceReply: e.target.checked }));
 $('voiceName').addEventListener('change', (e) => { api.setSettings({ voiceName: e.target.value }); api.voiceSay?.(e.target.value); });
@@ -3399,7 +3450,7 @@ async function showRemote() {
   if (r?.on) $('remoteInfo').innerHTML = r.url ? `Sur ton téléphone (même Wi-Fi), ouvre <b>${esc(r.url)}</b> et entre le code <b>${esc(r.pin)}</b>. Windows peut demander l’autorisation du pare-feu la première fois : clique « Autoriser ».` : 'Aucun réseau Wi-Fi ou Ethernet trouvé sur ce PC.';
 }
 // Raccourcis modifiables : clic sur un raccourci, puis la nouvelle combinaison (Échap annule, Retour arrière = par défaut)
-const HK = { shot: '📸 Capture d’écran', overlay: '📊 Infos en jeu', toggle: '🪟 Afficher / ranger le launcher', palette: '🔎 Recherche rapide' };
+const HK = { shot: '📸 Capture d’écran', overlay: '📊 Infos en jeu', perfbar: '⚡ Mini-compteur de performances', toggle: '🪟 Afficher / ranger le launcher', palette: '🔎 Recherche rapide' };
 const hkText = (a) => a.replace('CommandOrControl', 'Ctrl').replace('Shift', 'Maj').replace('PrintScreen', 'Impr. écran').replace(/num(\d)/, 'Pavé $1').split('+').map((k) => `<kbd>${esc(k)}</kbd>`).join('');
 async function showHotkeys() {
   const cur = await api.hotkeysGet?.().catch(() => null);
@@ -3894,7 +3945,9 @@ function demoApi() {
     chatRead: async () => ({ ok: true }), chatTyping: async () => ({ ok: true }), chatReact: async () => ({ ok: true }),
     schedList: async () => [{ id: 's1', key: 'g:g1', text: 'On lance la ranked, connectez-vous !', at: Date.now() + 3 * 3_600_000 }], schedAdd: async () => ({ ok: true }), schedDel: async () => ({ ok: true }),
     capturesRecent: async () => [], captureData: async () => null,
-    hotkeysGet: async () => ({ shot: 'CommandOrControl+Alt+S', overlay: 'CommandOrControl+Alt+O', toggle: 'CommandOrControl+Alt+H', palette: 'CommandOrControl+Alt+Space' }),
+    optiPrepare: async () => ({ name: 'Rocket League', windows: true, gain: 12, base: { avg: 187, low1: 121, games: 6 }, history: [180, 176, 190, 184, 205, 211, 187, 214].map((avg, i) => ({ avg, boost: i >= 4 && i !== 6 })), checks: [{ id: 'close', level: 'act', label: 'Fermer 2 applis qui ralentissent le jeu', detail: 'Google Chrome, OneDrive · rouvertes à la fin de la partie', on: true, apps: ['chrome', 'onedrive'] }, { id: 'power', level: 'act', label: 'Mode « Performances élevées » pendant la partie', detail: 'Le processeur ne ralentit plus pour économiser · remis comme avant ensuite', on: true }, { id: 'priority', level: 'act', label: 'Priorité au jeu', detail: 'Le jeu passe devant les autres programmes', on: true }, { id: 'quiet', level: 'act', label: 'Couper les notifications Windows pendant la partie', detail: 'Plus de bulles qui font sortir du plein écran', on: true }, { id: 'perfbar', level: 'act', label: 'Mini-compteur de performances en jeu', detail: 'Tes FPS et le gain par rapport à tes parties d’avant · Ctrl+Alt+P pour le cacher', on: true }, { id: 'ram', level: 'ok', label: 'Mémoire OK (54 % utilisée)', detail: '' }, { id: 'driver', level: 'warn', label: 'Pilote graphique pas à jour', detail: 'Un pilote récent donne souvent plus de FPS · Mon PC' }] }),
+    optiLaunch: async () => ({ ok: true }),
+    hotkeysGet: async () => ({ shot: 'CommandOrControl+Alt+S', overlay: 'CommandOrControl+Alt+O', perfbar: 'CommandOrControl+Alt+P', toggle: 'CommandOrControl+Alt+H', palette: 'CommandOrControl+Alt+Space' }),
     tools: async () => ({ profile: { enabled: false, close: [], power: 'none' }, apps: [], saveDirs: [], backups: [], received: [], caches: [], perf: [], graphics: { need: 'benchmark' }, fps: false, canMove: false }),
     gameCare: async () => ({ crashes: [{ at: Date.now() - 86_400_000, cause: 'Pilote graphique NVIDIA', fix: 'Mets à jour (ou réinstalle proprement) le pilote NVIDIA, et baisse les réglages graphiques si ça recommence.', module: 'nvwgf2umx.dll' }], loads: [{ ms: 24000 }, { ms: 26000 }, { ms: 41000 }], with: ['a1'] }),
     gameWith: async () => ({ ok: true, with: ['a1'], apps: [{ id: 'a1', name: 'Discord' }, { id: 'a2', name: 'Spotify' }, { id: 'a3', name: 'OBS Studio' }] }),
@@ -3914,7 +3967,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.35.0',
+    version: async () => '0.36.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

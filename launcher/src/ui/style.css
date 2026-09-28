@@ -1687,3 +1687,64 @@ body.idle[data-bg="anime"]::before { animation-play-state: paused; }
 .clipcard video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
 .clipcard figcaption { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; }
 .clipcard figcaption small { display: block; opacity: .7; }
+
+/* ---------- Optimisation « presque prêt » (orange, qui donne envie) ---------- */
+.maint { background: linear-gradient(160deg, rgba(255, 159, 67, .24), rgba(180, 83, 9, .16)), rgba(22, 14, 8, .6) !important; border-color: rgba(255, 176, 90, .5) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 30px 80px -30px rgba(255, 140, 40, .65) !important; }
+.maint p { color: #ffe8d1 !important; } .maint small { color: #ffc998 !important; }
+.maintsign svg { filter: drop-shadow(0 0 18px rgba(255, 150, 50, .75)) !important; }
+.maintsign path:first-child { fill: #ff9f43 !important; }
+.mainttape { background: repeating-linear-gradient(45deg, #ff9f43 0 18px, #1a0f06 18px 36px) !important; }
+#nav .navwork svg.danger { stroke: #ff9f43 !important; fill: rgba(255, 159, 67, .2) !important; filter: drop-shadow(0 0 4px rgba(255, 159, 67, .6)) !important; }
+.soon { padding: 5px 14px; border-radius: 99px; background: linear-gradient(90deg, #ff9f43, #ffc233); color: #1a0f06; font-weight: 800; font-size: 13px; letter-spacing: .03em; box-shadow: 0 0 22px -4px #ff9f43; animation: soonpulse 2s ease-in-out infinite; }
+@keyframes soonpulse { 50% { box-shadow: 0 0 34px 0 #ff9f43; } }
+.maintbar { position: relative; width: min(460px, 100%); height: 12px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.maintbar i { position: absolute; inset: 0 15% 0 0; border-radius: inherit; background: linear-gradient(90deg, #ff9f43, #ffc233); box-shadow: 0 0 14px #ff9f43; }
+.maintbar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent); animation: shine 2.2s linear infinite; }
+@keyframes shine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.maintbar span { position: absolute; right: 8px; top: -18px; font-size: 11px; color: #ffc998; }
+.maintlist { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; text-align: left; width: min(560px, 100%); }
+.maintlist li { padding: 9px 12px; border-radius: 12px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 176, 90, .18); color: #ffe8d1; font-size: 13.5px; display: flex; gap: 8px; align-items: center; }
+.maintlist em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 99px; }
+.maintlist .done em { background: #2ee07a; color: #06200f; } .maintlist .wip em { background: rgba(255, 159, 67, .25); color: #ffb169; }
+.maintlist .wip em::before { content: '● '; animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+/* ---------- Bouton ⚡ à côté de « Jouer » ---------- */
+.playbtn .optiplay { width: 46px; border-left: 1px solid rgba(255, 255, 255, .25); font-size: 18px; background: linear-gradient(135deg, #ff9f43, #ff6b1a) !important; }
+.playbtn .optiplay:hover { filter: brightness(1.15); }
+/* ---------- Fenêtre « Optimiser et jouer » ---------- */
+.optidlg .dlg { width: min(560px, 92vw); display: flex; flex-direction: column; gap: 12px; }
+.odhead { display: flex; align-items: center; gap: 12px; } .odhead h2 { margin: 0; } .odhead .x { margin-left: auto; border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 16px; }
+.odbolt { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; background: linear-gradient(135deg, #ff9f43, #ff6b1a); box-shadow: 0 0 24px -4px #ff9f43; }
+.odstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.odstats > div { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .05); border: 1px solid var(--line); }
+.odstats b { display: block; font-size: 20px; } .odstats small { color: var(--muted); font-size: 11.5px; }
+.odstats .up b { color: #2ee07a; } .odstats .down b { color: #ff9f43; }
+.odchecks { display: grid; gap: 6px; max-height: 46vh; overflow-y: auto; }
+.odck { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.odck b { display: block; font-size: 13.5px; } .odck small { color: var(--muted); font-size: 12px; }
+.odck .ico { width: 26px; text-align: center; font-size: 15px; }
+.odck.warn { border-color: rgba(255, 159, 67, .45); background: rgba(255, 159, 67, .08); }
+.odck input { margin-left: auto; width: 18px; height: 18px; accent-color: #ff9f43; flex: none; }
+.odrun { display: flex; flex-direction: column; gap: 10px; }
+.odbar { height: 10px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.odbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff9f43, #ffc233); box-shadow: 0 0 14px #ff9f43; transition: width .4s ease; }
+.odrun p { margin: 0; color: #ffb169; font-weight: 700; }
+.odrun ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; color: #cfd6e4; }
+.odrun li::before { content: '✓ '; color: #2ee07a; font-weight: 800; }
+.odfoot { display: flex; justify-content: flex-end; gap: 8px; }
+.dcbtn { width: 34px; height: 34px; border-radius: 10px; border: 1px solid rgba(88, 101, 242, .5); background: rgba(88, 101, 242, .18); display: grid; place-items: center; cursor: pointer; color: #c9ceff; margin-left: auto; }
+.dcbtn:hover { background: #5865f2; color: #fff; }
+.dcbtn .dc { width: 19px; height: 19px; fill: currentColor; stroke: none; }
+.dcbtn + .winbtns { margin-left: 4px; }
+.odrun[hidden], .odchecks[hidden], .odstats[hidden], .odfoot[hidden] { display: none !important; }
+.maintlist li { display: flex !important; align-items: center; gap: 12px; line-height: 1.5; }
+.maintlist li > span { flex: 1; }
+.maintlist em { flex: none; }
+
+.odspark { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: 4px; height: 58px; padding: 8px 12px 20px !important; position: relative; }
+.odspark i { flex: 1; border-radius: 4px 4px 1px 1px; background: rgba(120, 160, 255, .55); }
+.odspark i.b { background: linear-gradient(180deg, #ffc233, #ff9f43); box-shadow: 0 0 10px -2px #ff9f43; }
+.odspark small { position: absolute; left: 12px; bottom: 3px; }
+
+.odstats .garr { width: 15px; height: 17px; fill: currentColor; margin-right: 4px; vertical-align: -1px; filter: drop-shadow(0 0 5px currentColor); }
+.odstats .down b { color: #ff5a4f; }
