@@ -1764,3 +1764,4 @@ body.gaming #ambient, body.gaming .neon { display: none !important; }
 .homesep { display: flex; align-items: center; gap: 14px; margin: 54px 0 4px; color: var(--muted); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
 .homesep::before, .homesep::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line-2), transparent); }
 .homesep:not(:has(~ :is(#newsBlock, #dealBlock, #freeBlock):not([hidden]))) { display: none; }
+.storehead { grid-column: 1 / -1; margin-top: 22px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }

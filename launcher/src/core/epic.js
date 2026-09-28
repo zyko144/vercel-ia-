@@ -114,3 +114,15 @@ export async function listEpicAccounts(localAppData = process.env.LOCALAPPDATA) 
   }
   return [...ids].map((id, n) => ({ id, name: `Compte Epic ${n + 1} (…${id.slice(-4)})` }));
 }
+
+/** Jeux du magasin Epic pour la recherche (même non possédés) : nom, image et lien de la fiche. */
+export async function epicStoreSearch(term, fetchImpl = fetch) {
+  const query = 'query searchStoreQuery($keywords: String, $country: String!, $locale: String) { Catalog { searchStore(keywords: $keywords, country: $country, locale: $locale, count: 8, category: "games/edition/base") { elements { title productSlug urlSlug catalogNs { mappings { pageSlug } } keyImages { type url } } } } }';
+  const r = await fetchImpl('https://graphql.epicgames.com/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables: { keywords: String(term ?? '').slice(0, 80), country: 'FR', locale: 'fr' } }), signal: AbortSignal.timeout(10_000) })
+    .then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  return (r?.data?.Catalog?.searchStore?.elements ?? []).map((e) => {
+    const slug = String(e.catalogNs?.mappings?.[0]?.pageSlug ?? e.productSlug ?? e.urlSlug ?? '').replace(/\/home$/, '');
+    const a = epicArt(e.keyImages);
+    return /^[\w-]+$/.test(slug) ? { name: e.title, src: 'epic', img: a.hero ?? a.cover ?? null, url: `https://store.epicgames.com/fr/p/${slug}` } : null;
+  }).filter(Boolean);
+}

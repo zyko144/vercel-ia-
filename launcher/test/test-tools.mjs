@@ -140,3 +140,19 @@ console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, p
   assert.equal(prelaunchChecks({ tweaks: [{ id: 'gamemode', on: true }, { id: 'dvr', on: true }] }).find((x) => x.id === 'wintweaks').level, 'ok');
   console.log('✅ Gains de FPS par jeu (réglages sûrs, rien d’imposé)');
 }
+
+{
+  const { gameExes } = await import('../src/core/tracker.js');
+  const tree = { 'C:\\rl': [['Binaries', 1], ['unins000.exe', 0]], 'C:\\rl\\Binaries': [['Win64', 1]], 'C:\\rl\\Binaries\\Win64': [['RocketLeague.exe', 0], ['vc_redist.x64.exe', 0]] };
+  const readdir = async (d) => (tree[d] ?? []).map(([name, dir]) => ({ name, isDirectory: () => Boolean(dir) }));
+  assert.deepEqual(await gameExes('C:\\rl', readdir), ['rocketleague.exe'], 'jeu Steam avec anti-triche : exe retrouvé dans son dossier');
+  console.log('✅ « Ferme Rocket League » (anti-triche, Steam et Epic)');
+}
+
+{
+  const { epicStoreSearch } = await import('../src/core/epic.js');
+  const fake = async () => ({ ok: true, json: async () => ({ data: { Catalog: { searchStore: { elements: [{ title: 'Fortnite', productSlug: 'fortnite/home', catalogNs: { mappings: [] }, keyImages: [{ type: 'DieselStoreFrontWide', url: 'https://cdn1.epicgames.com/fn.jpg' }] }, { title: 'Bad', productSlug: '../x' }] } } } }) });
+  const r = await epicStoreSearch('fortnite', fake);
+  assert.equal(r.length, 1); assert.equal(r[0].url, 'https://store.epicgames.com/fr/p/fortnite');
+  console.log('✅ Recherche : jeux du magasin Epic même non installés');
+}
