@@ -92,7 +92,7 @@ section { padding: 90px 0; }
 .head h2 { font-size: clamp(30px, 4.4vw, 50px); margin: 10px 0 14px; }
 .head p { color: var(--muted); font-size: 17.5px; }
 /* Toutes les captures : image telle quelle, bords arrondis, ombre ; clic = agrandir */
-.zoomable { border-radius: 16px; box-shadow: 0 40px 90px -35px rgba(0, 0, 0, .9), 0 0 80px -40px var(--blue); cursor: zoom-in; display: block; }
+.tilt img, .shot img, .tour-view .scr img, .vcard img, .zoomable { border-radius: 20px; overflow: hidden; box-shadow: 0 40px 90px -35px rgba(0, 0, 0, .9), 0 0 80px -40px var(--blue); cursor: zoom-in; display: block; }
 .lightbox { outline: none; border: 0; padding: 0; background: transparent; max-width: 94vw; max-height: 92vh; }
 .lightbox::backdrop { background: rgba(4, 4, 8, .85); backdrop-filter: blur(6px); }
 .lightbox img { display: block; max-width: 94vw; max-height: 92vh; border-radius: 16px; cursor: zoom-out; }
