@@ -93,6 +93,10 @@ async function fatal(err) {
 process.on('uncaughtException', (err) => { fatal(err); });
 process.on('unhandledRejection', (err) => { fatal(err); });
 
+// Nom de l'appli partout dans Windows (notifications, mélangeur de volume, gestionnaire des tâches) : « History Launcher »,
+// jamais « Electron ». L'identifiant est le même que celui de l'installateur (raccourcis du menu Démarrer).
+app.setName('History Launcher');
+if (process.platform === 'win32') app.setAppUserModelId('fr.historyia.launcher');
 if (!app.requestSingleInstanceLock()) app.quit();
 
 // Images de la bibliothèque Steam sur le PC, servies par « libimg:// » : seulement les fichiers que le scan a trouvés
@@ -559,7 +563,7 @@ async function runBench() {
 }
 function gpuBench() {
   return new Promise((resolve) => {
-    const w = new BrowserWindow({ width: 1280, height: 720, title: 'Benchmark History', backgroundColor: '#07060a', autoHideMenuBar: true, icon: ICON,
+    const w = new BrowserWindow({ width: 1280, height: 720, title: 'Benchmark · History Launcher', backgroundColor: '#07060a', autoHideMenuBar: true, icon: ICON,
       webPreferences: { preload: path.join(here, 'bench.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     w.webContents.on('will-navigate', (e) => e.preventDefault());

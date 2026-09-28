@@ -1,7 +1,7 @@
 {
   "name": "history-launcher",
   "productName": "History Launcher",
-  "version": "0.27.0",
+  "version": "0.27.1",
   "description": "Toute la bibliothèque du PC (Steam, Epic, applis) au même endroit, triée par temps de jeu",
   "main": "src/main.js",
   "type": "module",
