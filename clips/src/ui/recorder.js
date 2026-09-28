@@ -22,9 +22,12 @@ window.rec.onStart(async (id, o = {}) => {
   const fps = o.fps === 30 ? 30 : 60;
   BITRATE = Math.round((h === 1440 ? 20 : h === 1080 ? 12 : 6) * (fps === 60 ? 1 : 0.65) * 1_000_000);
   try {
-    const video = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: Math.round((h * 16) / 9), maxHeight: h, minFrameRate: Math.min(30, fps), maxFrameRate: fps } };
-    stream = await navigator.mediaDevices.getUserMedia({ audio: o.audio === false ? false : { mandatory: { chromeMediaSource: 'desktop' } }, video })
-      .catch(() => navigator.mediaDevices.getUserMedia({ audio: false, video }));
+    const video = { width: { max: Math.round((h * 16) / 9) }, height: { max: h }, frameRate: { ideal: fps, max: fps } };
+    stream = await navigator.mediaDevices.getDisplayMedia({ video, audio: o.audio !== false })
+      .catch(() => navigator.mediaDevices.getDisplayMedia({ video, audio: false }))
+      // Repli : ancienne méthode d'Electron (sans geste de l'utilisateur)
+      .catch(() => { const legacy = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: Math.round((h * 16) / 9), maxHeight: h, maxFrameRate: fps } };
+        return navigator.mediaDevices.getUserMedia({ audio: o.audio === false ? false : { mandatory: { chromeMediaSource: 'desktop' } }, video: legacy }).catch(() => navigator.mediaDevices.getUserMedia({ audio: false, video: legacy })); });
     startOne();
     cycle = setInterval(startOne, D);
     window.rec.state('on');

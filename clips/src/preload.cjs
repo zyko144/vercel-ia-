@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   settings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (p) => ipcRenderer.invoke('settings:set', p),
   pickFolder: () => ipcRenderer.invoke('settings:folder'),
+  saveNow: () => ipcRenderer.invoke('clips:save'),
   site: () => ipcRenderer.invoke('app:site'),
   onChanged: (fn) => ipcRenderer.on('clips:changed', () => fn()),
 });

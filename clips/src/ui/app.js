@@ -7,19 +7,25 @@ const sec = (s) => `${Number(s).toFixed(1).replace('.', ',')} s`;
 // Aperçu dans un navigateur (sans l'appli) : quelques clips d'exemple
 const api = window.api ?? {
   list: async () => [['Rocket League', 3], ['FiveM', 2], ['Fortnite', 1]].flatMap(([g, n], i) => Array.from({ length: n }, (_, k) => ({ token: `${i}${k}`, game: g, name: `${g} ${k + 1}`, at: Date.now() - (i * 3 + k) * 3_600_000, size: 42e6, image: false, fav: k === 0, url: '' }))),
-  settings: async () => ({ replay: true, seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', autostart: true, dir: 'C:\\Users\\toi\\Videos\\History Clips', version: 'démo' }),
-  account: async () => ({ logged: false }), onChanged: () => {},
+  settings: async () => ({ replay: true, rec: 'on', seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', autostart: true, dir: 'C:\\Users\\toi\\Videos\\History Clips', version: 'démo' }),
+  account: async () => ({ logged: false }), onChanged: () => {}, setSettings: async () => ({ ok: true }), saveNow: async () => {},
 };
 const toast = (m) => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3200); };
 const keyText = (a) => String(a ?? '').replace('CommandOrControl', 'Ctrl').replace('Shift', 'Maj').replace('PrintScreen', 'Impr. écran').split('+').map((k) => `<kbd>${esc(k)}</kbd>`).join('');
 
-let clips = []; let filter = 'tout'; let cur = null; let settings = {};
+const hue = (g) => [...g].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 40);
+const gdot = (g) => `<span class="gdot" style="background:hsl(${hue(g)} 85% 62%)">${esc(g.slice(0, 1).toUpperCase())}</span>`;
+const card = (c) => `<button class="card glass" data-t="${esc(c.token)}"><div class="thumb">${c.image ? `<img src="${esc(c.url)}" alt="" loading="lazy">` : c.url ? `<video src="${esc(c.url)}#t=0.5" preload="metadata" muted></video>` : ''}<span class="tag">${esc(c.game)}</span>${c.fav ? '<span class="star">⭐</span>' : ''}</div>
+    <div class="info"><b>${esc(c.name)}</b><small>${when(c.at)} · ${size(c.size)}</small></div></button>`;
+const emptyMsg = () => `<div class="empty"><b>Aucun clip ici pour l’instant</b>En jeu, appuie sur ${keyText(settings.hotClip ?? 'F8')} pour garder les ${settings.seconds ?? 30} dernières secondes.</div>`;
+
+let clips = []; let filter = 'home'; let cur = null; let settings = {};
 
 // ---------- Galerie ----------
 async function load() {
   clips = await api.list().catch(() => []);
   const games = [...new Set(clips.map((c) => c.game))].sort((a, b) => a.localeCompare(b));
-  $('games').innerHTML = games.map((g) => `<button data-f="g:${esc(g)}" class="${filter === `g:${g}` ? 'on' : ''}">🎮 ${esc(g)}<em>${clips.filter((c) => c.game === g).length}</em></button>`).join('');
+  $('games').innerHTML = games.map((g) => `<button data-f="g:${esc(g)}" class="${filter === `g:${g}` ? 'on' : ''}">${gdot(g)}${esc(g)}<em>${clips.filter((c) => c.game === g).length}</em></button>`).join('');
   $('nTout').textContent = clips.filter((c) => !c.image).length || '';
   $('nFavs').textContent = clips.filter((c) => c.fav).length || '';
   $('nCaps').textContent = clips.filter((c) => c.image).length || '';
@@ -27,22 +33,42 @@ async function load() {
 }
 function render() {
   const q = $('search').value.trim().toLowerCase();
-  const list = clips.filter((c) => (filter === 'tout' ? !c.image : filter === 'favs' ? c.fav : filter === 'captures' ? c.image : c.game === filter.slice(2)))
+  const list = clips.filter((c) => (filter === 'home' || (filter === 'tout' ? !c.image : filter === 'favs' ? c.fav : filter === 'captures' ? c.image : c.game === filter.slice(2))))
     .filter((c) => !q || `${c.name} ${c.game}`.toLowerCase().includes(q));
-  $('title').textContent = filter === 'tout' ? 'Tous les clips' : filter === 'favs' ? 'Favoris' : filter === 'captures' ? 'Captures' : filter.slice(2);
-  $('grid').innerHTML = list.length ? list.map((c) => `<button class="card" data-t="${esc(c.token)}"><div class="thumb">${c.image ? `<img src="${esc(c.url)}" alt="" loading="lazy">` : c.url ? `<video src="${esc(c.url)}#t=0.5" preload="metadata" muted></video>` : ''}<span class="tag">${esc(c.game)}</span>${c.fav ? '<span class="star">⭐</span>' : ''}</div>
-    <div class="info"><b>${esc(c.name)}</b><small>${when(c.at)} · ${size(c.size)}</small></div></button>`).join('')
-    : `<div class="empty"><b>Aucun clip ici pour l’instant</b>En jeu, appuie sur ${keyText(settings.hotClip ?? 'F8')} pour garder les ${settings.seconds ?? 30} dernières secondes.</div>`;
+  $('title').textContent = filter === 'home' ? 'Accueil' : filter === 'tout' ? 'Mes clips' : filter === 'favs' ? 'Favoris' : filter === 'captures' ? 'Captures' : filter.slice(2);
+  const home = filter === 'home' && !q;
+  $('home').hidden = !home; $('grid').hidden = home;
+  if (home) return renderHome();
+  $('grid').innerHTML = list.map(card).join('') || emptyMsg();
 }
 $('nav').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) select(b.dataset.f); });
 $('games').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) select(b.dataset.f); });
+function renderHome() {
+  const vids = clips.filter((c) => !c.image); const on = settings.rec === 'on';
+  const games = [...new Set(clips.map((c) => c.game))];
+  const err = String(settings.rec ?? '').startsWith('error') ? settings.rec.slice(6) : '';
+  $('home').innerHTML = `<section class="hero glass"><div class="recdot ${on ? 'on' : ''}"><i></i></div>
+    <div><h2>${on ? 'Replay actif' : settings.replay ? 'Replay en démarrage…' : 'Replay en pause'}</h2><p>En jeu, appuie sur ${keyText(settings.hotClip)} pour garder les ${settings.seconds} dernières secondes · ${keyText(settings.hotShot)} pour une capture.<br>${settings.height}p · ${settings.fps} i/s${settings.audio ? ' · son du PC' : ' · sans son'}</p>${err ? `<p class="err">⚠ L’enregistrement n’a pas démarré : ${esc(err)}</p>` : ''}</div>
+    <div class="heroact"><button type="button" class="btn" data-act="toggle">${settings.replay ? '⏸ Pause' : '▶ Activer'}</button><button type="button" class="btn" data-act="set">⚙ Réglages</button></div></section>
+  <div class="stats"><div class="glass"><b>${vids.length}</b><small>clips</small></div><div class="glass"><b>${clips.length - vids.length}</b><small>captures</small></div><div class="glass"><b>${games.length}</b><small>jeux</small></div><div class="glass"><b>${size(clips.reduce((t, c) => t + c.size, 0))}</b><small>sur le disque</small></div></div>
+  <h3 class="sect">Derniers clips ${vids.length > 6 ? '<button type="button" data-go="tout">Tout voir →</button>' : ''}</h3><div class="grid">${vids.slice(0, 6).map(card).join('') || emptyMsg()}</div>
+  ${games.length ? `<h3 class="sect">Par jeu</h3><div class="games">${games.map((g) => `<button type="button" class="gcard glass" data-go="g:${esc(g)}">${gdot(g)}<span><b>${esc(g)}</b><small>${clips.filter((c) => c.game === g).length} fichiers</small></span></button>`).join('')}</div>` : ''}`;
+}
+$('home').addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]'); if (go) return select(go.dataset.go);
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'toggle') setP({ replay: !settings.replay }, settings.replay ? '⏸ Replay en pause' : '🔴 Replay actif').then(render);
+  if (act === 'set') openSettings();
+});
+$('saveNow').addEventListener('click', () => { api.saveNow(); toast('🎬 Clip en cours d’enregistrement…'); });
+$('profile').addEventListener('click', () => openSettings().then(() => $('acctSec').scrollIntoView()));
 function select(f) { filter = f; document.querySelectorAll('.side nav button').forEach((b) => b.classList.toggle('on', b.dataset.f === f)); render(); }
 $('search').addEventListener('input', render);
 // Survol : aperçu muet
-$('grid').addEventListener('mouseover', (e) => { const v = e.target.closest('.card')?.querySelector('video'); if (v) v.play().catch(() => {}); });
-$('grid').addEventListener('mouseout', (e) => { const v = e.target.closest('.card')?.querySelector('video'); if (v && !e.relatedTarget?.closest?.('.card')?.contains(v)) { v.pause(); v.currentTime = 0.5; } });
-$('grid').addEventListener('click', (e) => { const c = e.target.closest('[data-t]'); if (c) openViewer(clips.find((x) => x.token === c.dataset.t)); });
-api.onChanged(() => load());
+$('view').addEventListener('mouseover', (e) => { const v = e.target.closest('.card')?.querySelector('video'); if (v) v.play().catch(() => {}); });
+$('view').addEventListener('mouseout', (e) => { const v = e.target.closest('.card')?.querySelector('video'); if (v && !e.relatedTarget?.closest?.('.card')?.contains(v)) { v.pause(); v.currentTime = 0.5; } });
+$('view').addEventListener('click', (e) => { const c = e.target.closest('[data-t]'); if (c) openViewer(clips.find((x) => x.token === c.dataset.t)); });
+api.onChanged(async () => { settings = await api.settings(); paintPill(); load(); });
 
 // ---------- Lecteur + découpe ----------
 function openViewer(c) {
@@ -137,6 +163,8 @@ document.querySelectorAll('[data-hk]').forEach((b) => b.addEventListener('click'
 }));
 async function paintAccount() {
   const a = await api.account();
+  $('pName').textContent = a.logged ? a.pseudo ?? 'Connecté' : 'Non connecté'; $('pSub').textContent = a.logged ? 'Compte History' : 'Se connecter';
+  $('avatar').textContent = a.logged ? (a.pseudo ?? 'H').slice(0, 1).toUpperCase() : '?';
   $('acct').innerHTML = a.logged ? `<div class="row"><span>Connecté${a.pseudo ? ` : <b>${esc(a.pseudo)}</b>` : ''}</span><button type="button" class="btn ghost sm" id="aOut">Se déconnecter</button></div>`
     : '<p class="fine">Le même compte que History Launcher.</p><input type="email" id="aMail" placeholder="E-mail"><input type="password" id="aPass" placeholder="Mot de passe"><div class="row" style="justify-content:flex-end"><button type="button" class="btn play" id="aIn">Se connecter</button></div>';
 }
@@ -151,7 +179,7 @@ $('acct').addEventListener('click', async (e) => {
 });
 
 function paintPill() {
-  $('replayPill').classList.toggle('on', Boolean(settings.replay));
-  $('replayPill').querySelector('span').innerHTML = settings.replay ? `Replay actif · ${keyText(settings.hotClip)} garde les ${settings.seconds} dernières s` : 'Replay en pause';
+  $('replayPill').classList.toggle('on', settings.rec === 'on');
+  $('replayPill').querySelector('span').innerHTML = settings.rec === 'on' ? `REC · ${keyText(settings.hotClip)}` : settings.replay ? 'Replay…' : 'Replay en pause';
 }
-(async () => { settings = await api.settings(); paintPill(); load(); })();
+(async () => { settings = await api.settings(); paintPill(); paintAccount(); load(); })();
