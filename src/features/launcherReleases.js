@@ -16,7 +16,7 @@ export function releaseMessage(rel) {
   const setup = (rel.assets ?? []).find((a) => /\.exe$/i.test(a.name));
   let body = String(rel.body ?? '').trim() || `# 🚀 History Launcher v${version} est disponible`;
   if (!body.startsWith('#')) body = `# 🚀 History Launcher v${version}\n${body}`;
-  const foot = `\n\n-# Version ${version}${setup ? ` · [Télécharger l’installateur](${setup.browser_download_url})` : ''} · [Site](https://historylauncher.vercel.app)`;
+  const foot = `\n\n-# Version ${version}${setup ? ` · [Télécharger l’installateur](${setup.browser_download_url})` : ''} · [Site](https://zyko144.github.io/vercel-ia-)`;
   if (body.length + foot.length > 2000) body = `${body.slice(0, 1990 - foot.length).replace(/\n[^\n]*$/, '')}\n…`;
   // Une capture par nouveauté : apercu.png puis apercu-2.png, apercu-3.png… (10 fichiers max sur Discord)
   const rank = (n) => Number(n.match(/^apercu(?:-(\d+))?\.png$/)?.[1] ?? 1);

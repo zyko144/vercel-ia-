@@ -2414,7 +2414,7 @@ ipcMain.handle('account:logout', async () => {
 });
 ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; store.save(); return { ok: true }; });
 
-ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api', site: 'https://historylauncher.vercel.app/' }[which] ?? ''));
+ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api', site: 'https://zyko144.github.io/vercel-ia-/' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
 ipcMain.handle('fivem:join', async (_e, code) => {
   const c = serverCode(code);

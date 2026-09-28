@@ -128,12 +128,12 @@
   "redirects": [
     {
       "source": "/launcher",
-      "destination": "https://historylauncher.vercel.app/",
+      "destination": "https://zyko144.github.io/vercel-ia-/",
       "permanent": false
     },
     {
       "source": "/launcher.html",
-      "destination": "https://historylauncher.vercel.app/",
+      "destination": "https://zyko144.github.io/vercel-ia-/",
       "permanent": false
     }
   ]

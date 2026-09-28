@@ -4,7 +4,7 @@ import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { load, save } from '../storage.js';
 
 const KEY = 'launcher-serveurs';
-export const SITE = 'https://historylauncher.vercel.app';
+export const SITE = 'https://zyko144.github.io/vercel-ia-';
 export const SALONS = [
   ['infos', 'ℹ・infos', 'History Launcher : c’est quoi, le télécharger, lier ton compte.'],
   ['news', '📢・nouveautés', 'Chaque nouvelle version de History Launcher, avec ses nouveautés en image.'],
