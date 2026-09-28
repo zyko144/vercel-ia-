@@ -11,7 +11,8 @@ import { load, save } from '../storage.js';
 import { compareCardGif, launcherCardGif } from './launcherCard.js';
 import { accountByDiscord, linkDiscord, linkedAccounts } from './launcherAccounts.js';
 import { gameKey, notifyAccount, saveSocial, socialData } from './launcherSocial.js';
-import { RELEASES_CHANNEL } from './launcherReleases.js';
+import { RELEASES_CHANNEL, latestRelease } from './launcherReleases.js';
+import { broadcast, installHere, SITE } from './launcherServers.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral };
 const DEALS_NAME = '🎁・jeux-gratuits-et-promos';
@@ -46,7 +47,9 @@ export const launcherCommand = new SlashCommandBuilder().setName('launcher').set
     .addUserOption((o) => o.setName('membre').setDescription('Avec qui te comparer').setRequired(true))
     .addUserOption((o) => o.setName('avec').setDescription('Comparer deux autres membres (sinon : toi)')))
   .addSubcommand((s) => s.setName('fps').setDescription('FPS mesurés par les joueurs History sur un jeu, avec leur PC')
-    .addStringOption((o) => o.setName('jeu').setDescription('Le jeu').setRequired(true).setAutocomplete(true).setMaxLength(80)));
+    .addStringOption((o) => o.setName('jeu').setDescription('Le jeu').setRequired(true).setAutocomplete(true).setMaxLength(80)))
+  .addSubcommand((s) => s.setName('telecharger').setDescription('Lien de la dernière version de History Launcher'))
+  .addSubcommand((s) => s.setName('installer').setDescription('Admin : crée les salons infos, nouveautés et jeux gratuits ici'));
 
 // Paliers de rôles (créés s'ils manquent). Le benchmark suit les paliers du launcher.
 export const BENCH_TIERS = [[1600, '🏁 Monstre de jeu'], [1150, '🏁 Très haut de gamme'], [850, '🏁 Bon PC de jeu']];
@@ -69,6 +72,17 @@ const hours = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(Math.round(m %
 
 export async function handleLauncherCommand(client, interaction) {
   const sub = interaction.options.getSubcommand();
+  if (sub === 'telecharger') {
+    const rel = await latestRelease().catch(() => null);
+    const setup = (rel?.assets ?? []).find((a) => /\.exe$/i.test(a.name));
+    return interaction.reply({ content: `# 🚀 History Launcher${rel?.tag_name ? ` ${rel.tag_name}` : ''}\n${setup ? `**[📥 Télécharger l’installateur](${setup.browser_download_url})** · ` : ''}[Site](${SITE})`, ...PRIVATE });
+  }
+  if (sub === 'installer') {
+    if (!interaction.inGuild() || !interaction.memberPermissions?.has('ManageGuild')) return interaction.reply({ content: '❌ Réservé aux admins du serveur (permission « Gérer le serveur »).', ...PRIVATE });
+    await interaction.deferReply(PRIVATE);
+    const r = await installHere(interaction.guild).catch((err) => ({ error: err.message }));
+    return interaction.editReply(r.error ? `❌ Impossible : ${r.error} (le bot a besoin de « Gérer les salons »).` : `✅ Salons prêts : <#${r.infos}> · <#${r.news}> · <#${r.deals}>. Les 3 dernières mises à jour sont postées, les suivantes arriveront toutes seules.`);
+  }
   if (sub === 'lier') {
     const r = await linkDiscord(interaction.options.getString('code', true), interaction.user.id);
     if (!r.ok) return interaction.reply({ content: `❌ ${r.error}`, ...PRIVATE });
@@ -329,7 +343,9 @@ async function announceFree(client, fetchImpl = fetch) {
       const img = await fetchImpl(g.image, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
       if (img?.ok) files.push(new AttachmentBuilder(Buffer.from(await img.arrayBuffer()), { name: 'jeu-gratuit.jpg' }));
     }
-    await channel.send({ content: `# 🎁 ${g.name} est gratuit sur Epic Games\nRécupère-le avant le **${until}** : il reste à toi pour toujours.\n-# [Page du jeu](https://store.epicgames.com/fr/p/${g.slug}) · History Launcher te prévient aussi dans l’appli`, files, allowedMentions: { parse: [] } });
+    const payload = { content: `# 🎁 ${g.name} est gratuit sur Epic Games\nRécupère-le avant le **${until}** : il reste à toi pour toujours.\n-# [Page du jeu](https://store.epicgames.com/fr/p/${g.slug}) · History Launcher te prévient aussi dans l’appli`, files };
+    await channel.send({ ...payload, allowedMentions: { parse: [] } });
+    await broadcast(client, 'deals', payload, channel.id);
     st.done = [...st.done, `${g.slug}:${g.until}`].slice(-100);
   }
   save('launcher-epic-annonces', st);
@@ -351,7 +367,9 @@ async function announceDeals(client, fetchImpl = fetch) {
   const embeds = deals.map((x) => new EmbedBuilder().setColor(0x22d3ee).setTitle(`${x.name} : -${x.discount_percent} %`).setURL(`https://store.steampowered.com/app/${x.id}`)
     .setDescription(`~~${eur(x.original_price)}~~ **${eur(x.final_price)}**${x.discount_expiration ? ` · jusqu’au ${new Date(x.discount_expiration * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' })}` : ''}`)
     .setThumbnail(x.header_image ?? x.large_capsule_image ?? null));
-  await channel.send({ content: '# 🔥 Grosses promos Steam du jour\n-# Suis un prix dans History Launcher (Paramètres › Jeux › Alertes de prix) pour être prévenu sous ton prix.', embeds, allowedMentions: { parse: [] } });
+  const payload = { content: '# 🔥 Grosses promos Steam du jour\n-# Suis un prix dans History Launcher (Paramètres › Jeux › Alertes de prix) pour être prévenu sous ton prix.', embeds };
+  await channel.send({ ...payload, allowedMentions: { parse: [] } });
+  await broadcast(client, 'deals', payload, channel.id);
   save('launcher-bons-plans', { ...st, dealsDay: today, dealsSeen: [...seen, ...deals.map((x) => `${x.id}:${x.final_price}`)].slice(-300) });
 }
 

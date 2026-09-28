@@ -3,6 +3,7 @@
 // PNG de la nouveauté, avec le lien de téléchargement.
 import { AttachmentBuilder } from 'discord.js';
 import { load, save } from '../storage.js';
+import { broadcast } from './launcherServers.js';
 
 const KEY = 'launcher-annonces';
 const REPO = 'zyko144/vercel-ia-';
@@ -62,15 +63,28 @@ async function tick(client, fetchImpl = fetch, want = null) {
   if (st.last === rel.tag_name || (st.last && vnum(rel.tag_name) < vnum(st.last))) return false;
   const channel = await client.channels.fetch(RELEASES_CHANNEL).catch(() => null);
   if (!channel?.isTextBased?.()) { console.warn('[annonces launcher] salon introuvable ou inaccessible :', RELEASES_CHANNEL); return false; }
+  const payload = await releasePayload(rel, fetchImpl);
+  await channel.send({ ...payload, allowedMentions: { parse: [] } });
+  save(KEY, { last: rel.tag_name, at: Date.now() });
+  await broadcast(client, 'news', payload, channel.id); // aussi dans les serveurs installés avec /launcher installer
+  return true;
+}
+/** Texte + captures d'une version, prêts à envoyer. */
+export async function releasePayload(rel, fetchImpl = fetch) {
   const msg = releaseMessage(rel);
   const files = [];
   for (const [i, url] of msg.images.entries()) {
     const img = await fetchImpl(url, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
     if (img?.ok) files.push(new AttachmentBuilder(Buffer.from(await img.arrayBuffer()), { name: `history-v${msg.version}${i ? `-${i + 1}` : ''}.png` }));
   }
-  await channel.send({ content: msg.content, files, allowedMentions: { parse: [] } });
-  save(KEY, { last: rel.tag_name, at: Date.now() });
-  return true;
+  return { content: msg.content, files };
+}
+/** Les n dernières versions complètes, de la plus ancienne à la plus récente (vide si GitHub ne répond pas). */
+export async function recentReleases(n = 3, fetchImpl = fetch) {
+  const headers = { 'User-Agent': 'HistoryBot', Accept: 'application/vnd.github+json', ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) };
+  const r = await fetchImpl(`https://api.github.com/repos/${REPO}/releases?per_page=15`, { headers, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  const list = r?.ok ? await r.json().catch(() => []) : [];
+  return (Array.isArray(list) ? list : []).filter((x) => !x.draft && /^v\d/.test(x.tag_name) && (x.assets ?? []).some((a) => a.name === 'latest.yml')).slice(0, n).reverse();
 }
 let clientRef = null;
 let lastTrigger = 0;
