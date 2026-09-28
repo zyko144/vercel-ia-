@@ -1,5 +1,7 @@
 // Pont minimal et sûr entre l'interface et Windows : seulement ces fonctions, rien d'autre.
-const { contextBridge, ipcRenderer, webUtils } = require('electron');
+const { contextBridge, ipcRenderer, webUtils, webFrame } = require('electron');
+// Fenêtre réduite ou rangée : on vide le cache d'images décodées (elles se rechargent toutes seules au retour)
+ipcRenderer.on('ui:trim', () => { try { webFrame.clearCache(); } catch { /* rien */ } });
 
 contextBridge.exposeInMainWorld('launcher', {
   scan: () => ipcRenderer.invoke('lib:scan'),

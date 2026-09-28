@@ -175,7 +175,8 @@ export async function steamLocalArt(steamPath, appid) {
   if (!steamPath) return {};
   const cache = path.join(steamPath, 'appcache', 'librarycache');
   const out = {};
-  const take = (kind, file) => { if (!out[kind]) out[kind] = file; };
+  // La version normale suffit (la « _2x » pèse 4 fois plus en mémoire une fois affichée)
+  const take = (kind, file) => { if (!out[kind] || (/_2x\./i.test(out[kind]) && !/_2x\./i.test(file))) out[kind] = file; };
   // Nouveau rangement : un dossier par jeu
   const walk = async (dir, depth) => {
     for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
@@ -224,7 +225,7 @@ export async function steamStoreAssets(appids, fetchImpl = fetch) {
       const u = (file) => (file ? `https://shared.akamai.steamstatic.com/store_item_assets/${a.asset_url_format.replace('${FILENAME}', file)}` : null);
       const logoKey = Object.keys(a).find((k) => /logo/i.test(k) && typeof a[k] === 'string');
       out[String(item.appid ?? item.id)] = {
-        cover: u(a.library_capsule_2x ?? a.library_capsule), hero: u(a.library_hero_2x ?? a.library_hero),
+        cover: u(a.library_capsule ?? a.library_capsule_2x), hero: u(a.library_hero ?? a.library_hero_2x), hero2x: u(a.library_hero_2x),
         header: u(a.header ?? a.main_capsule), logo: logoKey ? u(a[logoKey]) : null,
       };
     }

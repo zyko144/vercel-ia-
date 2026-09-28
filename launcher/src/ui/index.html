@@ -252,13 +252,23 @@
 
   <section id="view-optimisation" class="view paused">
     <div class="maint">
-      <div class="maintsign"><svg viewBox="0 0 64 64"><path d="M32 5 61 57H3Z"/><path d="M32 23v17M32 47v1" class="ln"/></svg></div>
-      <div class="mainttape"></div>
+      <div class="mainttape t1"><span>TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX</span></div>
+      <div class="mainttape t3"><span>ATTENTION · ATTENTION · ATTENTION · ATTENTION</span></div>
+      <div class="maintsign"><svg viewBox="0 0 120 100" aria-hidden="true">
+        <defs><pattern id="mstripe" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="14" fill="#f97316"/><rect x="7" width="7" height="14" fill="#fff7ed"/></pattern></defs>
+        <rect x="18" y="44" width="7" height="44" rx="2" fill="#e5e7eb"/><rect x="95" y="44" width="7" height="44" rx="2" fill="#e5e7eb"/>
+        <rect x="12" y="86" width="19" height="6" rx="2" fill="#9ca3af"/><rect x="89" y="86" width="19" height="6" rx="2" fill="#9ca3af"/>
+        <rect x="8" y="30" width="104" height="22" rx="4" fill="url(#mstripe)" stroke="#7c2d12" stroke-width="2"/>
+        <circle class="lamp" cx="21" cy="24" r="6"/><circle class="lamp l2" cx="99" cy="24" r="6"/>
+        <rect x="16" y="26" width="10" height="5" fill="#374151"/><rect x="94" y="26" width="10" height="5" fill="#374151"/>
+        <path d="M60 50 72 90H48Z" fill="#f97316"/><path d="M56.2 62.5h7.6l2.4 8H53.8Z" fill="#fff"/><path d="M52.3 75.5h15.4l2.1 7H50.2Z" fill="#fff"/>
+        <rect x="42" y="89" width="36" height="6" rx="2" fill="#c2410c"/>
+      </svg></div>
       <h2>Optimisation en travaux</h2>
       <p>Nous rencontrons des problèmes avec les optimisations. On les remettra au plus vite, pour que tout soit parfait à leur retour.</p>
       <small>En attendant, rien n’est modifié sur ton PC. Si un jeu bug depuis une ancienne optimisation, remets les réglages de Windows comme à l’origine :</small>
       <button class="btn" type="button" id="maintReset">↩ Remettre Windows comme avant</button>
-      <div class="mainttape b"></div>
+      <div class="mainttape b"><span>TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX · TRAVAUX</span></div>
     </div>
     <div class="optihero">
       <div class="ring" id="optiRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="val" id="ringVal"/></svg><div><b id="ringNum">–</b><small id="ringLabel">Pas encore analysé</small></div></div>
