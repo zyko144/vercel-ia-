@@ -211,7 +211,7 @@ await check('même jeu malgré les variantes de nom, jamais un autre', async () 
 await check('images : jeu d’un autre launcher trouvé sur Steam (logo, jaquette, fiche)', async () => {
   const r = await enrich({ id: 'reg:r6', kind: 'game', name: 'Rainbow Six Siege', art: {} }, { fetchImpl: web, details: true });
   assert.equal(r.steamId, '359550');
-  assert.equal(r.art.cover, 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/359550/abc123/library_600x900_2x.jpg?t=1', 'adresse officielle actuelle');
+  assert.equal(r.art.cover, 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/359550/abc123/library_600x900.jpg?t=1', 'adresse officielle actuelle, taille normale (moins de mémoire)');
   assert.match(r.art.logo, /359550\/logo\.png/);
   assert.equal(r.details.description, 'Tactique & équipe');
   assert.equal(r.details.score, 79);
