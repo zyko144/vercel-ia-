@@ -1675,3 +1675,5 @@ body.idle[data-bg="anime"]::before { animation-play-state: paused; }
 /* Fichier joint dans un message */
 .cfile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; margin: 2px 0 4px; border-radius: 12px; border: 1px solid var(--line, rgba(255, 255, 255, .12)); background: rgba(255, 255, 255, .05); color: inherit; font: inherit; cursor: pointer; text-align: left; max-width: 280px; }
 .cfile b { word-break: break-all; } .cfile small { opacity: .7; } .cfile:hover { background: rgba(255, 255, 255, .1); }
+/* Collections retirées du menu de gauche */
+.colhead[hidden], #collections[hidden] { display: none !important; }
