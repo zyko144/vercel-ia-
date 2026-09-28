@@ -4,10 +4,11 @@
 // Tout est gardé en cache 14 jours : rien n'est redemandé à chaque ouverture.
 import { steamArt, steamDetails, steamStoreAssets } from './steam.js';
 import { norm } from './sort.js';
+import { epicStoreArt } from './epic.js';
 
 const DAY = 86_400_000;
 export const CACHE_DAYS = 14;
-const ART_V = 3; // change à chaque correction de la recherche d'images : les anciennes recherches sont refaites
+const ART_V = 4; // change à chaque correction de la recherche d'images : les anciennes recherches sont refaites
 const json = (fetchImpl, url, opts = {}) => fetchImpl(url, { ...opts, signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /**
@@ -89,6 +90,19 @@ export async function enrich(item, { cache = null, gridKey = null, fetchImpl = f
     if (!grid?.cover && item.kind === 'game' && !out.steamId) {
       out.steamId = knownSteamId(item.name) ?? await steamMatch(item.name, fetchImpl);
       if (out.steamId) out.art = { ...await steamImages(out.steamId, fetchImpl), ...Object.fromEntries(Object.entries(out.art).filter(([, v]) => v)) };
+    }
+  }
+  // Jeux Epic (Fortnite…) : ce qui manque (logo, grand fond, jaquette) vient du magasin Epic, sinon de Steam
+  if (item.kind === 'game' && item.source === 'epic') {
+    const ok = (o) => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v));
+    const have = () => ({ ...ok(item.art), ...ok(out.art) });
+    if (!have().logo || !have().hero || !have().cover) {
+      const e = await epicStoreArt(item.name, sameName, fetchImpl);
+      if (e) out.art = { ...ok(e), ...ok(out.art) };
+    }
+    if (!have().logo) {
+      out.steamId ??= knownSteamId(item.name) ?? await steamMatch(item.name, fetchImpl);
+      if (out.steamId) out.art = { ...ok(await steamImages(out.steamId, fetchImpl)), ...ok(out.art) };
     }
   }
   if (details && out.steamId && item.kind === 'game') out.details = await steamDetails(out.steamId, fetchImpl);

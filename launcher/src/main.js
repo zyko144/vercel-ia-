@@ -35,7 +35,7 @@ import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
-import { translateNews, dominantColor, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
+import { translateNews, dominantColor, fortniteNews, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { badges, hourly, levelOf, rediscover, streakOf } from './core/progress.js';
 import { dnsTest, pingHosts } from './core/net.js';
 import { checkReq, parseReq } from './core/reqs.js';
@@ -366,7 +366,8 @@ async function enrichInBackground() {
       send('lib:update', library());
     }
     // 2. Le reste : jeux des autres launchers et applis sans image (magasin Steam, SteamGridDB, puis l'IA)
-    const todo = raw.filter((i) => i.source !== 'steam' && !(i.art?.cover || i.art?.hero));
+    // (jeux Epic : aussi quand il manque le logo ou le grand fond, ex. Fortnite)
+    const todo = raw.filter((i) => i.source !== 'steam' && (!(i.art?.cover || i.art?.hero) || (i.source === 'epic' && i.kind === 'game' && !(i.art?.logo && i.art?.hero && i.art?.cover) && !fresh(i))));
     const gridKey = secret('grid');
     for (let n = 0; n < todo.length; n += 4) {
       await Promise.all(todo.slice(n, n + 4).map(async (i) => {
@@ -505,8 +506,10 @@ ipcMain.handle('opti:prepare', async (_e, id) => {
   const apps = BOOST_APPS.filter((a) => [a.exe].flat().some((e) => running.has(e)) && !(a.id === 'epicbg' && item.source === 'epic')).map(({ id: aid, label }) => ({ id: aid, label }));
   const { statfs } = await import('node:fs/promises');
   const fsInfo = item.installDir ? await statfs(item.installDir).catch(() => null) : null;
+  const game = /fortnite/i.test(item.name) ? 'fortnite' : item.source === 'fivem' ? 'fivem' : null;
+  const [tweaks, fnPerf] = await Promise.all([tweakStates().catch(() => []), game === 'fortnite' ? fortniteState().catch(() => null) : null]);
   const checks = prelaunchChecks({
-    apps, power, high: HIGH_PERFORMANCE, fpsOn: store.data.settings.fps === true,
+    apps, power, high: HIGH_PERFORMANCE, fpsOn: store.data.settings.fps === true, tweaks, game, fnPerf,
     ramUsedPct: pc?.ram ? Math.round((100 * pc.ram.used) / pc.ram.total) : null, temp: pc?.cpu?.temp ?? null,
     diskFreeGb: fsInfo ? (fsInfo.bavail * fsInfo.bsize) / 1e9 : null, driverOld: Boolean(driverInfo),
   });
@@ -521,8 +524,20 @@ ipcMain.handle('opti:launch', async (_e, id, choice = {}) => {
   const item = items.find((i) => i.id === id && i.installed);
   if (!item) return { ok: false };
   const step = (text, pct) => send('opti:step', { text, pct });
+  const c0 = choice;
   const c = { close: Array.isArray(choice.close) ? choice.close.map(String).filter((x) => BOOST_APPS.some((a) => a.id === x)) : [], power: Boolean(choice.power), priority: Boolean(choice.priority), quiet: Boolean(choice.quiet) };
   step('Analyse de ton PC…', 10);
+  // Réglages de jeu Windows (photo des réglages prise avant : « Remettre Windows comme avant » les annule)
+  if (c0.wintweaks && process.platform === 'win32') {
+    step('Mode Jeu de Windows et capture Xbox en fond…', 20);
+    await snapshotSettings('Avant « Optimiser et jouer »').catch(() => {});
+    for (const t of ['gamemode', 'dvr']) await setTweak(t, true).catch(() => {});
+  }
+  if (c0.fnperf && /fortnite/i.test(item.name)) { step('Mode Performance de Fortnite…', 25); await fortnitePerf(true).catch(() => {}); }
+  if (c0.fivemcache && item.source === 'fivem') {
+    step('Vidage du cache FiveM (mods gardés)…', 25);
+    for (const d of shaderCaches(item).filter((x) => x.id.startsWith('fivem-'))) await clearDir(d.dir).catch(() => {});
+  }
   if (process.platform === 'win32' && !boosted) {
     if (c.close.length) step(`Fermeture de ${c.close.length} appli${c.close.length > 1 ? 's' : ''} en arrière-plan…`, 30);
     if (c.power) step('Passage en mode « Performances élevées »…', 50);
@@ -551,14 +566,14 @@ function perfbarData() {
   const base = perfBaseline(store.data.perf?.[sess.id] ?? []);
   const last = sess.samples.at(-1) ?? {};
   const fps = sess.live?.avg ? Math.round(sess.live.avg) : null;
-  return { game: sess.name, fps, gpu: last.gpu != null ? Math.round(last.gpu) : null, delta: perfDelta(sess.live?.avg, base?.avg), text: perfLine({ fps, delta: perfDelta(sess.live?.avg, base?.avg), gpu: last.gpu }) };
+  return { game: sess.name, fps, state: sess.fpsState ?? null, gpu: last.gpu != null ? Math.round(last.gpu) : null, delta: perfDelta(sess.live?.avg, base?.avg), text: perfLine({ fps, delta: perfDelta(sess.live?.avg, base?.avg), gpu: last.gpu }) };
 }
 function perfbarPush() { if (perfbar && !perfbar.isDestroyed()) { const d = perfbarData(); if (d) perfbar.webContents.send('perfbar:data', d); } }
 function setPerfbar(on) {
   if (!on) { if (perfbar && !perfbar.isDestroyed()) perfbar.close(); perfbar = null; return; }
   if (perfbar && !perfbar.isDestroyed()) return;
   const area = screen.getPrimaryDisplay().workArea;
-  perfbar = new BrowserWindow({ width: 190, height: 30, x: area.x + 10, y: area.y + 8, frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, hasShadow: false, show: false,
+  perfbar = new BrowserWindow({ width: 230, height: 30, x: area.x + 10, y: area.y + 8, frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, hasShadow: false, show: false,
     webPreferences: { preload: path.join(here, 'perfbar.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false } });
   perfbar.setAlwaysOnTop(true, 'screen-saver');
   perfbar.setIgnoreMouseEvents(true); // les clics passent au jeu
@@ -571,6 +586,7 @@ function setPerfbar(on) {
 function togglePerfbar() {
   const on = !(perfbar && !perfbar.isDestroyed());
   store.data.settings.perfbar = on; store.save();
+  if (on && store.data.settings.fps !== true && process.platform === 'win32') enableFps().then((f) => { if (f.relog) notify('Mesure des FPS activée', 'Reconnecte-toi à Windows une fois : ensuite tes FPS s’affichent dans le mini-compteur.'); }).catch(() => {});
   if (on && !sess) { notify('Mini-compteur de performances', 'Il s’affichera pendant ta prochaine partie (Ctrl+Alt+P pour le cacher).'); return; }
   setPerfbar(on);
 }
@@ -2110,15 +2126,23 @@ setInterval(() => {
   }
 }, 3_600_000);
 ipcMain.handle('news:get', async () => {
-  const c = store.data.news;
-  if (c && Date.now() - c.at < 3 * 3_600_000) return c.list;
+  // Actus des jeux INSTALLÉS : refaites dès que la liste change (jeu installé ou désinstallé), sinon toutes les heures
   const games = items.filter((i) => i.source === 'steam' && i.installed && /^\d+$/.test(i.steamId ?? '')).sort((a, b) => b.minutes - a.minutes).slice(0, 6);
-  const all = (await Promise.all(games.map((g) => steamNews(g.steamId, 2).then((n) => n.map((x) => ({ ...x, game: g.name, id: g.id, image: g.art?.header ?? g.art?.hero ?? null }))).catch(() => [])))).flat();
+  const fortnite = items.find((i) => i.installed && /^fortnite$/i.test(i.name ?? ''));
+  const key = [...games.map((g) => g.id), fortnite?.id].filter(Boolean).join(',');
+  const c = store.data.news;
+  if (c && c.key === key && Date.now() - c.at < 3_600_000) return c.list;
+  const all = [
+    ...(await Promise.all(games.map((g) => steamNews(g.steamId, 2).then((n) => n.map((x) => ({ ...x, game: g.name, id: g.id, image: g.art?.header ?? g.art?.hero ?? null }))).catch(() => [])))).flat(),
+    ...(fortnite ? (await fortniteNews(2).catch(() => [])).map((x) => ({ ...x, id: fortnite.id, image: x.image ?? fortnite.art?.hero ?? null })) : []),
+  ];
   const list = await translateNews(await getAi(), all.sort((a, b) => b.at - a.at).slice(0, 8), (store.data.newsFr ??= {}));
-  store.data.news = { at: Date.now(), list };
+  store.data.news = { at: Date.now(), list, key };
   store.save();
   return list;
 });
+// Article hors Steam (Fortnite) : ouvert seulement s'il vient d'un site officiel
+ipcMain.handle('news:url', (_e, url) => { const u = String(url ?? ''); if (/^https:\/\/(www\.)?(fortnite\.com|epicgames\.com)\//.test(u)) shell.openExternal(u); return true; });
 ipcMain.handle('news:game', async (_e, id) => {
   const item = items.find((i) => i.id === String(id));
   if (item?.source !== 'steam') return [];
@@ -2879,12 +2903,18 @@ async function sessionStart(s) {
   if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
   if (store.data.settings.perfbar) setPerfbar(true);
   send('ui:gaming', true);
-  if (!item || store.data.settings.fps !== true || profileOf(item.id).fps === false || process.platform !== 'win32') return;
-  const exe = (await runningPaths(0)).find((p) => item.installDir && p.startsWith(String(item.installDir).toLowerCase()) && /\.exe$/.test(p) && !/(crash|report|launcher|helper|updater|redist|unins)/i.test(p));
-  if (!exe) return;
+  if (!item || process.platform !== 'win32') return;
+  if (store.data.settings.fps !== true || profileOf(item.id).fps === false) { sess.fpsState = 'off'; perfbarPush(); return; }
+  // Tous les exe du jeu en cours (ex. Fortnite : FortniteClient-Win64-Shipping + sa version anti-triche)
+  const dir = String(item.installDir ?? '').toLowerCase();
+  const exes = [...new Set((await runningPaths(0)).filter((p) => dir && p.startsWith(dir) && /\.exe$/.test(p) && !/(crash|report|launcher|helper|updater|redist|unins|webhelper|cefprocess)/i.test(path.win32.basename(p))).map((p) => path.win32.basename(p)))];
+  if (!exes.length) { sess.fpsState = 'nogame'; perfbarPush(); return; }
   const pm = await ensurePresentMon(path.join(app.getPath('userData'), 'outils')).catch(() => null);
   if (!pm || !sess) return;
-  sess.cap = captureFps(pm, path.win32.basename(exe), (live) => { if (sess) { sess.live = live; widgetPush(); perfbarPush(); } });
+  sess.fpsState = 'wait';
+  sess.cap = captureFps(pm, exes, (live) => { if (sess) { sess.live = live; sess.fpsState = 'ok'; widgetPush(); perfbarPush(); } });
+  // Refus de Windows (droits) : dit dans la mini-barre au lieu de n'afficher que le GPU
+  sess.cap.done.then((r) => { if (sess && r?.error === 'droits') { sess.fpsState = 'droits'; perfbarPush(); } });
 }
 function verdict(stats, samples) {
   const g = samples.map((x) => x.gpu).filter((x) => x != null);
