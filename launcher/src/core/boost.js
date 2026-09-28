@@ -29,6 +29,7 @@ export function boostPlan(runningPaths, chosen) {
   const wanted = new Set(BOOST_APPS.filter((a) => chosen.includes(a.id)).flatMap((a) => [a.exe].flat()));
   const byName = new Map();
   for (const p of runningPaths) {
+    if (!p.includes('\\')) continue; // sans chemin : impossible à rouvrir après
     const name = path.win32.basename(p).toLowerCase();
     if (wanted.has(name) && !byName.has(name)) byName.set(name, p);
   }

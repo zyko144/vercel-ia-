@@ -14,7 +14,8 @@ export async function runningPaths(maxAgeMs = 8000) {
   if (process.platform !== 'win32') return [];
   if (Date.now() - procCache.at < maxAgeMs) return procCache.paths;
   if (procCache.pending) return procCache.pending;
-  procCache.pending = ps('Get-Process | Where-Object Path | ForEach-Object Path', 20_000)
+  // Sans chemin (jeu protégé par anti-triche : Fortnite, Rocket League…) : juste le nom, ex. « fortniteclient-win64-shipping.exe »
+  procCache.pending = ps("Get-Process | ForEach-Object { if ($_.Path) { $_.Path } else { $_.ProcessName + '.exe' } }", 20_000)
     .then((stdout) => [...new Set(stdout.split(/\r?\n/).map((l) => l.trim().toLowerCase()).filter(Boolean))])
     .catch(() => procCache.paths)
     .then((paths) => { procCache = { at: Date.now(), paths, pending: null }; return paths; });
@@ -28,10 +29,11 @@ export function activeItems(items, paths) {
   const prepared = items.map((item) => {
     const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
     // Un dossier trop court (C:\, Program Files) toucherait tout : on l'ignore
-    return { id: item.id, exe: String(item.exe ?? '').toLowerCase(), dir: dir.split('\\').filter(Boolean).length >= 3 ? `${dir}\\` : null };
+    return { id: item.id, exe: String(item.exe ?? '').toLowerCase(), dir: dir.split('\\').filter(Boolean).length >= 3 ? `${dir}\\` : null, names: exeNames.get(item.id) };
   });
   const active = new Set();
   for (const p of paths) {
+    if (!p.includes('\\')) { const it = prepared.find((x) => x.names?.has(p)); if (it) active.add(it.id); continue; }
     let best = null;
     let bestLen = -1;
     for (const it of prepared) {
@@ -72,6 +74,7 @@ export function startTracker(getItems, store, onChange, everyMs = 60_000, accoun
     if (isPaused()) return;
     const items = getItems();
     const paths = await runningPaths();
+    if (paths.some((p) => !p.includes('\\'))) await learnExes(items);
     const active = activeItems(items, paths);
     if (!active.size) return;
     // Jeu Steam lancé sans Steam (lancement direct) : Steam ne compte pas ce temps, le launcher le garde à part
@@ -118,6 +121,17 @@ export function itemHistory(days, id, n = 30, now = Date.now()) {
   let streak = 0;
   for (let i = list.length - 1; i >= 0 && list[i].minutes > 0; i--) streak++;
   return { days: list, total, daysPlayed: played.length, avg: played.length ? Math.round(total / played.length) : 0, best, streak };
+}
+
+// Noms des programmes de chaque jeu installé (lus une fois par session) : reconnaît un jeu dont Windows cache le chemin
+const exeNames = new Map();
+export async function learnExes(items, readdir = null) {
+  readdir ??= (await import('node:fs/promises')).readdir;
+  for (const i of items) {
+    const dir = String(i.installDir ?? '');
+    if (i.kind !== 'game' || !i.installed || exeNames.has(i.id) || dir.split('\\').filter(Boolean).length < 2) continue;
+    exeNames.set(i.id, new Set((await gameExes(dir, readdir)).filter((n) => !/(crash|report|launcher|helper|updater|redist|unins|webhelper|cefprocess|setup|install)/.test(n))));
+  }
 }
 
 /** Noms des .exe d'un dossier de jeu (4 niveaux max) : pour fermer les jeux dont l'anti-triche cache le chemin. */

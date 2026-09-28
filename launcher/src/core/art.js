@@ -8,7 +8,7 @@ import { epicStoreArt } from './epic.js';
 
 const DAY = 86_400_000;
 export const CACHE_DAYS = 14;
-const ART_V = 4; // change à chaque correction de la recherche d'images : les anciennes recherches sont refaites
+const ART_V = 5; // change à chaque correction de la recherche d'images : les anciennes recherches sont refaites
 const json = (fetchImpl, url, opts = {}) => fetchImpl(url, { ...opts, signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /**
@@ -105,6 +105,8 @@ export async function enrich(item, { cache = null, gridKey = null, fetchImpl = f
       if (out.steamId) out.art = { ...ok(await steamImages(out.steamId, fetchImpl)), ...ok(out.art) };
     }
   }
+  // Magasin injoignable : on réessaie dans 6 h au lieu d'attendre la fin du cache
+  if (item.source === 'epic' && !Object.values({ ...item.art, ...out.art }).some(Boolean)) out.at = now - CACHE_DAYS * DAY + 6 * 3600_000;
   if (details && out.steamId && item.kind === 'game') out.details = await steamDetails(out.steamId, fetchImpl);
   return out;
 }
