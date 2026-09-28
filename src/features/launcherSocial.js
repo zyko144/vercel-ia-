@@ -1,7 +1,7 @@
 // Côté social des comptes History Launcher : amis (par code ami), présence (jeu en cours), classement de la semaine
 // entre amis, soirées jeu. Tout passe par la session du compte ; on ne voit que ses amis, jamais les autres comptes.
 import { randomUUID } from 'node:crypto';
-import { load, save } from '../storage.js';
+import { delBlob, getBlob, load, putBlob, save } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
 import { PUBLIC_BASE, checkImage, dropImage, me, profileOf, saveImage } from './launcherAccounts.js';
 
@@ -271,13 +271,13 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     const imgId = randomUUID();
     return saveImage('image', imgId, img).then(() => ({ img: imgId }), () => ({ error: 'Image non envoyée, réessaie dans un instant.' }));
   };
-  const dropImg = (m) => { if (m?.img) dropImage('image', m.img); };
+  const dropImg = (m) => { if (m?.img) dropImage('image', m.img); if (m?.file) delBlob(`fichier/${m.file}`).catch(() => {}); };
 
   if (route === 'POST /api/compte/messages') {
     const to = String(body.to ?? '');
     const msg = text(body.text, 500);
     if (!friendOf(to)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
-    if (!msg && !body.image) return send(res, 400, { error: 'Message vide.' });
+    if (!msg && !body.image && !fileOf(id, body.file).file) return send(res, 400, { error: 'Message vide.' });
     const key = pairKey(id, to);
     const mid = msgId(body.cid);
     const fil = listOf(d.threads, key);
@@ -285,12 +285,12 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
     const a = await attach(body.image);
     if (a.error) return send(res, 400, { error: a.error });
-    const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}) };
+    const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}), ...fileOf(id, body.file) };
     const kept = [...fil, m];
     for (const old of kept.slice(0, -MAX_THREAD)) dropImg(old);
     d.threads[key] = kept.slice(-MAX_THREAD);
     d.reads[`${id}>${to}`] = m.at; // écrire = avoir lu ce qui précède
-    pushInbox(d, to, { type: 'msg', from: id, text: msg || '📷 Image', msg: mid, sentAt: m.at });
+    pushInbox(d, to, { type: 'msg', from: id, text: msg || (m.fileName ? `📎 ${m.fileName}` : '📷 Image'), msg: mid, sentAt: m.at });
     return done(200, { ok: true, id: mid, message: m, fil: withIds(d.threads[key]) });
   }
 
@@ -373,18 +373,18 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     const g = groupOf(body.id);
     if (!g) return send(res, 404, { error: 'Groupe introuvable.' });
     const msg = text(body.text, 500);
-    if (!msg && !body.image) return send(res, 400, { error: 'Message vide.' });
+    if (!msg && !body.image && !fileOf(id, body.file).file) return send(res, 400, { error: 'Message vide.' });
     const mid = msgId(body.cid);
     const fil = listOf(d.gthreads, g.id);
     if (fil.some((m) => m.id === mid)) return send(res, 200, { ok: true, id: mid, fil });
     if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
     const a = await attach(body.image);
     if (a.error) return send(res, 400, { error: a.error });
-    const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}) };
+    const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}), ...fileOf(id, body.file) };
     const kept = [...fil, m];
     for (const old of kept.slice(0, -MAX_GTHREAD)) dropImg(old);
     d.gthreads[g.id] = kept.slice(-MAX_GTHREAD);
-    for (const to of g.members.filter((x) => x !== id)) pushInbox(d, to, { type: 'gmsg', from: id, gid: g.id, group: g.name, text: msg || '📷 Image', msg: mid, sentAt: m.at });
+    for (const to of g.members.filter((x) => x !== id)) pushInbox(d, to, { type: 'gmsg', from: id, gid: g.id, group: g.name, text: msg || (m.fileName ? `📎 ${m.fileName}` : '📷 Image'), msg: mid, sentAt: m.at });
     return done(200, { ok: true, id: mid, message: m, fil: d.gthreads[g.id] });
   }
   if (route === 'POST /api/compte/groupes/messages/supprimer') {
@@ -535,6 +535,13 @@ export { gameKey };
 
 // ---------- Fichiers : clips vers Discord, sauvegardes partagées entre amis ----------
 const CLIP_MAX = 60 * 1024 * 1024;
+// Fichiers joints aux messages : envoyés d'abord (10 Mo max), puis ajoutés au message par leur identifiant
+const FILE_MAX = 10 * 1024 * 1024;
+const uploads = new Map(); // id -> { from, name, size, at }
+export function fileOf(from, fid) {
+  const u = uploads.get(String(fid ?? ''));
+  return u && u.from === from ? { file: String(fid), fileName: u.name, fileSize: u.size } : {};
+}
 const SHARE_MAX = 25 * 1024 * 1024;
 const SHARE_TTL = 24 * 3_600_000;
 const SHARE_TOTAL = 300 * 1024 * 1024;
@@ -559,6 +566,25 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
     const r = await (await import('./launcherDiscord.js')).postClip({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, game: text(url.searchParams.get('jeu'), 80) || null, note: text(url.searchParams.get('texte'), 200) || null })
       .catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
     return send(res, r.ok ? 200 : 502, r);
+  }
+  if (route === 'POST /api/compte/fichier') {
+    if (!allowAttempt('launcher-fichier', id, 30, 86_400_000)) return send(res, 429, { error: 'Trop de fichiers aujourd’hui.' });
+    const buf = await readBinary(req, FILE_MAX).catch(() => null);
+    if (!buf?.length) return send(res, 413, { error: 'Fichier trop gros (10 Mo maximum).' });
+    const fid = randomUUID();
+    const name = text(url.searchParams.get('nom'), 120).replace(/[\\/:*?"<>|]/g, '_') || 'fichier';
+    await putBlob(`fichier/${fid}`, buf, 'application/octet-stream');
+    for (const [k, u] of uploads) if (Date.now() - u.at > 3_600_000) uploads.delete(k);
+    uploads.set(fid, { from: id, name, size: buf.length, at: Date.now() });
+    return send(res, 200, { ok: true, id: fid, name, size: buf.length });
+  }
+  if (route === 'GET /api/compte/fichier') {
+    const fid = String(url.searchParams.get('id') ?? '');
+    const blob = /^[\w-]{36}$/.test(fid) ? await getBlob(`fichier/${fid}`) : null;
+    if (!blob) return send(res, 404, { error: 'Fichier introuvable ou supprimé.' });
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': blob.buf.length, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.end(blob.buf);
+    return true;
   }
   if (route === 'POST /api/compte/partage') {
     const to = String(url.searchParams.get('a') ?? '');

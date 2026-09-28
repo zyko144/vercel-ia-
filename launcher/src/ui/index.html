@@ -25,8 +25,8 @@
   </nav>
   <h5>Plateformes</h5>
   <nav id="platforms" class="platforms"></nav>
-  <h5 class="colhead">Collections <button id="newCol" title="Nouvelle collection">+</button></h5>
-  <nav id="collections" class="platforms"></nav>
+  <h5 class="colhead" hidden>Collections <button id="newCol" title="Nouvelle collection">+</button></h5>
+  <nav id="collections" class="platforms" hidden></nav>
   <div class="grow"></div>
   <button id="openSettings" class="navlike"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Paramètres</button>
   <button class="profile" id="profileBtn" title="Mon compte"><span class="avatar" id="avatar">?</span><div><b id="profileName">Joueur</b><small id="profileSub"><i class="online"></i>En ligne</small></div></button>
@@ -437,13 +437,15 @@
       <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
       <label class="toggle"><input type="checkbox" id="remoteOn"><span></span>📱 Contrôle depuis le téléphone (même Wi-Fi) : voir le PC et lancer un jeu</label>
       <p class="hint sethint" id="remoteInfo" hidden></p>
+      <b class="sub">⌨ Raccourcis (marchent aussi en jeu) : clique puis appuie sur ta combinaison</b>
+      <div id="hotkeys"></div>
       <div class="setrow"><span>Thème</span><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option><option value="perso">Ma couleur…</option></select><input type="color" id="themeColor" value="#2f8bff" hidden></div>
       <div class="setrow"><span>Fond de l’appli</span><select id="bgMode"><option value="jeu">Jaquette floue du jeu sélectionné</option><option value="anime">Dégradé animé</option><option value="sobre">Sobre (noir)</option></select></div>
       <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
     </section>
     <section class="setpane" data-pane="jeux" hidden>
       <h3>🎮 Jeux</h3>
-      <label class="toggle"><input type="checkbox" id="tournament"><span></span>🏆 Mode tournoi : boost sur chaque partie, aucune notification, rien ne dérange</label>
+      <label class="toggle"><input type="checkbox" id="tournament"><span></span>🏆 Mode tournoi : boost sur chaque partie, aucune notification (sauf la bulle des messages et les appels)</label>
       <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
       <label class="toggle"><input type="checkbox" id="nightUpdates"><span></span>🌙 Mettre à jour les jeux Steam la nuit (entre 3 h et 6 h, si le PC est allumé et ne sert pas)</label>
       <label class="toggle"><input type="checkbox" id="preloadSteam"><span></span>⚡ Préparer Steam en fond au démarrage (les jeux Steam se lancent plus vite)</label>

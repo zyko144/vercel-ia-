@@ -1,6 +1,5 @@
 /**
- * Banc d'essai du salon IA STATUS : panne détectée après 5 échecs sur 1 min, message dans chaque serveur,
- * refus de contenu ignorés, message de retour à la première réussite.
+ * Banc d'essai : le salon IA STATUS est retiré (supprimé des serveurs, plus aucune alerte).
  *
  *   node tools/test-ai-status.mjs
  */
@@ -36,45 +35,18 @@ const makeGuild = (id, withChannel) => {
   return guild;
 };
 const guilds = [makeGuild('1', true), makeGuild('2', false)];
+const deleted = [];
+for (const c of guilds[0].channels.cache.values()) c.delete = async () => { deleted.push(c.name); };
 status.startAiStatus({ guilds: { cache: new Collection(guilds.map((g) => [g.id, g])) } });
-const realNow = Date.now;
-let now = realNow();
-Date.now = () => now;
 const flush = () => new Promise((r) => setTimeout(r, 20));
 
-await check('refus de contenu (400) : pas une panne', async () => {
-  for (let i = 0; i < 10; i++) { status.noteAiResult(false, 400); now += 20_000; }
-  assert.equal(status.aiIsDown(), false);
-});
-
-await check('5 échecs 503 sur plus d’une minute : panne, message rouge dans chaque serveur (salon créé)', async () => {
-  for (let i = 0; i < 5; i++) { status.noteAiResult(false, 503); now += 16_000; }
-  assert.equal(status.aiIsDown(), true);
+await check('salon IA STATUS retiré : supprimé là où il existe', async () => {
   await flush();
-  assert.equal(sent.length, 2);
-  assert.match(sent[0].p.embeds[0].data.title, /indisponible/);
-  assert.match(sent[0].p.embeds[0].data.description, /Nos équipes travaillent dessus/);
-  assert.match(sent[0].p.embeds[0].data.image.url, /iastatus\/down\.gif/);
-  assert.ok(guilds[1].channels.cache.some((c) => c.name === '🔴・ia-status'), 'salon créé');
+  assert.deepEqual(deleted, ['🔴・ia-status']);
 });
-
-await check('première réussite : message vert de retour', async () => {
-  now += 5 * 60_000;
-  status.noteAiResult(true);
-  assert.equal(status.aiIsDown(), false);
+await check('panne de l’IA : suivie mais plus aucun message sur Discord', async () => {
+  for (let i = 0; i < 6; i++) status.noteAiResult(false, 503);
   await flush();
-  assert.equal(sent.length, 4);
-  assert.match(sent[3].p.embeds[0].data.title, /de retour/);
+  assert.equal(sent.length, 0);
 });
-
-await check('rechute rapide : pas de nouvelle alerte avant 30 min', async () => {
-  for (let i = 0; i < 6; i++) { status.noteAiResult(false, 500); now += 15_000; }
-  assert.equal(status.aiIsDown(), true);
-  status.noteAiResult(true);
-  await flush();
-  assert.equal(sent.length, 4);
-});
-
-Date.now = realNow;
 console.log(`\n${passed} vérifications passées.`);
-process.exit(0);

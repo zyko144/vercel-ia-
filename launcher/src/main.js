@@ -1580,7 +1580,7 @@ function bubblePlace() {
 /** Affiche le message dans la bulle ; renvoie false si elle ne doit pas s'afficher (la carte classique prend le relais). */
 function bubbleMsg(x) {
   const st = store.data.settings;
-  if (st.msgBubble === false || st.friendNotifs === false || st.dnd || st.tournament || gameDnd() || streaming()) return false;
+  if (st.msgBubble === false || st.friendNotifs === false || st.dnd || gameDnd() || streaming()) return false; // mode tournoi : la bulle des messages passe quand même
   if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) return false;
   const group = x.type === 'gmsg';
   const key = group ? `g:${x.gid}` : `f:${x.from}`;
@@ -1739,7 +1739,7 @@ async function setReplay(on) {
   const src = (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }))[0];
   if (src) recWin.webContents.send('rec:start', src.id);
 }
-ipcMain.on('rec:state', (_e, st) => { recState = st; if (st.startsWith('error')) notify('Replay indisponible', `L’enregistrement de l’écran n’a pas démarré (${st.slice(6, 120)}).`); });
+ipcMain.on('rec:state', (_e, st) => { if (st === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.'); recState = st; if (st.startsWith('error')) notify('Replay indisponible', `L’enregistrement de l’écran n’a pas démarré (${st.slice(6, 120)}).`); });
 ipcMain.on('rec:clip', async (e, buf, mime) => {
   if (!recWin || e.sender !== recWin.webContents) return;
   try {
@@ -1748,7 +1748,13 @@ ipcMain.on('rec:clip', async (e, buf, mime) => {
   } catch (err) { notify('Clip non enregistré', err.message); }
 });
 function saveClip() {
-  if (!recWin || recState !== 'on') { notify('Replay désactivé', 'Active « Replay des 30 dernières secondes » dans les Paramètres, puis Ctrl+Alt+R pour garder le clip.'); return false; }
+  if (!recWin || recState !== 'on') {
+    // Replay coupé : on l'active tout de suite (le prochain appui gardera le clip)
+    if (!store.data.settings.replay) { store.data.settings.replay = true; store.save(); send('settings:changed', {}); }
+    setReplay(true).catch(() => {});
+    notify('Replay activé', 'L’enregistrement des 30 dernières secondes tourne maintenant : rappuie sur le raccourci du clip pour garder ce qui vient de se passer.');
+    return false;
+  }
   recWin.webContents.send('rec:save');
   return true;
 }
@@ -1834,7 +1840,22 @@ async function sendReliable(pathname, body) {
   return { ...r, error: r?.error ?? 'Serveur injoignable : message non envoyé.' };
 }
 const CIDM = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
-const extraOf = (x) => ({ ...(x?.re ? { re: CIDM(x.re) } : {}), ...(typeof x?.image === 'string' && x.image.length < 1_700_000 ? { image: x.image } : {}) });
+const extraOf = (x) => ({ ...(x?.re ? { re: CIDM(x.re) } : {}), ...(typeof x?.image === 'string' && x.image.length < 1_700_000 ? { image: x.image } : {}), ...(/^[\w-]{36}$/.test(String(x?.file ?? '')) ? { file: x.file } : {}) });
+// Fichier joint : envoyé au serveur (10 Mo max), puis ajouté au message par son identifiant
+ipcMain.handle('chat:upload', (_e, name, bytes) => (bytes?.byteLength > 10 * 1024 * 1024 ? { ok: false, error: 'Fichier trop gros (10 Mo maximum).' } : apiRaw(`/api/compte/fichier?nom=${encodeURIComponent(String(name ?? 'fichier').slice(0, 120))}`, Buffer.from(bytes))));
+ipcMain.handle('chat:download', async (_e, fid, name) => {
+  const token = secret('account');
+  if (!token || !/^[\w-]{36}$/.test(String(fid))) return { ok: false };
+  const res = await fetch(`${API}/api/compte/fichier?id=${fid}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(120_000) }).catch(() => null);
+  if (!res?.ok) return { ok: false, error: 'Fichier introuvable ou supprimé.' };
+  const { writeFile } = await import('node:fs/promises');
+  const safe = path.basename(String(name ?? 'fichier')).replace(/[\\/:*?"<>|]/g, '_') || 'fichier';
+  let file = path.join(app.getPath('downloads'), safe);
+  for (let n = 1; await import('node:fs').then((fs) => fs.existsSync(file)); n++) file = path.join(app.getPath('downloads'), `${path.parse(safe).name} (${n})${path.parse(safe).ext}`);
+  await writeFile(file, Buffer.from(await res.arrayBuffer()));
+  shell.showItemInFolder(file);
+  return { ok: true, file: path.basename(file) };
+});
 ipcMain.handle('chat:send', (_e, fid, text, cid, extra) => sendReliable('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined, ...extraOf(extra) }));
 ipcMain.handle('chat:read', (_e, fid) => social('/api/compte/messages/lu', { avec: FID(fid) }));
 ipcMain.handle('chat:typing', (_e, kind, id) => social('/api/compte/messages/ecrit', kind === 'g' ? { groupe: CIDM(id) } : { to: FID(id) }));
@@ -2430,6 +2451,31 @@ ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; s
 
 ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api', site: 'https://zyko144.github.io/vercel-ia-/' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
+// Raccourcis globaux (même en jeu), modifiables dans Paramètres › Général
+const HOTKEYS = {
+  overlay: ['CommandOrControl+Alt+O', () => toggleOverlay()],
+  palette: ['CommandOrControl+Alt+Space', () => { showWindow(); send('palette:open', {}); }],
+  shot: ['CommandOrControl+Alt+S', () => { takeScreenshot().catch((err) => notify('Capture impossible', err.message)); }],
+  clip: ['CommandOrControl+Alt+R', () => { saveClip(); }],
+  toggle: ['CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow())],
+};
+const hotkeyOf = (k) => store.data.settings.hotkeys?.[k] || HOTKEYS[k][0];
+function registerHotkeys() {
+  globalShortcut.unregisterAll();
+  const failed = [];
+  for (const [k, [, fn]] of Object.entries(HOTKEYS)) { try { if (!globalShortcut.register(hotkeyOf(k), fn)) failed.push(k); } catch { failed.push(k); } }
+  return failed;
+}
+ipcMain.handle('hotkeys:get', () => Object.fromEntries(Object.keys(HOTKEYS).map((k) => [k, hotkeyOf(k)])));
+ipcMain.handle('hotkeys:set', (_e, key, accel) => {
+  if (!HOTKEYS[key] || (accel !== null && !/^(CommandOrControl|Alt|Shift)(\+(CommandOrControl|Alt|Shift))*\+[A-Z0-9]$|^(CommandOrControl|Alt|Shift)(\+(CommandOrControl|Alt|Shift))*\+(F\d{1,2}|Space|Tab|Up|Down|Left|Right)$|^F\d{1,2}$/.test(String(accel)))) return { ok: false, error: 'Combinaison non valable.' };
+  if (accel && Object.keys(HOTKEYS).some((k) => k !== key && hotkeyOf(k) === accel)) return { ok: false, error: 'Déjà utilisée par un autre raccourci.' };
+  const hk = { ...(store.data.settings.hotkeys ?? {}) };
+  if (accel) hk[key] = accel; else delete hk[key];
+  store.data.settings.hotkeys = hk; store.save();
+  const failed = registerHotkeys();
+  return failed.includes(key) ? { ok: false, error: 'Windows ou une autre appli utilise déjà cette combinaison.' } : { ok: true, value: hotkeyOf(key) };
+});
 ipcMain.handle('fivem:join', async (_e, code) => {
   const c = serverCode(code);
   if (!c) return { ok: false, error: 'Code de serveur invalide (ex. cfx.re/join/abc123).' };
@@ -2905,14 +2951,8 @@ async function start() {
   powerMonitor.on('unlock-screen', () => { pcAway = false; });
   powerMonitor.on('suspend', () => { pcAway = true; });
   powerMonitor.on('resume', () => { pcAway = false; });
-  // Raccourci global : Ctrl+Alt+H affiche ou range le launcher, même en jeu
-  globalShortcut.register('CommandOrControl+Alt+O', toggleOverlay);
-  // Recherche rapide depuis n'importe où : le launcher s'ouvre directement sur la barre de recherche
-  globalShortcut.register('CommandOrControl+Alt+Space', () => { showWindow(); send('palette:open', {}); });
-  globalShortcut.register('CommandOrControl+Alt+S', () => { takeScreenshot().catch((err) => notify('Capture impossible', err.message)); });
-  globalShortcut.register('CommandOrControl+Alt+R', () => { saveClip(); });
+  registerHotkeys();
   if (store.data.settings.replay) setTimeout(() => setReplay(true).catch(() => {}), 8000);
-  globalShortcut.register('CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
   if (app.isPackaged) app.setAsDefaultProtocolClient('history');
   setTimeout(() => handleInvite(process.argv), 3000);
   setTimeout(() => checkDeals().catch(() => {}), 60_000);

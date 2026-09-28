@@ -965,7 +965,7 @@ function paintThread(key, { force = false } = {}) {
     const reacts = Object.entries(m.reacts ?? {}).filter(([, ids]) => ids?.length);
     return `${sep}<div class="cmsg ${them ? 'them' : 'me'} ${grouped ? 'grouped' : ''} ${who ? 'named' : ''}" data-mid="${esc(m.id ?? '')}">${who ? `<em class="cname">${avatar(who, 'xs')}${esc(who.pseudo)}</em>` : ''}
       ${m.re ? `<div class="cquote" data-mjump="${esc(m.re.id)}"><b>${esc(nameOf(m.re.from).pseudo)}</b>${esc(m.re.text)}</div>` : ''}
-      ${img ? `<img class="cimg" src="${esc(img)}" data-mview="${esc(img)}" alt="Image" loading="lazy">` : ''}${m.text ? `<span>${esc(m.text)}</span>` : ''}
+      ${img ? `<img class="cimg" src="${esc(img)}" data-mview="${esc(img)}" alt="Image" loading="lazy">` : ''}${m.file ? `<button type="button" class="cfile" data-mfile="${esc(m.file)}" data-fname="${esc(m.fileName ?? 'fichier')}">📄 <b>${esc(m.fileName ?? 'fichier')}</b><small>${(m.fileSize ?? 0) < 1e6 ? `${Math.max(1, Math.ceil((m.fileSize ?? 0) / 1e3))} Ko` : gb(m.fileSize)} · télécharger</small></button>` : ''}${m.text ? `<span>${esc(m.text)}</span>` : ''}
       ${them && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}
       ${reacts.length ? `<div class="creacts">${reacts.map(([e, ids]) => `<button type="button" class="creact ${ids.includes(myId()) ? 'mine' : ''}" data-mreact="${e}" data-rid="${esc(m.id)}" title="${esc(ids.map((x) => nameOf(x).pseudo).join(', '))}">${e}<b>${ids.length}</b></button>`).join('')}</div>` : ''}
       <small>${hm(m.at)}${i === seenIdx ? ` · <b class="cseen">Vu${lu && i === lastIdx ? ` à ${hm(lu)}` : ''}</b>` : ''}</small>
@@ -1046,7 +1046,7 @@ async function sendMsg(key, text, cid = newCid(), extra = {}) {
   pendingMsgs.set(cid, { key, text, failed: null, ...extra });
   paintThread(key, { force: true });
   const id = key.slice(2);
-  const x = { ...(extra.re ? { re: extra.re } : {}), ...(extra.image ? { image: extra.image } : {}) };
+  const x = { ...(extra.re ? { re: extra.re } : {}), ...(extra.image ? { image: extra.image } : {}), ...(extra.file ? { file: extra.file } : {}) };
   const r = await (key[0] === 'f' ? api.chatSend(id, text, cid, x) : api.groupSend(id, text, cid, x)).catch(() => null);
   if (!r || r.error || (r.status && r.status !== 200)) { pendingMsgs.set(cid, { key, text, failed: r?.error ?? 'Non envoyé', ...extra }); paintThread(key); return; }
   pendingMsgs.delete(cid);
@@ -1096,10 +1096,11 @@ for (const fil of ['chatFil', 'gFil']) {
   $(fil).addEventListener('click', async (e) => {
     const key = fil === 'chatFil' ? (chatWith ? `f:${chatWith.id}` : null) : (gOpen() ? `g:${gOpen()}` : null);
     if (!key) return;
-    const t = e.target.closest('[data-mdel],[data-mretry],[data-mdrop],[data-mreload],[data-mreply],[data-mpick],[data-mreact],[data-mview],[data-mjump]'); if (!t) return;
+    const t = e.target.closest('[data-mdel],[data-mretry],[data-mdrop],[data-mreload],[data-mreply],[data-mpick],[data-mreact],[data-mview],[data-mjump],[data-mfile]'); if (!t) return;
+    if (t.dataset.mfile) { api.chatDownload(t.dataset.mfile, t.dataset.fname).then((r) => toast(r?.ok ? `📥 ${r.file} dans Téléchargements` : r?.error ?? 'Téléchargement impossible')); return; }
     if (t.dataset.mreload) return loadThread(key);
     if (t.dataset.mdrop) { pendingMsgs.delete(t.dataset.mdrop); return paintThread(key, { force: true }); }
-    if (t.dataset.mretry) { const p = pendingMsgs.get(t.dataset.mretry); if (p) sendMsg(key, p.text, t.dataset.mretry, { re: p.re, image: p.image }); return; }
+    if (t.dataset.mretry) { const p = pendingMsgs.get(t.dataset.mretry); if (p) sendMsg(key, p.text, t.dataset.mretry, { re: p.re, image: p.image, file: p.file }); return; }
     if (t.dataset.mreply) { const m = (threads.get(key) ?? []).find((x) => x.id === t.dataset.mreply); if (m) { replyTo.set(key, m); paintReply(key); $(composerIds(key).text).focus(); } return; }
     if (t.dataset.mpick) return reactPicker(t.closest('.cmsg'), t.dataset.mpick);
     if (t.dataset.mreact) return react(key, t.dataset.rid, t.dataset.mreact);
@@ -1157,7 +1158,7 @@ async function shrinkImage(file) {
 }
 function attachMenu(key, btn) {
   const ctx = $('ctx');
-  ctx.innerHTML = '<div class="ctxhead">Envoyer une image</div><button data-att="shot">📷 Une de mes captures</button><button data-att="file">🖼 Une image du PC</button>';
+  ctx.innerHTML = '<div class="ctxhead">Envoyer une image</div><button data-att="shot">📷 Une de mes captures</button><button data-att="file">🖼 Une image du PC</button><button data-att="doc">📎 Un fichier (10 Mo max)</button>';
   ctx.hidden = false;
   const r = btn.getBoundingClientRect();
   ctx.style.left = `${r.left}px`; ctx.style.top = `${Math.max(8, r.top - ctx.offsetHeight - 6)}px`;
@@ -1165,6 +1166,18 @@ function attachMenu(key, btn) {
   ctx.onclick = async (e) => {
     const b = e.target.closest('[data-att]'); if (!b) return;
     ctx.hidden = true; ctx.onclick = null;
+    if (b.dataset.att === 'doc') {
+      const inp = document.createElement('input'); inp.type = 'file';
+      inp.onchange = async () => {
+        const f = inp.files?.[0]; if (!f) return;
+        if (f.size > 10 * 1024 * 1024) return toast('Fichier trop gros (10 Mo maximum)');
+        toast(`📎 Envoi de ${f.name}…`);
+        const r = await api.chatUpload(f.name, new Uint8Array(await f.arrayBuffer())).catch(() => null);
+        if (!r?.ok) return toast(r?.error ?? 'Envoi impossible');
+        sendMsg(key, '', newCid(), { file: r.id });
+      };
+      return inp.click();
+    }
     if (b.dataset.att === 'file') {
       const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp';
       inp.onchange = async () => { const f = inp.files?.[0]; if (!f) return; const u = await shrinkImage(f).catch(() => null); if (!u) return toast('Image illisible ou trop lourde'); sendMsg(key, '', newCid(), { image: u }); };
@@ -1614,6 +1627,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.31.1': [
+    ['⌨', 'Raccourcis à ton goût', 'Paramètres › Général : clique sur un raccourci (clip, capture, infos en jeu, afficher le launcher, recherche) et appuie sur ta combinaison. Retour arrière remet celui d’origine.', ['#openSettings', 'wait600', '[data-pane=general]', 'wait800']],
+    ['📎', 'Fichiers dans les messages', 'Le trombone permet maintenant d’envoyer n’importe quel fichier (10 Mo max) à un ami ou un groupe ; il le télécharge d’un clic.'],
+    ['💬', 'Messages en jeu', 'La bulle des messages s’affiche aussi en mode tournoi (les autres notifications restent coupées).'],
+    ['🎬', 'Clips réparés', 'Si le replay était coupé, le raccourci du clip l’active tout de suite ; appuyer trop tôt ne le bloque plus.'],
+    ['🧹', 'Menu plus simple', 'La catégorie Collections est retirée du menu de gauche.'],
+  ],
   '0.31.0': [
     ['📱', 'Contrôle depuis le téléphone', 'Paramètres › Général : active-le, ouvre l’adresse affichée sur ton téléphone (même Wi-Fi) et entre le code. Tu vois les températures du PC et tu lances un jeu à distance.', ['#openSettings', 'wait600', '[data-pane=general]', 'wait800']],
     ['🌙', 'Mises à jour la nuit', 'Paramètres › Jeux : entre 3 h et 6 h, si le PC est allumé et ne sert pas, Steam s’ouvre en fond et télécharge les mises à jour de tes jeux. Au réveil, tout est prêt.'],
@@ -3327,6 +3347,31 @@ async function showRemote() {
   $('remoteInfo').hidden = !r?.on;
   if (r?.on) $('remoteInfo').innerHTML = r.url ? `Sur ton téléphone (même Wi-Fi), ouvre <b>${esc(r.url)}</b> et entre le code <b>${esc(r.pin)}</b>. Windows peut demander l’autorisation du pare-feu la première fois : clique « Autoriser ».` : 'Aucun réseau Wi-Fi ou Ethernet trouvé sur ce PC.';
 }
+// Raccourcis modifiables : clic sur un raccourci, puis la nouvelle combinaison (Échap annule, Retour arrière = par défaut)
+const HK = { clip: '🎬 Garder les 30 dernières secondes', shot: '📸 Capture d’écran', overlay: '📊 Infos en jeu', toggle: '🪟 Afficher / ranger le launcher', palette: '🔎 Recherche rapide' };
+const hkText = (a) => a.replace('CommandOrControl', 'Ctrl').split('+').map((k) => `<kbd>${esc(k)}</kbd>`).join('');
+async function showHotkeys() {
+  const cur = await api.hotkeysGet?.().catch(() => null);
+  if (!cur) return;
+  $('hotkeys').innerHTML = Object.entries(HK).map(([k, l]) => `<div class="setrow"><span>${l}</span><button type="button" class="btn ghost sm" data-hk="${k}">${hkText(cur[k])}</button></div>`).join('');
+}
+$('hotkeys').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-hk]'); if (!b) return;
+  b.textContent = 'Appuie sur ta combinaison…';
+  const onKey = async (ev) => {
+    ev.preventDefault(); ev.stopPropagation();
+    if (['Control', 'Alt', 'Shift', 'Meta'].includes(ev.key)) return;
+    document.removeEventListener('keydown', onKey, true);
+    if (ev.key === 'Escape') return showHotkeys();
+    const key = ev.key === ' ' ? 'Space' : ev.key.startsWith('Arrow') ? ev.key.slice(5) : /^F\d{1,2}$/.test(ev.key) ? ev.key : ev.key.length === 1 ? ev.key.toUpperCase() : null;
+    const accel = ev.key === 'Backspace' ? null : key && [ev.ctrlKey && 'CommandOrControl', ev.altKey && 'Alt', ev.shiftKey && 'Shift', key].filter(Boolean).join('+');
+    if (accel === undefined || (accel && !key)) { toast('Touche non prise en charge'); return showHotkeys(); }
+    const r = await api.hotkeysSet(b.dataset.hk, accel);
+    toast(r?.ok ? '⌨ Raccourci enregistré' : r?.error ?? 'Impossible'); showHotkeys();
+  };
+  document.addEventListener('keydown', onKey, true);
+});
+showHotkeys();
 $('remoteOn').addEventListener('change', async (e) => { await api.setSettings({ remote: e.target.checked }); showRemote(); });
 $('configsRestore').addEventListener('click', async () => { const r = await api.configsRestore(); if (r?.ok) toast(`🎮 Réglages remis : ${r.games.join(', ')}`); else if (!r?.cancelled) toast(r?.error ?? 'Impossible'); });
 $('gameMode').addEventListener('change', (e) => api.setSettings({ gameMode: e.target.checked }));
@@ -3797,6 +3842,7 @@ function demoApi() {
     chatRead: async () => ({ ok: true }), chatTyping: async () => ({ ok: true }), chatReact: async () => ({ ok: true }),
     schedList: async () => [{ id: 's1', key: 'g:g1', text: 'On lance la ranked, connectez-vous !', at: Date.now() + 3 * 3_600_000 }], schedAdd: async () => ({ ok: true }), schedDel: async () => ({ ok: true }),
     capturesRecent: async () => [], captureData: async () => null,
+    hotkeysGet: async () => ({ clip: 'CommandOrControl+Alt+R', shot: 'CommandOrControl+Alt+S', overlay: 'CommandOrControl+Alt+O', toggle: 'CommandOrControl+Alt+H', palette: 'CommandOrControl+Alt+Space' }),
     tools: async () => ({ profile: { enabled: false, close: [], power: 'none' }, apps: [], saveDirs: [], backups: [], received: [], caches: [], perf: [], graphics: { need: 'benchmark' }, fps: false, canMove: false }),
     gameCare: async () => ({ crashes: [{ at: Date.now() - 86_400_000, cause: 'Pilote graphique NVIDIA', fix: 'Mets à jour (ou réinstalle proprement) le pilote NVIDIA, et baisse les réglages graphiques si ça recommence.', module: 'nvwgf2umx.dll' }], loads: [{ ms: 24000 }, { ms: 26000 }, { ms: 41000 }], with: ['a1'] }),
     gameWith: async () => ({ ok: true, with: ['a1'], apps: [{ id: 'a1', name: 'Discord' }, { id: 'a2', name: 'Spotify' }, { id: 'a3', name: 'OBS Studio' }] }),
@@ -3816,7 +3862,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.31.0',
+    version: async () => '0.31.1',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
