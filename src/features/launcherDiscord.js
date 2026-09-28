@@ -187,7 +187,7 @@ export async function handleLauncherAutocomplete(interaction) {
 let clientRef = null;
 const DISCORD_MAX = 9.5 * 1024 * 1024;
 /** Discord refuse plus de 10 Mo : une vidéo trop lourde est réencodée en 720p H.264 (sans perdre la fin du clip). */
-async function fitForDiscord(buf, ext, seconds = 45) {
+export async function fitForDiscord(buf, ext, seconds = 45) {
   if (buf.length <= DISCORD_MAX) return { buf, ext };
   if (!['webm', 'mp4'].includes(ext)) throw new Error('image trop lourde (10 Mo maximum)');
   const [{ default: ffmpeg }, fs, os, path, { spawn }] = await Promise.all([import('ffmpeg-static'), import('node:fs/promises'), import('node:os'), import('node:path'), import('node:child_process')]);

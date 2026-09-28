@@ -40,3 +40,15 @@ export function validAccel(accel) {
   const KEY = /^([A-Z0-9]|F([1-9]|1\d|2[0-4])|Space|Tab|Up|Down|Left|Right|PrintScreen|Insert|Delete|Home|End|PageUp|PageDown|num[0-9]|numdec|numadd|numsub|nummult|numdiv|Plus|[;=,\-./`'[\]\\])$/;
   return KEY.test(k) && mods.every((m) => ['CommandOrControl', 'Alt', 'Shift'].includes(m)) && new Set(mods).size === mods.length && (mods.length > 0 || !/^[A-Z0-9]$|^(Space|Tab)$/.test(k));
 }
+
+/** Ligne du veilleur de fenêtre active : « FG|hwnd|pid|plein écran|description|titre|processus|chemin ». */
+export function parseFg(line) {
+  const m = String(line ?? '').split('|');
+  if (m[0] !== 'FG' || m.length < 8) return null;
+  return { hwnd: m[1], pid: Number(m[2]), full: m[3] === '1', desc: m[4], title: m[5], proc: m[6], exe: m.slice(7).join('|') };
+}
+/** Nom à chercher sur Steam pour l'image du jeu (sans « (64-bit) », ® ou suffixes techniques). FiveM = GTA V. */
+export function artTerm(name) {
+  const s = String(name ?? '').replace(/\(.*?\)|[®™]|\bby\b.*$/gi, '').replace(/\s+/g, ' ').trim();
+  return /fivem|gta ?v|grand theft auto v/i.test(s) ? 'Grand Theft Auto V' : s;
+}

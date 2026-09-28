@@ -64,7 +64,7 @@ jobs:
           FILES=(dist/History-Clips-Setup-$V.exe dist/*.exe.blockmap dist/latest.yml)
           git tag "clips-v$V" "$GITHUB_SHA" 2>/dev/null || true
           git push origin "clips-v$V" || true
-          gh release view "clips-v$V" >/dev/null 2>&1 || gh release create "clips-v$V" --verify-tag --latest=false --title "History Clips $V" --notes "History Clips $V"
+          gh release view "clips-v$V" >/dev/null 2>&1 || gh release create "clips-v$V" --verify-tag --latest=false --title "History Clips $V" --notes "$(node -p "require('./package.json').releaseNotes || 'History Clips ' + require('./package.json').version")"
           gh release upload "clips-v$V" "${FILES[@]}" --clobber
           # Release fixe : lien de téléchargement stable et mises à jour automatiques de l'appli
           gh release view clips-latest >/dev/null 2>&1 || gh release create clips-latest --latest=false --title "History Clips (dernière version)" --notes "Toujours la dernière version de History Clips. Télécharge History-Clips-Setup.exe."

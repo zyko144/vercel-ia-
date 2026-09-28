@@ -2,35 +2,125 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: clip:; media-src clip:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: clip:; media-src clip:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>History Clips</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-theme="jaune">
+<div class="neon" aria-hidden="true"></div>
 <aside class="side">
-  <div class="brand"><img src="icon.png" alt=""><div><b>History</b><small>Clips</small></div></div>
+  <div class="sidebg" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="brandmark"><img src="icon.png" alt="History Clips"><span>History <b>Clips</b></span></div>
   <nav id="nav">
-    <button data-f="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Accueil</button>
-    <button data-f="tout"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg>Mes clips<em id="nTout"></em></button>
-    <button data-f="favs"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>Favoris<em id="nFavs"></em></button>
-    <button data-f="captures"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Captures<em id="nCaps"></em></button>
+    <button data-v="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Accueil</button>
+    <button data-v="tout"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>Mes clips<em id="nTout"></em></button>
+    <button data-v="jeux"><svg viewBox="0 0 24 24"><path d="M7 8h10a5 5 0 0 1 4.6 6.9l-.8 2a2.5 2.5 0 0 1-4.3.6L15 16H9l-1.5 1.5a2.5 2.5 0 0 1-4.3-.6l-.8-2A5 5 0 0 1 7 8zm0 3v2m-1-1h2m7-.5h.01m2 1.5h.01"/></svg>Jeux<em id="nJeux"></em></button>
+    <button data-v="favs"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>Favoris<em id="nFavs"></em></button>
+    <button data-v="captures"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Captures<em id="nCaps"></em></button>
   </nav>
-  <h5>Jeux</h5>
-  <nav id="games"></nav>
+  <h5>Tes jeux</h5>
+  <nav id="games" class="games-nav"></nav>
   <div class="grow"></div>
-  <button class="navlike" id="openSet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Réglages</button>
-  <button class="profile" id="profile"><span class="avatar" id="avatar">?</span><span><b id="pName">Non connecté</b><small id="pSub">Compte History</small></span></button>
+  <button class="navlike" data-v="reglages"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Paramètres</button>
+  <button class="profile" id="profile" title="Mon compte"><span class="avatar" id="avatar">?</span><div><b id="pName">Invité</b><small id="pSub">Se connecter</small></div></button>
 </aside>
+
 <header class="top">
-  <h1 id="title">Accueil</h1>
-  <input id="search" type="search" placeholder="Rechercher un clip, un jeu…">
-  <span class="pill" id="replayPill"><b></b><span></span></span>
-  <button type="button" class="btn play" id="saveNow">🎬 Garder un clip</button>
+  <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="search" type="search" placeholder="Rechercher un clip, un jeu…" autocomplete="off"></label>
+  <span class="pill" id="replayPill" title="État du replay"><b></b><span></span></span>
+  <button type="button" class="updpill" id="updPill" hidden></button>
+  <button type="button" class="btn play sm" id="saveNow">🎬 Garder un clip</button>
+  <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
-<main id="view">
-  <div id="home"></div>
-  <div class="grid" id="grid" hidden></div>
+
+<div id="ambient" aria-hidden="true"></div>
+<main id="main">
+  <section class="view on" id="v-home"></section>
+  <section class="view" id="v-list"><div class="list-head"><h1 id="listTitle">Mes clips</h1><div class="seg" id="sort"><button data-s="new" class="on">Récents</button><button data-s="old">Anciens</button><button data-s="big">Plus lourds</button></div></div><div class="grid" id="grid"></div></section>
+  <section class="view" id="v-jeux"><div class="list-head"><h1>Jeux</h1><small class="hint">Tes clips rangés par jeu</small></div><div class="gamegrid" id="gamegrid"></div></section>
+  <section class="view" id="v-game"><div class="ghero" id="ghero"></div><div class="grid" id="ggrid"></div></section>
+  <section class="view" id="v-reglages">
+    <div class="list-head"><h1>Paramètres</h1></div>
+    <div class="setwrap">
+      <nav class="setnav" id="setnav">
+        <button data-p="rec" class="on">🎬 Enregistrement</button><button data-p="perf">⚡ Performance</button><button data-p="keys">⌨ Raccourcis</button>
+        <button data-p="disk">📁 Stockage</button><button data-p="look">🎨 Apparence</button><button data-p="acct">👤 Compte</button><button data-p="about">⬆ Mises à jour</button>
+      </nav>
+      <div class="setpanes">
+        <div class="pane on glass" data-p="rec">
+          <h3>🎬 Enregistrement</h3>
+          <label class="toggle"><input type="checkbox" id="sReplay"><span></span>Replay actif (garde les dernières secondes quand tu appuies sur ta touche)</label>
+          <div class="row"><span>Ce qui est filmé</span><div class="seg" id="sSource"><button data-val="screen">🖥 Écran entier</button><button data-val="game">🎮 Le jeu seulement</button></div></div>
+          <div class="row"><span>Durée d’un clip</span><select id="sSeconds"><option value="15">15 secondes</option><option value="30">30 secondes</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></div>
+          <div class="row"><span>Qualité</span><select id="sHeight"><option value="720">720p (léger)</option><option value="1080">1080p</option><option value="1440">1440p (lourd)</option></select></div>
+          <div class="row"><span>Images par seconde</span><select id="sFps"><option value="30">30 i/s (léger)</option><option value="60">60 i/s (fluide)</option></select></div>
+          <label class="toggle"><input type="checkbox" id="sAudio"><span></span>Enregistrer le son du PC</label>
+          <label class="toggle"><input type="checkbox" id="sSound"><span></span>Petit son de confirmation quand un clip est gardé</label>
+        </div>
+        <div class="pane glass" data-p="perf">
+          <h3>⚡ Performance <small>(pour ne pas perdre de FPS en jeu)</small></h3>
+          <label class="toggle"><input type="checkbox" id="sOnlyGame"><span></span>Enregistrer seulement quand un jeu est en plein écran (0 ressource utilisée le reste du temps)</label>
+          <label class="toggle"><input type="checkbox" id="sPriority"><span></span>Priorité au jeu (l’enregistrement passe après le jeu)</label>
+          <div class="row"><span>Réglage rapide</span><div class="seg" id="sPreset"><button data-val="perf">🚀 Max FPS (720p 30)</button><button data-val="eq">⚖ Équilibré (1080p 60)</button><button data-val="qual">💎 Qualité (1440p 60)</button></div></div>
+          <p class="fine">L’encodage utilise la carte graphique quand elle le permet. Le mode « Max FPS » coûte le moins en jeu.</p>
+        </div>
+        <div class="pane glass" data-p="keys">
+          <h3>⌨ Raccourcis <small>(clique puis appuie sur la touche ou la combinaison voulue)</small></h3>
+          <div class="row"><span>🎬 Garder un clip</span><button type="button" class="btn ghost sm" data-hk="hotClip"></button></div>
+          <div class="row"><span>📸 Capture d’écran</span><button type="button" class="btn ghost sm" data-hk="hotShot"></button></div>
+        </div>
+        <div class="pane glass" data-p="disk">
+          <h3>📁 Stockage</h3>
+          <div class="row"><span id="sDir"></span><div><button type="button" class="btn ghost sm" id="sOpenDir">Ouvrir</button> <button type="button" class="btn ghost sm" id="sPick">Changer</button></div></div>
+          <div class="row"><span>Espace maximum (les plus vieux clips hors favoris partent à la corbeille)</span><select id="sMax"><option value="0">Illimité</option><option value="10">10 Go</option><option value="20">20 Go</option><option value="50">50 Go</option><option value="100">100 Go</option></select></div>
+          <label class="toggle"><input type="checkbox" id="sAuto"><span></span>Démarrer avec Windows (en fond, prêt à clipper)</label>
+        </div>
+        <div class="pane glass" data-p="look">
+          <h3>🎨 Apparence</h3>
+          <div class="themes" id="themes"></div>
+        </div>
+        <div class="pane glass" data-p="acct">
+          <h3>👤 Compte History <small>(le même que History Launcher)</small></h3>
+          <div id="acct"></div>
+        </div>
+        <div class="pane glass" data-p="about">
+          <h3>⬆ Mises à jour</h3>
+          <p id="sVer" class="fine"></p>
+          <div class="row"><span id="updStatus">Les mises à jour s’installent toutes seules.</span><button type="button" class="btn sm" id="updCheck">Rechercher</button></div>
+          <button type="button" class="linkbtn" id="openSite">Site de History Clips</button>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
+
+<section class="auth" id="auth" hidden>
+  <div class="authcard">
+    <img src="icon.png" alt="" class="authlogo">
+    <h1>Bienvenue sur <span>History Clips</span></h1>
+    <p class="sub">Garde tes meilleurs moments de jeu en un appui.</p>
+    <button type="button" class="btn play big" id="authLauncher"><img src="icon.png" alt="">Se connecter avec History Launcher</button>
+    <div class="or"><span>ou</span></div>
+    <div class="tabs" id="authTabs"><button data-auth="connexion" class="on">Se connecter</button><button data-auth="inscription">Créer un compte</button></div>
+    <form id="authForm" autocomplete="on">
+      <label class="field" id="pseudoField" hidden><span>Pseudo</span><input id="aPseudo" autocomplete="nickname" maxlength="20" placeholder="Ton pseudo"></label>
+      <label class="field"><span>E-mail</span><input id="aEmail" type="email" autocomplete="email" maxlength="254" placeholder="toi@exemple.fr" required></label>
+      <label class="field"><span>Mot de passe</span><input id="aPass" type="password" autocomplete="current-password" maxlength="128" placeholder="8 caractères minimum" required></label>
+      <p class="autherr" id="authErr"></p>
+      <button class="btn play big" id="authGo">Se connecter</button>
+    </form>
+    <form id="authStep" class="authstep" hidden autocomplete="off">
+      <h2>🔐 Double authentification</h2>
+      <p class="sub">Entre le code à 6 chiffres de ton application (ou un code de secours).</p>
+      <input id="stepCode" class="codein" inputmode="numeric" maxlength="11" placeholder="000000" autocomplete="one-time-code">
+      <p class="autherr" id="stepErr"></p>
+      <button class="btn play big" id="stepGo">Valider</button>
+      <button type="button" class="linkbtn" id="stepBack">Retour</button>
+    </form>
+    <div class="authpair" id="authPair" hidden><h2 id="pairTitle">💻 Connexion avec un autre PC</h2><p class="sub" id="pairText">Sur History Launcher déjà connecté : clique sur ton nom en bas à gauche › <b>Connecter un autre PC</b>, puis entre ce code.</p><div class="paircode" id="pairCode">····-····</div><small class="hint">Valable 5 minutes.</small><button type="button" class="linkbtn" id="pairBack">Retour</button></div>
+    <div class="authlinks"><button class="linkbtn" type="button" id="authPairBtn">💻 Avec un code (autre PC)</button><button class="linkbtn" type="button" id="authForgot">Mot de passe oublié ?</button><button class="linkbtn" type="button" id="authSkip">Continuer sans compte</button></div>
+  </div>
+</section>
 
 <dialog id="viewer" class="viewer">
   <div class="vhead"><h2 id="vTitle"></h2><button type="button" class="x" data-close>✕</button></div>
@@ -44,6 +134,7 @@
   <div class="vbar">
     <button type="button" class="btn play" id="vDiscord">📤 Discord</button>
     <button type="button" class="btn" id="vExport">⬇ Exporter en MP4</button>
+    <button type="button" class="btn" id="vCopy" hidden>📋 Copier l’image</button>
     <button type="button" class="btn ghost" id="vFav">⭐ Favori</button>
     <button type="button" class="btn ghost" id="vRename">✏ Renommer</button>
     <button type="button" class="btn ghost" id="vFolder">📁 Dossier</button>
@@ -52,35 +143,7 @@
 </dialog>
 
 <dialog id="modal" class="modal"><div id="modalBox"></div></dialog>
-
-<dialog id="settings" class="modal wide">
-  <div class="vhead"><h2>⚙ Réglages</h2><button type="button" class="x" data-close>✕</button></div>
-  <div class="sets">
-    <section class="glass">
-      <h3>🎬 Replay</h3>
-      <label class="toggle"><input type="checkbox" id="sReplay"><span></span>Replay actif (enregistre en fond pour garder les dernières secondes)</label>
-      <div class="row"><span>Durée d’un clip</span><select id="sSeconds"><option value="15">15 secondes</option><option value="30">30 secondes</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></div>
-      <div class="row"><span>Qualité</span><select id="sHeight"><option value="720">720p (léger)</option><option value="1080">1080p</option><option value="1440">1440p (lourd)</option></select></div>
-      <div class="row"><span>Images par seconde</span><select id="sFps"><option value="30">30 i/s (léger)</option><option value="60">60 i/s (fluide)</option></select></div>
-      <label class="toggle"><input type="checkbox" id="sAudio"><span></span>Enregistrer le son du PC</label>
-    </section>
-    <section class="glass">
-      <h3>⌨ Raccourcis <small>(clique puis appuie sur ta touche)</small></h3>
-      <div class="row"><span>🎬 Garder un clip</span><button type="button" class="btn ghost sm" data-hk="hotClip"></button></div>
-      <div class="row"><span>📸 Capture d’écran</span><button type="button" class="btn ghost sm" data-hk="hotShot"></button></div>
-    </section>
-    <section class="glass">
-      <h3>📁 Rangement</h3>
-      <div class="row"><span id="sDir"></span><button type="button" class="btn ghost sm" id="sPick">Changer</button></div>
-      <label class="toggle"><input type="checkbox" id="sAuto"><span></span>Démarrer avec Windows (en fond, prêt à clipper)</label>
-    </section>
-    <section class="glass" id="acctSec">
-      <h3>👤 Compte History <small>(pour envoyer sur Discord)</small></h3>
-      <div id="acct"></div>
-    </section>
-    <p class="fine" id="sVer"></p>
-  </div>
-</dialog>
+<div id="updScreen" class="updscreen" hidden><div class="updcard"><img src="icon.png" alt=""><h2 id="updTitle">Mise à jour</h2><p id="updText">Téléchargement…</p><div class="updbar"><i id="updFill"></i></div></div></div>
 <div id="toast" hidden></div>
 <script src="app.js"></script>
 </body>

@@ -1456,6 +1456,8 @@ setInterval(() => checkFree().catch(() => {}), 6 * 3_600_000);
 // Lien d'invitation : history://ami/<code ami> 
 function handleInvite(argv) {
   const url = (argv ?? []).find((a) => /^history:\/\//i.test(String(a)));
+  const clipCode = url && String(url).match(/^history:\/\/clips\/([A-Z0-9]{4}-?[A-Z0-9]{4})\/?$/i)?.[1];
+  if (clipCode) return approveClips(clipCode.toUpperCase().replace(/^(.{4})-?/, '$1-'));
   const m = url && decodeURIComponent(String(url)).match(/^history:\/\/ami\/([\p{L}\p{N}._-]{2,20}#[0-9A-Fa-f]{6})\/?$/u);
   if (!m) return;
   showWindow();
@@ -1733,9 +1735,29 @@ async function takeScreenshot() {
 
 // Les clips sont maintenant dans l'appli History Clips (légère, à part) : le launcher ne filme plus l'écran
 const CLIPS_SITE = 'https://zyko144.github.io/vercel-ia-/clips/';
-const openClipsApp = () => { shell.openExternal(CLIPS_SITE); return false; };
+const CLIPS_SETUP = 'https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe';
+// History Clips installé : on l'ouvre (et il se connecte à ce compte en un clic) ; sinon on télécharge son installateur
+let clipsLinkAt = 0;
+const openClipsApp = () => {
+  if (!app.getApplicationNameForProtocol('history-clips://')) { shell.openExternal(CLIPS_SETUP); return false; }
+  clipsLinkAt = Date.now();
+  shell.openExternal(secret('account') ? 'history-clips://lier' : 'history-clips://ouvrir');
+  return true;
+};
 ipcMain.handle('capture:clip', () => ({ ok: openClipsApp() }));
-ipcMain.handle('clips:site', () => { shell.openExternal(CLIPS_SITE); return true; });
+ipcMain.handle('clips:site', () => openClipsApp());
+// History Clips demande à se connecter à ce compte (lien history://clips/CODE) : validé tout seul si on vient de l'ouvrir d'ici,
+// sinon on demande (un site ne peut pas relier son propre History Clips à ton compte en douce)
+async function approveClips(code) {
+  if (!secret('account')) { showWindow(); return; }
+  if (Date.now() - clipsLinkAt > 120_000) {
+    const r = await dialog.showMessageBox(win ?? undefined, { type: 'question', buttons: ['Autoriser', 'Refuser'], defaultId: 1, cancelId: 1, title: 'History Clips', message: 'Connecter History Clips à ton compte ?', detail: `Code ${code}. Accepte seulement si tu viens de cliquer sur « Se connecter avec History Launcher » dans History Clips.` });
+    if (r.response !== 0) return;
+  }
+  clipsLinkAt = 0;
+  const r = await social('/api/compte/lien/valider', { code });
+  notify('History Clips', r.ok ? '🎬 Connecté à ton compte History' : r.error ?? 'Connexion refusée');
+}
 
 /** Rejoindre un ami : serveur FiveM, jeu Steam, sinon le même jeu s'il est installé ici. */
 async function joinGame(join, game) {

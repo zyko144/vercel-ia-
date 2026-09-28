@@ -18,7 +18,6 @@
     <button data-view="applis"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Applications</button>
     <button data-view="favoris"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9a4.8 4.8 0 0 1 9-3 4.8 4.8 0 0 1 9 3c-2 4.6-9 9-9 9z"/></svg>Favoris</button>
     <button data-view="stats"><svg viewBox="0 0 24 24"><path d="M5 20V10m5 10V4m5 16v-8m5 8V7"/></svg>Statistiques</button>
-    <button type="button" id="clipsLink" class="navlike"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>History Clips<em class="navcount">↗</em></button>
     <button data-view="classement"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>Classement</button>
     <button data-view="amis"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Amis<em class="navcount" id="friendsOnline"></em></button>
     <button data-view="pc"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Mon PC</button>
@@ -29,6 +28,7 @@
   <h5 class="colhead" hidden>Collections <button id="newCol" title="Nouvelle collection">+</button></h5>
   <nav id="collections" class="platforms" hidden></nav>
   <div class="grow"></div>
+  <button type="button" id="clipsLink" class="cliplink" title="Ouvrir History Clips (ou le télécharger)"><img src="clips.png" alt="">History Clips<em>↗</em></button>
   <button id="openSettings" class="navlike"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Paramètres</button>
   <button class="profile" id="profileBtn" title="Mon compte"><span class="avatar" id="avatar">?</span><div><b id="profileName">Joueur</b><small id="profileSub"><i class="online"></i>En ligne</small></div></button>
 </aside>
@@ -451,7 +451,7 @@
     <section class="setpane" data-pane="clips" hidden>
       <h3>🎬 Clips</h3>
       <p class="hint sethint">Les clips ont maintenant leur propre appli, légère et faite pour ça : <b>History Clips</b>. Replay en jeu, découpe, galerie par jeu et partage sur Discord. History Launcher ne filme plus ton écran (beaucoup moins de mémoire).</p>
-      <div class="row"><button type="button" class="btn play" id="clipsDownload">⬇ Télécharger History Clips</button></div>
+      <div class="row"><button type="button" class="btn play" id="clipsDownload">🎬 Ouvrir History Clips (ou l’installer)</button></div>
     </section>
     <section class="setpane" data-pane="raccourcis" hidden>
       <h3>⌨ Raccourcis</h3>

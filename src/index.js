@@ -13,6 +13,7 @@ import { setPaymentsClient } from './features/payments.js';
 import { ActivityType, Client, Events, GatewayIntentBits, IntentsBitField, Partials } from 'discord.js';
 import { adminRoutes, testAudioFile } from './admin.js';
 import { startCasinho } from './casinho/index.js';
+import { startClipsBot } from './clips/bot.js';
 import { startVoiceAssistant } from './voice-ai/assistant.js';
 import { config } from './config.js';
 import { commandDefinitions, guildCommandDefinitions } from './commands/definitions.js';
@@ -248,4 +249,6 @@ async function privilegedIntents() {
   }
   // Le casino a son propre bot : il se connecte à côté, et son absence ne gêne pas le reste.
   startCasinho().catch((err) => console.error('🎰 Casinho :', err.message));
+  // History Clips a aussi son bot (serveur de l'appli) : absent = on continue sans
+  startClipsBot().catch((err) => console.error('🎬 History Clips :', err.message));
 })();
