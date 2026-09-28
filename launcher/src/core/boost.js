@@ -57,3 +57,24 @@ export async function closeApps(plan) {
   }
   return closed;
 }
+
+// Priorité au jeu (réversible, rien d'installé) : le jeu passe en priorité « au-dessus de la normale » (jamais
+// « temps réel », qui fige souris et son), les navigateurs en retrait pour ne pas voler de processeur, les tâches
+// Windows inutiles en jeu sont fermées (elles se relancent seules quand on en a besoin), et Windows mémorise
+// d'utiliser la carte graphique puissante pour ce jeu (portables à deux cartes : gros gain de FPS dès la partie suivante).
+export const BROWSERS = ['chrome', 'msedge', 'firefox', 'opera', 'brave'];
+export const JUNK = ['Widgets', 'WidgetService', 'PhoneExperienceHost', 'YourPhone'];
+const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
+export function tuneScript(gamePaths) {
+  const paths = gamePaths.filter((p) => /^[a-z]:\\[^"<>|?*\r\n]+\.exe$/i.test(p));
+  return [
+    "$ErrorActionPreference='SilentlyContinue'",
+    `$g=@(${paths.map(q).join(',')}); Get-Process | Where-Object { $g -contains $_.Path.ToLower() } | ForEach-Object { $_.PriorityClass='AboveNormal' }`,
+    `Get-Process ${BROWSERS.join(',')} | ForEach-Object { $_.PriorityClass='BelowNormal' }`,
+    `Stop-Process -Name ${JUNK.join(',')} -Force`,
+    "$k='HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences'; if(!(Test-Path $k)){ New-Item $k -Force | Out-Null }",
+    // Seulement si rien n'est déjà choisi pour ce jeu : on respecte un réglage fait à la main
+    `foreach($p in $g){ if($null -eq (Get-ItemProperty $k).$p){ New-ItemProperty $k -Name $p -Value 'GpuPreference=2;' -Force | Out-Null } }`,
+  ].join('\n');
+}
+export const untuneScript = () => `$ErrorActionPreference='SilentlyContinue'\nGet-Process ${BROWSERS.join(',')} | ForEach-Object { $_.PriorityClass='Normal' }`;

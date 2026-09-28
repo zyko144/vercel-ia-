@@ -1607,6 +1607,9 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.29.0': [
+    ['🎯', 'Priorité au jeu', 'Pendant le boost : le jeu passe devant les autres programmes, les navigateurs se mettent en retrait (fini les freezes quand Chrome ou Edge tournent), les tâches Windows inutiles en jeu (widgets, Lien avec le téléphone) sont fermées, et Windows utilise la carte graphique puissante pour ce jeu (gros gain sur les portables). Tout est remis à la fin, désactivable dans Mon PC › Performances.', ['[data-view=pc]', '[data-pctab=perf]', 'wait1200']],
+  ],
   '0.28.2': [
     ['🚧', 'Bandes de travaux qui défilent', 'Sur la page Optimisation, les traits rouges et noirs des bandes défilent en continu, seulement quand l’onglet est affiché.', ['[data-view=optimisation]', 'wait1500']],
   ],
@@ -2202,7 +2205,7 @@ async function openPc() {
   pcTimer = setInterval(() => (state.view === 'pc' ? renderPc() : clearInterval(pcTimer)), 2500);
   const b = await api.boost?.().catch(() => null);
   if (!b) return;
-  $('boostOn').checked = b.enabled; $('boostPower').checked = b.power; $('boostRestore').checked = b.restore; $('heatAlerts').checked = b.heatAlerts;
+  $('boostOn').checked = b.enabled; $('boostPower').checked = b.power; $('boostRestore').checked = b.restore; $('boostTune').checked = b.tune; $('heatAlerts').checked = b.heatAlerts;
   $('boostApps').innerHTML = b.apps.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}" ${b.close.includes(a.id) ? 'checked' : ''}>${esc(a.label)}</label>`).join('');
 }
 // ---------- Mon PC : diagnostic, composants, conseils, antivirus, programmes, benchmark, rapport ----------
@@ -2333,7 +2336,7 @@ document.querySelectorAll('[data-avscan]').forEach((b) => b.addEventListener('cl
 }));
 $('avRemove').addEventListener('click', async () => { const r = await api.pcDefRemove(); toast(r?.ok ? 'Menaces supprimées ✓' : 'Accepte la demande administrateur de Windows pour supprimer'); pcDiag(true); });
 $('pcProcs').addEventListener('click', async (e) => { const b = e.target.closest('[data-kill]'); if (!b) return; const r = await api.pcKill(Number(b.dataset.kill), b.dataset.kpath); if (r?.ok) { toast('Programme fermé'); renderProcs(); } else if (!r?.cancelled) toast(r?.error ?? 'Impossible'); });
-for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boostRestore', 'restore'], ['heatAlerts', 'heatAlerts']]) {
+for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boostRestore', 'restore'], ['boostTune', 'tune'], ['heatAlerts', 'heatAlerts']]) {
   $(id).addEventListener('change', (e) => api.setBoost({ [key]: e.target.checked }).then(() => key === 'enabled' && toast(e.target.checked ? 'Boost activé pour les prochaines parties' : 'Boost désactivé')));
 }
 $('boostApps').addEventListener('change', () => api.setBoost({ close: [...document.querySelectorAll('#boostApps input:checked')].map((i) => i.value) }));
@@ -3777,7 +3780,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.28.2',
+    version: async () => '0.29.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
