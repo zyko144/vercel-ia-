@@ -10,7 +10,7 @@ import { LAUNCHER_NAMES, SOURCES, creditLive, findExe, merge, playtimeOf, scanAl
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend, createRemoteAi } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
-import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme } from './core/boost.js';
+import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme, tuneScript, untuneScript } from './core/boost.js';
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
 import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
@@ -436,7 +436,7 @@ let lastActive = { ids: [], at: 0 };
 let detected = null;
 const currentSession = () => playSession ?? (detected && Date.now() - lastActive.at < 120_000 && lastActive.ids.includes(detected.id) ? detected : null);
 let boosted = null;
-const boostSettings = () => ({ enabled: false, power: true, close: [], restore: true, ...(store.data.settings.boost ?? {}) });
+const boostSettings = () => ({ enabled: false, power: true, close: [], restore: true, tune: true, ...(store.data.settings.boost ?? {}) });
 // Mode streamer : pas de notifications Windows ni de cartes d'amis (pseudos, messages) pendant un live
 let obsRunning = false;
 const streaming = () => Boolean(store.data.settings.streamer || (store.data.settings.streamerAuto !== false && obsRunning));
@@ -462,16 +462,21 @@ async function startBoost(item) {
   boosted = { item, scheme, closed, quiet, start: Date.now(), misses: 0 };
   notify('Boost activé', `${item.name} : performances élevées${closed.length ? `, ${closed.length} appli(s) fermée(s)` : ''}.`);
   boosted.timer = setInterval(async () => {
+    const paths = await runningPaths();
+    // Dès que le jeu tourne : priorité au jeu (une fois)
+    const mine = paths.filter((p) => activeItems([item], [p]).size);
+    if (mine.length && !boosted.tuned && b.tune) { boosted.tuned = true; ps(tuneScript(mine)).catch(() => {}); }
     if (Date.now() - boosted.start < 90_000) return; // le jeu a le temps de démarrer
-    const running = activeItems([item], await runningPaths()).size > 0;
+    const running = mine.length > 0;
     boosted.misses = running ? 0 : boosted.misses + 1;
     if (boosted.misses >= 2) endBoost().catch(() => {});
   }, 20_000);
 }
 async function endBoost({ silent = false } = {}) {
   if (!boosted) return;
-  const { scheme, closed, timer, quiet } = boosted;
+  const { scheme, closed, timer, quiet, tuned } = boosted;
   if (quiet) await windowsToasts(true);
+  if (tuned) ps(untuneScript()).catch(() => {});
   const changed = Boolean((scheme && scheme !== HIGH_PERFORMANCE) || closed.length);
   clearInterval(timer);
   boosted = null;
@@ -483,7 +488,7 @@ async function endBoost({ silent = false } = {}) {
 ipcMain.handle('boost:get', () => ({ ...boostSettings(), heatAlerts: store.data.settings.heatAlerts !== false, apps: BOOST_APPS.map(({ id, label }) => ({ id, label })) }));
 ipcMain.handle('boost:set', (_e, patch) => {
   const b = boostSettings();
-  for (const k of ['enabled', 'power', 'restore']) if (k in patch) b[k] = Boolean(patch[k]);
+  for (const k of ['enabled', 'power', 'restore', 'tune']) if (k in patch) b[k] = Boolean(patch[k]);
   if (Array.isArray(patch.close)) b.close = patch.close.map(String).filter((id) => BOOST_APPS.some((a) => a.id === id));
   if ('heatAlerts' in patch) store.data.settings.heatAlerts = Boolean(patch.heatAlerts);
   if (patch.game && typeof patch.game.id === 'string' && items.some((i) => i.id === patch.game.id)) {
