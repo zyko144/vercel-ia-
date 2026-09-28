@@ -126,7 +126,7 @@ function profileEmbed(acc, user, p) {
       { name: '🎮 Jeu de la semaine', value: p.top ?? '—', inline: true },
       { name: '👥 Amis History', value: String(p.friends), inline: true },
     )
-    .setFooter({ text: 'historylauncher.vercel.app' });
+    .setFooter({ text: 'zyko144.github.io/vercel-ia-' });
   if (p.benchCpu || p.benchGpu) e.addFields({ name: '🖥 PC', value: [p.benchCpu, p.benchGpu].filter(Boolean).join('\n').slice(0, 200) });
   return e;
 }

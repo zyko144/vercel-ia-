@@ -1727,7 +1727,7 @@ const CHANGELOG = {
     ['🪶', 'Beaucoup plus léger', 'Moins de processeur (plus de PowerShell relancé toutes les 5 s, animations en pause en arrière-plan) et moins de mémoire (la fenêtre se libère quand le launcher est dans la barre des tâches, démarrage de Windows sans fenêtre).'],
   ],
   '0.17.1': [
-    ['🌐', 'Nouveau site du launcher', 'historylauncher.vercel.app : toutes les fonctions, l’analyse pro, Windows Update et le journal des versions. Paramètres › À propos › Site du launcher.', ['#openSettings', '.setnav [data-pane=about]']],
+    ['🌐', 'Nouveau site du launcher', 'zyko144.github.io/vercel-ia- : toutes les fonctions, l’analyse pro, Windows Update et le journal des versions. Paramètres › À propos › Site du launcher.', ['#openSettings', '.setnav [data-pane=about]']],
   ],
   '0.17.0': [
     ['🔬', 'Analyse pro de tout le PC', 'Mon PC › Analyse pro : chaque fichier de chaque disque est lu un par un, les doublons sont confirmés par empreinte SHA-256, chaque fichier louche passe à l’antivirus et le journal de Windows est vérifié (écrans bleus, arrêts brutaux, erreurs disque).', ['[data-view=pc]', '[data-pctab=analyse]']],
@@ -1756,7 +1756,7 @@ const CHANGELOG = {
   ],
   '0.14.1': [
     ['🎮', 'Mémoire vidéo exacte', 'Mon PC affiche la vraie mémoire des cartes graphiques de plus de 4 Go (Windows la tronquait).', ['[data-view=pc]']],
-    ['🌐', 'Site du launcher', 'Toutes les fonctions expliquées avec des captures, et la dernière version à télécharger : historylauncher.vercel.app'],
+    ['🌐', 'Site du launcher', 'Toutes les fonctions expliquées avec des captures, et la dernière version à télécharger : zyko144.github.io/vercel-ia-'],
   ],
   '0.14.0': [
     ['🔬', 'Analyse complète du PC', 'Mon PC › Analyse complète : composants, antivirus complet, programmes louches, fichiers inutiles, benchmark et rapport détaillé.', ['[data-view=pc]']],

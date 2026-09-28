@@ -75,7 +75,7 @@ export function launcherCardSvg(p, { shine = null, pulse = 0, avatar = null, log
     <text x="${bx + bw + 20}" y="${y + 13}" font-size="16" font-weight="800" fill="#f4f1f6">${v ? Math.round(v) : '–'}</text>`;
   }).join('')}
   <text x="330" y="${H - 72}" font-size="13" fill="#aea7b8">${esc(cut([p.benchCpu, p.benchGpu].filter(Boolean).join('  ·  ') || 'Lance le benchmark dans Mon PC › Performances', 90))}</text>
-  <text x="330" y="${H - 48}" font-size="13" fill="#8c8596">historylauncher.vercel.app</text>
+  <text x="330" y="${H - 48}" font-size="13" fill="#8c8596">zyko144.github.io/vercel-ia-</text>
   ${shine == null ? '' : `<g clip-path="url(#card)"><rect x="${Math.round(shine)}" y="-120" width="240" height="${H + 240}" fill="url(#shine)" transform="rotate(20 ${Math.round(shine) + 120} ${H / 2})"/></g>`}
 </svg>`;
 }
