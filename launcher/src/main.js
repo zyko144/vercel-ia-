@@ -106,7 +106,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 // Images de la bibliothèque Steam sur le PC, servies par « libimg:// » : seulement les fichiers que le scan a trouvés
 // (une liste blanche de jetons), jamais un chemin choisi par l'interface.
-protocol.registerSchemesAsPrivileged([{ scheme: 'libimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }, { scheme: 'libvid', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
+protocol.registerSchemesAsPrivileged([{ scheme: 'libimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 const localFiles = new Map(); // jeton -> chemin
 function localUrls(art) {
   if (!art) return {};
@@ -1343,7 +1343,6 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('batterySaver' in patch && !patch.batterySaver && onBattery) batteryMode(false).catch(() => {});
   if ('status' in patch) { store.data.settings.status = String(patch.status ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 60) || null; lastPresence = 0; }
   if ('textScale' in patch) { const z = [0.9, 1, 1.1, 1.25].includes(Number(patch.textScale)) ? Number(patch.textScale) : 1; store.data.settings.textScale = z; win?.webContents.setZoomFactor(z); }
-  if ('replay' in patch) { store.data.settings.replay = Boolean(patch.replay); setReplay(store.data.settings.replay && (store.data.settings.replayAlways === true || Boolean(sess))).catch(() => {}); }
   if ('sidebar' in patch) {
     const sb = patch.sidebar ?? {};
     const ids = (v, re) => [...new Set((Array.isArray(v) ? v : []).map(String).filter((x) => re.test(x)))].slice(0, 40);
@@ -1357,14 +1356,6 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   if ('preloadSteam' in patch) store.data.settings.preloadSteam = Boolean(patch.preloadSteam);
   if ('nightUpdates' in patch) store.data.settings.nightUpdates = Boolean(patch.nightUpdates);
-  // Réglages des clips : le replay redémarre pour les appliquer
-  let clipChanged = false;
-  if ('clipSeconds' in patch && [15, 30, 60, 120].includes(Number(patch.clipSeconds))) { store.data.settings.clipSeconds = Number(patch.clipSeconds); clipChanged = true; }
-  if ('clipQuality' in patch && [720, 1080, 1440].includes(Number(patch.clipQuality))) { store.data.settings.clipQuality = Number(patch.clipQuality); clipChanged = true; }
-  if ('clipFps' in patch && [30, 60].includes(Number(patch.clipFps))) { store.data.settings.clipFps = Number(patch.clipFps); clipChanged = true; }
-  if ('clipAudio' in patch) { store.data.settings.clipAudio = Boolean(patch.clipAudio); clipChanged = true; }
-  if ('replayAlways' in patch) { store.data.settings.replayAlways = Boolean(patch.replayAlways); if (store.data.settings.replay) setReplay(Boolean(patch.replayAlways) || Boolean(sess)).catch(() => {}); }
-  if (clipChanged) { if (recWin && !recWin.isDestroyed()) setReplay(false).then(() => setTimeout(() => setReplay(true).catch(() => {}), 800)).catch(() => {}); }
   if ('voiceReply' in patch) store.data.settings.voiceReply = Boolean(patch.voiceReply);
   if ('voiceName' in patch) store.data.settings.voiceName = String(patch.voiceName ?? '').slice(0, 80);
   if ('remote' in patch) { store.data.settings.remote = Boolean(patch.remote); setRemote(); }
@@ -1739,49 +1730,12 @@ async function takeScreenshot() {
   pushCard({ id: `cap-${Date.now()}`, icon: '📸', title: 'Capture enregistrée', body: path.basename(file), actions: [['discord', 'Discord'], ['folder', 'Ouvrir le dossier']], ttl: 8000, file }, true);
   return file;
 }
-let recWin = null;
-const clipSeconds = () => ([15, 30, 60, 120].includes(store.data.settings.clipSeconds) ? store.data.settings.clipSeconds : 30);
-let recState = 'off';
-async function setReplay(on) {
-  if (!on) {
-    if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); setTimeout(() => recWin?.destroy(), 500); }
-    recWin = null;
-    recState = 'off';
-    return;
-  }
-  if (recWin && !recWin.isDestroyed()) return;
-  recWin = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { preload: path.join(here, 'recorder.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
-  recWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  recWin.webContents.on('will-navigate', (e) => e.preventDefault());
-  recWin.on('closed', () => { recWin = null; });
-  await recWin.loadFile(path.join(here, 'ui', 'recorder.html'));
-  const src = (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }))[0];
-  const st = store.data.settings;
-  if (src) recWin.webContents.send('rec:start', src.id, { seconds: clipSeconds(), height: [720, 1080, 1440].includes(st.clipQuality) ? st.clipQuality : 1080, fps: st.clipFps === 30 ? 30 : 60, audio: st.clipAudio !== false });
-}
-ipcMain.on('rec:state', (_e, st) => { if (st === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.'); recState = st; if (st.startsWith('error')) notify('Replay indisponible', `L’enregistrement de l’écran n’a pas démarré (${st.slice(6, 120)}).`); });
-ipcMain.on('rec:clip', async (e, buf, mime) => {
-  if (!recWin || e.sender !== recWin.webContents) return;
-  try {
-    const file = await saveCapture(Buffer.from(buf), 'webm');
-    pushCard({ id: `clip-${Date.now()}`, icon: '🎬', title: 'Clip enregistré', body: `${path.basename(file)} · ${(buf.byteLength / 1e6).toFixed(0)} Mo`, actions: [['play', 'Regarder'], ['discord', 'Discord'], ['folder', 'Dossier']], ttl: 10_000, file }, true);
-  } catch (err) { notify('Clip non enregistré', err.message); }
-});
-function saveClip() {
-  if (!recWin || recState !== 'on') {
-    // Replay coupé : on l'active tout de suite (le prochain appui gardera le clip)
-    if (!store.data.settings.replay) { store.data.settings.replay = true; store.save(); send('settings:changed', {}); }
-    // Hors partie (et replay « seulement en jeu ») : il démarrera avec ton prochain jeu
-    if (!sess && store.data.settings.replayAlways !== true) { notify('Replay activé', 'Il tourne pendant tes parties : en jeu, appuie sur le raccourci du clip pour garder les dernières secondes.'); return false; }
-    setReplay(true).catch(() => {});
-    notify('Replay activé', 'L’enregistrement tourne maintenant : rappuie sur le raccourci du clip pour garder ce qui vient de se passer.');
-    return false;
-  }
-  recWin.webContents.send('rec:save');
-  return true;
-}
-ipcMain.handle('capture:shot', () => takeScreenshot().then((f) => ({ ok: true, file: path.basename(f) })).catch((err) => ({ ok: false, error: err.message })));
-ipcMain.handle('capture:clip', () => ({ ok: saveClip() }));
+
+// Les clips sont maintenant dans l'appli History Clips (légère, à part) : le launcher ne filme plus l'écran
+const CLIPS_SITE = 'https://zyko144.github.io/vercel-ia-/clips/';
+const openClipsApp = () => { shell.openExternal(CLIPS_SITE); return false; };
+ipcMain.handle('capture:clip', () => ({ ok: openClipsApp() }));
+ipcMain.handle('clips:site', () => { shell.openExternal(CLIPS_SITE); return true; });
 
 /** Rejoindre un ami : serveur FiveM, jeu Steam, sinon le même jeu s'il est installé ici. */
 async function joinGame(join, game) {
@@ -2106,7 +2060,7 @@ const LAUNCHER_ACTIONS = ['add_friend', 'accept_friends', 'friends_status', 'emp
 async function execAction(c) {
   const a = c.action;
   if (a === 'screenshot') { await new Promise((r) => setTimeout(r, 400)); const f = await takeScreenshot(); return `📸 Capture enregistrée : ${path.basename(f)}.`; }
-  if (a === 'clip') return saveClip() ? '🎬 Je garde les 30 dernières secondes.' : 'Replay activé : redemande le clip dans quelques secondes.';
+  if (a === 'clip') { openClipsApp(); return '🎬 Les clips sont dans History Clips : je t’ouvre la page pour la télécharger.'; }
   if (a === 'appvol') {
     // « le jeu » : le jeu en cours ; sinon le nom de l'appli (Discord, Spotify, Chrome…)
     const s = currentSession(); const game = s ? items.find((i) => i.id === s.id) : null;
@@ -2488,7 +2442,6 @@ const HOTKEYS = {
   overlay: ['CommandOrControl+Alt+O', () => toggleOverlay()],
   palette: ['CommandOrControl+Alt+Space', () => { showWindow(); send('palette:open', {}); }],
   shot: ['CommandOrControl+Alt+S', () => { takeScreenshot().catch((err) => notify('Capture impossible', err.message)); }],
-  clip: ['CommandOrControl+Alt+R', () => { saveClip(); }],
   toggle: ['CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow())],
 };
 const hotkeyOf = (k) => store.data.settings.hotkeys?.[k] || HOTKEYS[k][0];
@@ -2792,7 +2745,6 @@ async function sessionStart(s) {
   const item = items.find((i) => i.id === s.id);
   coreLoad();
   sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null, pings: [] };
-  if (store.data.settings.replay) setReplay(true).catch(() => {}); // replay : démarre avec la partie
   sessionPing(sess, item);
   setQuiet(true); // mesures plus légères pendant le jeu (pas de requête WMI de température, carte graphique lue moins souvent)
   if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
@@ -2814,7 +2766,6 @@ function verdict(stats, samples) {
 async function sessionEnd() {
   const s = sess; sess = null;
   if (!s) return;
-  if (store.data.settings.replayAlways !== true) setTimeout(() => { if (!sess) setReplay(false).catch(() => {}); }, 60_000); // la mémoire du replay est rendue 1 min après la partie
   setQuiet(false);
   setTimeout(flushHeld, 3000);
   if (s.autoWidget && !store.data.settings.widget) setWidget(false);
@@ -2970,17 +2921,13 @@ app.whenReady().then(() => setTimeout(async () => { if (store.data.settings.prel
 
 
 async function start() {
-  protocol.handle('libvid', (req) => {
-    const file = captureFiles.get(new URL(req.url).pathname.replace(/^\//, '').replace(/\.(webm|mp4)$/, ''));
-    return file ? net.fetch(pathToFileURL(file).toString(), { headers: req.headers }) : new Response('introuvable', { status: 404 });
-  });
   protocol.handle('libimg', (req) => {
     const token = new URL(req.url).pathname.replace(/^\//, '').replace(/\.(png|jpg)$/, '');
     const file = localFiles.get(token);
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response('introuvable', { status: 404 });
   });
   // Micro : autorisé seulement pour la fenêtre du launcher (bouton micro de l'assistant)
-  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb((permission === 'fullscreen' && wc === win?.webContents) || (permission === 'media' && (wc === win?.webContents || (recWin && !recWin.isDestroyed() && wc === recWin.webContents)))));
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(['media', 'fullscreen'].includes(permission) && wc === win?.webContents));
   await store.load();
   applyAutostart();
   // Lancé avec Windows : directement dans la barre des tâches, sans fenêtre (rien en mémoire tant qu'on ne l'ouvre pas)
@@ -2993,7 +2940,6 @@ async function start() {
   powerMonitor.on('suspend', () => { pcAway = true; });
   powerMonitor.on('resume', () => { pcAway = false; });
   registerHotkeys();
-  if (store.data.settings.replay && store.data.settings.replayAlways === true) setTimeout(() => setReplay(true).catch(() => {}), 8000);
   if (app.isPackaged) app.setAsDefaultProtocolClient('history');
   setTimeout(() => handleInvite(process.argv), 3000);
   setTimeout(() => checkDeals().catch(() => {}), 60_000);
@@ -3057,7 +3003,7 @@ async function clipToDiscord(file, note = '', to = '') {
   if (((await stat(file).catch(() => null))?.size ?? 0) > 60 * 1024 * 1024) return { ok: false, error: 'Fichier trop gros (60 Mo maximum).' };
   pushCard({ id: `disc-${Date.now()}`, icon: '📤', title: 'Envoi sur Discord…', body: path.basename(file), actions: [], ttl: 5000, nolog: true }, true);
   const game = currentSession()?.name ?? path.basename(path.dirname(file));
-  const q = new URLSearchParams({ type: ext, jeu: String(game ?? '').slice(0, 80), duree: String(Math.ceil(clipSeconds() * 1.5)), ...(note ? { texte: String(note).slice(0, 200) } : {}), ...(/^[\w-]{3,64}$/.test(String(to)) ? { a: String(to) } : {}) });
+  const q = new URLSearchParams({ type: ext, jeu: String(game ?? '').slice(0, 80), ...(note ? { texte: String(note).slice(0, 200) } : {}), ...(/^[\w-]{3,64}$/.test(String(to)) ? { a: String(to) } : {}) });
   const r = await apiRaw(`/api/compte/discord/clip?${q}`, await readFile(file));
   pushCard(r.ok ? { id: `disc-ok-${Date.now()}`, icon: '✅', title: 'Envoyé sur Discord', body: to ? 'En message privé à ton ami.' : 'Dans le salon des clips du serveur History.', actions: [], ttl: 6000 } : { id: `disc-ko-${Date.now()}`, icon: '⚠️', title: 'Envoi impossible', body: r.error ?? 'Réessaie plus tard.', actions: [], ttl: 9000 }, true);
   return r.ok ? { ok: true, url: r.url } : { ok: false, error: r.error ?? 'Envoi impossible.' };
@@ -3421,35 +3367,6 @@ ipcMain.handle('captures:recent', async () => {
     return { token, at: c.at, game: c.game, url: localUrls({ x: c.file }).x };
   });
 });
-// Catégorie Clips : tous les clips du launcher (Vidéos\<jeu>\… .webm), du plus récent au plus ancien
-ipcMain.handle('clips:list', async () => {
-  const { readdir, stat } = await import('node:fs/promises');
-  const root = path.join(os.homedir(), 'Videos');
-  const out = [];
-  for (const d of await readdir(root, { withFileTypes: true }).catch(() => [])) {
-    if (!d.isDirectory()) continue;
-    for (const f of await readdir(path.join(root, d.name)).catch(() => [])) {
-      if (!/ \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.(webm|mp4)$/.test(f)) continue;
-      const file = path.join(root, d.name, f);
-      const st = await stat(file).catch(() => null);
-      if (st) out.push({ file, game: d.name, at: st.mtimeMs, size: st.size });
-    }
-  }
-  return out.sort((a, b) => b.at - a.at).slice(0, 80).map((c) => {
-    const token = createHash('sha1').update(c.file).digest('hex').slice(0, 24);
-    captureFiles.set(token, c.file);
-    return { token, game: c.game, at: c.at, size: c.size, name: path.basename(c.file), url: `libvid://v/${token}${path.extname(c.file)}` };
-  });
-});
-ipcMain.handle('clips:delete', async (_e, token) => {
-  const f = captureFiles.get(String(token));
-  if (!f || !(await confirm('Supprimer ce clip ?', `${path.basename(f)} part dans la corbeille (tu peux encore le récupérer).`, { danger: true, ok: 'Supprimer', icon: '🗑' }))) return { ok: false };
-  await shell.trashItem(f);
-  captureFiles.delete(String(token));
-  return { ok: true };
-});
-ipcMain.handle('clips:folder', () => shell.openPath(path.join(os.homedir(), 'Videos')));
-ipcMain.handle('clips:open', (_e, token, how) => { const f = captureFiles.get(String(token)); if (!f) return false; if (how === 'folder') shell.showItemInFolder(f); else shell.openPath(f); return true; });
 ipcMain.handle('captures:data', (_e, token) => {
   const f = captureFiles.get(String(token));
   if (!f) return null;

@@ -1,0 +1,42 @@
+// Fonctions pures de History Clips (testées dans test/test-clips.mjs).
+import path from 'node:path';
+
+/** Nom de dossier Windows valide (caractères interdits retirés). */
+export function safeName(name) {
+  const s = String(name ?? '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').replace(/[. ]+$/, '').trim().slice(0, 80);
+  return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(s) ? `${s}_` : s;
+}
+/** « Rocket League 2026-09-28 21-14-03.mp4 » */
+export function clipName(game, ext, d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${safeName(game) || 'Clip'} ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}.${ext}`;
+}
+export const isMedia = (f) => /\.(mp4|webm|png)$/i.test(f);
+
+/** Nom lisible du jeu au premier plan : description du programme, sinon titre de la fenêtre, sinon nom du processus. */
+export function gameLabel({ desc = '', title = '', proc = '' } = {}) {
+  const bad = /^(explorer|history clips|electron|desktop|program manager)$/i;
+  for (const v of [desc, title, proc]) { const s = String(v ?? '').trim(); if (s && !bad.test(s) && s.length <= 60) return s; }
+  return 'Bureau';
+}
+
+/** Arguments ffmpeg : remise en MP4 (durée et avance rapide corrects), avec ou sans découpe. */
+export function ffmpegArgs(src, out, { start = null, end = null, reencode = false } = {}) {
+  const a = ['-y'];
+  if (start != null) a.push('-ss', String(Math.max(0, start)));
+  a.push('-i', src);
+  if (end != null) a.push('-t', String(Math.max(0.5, end - (start ?? 0))));
+  if (reencode) a.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p');
+  else a.push('-c:v', 'copy');
+  a.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out);
+  return a;
+}
+/** Chemin de ffmpeg dans l'appli installée (hors de l'archive asar). */
+export const unpacked = (p) => String(p ?? '').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+
+/** Accélérateur Electron valide : touche seule (F1-F24, Impr. écran…) ou n'importe quelle touche avec Ctrl/Alt/Maj. */
+export function validAccel(accel) {
+  const parts = String(accel ?? '').split('+'); const k = parts.pop(); const mods = parts;
+  const KEY = /^([A-Z0-9]|F([1-9]|1\d|2[0-4])|Space|Tab|Up|Down|Left|Right|PrintScreen|Insert|Delete|Home|End|PageUp|PageDown|num[0-9]|numdec|numadd|numsub|nummult|numdiv|Plus|[;=,\-./`'[\]\\])$/;
+  return KEY.test(k) && mods.every((m) => ['CommandOrControl', 'Alt', 'Shift'].includes(m)) && new Set(mods).size === mods.length && (mods.length > 0 || !/^[A-Z0-9]$|^(Space|Tab)$/.test(k));
+}

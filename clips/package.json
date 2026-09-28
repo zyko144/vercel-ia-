@@ -1,0 +1,42 @@
+{
+  "name": "history-clips",
+  "productName": "History Clips",
+  "version": "0.1.0",
+  "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
+  "main": "src/main.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/test-clips.mjs",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "ffmpeg-static": "^5.2.0"
+  },
+  "build": {
+    "appId": "fr.historyia.clips",
+    "productName": "History Clips",
+    "files": ["src/**/*"],
+    "asarUnpack": ["node_modules/ffmpeg-static/**"],
+    "win": { "target": "nsis", "icon": "src/ui/icon.png" },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "History Clips",
+      "artifactName": "History-Clips-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "perMachine": false,
+      "runAfterFinish": true
+    },
+    "directories": { "output": "dist" },
+    "publish": [{ "provider": "generic", "url": "https://github.com/zyko144/vercel-ia-/releases/download/clips-latest" }]
+  }
+}
