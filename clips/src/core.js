@@ -21,13 +21,21 @@ export function gameLabel({ desc = '', title = '', proc = '' } = {}) {
 }
 
 /** Arguments ffmpeg : remise en MP4 (durée et avance rapide corrects), avec ou sans découpe. */
-export function ffmpegArgs(src, out, { start = null, end = null, reencode = false, fixup = false } = {}) {
-  // fixup : replay recollé (en-tête + dernières secondes) → horodatage refait, début abîmé ignoré
+/** Réglages d'encodage H.264 : carte graphique (NVIDIA, Intel, AMD) si elle est là, sinon processeur. Toujours lisible partout. */
+export function encArgs(enc = 'libx264') {
+  if (enc === 'h264_nvenc') return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '21', '-b:v', '0', '-pix_fmt', 'yuv420p'];
+  if (enc === 'h264_qsv') return ['-c:v', 'h264_qsv', '-global_quality', '22'];
+  if (enc === 'h264_amf') return ['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '20', '-qp_p', '22', '-pix_fmt', 'yuv420p'];
+  return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p'];
+}
+/** Arguments ffmpeg : remise en MP4 (durée et avance rapide corrects), avec ou sans découpe. */
+export function ffmpegArgs(src, out, { start = null, end = null, reencode = false, fixup = false, enc = 'libx264' } = {}) {
+  // fixup : replay recollé (en-tête + dernières secondes) → début abîmé ignoré, horodatage propre
   const a = fixup ? ['-y', '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err'] : ['-y'];
   if (start != null) a.push('-ss', String(Math.max(0, start)));
   a.push('-i', src);
   if (end != null) a.push('-t', String(Math.max(0.5, end - (start ?? 0))));
-  if (reencode) a.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p');
+  if (reencode) a.push(...encArgs(enc), '-fps_mode', 'vfr');
   else a.push('-c:v', 'copy');
   a.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out);
   return a;

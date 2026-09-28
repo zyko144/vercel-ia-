@@ -17,6 +17,13 @@ window.rec.onStart(async (id, o = {}) => {
       .catch(() => { const legacy = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: Math.round((h * 16) / 9), maxHeight: h, maxFrameRate: fps } };
         return navigator.mediaDevices.getUserMedia({ audio: o.audio === false ? false : { mandatory: { chromeMediaSource: 'desktop' } }, video: legacy }).catch(() => navigator.mediaDevices.getUserMedia({ audio: false, video: legacy })); });
     streams.push(screen);
+    // Son du PC absent (Windows ne l'a pas donné avec l'image) : on le prend par l'autre méthode et on l'ajoute
+    if (o.audio !== false && !screen.getAudioTracks().length) {
+      const alt = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: 16, maxHeight: 16 } } }).catch(() => null);
+      const track = alt?.getAudioTracks()[0];
+      alt?.getVideoTracks().forEach((t) => t.stop());
+      if (track) screen.addTrack(track);
+    }
     const mic = o.mic ? await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).catch(() => null) : null;
     if (mic) streams.push(mic);
     // Une image clé par seconde : on peut couper le replay à n'importe quelle seconde
@@ -29,7 +36,7 @@ window.rec.onStart(async (id, o = {}) => {
       recs.push(r);
     }
     for (const r of recs) r.start(1000); // même instant : les deux pistes restent calées
-    window.rec.state(mic ? 'on' : o.mic ? 'on:nomic' : 'on');
+    window.rec.state(o.audio !== false && !screen.getAudioTracks().length ? 'on:noaudio' : o.mic && !mic ? 'on:nomic' : 'on');
   } catch (err) {
     window.rec.state(`error:${err?.message ?? err}`);
   }
