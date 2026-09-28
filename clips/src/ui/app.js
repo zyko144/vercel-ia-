@@ -29,7 +29,7 @@ function gico(g) {
 const gbg = (g) => `background:${art[g]?.img ? `url('${esc(art[g].img)}') center / cover, ` : ''}linear-gradient(135deg,hsl(${hue(g)} 70% 45%),#120e0a)`;
 function card(c) {
   const poster = !c.url && art[c.game]?.img ? ` style="background-image:url('${esc(art[c.game].img)}')"` : '';
-  return `<button class="card glass" data-t="${esc(c.token)}"><div class="thumb"${poster}>${c.image ? `<img src="${esc(c.url)}" alt="" loading="lazy">` : c.url ? `<video src="${esc(c.url)}#t=0.5" preload="metadata" muted></video>` : ''}<span class="tag">${gico(c.game)}${esc(c.game)}</span>${c.fav ? '<span class="star">⭐</span>' : ''}${c.image ? '<span class="dur">📸</span>' : ''}</div>
+  return `<button class="card glass" data-t="${esc(c.token)}"><div class="thumb"${poster}>${c.image ? `<img src="${esc(c.url)}" alt="" loading="lazy" decoding="async">` : c.thumb ? `<img src="${esc(c.thumb)}" alt="" loading="lazy" decoding="async">` : ''}<span class="tag">${gico(c.game)}${esc(c.game)}</span>${c.fav ? '<span class="star">⭐</span>' : ''}${c.image ? '<span class="dur">📸</span>' : ''}</div>
     <div class="info"><b>${esc(c.name)}</b><small>${when(c.at)} · ${size(c.size)}</small></div></button>`;
 }
 const emptyMsg = (t = 'Aucun clip ici pour l’instant') => `<div class="empty"><b>${t}</b>En jeu, appuie sur ${keyText(settings.hotClip ?? 'F8')} pour garder les ${settings.seconds ?? 30} dernières secondes.</div>`;
@@ -112,11 +112,18 @@ document.addEventListener('click', (e) => {
 $('search').addEventListener('input', render);
 // Logo du jeu introuvable : on affiche son nom à la place
 document.addEventListener('error', (e) => { if (e.target.classList?.contains('glogo')) e.target.outerHTML = `<h1>${esc(e.target.alt)}</h1>`; }, true);
-$('main').addEventListener('mouseover', (e) => { const v = e.target.closest('.card')?.querySelector('video'); if (v) v.play().catch(() => {}); });
-$('main').addEventListener('mouseout', (e) => { const v = e.target.closest('.card')?.querySelector('video'); if (v && !e.relatedTarget?.closest?.('.card')?.contains(v)) { v.pause(); v.currentTime = 0.5; } });
+// Survol : la vidéo n'est chargée que sur la carte survolée (une seule à la fois), puis libérée
+$('main').addEventListener('mouseover', (e) => {
+  const card = e.target.closest('.card'); if (!card || card.querySelector('video')) return;
+  const c = clips.find((x) => x.token === card.dataset.t); if (!c || c.image || !c.url) return;
+  const v = document.createElement('video'); v.muted = true; v.loop = true; v.src = c.url; v.play().catch(() => {});
+  card.querySelector('.thumb').prepend(v);
+});
+$('main').addEventListener('mouseout', (e) => { const card = e.target.closest('.card'); const v = card?.querySelector('video'); if (v && !card.contains(e.relatedTarget)) { v.pause(); v.removeAttribute('src'); v.load(); v.remove(); } });
 $('saveNow').addEventListener('click', () => { api.saveNow(); toast('🎬 Clip en cours d’enregistrement…'); });
 $('profile').addEventListener('click', () => (compte ? (show('reglages'), pane('acct')) : openAuth()));
 api.onChanged(async () => { settings = await api.settings() ?? settings; paintPill(); load(); });
+api.onFocus((f) => document.body.classList.toggle('idle', !f));
 api.onMax((m) => { document.querySelector('[data-win=max]').textContent = m ? '❐' : '▢'; });
 
 // ---------- Lecteur + découpe ----------
@@ -129,23 +136,77 @@ function openViewer(c) {
   $('vFav').textContent = c.fav ? '⭐ Retirer des favoris' : '⭐ Favori';
   $('viewer').showModal();
 }
-$('vVideo').addEventListener('loadedmetadata', () => {
-  const d = Number.isFinite($('vVideo').duration) ? $('vVideo').duration : 0;
-  for (const id of ['tStart', 'tEnd']) $(id).max = String(d);
-  $('tStart').value = '0'; $('tEnd').value = String(d); $('oStart').textContent = sec(0); $('oEnd').textContent = sec(d);
+// ---------- Découpe : timeline avec poignées, bande d'images, lecture de la sélection ----------
+const V = $('vVideo');
+let dur = 0; let tA = 0; let tB = 0; let selPlay = false;
+const pct = (t) => `${dur ? (t / dur) * 100 : 0}%`;
+function paintTrim() {
+  $('tlSel').style.left = pct(tA); $('tlSel').style.width = `calc(${pct(tB)} - ${pct(tA)})`;
+  $('shadeL').style.width = pct(tA); $('shadeR').style.width = `calc(100% - ${pct(tB)})`;
+  $('oStart').textContent = sec(tA); $('oEnd').textContent = sec(tB); $('tSel').textContent = `Sélection : ${sec(tB - tA)}`;
+}
+const setA = (t) => { tA = Math.max(0, Math.min(t, tB - 0.5)); paintTrim(); };
+const setB = (t) => { tB = Math.min(dur, Math.max(t, tA + 0.5)); paintTrim(); };
+V.addEventListener('loadedmetadata', () => { dur = Number.isFinite(V.duration) ? V.duration : 0; tA = 0; tB = dur; paintTrim(); filmstrip(cur); });
+V.addEventListener('timeupdate', () => {
+  $('tlPh').style.left = pct(V.currentTime);
+  if (selPlay && V.currentTime >= tB) { V.pause(); V.currentTime = tA; selPlay = false; $('playSel').textContent = '▶ Lire la sélection'; }
 });
-for (const id of ['tStart', 'tEnd']) $(id).addEventListener('input', () => {
-  let a = Number($('tStart').value); let b = Number($('tEnd').value);
-  if (a > b - 0.5) { if (id === 'tStart') a = Math.max(0, b - 0.5); else b = a + 0.5; $('tStart').value = a; $('tEnd').value = b; }
-  $('oStart').textContent = sec(a); $('oEnd').textContent = sec(b);
-  $('vVideo').currentTime = id === 'tStart' ? a : b;
+// Bande d'images : 10 vignettes prises dans la vidéo
+async function filmstrip(c) {
+  const strip = $('strip'); strip.innerHTML = '';
+  if (!c?.url || !dur) return;
+  const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = c.url;
+  await new Promise((ok) => { v.onloadeddata = ok; v.onerror = ok; });
+  for (let i = 0; i < 10 && cur === c; i++) {
+    await new Promise((ok) => { v.onseeked = ok; v.currentTime = (dur * (i + 0.5)) / 10; setTimeout(ok, 1500); });
+    const cv = document.createElement('canvas'); cv.width = 160; cv.height = 90;
+    cv.getContext('2d').drawImage(v, 0, 0, 160, 90); strip.append(cv);
+  }
+  v.removeAttribute('src'); v.load();
+}
+// Glisser : une poignée, toute la sélection, ou un clic pour placer la lecture
+$('tl').addEventListener('pointerdown', (e) => {
+  if (!dur) return;
+  const r = $('tl').getBoundingClientRect(); const at = (x) => Math.max(0, Math.min(dur, ((x - r.left) / r.width) * dur));
+  const h = e.target.closest('[data-h]')?.dataset.h; const onSel = !h && e.target.closest('#tlSel'); const t0 = at(e.clientX); const a0 = tA; const b0 = tB;
+  if (!h && !onSel) { V.currentTime = t0; return; }
+  $('tl').setPointerCapture(e.pointerId);
+  const move = (ev) => {
+    const t = at(ev.clientX);
+    if (h === 'a') { setA(t); V.currentTime = tA; } else if (h === 'b') { setB(t); V.currentTime = tB; }
+    else { const d = Math.max(-a0, Math.min(dur - b0, t - t0)); tA = a0 + d; tB = b0 + d; paintTrim(); V.currentTime = tA; }
+  };
+  const up = () => { $('tl').removeEventListener('pointermove', move); $('tl').removeEventListener('pointerup', up); };
+  $('tl').addEventListener('pointermove', move); $('tl').addEventListener('pointerup', up);
 });
-$('vVideo').addEventListener('timeupdate', () => { const b = Number($('tEnd').value); if (b > 0 && $('vVideo').currentTime > b + 0.1 && !$('vVideo').paused) { $('vVideo').currentTime = Number($('tStart').value); } });
-$('vVideo').addEventListener('dblclick', () => $('vVideo').requestFullscreen?.().catch(() => {}));
-$('doTrim').addEventListener('click', async () => {
-  toast('✂ Découpe en cours…');
-  const r = await api.trim(cur.token, Number($('tStart').value), Number($('tEnd').value)).catch(() => null);
-  toast(r?.ok ? '✂ Passage gardé (nouveau clip « coupé », l’original reste)' : r?.error ?? 'Découpe impossible'); if (r?.ok) load();
+$('setA').addEventListener('click', () => setA(V.currentTime));
+$('setB').addEventListener('click', () => setB(V.currentTime));
+$('resetSel').addEventListener('click', () => { tA = 0; tB = dur; paintTrim(); });
+$('playSel').addEventListener('click', () => {
+  if (selPlay) { V.pause(); selPlay = false; $('playSel').textContent = '▶ Lire la sélection'; return; }
+  V.currentTime = tA; V.play().catch(() => {}); selPlay = true; $('playSel').textContent = '⏸ Pause';
+});
+document.addEventListener('keydown', (e) => {
+  if (!$('viewer').open || cur?.image || e.target.matches('input, textarea')) return;
+  if (e.key === 'i' || e.key === 'I') setA(V.currentTime);
+  else if (e.key === 'o' || e.key === 'O') setB(V.currentTime);
+  else if (e.key === ' ') { e.preventDefault(); V.paused ? V.play().catch(() => {}) : V.pause(); }
+  else if (e.key === 'ArrowLeft') V.currentTime = Math.max(0, V.currentTime - (e.shiftKey ? 1 : 0.1));
+  else if (e.key === 'ArrowRight') V.currentTime = Math.min(dur, V.currentTime + (e.shiftKey ? 1 : 0.1));
+});
+V.addEventListener('dblclick', () => V.requestFullscreen?.().catch(() => {}));
+// Valider : nouveau clip ou à la place de l'original
+$('doTrim').addEventListener('click', () => {
+  if (!dur || (tA < 0.05 && tB > dur - 0.05)) return toast('Déplace les poignées pour choisir le passage à garder.');
+  ask(`✂ Garder ${sec(tB - tA)}`, `<p class="fine">De ${sec(tA)} à ${sec(tB)}. Comment l’enregistrer ?</p><div class="choice"><button type="button" class="btn play" data-to="new">💾 Nouveau clip<small>l’original reste intact</small></button><button type="button" class="btn" data-to="replace">♻ Remplacer l’original<small>l’ancien part à la corbeille</small></button></div>`, null, async (mode) => {
+    toast('✂ Découpe en cours…');
+    const r = await api.trim(cur.token, tA, tB, mode).catch(() => null);
+    if (!r?.ok) return toast(r?.error ?? 'Découpe impossible');
+    toast(mode === 'replace' ? '♻ Clip remplacé par le passage choisi' : '💾 Nouveau clip enregistré');
+    if (mode === 'replace') $('viewer').close();
+    load();
+  });
 });
 $('vFav').addEventListener('click', async () => { cur.fav = await api.fav(cur.token); $('vFav').textContent = cur.fav ? '⭐ Retirer des favoris' : '⭐ Favori'; load(); });
 $('vRename').addEventListener('click', () => ask('✏ Renommer le clip', `<input type="text" id="mName" maxlength="80" value="${esc(cur.name)}">`, async () => { await api.rename(cur.token, $('mName').value); $('vTitle').textContent = `${$('mName').value} · ${cur.game}`; load(); }));
@@ -156,15 +217,45 @@ $('vDelete').addEventListener('click', async () => { if (await api.remove(cur.to
 $('viewer').addEventListener('close', () => { $('vVideo').pause(); $('vVideo').removeAttribute('src'); $('vVideo').load(); });
 
 // ---------- Discord ----------
-$('vDiscord').addEventListener('click', async () => {
+$('vDiscord').addEventListener('click', () => shareDiscord(cur));
+// Envoi : serveur History Clips, un autre serveur où le bot est (salon « clips-history »), ou en privé à un ami
+async function shareDiscord(c) {
+  if (!c) return;
   if (!compte) { toast('Connecte ton compte History pour envoyer sur Discord'); return openAuth(); }
-  const amis = await api.friends().catch(() => []) ?? [];
-  ask('📤 Envoyer sur Discord', `<div class="pick"><button type="button" class="btn play" data-to="">📢 Salon des clips du serveur History Clips</button>${amis.map((a) => `<button type="button" class="btn ghost" data-to="${esc(a.id)}">💬 En privé à ${esc(a.pseudo)}</button>`).join('')}</div><p class="fine">En privé, ton ami doit avoir lié son Discord dans History Launcher.</p>`, null, async (to) => {
+  const [amis, servs] = await Promise.all([api.friends().catch(() => []), api.servers().catch(() => [])]);
+  const sv = (servs ?? []).map((g) => `<button type="button" class="btn ${g.home ? 'play' : ''}" data-to="g:${esc(g.id)}">${g.icon ? `<img src="${esc(g.icon)}" alt="" class="gicon">` : '📢'} ${g.home ? 'Serveur History Clips' : `${esc(g.name)} <small>· salon clips-history</small>`}</button>`).join('');
+  ask('📤 Envoyer sur Discord', `<div class="pick">${sv || '<button type="button" class="btn play" data-to="">📢 Serveur History Clips</button>'}${(amis ?? []).map((a) => `<button type="button" class="btn ghost" data-to="${esc(a.id)}">💬 En privé à ${esc(a.pseudo)}</button>`).join('')}</div><p class="fine">Pour partager sur un autre serveur, ajoute le bot History Clips dessus : il crée tout seul le salon <b>clips-history</b>. Ton compte Discord doit être lié dans History Launcher.</p>`, null, async (to) => {
     toast('📤 Envoi du clip…');
-    const r = await api.discord(cur.token, to);
+    const r = to.startsWith('g:') ? await api.discord(c.token, '', to.slice(2)) : await api.discord(c.token, to);
     toast(r?.ok ? '✅ Clip envoyé sur Discord' : r?.error ?? 'Envoi impossible');
   });
+}
+
+// ---------- Clic droit sur un clip ----------
+const menu = document.createElement('div'); menu.className = 'ctx glass'; menu.hidden = true; document.body.append(menu);
+document.addEventListener('contextmenu', (e) => {
+  const el = e.target.closest('[data-t]'); if (!el) return;
+  e.preventDefault();
+  const c = clips.find((x) => x.token === el.dataset.t); if (!c) return;
+  menu.innerHTML = `<b>${esc(c.name)}</b><button data-m="open">▶ Ouvrir</button>${c.image ? '<button data-m="copy">📋 Copier l’image</button>' : '<button data-m="discord">📤 Envoyer sur Discord</button><button data-m="export">⬇ Exporter en MP4</button>'}<button data-m="fav">${c.fav ? '⭐ Retirer des favoris' : '⭐ Ajouter aux favoris'}</button><button data-m="rename">✏ Renommer</button><button data-m="folder">📁 Afficher dans le dossier</button><hr><button data-m="delete" class="danger">🗑 Supprimer</button>`;
+  menu.hidden = false;
+  menu.style.left = `${Math.min(e.clientX, innerWidth - menu.offsetWidth - 8)}px`; menu.style.top = `${Math.min(e.clientY, innerHeight - menu.offsetHeight - 8)}px`;
+  menu.onclick = async (ev) => {
+    const m = ev.target.closest('[data-m]')?.dataset.m; if (!m) return;
+    menu.hidden = true; cur = c;
+    if (m === 'open') openViewer(c);
+    else if (m === 'discord') shareDiscord(c);
+    else if (m === 'copy') toast((await api.copy(c.token)) ? '📋 Image copiée' : 'Copie impossible');
+    else if (m === 'export') { const r = await api.exportMp4(c.token); if (!r?.cancelled) toast(r?.ok ? '⬇ Exporté en MP4' : r?.error ?? 'Export impossible'); }
+    else if (m === 'fav') { await api.fav(c.token); load(); }
+    else if (m === 'rename') ask('✏ Renommer le clip', `<input type="text" id="mName" maxlength="80" value="${esc(c.name)}">`, async () => { await api.rename(c.token, $('mName').value); load(); });
+    else if (m === 'folder') api.open(c.token, 'folder');
+    else if (m === 'delete' && await api.remove(c.token)) { toast('🗑 Clip supprimé'); load(); }
+  };
 });
+for (const ev of ['click', 'blur']) addEventListener(ev, (e) => { if (!menu.contains(e.target)) menu.hidden = true; }, true);
+addEventListener('keydown', (e) => { if (e.key === 'Escape') menu.hidden = true; });
+
 // Petite fenêtre : ok() pour « Valider », pick(valeur) pour les boutons data-to
 function ask(title, html, ok, pick) {
   $('modalBox').innerHTML = `<div class="vhead"><h2>${title}</h2><button type="button" class="x" data-close>✕</button></div>${html}${ok ? '<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn play" id="mOk">Valider</button></div>' : ''}`;
@@ -221,10 +312,9 @@ async function linkLauncher() {
   $('auth').hidden = false; authView('pair'); $('pairTitle').textContent = '🔗 Connexion avec History Launcher'; $('pairCode').textContent = '····-····';
   $('pairText').innerHTML = 'History Launcher s’ouvre et valide la connexion tout seul…';
   const r = await api.linkLauncher();
-  if (r?.code) $('pairCode').textContent = r.code;
-  if (r?.noLauncher) $('pairText').innerHTML = 'History Launcher n’est pas installé sur ce PC. Sur un PC où il est connecté : clique sur ton nom › <b>Connecter un autre PC</b> et entre ce code.';
-  else if (!r?.ok && !r?.code) $('pairText').textContent = r?.error ?? 'Serveur injoignable.';
-  if (r?.code) pollPair();
+  if (r?.ok) return done((await api.account())?.compte);
+  if (r?.noLauncher) { $('pairText').innerHTML = 'History Launcher n’est pas installé sur ce PC : connecte-toi avec ton e-mail, ou avec un code depuis un autre PC.'; $('pairCode').textContent = '—'; }
+  else $('pairText').textContent = r?.error ?? 'Connexion pas validée : ouvre History Launcher et connecte-toi, puis réessaie.';
 }
 $('authLauncher').addEventListener('click', linkLauncher);
 api.onLinkLauncher(linkLauncher);
@@ -235,7 +325,7 @@ function paintProfile() {
   av.style.backgroundImage = compte?.avatar && /^https:|^data:image\//.test(compte.avatar) ? `url('${compte.avatar}')` : '';
   if (compte?.avatar) av.textContent = '';
 }
-api.onAccount(async () => { compte = (await api.account())?.compte ?? null; paintProfile(); });
+api.onAccount(async () => { compte = (await api.account())?.compte ?? null; paintProfile(); if (compte) { $('auth').hidden = true; if (view === 'reglages') paintSettings(); } });
 
 // ---------- Réglages ----------
 const THEMES = { jaune: '#ffc233', bleu: '#2f8bff', rouge: '#ff4d5e', violet: '#b36bff', vert: '#2ee07a', rose: '#ff5fb4' };

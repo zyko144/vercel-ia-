@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.3.0",
-  "releaseNotes": "Refonte complète dans le style de History Launcher : barre du haut intégrée, gros logo, fond animé et 6 thèmes de couleur. Connexion au compte History (ou en un clic avec History Launcher). Jeux avec leurs images et leurs icônes. Mode « le jeu seulement », replay seulement en jeu et priorité au jeu pour ne pas perdre de FPS. Espace maximum, copie des captures, mises à jour intégrées.",
+  "version": "0.4.0",
+  "releaseNotes": "Nouvelle découpe : une timeline avec des poignées à glisser, une bande d’images et la lecture de la sélection. Après la découpe, tu choisis d’enregistrer un nouveau clip ou de remplacer l’original. Clic droit sur un clip pour l’ouvrir, l’envoyer, le renommer ou le supprimer. Partage sur tous les serveurs où le bot History Clips est invité, dans un salon clips-history créé tout seul. Connexion automatique avec History Launcher. Chaque clip est rangé dans le bon jeu, avec la bonne image. Beaucoup moins de mémoire et de processeur : miniatures légères, vidéo chargée seulement au survol, animations en pause pendant que tu joues.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

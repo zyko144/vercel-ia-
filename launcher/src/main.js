@@ -1750,7 +1750,14 @@ ipcMain.handle('clips:site', () => openClipsApp());
 // sinon on demande (un site ne peut pas relier son propre History Clips à ton compte en douce)
 async function approveClips(code) {
   if (!secret('account')) { showWindow(); return; }
-  if (Date.now() - clipsLinkAt > 120_000) {
+  // Preuve locale : History Clips a noté ce code dans son dossier il y a moins de 3 min → validé sans rien demander
+  const { readFile: rf } = await import('node:fs/promises');
+  let local = false;
+  for (const dir of ['History Clips', 'history-clips']) {
+    const f = await rf(path.join(app.getPath('appData'), dir, 'lien-launcher.json'), 'utf8').then(JSON.parse).catch(() => null);
+    if (f?.code === code && Date.now() - f.at < 180_000) local = true;
+  }
+  if (!local && Date.now() - clipsLinkAt > 120_000) {
     const r = await dialog.showMessageBox(win ?? undefined, { type: 'question', buttons: ['Autoriser', 'Refuser'], defaultId: 1, cancelId: 1, title: 'History Clips', message: 'Connecter History Clips à ton compte ?', detail: `Code ${code}. Accepte seulement si tu viens de cliquer sur « Se connecter avec History Launcher » dans History Clips.` });
     if (r.response !== 0) return;
   }
@@ -2323,7 +2330,11 @@ for (const kind of ['inscription', 'connexion']) {
   });
 }
 function loggedIn(r) {
-  if (r.token) { setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); setTimeout(() => autoRestore().catch(() => {}), 1500); }
+  if (r.token) {
+    setSecret('account', r.token); store.data.settings.lastAccount = r.compte; store.data.settings.skipAccount = false; store.save(); setTimeout(() => autoRestore().catch(() => {}), 1500);
+    // History Clips installé : il se relie aussi à ce compte, tout seul
+    if (app.getApplicationNameForProtocol('history-clips://')) setTimeout(() => { clipsLinkAt = Date.now(); shell.openExternal('history-clips://lier').catch(() => {}); }, 3000);
+  }
   return { ok: Boolean(r.token), compte: r.compte ?? null, error: r.token ? null : r.error ?? 'Erreur.', recoveryLeft: r.recoveryLeft };
 }
 // Sécurité du compte : double authentification (QR code), vérification de l'e-mail, mot de passe oublié

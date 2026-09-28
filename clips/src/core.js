@@ -50,5 +50,12 @@ export function parseFg(line) {
 /** Nom à chercher sur Steam pour l'image du jeu (sans « (64-bit) », ® ou suffixes techniques). FiveM = GTA V. */
 export function artTerm(name) {
   const s = String(name ?? '').replace(/\(.*?\)|[®™]|\bby\b.*$/gi, '').replace(/\s+/g, ' ').trim();
+  if (/^(clip|clips|bureau|capture|captures|history clips|history launcher)$/i.test(s)) return '';
   return /fivem|gta ?v|grand theft auto v/i.test(s) ? 'Grand Theft Auto V' : s;
+}
+/** Le résultat Steam est-il bien ce jeu ? (noms comparés sans accents, espaces ni ponctuation) */
+export function artMatch(term, name) {
+  const n = (v) => String(v ?? '').normalize('NFD').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const a = n(term); const b = n(name);
+  return a.length >= 3 && b.length >= 3 && (a === b || b.startsWith(a) || a.startsWith(b));
 }

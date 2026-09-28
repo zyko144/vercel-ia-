@@ -554,6 +554,12 @@ function sweepShares() {
 }
 async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend }) {
   const send = (...a) => { rawSend(...a); return true; };
+  if (route === 'GET /api/compte/discord/serveurs') {
+    const acc = (await accounts())[id];
+    if (!acc?.discordId) return send(res, 200, { serveurs: [], lie: false });
+    const servers = await (await import('../clips/bot.js')).clipsServers(acc.discordId).catch(() => []);
+    return send(res, 200, { serveurs: servers, lie: true });
+  }
   if (route === 'POST /api/compte/discord/clip') {
     const accs = await accounts();
     const acc = accs[id];
@@ -575,8 +581,9 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
     // Depuis History Clips (et pas à un ami) : dans le serveur History Clips si son bot est là
     const seconds = Number(url.searchParams.get('duree')) || 45;
     const clipsBot = url.searchParams.get('source') === 'clips' && !toDiscordId ? await import('../clips/bot.js') : null;
-    if (clipsBot?.clipsBotReady()) {
-      const r = await clipsBot.postClipToClipsServer({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, seconds, game: text(url.searchParams.get('jeu'), 80) || null }).catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
+    const guildId = /^\d{15,25}$/.test(url.searchParams.get('serveur') ?? '') ? url.searchParams.get('serveur') : null;
+    if (clipsBot?.clipsBotReady() || guildId) {
+      const r = await clipsBot?.postClipToClipsServer({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, seconds, guildId, game: text(url.searchParams.get('jeu'), 80) || null }).catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
       if (r) return send(res, r.ok ? 200 : 502, r);
     }
     const r = await (await import('./launcherDiscord.js')).postClip({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, toDiscordId, seconds: Number(url.searchParams.get('duree')) || 45, game: text(url.searchParams.get('jeu'), 80) || null, note: text(url.searchParams.get('texte'), 200) || null })
