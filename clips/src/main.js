@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import updaterMod from 'electron-updater';
-import { artTerm, clipName, ffmpegArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
+import { artMatch, artTerm, clipName, ffmpegArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(here, 'ui', 'icon.png');
@@ -21,7 +21,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'clip', privileges: { standard: 
 
 // ---------- Réglages (fichier JSON dans le dossier de l'appli) ----------
 const DEFAULTS = { replay: true, seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', autostart: true, favs: [], names: {},
-  source: 'screen', onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art: {}, exes: {} };
+  source: 'screen', onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art2: {}, exes: {} };
 const SET_FILE = () => path.join(app.getPath('userData'), 'reglages.json');
 let st = { ...DEFAULTS };
 const saveSt = () => writeFile(SET_FILE(), JSON.stringify(st)).catch(() => {});
@@ -151,7 +151,7 @@ async function saveClip(game) {
     setReplay(true).catch(() => {});
     return notify('Replay activé', `Il enregistre maintenant : rappuie sur ${st.hotClip} pour garder les dernières secondes.`);
   }
-  pendingGame = game ?? (fg.game || 'Clip');
+  pendingGame = game ?? (inGame() ? fg.game : 'Bureau');
   recWin.webContents.send('rec:save');
 }
 const FFMPEG = async () => unpacked((await import('ffmpeg-static')).default);
@@ -181,7 +181,7 @@ async function screenshot() {
   const size = { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor) };
   const [src] = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
   if (!src) return;
-  const game = safeName(fg.game) || 'Capture';
+  const game = safeName(inGame() ? fg.game : 'Bureau') || 'Capture';
   const dir = path.join(ROOT(), game);
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, clipName(game, 'png')), src.thumbnail.toPNG());
@@ -257,18 +257,19 @@ ipcMain.handle('clips:export', async (_e, t) => {
   if (r.canceled || !r.filePath) return { ok: false, cancelled: true };
   try { await toMp4(f, r.filePath); shell.showItemInFolder(r.filePath); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; }
 });
-ipcMain.handle('clips:save', () => saveClip(inGame() ? fg.game : 'Clip'));
+ipcMain.handle('clips:save', () => saveClip(inGame() ? fg.game : 'Bureau'));
 
 // Images des jeux : bannière Steam (recherche par nom) + icône du .exe
 ipcMain.handle('games:art', async (_e, names) => {
   const out = {};
   for (const name of (Array.isArray(names) ? names : []).slice(0, 40).map(String)) {
-    let a = st.art[name];
+    let a = st.art2[name];
     if (!a || (!a.img && Date.now() - (a.at ?? 0) > 7 * 86_400_000)) {
       a = { at: Date.now() };
       try {
         const r = await (await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(artTerm(name))}&l=french&cc=FR`, { signal: AbortSignal.timeout(8000) })).json();
-        const id = r?.items?.[0]?.id;
+        // Seulement si Steam trouve vraiment CE jeu (sinon « Bureau » ou « Chrome » donnaient un jeu au hasard)
+        const id = artTerm(name) ? r?.items?.find((x) => artMatch(artTerm(name), x.name))?.id : null;
         const classic = (f) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/${f}`;
         if (id) Object.assign(a, { img: classic('header.jpg'), logo: classic('logo.png'), hero: classic('library_hero.jpg') });
         // Adresses exactes des images (les jeux récents n'ont plus les anciennes), comme le launcher
@@ -280,7 +281,7 @@ ipcMain.handle('games:art', async (_e, names) => {
           Object.assign(a, { img: u(as.header ?? as.main_capsule) ?? a.img, hero: u(as.library_hero ?? as.library_hero_2x) ?? a.hero, logo: logoKey ? u(as[logoKey]) : a.logo });
         }
       } catch { /* hors ligne */ }
-      st.art[name] = a; saveSt();
+      st.art2[name] = a; saveSt();
     }
     let icon = null;
     if (st.exes[name]) icon = await app.getFileIcon(st.exes[name], { size: 'large' }).then((i) => i.toDataURL()).catch(() => null);
@@ -330,14 +331,31 @@ ipcMain.handle('account:pairPoll', async () => {
   if (r.token) { pairTicket = null; return loggedIn(r); }
   return r;
 });
-ipcMain.handle('account:launcher', async () => {
-  const r = await api('/api/compte/lien/demande', { method: 'POST', token: null, body: { appareil: device(), nom: 'History Clips' } });
-  if (!r.code) return { ok: false, error: r.error ?? 'Serveur injoignable.' };
-  pairTicket = r.ticket;
-  if (!app.getApplicationNameForProtocol('history://')) return { ok: false, noLauncher: true, code: r.code };
-  await shell.openExternal(`history://clips/${r.code}`);
-  return { ok: true, code: r.code };
-});
+// Connexion automatique avec History Launcher : on demande un code, on le note dans un fichier local
+// (preuve pour le launcher que c'est bien History Clips sur ce PC, un site ne peut pas l'écrire), puis le launcher le valide seul.
+const LINK_FILE = () => path.join(app.getPath('userData'), 'lien-launcher.json');
+let linking = null;
+async function autoLink() {
+  if (tokenGet()) return { ok: true, already: true };
+  if (!app.getApplicationNameForProtocol('history://')) return { ok: false, noLauncher: true };
+  if (linking) return linking;
+  linking = (async () => {
+    const r = await api('/api/compte/lien/demande', { method: 'POST', token: null, body: { appareil: device(), nom: 'History Clips' } });
+    if (!r.code) return { ok: false, error: r.error ?? 'Serveur injoignable.' };
+    await writeFile(LINK_FILE(), JSON.stringify({ code: r.code, at: Date.now() }));
+    await shell.openExternal(`history://clips/${r.code}`);
+    for (let i = 0; i < 40 && !tokenGet(); i++) {
+      await new Promise((ok) => setTimeout(ok, 3000));
+      const p = await api(`/api/compte/lien/attente?ticket=${encodeURIComponent(r.ticket)}`, { token: null });
+      if (p.token) { loggedIn(p); notify('🔗 Connecté avec History Launcher', `Compte ${p.compte?.pseudo ?? 'History'} relié à History Clips.`); break; }
+      if (p.status === 410) break;
+    }
+    await rm(LINK_FILE(), { force: true }).catch(() => {});
+    return { ok: Boolean(tokenGet()), code: r.code };
+  })().finally(() => { linking = null; });
+  return linking;
+}
+ipcMain.handle('account:launcher', () => autoLink());
 ipcMain.handle('clips:discord', async (_e, t, to) => {
   const f = fileOf(t);
   if (!f) return { ok: false };
@@ -354,7 +372,7 @@ ipcMain.handle('clips:discord', async (_e, t, to) => {
 });
 
 // ---------- Réglages ----------
-ipcMain.handle('settings:get', () => ({ ...st, token: undefined, art: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
+ipcMain.handle('settings:get', () => ({ ...st, token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
 ipcMain.handle('settings:set', (_e, p) => {
   let replayChanged = false; let restart = false;
   if ('replay' in p) { st.replay = Boolean(p.replay); replayChanged = true; }
@@ -406,8 +424,9 @@ ipcMain.handle('update:now', () => { if (upd.state === 'ready') { app.quitting =
 function handleLink(argv) {
   const url = (argv ?? []).find((a) => /^history-clips:\/\//i.test(String(a)));
   if (!url) return;
+  // Ouvert par le launcher pour se connecter : fait en fond, sans montrer la fenêtre si c'est déjà bon
+  if (/lier/i.test(url)) { if (!tokenGet()) autoLink().catch(() => {}); return; }
   showWindow();
-  if (/lier/i.test(url) && !tokenGet()) setTimeout(() => send('link:launcher'), 1200);
 }
 
 // ---------- Démarrage ----------
@@ -442,4 +461,6 @@ app.whenReady().then(async () => {
   if (!process.argv.includes('--demarrage')) createWindow();
   handleLink(process.argv);
   startUpdater();
+  // Pas encore connecté et History Launcher installé : on se relie à son compte tout seul
+  setTimeout(() => autoLink().catch(() => {}), 4000);
 });

@@ -221,10 +221,9 @@ async function linkLauncher() {
   $('auth').hidden = false; authView('pair'); $('pairTitle').textContent = '🔗 Connexion avec History Launcher'; $('pairCode').textContent = '····-····';
   $('pairText').innerHTML = 'History Launcher s’ouvre et valide la connexion tout seul…';
   const r = await api.linkLauncher();
-  if (r?.code) $('pairCode').textContent = r.code;
-  if (r?.noLauncher) $('pairText').innerHTML = 'History Launcher n’est pas installé sur ce PC. Sur un PC où il est connecté : clique sur ton nom › <b>Connecter un autre PC</b> et entre ce code.';
-  else if (!r?.ok && !r?.code) $('pairText').textContent = r?.error ?? 'Serveur injoignable.';
-  if (r?.code) pollPair();
+  if (r?.ok) return done((await api.account())?.compte);
+  if (r?.noLauncher) { $('pairText').innerHTML = 'History Launcher n’est pas installé sur ce PC : connecte-toi avec ton e-mail, ou avec un code depuis un autre PC.'; $('pairCode').textContent = '—'; }
+  else $('pairText').textContent = r?.error ?? 'Connexion pas validée : ouvre History Launcher et connecte-toi, puis réessaie.';
 }
 $('authLauncher').addEventListener('click', linkLauncher);
 api.onLinkLauncher(linkLauncher);
@@ -235,7 +234,7 @@ function paintProfile() {
   av.style.backgroundImage = compte?.avatar && /^https:|^data:image\//.test(compte.avatar) ? `url('${compte.avatar}')` : '';
   if (compte?.avatar) av.textContent = '';
 }
-api.onAccount(async () => { compte = (await api.account())?.compte ?? null; paintProfile(); });
+api.onAccount(async () => { compte = (await api.account())?.compte ?? null; paintProfile(); if (compte) { $('auth').hidden = true; if (view === 'reglages') paintSettings(); } });
 
 // ---------- Réglages ----------
 const THEMES = { jaune: '#ffc233', bleu: '#2f8bff', rouge: '#ff4d5e', violet: '#b36bff', vert: '#2ee07a', rose: '#ff5fb4' };
