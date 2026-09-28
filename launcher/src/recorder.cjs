@@ -2,7 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('rec', {
-  onStart: (fn) => ipcRenderer.on('rec:start', (_e, id) => fn(id)),
+  onStart: (fn) => ipcRenderer.on('rec:start', (_e, id, opts) => fn(id, opts)),
   onSave: (fn) => ipcRenderer.on('rec:save', () => fn()),
   onStop: (fn) => ipcRenderer.on('rec:stop', () => fn()),
   clip: (buf, mime) => ipcRenderer.send('rec:clip', buf, mime),

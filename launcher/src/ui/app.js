@@ -1627,6 +1627,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.33.0': [
+    ['⚙', 'Paramètres rangés', 'Nouvelles catégories : 🎨 Apparence, 🎬 Clips & captures, ⌨ Raccourcis, 🎙 Assistant vocal et 📱 Téléphone. Chaque réglage est à sa place.', ['#openSettings', 'wait600', '.setnav [data-pane=clips]', 'wait800']],
+    ['🎬', 'Clips sur mesure', 'Durée (15 s à 2 min), qualité (720p à 1440p), 30 ou 60 images/s, avec ou sans le son du PC.'],
+    ['📤', 'Clip à un ami sur Discord', 'Depuis la page Clips : envoie un clip dans le salon du serveur ou en message privé à un ami précis. Qualité bien meilleure sur Discord (débit calculé pour la limite de 10 Mo, 1080p quand ça tient).'],
+    ['⛶', 'Clips en plein écran', 'Bouton ⛶ ou double-clic sur un clip pour le regarder en plein écran (c’était bloqué). 🗑 pour supprimer un clip (il part dans la corbeille).'],
+    ['🔇', 'Plus de lancement surprise', 'L’écoute « Hey History » est plus exigeante et ne peut plus ouvrir Epic Games, Steam ou les autres plateformes : un bruit du jeu ou de Discord ne lance plus rien.'],
+  ],
   '0.32.0': [
     ['🎬', 'Catégorie Clips', 'Nouvelle page Clips dans le menu : tous tes clips, à regarder dans l’appli en bonne qualité avec le son, à envoyer sur Discord ou ouvrir dans leur dossier.', ['[data-view=clips]', 'wait1200']],
     ['🛠', 'Clips réparés', 'Windows refusait l’accès à l’écran à l’enregistreur du replay : les clips marchent maintenant, en 1080p jusqu’à 60 images/s, avec le son du PC.'],
@@ -1642,14 +1649,14 @@ const CHANGELOG = {
     ['🧹', 'Collections retirées pour de bon', 'La catégorie Collections ne s’affiche plus dans le menu de gauche (elle restait visible dans la 0.31.1).', ['wait800']],
   ],
   '0.31.1': [
-    ['⌨', 'Raccourcis à ton goût', 'Paramètres › Général : clique sur un raccourci (clip, capture, infos en jeu, afficher le launcher, recherche) et appuie sur ta combinaison. Retour arrière remet celui d’origine.', ['#openSettings', 'wait600', '[data-pane=general]', 'wait800']],
+    ['⌨', 'Raccourcis à ton goût', 'Paramètres › Raccourcis : clique sur un raccourci (clip, capture, infos en jeu, afficher le launcher, recherche) et appuie sur ta combinaison. Retour arrière remet celui d’origine.', ['#openSettings', 'wait600', '[data-pane=general]', 'wait800']],
     ['📎', 'Fichiers dans les messages', 'Le trombone permet maintenant d’envoyer n’importe quel fichier (10 Mo max) à un ami ou un groupe ; il le télécharge d’un clic.'],
     ['💬', 'Messages en jeu', 'La bulle des messages s’affiche aussi en mode tournoi (les autres notifications restent coupées).'],
     ['🎬', 'Clips réparés', 'Si le replay était coupé, le raccourci du clip l’active tout de suite ; appuyer trop tôt ne le bloque plus.'],
     ['🧹', 'Menu plus simple', 'La catégorie Collections est retirée du menu de gauche.'],
   ],
   '0.31.0': [
-    ['📱', 'Contrôle depuis le téléphone', 'Paramètres › Général : active-le, ouvre l’adresse affichée sur ton téléphone (même Wi-Fi) et entre le code. Tu vois les températures du PC et tu lances un jeu à distance.', ['#openSettings', 'wait600', '[data-pane=general]', 'wait800']],
+    ['📱', 'Contrôle depuis le téléphone', 'Paramètres › Téléphone : active-le, ouvre l’adresse affichée sur ton téléphone (même Wi-Fi) et entre le code. Tu vois les températures du PC et tu lances un jeu à distance.', ['#openSettings', 'wait600', '[data-pane=general]', 'wait800']],
     ['🌙', 'Mises à jour la nuit', 'Paramètres › Jeux : entre 3 h et 6 h, si le PC est allumé et ne sert pas, Steam s’ouvre en fond et télécharge les mises à jour de tes jeux. Au réveil, tout est prêt.'],
     ['🎮', 'Réglages de jeux dans le cloud', 'Touches, sensibilité et graphismes de Fortnite, FiveM, GTA V, Rocket League et Minecraft partent dans ta sauvegarde. Sur un nouveau PC : Paramètres › Compte › « Remettre mes réglages de jeux ».'],
     ['🎨', 'Ta couleur et ton fond', 'Paramètres › Général : choisis n’importe quelle couleur pour l’appli, et le fond (jaquette floue du jeu, dégradé animé ou sobre).'],
@@ -3020,14 +3027,34 @@ async function renderClips() {
   const list = await api.clipsList?.().catch(() => []) ?? [];
   $('clipGrid').innerHTML = list.length ? list.map((c) => `<figure class="clipcard"><video src="${esc(c.url)}" controls preload="metadata"></video>
     <figcaption><div><b>${esc(c.game)}</b><small>${new Date(c.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · ${gb(c.size)}</small></div>
-    <div class="row"><button type="button" class="btn sm" data-clipd="${esc(c.token)}">Discord</button><button type="button" class="btn ghost sm" data-clipf="${esc(c.token)}">📁</button></div></figcaption></figure>`).join('')
+    <div class="row"><button type="button" class="btn ghost sm" data-clipfs title="Plein écran">⛶</button><button type="button" class="btn sm" data-clipd="${esc(c.token)}">Discord</button><button type="button" class="btn ghost sm" data-clipf="${esc(c.token)}" title="Dossier">📁</button><button type="button" class="btn ghost sm" data-clipdel="${esc(c.token)}" title="Supprimer">🗑</button></div></figcaption></figure>`).join('')
     : '<div class="empty">Aucun clip pour l’instant. Active le replay (Paramètres › Jeux), puis appuie sur ton raccourci de clip en jeu.</div>';
 }
+$('clipGrid').addEventListener('dblclick', (e) => { const v = e.target.closest('video'); if (v) v.requestFullscreen?.().catch(() => {}); });
 $('clipGrid').addEventListener('click', async (e) => {
+  const fs = e.target.closest('[data-clipfs]'); if (fs) return fs.closest('.clipcard').querySelector('video').requestFullscreen?.().catch(() => toast('Plein écran impossible'));
+  const del = e.target.closest('[data-clipdel]'); if (del) { const r = await api.clipsDelete(del.dataset.clipdel); if (r?.ok) { toast('🗑 Clip supprimé'); renderClips(); } return; }
   const d = e.target.closest('[data-clipd]'); const f = e.target.closest('[data-clipf]');
   if (f) return api.clipsOpen(f.dataset.clipf, 'folder');
-  if (d) { d.disabled = true; const r = await api.captureDiscord(d.dataset.clipd).catch(() => null); d.disabled = false; toast(r?.ok ? '✅ Envoyé sur Discord' : r?.error ?? 'Envoi impossible'); }
+  if (d) pickClipTarget(d.dataset.clipd);
 });
+// Envoyer un clip : dans le salon des clips du serveur, ou en message privé Discord à un ami précis
+function pickClipTarget(token) {
+  const amis = state.hist?.amis ?? [];
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📤</span><h2>Envoyer le clip sur Discord</h2></div>
+    <div class="flist"><button type="button" class="btn" data-to="">📢 Dans le salon des clips du serveur History</button>
+    ${amis.map((a) => `<button type="button" class="btn ghost" data-to="${esc(a.id)}">💬 En privé à ${esc(a.pseudo)}</button>`).join('')}</div>
+    <p class="hint">En privé : ton ami doit avoir lié son Discord (Paramètres › Compte). Le clip est optimisé pour tenir dans la limite de Discord (10 Mo).</p>
+    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    if (e.target.closest('[data-m]')) return $('modal').close();
+    const b = e.target.closest('[data-to]'); if (!b) return;
+    $('modal').close(); toast('📤 Envoi du clip…');
+    const r = await api.captureDiscord(token, '', b.dataset.to).catch(() => null);
+    toast(r?.ok ? '✅ Clip envoyé sur Discord' : r?.error ?? 'Envoi impossible');
+  };
+}
 function select(item) {
   if (!item) return;
   state.sel = item;
@@ -3343,6 +3370,8 @@ function showKeys(s) {
   $('shareActivity').checked = s.shareActivity !== false;
   $('friendNotifs').checked = s.friendNotifs !== false;
   $('replay').checked = Boolean(s.replay);
+  $('clipSeconds').value = String(s.clipSeconds ?? 30);
+  $('clipQuality').value = String(s.clipQuality ?? 1080); $('clipFps').value = String(s.clipFps ?? 60); $('clipAudio').checked = s.clipAudio !== false;
   $('textScale').value = String(s.textScale ?? 1);
   $('compact').checked = Boolean(s.compact); document.body.classList.toggle('compact', Boolean(s.compact));
   $('dnd').checked = Boolean(s.dnd); $('tournament').checked = Boolean(s.tournament);
@@ -3449,7 +3478,11 @@ $('micTest').addEventListener('click', async (e) => {
     else { stream.getTracks().forEach((t) => t.stop()); ctx.close(); $('micLvl').style.width = '0'; toast(peak < 8 ? '🎙 Aucun son capté : vérifie le micro choisi dans Windows' : peak > 95 ? '🎙 Micro qui sature : baisse son volume dans Windows' : '🎙 Micro OK 👍'); }
   })();
 });
-$('replay').addEventListener('change', (e) => api.setSettings({ replay: e.target.checked }).then(() => toast(e.target.checked ? '🎬 Replay activé : Ctrl+Alt+R garde les 30 dernières secondes' : 'Replay désactivé')));
+for (const k of ['clipQuality', 'clipFps']) $(k).addEventListener('change', (e) => api.setSettings({ [k]: Number(e.target.value) }).then(() => toast('🎬 Réglage des clips enregistré')));
+$('clipAudio').addEventListener('change', (e) => api.setSettings({ clipAudio: e.target.checked }));
+$('clipsFolder').addEventListener('click', () => api.clipsFolder?.());
+$('clipSeconds').addEventListener('change', (e) => api.setSettings({ clipSeconds: Number(e.target.value) }).then(() => toast(`🎬 Les clips gardent maintenant les ${e.target.selectedOptions[0].text} dernières`)));
+$('replay').addEventListener('change', (e) => api.setSettings({ replay: e.target.checked }).then(() => toast(e.target.checked ? '🎬 Replay activé : ton raccourci de clip garde les dernières secondes' : 'Replay désactivé')));
 
 // Assistant : bulle en bas à droite, qui s'ouvre et se referme
 function openAssistant(open = !$('aipop').classList.contains('open')) {
@@ -3897,7 +3930,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.32.0',
+    version: async () => '0.33.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

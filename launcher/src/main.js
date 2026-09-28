@@ -1357,6 +1357,13 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   if ('preloadSteam' in patch) store.data.settings.preloadSteam = Boolean(patch.preloadSteam);
   if ('nightUpdates' in patch) store.data.settings.nightUpdates = Boolean(patch.nightUpdates);
+  // Réglages des clips : le replay redémarre pour les appliquer
+  let clipChanged = false;
+  if ('clipSeconds' in patch && [15, 30, 60, 120].includes(Number(patch.clipSeconds))) { store.data.settings.clipSeconds = Number(patch.clipSeconds); clipChanged = true; }
+  if ('clipQuality' in patch && [720, 1080, 1440].includes(Number(patch.clipQuality))) { store.data.settings.clipQuality = Number(patch.clipQuality); clipChanged = true; }
+  if ('clipFps' in patch && [30, 60].includes(Number(patch.clipFps))) { store.data.settings.clipFps = Number(patch.clipFps); clipChanged = true; }
+  if ('clipAudio' in patch) { store.data.settings.clipAudio = Boolean(patch.clipAudio); clipChanged = true; }
+  if (clipChanged) { if (store.data.settings.replay) setReplay(false).then(() => setTimeout(() => setReplay(true).catch(() => {}), 800)).catch(() => {}); }
   if ('voiceReply' in patch) store.data.settings.voiceReply = Boolean(patch.voiceReply);
   if ('voiceName' in patch) store.data.settings.voiceName = String(patch.voiceName ?? '').slice(0, 80);
   if ('remote' in patch) { store.data.settings.remote = Boolean(patch.remote); setRemote(); }
@@ -1732,6 +1739,7 @@ async function takeScreenshot() {
   return file;
 }
 let recWin = null;
+const clipSeconds = () => ([15, 30, 60, 120].includes(store.data.settings.clipSeconds) ? store.data.settings.clipSeconds : 30);
 let recState = 'off';
 async function setReplay(on) {
   if (!on) {
@@ -1747,7 +1755,8 @@ async function setReplay(on) {
   recWin.on('closed', () => { recWin = null; });
   await recWin.loadFile(path.join(here, 'ui', 'recorder.html'));
   const src = (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }))[0];
-  if (src) recWin.webContents.send('rec:start', src.id);
+  const st = store.data.settings;
+  if (src) recWin.webContents.send('rec:start', src.id, { seconds: clipSeconds(), height: [720, 1080, 1440].includes(st.clipQuality) ? st.clipQuality : 1080, fps: st.clipFps === 30 ? 30 : 60, audio: st.clipAudio !== false });
 }
 ipcMain.on('rec:state', (_e, st) => { if (st === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.'); recState = st; if (st.startsWith('error')) notify('Replay indisponible', `L’enregistrement de l’écran n’a pas démarré (${st.slice(6, 120)}).`); });
 ipcMain.on('rec:clip', async (e, buf, mime) => {
@@ -2258,7 +2267,8 @@ ipcMain.handle('ai:ask', (_e, message) => runCommand(message));
 let stopListening = null;
 let awaitingCommandUntil = 0;
 let voiceNames = '';
-const listenNames = () => items.filter((i) => i.installed && (i.kind === 'game' || i.brand || i.known)).map((i) => i.name);
+// Les plateformes (Epic, Steam, EA…) ne sont pas dans la liste d'écoute : un bruit de jeu ou de Discord ne doit jamais les ouvrir
+const listenNames = () => items.filter((i) => i.installed && (i.kind === 'game' || i.brand || i.known) && !/epic games|^steam$|ea app|ubisoft|battle\.net|rockstar games launcher|riot client/i.test(i.name)).map((i) => i.name);
 function setVoice(on) {
   stopListening?.();
   stopListening = null;
@@ -2274,7 +2284,7 @@ function setVoice(on) {
       send('voice:state', { state: 'ecoute' });
       return;
     }
-    if (grammar === 'cmd' || grammar === 'music' || grammar === 'view') { if (confidence >= 0.45) command = stripWake(text) ?? text; }
+    if (grammar === 'cmd' || grammar === 'music' || grammar === 'view') { if (confidence >= 0.7) command = stripWake(text) ?? text; } // seuil relevé : moins de commandes entendues par erreur
     else {
       const after = stripWake(text);
       if (after) command = after;
@@ -2965,7 +2975,7 @@ async function start() {
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response('introuvable', { status: 404 });
   });
   // Micro : autorisé seulement pour la fenêtre du launcher (bouton micro de l'assistant)
-  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media' && (wc === win?.webContents || (recWin && !recWin.isDestroyed() && wc === recWin.webContents))));
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb((permission === 'fullscreen' && wc === win?.webContents) || (permission === 'media' && (wc === win?.webContents || (recWin && !recWin.isDestroyed() && wc === recWin.webContents)))));
   await store.load();
   applyAutostart();
   // Lancé avec Windows : directement dans la barre des tâches, sans fenêtre (rien en mémoire tant qu'on ne l'ouvre pas)
@@ -3035,19 +3045,19 @@ async function apiRaw(pathname, buf, { timeout = 180_000 } = {}) {
 }
 
 // ---------- Clips et captures vers le salon Discord (compte Discord lié) ----------
-async function clipToDiscord(file, note = '') {
+async function clipToDiscord(file, note = '', to = '') {
   const { readFile, stat } = await import('node:fs/promises');
   const ext = path.extname(file).slice(1).toLowerCase().replace('jpeg', 'jpg');
   if (!['png', 'jpg', 'webm', 'mp4'].includes(ext)) return { ok: false, error: 'Format non pris en charge (images PNG/JPG, vidéos WEBM/MP4).' };
   if (((await stat(file).catch(() => null))?.size ?? 0) > 60 * 1024 * 1024) return { ok: false, error: 'Fichier trop gros (60 Mo maximum).' };
   pushCard({ id: `disc-${Date.now()}`, icon: '📤', title: 'Envoi sur Discord…', body: path.basename(file), actions: [], ttl: 5000, nolog: true }, true);
   const game = currentSession()?.name ?? path.basename(path.dirname(file));
-  const q = new URLSearchParams({ type: ext, jeu: String(game ?? '').slice(0, 80), ...(note ? { texte: String(note).slice(0, 200) } : {}) });
+  const q = new URLSearchParams({ type: ext, jeu: String(game ?? '').slice(0, 80), duree: String(Math.ceil(clipSeconds() * 1.5)), ...(note ? { texte: String(note).slice(0, 200) } : {}), ...(/^[\w-]{3,64}$/.test(String(to)) ? { a: String(to) } : {}) });
   const r = await apiRaw(`/api/compte/discord/clip?${q}`, await readFile(file));
-  pushCard(r.ok ? { id: `disc-ok-${Date.now()}`, icon: '✅', title: 'Envoyé sur Discord', body: 'Dans le salon des clips du serveur History.', actions: [], ttl: 6000 } : { id: `disc-ko-${Date.now()}`, icon: '⚠️', title: 'Envoi impossible', body: r.error ?? 'Réessaie plus tard.', actions: [], ttl: 9000 }, true);
+  pushCard(r.ok ? { id: `disc-ok-${Date.now()}`, icon: '✅', title: 'Envoyé sur Discord', body: to ? 'En message privé à ton ami.' : 'Dans le salon des clips du serveur History.', actions: [], ttl: 6000 } : { id: `disc-ko-${Date.now()}`, icon: '⚠️', title: 'Envoi impossible', body: r.error ?? 'Réessaie plus tard.', actions: [], ttl: 9000 }, true);
   return r.ok ? { ok: true, url: r.url } : { ok: false, error: r.error ?? 'Envoi impossible.' };
 }
-ipcMain.handle('capture:discord', (_e, token, note) => { const f = captureFiles.get(String(token)); return f ? clipToDiscord(f, note) : { ok: false, error: 'Capture introuvable.' }; });
+ipcMain.handle('capture:discord', (_e, token, note, to) => { const f = captureFiles.get(String(token)); return f ? clipToDiscord(f, note, to) : { ok: false, error: 'Capture introuvable.' }; });
 
 // ---------- Groupe : lancer une partie annoncée sur Discord ----------
 ipcMain.handle('groups:party', (_e, id, text) => social('/api/compte/groupes/partie', { id: String(id ?? ''), jeu: currentSession()?.name ?? undefined, texte: String(text ?? '').slice(0, 200) }));
@@ -3426,6 +3436,14 @@ ipcMain.handle('clips:list', async () => {
     return { token, game: c.game, at: c.at, size: c.size, name: path.basename(c.file), url: `libvid://v/${token}${path.extname(c.file)}` };
   });
 });
+ipcMain.handle('clips:delete', async (_e, token) => {
+  const f = captureFiles.get(String(token));
+  if (!f || !(await confirm('Supprimer ce clip ?', `${path.basename(f)} part dans la corbeille (tu peux encore le récupérer).`, { danger: true, ok: 'Supprimer', icon: '🗑' }))) return { ok: false };
+  await shell.trashItem(f);
+  captureFiles.delete(String(token));
+  return { ok: true };
+});
+ipcMain.handle('clips:folder', () => shell.openPath(path.join(os.homedir(), 'Videos')));
 ipcMain.handle('clips:open', (_e, token, how) => { const f = captureFiles.get(String(token)); if (!f) return false; if (how === 'folder') shell.showItemInFolder(f); else shell.openPath(f); return true; });
 ipcMain.handle('captures:data', (_e, token) => {
   const f = captureFiles.get(String(token));
