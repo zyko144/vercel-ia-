@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>History Clips · garde tes meilleurs moments de jeu</title>
+<meta name="description" content="History Clips enregistre ta partie en fond : un appui sur F8 garde les dernières secondes. Découpe, galerie par jeu et envoi sur Discord. Gratuit, léger, pour Windows.">
+<meta property="og:title" content="History Clips">
+<meta property="og:description" content="Un appui, et ton meilleur moment est gardé. Découpe, galerie par jeu, partage Discord.">
+<meta property="og:image" content="https://zyko144.github.io/vercel-ia-/assets/banniere.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/logo.png">
+<style>
+:root { --bg: #07060b; --text: #f4f1f6; --muted: #a39cab; --line: rgba(255, 255, 255, .1); --blue: #2f8bff; --blue-2: #1554d1; --cyan: #22d3ee; --red: #ef4444; --font: 'Segoe UI', system-ui, -apple-system, Inter, sans-serif; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+a { color: inherit; }
+.wrap { width: min(1120px, 92vw); margin: 0 auto; }
+.nav { position: sticky; top: 12px; z-index: 5; margin-top: 12px; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-radius: 18px; border: 1px solid var(--line); background: rgba(12, 10, 18, .7); backdrop-filter: blur(14px); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: #fff; font: 700 15.5px var(--font); text-decoration: none; transition: transform .2s, box-shadow .2s; }
+.btn:hover { transform: translateY(-2px); }
+.btn.main { border: 0; background: linear-gradient(100deg, var(--blue), var(--blue-2)); box-shadow: 0 14px 34px -10px var(--blue); }
+.btn.sm { padding: 8px 14px; font-size: 14px; }
+.hero { position: relative; isolation: isolate; text-align: center; padding: 110px 0 60px; }
+.hero::before { content: ""; position: absolute; z-index: -1; left: 50%; width: 100vw; transform: translateX(-50%); top: -140px; height: calc(100% + 200px); background: radial-gradient(40% 50% at 12% 0%, rgba(239, 68, 68, .35), transparent 70%), radial-gradient(40% 50% at 92% 40%, rgba(47, 139, 255, .45), transparent 70%), radial-gradient(60% 60% at 50% 30%, rgba(21, 84, 209, .3), transparent 75%); -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent); mask-image: linear-gradient(180deg, #000 55%, transparent); }
+.rec { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: rgba(255, 255, 255, .05); font-size: 13.5px; font-weight: 600; }
+.rec b { width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 12px var(--red); animation: rec 1.6s infinite; }
+@keyframes rec { 50% { opacity: .3; } }
+h1 { font-size: clamp(40px, 7vw, 76px); line-height: 1.02; margin: 22px 0 18px; letter-spacing: -.02em; }
+.grad { background: linear-gradient(90deg, #fff, #9ecbff 40%, var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lead { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 660px; margin: 0 auto 30px; }
+kbd { display: inline-block; padding: 1px 9px; border-radius: 8px; border: 1px solid var(--line); background: #110f17; font: 700 .9em ui-monospace, monospace; color: #fff; }
+.meta { color: var(--muted); font-size: 13.5px; margin-top: 14px; }
+section { padding: 70px 0; }
+h2 { font-size: clamp(28px, 4vw, 42px); margin: 0 0 10px; text-align: center; }
+.sub { color: var(--muted); text-align: center; margin: 0 auto 38px; max-width: 620px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.card { padding: 22px; border-radius: 20px; border: 1px solid var(--line); background: linear-gradient(160deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02)); }
+.card h3 { margin: 14px 0 6px; font-size: 18px; } .card p { margin: 0; color: var(--muted); font-size: 15px; }
+.ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: var(--c); background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--c) 45%, transparent), color-mix(in srgb, var(--c) 8%, transparent) 70%); border: 1px solid color-mix(in srgb, var(--c) 45%, rgba(255, 255, 255, .1)); }
+.ic svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; counter-reset: s; }
+.step { padding: 22px; border-radius: 20px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); }
+.step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--blue-2)); font-weight: 800; margin-bottom: 12px; }
+.step b { display: block; font-size: 17px; } .step p { margin: 4px 0 0; color: var(--muted); }
+details { border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; margin: 10px auto; max-width: 760px; background: rgba(255, 255, 255, .03); }
+summary { cursor: pointer; font-weight: 700; } details p { color: var(--muted); margin: 10px 0 0; }
+.cta { text-align: center; padding: 60px 20px; border-radius: 26px; border: 1px solid var(--line); background: radial-gradient(60% 80% at 50% 0%, rgba(47, 139, 255, .25), transparent 70%), rgba(255, 255, 255, .03); }
+footer { color: var(--muted); font-size: 13.5px; text-align: center; padding: 40px 0 60px; }
+@media (max-width: 640px) { .nav .links { display: none; } .hero { padding-top: 70px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="nav">
+    <a class="brand" href="#top"><img src="../assets/logo.png" alt="">History Clips</a>
+    <div class="links"><a class="btn sm" href="../">History Launcher</a> <a class="btn sm main" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">Télécharger</a></div>
+  </header>
+
+  <section class="hero" id="top">
+    <span class="rec"><b></b>Enregistre en fond, sans te gêner</span>
+    <h1>Ton meilleur moment,<br><span class="grad">gardé en un appui.</span></h1>
+    <p class="lead">History Clips tourne en fond pendant que tu joues. Appuie sur <kbd>F8</kbd> : les dernières secondes sont gardées, rangées par jeu, prêtes à couper et à envoyer sur Discord.</p>
+    <a class="btn main" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">⬇ Télécharger pour Windows</a>
+    <p class="meta">Gratuit · Windows 10 et 11 · mises à jour automatiques · même compte que History Launcher</p>
+  </section>
+
+  <section id="fonctions">
+    <h2>Fait pour une seule chose : tes clips</h2>
+    <p class="sub">Léger, rapide, et sans rien de compliqué.</p>
+    <div class="cards">
+      <div class="card" style="--c:#ef4444"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg></div><h3>Replay en fond</h3><p>Garde les 15 s à 2 min qui viennent de se passer, en 720p à 1440p, 30 ou 60 images/s, avec le son du PC.</p></div>
+      <div class="card" style="--c:#2f8bff"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><h3>Galerie par jeu</h3><p>Chaque clip est rangé tout seul dans le dossier de son jeu. Favoris, recherche, renommer, supprimer.</p></div>
+      <div class="card" style="--c:#22d3ee"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 7.5 20 17M8 16.5 20 7"/></svg></div><h3>Découpe en deux clics</h3><p>Choisis le début et la fin, garde le passage : un nouveau clip en MP4 haute qualité, l’original reste.</p></div>
+      <div class="card" style="--c:#9b6bff"><div class="ic"><svg viewBox="0 0 24 24"><path d="M8 7.5c1.3-.5 2.6-.7 4-.7s2.7.2 4 .7c1.6 2.3 2.4 4.9 2.3 8.2-1.3 1-2.6 1.6-4 2l-.9-1.6M8.6 16.1l-.9 1.6c-1.4-.4-2.7-1-4-2-.1-3.3.7-5.9 2.3-8.2"/><circle cx="9.5" cy="12.5" r="1.1"/><circle cx="14.5" cy="12.5" r="1.1"/></svg></div><h3>Partage sur Discord</h3><p>Dans le salon des clips du serveur History, ou en privé à un ami. Qualité optimisée pour la limite de Discord.</p></div>
+      <div class="card" style="--c:#2ee07a"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg></div><h3>Touches au choix</h3><p><kbd>F8</kbd> pour un clip, <kbd>F9</kbd> pour une capture… ou n’importe quelle touche que tu préfères.</p></div>
+      <div class="card" style="--c:#ffd23f"><div class="ic"><svg viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6Z"/></svg></div><h3>Léger</h3><p>Une appli à part, sans tout le launcher : elle ne garde en mémoire que l’enregistreur quand sa fenêtre est fermée.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Comment ça marche</h2>
+    <p class="sub">Trois étapes, c’est tout.</p>
+    <div class="steps">
+      <div class="step"><b>Installe History Clips</b><p>Un clic, il démarre avec Windows et attend en fond (icône près de l’horloge).</p></div>
+      <div class="step"><b>Joue normalement</b><p>Un beau moment ? Appuie sur <kbd>F8</kbd> : les dernières secondes sont gardées.</p></div>
+      <div class="step"><b>Coupe et partage</b><p>Ouvre History Clips, garde le meilleur passage et envoie-le sur Discord.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+    <details><summary>Est-ce que ça baisse mes FPS ?</summary><p>Très peu : l’enregistrement utilise l’encodeur vidéo de ta carte graphique. Tu peux choisir 720p et 30 images/s pour le rendre encore plus léger, ou mettre le replay en pause depuis l’icône.</p></details>
+    <details><summary>Où sont mes clips ?</summary><p>Dans Vidéos › History Clips › nom du jeu (modifiable dans les réglages), en MP4 lisibles partout.</p></details>
+    <details><summary>J’ai History Launcher, il me faut les deux ?</summary><p>Les clips ne sont plus dans le launcher : History Clips est fait pour ça et bien plus léger. Les deux utilisent le même compte History.</p></details>
+    <details><summary>C’est gratuit ?</summary><p>Oui, entièrement.</p></details>
+  </section>
+
+  <div class="cta">
+    <h2>Prêt à garder tes meilleurs moments ?</h2>
+    <p class="sub">Gratuit, pour Windows 10 et 11.</p>
+    <a class="btn main" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">⬇ Télécharger History Clips</a>
+  </div>
+  <footer>History Clips · fait par History · <a href="../">History Launcher</a></footer>
+</div>
+</body>
+</html>

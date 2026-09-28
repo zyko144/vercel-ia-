@@ -1,0 +1,71 @@
+# Publie l'installateur de History Clips à chaque nouvelle version (augmenter "version" dans clips/package.json).
+# Les versions vont dans des releases « clips-vX » (jamais marquées « latest » : le launcher garde les siennes),
+# et une release fixe « clips-latest » contient toujours la dernière : lien de téléchargement stable + mise à jour auto.
+name: History Clips - publier une nouvelle version
+
+on:
+  push:
+    branches: [main]
+    paths: ['clips/**', '.github/workflows/clips-release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clips-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: clips
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: v
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Déjà publiée ?
+        id: exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "clips-v${{ steps.v.outputs.version }}" --json assets -q '.assets[].name' 2>/dev/null | grep -qx latest.yml; then echo "yes=true" >> "$GITHUB_OUTPUT"; else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.exists.outputs.yes == 'false'
+        with:
+          node-version: 22
+
+      - name: Installation et tests
+        if: steps.exists.outputs.yes == 'false'
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+
+      - name: Construction de l'installateur
+        if: steps.exists.outputs.yes == 'false'
+        run: npx electron-builder --win --publish never
+
+      - name: Publication
+        if: steps.exists.outputs.yes == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          cp "dist/History-Clips-Setup-$V.exe" dist/History-Clips-Setup.exe
+          FILES=(dist/History-Clips-Setup-$V.exe dist/*.exe.blockmap dist/latest.yml)
+          git tag "clips-v$V" "$GITHUB_SHA" 2>/dev/null || true
+          git push origin "clips-v$V" || true
+          gh release view "clips-v$V" >/dev/null 2>&1 || gh release create "clips-v$V" --verify-tag --latest=false --title "History Clips $V" --notes "History Clips $V"
+          gh release upload "clips-v$V" "${FILES[@]}" --clobber
+          # Release fixe : lien de téléchargement stable et mises à jour automatiques de l'appli
+          gh release view clips-latest >/dev/null 2>&1 || gh release create clips-latest --latest=false --title "History Clips (dernière version)" --notes "Toujours la dernière version de History Clips. Télécharge History-Clips-Setup.exe."
+          gh release upload clips-latest "${FILES[@]}" dist/History-Clips-Setup.exe --clobber

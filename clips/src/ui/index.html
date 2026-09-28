@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: clip:; media-src clip:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'">
+<title>History Clips</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<aside class="side">
+  <div class="brand"><img src="icon.png" alt=""><b>History Clips</b></div>
+  <nav id="nav">
+    <button data-f="tout" class="on">🎬 Tous les clips<em id="nTout"></em></button>
+    <button data-f="favs">⭐ Favoris<em id="nFavs"></em></button>
+    <button data-f="captures">📸 Captures<em id="nCaps"></em></button>
+  </nav>
+  <h5>Jeux</h5>
+  <nav id="games"></nav>
+  <button class="setbtn" id="openSet">⚙ Réglages</button>
+</aside>
+<main>
+  <header class="top">
+    <div><h1 id="title">Tous les clips</h1><span class="pill" id="replayPill"><b></b><span></span></span></div>
+    <input id="search" type="search" placeholder="Rechercher un clip, un jeu…">
+  </header>
+  <div class="grid" id="grid"></div>
+</main>
+
+<dialog id="viewer" class="viewer">
+  <div class="vhead"><h2 id="vTitle"></h2><button type="button" class="x" data-close>✕</button></div>
+  <video id="vVideo" controls></video><img id="vImg" alt="" hidden>
+  <div class="trim" id="trim">
+    <b>✂ Découper</b>
+    <label>Début <input type="range" id="tStart" min="0" step="0.1" value="0"><output id="oStart">0,0 s</output></label>
+    <label>Fin <input type="range" id="tEnd" min="0" step="0.1" value="0"><output id="oEnd">0,0 s</output></label>
+    <button type="button" class="btn" id="doTrim">✂ Garder ce passage</button>
+  </div>
+  <div class="vbar">
+    <button type="button" class="btn play" id="vDiscord">📤 Discord</button>
+    <button type="button" class="btn" id="vExport">⬇ Exporter en MP4</button>
+    <button type="button" class="btn ghost" id="vFav">⭐ Favori</button>
+    <button type="button" class="btn ghost" id="vRename">✏ Renommer</button>
+    <button type="button" class="btn ghost" id="vFolder">📁 Dossier</button>
+    <button type="button" class="btn ghost danger" id="vDelete">🗑 Supprimer</button>
+  </div>
+</dialog>
+
+<dialog id="modal" class="modal"><div id="modalBox"></div></dialog>
+
+<dialog id="settings" class="modal wide">
+  <div class="vhead"><h2>⚙ Réglages</h2><button type="button" class="x" data-close>✕</button></div>
+  <div class="sets">
+    <section>
+      <h3>🎬 Replay</h3>
+      <label class="toggle"><input type="checkbox" id="sReplay"><span></span>Replay actif (enregistre en fond pour garder les dernières secondes)</label>
+      <div class="row"><span>Durée d’un clip</span><select id="sSeconds"><option value="15">15 secondes</option><option value="30">30 secondes</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></div>
+      <div class="row"><span>Qualité</span><select id="sHeight"><option value="720">720p (léger)</option><option value="1080">1080p</option><option value="1440">1440p (lourd)</option></select></div>
+      <div class="row"><span>Images par seconde</span><select id="sFps"><option value="30">30 i/s (léger)</option><option value="60">60 i/s (fluide)</option></select></div>
+      <label class="toggle"><input type="checkbox" id="sAudio"><span></span>Enregistrer le son du PC</label>
+    </section>
+    <section>
+      <h3>⌨ Raccourcis <small>(clique puis appuie sur ta touche)</small></h3>
+      <div class="row"><span>🎬 Garder un clip</span><button type="button" class="btn ghost sm" data-hk="hotClip"></button></div>
+      <div class="row"><span>📸 Capture d’écran</span><button type="button" class="btn ghost sm" data-hk="hotShot"></button></div>
+    </section>
+    <section>
+      <h3>📁 Rangement</h3>
+      <div class="row"><span id="sDir"></span><button type="button" class="btn ghost sm" id="sPick">Changer</button></div>
+      <label class="toggle"><input type="checkbox" id="sAuto"><span></span>Démarrer avec Windows (en fond, prêt à clipper)</label>
+    </section>
+    <section>
+      <h3>👤 Compte History <small>(pour envoyer sur Discord)</small></h3>
+      <div id="acct"></div>
+    </section>
+    <p class="fine" id="sVer"></p>
+  </div>
+</dialog>
+<div id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

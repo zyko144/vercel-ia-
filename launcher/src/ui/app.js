@@ -1627,6 +1627,9 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.34.0': [
+    ['🎬', 'Les clips ont leur propre appli : History Clips', 'Le replay et la galerie de clips quittent le launcher (qui devient plus léger) pour History Clips : enregistrement, découpe, galerie par jeu et envoi sur Discord. Lien de téléchargement dans le menu et dans Paramètres › Clips.', ['#openSettings', 'wait700', '.setnav [data-pane=clips]', 'wait900']],
+  ],
   '0.33.1': [
     ['🪶', 'Beaucoup moins de mémoire avec le replay', 'Le replay ne filme plus l’écran en permanence : il tourne seulement pendant tes parties (et rend sa mémoire 1 min après), avec deux encodages vidéo au lieu de trois. Option « Replay aussi hors des parties » dans Paramètres › Clips & captures.', ['#openSettings', 'wait600', '.setnav [data-pane=clips]', 'wait800']],
   ],
@@ -3018,46 +3021,13 @@ function go(view) {
   if (state.view === 'liste') renderList();
   if (state.view === 'stats') renderStats();
   if (state.view === 'classement') renderRanking();
-  if (state.view === 'clips') renderClips();
   if (state.view === 'amis') showFriendTab(state.ftab);
   if (state.view === 'pc') openPc();
   if (state.view === 'optimisation') openOpti();
   $('main').scrollTop = 0;
 }
 
-// Catégorie Clips : lecture dans l'appli (image et son d'origine), envoi sur Discord, dossier
-async function renderClips() {
-  const list = await api.clipsList?.().catch(() => []) ?? [];
-  $('clipGrid').innerHTML = list.length ? list.map((c) => `<figure class="clipcard"><video src="${esc(c.url)}" controls preload="metadata"></video>
-    <figcaption><div><b>${esc(c.game)}</b><small>${new Date(c.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · ${gb(c.size)}</small></div>
-    <div class="row"><button type="button" class="btn ghost sm" data-clipfs title="Plein écran">⛶</button><button type="button" class="btn sm" data-clipd="${esc(c.token)}">Discord</button><button type="button" class="btn ghost sm" data-clipf="${esc(c.token)}" title="Dossier">📁</button><button type="button" class="btn ghost sm" data-clipdel="${esc(c.token)}" title="Supprimer">🗑</button></div></figcaption></figure>`).join('')
-    : '<div class="empty">Aucun clip pour l’instant. Active le replay (Paramètres › Jeux), puis appuie sur ton raccourci de clip en jeu.</div>';
-}
-$('clipGrid').addEventListener('dblclick', (e) => { const v = e.target.closest('video'); if (v) v.requestFullscreen?.().catch(() => {}); });
-$('clipGrid').addEventListener('click', async (e) => {
-  const fs = e.target.closest('[data-clipfs]'); if (fs) return fs.closest('.clipcard').querySelector('video').requestFullscreen?.().catch(() => toast('Plein écran impossible'));
-  const del = e.target.closest('[data-clipdel]'); if (del) { const r = await api.clipsDelete(del.dataset.clipdel); if (r?.ok) { toast('🗑 Clip supprimé'); renderClips(); } return; }
-  const d = e.target.closest('[data-clipd]'); const f = e.target.closest('[data-clipf]');
-  if (f) return api.clipsOpen(f.dataset.clipf, 'folder');
-  if (d) pickClipTarget(d.dataset.clipd);
-});
-// Envoyer un clip : dans le salon des clips du serveur, ou en message privé Discord à un ami précis
-function pickClipTarget(token) {
-  const amis = state.hist?.amis ?? [];
-  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📤</span><h2>Envoyer le clip sur Discord</h2></div>
-    <div class="flist"><button type="button" class="btn" data-to="">📢 Dans le salon des clips du serveur History</button>
-    ${amis.map((a) => `<button type="button" class="btn ghost" data-to="${esc(a.id)}">💬 En privé à ${esc(a.pseudo)}</button>`).join('')}</div>
-    <p class="hint">En privé : ton ami doit avoir lié son Discord (Paramètres › Compte). Le clip est optimisé pour tenir dans la limite de Discord (10 Mo).</p>
-    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button></div>`;
-  $('modal').showModal();
-  $('modalBox').onclick = async (e) => {
-    if (e.target.closest('[data-m]')) return $('modal').close();
-    const b = e.target.closest('[data-to]'); if (!b) return;
-    $('modal').close(); toast('📤 Envoi du clip…');
-    const r = await api.captureDiscord(token, '', b.dataset.to).catch(() => null);
-    toast(r?.ok ? '✅ Clip envoyé sur Discord' : r?.error ?? 'Envoi impossible');
-  };
-}
+
 function select(item) {
   if (!item) return;
   state.sel = item;
@@ -3372,9 +3342,6 @@ function showKeys(s) {
   $('discordStatus').checked = s.discordStatus !== false;
   $('shareActivity').checked = s.shareActivity !== false;
   $('friendNotifs').checked = s.friendNotifs !== false;
-  $('replay').checked = Boolean(s.replay);
-  $('clipSeconds').value = String(s.clipSeconds ?? 30); $('replayAlways').checked = s.replayAlways === true;
-  $('clipQuality').value = String(s.clipQuality ?? 1080); $('clipFps').value = String(s.clipFps ?? 60); $('clipAudio').checked = s.clipAudio !== false;
   $('textScale').value = String(s.textScale ?? 1);
   $('compact').checked = Boolean(s.compact); document.body.classList.toggle('compact', Boolean(s.compact));
   $('dnd').checked = Boolean(s.dnd); $('tournament').checked = Boolean(s.tournament);
@@ -3404,6 +3371,8 @@ $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('preloadSteam').addEventListener('change', (e) => api.setSettings({ preloadSteam: e.target.checked }));
 $('nightUpdates').addEventListener('change', (e) => api.setSettings({ nightUpdates: e.target.checked }));
+$('clipsLink').addEventListener('click', () => api.clipsSite?.());
+$('clipsDownload').addEventListener('click', () => api.clipsSite?.());
 $('voiceReply').addEventListener('change', (e) => api.setSettings({ voiceReply: e.target.checked }));
 $('voiceName').addEventListener('change', (e) => { api.setSettings({ voiceName: e.target.value }); api.voiceSay?.(e.target.value); });
 $('voiceTest').addEventListener('click', () => api.voiceSay?.($('voiceName').value));
@@ -3413,7 +3382,7 @@ async function showRemote() {
   if (r?.on) $('remoteInfo').innerHTML = r.url ? `Sur ton téléphone (même Wi-Fi), ouvre <b>${esc(r.url)}</b> et entre le code <b>${esc(r.pin)}</b>. Windows peut demander l’autorisation du pare-feu la première fois : clique « Autoriser ».` : 'Aucun réseau Wi-Fi ou Ethernet trouvé sur ce PC.';
 }
 // Raccourcis modifiables : clic sur un raccourci, puis la nouvelle combinaison (Échap annule, Retour arrière = par défaut)
-const HK = { clip: '🎬 Garder les 30 dernières secondes', shot: '📸 Capture d’écran', overlay: '📊 Infos en jeu', toggle: '🪟 Afficher / ranger le launcher', palette: '🔎 Recherche rapide' };
+const HK = { shot: '📸 Capture d’écran', overlay: '📊 Infos en jeu', toggle: '🪟 Afficher / ranger le launcher', palette: '🔎 Recherche rapide' };
 const hkText = (a) => a.replace('CommandOrControl', 'Ctrl').replace('Shift', 'Maj').replace('PrintScreen', 'Impr. écran').replace(/num(\d)/, 'Pavé $1').split('+').map((k) => `<kbd>${esc(k)}</kbd>`).join('');
 async function showHotkeys() {
   const cur = await api.hotkeysGet?.().catch(() => null);
@@ -3481,12 +3450,6 @@ $('micTest').addEventListener('click', async (e) => {
     else { stream.getTracks().forEach((t) => t.stop()); ctx.close(); $('micLvl').style.width = '0'; toast(peak < 8 ? '🎙 Aucun son capté : vérifie le micro choisi dans Windows' : peak > 95 ? '🎙 Micro qui sature : baisse son volume dans Windows' : '🎙 Micro OK 👍'); }
   })();
 });
-for (const k of ['clipQuality', 'clipFps']) $(k).addEventListener('change', (e) => api.setSettings({ [k]: Number(e.target.value) }).then(() => toast('🎬 Réglage des clips enregistré')));
-$('replayAlways').addEventListener('change', (e) => api.setSettings({ replayAlways: e.target.checked }));
-$('clipAudio').addEventListener('change', (e) => api.setSettings({ clipAudio: e.target.checked }));
-$('clipsFolder').addEventListener('click', () => api.clipsFolder?.());
-$('clipSeconds').addEventListener('change', (e) => api.setSettings({ clipSeconds: Number(e.target.value) }).then(() => toast(`🎬 Les clips gardent maintenant les ${e.target.selectedOptions[0].text} dernières`)));
-$('replay').addEventListener('change', (e) => api.setSettings({ replay: e.target.checked }).then(() => toast(e.target.checked ? '🎬 Replay activé : ton raccourci de clip garde les dernières secondes' : 'Replay désactivé')));
 
 // Assistant : bulle en bas à droite, qui s'ouvre et se referme
 function openAssistant(open = !$('aipop').classList.contains('open')) {
@@ -3914,7 +3877,7 @@ function demoApi() {
     chatRead: async () => ({ ok: true }), chatTyping: async () => ({ ok: true }), chatReact: async () => ({ ok: true }),
     schedList: async () => [{ id: 's1', key: 'g:g1', text: 'On lance la ranked, connectez-vous !', at: Date.now() + 3 * 3_600_000 }], schedAdd: async () => ({ ok: true }), schedDel: async () => ({ ok: true }),
     capturesRecent: async () => [], captureData: async () => null,
-    hotkeysGet: async () => ({ clip: 'CommandOrControl+Alt+R', shot: 'CommandOrControl+Alt+S', overlay: 'CommandOrControl+Alt+O', toggle: 'CommandOrControl+Alt+H', palette: 'CommandOrControl+Alt+Space' }),
+    hotkeysGet: async () => ({ shot: 'CommandOrControl+Alt+S', overlay: 'CommandOrControl+Alt+O', toggle: 'CommandOrControl+Alt+H', palette: 'CommandOrControl+Alt+Space' }),
     tools: async () => ({ profile: { enabled: false, close: [], power: 'none' }, apps: [], saveDirs: [], backups: [], received: [], caches: [], perf: [], graphics: { need: 'benchmark' }, fps: false, canMove: false }),
     gameCare: async () => ({ crashes: [{ at: Date.now() - 86_400_000, cause: 'Pilote graphique NVIDIA', fix: 'Mets à jour (ou réinstalle proprement) le pilote NVIDIA, et baisse les réglages graphiques si ça recommence.', module: 'nvwgf2umx.dll' }], loads: [{ ms: 24000 }, { ms: 26000 }, { ms: 41000 }], with: ['a1'] }),
     gameWith: async () => ({ ok: true, with: ['a1'], apps: [{ id: 'a1', name: 'Discord' }, { id: 'a2', name: 'Spotify' }, { id: 'a3', name: 'OBS Studio' }] }),
@@ -3934,7 +3897,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.33.1',
+    version: async () => '0.34.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

@@ -1,0 +1,18 @@
+// Tests des fonctions pures de History Clips : node test/test-clips.mjs
+import assert from 'node:assert/strict';
+import { clipName, ffmpegArgs, gameLabel, safeName, unpacked, validAccel } from '../src/core.js';
+
+assert.equal(safeName('Rocket League: <Pro>'), 'Rocket League Pro');
+assert.equal(safeName('CON'), 'CON_');
+assert.match(clipName('FiveM', 'mp4', new Date(2026, 8, 28, 21, 4, 3)), /^FiveM 2026-09-28 21-04-03\.mp4$/);
+assert.equal(gameLabel({ desc: 'Rocket League', title: 'Rocket League (64-bit)', proc: 'RocketLeague' }), 'Rocket League');
+assert.equal(gameLabel({ desc: '', title: '', proc: 'explorer' }), 'Bureau');
+assert.equal(gameLabel({ desc: '', title: 'FiveM® by Cfx.re', proc: 'FiveM_GTAProcess' }), 'FiveM® by Cfx.re');
+const trim = ffmpegArgs('a.webm', 'b.mp4', { start: 2, end: 12, reencode: true });
+assert.deepEqual(trim.slice(0, 7), ['-y', '-ss', '2', '-i', 'a.webm', '-t', '10']);
+assert.ok(trim.includes('libx264') && trim.includes('+faststart'));
+assert.ok(ffmpegArgs('a.webm', 'b.mp4').includes('copy'), 'remise en MP4 sans réencoder la vidéo');
+assert.equal(unpacked(['C:', 'app', 'resources', 'app.asar', 'node_modules', 'ffmpeg.exe'].join(process.platform === 'win32' ? '\\' : '/')).includes('app.asar.unpacked'), true);
+assert.ok(validAccel('F8') && validAccel('Alt+F10') && validAccel('CommandOrControl+Shift+K') && validAccel('PrintScreen'));
+assert.ok(!validAccel('K') && !validAccel('Space') && !validAccel('Alt+Alt+K') && !validAccel('Win+K'));
+console.log('✅ History Clips : 15 vérifications');
