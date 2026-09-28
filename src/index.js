@@ -93,10 +93,13 @@ client.once(Events.ClientReady, async (c) => {
     console.error('❌ Enregistrement des commandes impossible :', err);
   }
   // /play sur chaque serveur : visible tout de suite, sans attendre la mise à jour globale de Discord
-  const guildPayload = (old ? guildCommandDefinitions : guildCommandDefinitions.filter((cmd) => cmd.name === 'launcher')).map((cmd) => cmd.toJSON());
-  const registerOn = (guild) => guild.commands.set(guildPayload).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
+  const { HOME_GUILD } = await import('./features/launcherServers.js');
+  const pick = (name) => guildCommandDefinitions.filter((cmd) => cmd.name === name).map((cmd) => cmd.toJSON());
+  // /launcher sur le serveur du launcher, /play (musique) sur les autres
+  const payloadFor = (guild) => (old ? guildCommandDefinitions.map((cmd) => cmd.toJSON()) : pick(guild.id === HOME_GUILD ? 'launcher' : 'play'));
+  const registerOn = (guild) => guild.commands.set(payloadFor(guild)).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
   await Promise.all([...c.guilds.cache.values()].map(registerOn));
-  console.log(`▶️ ${guildPayload.map((x) => `/${x.name}`).join(' ')} enregistrée(s) sur ${c.guilds.cache.size} serveur(s)`);
+  console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
   c.on(Events.GuildCreate, (guild) => registerOn(guild));
   // Résumé des commandes « !! » dans le salon agora (une fois par version)
   import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));

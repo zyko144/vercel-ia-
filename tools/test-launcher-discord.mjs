@@ -100,7 +100,7 @@ await check('rôles automatiques selon le niveau et le benchmark', async () => {
     roles: { cache: { find: (fn) => [...roles.values()].find(fn) }, create: async ({ name }) => { const r = { id: name, name }; roles.set(name, r); return r; } },
     members: { fetch: async () => ({ roles: { cache: { has: (id) => has.has(id) }, add: async (r) => has.add(r.id), remove: async (r) => has.delete(r.id) } }) },
   };
-  await _test.syncMember({ channels: { fetch: async () => ({ guild }) } }, 'd1', await profileOf(noamId));
+  await _test.syncMember({ guilds: { fetch: async () => guild } }, 'd1', await profileOf(noamId));
   assert.ok(has.has('🏁 Monstre de jeu') && has.has('🔥 Niveau 25+'), 'rôles donnés (et créés)');
   assert.ok(!has.has('old'), 'ancien palier retiré');
 });
@@ -110,6 +110,8 @@ await check('jeux gratuits Epic : annoncés une seule fois, avec image', async (
   const feed = { data: { Catalog: { searchStore: { elements: [{ title: 'Super Jeu', productSlug: 'super-jeu', keyImages: [{ type: 'OfferImageWide', url: 'https://img/x.jpg' }], price: { totalPrice: { discountPrice: 0 } }, promotions: { promotionalOffers: [{ promotionalOffers: [{ startDate: new Date(now - 86_400_000).toISOString(), endDate: new Date(now + 5 * 86_400_000).toISOString(), discountSetting: { discountPercentage: 0 } }] }] } }] } } } };
   const fetchImpl = async (u) => (String(u).includes('freeGamesPromotions') ? new Response(JSON.stringify(feed)) : new Response(new Uint8Array([1, 2, 3])));
   const sent = [];
+  // Serveur du launcher installé : les annonces vont dans son salon jeux-gratuits
+  await (await import('../src/storage.js')).save('launcher-serveurs', [{ guildId: 'g1', news: 'n1', deals: 'd1' }]);
   const client = { channels: { fetch: async () => ({ isTextBased: () => true, send: async (p) => sent.push(p) }) } };
   await _test.announceFree(client, fetchImpl);
   await new Promise((r) => setTimeout(r, 1200));
@@ -119,11 +121,9 @@ await check('jeux gratuits Epic : annoncés une seule fois, avec image', async (
   assert.equal(sent[0].files.length, 1);
 });
 
-await check('salon des bons plans créé tout seul + grosses promos Steam une fois par jour', async () => {
-  const created = []; const sent = [];
-  const chan = { id: 'bp1', name: '🎁・jeux-gratuits-et-promos', isTextBased: () => true, send: async (p) => sent.push(p) };
-  const guild = { channels: { cache: { find: () => null }, create: async (o) => { created.push(o); return chan; } } };
-  const client = { channels: { fetch: async (id) => (id === 'bp1' ? chan : { guild, parentId: 'cat', isTextBased: () => true }) } };
+await check('grosses promos Steam une fois par jour, dans le salon jeux-gratuits', async () => {
+  const sent = [];
+  const client = { channels: { fetch: async () => ({ send: async (p) => sent.push(p) }) } };
   const steam = { specials: { items: [
     { id: 1, name: 'Gros Jeu', discounted: true, discount_percent: 75, original_price: 5999, final_price: 1499, header_image: 'https://x/1.jpg', discount_expiration: 1_900_000_000 },
     { id: 2, name: 'Petite promo', discounted: true, discount_percent: 20, original_price: 1000, final_price: 800 },
@@ -132,8 +132,6 @@ await check('salon des bons plans créé tout seul + grosses promos Steam une fo
   await _test.announceDeals(client, fetchImpl);
   await new Promise((r) => setTimeout(r, 1200));
   await _test.announceDeals(client, fetchImpl);
-  assert.equal(created.length, 1, 'salon créé une fois');
-  assert.equal(created[0].parent, 'cat');
   assert.equal(sent.length, 1, 'une fois par jour');
   assert.equal(sent[0].embeds.length, 1, 'seulement les promos de -50 % et plus');
   assert.match(sent[0].embeds[0].toJSON().description, /14,99 €/);
