@@ -4,7 +4,7 @@
 // - Tentatives limitées par adresse IP et par e-mail ; messages d'erreur qui ne disent pas si l'e-mail existe.
 import { createHash, randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { load, save } from '../storage.js';
+import { delBlob, deleteRows, getBlob, load, putBlob, save, storageBackend, upsertRows } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
 import { checkMailCode, checkTotp, codeMail, codeRecord, hashValue, mailCode, mailReady, newTotpSecret, otpauthUrl, recoveryCodes, sendMail } from './launcherSecurity.js';
 
@@ -14,6 +14,39 @@ const SESSION_MS = 90 * 86_400_000;
 const sha = (v) => createHash('sha256').update(v).digest('hex');
 const creating = new Set(); // e-mails en cours d'inscription (deux inscriptions simultanées)
 
+// Images (photo, bannière, images des discussions) : fichiers dans Supabase Storage (ou dossier local sans Supabase)
+export async function saveImage(kind, id, img) { await putBlob(`${kind}/${id}`, Buffer.from(img.data, 'base64'), img.mime); }
+export function dropImage(kind, id) { delBlob(`${kind}/${id}`).catch(() => {}); save(`launcher-${kind === 'image' ? 'img' : kind}-${id}`, {}); }
+
+// Comptes recopiés dans une vraie table Supabase « launcher_comptes » (lisible dans le tableau de bord) :
+// jamais de mot de passe, de clé de double authentification ni de jeton, seulement le profil et l'activité.
+const mirrorSeen = new Map();
+let mirrorTimer = null;
+function store(d) {
+  save(KEY, d);
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(() => mirrorAccounts(d).catch((err) => console.warn('[comptes] recopie Supabase :', err.message)), 4000);
+}
+export async function mirrorAccounts(d) {
+  if (storageBackend !== 'Supabase') return { rows: 0 };
+  const social = (await load('launcher-social', null)) ?? {};
+  const rows = Object.values(d.accounts ?? {}).map((a) => {
+    const p = a.profile ?? {};
+    const pres = social.presence?.[a.id] ?? {};
+    const last = Math.max(...Object.values(d.sessions ?? {}).filter((x) => x.id === a.id).map((x) => x.seen ?? x.at), pres.seen ?? 0, 0);
+    return {
+      id: a.id, pseudo: a.pseudo, email: a.email, cree_le: new Date(a.createdAt ?? Date.now()).toISOString(), email_verifie: a.verified !== false,
+      double_auth: Boolean(a.totp?.on), discord_lie: Boolean(a.discordId), photo: Boolean(p.av), couleur: p.color ?? null, bio: p.bio ?? null, jeu_prefere: p.favGame ?? null,
+      amis: (social.friends?.[a.id] ?? []).length, appareils: (a.devices ?? []).length, derniere_activite: last ? new Date(last).toISOString() : null, joue_a: pres.playing ?? null,
+    };
+  });
+  const changed = rows.filter((r) => { const h = JSON.stringify(r); if (mirrorSeen.get(r.id) === h) return false; mirrorSeen.set(r.id, h); return true; });
+  const gone = [...mirrorSeen.keys()].filter((id) => !d.accounts?.[id]);
+  for (let i = 0; i < changed.length; i += 200) if (!(await upsertRows('launcher_comptes', changed.slice(i, i + 200)))) { for (const r of changed) mirrorSeen.delete(r.id); return { rows: 0, error: true }; }
+  if (gone.length && await deleteRows('launcher_comptes', gone)) for (const id of gone) mirrorSeen.delete(id);
+  return { rows: changed.length };
+}
+let mirroredOnce = false;
 async function data() {
   const d = (await load(KEY, null)) ?? {};
   d.accounts ??= {}; // id -> compte
@@ -22,6 +55,7 @@ async function data() {
   d.tickets ??= {}; // étape double authentification : empreinte -> { id, exp, tries }
   d.discordCodes ??= {}; // code de liaison Discord -> { id, exp }
   d.pairs ??= {}; // connexion par code depuis un autre PC : empreinte du ticket -> { code, exp, device, id, name }
+  if (!mirroredOnce) { mirroredOnce = true; setTimeout(() => mirrorAccounts(d).catch(() => {}), 10_000); } // comptes déjà existants recopiés au démarrage
   return d;
 }
 
@@ -137,20 +171,20 @@ async function saveProfile(a, body) {
     for (const k of PROFILE_CHOICES.links) { const v = linkHandle(k, body.liens[k]); if (v) p.links[k] = v; }
   }
   if ('banniereImg' in body) {
-    if (body.banniereImg === null) { delete p.bv; save(`launcher-banniere-${a.id}`, {}); }
+    if (body.banniereImg === null) { delete p.bv; dropImage('banniere', a.id); }
     else {
       const img = checkImage(body.banniereImg, 300 * 1024);
       if (typeof img === 'string') return img.replace('Image', 'Bannière');
-      save(`launcher-banniere-${a.id}`, img);
+      try { await saveImage('banniere', a.id, img); } catch { return 'Bannière non enregistrée, réessaie dans un instant.'; }
       p.bv = Date.now();
     }
   }
   if ('avatar' in body) {
-    if (body.avatar === null) { delete p.av; save(`launcher-avatar-${a.id}`, {}); }
+    if (body.avatar === null) { delete p.av; dropImage('avatar', a.id); }
     else {
       const img = checkImage(body.avatar, AVATAR_MAX);
       if (typeof img === 'string') return img;
-      save(`launcher-avatar-${a.id}`, img);
+      try { await saveImage('avatar', a.id, img); } catch { return 'Photo non enregistrée, réessaie dans un instant.'; }
       p.av = Date.now();
     }
   }
@@ -180,7 +214,7 @@ export async function register(body, ip) {
       sendMail(email, m.subject, m.html).catch(() => {});
     }
     const token = await newSession(d, id);
-    save(KEY, d);
+    store(d);
     return { status: 201, token, compte: publicAccount(d.accounts[id]) };
   } finally {
     creating.delete(email);
@@ -204,12 +238,12 @@ export async function login(body, ip) {
     const ticket = randomBytes(24).toString('base64url');
     d.tickets[sha(ticket)] = { id: account.id, exp: Date.now() + 5 * 60_000, tries: 0, device: cleanDevice(body.appareil) };
     for (const [k, t] of Object.entries(d.tickets)) if (Date.now() > t.exp) delete d.tickets[k];
-    save(KEY, d);
+    store(d);
     return { status: 200, need2fa: true, ticket };
   }
   const token = await newSession(d, account.id);
   await deviceCheck(account, cleanDevice(body.appareil), ip);
-  save(KEY, d);
+  store(d);
   return { status: 200, token, compte: publicAccount(account) };
 }
 
@@ -227,7 +261,7 @@ export async function me(token) {
 export async function logout(token) {
   const d = await data();
   if (typeof token === 'string') delete d.sessions[sha(token)];
-  save(KEY, d);
+  store(d);
   return { status: 200, ok: true };
 }
 
@@ -248,13 +282,13 @@ export async function securityRoute(route, body, token, ip) {
     const code = String(body.code ?? '').trim().toUpperCase();
     const step = a?.totp?.on ? checkTotp(a.totp.secret, code, a.totp.lastStep ?? -1) : null;
     const recovery = !step && a?.totp?.recovery?.includes(hashValue(code));
-    if (!a || (step == null && !recovery)) { save(KEY, d); return { status: 401, error: 'Code incorrect.' }; }
+    if (!a || (step == null && !recovery)) { store(d); return { status: 401, error: 'Code incorrect.' }; }
     if (step != null) a.totp.lastStep = step;
     if (recovery) a.totp.recovery = a.totp.recovery.filter((h) => h !== hashValue(code));
     delete d.tickets[sha(String(body.ticket))];
     const tok = await newSession(d, a.id);
     await deviceCheck(a, t.device, ip);
-    save(KEY, d);
+    store(d);
     return { status: 200, token: tok, compte: publicAccount(a), recoveryLeft: recovery ? a.totp.recovery.length : undefined };
   }
   if (route === 'POST /api/compte/mdp/oubli') {
@@ -263,7 +297,7 @@ export async function securityRoute(route, body, token, ip) {
     if (a && mailReady()) {
       const code = mailCode();
       a.reset = codeRecord(code);
-      save(KEY, d);
+      store(d);
       const m = codeMail(a.pseudo, code, 'reset');
       await sendMail(a.email, m.subject, m.html);
     }
@@ -275,13 +309,13 @@ export async function securityRoute(route, body, token, ip) {
     const pb = passwordProblem(body.motDePasse);
     if (pb) return { status: 400, error: pb };
     const r = a ? checkMailCode(a.reset, body.code) : 'bad';
-    if (r !== 'ok') { save(KEY, d); return { status: 400, error: r === 'expired' ? 'Code expiré : redemande un code.' : 'Code incorrect.' }; }
+    if (r !== 'ok') { store(d); return { status: 400, error: r === 'expired' ? 'Code expiré : redemande un code.' : 'Code incorrect.' }; }
     a.salt = randomBytes(16).toString('hex');
     a.hash = await hashPassword(body.motDePasse, a.salt);
     delete a.reset;
     a.verified = true; // le code reçu par e-mail prouve l'adresse
     for (const [k, s] of Object.entries(d.sessions)) if (s.id === a.id) delete d.sessions[k]; // déconnecte partout
-    save(KEY, d);
+    store(d);
     return { status: 200, ok: true };
   }
   // Routes qui demandent d'être connecté
@@ -293,23 +327,23 @@ export async function securityRoute(route, body, token, ip) {
     if (!mailReady()) return { status: 503, error: 'E-mails non configurés sur le serveur.' };
     const code = mailCode();
     a.verif = codeRecord(code);
-    save(KEY, d);
+    store(d);
     const m = codeMail(a.pseudo, code, 'verif');
     const r = await sendMail(a.email, m.subject, m.html);
     return r.ok ? { status: 200, ok: true } : { status: 502, error: r.error };
   }
   if (route === 'POST /api/compte/verif') {
     const r = checkMailCode(a.verif, body.code);
-    if (r !== 'ok') { save(KEY, d); return { status: 400, error: r === 'expired' ? 'Code expiré : demande un nouveau code.' : 'Code incorrect.' }; }
+    if (r !== 'ok') { store(d); return { status: 400, error: r === 'expired' ? 'Code expiré : demande un nouveau code.' : 'Code incorrect.' }; }
     a.verified = true;
     delete a.verif;
-    save(KEY, d);
+    store(d);
     return { status: 200, ok: true, compte: publicAccount(a) };
   }
   if (route === 'POST /api/compte/2fa/debut') {
     if (a.totp?.on) return { status: 409, error: 'La double authentification est déjà activée.' };
     a.totp = { on: false, secret: newTotpSecret() };
-    save(KEY, d);
+    store(d);
     return { status: 200, secret: a.totp.secret, url: otpauthUrl(a.totp.secret, a.email) };
   }
   if (route === 'POST /api/compte/2fa/activer') {
@@ -320,7 +354,7 @@ export async function securityRoute(route, body, token, ip) {
     a.totp = { on: true, secret: a.totp.secret, lastStep: step, recovery: codes.map(hashValue), since: Date.now() };
     // Les autres appareils déjà connectés sont déconnectés : ils devront donner le code pour revenir
     for (const [h, sess] of Object.entries(d.sessions)) if (sess.id === a.id && h !== sha(String(token ?? ''))) delete d.sessions[h];
-    save(KEY, d);
+    store(d);
     return { status: 200, ok: true, recovery: codes, compte: publicAccount(a) };
   }
   // Déverrouillage du launcher à l'ouverture (compte avec double authentification)
@@ -332,7 +366,7 @@ export async function securityRoute(route, body, token, ip) {
     if (step == null && !recovery) return { status: 401, error: 'Code incorrect.' };
     if (step != null) a.totp.lastStep = step;
     if (recovery) a.totp.recovery = a.totp.recovery.filter((h) => h !== hashValue(code));
-    save(KEY, d);
+    store(d);
     return { status: 200, ok: true, recoveryLeft: recovery ? a.totp.recovery.length : undefined };
   }
   if (route === 'POST /api/compte/2fa/desactiver') {
@@ -342,7 +376,7 @@ export async function securityRoute(route, body, token, ip) {
     if (pw.length !== good.length || !timingSafeEqual(pw, good)) return { status: 401, error: 'Mot de passe incorrect.' };
     if (checkTotp(a.totp.secret, body.code, a.totp.lastStep ?? -1) == null && !a.totp.recovery?.includes(hashValue(String(body.code ?? '').trim().toUpperCase()))) return { status: 401, error: 'Code incorrect.' };
     delete a.totp;
-    save(KEY, d);
+    store(d);
     return { status: 200, ok: true, compte: publicAccount(a) };
   }
   return { status: 404, error: 'route inconnue' };
@@ -361,6 +395,11 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
     if (url.pathname.startsWith('/api/compte/verif') || url.pathname.startsWith('/api/compte/mdp') || url.pathname.startsWith('/api/compte/2fa') || route === 'POST /api/compte/connexion/2fa') {
       const r = await securityRoute(route, await readJson(req), token, ip); return send(res, r.status, r);
     }
+    // État du stockage (sans rien de secret) : le launcher affiche si les comptes sont bien gardés sur Supabase
+    if (route === 'GET /api/compte/etat') {
+      const d = await data();
+      return send(res, 200, { stockage: storageBackend, supabase: storageBackend === 'Supabase', comptes: Object.keys(d.accounts).length });
+    }
     // Connexion par code : le nouveau PC affiche un code, un PC déjà connecté le valide (pas de mot de passe à taper)
     if (route === 'POST /api/compte/lien/demande') {
       if (!allowAttempt('compte-lien-demande', ip, 10, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie dans quelques minutes.' });
@@ -370,7 +409,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const code = Array.from(randomBytes(8), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('').replace(/^(.{4})/, '$1-');
       const ticket = randomBytes(24).toString('base64url');
       d.pairs[sha(ticket)] = { code, exp: Date.now() + 5 * 60_000, device: cleanDevice(body.appareil), name: String(body.nom ?? 'PC').replace(/[^\w .'-]/g, '').slice(0, 40) || 'PC', id: null };
-      save(KEY, d);
+      store(d);
       return send(res, 200, { ok: true, code, ticket, exp: d.pairs[sha(ticket)].exp });
     }
     if (route === 'GET /api/compte/lien/attente') {
@@ -384,7 +423,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       if (!a) return send(res, 410, { error: 'Compte introuvable.' });
       const tok = await newSession(d, a.id);
       if (pr.device) { const h = sha(`appareil:${pr.device}`); a.devices = [...(a.devices ?? []).filter((x) => x.h !== h), { h, at: Date.now() }].slice(-20); }
-      save(KEY, d);
+      store(d);
       return send(res, 200, { ok: true, token: tok, compte: publicAccount(a) });
     }
     if (route === 'POST /api/compte/lien/valider') {
@@ -396,27 +435,32 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const pr = Object.values(d.pairs).find((x) => x.code === code && Date.now() <= x.exp && !x.id);
       if (!pr) return send(res, 404, { error: 'Code inconnu ou expiré.' });
       pr.id = a.id;
-      save(KEY, d);
+      store(d);
       return send(res, 200, { ok: true, nom: pr.name });
     }
     if (route === 'POST /api/compte/discord/code' || route === 'POST /api/compte/discord/delier') {
       const d = await data();
       const a = await accountOf(d, token);
       if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
-      if (route.endsWith('delier')) { delete a.discordId; save(KEY, d); return send(res, 200, { ok: true }); }
+      if (route.endsWith('delier')) { delete a.discordId; store(d); return send(res, 200, { ok: true }); }
       for (const [c, x] of Object.entries(d.discordCodes)) if (Date.now() > x.exp || x.id === a.id) delete d.discordCodes[c];
       const code = Array.from(randomBytes(6), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
       d.discordCodes[code] = { id: a.id, exp: Date.now() + 10 * 60_000 };
-      save(KEY, d);
+      store(d);
       return send(res, 200, { ok: true, code, lie: Boolean(a.discordId) });
     }
     // Photo de profil : publique (identifiant aléatoire), gardée en cache par le navigateur
     const avm = url.pathname.match(/^\/api\/compte\/(avatar|banniere|img)\/([\w-]{8,64})$/);
     if (avm && req.method === 'GET') {
-      const img = await load(`launcher-${avm[1]}-${avm[2]}`, null);
-      if (!img?.data) return send(res, 404, { error: 'Pas de photo.' });
-      res.writeHead(200, { 'Content-Type': img.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
-      res.end(Buffer.from(img.data, 'base64'));
+      const kind = avm[1] === 'img' ? 'image' : avm[1];
+      let blob = await getBlob(`${kind}/${avm[2]}`);
+      if (!blob) { // anciennes images gardées dans la table clé/valeur
+        const old = await load(`launcher-${avm[1]}-${avm[2]}`, null);
+        if (old?.data) blob = { buf: Buffer.from(old.data, 'base64'), mime: old.mime };
+      }
+      if (!blob || !/^image\/(png|jpeg|webp)$/.test(blob.mime)) return send(res, 404, { error: 'Pas de photo.' });
+      res.writeHead(200, { 'Content-Type': blob.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+      res.end(blob.buf);
       return;
     }
     if (route === 'POST /api/compte/profil') {
@@ -426,7 +470,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       if (!allowAttempt('compte-profil', a.id, 30, 60 * 60_000)) return send(res, 429, { error: 'Trop de changements, réessaie plus tard.' });
       const err = await saveProfile(a, await readJson(req));
       if (err) return send(res, 400, { error: err });
-      save(KEY, d);
+      store(d);
       return send(res, 200, { ok: true, compte: publicAccount(a) });
     }
     if (route === 'GET /api/compte/moi') { const c = await me(token); return c ? send(res, 200, { compte: c }) : send(res, 401, { error: 'Session expirée, reconnecte-toi.' }); }
@@ -460,7 +504,7 @@ export async function linkDiscord(code, discordId) {
   const a = d.accounts[x.id];
   if (!a) return { ok: false, error: 'Compte introuvable.' };
   a.discordId = String(discordId);
-  save(KEY, d);
+  store(d);
   return { ok: true, pseudo: a.pseudo, id: a.id };
 }
 export async function accountByDiscord(discordId) {

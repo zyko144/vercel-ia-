@@ -92,6 +92,60 @@ export async function flushAll() {
   await Promise.all(keys.map((k) => writeRemote(k, cache.get(k)).catch((err) => console.error(`[storage] écriture "${k}" impossible :`, err.message))));
 }
 
+// ---------- Tables et fichiers Supabase (comptes lisibles dans le tableau de bord, images dans Storage) ----------
+const warned = new Set();
+const warnOnce = (k, msg) => { if (!warned.has(k)) { warned.add(k); console.warn(msg); } };
+/** Insère ou met à jour des lignes dans une vraie table Supabase (ignoré sans Supabase). */
+export async function upsertRows(table, rows, onConflict = 'id') {
+  if (!useSupabase || !rows.length) return false;
+  const res = await fetch(`${config.supabase.url}/rest/v1/${table}?on_conflict=${onConflict}`, {
+    method: 'POST', headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows),
+  }).catch((err) => ({ ok: false, status: 0, text: async () => err.message }));
+  if (!res.ok) { warnOnce(`t:${table}`, `[storage] table « ${table} » inaccessible (${res.status}) : lance supabase.sql dans Supabase > SQL Editor. ${String(await res.text()).slice(0, 160)}`); return false; }
+  return true;
+}
+export async function deleteRows(table, ids, col = 'id') {
+  if (!useSupabase || !ids.length) return false;
+  const list = ids.map((x) => `"${String(x).replace(/"/g, '')}"`).join(',');
+  const res = await fetch(`${config.supabase.url}/rest/v1/${table}?${col}=in.(${encodeURIComponent(list)})`, { method: 'DELETE', headers: supabaseHeaders() }).catch(() => ({ ok: false }));
+  return res.ok;
+}
+// Fichiers (photos de profil, bannières, images des discussions) : bucket privé Supabase Storage, sinon dossier local
+const BUCKET = 'launcher';
+let bucketReady = null;
+function ensureBucket() {
+  bucketReady ??= fetch(`${config.supabase.url}/storage/v1/bucket`, { method: 'POST', headers: supabaseHeaders(), body: JSON.stringify({ id: BUCKET, name: BUCKET, public: false, file_size_limit: 5 * 1024 * 1024 }) })
+    .then(() => true).catch(() => true);
+  return bucketReady;
+}
+const blobFile = (name) => path.join(DATA_DIR, 'fichiers', name.replace(/[^\w.-]/g, '_'));
+export async function putBlob(name, buf, mime) {
+  if (useSupabase) {
+    await ensureBucket();
+    const res = await fetch(`${config.supabase.url}/storage/v1/object/${BUCKET}/${encodeURIComponent(name)}`, { method: 'POST', headers: { ...supabaseHeaders(), 'Content-Type': mime, 'x-upsert': 'true', 'cache-control': '31536000' }, body: buf });
+    if (!res.ok) throw new Error(`Supabase Storage ${res.status}: ${String(await res.text()).slice(0, 160)}`);
+    return true;
+  }
+  await fs.mkdir(path.dirname(blobFile(name)), { recursive: true });
+  await fs.writeFile(blobFile(name), buf);
+  await fs.writeFile(`${blobFile(name)}.type`, mime);
+  return true;
+}
+export async function getBlob(name) {
+  if (useSupabase) {
+    const res = await fetch(`${config.supabase.url}/storage/v1/object/${BUCKET}/${encodeURIComponent(name)}`, { headers: supabaseHeaders() }).catch(() => null);
+    if (!res?.ok) return null;
+    return { buf: Buffer.from(await res.arrayBuffer()), mime: res.headers.get('content-type') || 'application/octet-stream' };
+  }
+  const buf = await fs.readFile(blobFile(name)).catch(() => null);
+  return buf ? { buf, mime: String(await fs.readFile(`${blobFile(name)}.type`, 'utf8').catch(() => 'application/octet-stream')) } : null;
+}
+export async function delBlob(name) {
+  if (useSupabase) { await fetch(`${config.supabase.url}/storage/v1/object/${BUCKET}`, { method: 'DELETE', headers: supabaseHeaders(), body: JSON.stringify({ prefixes: [name] }) }).catch(() => {}); return; }
+  await fs.rm(blobFile(name), { force: true }).catch(() => {});
+  await fs.rm(`${blobFile(name)}.type`, { force: true }).catch(() => {});
+}
+
 export const storageBackend = useSupabase ? 'Supabase' : 'fichiers locaux';
 
 /** Stockage partagé entre plusieurs machines (Supabase) : sinon, chaque copie du bot a ses propres fichiers. */

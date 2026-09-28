@@ -1609,3 +1609,13 @@ body.idle .maintsign svg { animation: none; }
 .paircode { font: 800 34px/1.1 ui-monospace, Consolas, monospace; letter-spacing: .12em; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.05); border: 1px dashed rgba(255,255,255,.2); color: #fff; user-select: all; }
 .toolsbody { grid-auto-rows: max-content; }
 .flist > div.crash { display: block; height: auto; }
+
+.cloudstate { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); margin-bottom: 12px; }
+.cloudstate > span { font-size: 20px; }
+.cloudstate div { display: grid; gap: 2px; } .cloudstate small { color: var(--muted); font-size: 12.5px; }
+.cloudstate.ok { border-color: rgba(74,222,128,.35); background: rgba(74,222,128,.06); }
+.cloudstate.bad { border-color: rgba(239,68,68,.5); background: rgba(239,68,68,.1); }
+.cloudstate.warn { border-color: rgba(251,191,36,.4); }
+.netpill { margin-left: 10px; padding: 5px 11px; border-radius: 99px; font-size: 12px; font-weight: 600; color: #fecaca; background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.45); white-space: nowrap; animation: netpulse 2s ease-in-out infinite; }
+.netpill[hidden] { display: none; }
+@keyframes netpulse { 50% { opacity: .6; } }
