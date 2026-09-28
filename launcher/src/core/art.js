@@ -7,6 +7,7 @@ import { norm } from './sort.js';
 
 const DAY = 86_400_000;
 export const CACHE_DAYS = 14;
+const ART_V = 2; // change à chaque correction de la recherche d'images : les anciennes recherches sont refaites
 const json = (fetchImpl, url, opts = {}) => fetchImpl(url, { ...opts, signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /**
@@ -28,6 +29,20 @@ export async function steamImages(appid, fetchImpl = fetch) {
   return { ...steamArt(appid), ...clean };
 }
 
+// Jeux renommés sur Steam ou installés par un autre launcher (Ubisoft, Rockstar, FiveM…) : numéro Steam connu,
+// pour avoir leurs vraies images même quand le nom ne correspond plus (« Rainbow Six Siege X », « GTA V Enhanced »…)
+const KNOWN_STEAM = [
+  [/rainbowsix(siege)?(x)?$/, '359550'], [/^(grandtheftauto(v|5)|gta(v|5))(enhanced|legacy)?$/, '271590'], [/^fivem$/, '271590'], [/^redm$/, '1174180'],
+  [/^counterstrike2$|^cs2$/, '730'], [/^counterstrikeglobaloffensive$|^csgo$/, '730'], [/^left4dead2$|^l4d2$/, '550'], [/^left4dead$/, '500'],
+  [/^reddeadredemption2$|^rdr2$/, '1174180'], [/^apexlegends$/, '1172470'], [/^rocketleague$/, '252950'], [/^dota2$/, '570'], [/^teamfortress2$/, '440'],
+  [/^pubg(battlegrounds)?$|^playerunknownsbattlegrounds$/, '578080'], [/^callofduty(hq|modernwarfare(ii|iii)?|blackops(6|7)?)?$/, '1938090'], [/^fallguys$/, '1097150'],
+  [/^rust$/, '252490'], [/^garrysmod$/, '4000'], [/^eldenring$/, '1245620'], [/^cyberpunk2077$/, '1091500'], [/^thefinals$|^finals$/, '2073850'],
+  [/^marvelrivals$/, '2767030'], [/^helldivers2$/, '553850'], [/^overwatch2?$/, '2357570'], [/^destiny2$/, '1085660'], [/^warframe$/, '230410'],
+];
+export function knownSteamId(name) {
+  const n = norm(name).replace(/^tomclancys/, '');
+  return KNOWN_STEAM.find(([re]) => re.test(n))?.[1] ?? null;
+}
 /** Cherche le jeu sur le magasin Steam. */
 export async function steamMatch(name, fetchImpl = fetch) {
   const data = await json(fetchImpl, `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(name)}&cc=FR&l=french`);
@@ -55,13 +70,13 @@ export async function gridArt(name, key, fetchImpl = fetch) {
  * Renvoie la nouvelle entrée de cache, ou l'ancienne si elle est encore récente.
  */
 export async function enrich(item, { cache = null, gridKey = null, fetchImpl = fetch, now = Date.now(), details = false } = {}) {
-  const fresh = cache && now - cache.at < CACHE_DAYS * DAY && (cache.gridKey ?? null) === (gridKey ? 'oui' : null);
+  const fresh = cache && cache.v === ART_V && now - cache.at < CACHE_DAYS * DAY && (cache.gridKey ?? null) === (gridKey ? 'oui' : null);
   if (fresh && (!details || cache.details || item.kind !== 'game')) return cache;
   if (fresh && details) {
     const id = cache.steamId ?? item.steamId;
     return { ...cache, details: id ? await steamDetails(id, fetchImpl) : null };
   }
-  const out = { at: now, gridKey: gridKey ? 'oui' : null, art: {}, details: null, steamId: item.steamId ?? null };
+  const out = { v: ART_V, at: now, gridKey: gridKey ? 'oui' : null, art: {}, details: null, steamId: item.steamId ?? null };
   const local = item.localArt ?? {};
   const hasArt = Boolean(item.art?.cover || item.art?.hero || (local.cover && local.hero));
 
@@ -72,7 +87,7 @@ export async function enrich(item, { cache = null, gridKey = null, fetchImpl = f
     const grid = await gridArt(item.name, gridKey, fetchImpl);
     if (grid) out.art = grid;
     if (!grid?.cover && item.kind === 'game' && !out.steamId) {
-      out.steamId = await steamMatch(item.name, fetchImpl);
+      out.steamId = knownSteamId(item.name) ?? await steamMatch(item.name, fetchImpl);
       if (out.steamId) out.art = { ...await steamImages(out.steamId, fetchImpl), ...Object.fromEntries(Object.entries(out.art).filter(([, v]) => v)) };
     }
   }

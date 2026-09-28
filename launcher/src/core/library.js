@@ -134,6 +134,11 @@ export function merge(items, store, localUrls = null, timeOptions = {}) {
     const ok = (o) => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v));
     // Du moins sûr au plus sûr : ancienne adresse Steam < trouvées en ligne < images du launcher (Epic) < images sur le PC
     const art = { ...ok(i.cdnArt), ...ok(found.art), ...ok(i.art), ...ok(localUrls?.(i.localArt)) };
+    // Adresses de secours (ancienne adresse Steam ↔ nouvelle adresse avec code) : si la première ne charge pas
+    for (const k of ['hero', 'cover', 'header']) {
+      const alt = [found.art?.[k], i.cdnArt?.[k], i.art?.[k]].find((u) => u && u !== art[k]);
+      if (alt) art[`${k}Alt`] = alt;
+    }
     return {
       ...i, name: i.name ?? extra.name ?? realName(store.names?.[i.steamId]),
       art, details: found.details ?? i.details ?? null, matchSteamId: found.steamId ?? i.steamId ?? null,

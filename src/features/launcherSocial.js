@@ -83,7 +83,7 @@ function view(d, accs, id) {
     const a = accs[fid];
     const p = d.presence[fid] ?? {};
     const online = now - (p.seen ?? 0) < ONLINE_MS;
-    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), ...profileOf(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), bench: p.bench ?? null, playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, dispo: online && p.playing ? p.dispo ?? null : null, week: p.week ?? 0, top: p.top ?? null } : null;
+    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), ...profileOf(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, dispo: online && p.playing ? p.dispo ?? null : null, week: p.week ?? 0, top: (a.profile?.hide ?? []).includes('top') ? null : p.top ?? null, bench: (a.profile?.hide ?? []).includes('bench') ? null : p.bench ?? null } : null;
   };
   return {
     code: friendCode(accs[id]),

@@ -2294,6 +2294,8 @@ ipcMain.handle('account:profile', async (_e, p) => {
   if (p && 'bio' in p) body.bio = String(p.bio ?? '').slice(0, 140);
   for (const k of ['cadre', 'effet', 'banniere']) if (p && k in p) body[k] = String(p[k] ?? '').slice(0, 20);
   if (p && 'cadreCouleur' in p) body.cadreCouleur = p.cadreCouleur === null ? null : String(p.cadreCouleur ?? '').slice(0, 7);
+  if (p && 'fond' in p) body.fond = p.fond === null ? null : String(p.fond ?? '').slice(0, 7);
+  if (p && Array.isArray(p.cacher)) body.cacher = p.cacher.slice(0, 3).map((x) => String(x).slice(0, 10));
   if (p && 'jeu' in p) body.jeu = String(p.jeu ?? '').slice(0, 60);
   if (p && Array.isArray(p.badges)) body.badges = p.badges.slice(0, 3).map((x) => String(x).slice(0, 20));
   if (p && p.liens && typeof p.liens === 'object') body.liens = Object.fromEntries(Object.entries(p.liens).slice(0, 8).map(([k, v]) => [String(k).slice(0, 12), String(v ?? '').slice(0, 120)]));
