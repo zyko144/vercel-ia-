@@ -82,6 +82,19 @@ export async function scanAll(paths = {}, { steamApiKey = null, fetchImpl = fetc
  *    ce serait compter deux fois la même partie) ;
  *  - autres jeux et applis : le chronomètre du launcher, rangé par compte (Epic, EA… : compte choisi dans les paramètres).
  */
+// Partie en cours d'un jeu dont le temps vient d'ailleurs (Steam, journaux FiveM) : ces temps ne sont écrits qu'à la
+// fermeture du jeu, donc le launcher compte la partie en direct à côté, jusqu'à ce que le vrai temps l'inclue.
+const liveExtra = (store, id, base) => { const lv = store.live?.[id]; return lv && base <= lv.base + 1 ? lv.minutes : 0; };
+/** Une minute de plus pour la partie en cours (base = temps officiel à ce moment-là). */
+export function creditLive(store, id, base, stepMin = 1, now = Date.now()) {
+  const live = (store.live ??= {});
+  const lv = live[id];
+  if (!lv || base > lv.base + 1) live[id] = { base, minutes: 0, at: now };
+  live[id].minutes += stepMin;
+  live[id].at = now;
+  for (const [k, v] of Object.entries(live)) if (now - v.at > 3 * 86_400_000) delete live[k];
+  return live[id];
+}
 export function playtimeOf(i, store, { total = false, steamAccount = null, accountFor = () => 'principal' } = {}) {
   const sum = (list) => list.reduce((a, t) => ({ minutes: a.minutes + (t?.minutes ?? 0), lastPlayed: Math.max(a.lastPlayed, t?.lastPlayed ?? 0) }), { minutes: 0, lastPlayed: 0 });
   if (i.steamTimes && Object.keys(i.steamTimes).length) {
@@ -90,12 +103,14 @@ export function playtimeOf(i, store, { total = false, steamAccount = null, accou
     const recent = chosen.reduce((n, t) => n + (t?.recent ?? 0), 0);
     const tracked = store.timeBy?.[i.id] ?? {};
     const seen = Math.max(...Object.values(tracked).map((t) => t.lastPlayed ?? 0), store.time?.[i.id]?.lastPlayed ?? 0, 0);
-    return { minutes: steam.minutes + (store.offSteam?.[i.id] ?? 0), lastPlayed: Math.max(steam.lastPlayed, seen), recent };
+    const base = steam.minutes + (store.offSteam?.[i.id] ?? 0);
+    return { minutes: base + liveExtra(store, i.id, base), base, lastPlayed: Math.max(steam.lastPlayed, seen), recent };
   }
   // FiveM : temps tiré de ses journaux de session (déjà complet, on n'ajoute pas le suivi pour ne rien compter deux fois)
   if (i.timeFromLogs) {
     const seen = Math.max(...Object.values(store.timeBy?.[i.id] ?? {}).map((t) => t.lastPlayed ?? 0), 0);
-    return { minutes: i.minutes ?? 0, lastPlayed: Math.max(i.lastPlayed ?? 0, seen) };
+    const base = i.minutes ?? 0;
+    return { minutes: base + liveExtra(store, i.id, base), base, lastPlayed: Math.max(i.lastPlayed ?? 0, seen) };
   }
   const by = store.timeBy?.[i.id] ?? {};
   const legacy = store.time?.[i.id];

@@ -1,6 +1,6 @@
 // Sauvegarde en ligne : ce qui part sur le compte (réglages, collections, favoris, temps suivi par le launcher,
 // historique, serveurs FiveM) et comment on le fusionne au retour sans rien perdre.
-export const BACKUP_KEYS = ['settings', 'collections', 'items', 'names', 'time', 'timeBy', 'offSteam', 'days', 'fivemFavs', 'fivemSessions', 'fivemLogs', 'fivemNames'];
+export const BACKUP_KEYS = ['settings', 'collections', 'items', 'names', 'time', 'timeBy', 'offSteam', 'days', 'fivemFavs', 'fivemSessions', 'fivemLogs', 'fivemNames', 'priceAlerts', 'sessions', 'crashes', 'loadTimes'];
 // Réglages propres à ce PC : jamais copiés d'un PC à l'autre
 const LOCAL_SETTINGS = ['autostart', 'lastAccount', 'skipAccount', 'steamAccount', 'epicAccount'];
 
@@ -45,6 +45,14 @@ export function mergeBackup(local, remote) {
   for (const k of ['time', 'timeBy', 'offSteam', 'days', 'fivemLogs', 'fivemNames']) if (isObj(remote[k])) out[k] = maxMerge(local[k] ?? {}, remote[k]);
   if (Array.isArray(remote.fivemFavs)) out.fivemFavs = [...new Set([...(local.fivemFavs ?? []), ...remote.fivemFavs])].slice(0, 30);
   if (Array.isArray(remote.fivemSessions)) out.fivemSessions = [...(local.fivemSessions ?? []), ...remote.fivemSessions];
+  if (isObj(remote.priceAlerts)) out.priceAlerts = { ...remote.priceAlerts, ...(local.priceAlerts ?? {}) };
+  // Journal des parties, plantages et temps de démarrage : réunis sans doublon
+  if (Array.isArray(remote.sessions)) { const seen = new Set((local.sessions ?? []).map((x) => `${x.id}@${x.start}`)); out.sessions = [...(local.sessions ?? []), ...remote.sessions.filter((x) => x && !seen.has(`${x.id}@${x.start}`))].sort((a, b) => a.start - b.start).slice(-300); }
+  for (const k of ['crashes', 'loadTimes']) {
+    if (!isObj(remote[k])) continue;
+    out[k] = { ...(local[k] ?? {}) };
+    for (const [id, list] of Object.entries(remote[k])) { if (!Array.isArray(list)) continue; const seen = new Set((out[k][id] ?? []).map((x) => x.at)); out[k][id] = [...(out[k][id] ?? []), ...list.filter((x) => x && !seen.has(x.at))].sort((a, b) => a.at - b.at).slice(-20); }
+  }
   return out;
 }
 

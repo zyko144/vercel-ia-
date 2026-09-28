@@ -2,11 +2,11 @@
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
-import { LAUNCHER_NAMES, SOURCES, findExe, merge, scanAll } from './core/library.js';
+import { LAUNCHER_NAMES, SOURCES, creditLive, findExe, merge, playtimeOf, scanAll } from './core/library.js';
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend, createRemoteAi } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
 import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
@@ -56,6 +56,9 @@ import { speak, startListening } from './core/voice.js';
 import { session } from 'electron';
 import { enrich } from './core/art.js';
 import { startTracker } from './core/tracker.js';
+import { crashesFor, diskAlerts, diskHealth, loadVerdict, netAdvice, parsePing, readCrashes, windowScript } from './core/gamecare.js';
+import nodeNet from 'node:net';
+import { ps } from './core/pshost.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Sons des notifications (fenêtre en bas à gauche) : jouables sans clic préalable
@@ -398,6 +401,8 @@ async function runSilentSteam(args) {
 function gameMode(item) {
   if (item.kind !== 'game') return; // jamais pour une appli (Discord, Spotify…)
   playSession = { id: item.id, name: item.name, start: Date.now() };
+  measureLoad(item).catch(() => {});
+  launchCompanions(item).catch(() => {});
   // Profil du jeu : copie des sauvegardes juste avant de jouer
   if (profileOf(item.id).saves) savesBackup(item).catch(() => {});
   startBoost(item).catch(() => {});
@@ -622,7 +627,13 @@ ipcMain.handle('progress:get', async () => {
   const total = games.reduce((n, i) => n + (i.minutes || 0), 0);
   const friends = (socialLive?.amis ?? []).length;
   const act = process.env.LAUNCHER_DEMO ? demoActivity() : { days: store.data.days, sessions: store.data.sessions ?? [] };
-  const sess = act.sessions.slice(-15).reverse().map((x) => ({ ...x, name: items.find((i) => i.id === x.id)?.name ?? 'Jeu' }));
+  const shotsBy = new Map();
+  const sess = await Promise.all(act.sessions.slice(-15).reverse().map(async (x) => {
+    const it = items.find((i) => i.id === x.id);
+    if (it && !shotsBy.has(it.id)) shotsBy.set(it.id, await capturesOf(it, { steamRoot: await steamPath(), accountIds: steamAccounts.map((a) => a.id) }).catch(() => []));
+    const shots = (shotsBy.get(x.id) ?? []).filter((c) => c.at >= x.start - 60_000 && c.at <= x.end + 120_000).length;
+    return { ...x, name: it?.name ?? 'Jeu', shots };
+  }));
   return {
     level: levelOf(total), totalMinutes: total, streak: streakOf(act.days),
     badges: badges({ items, days: act.days, sessions: act.sessions, friends, bench: (process.env.LAUNCHER_DEMO ? demoBench() : store.data.bench ?? [])[0] ?? null, health: diagCache?.data?.score ?? store.data.diagHistory?.at(-1)?.score ?? null, collections: Object.keys(store.data.collections ?? {}).length }),
@@ -1477,7 +1488,8 @@ async function sendPresence(s) {
   const item = s ? items.find((i) => i.id === s.id) : null;
   if (s && (NOT_GAME.test(s.name ?? '') || (item && item.kind !== 'game'))) s = null;
   const join = share && s ? joinFor(item, item?.source === 'fivem' ? lastFivemServer(store.data.fivemLogs, store.data.fivemLast ?? null) : null) : null;
-  await api('/api/compte/presence', { method: 'POST', token, body: { status: gameDnd() ? `🎯 En partie classée${s ? ` sur ${s.name}` : ''}` : store.data.settings.status ?? null, dnd: Boolean(store.data.settings.dnd || store.data.settings.tournament || gameDnd()), level: levelOf(items.filter((i) => i.kind === 'game').reduce((n, i) => n + (i.minutes || 0), 0)).level, bench: share ? (store.data.bench ?? [])[0]?.scores?.total ?? null : null, playing: share && s ? s.name : null, join, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
+  const dispo = share && s?.start ? dispoAt(s) : null;
+  await api('/api/compte/presence', { method: 'POST', token, body: { status: gameDnd() ? `🎯 En partie classée${s ? ` sur ${s.name}` : ''}` : store.data.settings.status ?? null, dnd: Boolean(store.data.settings.dnd || store.data.settings.tournament || gameDnd()), level: levelOf(items.filter((i) => i.kind === 'game').reduce((n, i) => n + (i.minutes || 0), 0)).level, bench: share ? (store.data.bench ?? [])[0]?.scores?.total ?? null : null, playing: share && s ? s.name : null, join, dispo, week: share ? Math.round(games.reduce((n, [, m]) => n + m, 0)) : 0, top: share ? top : null } });
 }
 
 // ---------- Amis en direct : notifications en bas à gauche (comme Steam), messages, « on joue ? », rejoindre ----------
@@ -1729,7 +1741,7 @@ async function socialTick(wait = 0) {
   store.data.inboxAt = Math.max(after, Number(r.now) || 0, ...(r.items ?? []).map((x) => x.at));
   socialLive = r;
   for (const x of r.items ?? []) {
-    if (x.type === 'msgdel' || x.type === 'gmsgdel') continue;
+    if (['msgdel', 'gmsgdel', 'react'].includes(x.type)) continue;
     if (x.type === 'share') { store.data.sharesIn = [...(store.data.sharesIn ?? []).filter((y) => Date.now() - y.at < 86_400_000), { id: x.share, from: x.pseudo, game: x.game, name: x.text, size: x.size, at: x.at }].slice(-20); store.save(); pushCard(cardFor(x), true); continue; }
     if (x.type === 'call') { if (Date.now() - x.at < 60_000) { pushCard(cardFor(x), true); send('call:ringing', { callId: x.callId, from: x.from, pseudo: x.pseudo }); } else logNotif({ ...cardFor(x), kind: 'missed', icon: '📵', title: `Appel manqué de ${x.pseudo ?? 'un ami'}`, body: 'Clique pour le rappeler.', at: x.at }); continue; }
     if ((x.type === 'msg' || x.type === 'gmsg') && bubbleMsg(x)) { logNotif({ ...cardFor(x), read: true }); continue; }
@@ -1737,7 +1749,7 @@ async function socialTick(wait = 0) {
   }
   for (const f of newlyPlaying(socialPrev, r.amis)) pushCard(playingCard(f, canJoin(f, items)));
   socialPrev = playingMap(r.amis);
-  send('social:live', { amis: r.amis, demandes: r.demandes, code: r.code, moi: r.moi, groupes: r.groupes, messages: (r.items ?? []).filter((x) => x.type === 'msg'), items: r.items ?? [] });
+  send('social:live', { amis: r.amis, demandes: r.demandes, code: r.code, moi: r.moi, groupes: r.groupes, messages: (r.items ?? []).filter((x) => x.type === 'msg'), items: r.items ?? [], typing: r.typing ?? [], lus: r.lus ?? {} });
   return true;
 }
 let socialLoopOn = false;
@@ -1775,10 +1787,14 @@ async function sendReliable(pathname, body) {
   return { ...r, error: r?.error ?? 'Serveur injoignable : message non envoyé.' };
 }
 const CIDM = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 64);
-ipcMain.handle('chat:send', (_e, fid, text, cid) => sendReliable('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined }));
+const extraOf = (x) => ({ ...(x?.re ? { re: CIDM(x.re) } : {}), ...(typeof x?.image === 'string' && x.image.length < 1_700_000 ? { image: x.image } : {}) });
+ipcMain.handle('chat:send', (_e, fid, text, cid, extra) => sendReliable('/api/compte/messages', { to: FID(fid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined, ...extraOf(extra) }));
+ipcMain.handle('chat:read', (_e, fid) => social('/api/compte/messages/lu', { avec: FID(fid) }));
+ipcMain.handle('chat:typing', (_e, kind, id) => social('/api/compte/messages/ecrit', kind === 'g' ? { groupe: CIDM(id) } : { to: FID(id) }));
+ipcMain.handle('chat:react', (_e, kind, id, msg, emoji) => social('/api/compte/messages/reagir', { ...(kind === 'g' ? { groupe: CIDM(id) } : { avec: FID(id) }), id: CIDM(msg), emoji: String(emoji ?? '').slice(0, 4) }));
 ipcMain.handle('chat:delete', (_e, fid, id) => social('/api/compte/messages/supprimer', { avec: FID(fid), id: CIDM(id) }));
 ipcMain.handle('group:thread', (_e, gid) => social(`/api/compte/groupes/messages?id=${encodeURIComponent(CIDM(gid))}`));
-ipcMain.handle('group:send', (_e, gid, text, cid) => sendReliable('/api/compte/groupes/messages', { id: CIDM(gid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined }));
+ipcMain.handle('group:send', (_e, gid, text, cid, extra) => sendReliable('/api/compte/groupes/messages', { id: CIDM(gid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined, ...extraOf(extra) }));
 ipcMain.handle('group:delete', (_e, gid, id) => social('/api/compte/groupes/messages/supprimer', { id: CIDM(gid), msg: CIDM(id) }));
 ipcMain.handle('friend:invite', (_e, fid, type) => social('/api/compte/inviter', { to: FID(fid), type: type === 'invite' ? 'invite' : 'ask', ...(type === 'invite' ? { game: currentSession()?.name ?? undefined } : {}) }));
 ipcMain.handle('friend:join', async (_e, fid) => {
@@ -2628,7 +2644,8 @@ async function sessionTick(s) {
 async function sessionStart(s) {
   const item = items.find((i) => i.id === s.id);
   coreLoad();
-  sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null };
+  sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null, pings: [] };
+  sessionPing(sess, item);
   setQuiet(true); // mesures plus légères pendant le jeu (pas de requête WMI de température, carte graphique lue moins souvent)
   if (store.data.settings.widgetGame && !(widget && !widget.isDestroyed())) { sess.autoWidget = true; setWidget(true); }
   if (!item || store.data.settings.fps !== true || profileOf(item.id).fps === false || process.platform !== 'win32') return;
@@ -2656,6 +2673,8 @@ async function sessionEnd() {
   let stats = null;
   if (s.cap) { stats = await Promise.race([s.cap.done, new Promise((r) => setTimeout(() => r(null), 6000))]); s.cap.stop(); }
   if (stats?.error === 'droits') notify('Mesure des FPS', 'Windows a refusé la mesure : reconnecte-toi à Windows (après l’activation dans Paramètres › Jeux) pour qu’elle marche.');
+  clearInterval(s.pingTimer);
+  setTimeout(() => crashCheck(s).catch(() => {}), 8000);
   if (minutes < 3) return;
   const v = verdict(stats?.error ? null : stats, s.samples);
   const rec = { at: Date.now(), minutes: Math.round(minutes), ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
@@ -2746,7 +2765,7 @@ async function widgetPush() {
   const hist = socialLive?.amis ?? [];
   widget.webContents.send('widget:data', {
     cpu: pc?.cpu?.usage ?? null, cpuT: pc?.cpu?.temp ?? null, gpuT: pc?.gpu?.temp ?? null, gpu: pc?.gpu?.usage ?? null, ram: pc?.ram ? Math.round((100 * pc.ram.used) / pc.ram.total) : null,
-    game: sess?.name ?? null, fps: sess?.live?.avg ?? null, hot: Boolean(sess?.hot >= 2), streamer: streaming(),
+    game: sess?.name ?? null, fps: sess?.live?.avg ?? null, ping: sess ? pingSummary(sess.pings) : null, hot: Boolean(sess?.hot >= 2), streamer: streaming(),
     online: hist.filter((a) => a.online).length + friends.filter((f) => f.online).length,
     playing: [...hist.filter((a) => a.playing).map((a) => ({ name: a.pseudo, game: a.playing })), ...friends.filter((f) => f.game).map((f) => ({ name: f.name, game: f.game }))].slice(0, 2),
   });
@@ -2802,11 +2821,37 @@ async function start() {
   setTimeout(() => handleInvite(process.argv), 3000);
   setTimeout(() => checkDeals().catch(() => {}), 60_000);
   setInterval(() => checkDeals().catch(() => {}), 6 * 3_600_000);
-  startTracker(() => items, store, (ids) => {
+  let liveIds = [];
+  startTracker(() => items, store, async (ids) => {
     lastActive = { ids, at: Date.now() };
+    // Temps de jeu en direct : Steam et FiveM n'écrivent leur temps qu'à la fermeture du jeu, on compte la partie à côté
+    const steamOn = (await runningPaths().catch(() => [])).some((p) => /[\\/]steam\.exe$/i.test(p));
+    const times = {};
+    for (const id of ids) {
+      const r = raw.find((x) => x.id === id);
+      const it = items.find((x) => x.id === id);
+      if (!r || !it) continue;
+      if (r.timeFromLogs || (r.steamTimes && Object.keys(r.steamTimes).length && steamOn)) creditLive(store.data, id, playtimeOf(r, { ...store.data, live: {} }, timeOptions()).base ?? 0);
+      const t = playtimeOf(r, store.data, timeOptions());
+      it.minutes = t.minutes; it.lastPlayed = t.lastPlayed;
+      times[id] = { minutes: t.minutes, lastPlayed: t.lastPlayed };
+    }
+    store.save();
+    // Journal : les amis History qui jouent au même jeu pendant la partie
+    for (const id of ids) {
+      const it = items.find((x) => x.id === id);
+      if (it?.kind !== 'game') continue;
+      const with_ = (socialLive?.amis ?? []).filter((a) => a.playing && norm(a.playing).includes(norm(it.name).slice(0, 12))).map((a) => a.pseudo);
+      const last = [...(store.data.sessions ?? [])].reverse().find((x) => x.id === id);
+      if (last && with_.length) last.with = [...new Set([...(last.with ?? []), ...with_])].slice(0, 6);
+    }
+    // Un jeu Steam / FiveM vient de se fermer : on relit son vrai temps un peu plus tard (écrit à la fermeture)
+    const closed = liveIds.filter((id) => !ids.includes(id));
+    liveIds = ids.filter((id) => store.data.live?.[id]);
+    if (closed.length) setTimeout(() => scan().then((lib) => send('lib:update', lib)).catch(() => {}), 45_000);
     const g = items.find((i) => ids.includes(i.id) && i.kind === 'game' && !NOT_GAME.test(i.name));
     if (g && detected?.id !== g.id) { detected = { id: g.id, name: g.name, start: Date.now() - 60_000 }; if (!playSession) startBoost(g).catch(() => {}); } // lancé hors du launcher : opti quand même
-    win?.webContents.send('lib:active', ids);
+    win?.webContents.send('lib:active', ids, times);
   }, 60_000, accountFor, () => pcAway);
   if (store.data.settings.voice) setTimeout(() => setVoice(true), 3000);
 }
@@ -3023,3 +3068,230 @@ ipcMain.handle('notifs:act', async (_e, id, action) => {
 
 // Copier du texte (code ami, lien d'invitation, rapport…) : par l'appli, le presse-papiers du navigateur étant bloqué
 ipcMain.handle('clip:write', (_e, text) => { clipboard.writeText(String(text ?? '').slice(0, 20_000)); return true; });
+
+
+// =====================================================================================================
+// 0.25 : temps de démarrage, plantages expliqués, disques pleins, santé des disques, connexion, « lancer avec »
+// =====================================================================================================
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+/** « Dispo vers 22 h » : fin probable de la partie, d'après la durée habituelle de tes parties sur ce jeu. */
+function dispoAt(s) {
+  const lens = (store.data.sessions ?? []).filter((x) => x.id === s.id && x.end - x.start >= 10 * 60_000).slice(-10).map((x) => x.end - x.start).sort((a, b) => a - b);
+  if (lens.length < 3) return null;
+  const eta = s.start + lens[Math.floor(lens.length / 2)];
+  return eta > Date.now() + 5 * 60_000 ? Math.round(eta / 300_000) * 300_000 : null;
+}
+// Temps de démarrage : du clic sur « Jouer » à l'apparition de la fenêtre du jeu (lecture seule, toutes les 2 s)
+async function measureLoad(item) {
+  if (process.platform !== 'win32' || !item.installDir || String(item.installDir).split('\\').filter(Boolean).length < 2) return;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 180_000) {
+    await wait(2000);
+    const n = Number(String(await ps(windowScript(item.installDir), 8000).catch(() => '0')).trim()) || 0;
+    if (!n) continue;
+    const ms = Date.now() - t0;
+    const hist = ((store.data.loadTimes ??= {})[item.id] ??= []);
+    const v = loadVerdict(hist, ms);
+    store.data.loadTimes[item.id] = [...hist, { at: Date.now(), ms }].slice(-20);
+    store.save();
+    if (v.slow) notify(`${item.name} a mis ${Math.round(ms / 1000)} s à démarrer`, `D’habitude ${Math.round(v.median / 1000)} s. Disque presque plein, mise à jour en cours ou trop d’applis ouvertes ?`);
+    return;
+  }
+}
+// Plantage : le journal de Windows dit quel module a lâché, on traduit en cause + solution
+async function crashCheck(s) {
+  const item = items.find((i) => i.id === s.id);
+  if (!item || process.platform !== 'win32') return;
+  const found = crashesFor(await readCrashes(s.start), { dir: item.installDir, exe: item.exe }).filter((c) => c.at >= s.start - 5000);
+  if (!found.length) return;
+  const c = found.at(-1);
+  const list = ((store.data.crashes ??= {})[item.id] ??= []);
+  if (list.some((x) => x.at === c.at)) return;
+  store.data.crashes[item.id] = [...list, c].slice(-20);
+  store.save();
+  const same = store.data.crashes[item.id].filter((x) => x.cause === c.cause && Date.now() - x.at < 7 * 86_400_000).length;
+  pushCard({ id: `crash-${item.id}-${c.at}`, kind: 'app', icon: '💥', title: `${item.name} a planté`, body: `${c.cause}${same > 1 ? ` (${same}× cette semaine)` : ''}. ${c.fix}`, actions: [['close', 'OK']], ttl: 20_000 }, true);
+}
+ipcMain.handle('game:care', (_e, id) => {
+  const i = String(id);
+  return { crashes: (store.data.crashes?.[i] ?? []).slice().reverse(), loads: (store.data.loadTimes?.[i] ?? []).slice(-10), with: store.data.items?.[i]?.with ?? [] };
+});
+
+// Ping en direct pendant une partie (serveur FiveM si connu, sinon ta connexion), affiché dans le widget
+function tcpPing(host, port, timeout = 2000) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const sock = nodeNet.connect({ host, port, timeout });
+    const done = (v) => { sock.destroy(); resolve(v); };
+    sock.once('connect', () => done(Math.round(performance.now() - t0)));
+    sock.once('timeout', () => done(null));
+    sock.once('error', () => done(null));
+  });
+}
+function pingTarget(item) {
+  const last = item?.source === 'fivem' ? String(store.data.fivemLast ?? '') : '';
+  const m = last.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})$/);
+  return m ? { host: m[1], port: Number(m[2]), label: 'serveur' } : { host: '1.1.1.1', port: 443, label: 'internet' };
+}
+function sessionPing(s, item) {
+  const t = pingTarget(item);
+  s.pingLabel = t.label;
+  s.pingTimer = setInterval(async () => { if (sess !== s) return clearInterval(s.pingTimer); s.pings = [...s.pings, await tcpPing(t.host, t.port)].slice(-30); }, 10_000);
+}
+function pingSummary(pings) {
+  const ok = (pings ?? []).filter((x) => x != null);
+  if (!pings?.length) return null;
+  return { ms: ok.length ? ok[ok.length - 1] : null, loss: Math.round((100 * (pings.length - ok.length)) / pings.length), label: sess?.pingLabel ?? 'internet' };
+}
+
+// Disques presque pleins (toutes les 30 min) : alerte + gros jeux oubliés à libérer
+let diskState = [];
+async function diskCheck() {
+  const letters = new Set([(process.env.SystemDrive ?? 'C:').toUpperCase()]);
+  for (const i of items) if (i.installed && /^[a-z]:/i.test(String(i.installDir ?? ''))) letters.add(String(i.installDir).slice(0, 2).toUpperCase());
+  const drives = await Promise.all([...letters].map(async (l) => ({ drive: `${l}\\`, free: await freeSpace(`${l}\\`), total: await diskSize(`${l}\\`) })));
+  diskState = diskAlerts(drives, items);
+  send('disk:alerts', diskState);
+  const seen = (store.data.diskNotified ??= {});
+  for (const a of diskState) {
+    if (Date.now() - (seen[a.drive] ?? 0) < 86_400_000) continue;
+    seen[a.drive] = Date.now();
+    notify(`Disque ${a.drive} presque plein`, `Plus que ${(a.free / 1e9).toFixed(1).replace('.', ',')} Go libres : les jeux risquent de ne plus pouvoir se mettre à jour.${a.idle.length ? ` ${a.idle[0].name} n’a pas été lancé depuis longtemps.` : ''}`);
+  }
+  store.save();
+  return diskState;
+}
+setTimeout(() => diskCheck().catch(() => {}), 2 * 60_000);
+setInterval(() => diskCheck().catch(() => {}), 30 * 60_000);
+ipcMain.handle('disk:alerts', () => (process.env.LAUNCHER_DEMO ? [{ drive: 'D:', free: 6.2e9, total: 1e12, critical: false, idle: [{ id: items.find((i) => i.kind === 'game')?.id ?? 'x', name: items.find((i) => i.kind === 'game')?.name ?? 'Jeu', size: 86e9, lastPlayed: Date.now() - 200 * 86_400_000 }] }] : diskCheck().catch(() => diskState)));
+ipcMain.handle('disk:health', () => (process.env.LAUNCHER_DEMO ? [{ name: 'Samsung SSD 980 PRO 1TB', ssd: true, bus: 'NVMe', size: 1e12, health: 'Healthy', wear: 6, temp: 41, hours: 3120, errors: 0, state: 'ok', notes: [] }, { name: 'WDC WD20EZRZ', ssd: false, bus: 'SATA', size: 2e12, health: 'Healthy', wear: null, temp: 36, hours: 21000, errors: 2, state: 'warn', notes: ['2 erreur(s) de lecture / écriture non corrigée(s).'] }] : diskHealth().catch(() => [])));
+
+// Test de connexion en 1 clic : ping, gigue, pertes, débit, Wi-Fi ou câble
+async function speedDown(ms = 8000) {
+  const t0 = performance.now(); let bytes = 0;
+  try {
+    const res = await fetch('https://speed.cloudflare.com/__down?bytes=50000000', { signal: AbortSignal.timeout(ms + 4000) });
+    const reader = res.body.getReader();
+    while (performance.now() - t0 < ms) { const { done, value } = await reader.read(); if (done) break; bytes += value.length; }
+    reader.cancel().catch(() => {});
+  } catch { /* coupé ou trop lent : on garde ce qui est arrivé */ }
+  const s = (performance.now() - t0) / 1000;
+  return bytes > 1e5 ? Math.round((bytes * 8) / s / 1e6) : null;
+}
+async function speedUp() {
+  const body = Buffer.alloc(8e6, 97);
+  const t0 = performance.now();
+  const ok = await fetch('https://speed.cloudflare.com/__up', { method: 'POST', body, signal: AbortSignal.timeout(20_000) }).then((r) => r.ok).catch(() => false);
+  return ok ? Math.round((body.length * 8) / ((performance.now() - t0) / 1000) / 1e6) : null;
+}
+async function pingSeries() {
+  if (process.platform === 'win32') {
+    const out = await new Promise((resolve) => execFile('ping', ['-n', '20', '-w', '1000', '1.1.1.1'], { windowsHide: true, timeout: 40_000, encoding: 'latin1' }, (_e, so) => resolve(String(so ?? ''))));
+    return parsePing(out);
+  }
+  const t = []; for (let i = 0; i < 10; i++) t.push(await tcpPing('1.1.1.1', 443));
+  const ok = t.filter((x) => x != null);
+  return { avg: ok.length ? Math.round(ok.reduce((a, b) => a + b, 0) / ok.length) : null, jitter: ok.length > 1 ? Math.round(ok.slice(1).reduce((a, x, i) => a + Math.abs(x - ok[i]), 0) / (ok.length - 1)) : null, loss: Math.round((100 * (t.length - ok.length)) / t.length) };
+}
+async function onWifi() {
+  if (process.platform !== 'win32') return null;
+  const out = await ps("$r=Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1; if($r){ (Get-NetAdapter -InterfaceIndex $r.ifIndex).PhysicalMediaType }", 15_000).catch(() => '');
+  return /802\.11|wireless|wi-?fi/i.test(String(out)) ? true : String(out).trim() ? false : null;
+}
+ipcMain.handle('net:test', async () => {
+  if (process.env.LAUNCHER_DEMO) return { ping: 18, jitter: 3, loss: 0, down: 412, up: 58, wifi: true, game: { label: 'serveur FiveM', ms: 34 }, ...netAdvice({ ping: 18, jitter: 3, loss: 0, down: 412, up: 58, wifi: true }) };
+  send('net:progress', { step: 'ping' });
+  const [p, wifi] = await Promise.all([pingSeries(), onWifi()]);
+  send('net:progress', { step: 'down' });
+  const down = await speedDown();
+  send('net:progress', { step: 'up' });
+  const up = await speedUp();
+  const t = pingTarget({ source: 'fivem' });
+  const game = t.label === 'serveur' ? { label: 'dernier serveur FiveM', ms: await tcpPing(t.host, t.port) } : null;
+  const r = { ping: p.avg, jitter: p.jitter, loss: p.loss, down, up, wifi, game, at: Date.now() };
+  store.data.netTests = [...(store.data.netTests ?? []), { at: r.at, ping: r.ping, down, up, loss: r.loss }].slice(-20);
+  store.save();
+  return { ...r, ...netAdvice(r) };
+});
+
+// « Lancer avec » : applis ouvertes en même temps que le jeu (Discord, OBS, Spotify…)
+async function launchCompanions(item) {
+  const ids = store.data.items?.[item.id]?.with ?? [];
+  if (!ids.length) return;
+  const running = activeItems(items, await runningPaths(0).catch(() => []));
+  for (const id of ids) {
+    const app_ = items.find((i) => i.id === id && i.kind !== 'game');
+    if (!app_ || running.has(app_.id)) continue;
+    const exe = app_.exe ?? await findExe(app_.installDir).catch(() => null);
+    if (exe) spawn(exe, [], { detached: true, stdio: 'ignore', cwd: path.dirname(exe) }).on('error', () => {}).unref();
+  }
+}
+ipcMain.handle('game:with', (_e, id, list) => {
+  const it = items.find((i) => i.id === String(id) && i.kind === 'game');
+  if (!it) return { ok: false };
+  if (Array.isArray(list)) { const valid = list.map(String).filter((x) => items.some((i) => i.id === x && i.kind !== 'game')).slice(0, 8); ((store.data.items ??= {})[it.id] ??= {}).with = valid; store.save(); }
+  return { ok: true, with: store.data.items?.[it.id]?.with ?? [], apps: items.filter((i) => i.kind !== 'game' && i.kind !== 'launcher' && (i.exe || i.installDir)).sort((a, b) => (b.minutes || 0) - (a.minutes || 0)).slice(0, 40).map((i) => ({ id: i.id, name: i.name, minutes: i.minutes || 0 })) };
+});
+
+// Captures récentes (pour les envoyer dans une discussion) et image réduite prête à envoyer
+ipcMain.handle('captures:recent', async () => {
+  const games = items.filter((i) => i.kind === 'game' && i.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 10);
+  const all = [];
+  for (const g of games) for (const c of await capturesOf(g, { steamRoot: await steamPath(), accountIds: steamAccounts.map((a) => a.id) }).catch(() => [])) if (!c.video) all.push({ ...c, game: g.name });
+  return all.sort((a, b) => b.at - a.at).slice(0, 24).map((c) => {
+    const token = createHash('sha1').update(c.file).digest('hex').slice(0, 24);
+    captureFiles.set(token, c.file);
+    return { token, at: c.at, game: c.game, url: localUrls({ x: c.file }).x };
+  });
+});
+ipcMain.handle('captures:data', (_e, token) => {
+  const f = captureFiles.get(String(token));
+  if (!f) return null;
+  let img = nativeImage.createFromPath(f);
+  if (img.isEmpty()) return null;
+  const { width } = img.getSize();
+  if (width > 1600) img = img.resize({ width: 1600, quality: 'good' });
+  for (const q of [85, 70, 55, 40]) { const b = img.toJPEG(q); if (b.length < 1_150_000) return `data:image/jpeg;base64,${b.toString('base64')}`; }
+  return null;
+});
+
+// Messages programmés (« préviens le groupe à 21 h ») : gardés sur ce PC, envoyés à l'heure (même launcher réduit)
+ipcMain.handle('sched:list', () => (store.data.scheduled ?? []).filter((x) => !x.sent));
+ipcMain.handle('sched:add', (_e, key, text, at) => {
+  const k = String(key ?? ''); const when = Number(at);
+  if (!/^[fg]:[\w-]{1,64}$/.test(k) || !String(text ?? '').trim() || !(when > Date.now()) || when > Date.now() + 7 * 86_400_000) return { ok: false, error: 'Heure invalide.' };
+  const x = { id: randomUUID(), key: k, text: String(text).slice(0, 500), at: Math.round(when) };
+  store.data.scheduled = [...(store.data.scheduled ?? []).filter((y) => !y.sent), x].slice(-30);
+  store.save();
+  return { ok: true, list: store.data.scheduled };
+});
+ipcMain.handle('sched:del', (_e, id) => { store.data.scheduled = (store.data.scheduled ?? []).filter((x) => x.id !== String(id)); store.save(); return { ok: true, list: store.data.scheduled }; });
+setInterval(async () => {
+  for (const x of (store.data.scheduled ?? []).filter((y) => !y.sent && y.at <= Date.now())) {
+    const id = x.key.slice(2);
+    const r = x.key[0] === 'g' ? await sendReliable('/api/compte/groupes/messages', { id: CIDM(id), text: x.text, cid: x.id }) : await sendReliable('/api/compte/messages', { to: FID(id), text: x.text, cid: x.id });
+    if (r.error && Date.now() - x.at < 3_600_000) continue; // on réessaie pendant une heure
+    x.sent = true;
+    send('social:sent', { key: x.key, fil: r.fil ?? null });
+    if (r.error) notify('Message programmé non envoyé', r.error);
+  }
+  store.data.scheduled = (store.data.scheduled ?? []).filter((y) => !y.sent);
+  store.save();
+}, 20_000);
+
+// Connexion par code : ce PC affiche un code, un PC déjà connecté le valide
+ipcMain.handle('account:pairStart', async () => {
+  store.data.deviceId ??= randomUUID();
+  return api('/api/compte/lien/demande', { method: 'POST', body: { appareil: store.data.deviceId, nom: os.hostname().slice(0, 40) } }).catch(() => ({ status: 0, error: 'Serveur injoignable, vérifie ta connexion internet.' }));
+});
+ipcMain.handle('account:pairPoll', async (_e, ticket) => {
+  const r = await api(`/api/compte/lien/attente?ticket=${encodeURIComponent(String(ticket ?? '').slice(0, 64))}`).catch(() => ({ status: 0 }));
+  if (r.token) return loggedIn(r);
+  return r;
+});
+ipcMain.handle('account:pairApprove', async (_e, code) => {
+  const c = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  if (c.length !== 8) return { ok: false, error: 'Le code fait 8 caractères (ex. K7Q2-M9XP).' };
+  const r = await social('/api/compte/lien/valider', { code: c });
+  return r.ok ? { ok: true, nom: r.nom } : { ok: false, error: r.error ?? 'Code refusé.' };
+});

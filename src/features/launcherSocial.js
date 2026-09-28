@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { load, save } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
-import { me, profileOf } from './launcherAccounts.js';
+import { PUBLIC_BASE, checkImage, me, profileOf } from './launcherAccounts.js';
 
 const KEY = 'launcher-social';
 const MAX_FRIENDS = 200;
@@ -24,7 +24,8 @@ async function data() {
   d.inbox ??= {}; // id -> [{ id, type: msg|ask|invite|reply, from, text?, game?, join?, oui?, at }]
   d.threads ??= {}; // « idA:idB » -> [{ from, text, at }]
   d.groups ??= {}; // id groupe -> { id, name, owner, members: [ids], at }
-  d.gthreads ??= {}; // id groupe -> [{ id, from, text, at }]
+  d.gthreads ??= {}; // id groupe -> [{ id, from, text, at, re?, img?, reacts? }]
+  d.reads ??= {}; // « lecteur>auteur » -> dernière lecture de la discussion
   return d;
 }
 const accounts = async () => (await load('launcher-comptes', null))?.accounts ?? {};
@@ -59,6 +60,14 @@ function waitInbox(id, ms, req) {
     req.once?.('close', done);
   });
 }
+// « … écrit » : éphémère (pas gardé), réveille la boîte du destinataire
+const typing = new Map(); // id destinataire -> [{ from, gid, at }]
+function setTyping(to, from, gid = null) {
+  const now = Date.now();
+  typing.set(to, [...(typing.get(to) ?? []).filter((x) => now - x.at < 6000 && !(x.from === from && x.gid === gid)), { from, gid, at: now }]);
+  wake(to);
+}
+const typingFor = (id) => (typing.get(id) ?? []).filter((x) => Date.now() - x.at < 6000);
 function pushInbox(d, to, item) {
   const now = Date.now();
   // Horodatage strictement croissant : deux éléments de la même milliseconde ne se perdent pas avec « apres »
@@ -74,7 +83,7 @@ function view(d, accs, id) {
     const a = accs[fid];
     const p = d.presence[fid] ?? {};
     const online = now - (p.seen ?? 0) < ONLINE_MS;
-    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), ...profileOf(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), bench: p.bench ?? null, playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, week: p.week ?? 0, top: p.top ?? null } : null;
+    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), ...profileOf(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), bench: p.bench ?? null, playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, dispo: online && p.playing ? p.dispo ?? null : null, week: p.week ?? 0, top: p.top ?? null } : null;
   };
   return {
     code: friendCode(accs[id]),
@@ -163,7 +172,7 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     if (!allowAttempt('compte-appel', id, 4000, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
     return callRoute(req, res, url, route, id, { readJson, send });
   }
-  if (!allowAttempt('compte-social', id, 900, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
+  if (!allowAttempt('compte-social', id, 3000, 60 * 60_000)) return send(res, 429, { error: 'Trop de demandes, réessaie plus tard.' });
   const binary = await fileRoutes(req, res, url, route, id, { readBinary, send });
   if (binary !== undefined) return binary;
   const body = req.method === 'POST' ? await readJson(req) : {};
@@ -219,6 +228,7 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
       playing, join: playing ? cleanJoin(body.join) : null,
       since: playing ? (prev.playing === playing && prev.since ? prev.since : Date.now()) : null,
       week: Math.max(0, Math.min(10_080, Math.round(Number(body.week) || 0))), // minutes sur 7 jours, plafonnées
+      dispo: playing && Number(body.dispo) > Date.now() && Number(body.dispo) < Date.now() + 12 * 3_600_000 ? Math.round(Number(body.dispo)) : null,
       status: body.status ? text(body.status, 60) : null, dnd: Boolean(body.dnd),
       bench: Number.isFinite(Number(body.bench)) && Number(body.bench) > 0 ? Math.min(20_000, Math.round(Number(body.bench))) : prev.bench ?? null,
       top: body.top ? text(body.top, 80) : null, seen: Date.now(),
@@ -241,7 +251,8 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     const items = fresh().map((x) => ({ ...x, pseudo: names[x.from]?.pseudo ?? '?' }));
     // « now » = dernier élément vu (et pas l'heure du serveur) : rien ne peut passer entre deux attentes
     const now = Math.max(after, ...items.map((x) => x.at));
-    return done(200, { items, now, ...view(d, accs, id) });
+    const lus = Object.fromEntries(listOf(d.friends, id).map((fid) => [fid, d.reads[`${fid}>${id}`] ?? 0]).filter(([, t]) => t));
+    return done(200, { items, now, typing: typingFor(id), lus, ...view(d, accs, id) });
   }
 
   const friendOf = (fid) => listOf(d.friends, id).includes(fid) && accs[fid];
@@ -250,26 +261,78 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
   const msgId = (v) => (/^[\w-]{8,64}$/.test(String(v ?? '')) ? String(v) : randomUUID());
   const withIds = (fil) => fil.map((m) => (m.id ? m : { ...m, id: `${m.at}-${String(m.from).slice(0, 8)}` }));
 
+  // Réponse à un message précis et image jointe (capture), pour les amis comme pour les groupes
+  const quote = (fil, reId) => { const m = fil.find((x) => x.id === String(reId ?? '')); return m ? { id: m.id, from: m.from, text: String(m.text || (m.img ? '📷 Image' : '')).slice(0, 90) } : null; };
+  const attach = (raw) => {
+    if (!raw) return { img: null };
+    if (!allowAttempt('launcher-img', id, 40, 86_400_000)) return { error: 'Trop d’images aujourd’hui.' };
+    const img = checkImage(raw, 1_200_000);
+    if (typeof img === 'string') return { error: img };
+    const imgId = randomUUID();
+    save(`launcher-img-${imgId}`, img);
+    return { img: imgId };
+  };
+  const dropImg = (m) => { if (m?.img) save(`launcher-img-${m.img}`, {}); };
+
   if (route === 'POST /api/compte/messages') {
     const to = String(body.to ?? '');
     const msg = text(body.text, 500);
     if (!friendOf(to)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
-    if (!msg) return send(res, 400, { error: 'Message vide.' });
+    if (!msg && !body.image) return send(res, 400, { error: 'Message vide.' });
     const key = pairKey(id, to);
     const mid = msgId(body.cid);
     const fil = listOf(d.threads, key);
     if (fil.some((m) => m.id === mid)) return send(res, 200, { ok: true, id: mid, fil: withIds(fil) });
     if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
-    const m = { id: mid, from: id, text: msg, at: Date.now() };
-    d.threads[key] = [...fil, m].slice(-MAX_THREAD);
-    pushInbox(d, to, { type: 'msg', from: id, text: msg, msg: mid, sentAt: m.at });
+    const a = attach(body.image);
+    if (a.error) return send(res, 400, { error: a.error });
+    const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}) };
+    const kept = [...fil, m];
+    for (const old of kept.slice(0, -MAX_THREAD)) dropImg(old);
+    d.threads[key] = kept.slice(-MAX_THREAD);
+    d.reads[`${id}>${to}`] = m.at; // écrire = avoir lu ce qui précède
+    pushInbox(d, to, { type: 'msg', from: id, text: msg || '📷 Image', msg: mid, sentAt: m.at });
     return done(200, { ok: true, id: mid, message: m, fil: withIds(d.threads[key]) });
+  }
+
+  // Lu : « Vu à 21 h 04 » chez l'ami
+  if (route === 'POST /api/compte/messages/lu') {
+    const fid = String(body.avec ?? '');
+    if (!friendOf(fid)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
+    const k = `${id}>${fid}`;
+    const last = (d.threads[pairKey(id, fid)] ?? []).filter((m) => m.from === fid).at(-1)?.at ?? 0;
+    if (last && (d.reads[k] ?? 0) < last) { d.reads[k] = Date.now(); wake(fid); return done(200, { ok: true }); }
+    return send(res, 200, { ok: true });
+  }
+  // « … écrit » (ami ou groupe), éphémère
+  if (route === 'POST /api/compte/messages/ecrit') {
+    if (!allowAttempt('launcher-ecrit', id, 40, 60_000)) return send(res, 200, { ok: true });
+    if (body.groupe) { const g = d.groups[String(body.groupe)]; if (g?.members.includes(id)) for (const m of g.members.filter((x) => x !== id)) setTyping(m, id, g.id); }
+    else if (friendOf(String(body.to ?? ''))) setTyping(String(body.to), id);
+    return send(res, 200, { ok: true });
+  }
+  // Réactions 👍 😂 🔥 ❤️ 😮 😢 (ami ou groupe)
+  if (route === 'POST /api/compte/messages/reagir') {
+    const emoji = ['👍', '😂', '🔥', '❤️', '😮', '😢'].find((e) => e === body.emoji);
+    if (!emoji) return send(res, 400, { error: 'Réaction inconnue.' });
+    let fil; let targets;
+    if (body.groupe) { const g = d.groups[String(body.groupe)]; if (!g?.members.includes(id)) return send(res, 404, { error: 'Groupe introuvable.' }); fil = listOf(d.gthreads, g.id); targets = g.members.filter((x) => x !== id).map((to) => [to, { gid: g.id }]); }
+    else { const fid = String(body.avec ?? ''); if (!friendOf(fid)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' }); fil = withIds(listOf(d.threads, pairKey(id, fid))); d.threads[pairKey(id, fid)] = fil; targets = [[fid, {}]]; }
+    const m = fil.find((x) => x.id === String(body.id ?? ''));
+    if (!m) return send(res, 404, { error: 'Message introuvable.' });
+    if (!allowAttempt('launcher-react', id, 60, 60_000)) return send(res, 429, { error: 'Doucement.' });
+    const who = new Set(m.reacts?.[emoji] ?? []);
+    if (who.has(id)) who.delete(id); else who.add(id);
+    m.reacts = { ...(m.reacts ?? {}), [emoji]: [...who] };
+    if (!who.size) delete m.reacts[emoji];
+    for (const [to, extra] of targets) pushInbox(d, to, { type: 'react', from: id, msg: m.id, emoji, on: who.has(id), ...extra });
+    return done(200, { ok: true, message: m });
   }
 
   if (route === 'GET /api/compte/messages') {
     const fid = String(url.searchParams.get('avec') ?? '');
     if (!friendOf(fid)) return send(res, 404, { error: 'Ce joueur n’est pas dans tes amis.' });
-    return send(res, 200, { fil: withIds(d.threads[pairKey(id, fid)] ?? []) });
+    return send(res, 200, { fil: withIds(d.threads[pairKey(id, fid)] ?? []), lu: d.reads[`${fid}>${id}`] ?? 0 });
   }
 
   // Supprimer un de ses messages (pour les deux)
@@ -283,6 +346,7 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     if (!m) return send(res, 200, { ok: true, fil });
     if (m.from !== id) return send(res, 403, { error: 'Tu ne peux supprimer que tes messages.' });
     d.threads[key] = fil.filter((x) => x.id !== mid);
+    dropImg(m);
     pushInbox(d, fid, { type: 'msgdel', from: id, msg: mid });
     return done(200, { ok: true, fil: d.threads[key] });
   }
@@ -310,14 +374,18 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     const g = groupOf(body.id);
     if (!g) return send(res, 404, { error: 'Groupe introuvable.' });
     const msg = text(body.text, 500);
-    if (!msg) return send(res, 400, { error: 'Message vide.' });
+    if (!msg && !body.image) return send(res, 400, { error: 'Message vide.' });
     const mid = msgId(body.cid);
     const fil = listOf(d.gthreads, g.id);
     if (fil.some((m) => m.id === mid)) return send(res, 200, { ok: true, id: mid, fil });
     if (!allowAttempt('launcher-msg', id, 40, 60_000)) return send(res, 429, { error: 'Doucement : trop de messages d’un coup.' });
-    const m = { id: mid, from: id, text: msg, at: Date.now() };
-    d.gthreads[g.id] = [...fil, m].slice(-MAX_GTHREAD);
-    for (const to of g.members.filter((x) => x !== id)) pushInbox(d, to, { type: 'gmsg', from: id, gid: g.id, group: g.name, text: msg, msg: mid, sentAt: m.at });
+    const a = attach(body.image);
+    if (a.error) return send(res, 400, { error: a.error });
+    const m = { id: mid, from: id, text: msg, at: Date.now(), ...(quote(fil, body.re) ? { re: quote(fil, body.re) } : {}), ...(a.img ? { img: a.img, imgUrl: `${PUBLIC_BASE}/api/compte/img/${a.img}` } : {}) };
+    const kept = [...fil, m];
+    for (const old of kept.slice(0, -MAX_GTHREAD)) dropImg(old);
+    d.gthreads[g.id] = kept.slice(-MAX_GTHREAD);
+    for (const to of g.members.filter((x) => x !== id)) pushInbox(d, to, { type: 'gmsg', from: id, gid: g.id, group: g.name, text: msg || '📷 Image', msg: mid, sentAt: m.at });
     return done(200, { ok: true, id: mid, message: m, fil: d.gthreads[g.id] });
   }
   if (route === 'POST /api/compte/groupes/messages/supprimer') {
@@ -329,6 +397,7 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     if (!m) return send(res, 200, { ok: true, fil });
     if (m.from !== id) return send(res, 403, { error: 'Tu ne peux supprimer que tes messages.' });
     d.gthreads[g.id] = fil.filter((x) => x.id !== mid);
+    dropImg(m);
     for (const to of g.members.filter((x) => x !== id)) pushInbox(d, to, { type: 'gmsgdel', from: id, gid: g.id, msg: mid });
     return done(200, { ok: true, fil: d.gthreads[g.id] });
   }

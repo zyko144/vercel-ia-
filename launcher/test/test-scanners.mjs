@@ -18,7 +18,7 @@ import { aiFindArt, geminiKeyFromEnv } from '../src/core/ai.js';
 import { parseTitle } from '../src/core/media.js';
 import { dayKey, periodStats, statCategory } from '../src/core/tracker.js';
 import { listSteamAccounts, ownedSteamGames, parseAppInfo, steamDetails, steamLocalArt, steamNames, steamStoreAssets } from '../src/core/steam.js';
-import { playtimeOf } from '../src/core/library.js';
+import { creditLive, playtimeOf } from '../src/core/library.js';
 
 let passed = 0;
 const check = async (name, fn) => { await fn(); passed += 1; console.log('✅', name); };
@@ -384,6 +384,18 @@ await check('temps de jeu : un seul compte (le choisi), ou le total ; jamais com
   const st = { timeBy: { 'epic:FN': { A: { minutes: 30, lastPlayed: 1 }, B: { minutes: 90, lastPlayed: 2 } } } };
   assert.equal(playtimeOf(epic, st, { accountFor: () => 'A' }).minutes, 30);
   assert.equal(playtimeOf(epic, st, { total: true }).minutes, 120);
+  // Partie en cours d'un jeu Steam : le temps monte chaque minute, sans compter deux fois quand Steam l'écrit
+  const live = { live: {} };
+  const rl = { id: 'steam:rl', steamTimes: { 1: { minutes: 600, lastPlayed: 1 } } };
+  for (let m = 0; m < 25; m++) creditLive(live, rl.id, playtimeOf(rl, { live: {} }).base);
+  assert.equal(playtimeOf(rl, live).minutes, 625, 'partie en cours ajoutée au temps de Steam');
+  const after = { ...rl, steamTimes: { 1: { minutes: 626, lastPlayed: 2 } } };
+  assert.equal(playtimeOf(after, live).minutes, 626, 'Steam a écrit la partie : plus de double compte');
+  creditLive(live, rl.id, playtimeOf(after, { live: {} }).base);
+  assert.equal(playtimeOf(after, live).minutes, 627, 'nouvelle partie repart de zéro');
+  const fivem = { id: 'fivem', timeFromLogs: true, minutes: 300 };
+  creditLive(live, 'fivem', 300); creditLive(live, 'fivem', 300);
+  assert.equal(playtimeOf(fivem, live).minutes, 302, 'FiveM aussi');
 });
 
 await check('vrais noms Steam (API officielle, par lots) ; jamais « Jeu Steam 123 » gardé', async () => {

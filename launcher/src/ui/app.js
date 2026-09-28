@@ -268,6 +268,20 @@ function card(i, cls = 'gcard') {
     <div class="meta"><b>${esc(i.name)}</b><small>${CLOCK}${hours(i.minutes)}</small></div></div>`;
 }
 
+// Disque presque plein : quels jeux oubliés libérer (en verre rouge)
+let diskAlerts = [];
+function renderDiskAlert() {
+  const el = $('diskAlert'); if (!el) return;
+  el.innerHTML = diskAlerts.map((a) => `<div class="adv ${a.critical ? 'p0' : 'p1'} diskadv"><div><b>💽 Disque ${esc(a.drive)} presque plein : ${gb(a.free)} libres sur ${gb(a.total)}</b><small>${a.idle.length ? 'Ces jeux n’ont pas été lancés depuis plus de 3 mois :' : 'Les jeux risquent de ne plus pouvoir se mettre à jour. Libère de la place (Mon PC › Stockage).'}</small>
+    ${a.idle.length ? `<div class="diskidle">${a.idle.map((i) => `<span>${esc(i.name)} · ${gb(i.size)}<button type="button" class="btn ghost sm" data-uninst="${esc(i.id)}">Désinstaller</button></span>`).join('')}</div>` : ''}</div></div>`).join('');
+}
+api.onDiskAlerts?.((d) => { diskAlerts = d ?? []; renderDiskAlert(); });
+$('diskAlert').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-uninst]'); if (!b) return;
+  const r = await api.action(b.dataset.uninst, 'uninstall');
+  if (r?.ok) { toast('Jeu désinstallé'); api.diskAlerts?.().then((d) => { diskAlerts = d ?? []; renderDiskAlert(); }).catch(() => {}); } else if (r?.error) toast(r.error);
+});
+setTimeout(() => api.diskAlerts?.().then((d) => { diskAlerts = d ?? []; renderDiskAlert(); }).catch(() => {}), 4000);
 function renderHome() {
   const top = filterSort(games(), { sort: 'joues' }).slice(0, 6);
   $('topGames').innerHTML = top.length ? top.map((i) => card(i)).join('') : '<div class="empty">Aucun jeu trouvé pour l’instant.</div>';
@@ -520,7 +534,7 @@ async function loadHistory() {
 function friendRow(a) {
   const n = unread[a.id] ?? 0;
   const st = a.playing ? 'ingame' : a.online ? 'on' : 'off';
-  const line = a.playing ? `Joue à ${esc(a.playing)}` : a.online ? (a.dnd ? 'Ne pas déranger' : a.status ? esc(a.status) : 'En ligne') : 'Hors ligne';
+  const line = a.playing ? `Joue à ${esc(a.playing)}${dispoTxt(a)}` : a.online ? (a.dnd ? 'Ne pas déranger' : a.status ? esc(a.status) : 'En ligne') : 'Hors ligne';
   return `<div class="fxrow ${st} ${fx.sel?.type === 'ami' && fx.sel.id === a.id ? 'sel' : ''}" data-fsel="${esc(a.id)}">
     ${avWrap(a, st, 'sm')}
     <div class="fxrinfo"><b>${esc(a.pseudo)}</b><small>${line}</small></div>
@@ -856,6 +870,9 @@ async function sideAction(a, k) {
 }
 
 // ---------- Messages entre amis + synchro en direct ----------
+// « dispo vers 22 h 15 » (fin probable de sa partie, d'après ses parties habituelles)
+const dispoTxt = (f) => (f?.dispo && f.dispo > Date.now() ? ` · dispo vers ${new Date(f.dispo).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', ' h ')}` : '');
+window.addEventListener('focus', () => { if (chatWith) markRead(`f:${chatWith.id}`); });
 function chatHeader() {
   if (!chatWith) return;
   const f = state.hist?.amis?.find((a) => a.id === chatWith.id);
@@ -864,7 +881,7 @@ function chatHeader() {
   setAv($('chatAv'), f ?? chatWith.name);
   if (f?.frame) $('chatAv').classList.add(`fr-${f.frame}`);
   $('chatWho').className = `nfx-${f?.nameFx ?? 'aucun'}`; $('chatWho').style.setProperty('--pc', f?.color ?? '#3b82f6');
-  $('chatSub').textContent = `${f?.playing ? `Joue à ${f.playing}` : f?.online ? (f.status ? `En ligne · « ${f.status} »` : 'En ligne') : 'Hors ligne · il verra ton message à sa prochaine connexion'}${f?.bio ? ` — ${f.bio}` : ''}`;
+  $('chatSub').textContent = `${f?.playing ? `${dispoTxt(f) ? `${dispoTxt(f).slice(3).replace(/^d/, 'D')} · ` : ''}Joue à ${f.playing}` : f?.online ? (f.status ? `En ligne · « ${f.status} »` : 'En ligne') : 'Hors ligne · il verra ton message à sa prochaine connexion'}${f?.bio ? ` — ${f.bio}` : ''}`;
   $('chatCall').hidden = !f?.online;
   $('chatJoin').hidden = !f?.playing;
   $('chatAsk').hidden = !f?.playing;
@@ -883,6 +900,11 @@ const myId = () => state.account?.id ?? 'me';
 const gOpen = () => (fx.sel?.type === 'groupe' ? fx.sel.id : null);
 const newCid = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`);
 const threadEl = (key) => (key === `f:${chatWith?.id}` ? $('chatFil') : key === `g:${gOpen()}` ? $('gFil') : null);
+const REACTS = ['👍', '😂', '🔥', '❤️', '😮', '😢'];
+const replyTo = new Map(); // discussion -> message auquel on répond
+const live = { lus: {}, typing: [] };
+const safeMsgImg = (u) => (/^https:\/\/[\w.-]+(:\d+)?\/api\/compte\/img\/[\w-]{8,64}$/.test(String(u ?? '')) ? u : null);
+const hm = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 function paintThread(key, { force = false } = {}) {
   const el = threadEl(key);
   if (!el) return;
@@ -891,30 +913,71 @@ function paintThread(key, { force = false } = {}) {
   if (!fil && !pend.length) { el.innerHTML = '<div class="cload"><i></i><i></i><i></i></div>'; return; }
   const group = key.startsWith('g:');
   const members = group ? (state.groups ?? []).find((g) => `g:${g.id}` === key)?.members ?? [] : [];
-  const nameOf = (id) => members.find((m) => m.id === id) ?? state.hist?.amis?.find((a) => a.id === id) ?? { pseudo: '?' };
+  const nameOf = (id) => (id === myId() ? { pseudo: 'Toi' } : members.find((m) => m.id === id) ?? state.hist?.amis?.find((a) => a.id === id) ?? { pseudo: '?' });
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   let day = '';
   const list = fil ?? [];
+  const lu = group ? 0 : live.lus[key.slice(2)] ?? 0;
+  const seenIdx = lu ? list.map((m, i) => [m, i]).filter(([m]) => m.from === myId() && m.at <= lu).at(-1)?.[1] ?? -1 : -1;
+  const lastIdx = list.length - 1;
   const html = list.map((m, i) => {
     const d = dayOf(m.at); const sep = d !== day ? `<div class="cday">${esc(d)}</div>` : ''; day = d;
     const them = m.from !== myId();
-    const grouped = i > 0 && list[i - 1].from === m.from && m.at - list[i - 1].at < 120_000 && !sep;
+    const grouped = i > 0 && list[i - 1].from === m.from && m.at - list[i - 1].at < 120_000 && !sep && !m.re;
     const who = group && them && !grouped ? nameOf(m.from) : null;
-    return `${sep}<div class="cmsg ${them ? 'them' : 'me'} ${grouped ? 'grouped' : ''} ${who ? 'named' : ''}" data-mid="${esc(m.id ?? '')}">${who ? `<em class="cname">${avatar(who, 'xs')}${esc(who.pseudo)}</em>` : ''}<span>${esc(m.text)}</span>${them && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}<small>${new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small>${!them && m.id ? `<button type="button" class="cdel" data-mdel="${esc(m.id)}" title="Supprimer le message">🗑</button>` : ''}</div>`;
-  }).join('') + pend.map(([cid, p]) => `<div class="cmsg me ${p.failed ? 'failed' : 'sending'}" data-cid="${esc(cid)}"><span>${esc(p.text)}</span><small>${p.failed ? `⚠ ${esc(p.failed)} · <button type="button" class="linkbtn" data-mretry="${esc(cid)}">Réessayer</button> · <button type="button" class="linkbtn" data-mdrop="${esc(cid)}">Annuler</button>` : 'envoi…'}</small></div>`).join('');
+    const img = safeMsgImg(m.imgUrl);
+    const reacts = Object.entries(m.reacts ?? {}).filter(([, ids]) => ids?.length);
+    return `${sep}<div class="cmsg ${them ? 'them' : 'me'} ${grouped ? 'grouped' : ''} ${who ? 'named' : ''}" data-mid="${esc(m.id ?? '')}">${who ? `<em class="cname">${avatar(who, 'xs')}${esc(who.pseudo)}</em>` : ''}
+      ${m.re ? `<div class="cquote" data-mjump="${esc(m.re.id)}"><b>${esc(nameOf(m.re.from).pseudo)}</b>${esc(m.re.text)}</div>` : ''}
+      ${img ? `<img class="cimg" src="${esc(img)}" data-mview="${esc(img)}" alt="Image" loading="lazy">` : ''}${m.text ? `<span>${esc(m.text)}</span>` : ''}
+      ${them && scamCheck(m.text) ? `<em class="scam">⚠ ${esc(scamCheck(m.text))}</em>` : ''}
+      ${reacts.length ? `<div class="creacts">${reacts.map(([e, ids]) => `<button type="button" class="creact ${ids.includes(myId()) ? 'mine' : ''}" data-mreact="${e}" data-rid="${esc(m.id)}" title="${esc(ids.map((x) => nameOf(x).pseudo).join(', '))}">${e}<b>${ids.length}</b></button>`).join('')}</div>` : ''}
+      <small>${hm(m.at)}${i === seenIdx ? ` · <b class="cseen">Vu${lu && i === lastIdx ? ` à ${hm(lu)}` : ''}</b>` : ''}</small>
+      ${m.id ? `<div class="ctools"><button type="button" data-mreply="${esc(m.id)}" title="Répondre">↩</button><button type="button" data-mpick="${esc(m.id)}" title="Réagir">😀</button>${!them ? `<button type="button" data-mdel="${esc(m.id)}" title="Supprimer le message">🗑</button>` : ''}</div>` : ''}</div>`;
+  }).join('') + pend.map(([cid, p]) => `<div class="cmsg me ${p.failed ? 'failed' : 'sending'}" data-cid="${esc(cid)}">${p.image ? `<img class="cimg" src="${esc(p.image)}" alt="">` : ''}${p.text ? `<span>${esc(p.text)}</span>` : ''}<small>${p.failed ? `⚠ ${esc(p.failed)} · <button type="button" class="linkbtn" data-mretry="${esc(cid)}">Réessayer</button> · <button type="button" class="linkbtn" data-mdrop="${esc(cid)}">Annuler</button>` : 'envoi…'}</small></div>`).join('');
   if (!force && el.dataset.html === html) return;
   el.dataset.html = html;
   const empty = group ? '<div class="cempty"><span class="cemo">👥</span><b>Discussion du groupe</b><small>Tout le groupe voit les messages ici. Dis bonjour 👋</small></div>' : `<div class="cempty">${avatar(state.hist?.amis?.find((a) => a.id === chatWith?.id) ?? chatWith?.name ?? '?', 'big')}<b>${esc(chatWith?.name ?? '')}</b><small>Pas encore de message : dis bonjour 👋</small></div>`;
   el.innerHTML = html || empty;
   if (atBottom || force) el.scrollTop = el.scrollHeight;
 }
+// Barre « Répondre à … », ligne « … écrit », messages programmés
+const composerIds = (key) => (key?.[0] === 'g' ? { bar: 'gReplyBar', typing: 'gTyping', scheds: 'gScheds', text: 'gText' } : { bar: 'chatReplyBar', typing: 'chatTyping', scheds: 'chatScheds', text: 'chatText' });
+const openKey = (kind) => (kind === 'g' ? (gOpen() ? `g:${gOpen()}` : null) : (chatWith ? `f:${chatWith.id}` : null));
+function paintReply(key) {
+  const ids = composerIds(key); const m = replyTo.get(key);
+  $(ids.bar).hidden = !m;
+  if (m) $(ids.bar).innerHTML = `<span>↩ Réponse à <b>${esc(m.from === myId() ? 'toi' : (state.hist?.amis?.find((a) => a.id === m.from)?.pseudo ?? (state.groups ?? []).flatMap((g) => g.members).find((x) => x.id === m.from)?.pseudo ?? '?'))}</b> : ${esc(String(m.text || '📷 Image').slice(0, 80))}</span><button type="button" data-rcancel title="Annuler">✕</button>`;
+}
+function paintTyping() {
+  for (const kind of ['f', 'g']) {
+    const key = openKey(kind); const el = $(composerIds(key ?? kind).typing);
+    if (!key) { el.textContent = ''; continue; }
+    const who = live.typing.filter((t) => Date.now() - t.seenAt < 6000 && (kind === 'g' ? t.gid === key.slice(2) : !t.gid && t.from === key.slice(2)))
+      .map((t) => state.hist?.amis?.find((a) => a.id === t.from)?.pseudo ?? (state.groups ?? []).flatMap((g) => g.members).find((x) => x.id === t.from)?.pseudo ?? '?');
+    el.innerHTML = who.length ? `<i></i><i></i><i></i> ${esc(who.slice(0, 3).join(', '))} ${who.length > 1 ? 'écrivent' : 'écrit'}…` : '';
+  }
+}
+async function paintScheds(key) {
+  if (!key) return;
+  const list = (await api.schedList?.().catch(() => []) ?? []).filter((x) => x.key === key);
+  $(composerIds(key).scheds).innerHTML = list.map((x) => `<div class="csched">⏰ <b>${new Date(x.at).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</b><span>${esc(x.text)}</span><button type="button" data-sdel="${esc(x.id)}" title="Annuler">✕</button></div>`).join('');
+}
+let readTimer = null;
+function markRead(key) {
+  if (!key || key[0] !== 'f' || !document.hasFocus()) return;
+  clearTimeout(readTimer);
+  readTimer = setTimeout(() => api.chatRead?.(key.slice(2)).catch(() => {}), 600);
+}
 async function loadThread(key) {
   const [kind, id] = [key[0], key.slice(2)];
   const r = await (kind === 'f' ? api.chatThread(id) : api.groupThread?.(id))?.catch(() => null);
   if (!r?.fil) { if (!threads.has(key)) { const el = threadEl(key); if (el) el.innerHTML = `<p class="hint">${esc(r?.error ?? 'Impossible de charger la discussion.')} <button type="button" class="linkbtn" data-mreload="${esc(key)}">Réessayer</button></p>`; } return; }
   keepThread(key, r.fil);
+  if (r.lu) live.lus[key.slice(2)] = Math.max(live.lus[key.slice(2)] ?? 0, r.lu);
   paintThread(key);
   if (key[0] === 'g') renderGroups(state.groups ?? []);
+  markRead(key);
 }
 async function openChat(id, name) {
   const f = state.hist?.amis?.find((a) => a.id === id);
@@ -927,6 +990,7 @@ async function openChat(id, name) {
   paintThread(`f:${id}`, { force: true });
   $('chatText').focus();
   loadThread(`f:${id}`);
+  paintReply(`f:${id}`); paintScheds(`f:${id}`); paintTyping();
   if (state.hist) renderHistory();
   updateFriendsBadge();
 }
@@ -937,16 +1001,18 @@ function openGroupChat(id) {
   paintThread(`g:${id}`, { force: true });
   setTimeout(() => $('gText').focus(), 0);
   loadThread(`g:${id}`);
+  paintReply(`g:${id}`); paintScheds(`g:${id}`); paintTyping();
   renderGroups(state.groups ?? []);
   updateFriendsBadge();
 }
 const refreshChat = () => chatWith && loadThread(`f:${chatWith.id}`);
-async function sendMsg(key, text, cid = newCid()) {
-  pendingMsgs.set(cid, { key, text, failed: null });
+async function sendMsg(key, text, cid = newCid(), extra = {}) {
+  pendingMsgs.set(cid, { key, text, failed: null, ...extra });
   paintThread(key, { force: true });
   const id = key.slice(2);
-  const r = await (key[0] === 'f' ? api.chatSend(id, text, cid) : api.groupSend(id, text, cid)).catch(() => null);
-  if (!r || r.error || (r.status && r.status !== 200)) { pendingMsgs.set(cid, { key, text, failed: r?.error ?? 'Non envoyé' }); paintThread(key); return; }
+  const x = { ...(extra.re ? { re: extra.re } : {}), ...(extra.image ? { image: extra.image } : {}) };
+  const r = await (key[0] === 'f' ? api.chatSend(id, text, cid, x) : api.groupSend(id, text, cid, x)).catch(() => null);
+  if (!r || r.error || (r.status && r.status !== 200)) { pendingMsgs.set(cid, { key, text, failed: r?.error ?? 'Non envoyé', ...extra }); paintThread(key); return; }
   pendingMsgs.delete(cid);
   if (r.fil) keepThread(key, r.fil);
   else keepThread(key, [...(threads.get(key) ?? []), r.message ?? { id: r.id ?? cid, from: myId(), text, at: Date.now() }]);
@@ -957,23 +1023,52 @@ function submitFrom(area, key) {
   const text = area.value.trim();
   if (!text || !key) return;
   area.value = ''; area.style.height = '';
-  sendMsg(key, text);
+  const re = replyTo.get(key)?.id;
+  replyTo.delete(key); paintReply(key);
+  sendMsg(key, text, newCid(), re ? { re } : {});
 }
 $('chatForm').addEventListener('submit', (e) => { e.preventDefault(); if (chatWith) submitFrom($('chatText'), `f:${chatWith.id}`); });
 $('gForm').addEventListener('submit', (e) => { e.preventDefault(); if (gOpen()) submitFrom($('gText'), `g:${gOpen()}`); });
+let typingSent = 0;
 for (const id of ['chatText', 'gText']) {
-  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.target.form.requestSubmit(); } });
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.target.form.requestSubmit(); } if (e.key === 'Escape') { const k = openKey(id === 'gText' ? 'g' : 'f'); if (k && replyTo.has(k)) { replyTo.delete(k); paintReply(k); } } });
+  $(id).addEventListener('input', (e) => {
+    const k = openKey(id === 'gText' ? 'g' : 'f');
+    if (!k || !e.target.value.trim() || Date.now() - typingSent < 3000) return;
+    typingSent = Date.now();
+    api.chatTyping?.(k[0], k.slice(2)).catch(() => {});
+  });
   if (id === 'gText') $(id).addEventListener('input', (e) => { e.target.style.height = ''; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; });
 }
-// Supprimer, réessayer, annuler un message (discussion d'ami ou de groupe)
+// Répondre, réagir, voir une image, supprimer, réessayer, annuler (discussion d'ami ou de groupe)
+function reactPicker(msgEl, mid) {
+  document.querySelectorAll('.cpick').forEach((x) => x.remove());
+  msgEl.insertAdjacentHTML('beforeend', `<div class="cpick">${REACTS.map((e) => `<button type="button" data-mreact="${e}" data-rid="${esc(mid)}">${e}</button>`).join('')}</div>`);
+}
+async function react(key, mid, emoji) {
+  document.querySelectorAll('.cpick').forEach((x) => x.remove());
+  const fil = threads.get(key) ?? [];
+  const m = fil.find((x) => x.id === mid); if (!m) return;
+  const who = new Set(m.reacts?.[emoji] ?? []);
+  if (who.has(myId())) who.delete(myId()); else who.add(myId());
+  m.reacts = { ...(m.reacts ?? {}), [emoji]: [...who] };
+  keepThread(key, fil); paintThread(key);
+  const r = await api.chatReact?.(key[0], key.slice(2), mid, emoji).catch(() => null);
+  if (r?.message) { keepThread(key, fil.map((x) => (x.id === mid ? { ...x, reacts: r.message.reacts } : x))); paintThread(key); } else if (!r?.ok) toast(r?.error ?? 'Réaction impossible');
+}
 for (const fil of ['chatFil', 'gFil']) {
   $(fil).addEventListener('click', async (e) => {
     const key = fil === 'chatFil' ? (chatWith ? `f:${chatWith.id}` : null) : (gOpen() ? `g:${gOpen()}` : null);
     if (!key) return;
-    const t = e.target.closest('[data-mdel],[data-mretry],[data-mdrop],[data-mreload]'); if (!t) return;
+    const t = e.target.closest('[data-mdel],[data-mretry],[data-mdrop],[data-mreload],[data-mreply],[data-mpick],[data-mreact],[data-mview],[data-mjump]'); if (!t) return;
     if (t.dataset.mreload) return loadThread(key);
     if (t.dataset.mdrop) { pendingMsgs.delete(t.dataset.mdrop); return paintThread(key, { force: true }); }
-    if (t.dataset.mretry) { const p = pendingMsgs.get(t.dataset.mretry); if (p) sendMsg(key, p.text, t.dataset.mretry); return; }
+    if (t.dataset.mretry) { const p = pendingMsgs.get(t.dataset.mretry); if (p) sendMsg(key, p.text, t.dataset.mretry, { re: p.re, image: p.image }); return; }
+    if (t.dataset.mreply) { const m = (threads.get(key) ?? []).find((x) => x.id === t.dataset.mreply); if (m) { replyTo.set(key, m); paintReply(key); $(composerIds(key).text).focus(); } return; }
+    if (t.dataset.mpick) return reactPicker(t.closest('.cmsg'), t.dataset.mpick);
+    if (t.dataset.mreact) return react(key, t.dataset.rid, t.dataset.mreact);
+    if (t.dataset.mview) { $('modalBox').classList.add('wide'); $('modalBox').innerHTML = `<img class="cimgbig" src="${esc(t.dataset.mview)}" alt=""><div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`; $('modal').showModal(); $('modalBox').onclick = (ev) => { if (ev.target.closest('[data-m]')) $('modal').close(); }; return; }
+    if (t.dataset.mjump) { const el = $(fil).querySelector(`[data-mid="${CSS.escape(t.dataset.mjump)}"]`); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } return; }
     const mid = t.dataset.mdel;
     if (!(await ui.confirm({ title: 'Supprimer ce message ?', text: key[0] === 'g' ? 'Il disparaît pour tout le groupe.' : 'Il disparaît aussi chez ton ami.', ok: 'Supprimer', danger: true, icon: '🗑' }))) return;
     const before = threads.get(key) ?? [];
@@ -982,6 +1077,76 @@ for (const fil of ['chatFil', 'gFil']) {
     if (!r?.ok) { keepThread(key, before); paintThread(key); return toast(r?.error ?? 'Suppression impossible pour l’instant'); }
     if (r.fil) { keepThread(key, r.fil); paintThread(key); }
   });
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.cpick,[data-mpick]')) document.querySelectorAll('.cpick').forEach((x) => x.remove()); });
+// Barre de réponse, messages programmés, pièce jointe (les deux discussions)
+for (const kind of ['f', 'g']) {
+  const ids = composerIds(kind === 'g' ? 'g:' : 'f:');
+  $(ids.bar).addEventListener('click', (e) => { if (e.target.closest('[data-rcancel]')) { const k = openKey(kind); replyTo.delete(k); paintReply(k); } });
+  $(ids.scheds).addEventListener('click', async (e) => { const b = e.target.closest('[data-sdel]'); if (!b) return; await api.schedDel?.(b.dataset.sdel); paintScheds(openKey(kind)); toast('Message programmé annulé'); });
+  $(kind === 'g' ? 'gForm' : 'chatForm').addEventListener('click', async (e) => {
+    const k = openKey(kind); if (!k) return;
+    if (e.target.closest('[data-csched]')) return scheduleMsg(k);
+    if (e.target.closest('[data-catt]')) return attachMenu(k, e.target.closest('[data-catt]'));
+  });
+}
+async function scheduleMsg(key) {
+  const area = $(composerIds(key).text);
+  const d = new Date(Date.now() + 60 * 60_000); d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0);
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  $('modalBox').innerHTML = `<div class="mhead"><span class="micon">⏰</span><h2>Programmer un message</h2></div><p class="hint">Il part tout seul à l’heure choisie (le launcher doit être ouvert, même réduit).</p>
+    <textarea class="minput" id="schText" rows="3" maxlength="500" placeholder="Ex. On lance la partie, connectez-vous !">${esc(area.value.trim())}</textarea>
+    <label class="field"><span>Quand</span><input type="datetime-local" class="minput" id="schAt" value="${local}"></label>
+    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" data-m="1">Programmer</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    if (b.dataset.m === '0') return $('modal').close();
+    const text = $('schText').value.trim(); const at = new Date($('schAt').value).getTime();
+    if (!text) return toast('Écris le message');
+    const r = await api.schedAdd?.(key, text, at);
+    if (!r?.ok) return toast(r?.error ?? 'Impossible');
+    area.value = ''; $('modal').close(); paintScheds(key);
+    toast(`⏰ Message programmé pour ${new Date(at).toLocaleString('fr-FR', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}`);
+  };
+}
+// Réduire une image du PC avant l'envoi (1600 px max, moins de 1,1 Mo)
+async function shrinkImage(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  for (const q of [0.85, 0.7, 0.55, 0.4]) { const u = c.toDataURL('image/jpeg', q); if (u.length * 0.75 < 1_100_000) return u; }
+  return null;
+}
+function attachMenu(key, btn) {
+  const ctx = $('ctx');
+  ctx.innerHTML = '<div class="ctxhead">Envoyer une image</div><button data-att="shot">📷 Une de mes captures</button><button data-att="file">🖼 Une image du PC</button>';
+  ctx.hidden = false;
+  const r = btn.getBoundingClientRect();
+  ctx.style.left = `${r.left}px`; ctx.style.top = `${Math.max(8, r.top - ctx.offsetHeight - 6)}px`;
+  ctx.classList.remove('show'); void ctx.offsetWidth; ctx.classList.add('show');
+  ctx.onclick = async (e) => {
+    const b = e.target.closest('[data-att]'); if (!b) return;
+    ctx.hidden = true; ctx.onclick = null;
+    if (b.dataset.att === 'file') {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp';
+      inp.onchange = async () => { const f = inp.files?.[0]; if (!f) return; const u = await shrinkImage(f).catch(() => null); if (!u) return toast('Image illisible ou trop lourde'); sendMsg(key, '', newCid(), { image: u }); };
+      return inp.click();
+    }
+    const list = await api.capturesRecent?.().catch(() => []) ?? [];
+    $('modalBox').classList.add('wide');
+    $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📷</span><h2>Envoyer une capture</h2></div>${list.length ? `<div class="shotpick">${list.map((c) => `<button type="button" data-shot="${esc(c.token)}"><img src="${esc(c.url)}" alt="" loading="lazy"><small>${esc(c.game)} · ${new Date(c.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</small></button>`).join('')}</div>` : '<p class="hint">Pas encore de capture : Ctrl+Alt+S pendant une partie.</p>'}
+      <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button></div>`;
+    $('modal').showModal();
+    $('modalBox').onclick = async (ev) => {
+      if (ev.target.closest('[data-m]')) return $('modal').close();
+      const s2 = ev.target.closest('[data-shot]'); if (!s2) return;
+      const u = await api.captureData?.(s2.dataset.shot).catch(() => null);
+      if (!u) return toast('Capture illisible');
+      $('modal').close(); sendMsg(key, '', newCid(), { image: u });
+    };
+  };
 }
 $('chatText').addEventListener('input', (e) => { e.target.style.height = ''; e.target.style.height = `${Math.min(120, e.target.scrollHeight)}px`; });
 $('chatAv').addEventListener('click', () => chatWith && openFriendProfile(chatWith.id));
@@ -1012,23 +1177,28 @@ function updateFriendsBadge() {
 api.onChatOpen?.((d) => { showFriendTab('history'); setTimeout(() => openChat(d.id), 200); });
 // Un message arrivé par la boîte en direct s'ajoute tout de suite au fil (sans recharger toute la discussion)
 function applyLive(x) {
-  const key = x.type === 'msg' || x.type === 'msgdel' ? `f:${x.from}` : `g:${x.gid}`;
+  const key = ['msg', 'msgdel'].includes(x.type) || (x.type === 'react' && !x.gid) ? `f:${x.from}` : `g:${x.gid}`;
   const fil = threads.get(key);
+  if (x.type === 'react') { if (threadEl(key)) loadThread(key); return false; }
   if (x.type === 'msgdel' || x.type === 'gmsgdel') { if (fil) { keepThread(key, fil.filter((m) => m.id !== x.msg)); paintThread(key); } return false; }
   const m = { id: x.msg ?? x.id, from: x.from, text: x.text, at: x.sentAt ?? x.at };
   if (fil && !fil.some((y) => y.id === m.id)) keepThread(key, [...fil, m].sort((a, b) => a.at - b.at));
-  if (threadEl(key)) { paintThread(key); if (!fil) loadThread(key); return false; }
+  if (threadEl(key)) { paintThread(key); loadThread(key); live.typing = live.typing.filter((t) => t.from !== x.from); paintTyping(); return false; }
   return true;
 }
 api.onSocial?.((d) => {
   let ding = false;
   for (const x of d.items ?? d.messages ?? []) {
-    if (!['msg', 'gmsg', 'msgdel', 'gmsgdel'].includes(x.type)) continue;
+    if (!['msg', 'gmsg', 'msgdel', 'gmsgdel', 'react'].includes(x.type)) continue;
     if (!applyLive(x)) continue;
     ding = true;
     if (x.type === 'msg') unread[x.from] = (unread[x.from] ?? 0) + 1; else gUnread[x.gid] = (gUnread[x.gid] ?? 0) + 1;
   }
   if (ding && document.hasFocus()) window.sfx?.play('notif');
+  // « … écrit » et « Vu »
+  if (d.typing?.length) { live.typing = [...live.typing.filter((t) => Date.now() - t.seenAt < 6000), ...d.typing.map((t) => ({ ...t, seenAt: Date.now() }))]; paintTyping(); setTimeout(paintTyping, 6200); }
+  if (d.lus) { let changed = false; for (const [k, v] of Object.entries(d.lus)) if (v > (live.lus[k] ?? 0)) { live.lus[k] = v; changed = true; } if (changed && chatWith) paintThread(`f:${chatWith.id}`); }
+  if (chatWith && (d.items ?? []).some((x) => x.type === 'msg' && x.from === chatWith.id)) markRead(`f:${chatWith.id}`);
   if (state.hist && !state.hist.error && d.amis) {
     state.hist = { ...state.hist, amis: d.amis, demandes: d.demandes ?? state.hist.demandes, groupes: d.groupes ?? state.hist.groupes };
     if (state.view === 'amis') { if (state.ftab === 'history') renderHistory(); if (d.groupes) renderGroups(d.groupes); }
@@ -1402,6 +1572,18 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.25.0': [
+    ['⏱', 'Temps de jeu en direct', 'Le temps de jeu monte chaque minute pendant la partie, même pour Steam et FiveM (qui ne l’écrivent qu’à la fermeture du jeu), sans jamais compter deux fois.'],
+    ['💬', 'Messages : Vu, écrit…, réponses, réactions', '« Vu à 21 h 04 » sous ton message, « Max écrit… » en direct, ↩ pour répondre à un message précis, 😀 pour réagir (👍 😂 🔥 ❤️ 😮 😢), en privé et en groupe.'],
+    ['📷', 'Images et messages programmés', '📎 envoie une de tes captures (ou une image du PC) dans la discussion ; ⏰ programme un message (« on lance à 21 h »).'],
+    ['🕒', '« Dispo vers 22 h »', 'Pendant ta partie, tes amis voient vers quelle heure tu seras dispo, d’après la durée habituelle de tes parties.'],
+    ['▶', 'Lancer avec le jeu', 'Outils du jeu › Santé & lancement : Discord, Spotify, OBS… s’ouvrent tout seuls avec le jeu. Et si une mise à jour Steam attend, History te propose de la faire avant de jouer.'],
+    ['💥', 'Plantages expliqués', 'Si un jeu se ferme brutalement, History lit le journal de Windows et te dit la cause probable (pilote, mod, overlay, anti-triche…) et quoi faire. Le temps de démarrage est aussi mesuré.'],
+    ['💽', 'Disques surveillés', 'Alerte quand un disque est presque plein, avec les gros jeux oubliés à libérer ; Mon PC › Composants montre l’usure et la santé de tes SSD et disques durs.'],
+    ['🚀', 'Test de connexion', 'Mon PC › Réseau : ping, stabilité, paquets perdus, débit, Wi-Fi ou câble, avec un conseil clair. En jeu, le widget affiche ton ping en direct.'],
+    ['💻', 'Connexion par code', 'Sur un nouveau PC : « Se connecter avec un autre PC », puis entre le code affiché depuis un PC déjà connecté. Tes réglages, collections, journal et alertes de prix suivent.'],
+    ['📓', 'Journal de parties', 'Statistiques : chaque partie indique avec quels amis tu as joué et combien de captures tu as prises.'],
+  ],
   '0.24.0': [
     ['💬', 'Messages fiables', 'Un message qui ne part pas est renvoyé tout seul (sans doublon), sinon il reste affiché avec « Réessayer ». Les discussions s’ouvrent tout de suite, même au démarrage.'],
     ['🗑', 'Supprimer un message', 'Passe la souris sur un de tes messages › 🗑 : il disparaît aussi chez ton ami (ou tout le groupe).'],
@@ -1594,13 +1776,26 @@ async function openGmod(found = null) {
 }
 // ---------- Outils du jeu : profil, sauvegardes, saccades, déplacement, performances ----------
 let toolsFor = null;
+// Santé du jeu : derniers plantages expliqués, temps de démarrage, applis lancées avec le jeu
+function santeHtml(item, care, w) {
+  const loads = care?.loads ?? []; const crashes = care?.crashes ?? [];
+  const sec = (ms) => `${Math.round(ms / 1000)} s`;
+  const avgLoad = loads.length ? loads.reduce((a, x) => a + x.ms, 0) / loads.length : null;
+  const last = loads.at(-1);
+  return `<b class="sub">⏱ Temps de démarrage</b>
+    ${loads.length ? `<div class="scansum"><div><b>${sec(last.ms)}</b><small>dernier lancement</small></div><div><b>${sec(avgLoad)}</b><small>en moyenne (${loads.length})</small></div><div class="${last.ms > avgLoad * 1.5 ? 'bad' : ''}"><b>${last.ms > avgLoad * 1.5 ? 'Plus lent' : 'Normal'}</b><small>par rapport à d’habitude</small></div></div>` : '<p class="hint">Lance le jeu depuis History : le temps entre le clic et l’apparition de sa fenêtre sera mesuré (tu es prévenu s’il devient anormalement long).</p>'}
+    <b class="sub">💥 Plantages</b>
+    ${crashes.length ? `<div class="flist">${crashes.slice(0, 8).map((c) => `<div class="crash"><div><b>${esc(c.cause)}</b><small>${new Date(c.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}${c.module ? ` · module ${esc(c.module)}` : ''}</small><p>${esc(c.fix)}</p></div></div>`).join('')}</div>` : '<p class="hint">Aucun plantage repéré 👍 Si le jeu se ferme brutalement, History lit le journal de Windows et t’explique la cause probable.</p>'}
+    <b class="sub">▶ Lancer avec le jeu</b><p class="hint">Ces applis s’ouvrent en même temps que ${esc(item.name)} (si elles ne tournent pas déjà).</p>
+    ${w?.apps?.length ? `<div class="checks">${w.apps.map((a) => `<label class="check"><input type="checkbox" data-with="${esc(a.id)}" ${w.with.includes(a.id) ? 'checked' : ''}>${esc(a.name)}</label>`).join('')}</div><div class="row"><button class="btn play" data-tact="with">Enregistrer</button></div>` : '<p class="hint">Aucune appli trouvée sur le PC.</p>'}`;
+}
 async function openTools(item, tab = 'profil') {
   hideCtx();
   toolsFor = item;
-  const d = await api.tools(item.id).catch(() => null);
+  const [d, care, withApps] = await Promise.all([api.tools(item.id).catch(() => null), api.gameCare?.(item.id).catch(() => null), api.gameWith?.(item.id).catch(() => null)]);
   if (!d || d.error) return toast(d?.error ?? 'Impossible');
   const p = d.profile;
-  const tabs = [['profil', '🎛 Profil'], ['graph', '🎚 Réglages conseillés'], ['saves', '💾 Sauvegardes'], ['shaders', '🧊 Saccades'], ...(d.canMove ? [['move', '📦 Déplacer']] : []), ['perf', '📈 Performances']];
+  const tabs = [['profil', '🎛 Profil'], ['graph', '🎚 Réglages conseillés'], ['saves', '💾 Sauvegardes'], ['shaders', '🧊 Saccades'], ...(d.canMove ? [['move', '📦 Déplacer']] : []), ['sante', '🩺 Santé & lancement'], ['perf', '📈 Performances']];
   const perf = d.perf.slice().reverse();
   const B = { cpu: 'processeur limitant', gpu: 'carte graphique à fond', mixte: 'équilibré' };
   const month = (days) => perf.filter((x) => Date.now() - x.at < days * 86_400_000 && x.avg);
@@ -1622,6 +1817,7 @@ async function openTools(item, tab = 'profil') {
       <div class="row"><button class="btn" data-tact="share" ${d.saveDirs.length ? '' : 'disabled'}>📤 Envoyer ma sauvegarde à un ami</button></div>
       <b class="sub">Copies</b><div class="flist">${d.backups.length ? d.backups.map((b) => `<div><div><b>${new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</b><small>${gb(b.bytes)}</small></div><button class="btn ghost sm" data-restore="${esc(b.id)}">Restaurer</button></div>`).join('') : '<p class="hint">Pas encore de copie.</p>'}</div>`,
     graph: graphicsHtml(d.graphics),
+    sante: santeHtml(item, care, withApps),
     shaders: `<p class="hint">Un cache de shaders abîmé ou trop vieux donne des saccades (surtout après une mise à jour du jeu ou du pilote). Il se recrée tout seul : les premières minutes peuvent saccader le temps qu’il se reconstruise.</p>
       <div class="checks">${d.caches.map((c) => `<label class="check"><input type="checkbox" data-cache="${esc(c.id)}" ${c.own ? 'checked' : ''}><span>${esc(c.label)}</span><em>${gb(c.bytes)}</em></label>`).join('')}</div>
       <div class="row"><button class="btn play" data-tact="shaders">🧊 Vider la sélection</button></div>`,
@@ -1650,6 +1846,7 @@ async function openTools(item, tab = 'profil') {
       return;
     }
     const a = t.dataset.tact;
+    if (a === 'with') { const list = [...document.querySelectorAll('#modalBox [data-with]:checked')].map((x) => x.dataset.with); const r = await api.gameWith(item.id, list); toast(r?.ok ? (list.length ? `▶ ${list.length} appli(s) lancée(s) avec ${item.name}` : 'Plus rien ne se lance avec le jeu') : 'Impossible'); return; }
     if (a === 'backup') { t.disabled = true; const r = await api.savesBackup(item.id); toast(r?.ok ? `💾 Copie faite (${gb(r.bytes)})` : r?.error ?? 'Impossible'); return openTools(item, 'saves'); }
     if (a === 'pick') { await api.savesPick(item.id); return openTools(item, 'saves'); }
     if (a === 'openSaves') return api.savesOpen();
@@ -2512,7 +2709,7 @@ async function renderProgress() {
     <div class="streak"><b>🔥 ${p.streak}</b><small>jour${p.streak > 1 ? 's' : ''} d’affilée</small></div>`;
   const max = Math.max(1, ...p.hourly);
   $('hourly').innerHTML = p.hourly.map((m, h) => `<div class="hb" title="${h} h : ${hours(m)}"><i style="height:${Math.max(2, (100 * m) / max)}%"></i><small>${h % 3 === 0 ? h : ''}</small></div>`).join('');
-  $('sessions').innerHTML = p.sessions.length ? p.sessions.map((x) => `<div class="sess" data-id="${esc(x.id)}"><b>${esc(x.name)}</b><small>${new Date(x.start).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${hours(Math.max(1, (x.end - x.start) / 60_000))}</small></div>`).join('') : '<div class="empty">Tes prochaines parties apparaîtront ici.</div>';
+  $('sessions').innerHTML = p.sessions.length ? p.sessions.map((x) => `<div class="sess" data-id="${esc(x.id)}"><b>${esc(x.name)}</b><small>${new Date(x.start).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${hours(Math.max(1, (x.end - x.start) / 60_000))}</small>${x.with?.length || x.shots ? `<em class="sessx">${x.with?.length ? `👥 avec ${esc(x.with.join(', '))}` : ''}${x.with?.length && x.shots ? ' · ' : ''}${x.shots ? `📷 ${x.shots} capture${x.shots > 1 ? 's' : ''}` : ''}</em>` : ''}</div>`).join('') : '<div class="empty">Tes prochaines parties apparaîtront ici.</div>';
   const got = p.badges.filter((b) => b.got).length;
   $('badgeCount').textContent = `${got} / ${p.badges.length} débloqués`;
   $('badges').innerHTML = p.badges.map((b) => `<div class="bdg ${b.got ? 'got' : ''}" title="${esc(b.desc)}"><span>${b.icon}</span><b>${esc(b.title)}</b><small>${esc(b.desc)}</small>${b.got ? '' : `<div class="lvlbar"><i style="width:${b.progress}%"></i></div>`}</div>`).join('');
@@ -2817,6 +3014,11 @@ async function act(action) {
   if (!item) return;
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
   const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
+  // Mise à jour en attente : la faire d'abord plutôt que d'attendre devant l'écran de chargement
+  if (action === 'launch' && item.updatePending && item.source === 'steam') {
+    const c = await ui.confirm({ title: `${item.name} a une mise à jour`, text: 'Steam va la télécharger avant de lancer le jeu. Tu peux la faire maintenant (le jeu se lance tout seul après) ou jouer quand même si le jeu le permet.', ok: '⬇ Mettre à jour puis jouer', cancel: 'Jouer quand même', icon: '⬆' });
+    if (c) { const u = await api.action(item.id, 'update'); return toast(u?.ok ? 'Steam fait la mise à jour puis lance le jeu' : u?.error ?? 'Impossible'); }
+  }
   if (action === 'launch') window.sfx?.play('launch');
   const r = await api.action(item.id, action);
   if (r?.ok) toast(labels[action]);
@@ -3348,7 +3550,7 @@ $('authSkip').addEventListener('click', async () => { await api.skipAccount?.();
 $('profileBtn').addEventListener('click', (e) => {
   if (!state.account) return showAuth(true);
   const ctx = $('ctx');
-  ctx.innerHTML = `<div class="ctxhead">${esc(state.account.pseudo)}</div><button data-pact="edit">🎨 Personnaliser mon profil</button><button data-pact="friends">👥 Mes amis</button><hr><button class="danger" data-pact="logout">Se déconnecter</button>`;
+  ctx.innerHTML = `<div class="ctxhead">${esc(state.account.pseudo)}</div><button data-pact="edit">🎨 Personnaliser mon profil</button><button data-pact="friends">👥 Mes amis</button><button data-pact="pair">💻 Connecter un autre PC</button><hr><button class="danger" data-pact="logout">Se déconnecter</button>`;
   ctx.hidden = false;
   const r = $('profileBtn').getBoundingClientRect();
   ctx.style.left = `${r.left}px`;
@@ -3359,6 +3561,12 @@ $('profileBtn').addEventListener('click', (e) => {
 async function profileAction(a) {
   if (a === 'edit') return openProfileEditor();
   if (a === 'friends') return go('amis');
+  if (a === 'pair') {
+    const code = await ui.prompt({ title: 'Connecter un autre PC', text: 'Sur le nouveau PC, clique sur « Se connecter avec un autre PC » : un code s’affiche. Entre-le ici. Ne le fais que si ce PC est à toi !', value: '', ok: 'Connecter', icon: '💻' });
+    if (!code) return;
+    const r = await api.pairApprove?.(code);
+    return toast(r?.ok ? `✅ ${r.nom} est maintenant connecté à ton compte` : r?.error ?? 'Code refusé');
+  }
   if (a === 'logout') {
     if (!(await ui.confirm({ title: 'Se déconnecter ?', text: `Connecté en tant que ${state.account.pseudo} (${state.account.email}).`, ok: 'Se déconnecter', icon: '👤' }))) return;
     await api.logout();
@@ -3408,7 +3616,13 @@ async function load() {
   api.collections?.().then((c) => { state.cols = c ?? {}; renderCollections(); }).catch(() => {});
 }
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
-api.onActive?.((ids) => { state.active = new Set(ids); renderHome(); renderHero(); });
+// Chaque minute : jeux ouverts + temps de jeu à jour (il monte pendant la partie)
+api.onActive?.((ids, times) => {
+  state.active = new Set(ids);
+  for (const [id, t] of Object.entries(times ?? {})) { const it = state.items.find((i) => i.id === id); if (it) { it.minutes = t.minutes; it.lastPlayed = t.lastPlayed; } }
+  renderHome(); renderHero();
+  if (state.view === 'liste' && Object.keys(times ?? {}).length) renderList();
+});
 api.settings().then(showKeys);
 api.boost?.().then((b) => { boostGames = b?.games ?? {}; }).catch(() => {});
 say('Salut ! 👋 Dis-moi ce que tu veux : « lance Rocket League », « ferme Discord », « monte le son », « trie par taille »… Tu peux aussi activer « Hey History » en bas pour me parler.');
@@ -3461,7 +3675,7 @@ function demoApi() {
     achievements: async () => ({ done: 45, total: 77, easy: [{ name: 'Bienvenue à Los Santos', desc: 'Termine la première mission', pct: 81.2, icon: null }, { name: 'Un peu de sport', desc: 'Joue au tennis', pct: 34.8, icon: null }], recent: [{ name: 'Braquage réussi', desc: 'Termine un braquage', done: true, pct: 22.1, icon: null }] }),
     captures: async () => [{ token: 'a', url: img('h1.jpg'), video: false }, { token: 'b', url: img('h2.jpg'), video: false }, { token: 'c', video: true }],
     hFriends: async () => ({ code: 'Noam#3F9A2C', moi: { week: 610, top: 'Rocket League' }, demandes: [{ id: 'z', pseudo: 'Zoé', code: 'Zoé#11AA22' }],
-      amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Grand Theft Auto V Enhanced — serveur FiveM RP très long', since: Date.now() - 42 * 60_000, week: 840, top: 'FiveM', status: 'Soirée RP 🚓 on recrute des flics motivés ce soir', bench: 1420, join: { fivem: 'abc123' }, color: '#f97316', frame: 'feu', nameFx: 'neon', banner: 'lave', bio: 'Flic le jour, braqueur la nuit. Serveur RP tous les soirs à 21 h.', favGame: 'FiveM', badges: ['rp', 'nuit', 'streamer'], links: { twitch: 'max_rp', discord: 'max.rp', youtube: 'MaxRP', tiktok: 'max.rp' }, since: Date.now() - 200 * 86_400_000 }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT', status: 'Dispo pour jouer' }, { id: 'k', pseudo: 'UnPseudoVraimentTrèsLongPourTester', online: true, playing: 'Rocket League', since: Date.now() - 5 * 60_000, week: 120, dnd: true, bench: 980 }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }],
+      amis: [{ id: 'm', pseudo: 'Max', online: true, playing: 'Grand Theft Auto V Enhanced — serveur FiveM RP très long', since: Date.now() - 42 * 60_000, week: 840, top: 'FiveM', status: 'Soirée RP 🚓 on recrute des flics motivés ce soir', bench: 1420, join: { fivem: 'abc123' }, dispo: Date.now() + 75 * 60_000, color: '#f97316', frame: 'feu', nameFx: 'neon', banner: 'lave', bio: 'Flic le jour, braqueur la nuit. Serveur RP tous les soirs à 21 h.', favGame: 'FiveM', badges: ['rp', 'nuit', 'streamer'], links: { twitch: 'max_rp', discord: 'max.rp', youtube: 'MaxRP', tiktok: 'max.rp' }, since: Date.now() - 200 * 86_400_000 }, { id: 'l', pseudo: 'Léa', online: true, playing: null, week: 300, top: 'VALORANT', status: 'Dispo pour jouer' }, { id: 'k', pseudo: 'UnPseudoVraimentTrèsLongPourTester', online: true, playing: 'Rocket League', since: Date.now() - 5 * 60_000, week: 120, dnd: true, bench: 980 }, { id: 's', pseudo: 'Sam', online: false, playing: null, week: 95, top: 'Fortnite' }],
       groupes: [{ id: 'g1', name: 'Squad RL — les meilleurs du serveur', owner: true, members: [{ id: 'me', pseudo: 'Noam', online: true }, { id: 'm', pseudo: 'Max', online: true, playing: 'FiveM' }, { id: 'l', pseudo: 'Léa', online: true }, { id: 's', pseudo: 'Sam', online: false }, { id: 'a', pseudo: 'Alex', online: false }, { id: 'b', pseudo: 'Bob', online: true }, { id: 'c', pseudo: 'Chloé', online: false }, { id: 'd', pseudo: 'Dan', online: false }] }] }),
     notifs: async () => ({ unread: 3, list: [
       { id: 'n1', at: Date.now() - 60_000, kind: 'msg', cat: 'amis', icon: '💬', title: 'Max', body: 'T’es chaud pour une partie ce soir ? On lance le serveur RP vers 21 h', from: 'm', read: false },
@@ -3471,8 +3685,18 @@ function demoApi() {
       { id: 'n5', at: Date.now() - 30 * 3_600_000, kind: 'share', cat: 'amis', icon: '💾', title: 'Sam t’envoie une sauvegarde', body: 'Minecraft · Monde survie (412 Ko)', read: true, done: 'saveget' }] }),
     chatSend: async (fid, text, cid) => ({ ok: true, id: cid, message: { id: cid, from: 'me', text, at: Date.now() } }), friendJoin: async () => ({ ok: true }), callStart: async () => ({ error: 'Aperçu : pas d’appel' }),
     notifsRead: async () => ({ unread: 0 }), notifsClear: async () => ({ list: [], unread: 0 }), notifsAct: async () => ({ ok: true }),
-    chatThread: async () => ({ fil: [{ id: 'a1', from: 'm', text: 'Yo ! T’es là ?', at: Date.now() - 3_600_000 }, { id: 'a2', from: 'm', text: 'On lance le serveur RP vers 21 h', at: Date.now() - 3_590_000 }, { id: 'a3', from: 'me', text: 'Grave, j’arrive dans 10 min', at: Date.now() - 3_500_000 }] }),
+    chatThread: async () => ({ lu: Date.now() - 60_000, fil: [{ id: 'a1', from: 'm', text: 'Yo ! T’es là ?', at: Date.now() - 3_600_000 }, { id: 'a2', from: 'm', text: 'On lance le serveur RP vers 21 h', at: Date.now() - 3_590_000, reacts: { '🔥': ['me'] } }, { id: 'a3', from: 'me', text: 'Grave, j’arrive dans 10 min', at: Date.now() - 3_500_000, re: { id: 'a2', from: 'm', text: 'On lance le serveur RP vers 21 h' } }, { id: 'a4', from: 'm', text: 'Parfait 👌', at: Date.now() - 3_400_000, reacts: { '👍': ['me'], '😂': ['me'] } }, { id: 'a5', from: 'me', text: 'Je prends la voiture de patrouille', at: Date.now() - 120_000 }] }),
     chatDelete: async () => ({ ok: true }), groupDelete: async () => ({ ok: true }),
+    chatRead: async () => ({ ok: true }), chatTyping: async () => ({ ok: true }), chatReact: async () => ({ ok: true }),
+    schedList: async () => [{ id: 's1', key: 'g:g1', text: 'On lance la ranked, connectez-vous !', at: Date.now() + 3 * 3_600_000 }], schedAdd: async () => ({ ok: true }), schedDel: async () => ({ ok: true }),
+    capturesRecent: async () => [], captureData: async () => null,
+    tools: async () => ({ profile: { enabled: false, close: [], power: 'none' }, apps: [], saveDirs: [], backups: [], received: [], caches: [], perf: [], graphics: { need: 'benchmark' }, fps: false, canMove: false }),
+    gameCare: async () => ({ crashes: [{ at: Date.now() - 86_400_000, cause: 'Pilote graphique NVIDIA', fix: 'Mets à jour (ou réinstalle proprement) le pilote NVIDIA, et baisse les réglages graphiques si ça recommence.', module: 'nvwgf2umx.dll' }], loads: [{ ms: 24000 }, { ms: 26000 }, { ms: 41000 }], with: ['a1'] }),
+    gameWith: async () => ({ ok: true, with: ['a1'], apps: [{ id: 'a1', name: 'Discord' }, { id: 'a2', name: 'Spotify' }, { id: 'a3', name: 'OBS Studio' }] }),
+    diskAlerts: async () => [{ drive: 'D:', free: 6.2e9, total: 1e12, critical: false, idle: [{ id: 'x1', name: 'Red Dead Redemption 2', size: 119e9 }, { id: 'x2', name: 'Call of Duty', size: 92e9 }] }],
+    diskHealth: async () => [{ name: 'Samsung SSD 980 PRO 1TB', ssd: true, bus: 'NVMe', size: 1e12, wear: 6, temp: 41, hours: 3120, errors: 0, state: 'ok', notes: [] }, { name: 'WDC WD20EZRZ', ssd: false, bus: 'SATA', size: 2e12, wear: null, temp: 36, hours: 21000, errors: 2, state: 'warn', notes: ['2 erreur(s) de lecture / écriture non corrigée(s).'] }],
+    netTest: async () => ({ ping: 18, jitter: 3, loss: 0, down: 412, up: 58, wifi: true, game: { label: 'dernier serveur FiveM', ms: 34 }, grade: 'Excellente', tips: ['Tu es en Wi-Fi : pour jouer en ligne, un câble Ethernet donne un ping plus bas et plus stable.'] }),
+    pairStart: async () => ({ code: 'K7Q2-M9XP', ticket: 't' }), pairPoll: async () => ({ waiting: true }),
     groupThread: async () => ({ fil: [{ id: 'g1', from: 'm', text: 'Qui est chaud pour une ranked ce soir ?', at: Date.now() - 7_200_000 }, { id: 'g2', from: 'l', text: 'Moi ! 21 h ?', at: Date.now() - 7_100_000 }, { id: 'g3', from: 'l', text: 'Je ramène Sam aussi', at: Date.now() - 7_080_000 }, { id: 'g4', from: 'me', text: 'Parfait, je lance le serveur', at: Date.now() - 7_000_000 }] }),
     groupSend: async (gid, text, cid) => ({ ok: true, id: cid, message: { id: cid, from: 'me', text, at: Date.now() } }),
     events: async () => ({ soirees: [{ id: 'e1', game: 'Rocket League', at: Date.now() + 5 * 3_600_000, mine: true, organisateur: 'Noam', ma: 'oui', invites: [{ pseudo: 'Max', reponse: 'oui' }, { pseudo: 'Léa', reponse: null }] }, { id: 'e2', game: 'VALORANT', at: Date.now() + 26 * 3_600_000, mine: false, organisateur: 'Léa', ma: null, invites: [{ pseudo: 'Noam', reponse: null }] }] }),
@@ -3485,7 +3709,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.24.0',
+    version: async () => '0.25.0',
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
@@ -3563,3 +3787,45 @@ function demoApi() {
   addEventListener('gamepadconnected', (e) => { toast(`🎮 Manette connectée : ${e.gamepad.id.split('(')[0].trim()}`); if (!raf) loop(); });
   addEventListener('gamepaddisconnected', () => { if (![...(navigator.getGamepads?.() ?? [])].some(Boolean) && raf) { cancelAnimationFrame(raf); clearTimeout(raf); raf = null; } });
 })();
+
+// ---------- Mon PC : santé des disques et test de connexion ----------
+$('diskHealth').addEventListener('click', async (e) => {
+  if (!e.target.closest('#diskHealthBtn')) return;
+  $('diskHealth').innerHTML = '<p class="hint">Lecture des disques…</p>';
+  const list = await api.diskHealth?.().catch(() => []) ?? [];
+  const S = { ok: ['✅', 'Bon état'], warn: ['⚠', 'À surveiller'], bad: ['⛔', 'En danger'] };
+  $('diskHealth').innerHTML = list.length ? `<div class="dhlist">${list.map((d) => `<div class="dh ${d.state}"><div class="dhtop"><b>${S[d.state][0]} ${esc(d.name)}</b><em>${S[d.state][1]}</em></div>
+    <small>${d.ssd ? 'SSD' : 'Disque dur'}${d.bus ? ` · ${esc(d.bus)}` : ''}${d.size ? ` · ${gb(d.size)}` : ''}</small>
+    <div class="dhstats">${d.wear != null ? `<span><b>${100 - d.wear} %</b>vie restante</span>` : ''}${d.temp != null ? `<span><b>${d.temp} °C</b>température</span>` : ''}${d.hours != null ? `<span><b>${Math.round(d.hours / 24).toLocaleString('fr-FR')} j</b>allumé</span>` : ''}<span><b>${d.errors}</b>erreur${d.errors > 1 ? 's' : ''}</span></div>
+    ${d.notes.map((n) => `<p>${esc(n)}</p>`).join('')}</div>`).join('')}</div><p class="hint">Certaines valeurs (usure, température) ne sont données que par certains disques.</p>` : '<p class="hint">Aucune information disponible sur ce PC.</p>';
+});
+api.onNetProgress?.((p) => { const el = $('netTestOut'); if (el && el.dataset.running) el.innerHTML = `<p class="hint">${{ ping: '📶 Mesure du ping et des pertes (20 essais)…', down: '⬇ Mesure du débit descendant…', up: '⬆ Mesure du débit montant…' }[p.step] ?? '…'}</p>`; });
+$('netTest').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  const out = $('netTestOut'); out.dataset.running = '1'; out.innerHTML = '<p class="hint">Démarrage du test…</p>';
+  const r = await api.netTest?.().catch(() => null);
+  delete out.dataset.running; e.target.disabled = false;
+  if (!r) { out.innerHTML = '<p class="hint">Test impossible pour l’instant.</p>'; return; }
+  const cls = { Excellente: 'ok', Bonne: 'ok', Moyenne: 'warn', Mauvaise: 'bad' }[r.grade];
+  const v = (x, u) => (x == null ? '–' : `${x}${u}`);
+  out.innerHTML = `<div class="nettest ${cls}"><div class="ntgrade"><small>Connexion</small><b>${esc(r.grade)}</b><em>${r.wifi == null ? '' : r.wifi ? '📶 Wi-Fi' : '🔌 Câble'}</em></div>
+    <div class="scansum"><div><b>${v(r.ping, ' ms')}</b><small>ping</small></div><div class="${r.jitter >= 20 ? 'bad' : ''}"><b>±${v(r.jitter, ' ms')}</b><small>stabilité</small></div><div class="${r.loss > 0 ? 'bad' : ''}"><b>${v(r.loss, ' %')}</b><small>perdus</small></div><div><b>${v(r.down, ' Mb/s')}</b><small>réception</small></div><div><b>${v(r.up, ' Mb/s')}</b><small>envoi</small></div>${r.game ? `<div><b>${v(r.game.ms, ' ms')}</b><small>${esc(r.game.label)}</small></div>` : ''}</div>
+    <ul class="nttips">${r.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
+});
+
+// Connexion par code : ce PC affiche un code, un PC déjà connecté le valide
+let pairTimer = null;
+function pairStop() { clearInterval(pairTimer); pairTimer = null; $('authPair').hidden = true; $('authForm').hidden = false; $('authPairBtn').hidden = false; }
+$('pairBack').addEventListener('click', pairStop);
+$('authPairBtn').addEventListener('click', async () => {
+  const r = await api.pairStart?.().catch(() => null);
+  if (!r?.code) return toast(r?.error ?? 'Impossible pour l’instant');
+  $('authForm').hidden = true; $('authPairBtn').hidden = true; $('authPair').hidden = false;
+  $('pairCode').textContent = r.code; $('pairHint').textContent = 'Valable 5 minutes.';
+  clearInterval(pairTimer);
+  pairTimer = setInterval(async () => {
+    const p = await api.pairPoll?.(r.ticket).catch(() => null);
+    if (p?.compte) { pairStop(); return loggedInUi(p, false); }
+    if (p?.status === 410) { clearInterval(pairTimer); $('pairHint').textContent = 'Code expiré : clique sur Retour pour en demander un nouveau.'; }
+  }, 2500);
+});

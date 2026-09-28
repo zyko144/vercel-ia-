@@ -8,6 +8,9 @@ window.widget?.onData((d) => {
   $('fps').textContent = d.fps ?? '–'; $('fpsHint').textContent = d.game ? 'en direct' : 'en jeu';
   $('game').textContent = d.hot ? '🔥 Surchauffe : vérifie la ventilation' : d.game ? `▶ ${d.game}` : '';
   $('game').classList.toggle('hot', Boolean(d.hot));
+  // Ping en direct pendant la partie (serveur FiveM si connu, sinon ta connexion)
+  $('wping').hidden = !d.ping;
+  if (d.ping) { $('wping').textContent = `📶 Ping ${d.ping.ms ?? '–'} ms${d.ping.loss ? ` · ${d.ping.loss} % perdus` : ''} (${d.ping.label})`; $('wping').className = `wping ${d.ping.loss >= 5 || d.ping.ms >= 100 ? 'bad' : d.ping.ms >= 60 ? 'warn' : ''}`; }
   const f = d.streamer ? null : d.playing?.[0];
   $('friends').innerHTML = '';
   const dot = document.createElement('i');

@@ -281,6 +281,56 @@ await check('profil : cadre à sa couleur, liens collés ramenés au pseudo', as
   assert.equal((await call('profil', noam, { cadreCouleur: 'red' })).compte.profile.frameColor, null);
 });
 
+await check('lu, écrit, réponse, réaction, image : tout arrive chez l’ami', async () => {
+  const maxId = (await call('amis', noam)).amis.find((a) => a.pseudo === 'Max').id;
+  const noamId = (await call('amis', max)).amis.find((a) => a.pseudo === 'Noam').id;
+  const first = await call('messages', noam, { to: maxId, text: 'Tu viens ce soir ?' });
+  assert.equal((await call(`messages?avec=${maxId}`, noam)).lu ?? 0, (await call(`messages?avec=${maxId}`, noam)).lu, 'lecture lisible');
+  await call('messages/lu', max, { avec: noamId });
+  const lu = (await call(`messages?avec=${maxId}`, noam)).lu;
+  assert.ok(lu >= first.message.at, 'Max a lu : « Vu » chez Noam');
+  assert.ok((await call('boite?apres=0', noam)).lus[maxId] >= first.message.at, 'lecture dans la boîte en direct');
+  await call('messages/ecrit', max, { to: noamId });
+  assert.ok((await call('boite?apres=0', noam)).typing.some((t) => t.from === maxId), '« Max écrit… »');
+  const rep = await call('messages', max, { to: noamId, text: 'Grave', re: first.id });
+  assert.equal(rep.message.re.text, 'Tu viens ce soir ?', 'réponse au bon message');
+  const r1 = await call('messages/reagir', noam, { avec: maxId, id: rep.id, emoji: '🔥' });
+  assert.deepEqual(r1.message.reacts['🔥'], [noamId === maxId ? '' : (await call('amis', max)).amis.find((a) => a.pseudo === 'Noam').id]);
+  assert.ok((await call('boite?apres=0', max)).items.some((x) => x.type === 'react' && x.emoji === '🔥'), 'Max voit la réaction');
+  assert.equal((await call('messages/reagir', noam, { avec: maxId, id: rep.id, emoji: '🔥' })).message.reacts['🔥'], undefined, 'deuxième clic : réaction retirée');
+  assert.equal((await call('messages/reagir', noam, { avec: maxId, id: rep.id, emoji: '💩' })).status, 400, 'emoji hors liste refusé');
+  const png = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]).toString('base64')}`;
+  const im = await call('messages', noam, { to: maxId, text: '', image: png });
+  assert.ok(im.message.img, 'image jointe');
+  const got = await fetch(`${base}/img/${im.message.img}`);
+  assert.equal(got.status, 200); assert.equal(got.headers.get('content-type'), 'image/png');
+  assert.equal((await call('messages', noam, { to: maxId, image: 'data:image/png;base64,AAAA' })).status, 400, 'faux PNG refusé');
+  await call('messages/supprimer', noam, { avec: maxId, id: im.message.img ? im.id : '' });
+  assert.equal((await fetch(`${base}/img/${im.message.img}`)).status, 404, 'image effacée avec le message');
+});
+
+await check('présence : « dispo vers » visible des amis, valeurs folles ignorées', async () => {
+  const at = Date.now() + 45 * 60_000;
+  await call('presence', noam, { playing: 'FiveM', dispo: at });
+  assert.equal((await call('amis', max)).amis.find((a) => a.pseudo === 'Noam').dispo, at);
+  await call('presence', noam, { playing: 'FiveM', dispo: Date.now() + 100 * 3_600_000 });
+  assert.equal((await call('amis', max)).amis.find((a) => a.pseudo === 'Noam').dispo, null);
+});
+
+await check('connexion par code depuis un autre PC : validé par un PC connecté, une seule fois', async () => {
+  const dem = await call('lien/demande', null, { appareil: 'pc-portable-1234', nom: 'PC portable' });
+  assert.match(dem.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  assert.ok((await call(`lien/attente?ticket=${dem.ticket}`, null)).waiting, 'en attente');
+  assert.equal((await call('lien/valider', null, { code: dem.code })).status, 401, 'il faut être connecté');
+  assert.equal((await call('lien/valider', max, { code: 'AAAA-AAAA' })).status, 404);
+  const ok = await call('lien/valider', noam, { code: dem.code.toLowerCase().replace('-', ' ') });
+  assert.equal(ok.nom, 'PC portable');
+  const fin = await call(`lien/attente?ticket=${dem.ticket}`, null);
+  assert.ok(fin.token && fin.compte.pseudo === 'Noam', 'nouveau PC connecté au compte');
+  assert.equal((await call('moi', fin.token)).compte.pseudo, 'Noam');
+  assert.equal((await call(`lien/attente?ticket=${dem.ticket}`, null)).status, 410, 'ticket à usage unique');
+});
+
 server.close();
 console.log(`\n${passed} vérifications passées.`);
 process.exit(0);
