@@ -22,7 +22,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .glass { position: relative; background: linear-gradient(135deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02) 55%, rgba(255, 255, 255, .05)), linear-gradient(120deg, rgba(var(--rgb), .1), transparent 60%);
   border: 1px solid rgba(255, 255, 255, .12); border-radius: 18px; backdrop-filter: blur(22px) saturate(170%);
   box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .14), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 18px 40px -24px #000; }
-.neon { position: fixed; inset: 0; z-index: 50; pointer-events: none; border-radius: 8px; padding: 2px; background: conic-gradient(from var(--a), transparent 0 60%, var(--accent) 72%, #fff 76%, var(--accent-2) 82%, transparent 94%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .3; animation: neonspin 10s linear infinite; }
+.neon { position: fixed; inset: 0; z-index: 50; pointer-events: none; border-radius: 8px; padding: 2px; background: conic-gradient(from var(--a), transparent 0 60%, var(--accent) 72%, #fff 76%, var(--accent-2) 82%, transparent 94%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .3; --a: 210deg; }
 @keyframes neonspin { to { --a: 360deg; } }
 
 /* ---------- Barre de gauche : fond flou animé aux couleurs du thème ---------- */
