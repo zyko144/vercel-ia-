@@ -10,7 +10,7 @@ const DEMO = {
   list: async () => [['Rocket League', 3], ['FiveM', 2], ['Fortnite', 1]].flatMap(([g, n], i) => Array.from({ length: n }, (_, k) => ({ token: `${i}${k}`, game: g, name: `${g} ${k + 1}`, at: Date.now() - (i * 3 + k) * 3_600_000, size: 42e6, image: false, fav: k === 0, url: '' }))),
   art: async () => ({ 'Rocket League': { img: STEAM(252950, 'header.jpg'), logo: STEAM(252950, 'logo.png'), hero: STEAM(252950, 'library_hero.jpg') }, FiveM: { img: STEAM(271590, 'header.jpg'), logo: STEAM(271590, 'logo.png'), hero: STEAM(271590, 'library_hero.jpg') }, Fortnite: {} }),
   settings: async () => ({ replay: true, rec: 'on', inGame: 'Rocket League', seconds: 30, height: 1080, fps: 60, audio: true, sound: true, source: 'screen', onlyGame: true, gamePriority: true, maxGB: 0, theme: 'jaune', hotClip: 'F8', hotShot: 'F9', autostart: true, dir: 'C:\\Users\\toi\\Videos\\History Clips', version: 'démo' }),
-  account: async () => ({ compte: { pseudo: 'Noam' } }), setSettings: async () => ({ ok: true }), updGet: async () => ({ state: 'idle' }),
+  account: async () => ({ compte: { pseudo: 'Alex' } }), setSettings: async () => ({ ok: true }), updGet: async () => ({ state: 'idle' }),
 };
 const api = new Proxy(window.hc ?? DEMO, { get: (t, k) => t[k] ?? (typeof k === 'string' && k.startsWith('on') ? () => {} : async () => null) });
 const toast = (m) => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3200); };

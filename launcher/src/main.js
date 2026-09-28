@@ -2064,7 +2064,7 @@ ipcMain.handle('stats:get', (_e, period) => {
   // Classement « 2 dernières semaines » : chiffres officiels de Steam pour ses jeux, chronomètre du launcher pour les autres
   const tracked14 = periodItems(days, 14);
   const twoWeeks = Object.fromEntries(items.filter((i) => i.kind === 'game').map((i) => [i.id, i.recent2w ?? tracked14[i.id] ?? 0]).filter(([, m]) => m > 0));
-  return { split, top, recent, twoWeeks, profile: process.env.LAUNCHER_DEMO ? 'Noam' : os.userInfo().username };
+  return { split, top, recent, twoWeeks, profile: process.env.LAUNCHER_DEMO ? 'Alex' : os.userInfo().username };
 });
 
 // ---------- Musique ----------
