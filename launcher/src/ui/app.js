@@ -1627,6 +1627,9 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.37.2': [
+    ['🔎', 'Fortnite trouvé dans la recherche', 'Un jeu déjà connu du launcher mais masqué ou filtré n’empêchait plus sa fiche magasin d’apparaître : tape « fortnite », il est là.', ['[data-view=jeux]', 'wait900']],
+  ],
   '0.37.1': [
     ['❌', '« Ferme Rocket League » marche pour de vrai', 'Dis « Hey History, ferme Rocket League » : les jeux avec anti-triche se ferment maintenant aussi sur Steam, et le bon est fermé si le jeu est sur Steam et Epic.', ['#aifab', 'wait900']],
     ['📊', 'FPS repérés pour Fortnite, Rocket League…', 'Le mini-compteur retrouve maintenant les jeux avec anti-triche et attend qu’ils démarrent (jusqu’à 2 min) : fini « jeu non repéré ».'],
@@ -2886,7 +2889,7 @@ function storeResults(q, list) {
   clearTimeout(storeT);
   storeT = setTimeout(async () => {
     const norm = (n) => String(n).toLowerCase().replace(/[^a-z0-9]/g, '');
-    const have = new Set(state.items.map((i) => norm(i.name)));
+    const have = new Set(list.map((i) => norm(i.name))); // seulement ceux déjà affichés (un jeu masqué ou filtré reste trouvable)
     const r = (await api.storeSearch?.(q).catch(() => []) ?? []).filter((x) => !have.has(norm(x.name)));
     if (q !== state.list.q || state.view !== 'liste') return;
     $('grid').insertAdjacentHTML('beforeend', r.length ? `<div class="storehead">Dans les magasins</div>${r.map((x) => `<div class="gridcard" data-surl="${esc(x.url)}">${art({ name: x.name, art: { hero: x.img } })}<span class="badge">${x.src === 'epic' ? 'Epic Games' : 'Steam'}</span><div class="meta"><b>${esc(x.name)}</b><small>Voir dans le magasin</small></div></div>`).join('')}` : list.length ? '' : '<div class="empty">Rien trouvé, même dans les magasins.</div>');
@@ -4005,7 +4008,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.37.1',
+    version: async () => '0.37.2',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
