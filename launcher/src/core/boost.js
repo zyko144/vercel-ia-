@@ -52,7 +52,8 @@ export async function closeApps(plan) {
   const closed = [];
   for (const p of plan) {
     if (!/^[\w .()-]+\.exe$/i.test(p.exe)) continue;
-    const ok = await run('taskkill.exe', ['/IM', p.exe], { windowsHide: true, timeout: 10_000 }).then(() => true).catch(() => false);
+    // OneDrive n'a pas de fenêtre : sa commande officielle /shutdown met la synchro en pause proprement
+    const ok = await (p.exe === 'onedrive.exe' ? run(p.path, ['/shutdown'], { windowsHide: true, timeout: 10_000 }) : run('taskkill.exe', ['/IM', p.exe], { windowsHide: true, timeout: 10_000 })).then(() => true).catch(() => false);
     if (ok) closed.push(p);
   }
   return closed;
@@ -78,3 +79,21 @@ export function tuneScript(gamePaths) {
   ].join('\n');
 }
 export const untuneScript = () => `$ErrorActionPreference='SilentlyContinue'\nGet-Process ${BROWSERS.join(',')} | ForEach-Object { $_.PriorityClass='Normal' }`;
+
+// Qui a volé du processeur pendant la partie (cause probable d'un freeze) : temps processeur de chaque programme,
+// comparé d'une mesure à l'autre. Le jeu et Windows lui-même sont ignorés.
+export const CPU_SCRIPT = "Get-Process | ForEach-Object { \"$($_.Name)|$([math]::Round($_.CPU, 1))\" }";
+const SYSTEM = /^(idle|system|dwm|csrss|audiodg|registry|memory compression|wininit|services|lsass|smss|history launcher|electron|powershell)$/i;
+export const parseCpu = (text) => new Map(String(text).split(/\r?\n/).map((l) => l.split('|')).filter((x) => x.length === 2 && x[1] !== '').map(([n, c]) => [n.trim(), Number(c.replace(',', '.'))]));
+/** Programmes qui ont pris au moins `min` % du processeur total entre deux mesures (hors jeu et Windows). */
+export function cpuHogs(prev, cur, seconds, cores, ignore = [], min = 25) {
+  const skip = new Set(ignore.map((n) => n.toLowerCase()));
+  const out = [];
+  for (const [name, c] of cur) {
+    const p = prev.get(name);
+    if (p == null || SYSTEM.test(name) || skip.has(name.toLowerCase())) continue;
+    const pct = Math.round(((c - p) / (seconds * cores)) * 100);
+    if (pct >= min) out.push({ name, pct });
+  }
+  return out;
+}

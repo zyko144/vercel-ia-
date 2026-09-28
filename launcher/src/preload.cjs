@@ -133,6 +133,7 @@ contextBridge.exposeInMainWorld('launcher', {
   savesPick: (id) => ipcRenderer.invoke('saves:pick', id),
   savesOpen: () => ipcRenderer.invoke('saves:open'),
   shadersClear: (id, which) => ipcRenderer.invoke('shaders:clear', id, which),
+  fortnitePerf: (id, on) => ipcRenderer.invoke('fortnite:perf', id, on),
   steamMove: (id, lib) => ipcRenderer.invoke('steam:move', id, lib),
   onMove: (fn) => ipcRenderer.on('move:progress', (_e, p) => fn(p)),
   priceSearch: (q) => ipcRenderer.invoke('price:search', q),

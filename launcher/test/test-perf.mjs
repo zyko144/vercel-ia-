@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { boostPlan, parseScheme, tuneScript, untuneScript } from '../src/core/boost.js';
+import { boostPlan, parseScheme, tuneScript, untuneScript, parseCpu, cpuHogs } from '../src/core/boost.js';
+import { shaderCaches, withPerfMode, perfModeOn } from '../src/core/gametools.js';
 import { cleanTarget, cleanTargets, measureTargets } from '../src/core/cleanup.js';
 import { cpuUsage, heatAlerts, parseNvidiaSmi } from '../src/core/monitor.js';
 
@@ -37,4 +38,17 @@ assert.match(tune, /'c:\\games\\it''s\\game\.exe'/, 'chemin du jeu échappé');
 assert.doesNotMatch(tune, /bad"path/, 'chemin douteux ignoré');
 assert.match(tune, /AboveNormal/); assert.doesNotMatch(tune, /RealTime|'High'/, 'jamais temps réel ni haute');
 assert.match(tune, /GpuPreference=2;/); assert.match(untuneScript(), /'Normal'/);
-console.log('✅ boost, surveillance et nettoyage : 19 vérifications');
+// Freezes : qui a pris du processeur (jeu et Windows ignorés)
+const hogs = cpuHogs(parseCpu('OneDrive|10\nFortniteClient|100\ndwm|5'), parseCpu('OneDrive|50\nFortniteClient|900\ndwm|90'), 20, 4, ['FortniteClient']);
+assert.deepEqual(hogs, [{ name: 'OneDrive', pct: 50 }]);
+// FiveM : seulement les caches retéléchargés, jamais game-storage, mods, plugins ni citizen (packs graphiques)
+const fc = shaderCaches({ source: 'fivem', installDir: 'C:\\FiveM' }).filter((c) => c.id.startsWith('fivem'));
+assert.deepEqual(fc.map((c) => c.dir.split(/[\\/]/).pop()), ['cache', 'server-cache', 'server-cache-priv']);
+assert.ok(fc.every((c) => !/game-storage|mods|plugins|citizen/i.test(c.dir)));
+// Fortnite : mode Performance posé une seule fois, le reste du fichier intact
+const ini = '[ScalabilityGroups]\r\nsg.ViewDistanceQuality=3\r\n[D3DRHIPreference]\r\nPreferredRHI=dx12\r\n';
+const fn = withPerfMode(ini);
+assert.ok(perfModeOn(fn) && !perfModeOn(ini));
+assert.equal((fn.match(/PreferredRHI/g) ?? []).length, 1); assert.match(fn, /sg\.ViewDistanceQuality=3/);
+assert.ok(perfModeOn(withPerfMode('[Autre]\r\na=1')));
+console.log('✅ boost, surveillance et nettoyage : 27 vérifications');

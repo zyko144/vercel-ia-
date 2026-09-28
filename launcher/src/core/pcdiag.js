@@ -10,7 +10,7 @@ export const DIAG_PS = String.raw`
 $ErrorActionPreference = 'SilentlyContinue'
 $o = [ordered]@{}
 $o.cpu = @(Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed,LoadPercentage)
-$o.gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,DriverDate,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate)
+$o.gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,DriverDate,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate,MaxRefreshRate)
 $o.vram = @(Get-ItemProperty 'HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' | Select-Object DriverDesc,'HardwareInformation.qwMemorySize')
 $o.ram = @(Get-CimInstance Win32_PhysicalMemory | Select-Object Capacity,Speed,ConfiguredClockSpeed,Manufacturer,PartNumber,SMBIOSMemoryType)
 $o.board = @(Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product)
@@ -61,7 +61,7 @@ export function parseDiag(raw, now = Date.now()) {
     gpus: arr(j.gpu).filter((g) => !/basic|virtual|parsec|remote|meta/i.test(g.Name ?? '')).map((g) => ({
       // AdapterRAM plafonne à 4 Go (champ 32 bits) : la vraie taille est dans le registre du pilote
       name: String(g.Name ?? ''), vram: num(arr(j.vram).find((v) => String(v.DriverDesc ?? '') === String(g.Name ?? ''))?.['HardwareInformation.qwMemorySize']) ?? (num(g.AdapterRAM) >= 4293918720 ? null : num(g.AdapterRAM)), driver: String(g.DriverVersion ?? ''), driverDate: psDate(g.DriverDate),
-      width: num(g.CurrentHorizontalResolution), height: num(g.CurrentVerticalResolution), hz: num(g.CurrentRefreshRate),
+      width: num(g.CurrentHorizontalResolution), height: num(g.CurrentVerticalResolution), hz: num(g.CurrentRefreshRate), maxHz: num(g.MaxRefreshRate),
     })),
     ram: arr(j.ram).map((m) => ({ size: num(m.Capacity), speed: num(m.Speed), configured: num(m.ConfiguredClockSpeed), maker: String(m.Manufacturer ?? '').trim(), part: String(m.PartNumber ?? '').trim(), type: { 26: 'DDR4', 34: 'DDR5', 24: 'DDR3' }[m.SMBIOSMemoryType] ?? null })),
     board: arr(j.board)[0] ? `${arr(j.board)[0].Manufacturer ?? ''} ${arr(j.board)[0].Product ?? ''}`.trim() : null,
@@ -130,7 +130,8 @@ export function analyze(d, { snap = null, drivers = null, now = Date.now() } = {
     comps.push({ key: 'gpu', icon: '🎮', title: 'Carte graphique', name: g.name, specs: [vram ? `${Math.round(vram / GB)} Go de mémoire vidéo` : null, g.width ? `${g.width}×${g.height} à ${g.hz ?? '?'} Hz` : null, gs?.temp != null ? `${gs.temp} °C` : null, drvAge != null ? `pilote de ${drvAge} jours` : null].filter(Boolean), status: (gs?.temp ?? 0) >= 85 ? 'bad' : drvAge > 180 ? 'warn' : 'ok', life: { pct: null, text: 'Pas d’usure mesurable ; surveille surtout la température (au-delà de 85 °C).' } });
     if (drvAge > 120) add(2, 'Pilote graphique ancien', `Ton pilote a ${Math.round(drvAge / 30)} mois : les jeux récents gagnent souvent des FPS avec le dernier.`, 'souvent +5 à +15 % sur les jeux récents');
     if (vram && vram < 6 * GB && !/intel|uhd|iris|radeon\(tm\) graphics|vega/i.test(g.name)) add(3, 'Mémoire vidéo limitée', `${Math.round(vram / GB)} Go : baisse la qualité des textures dans les jeux récents pour éviter les saccades.`);
-    if (g.hz === 60) add(4, 'Écran à 60 Hz', 'Si ton écran monte à 144 Hz ou plus : Paramètres Windows › Affichage › Paramètres d’affichage avancés › Taux de rafraîchissement.', 'image bien plus fluide si l’écran le permet');
+    if (g.hz && g.maxHz >= 100 && g.maxHz > g.hz + 5) add(1, `Écran bridé à ${g.hz} Hz`, `Ton écran semble pouvoir monter à ${g.maxHz} Hz : Paramètres Windows › Affichage › Paramètres d’affichage avancés › Taux de rafraîchissement.`, 'image bien plus fluide, gratuitement');
+    else if (g.hz === 60) add(4, 'Écran à 60 Hz', 'Si ton écran monte à 144 Hz ou plus : Paramètres Windows › Affichage › Paramètres d’affichage avancés › Taux de rafraîchissement.', 'image bien plus fluide si l’écran le permet');
   }
   if (!d.gpus.some((g) => !/intel|uhd|iris/i.test(g.name))) add(3, 'Pas de carte graphique dédiée', 'Le processeur graphique intégré limite fortement les jeux 3D. Une carte dédiée d’entrée de gamme multiplie les FPS.');
 
