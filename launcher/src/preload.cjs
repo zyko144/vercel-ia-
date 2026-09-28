@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('launcher', {
   optiLaunch: (id, choice) => ipcRenderer.invoke('opti:launch', id, choice),
   onOptiStep: (fn) => ipcRenderer.on('opti:step', (_e, v) => fn(v)),
   newsUrl: (u) => ipcRenderer.invoke('news:url', u),
+  storeSearch: (q) => ipcRenderer.invoke('store:search', q),
+  storeOpen: (u) => ipcRenderer.invoke('store:open', u),
   onGaming: (fn) => ipcRenderer.on('ui:gaming', (_e, v) => fn(v)),
   perfbarSet: (on) => ipcRenderer.invoke('perfbar:set', on),
   savesCloudUp: (id) => ipcRenderer.invoke('saves:cloudUp', id),

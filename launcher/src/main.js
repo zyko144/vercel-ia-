@@ -9,7 +9,7 @@ import os from 'node:os';
 import { LAUNCHER_NAMES, SOURCES, creditLive, findExe, merge, playtimeOf, scanAll } from './core/library.js';
 import { aiFindArt, assistant, createAi, geminiKeyFromEnv, recommend, createRemoteAi } from './core/ai.js';
 import { coverOf, mediaKey, nowPlaying } from './core/media.js';
-import { activeItems, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
+import { activeItems, gameExes, itemHistory, periodItems, periodStats, runningPaths, statCategory } from './core/tracker.js';
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme, tuneScript, untuneScript, CPU_SCRIPT, parseCpu, cpuHogs } from './core/boost.js';
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
@@ -27,7 +27,7 @@ import { readRegValue, NOT_GAME } from './core/registry.js';
 import { steamMatch } from './core/art.js';
 import { norm } from './core/sort.js';
 import { steamPath } from './core/library.js';
-import { epicActions } from './core/epic.js';
+import { epicActions, epicStoreSearch } from './core/epic.js';
 import { steamActions, steamDetails } from './core/steam.js';
 import { createStore } from './core/store.js';
 import { safeGameDir, uninstallFiles } from './core/manage.js';
@@ -1354,7 +1354,10 @@ async function doAction(id, action) {
 
   if (action === 'close') {
     // Fermer un jeu ou une appli : seulement les programmes situés dans son propre dossier
-    const closed = await closeItem(item);
+    // Même jeu sur Steam et Epic : on ferme celui qui tourne
+    const key = item.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let closed = await closeItem(item);
+    for (const o of items) if (!closed && o.installed && o !== item && o.name.toLowerCase().replace(/[^a-z0-9]/g, '') === key) closed = await closeItem(o);
     return closed ? { ok: true } : { ok: false, error: 'rien à fermer' };
   }
   throw new Error('action impossible pour cet élément');
@@ -1392,6 +1395,17 @@ ipcMain.handle('verify:repair', async (_e, id) => {
   return { ok: false, error: 'réparation automatique impossible pour ce jeu : réinstalle-le depuis son launcher' };
 });
 
+// Programmes du jeu qui tournent, par leur nom (marche aussi quand l'anti-triche cache leur chemin à Windows)
+async function runningGameExes(item) {
+  const { readdir } = await import('node:fs/promises');
+  const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
+  // Jamais un disque ou un dossier système entier (D:\Fortnite est accepté)
+  const deep = dir.split('\\').filter(Boolean).length >= 3 || (dir.split('\\').filter(Boolean).length === 2 && !/^[a-z]:\\(program files|windows|users|programdata)/.test(dir));
+  const byPath = deep ? (await runningPaths(0)).filter((p) => p.startsWith(`${dir}\\`) && p.endsWith('.exe')).map((p) => path.win32.basename(p)) : [];
+  const own = new Set([path.win32.basename(String(item.exe ?? '')).toLowerCase(), ...byPath, ...(deep ? await gameExes(item.installDir, readdir) : [])].filter(Boolean));
+  const running = await new Promise((resolve) => execFile('tasklist.exe', ['/FO', 'CSV', '/NH'], { windowsHide: true, timeout: 10_000 }, (_e, o) => resolve(String(o ?? '').split(/\r?\n/).map((l) => l.split('","')[0].replace(/^"/, '').toLowerCase()))));
+  return [...new Set(running.filter((n) => own.has(n)))];
+}
 async function closeItem(item) {
   const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
   if (!dir || dir.split('\\').filter(Boolean).length < 3) return false;
@@ -1402,9 +1416,10 @@ async function closeItem(item) {
   }
   if (targets.length) return true;
   // Jeux avec anti-triche (Rocket League, Fortnite…) : Windows cache leur chemin, on les ferme par le nom du programme
-  const exe = path.win32.basename(String(item.exe ?? ''));
-  if (process.platform !== 'win32' || !/^[\w .()-]+\.exe$/i.test(exe)) return false;
-  return new Promise((resolve) => execFile('taskkill.exe', ['/IM', exe, '/F'], { windowsHide: true, timeout: 10_000 }, (err) => resolve(!err)));
+  if (process.platform !== 'win32') return false;
+  const kill = await runningGameExes(item);
+  if (!kill.length) return false;
+  return new Promise((resolve) => execFile('taskkill.exe', [...kill.flatMap((n) => ['/IM', n]), '/F', '/T'], { windowsHide: true, timeout: 10_000 }, (err) => resolve(!err)));
 }
 
 ipcMain.handle('lib:scan', () => scan());
@@ -2846,6 +2861,18 @@ ipcMain.handle('price:search', async (_e, q) => {
   const j = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&cc=fr&l=french`, { signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   return (j?.items ?? []).slice(0, 6).map((x) => ({ id: String(x.id), name: x.name, price: x.price ? x.price.final / 100 : null, image: x.tiny_image ?? null }));
 });
+// Recherche dans les magasins : trouver un jeu même non installé (Fortnite, etc.)
+ipcMain.handle('store:search', async (_e, q) => {
+  const term = String(q ?? '').trim().slice(0, 80);
+  if (term.length < 2) return [];
+  const [st, ep] = await Promise.all([
+    fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&cc=fr&l=french`, { signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    epicStoreSearch(term).catch(() => []),
+  ]);
+  if (/^fortn?i/i.test(term) && !ep.some((x) => /^fortnite$/i.test(x.name))) ep.unshift({ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' });
+  return [...ep.slice(0, 4), ...(st?.items ?? []).slice(0, 4).map((x) => ({ name: x.name, src: 'steam', img: `https://cdn.cloudflare.steamstatic.com/steam/apps/${x.id}/header.jpg`, url: `https://store.steampowered.com/app/${x.id}` }))];
+});
+ipcMain.handle('store:open', (_e, url) => openLink(String(url ?? '')).then(() => true, () => false));
 ipcMain.handle('price:list', () => Object.values(store.data.priceAlerts ?? {}));
 ipcMain.handle('price:set', async (_e, appId, name, target) => {
   if (!/^\d+$/.test(String(appId))) return null;
@@ -2906,8 +2933,16 @@ async function sessionStart(s) {
   if (!item || process.platform !== 'win32') return;
   if (store.data.settings.fps !== true || profileOf(item.id).fps === false) { sess.fpsState = 'off'; perfbarPush(); return; }
   // Tous les exe du jeu en cours (ex. Fortnite : FortniteClient-Win64-Shipping + sa version anti-triche)
-  const dir = String(item.installDir ?? '').toLowerCase();
-  const exes = [...new Set((await runningPaths(0)).filter((p) => dir && p.startsWith(dir) && /\.exe$/.test(p) && !/(crash|report|launcher|helper|updater|redist|unins|webhelper|cefprocess)/i.test(path.win32.basename(p))).map((p) => path.win32.basename(p)))];
+  // Le jeu peut démarrer bien après (Epic, anti-triche) : on le cherche jusqu'à 2 min
+  const me = sess;
+  let exes = [];
+  for (let n = 0; n < 24 && sess === me; n++) {
+    exes = (await runningGameExes(item).catch(() => [])).filter((x) => !/(crash|report|launcher|helper|updater|redist|unins|webhelper|cefprocess)/i.test(x));
+    if (exes.length) break;
+    sess.fpsState = 'wait'; perfbarPush();
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  if (sess !== me) return;
   if (!exes.length) { sess.fpsState = 'nogame'; perfbarPush(); return; }
   const pm = await ensurePresentMon(path.join(app.getPath('userData'), 'outils')).catch(() => null);
   if (!pm || !sess) return;

@@ -1627,6 +1627,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.37.1': [
+    ['❌', '« Ferme Rocket League » marche pour de vrai', 'Dis « Hey History, ferme Rocket League » : les jeux avec anti-triche se ferment maintenant aussi sur Steam, et le bon est fermé si le jeu est sur Steam et Epic.', ['#aifab', 'wait900']],
+    ['📊', 'FPS repérés pour Fortnite, Rocket League…', 'Le mini-compteur retrouve maintenant les jeux avec anti-triche et attend qu’ils démarrent (jusqu’à 2 min) : fini « jeu non repéré ».'],
+    ['🔎', 'Recherche dans les magasins', 'Tape « fortnite » (ou n’importe quel jeu) dans la recherche : même non installé, il apparaît avec sa fiche Steam ou Epic à ouvrir.'],
+  ],
   '0.37.0': [
     ['⚡', 'Nouveau bouton Optimiser', 'À côté de Jouer : un clic règle Windows pour ton jeu (Mode Jeu, capture Xbox en fond coupée, photo des réglages avant) puis le lance.', ['#hero .optiplay', 'wait900']],
     ['🎯', 'Vrais gains de FPS', 'Options sûres par jeu : mode Performance de Fortnite, cache FiveM à refaire, priorité au jeu et carte graphique puissante. Tout est décoché si risqué et réversible.'],
@@ -2872,7 +2877,20 @@ function renderList() {
   const list = col ? filterSort(state.items.filter((i) => col.items.includes(i.id)), { ...state.list, kind: 'tout', source: 'tout', installed: state.list.installed === 'tout' ? 'tous' : state.list.installed }) : filterSort(state.items, state.list);
   $('listTitle').textContent = col ? `📚 ${col.name}` : state.list.q ? `Résultats pour « ${state.list.q} »` : state.list.source !== 'tout' ? state.sources[state.list.source]?.label ?? 'Plateforme' : TITLES[state.list.kind === 'tout' ? 'bibliotheque' : state.list.kind] ?? 'Bibliothèque';
   $('count').textContent = `${list.length} élément${list.length > 1 ? 's' : ''}`;
-  $('grid').innerHTML = list.length ? list.map((i) => card(i, 'gridcard')).join('') : '<div class="empty">Rien ici.</div>';
+  $('grid').innerHTML = list.length ? list.map((i) => card(i, 'gridcard')).join('') : state.list.q ? '' : '<div class="empty">Rien ici.</div>';
+  if (state.list.q && !col) storeResults(state.list.q, list);
+}
+// Recherche : les jeux des magasins Steam et Epic aussi (même non installés, ex. Fortnite)
+let storeT = 0;
+function storeResults(q, list) {
+  clearTimeout(storeT);
+  storeT = setTimeout(async () => {
+    const norm = (n) => String(n).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const have = new Set(state.items.map((i) => norm(i.name)));
+    const r = (await api.storeSearch?.(q).catch(() => []) ?? []).filter((x) => !have.has(norm(x.name)));
+    if (q !== state.list.q || state.view !== 'liste') return;
+    $('grid').insertAdjacentHTML('beforeend', r.length ? `<div class="storehead">Dans les magasins</div>${r.map((x) => `<div class="gridcard" data-surl="${esc(x.url)}">${art({ name: x.name, art: { hero: x.img } })}<span class="badge">${x.src === 'epic' ? 'Epic Games' : 'Steam'}</span><div class="meta"><b>${esc(x.name)}</b><small>Voir dans le magasin</small></div></div>`).join('')}` : list.length ? '' : '<div class="empty">Rien trouvé, même dans les magasins.</div>');
+  }, 350);
 }
 
 // ---------- Statistiques ----------
@@ -3207,7 +3225,7 @@ async function act(action) {
 
 // ---------- Événements ----------
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal], [data-news], [data-nurl]');
+  const t = e.target.closest('button, [data-id], [data-reco], [data-free], [data-deal], [data-news], [data-nurl], [data-surl]');
   const inCtx = Boolean(t?.closest('#ctx'));
   if (!t) { hideCtx(); return; }
   if (t.id === 'moreBtn') { if ($('ctx').hidden) openCtx(state.sel, 0, 0, t); else hideCtx(); return; }
@@ -3241,6 +3259,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
   if (t.dataset.upd) { const r = await api.action(t.dataset.upd, 'update'); return toast(r?.ok ? 'Steam fait la mise à jour puis lance le jeu' : r?.error ?? 'Impossible pour l’instant'); }
+  if (t.dataset.surl) return api.storeOpen(t.dataset.surl).then(() => toast('Fiche du jeu ouverte'));
   if (t.dataset.nurl) return api.newsUrl?.(t.dataset.nurl).then(() => toast('Article ouvert'));
   if (t.dataset.news) return api.openNews(t.dataset.news, t.dataset.gid).then(() => toast('Article ouvert'));
   if (t.dataset.boostgame && state.sel) {
@@ -3986,7 +4005,8 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.37.0',
+    version: async () => '0.37.1',
+    storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),

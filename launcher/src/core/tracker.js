@@ -119,3 +119,17 @@ export function itemHistory(days, id, n = 30, now = Date.now()) {
   for (let i = list.length - 1; i >= 0 && list[i].minutes > 0; i--) streak++;
   return { days: list, total, daysPlayed: played.length, avg: played.length ? Math.round(total / played.length) : 0, best, streak };
 }
+
+/** Noms des .exe d'un dossier de jeu (4 niveaux max) : pour fermer les jeux dont l'anti-triche cache le chemin. */
+export async function gameExes(dir, readdir, depth = 4) {
+  const out = new Set();
+  const walk = async (d, n) => {
+    const ents = await readdir(d, { withFileTypes: true }).catch(() => []);
+    for (const e of ents) {
+      if (e.isDirectory() && n > 1 && out.size < 200) await walk(`${d}\\${e.name}`, n - 1);
+      else if (/^[\w .()-]+\.exe$/i.test(e.name) && !/(unins|redist|setup|vc_?redist|dxsetup)/i.test(e.name)) out.add(e.name.toLowerCase());
+    }
+  };
+  await walk(dir, depth);
+  return [...out];
+}
