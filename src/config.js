@@ -59,6 +59,14 @@ function findCasinhoToken() {
 }
 const casinhoToken = findCasinhoToken();
 
+// Bot History Clips : token dans une variable dont le nom contient « clips » (ex. CLIPS_BOT_TOKEN).
+const isClipsName = (name) => /clips/i.test(name) && /token/i.test(name);
+function findClipsToken() {
+  for (const [name, value] of Object.entries(process.env)) if (isClipsName(name) && (value ?? '').trim()) return { token: value.trim(), source: name };
+  return { token: '', source: null };
+}
+const clipsToken = findClipsToken();
+
 // Table de roulette cliquable (Activité Discord) : son secret OAuth2 se colle dans
 // Render, sous le nom qu'on veut du moment qu'il contient « casinho » et « secret ».
 function findCasinhoSecret() {
@@ -82,8 +90,8 @@ function findVoiceToken() {
   if (discordTokens[1]) return { token: discordTokens[1], source: 'DISCORD_TOKEN (2e token)' };
   for (const [name, value] of Object.entries(process.env)) {
     const candidate = (value ?? '').trim();
-    if (isCasinhoName(name)) continue; // réservé au casino
-    if (TOKEN_SHAPE.test(candidate) && candidate !== discordTokens[0] && candidate !== casinhoToken.token) {
+    if (isCasinhoName(name) || isClipsName(name)) continue; // réservés au casino et à History Clips
+    if (TOKEN_SHAPE.test(candidate) && candidate !== discordTokens[0] && candidate !== casinhoToken.token && candidate !== clipsToken.token) {
       return { token: candidate, source: name };
     }
   }
@@ -268,6 +276,7 @@ export const config = {
 
   // Casino Casinho : deuxième bot, sur son propre serveur.
   // Les jetons sont fictifs : aucun achat, aucun dépôt, aucun retrait, aucun argent réel.
+  clips: { token: clipsToken.token, tokenSource: clipsToken.source, guildId: str('CLIPS_GUILD_ID') || '1554160501477605450' },
   casinho: {
     token: casinhoToken.token,
     tokenSource: casinhoToken.source,

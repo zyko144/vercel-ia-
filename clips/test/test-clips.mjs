@@ -16,3 +16,10 @@ assert.equal(unpacked(['C:', 'app', 'resources', 'app.asar', 'node_modules', 'ff
 assert.ok(validAccel('F8') && validAccel('Alt+F10') && validAccel('CommandOrControl+Shift+K') && validAccel('PrintScreen'));
 assert.ok(!validAccel('K') && !validAccel('Space') && !validAccel('Alt+Alt+K') && !validAccel('Win+K'));
 console.log('✅ History Clips : 15 vérifications');
+import { artTerm, parseFg } from '../src/core.js';
+const fgv = parseFg('FG|1234|88|1|Rocket League|Rocket League (64-bit, DX11)|RocketLeague|C:\\Jeux\\RL.exe');
+assert.equal(fgv.hwnd, '1234'); assert.equal(fgv.full, true); assert.equal(fgv.exe, 'C:\\Jeux\\RL.exe');
+assert.equal(parseFg('bruit'), null);
+assert.equal(artTerm('Rocket League (64-bit, DX11, Cooked)'), 'Rocket League');
+assert.equal(artTerm('FiveM® by Cfx.re'), 'Grand Theft Auto V');
+console.log('✅ History Clips : veilleur de jeu et images');

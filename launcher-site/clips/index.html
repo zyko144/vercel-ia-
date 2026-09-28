@@ -39,7 +39,12 @@ header nav a:hover { color: var(--y); }
 header .btn { padding: 10px 18px; }
 
 /* Héros */
-.hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 50px; align-items: center; padding: 90px 0 70px; }
+.herobg { position: absolute; z-index: -2; left: 50%; width: 100vw; transform: translateX(-50%); top: -120px; height: calc(100% + 200px); overflow: hidden; perspective: 1400px; pointer-events: none; -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent); mask-image: linear-gradient(180deg, #000 45%, transparent); }
+.herobg img { position: absolute; width: 62vw; max-width: 1100px; border-radius: 18px; border: 1px solid rgba(255, 194, 51, .25); box-shadow: 0 40px 120px -20px rgba(255, 194, 51, .45); opacity: .2; }
+.herobg .b1 { left: -12vw; top: 90px; transform: rotateY(24deg) rotateX(8deg) rotateZ(-4deg); }
+.herobg .b2 { right: -14vw; top: 40px; transform: rotateY(-26deg) rotateX(8deg) rotateZ(4deg); }
+@media (max-width: 760px) { .herobg img { width: 110vw; } .herobg .b2 { display: none; } }
+.hero { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 50px; align-items: center; padding: 90px 0 70px; }
 .rec { display: inline-flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: 99px; border: 1px solid rgba(255, 194, 51, .35); background: rgba(255, 194, 51, .08); color: #ffe2a0; font-size: 14px; font-weight: 600; }
 .rec b { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 12px #ef4444; animation: blink 1.6s infinite; }
 @keyframes blink { 50% { opacity: .3; } }
@@ -48,10 +53,10 @@ h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; margin: 20px 0 18px; 
 .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
 .meta { margin-top: 18px; color: var(--muted); font-size: 14px; }
 .visual { position: relative; perspective: 1400px; }
-.halo { position: absolute; width: 70%; aspect-ratio: 1; left: 50%; top: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle, rgba(255, 194, 51, .45), transparent 65%); filter: blur(30px); }
+.halo { position: absolute; width: 90%; aspect-ratio: 1; left: 50%; top: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle, rgba(255, 194, 51, .45), transparent 65%); filter: blur(30px); }
 .big { position: relative; width: min(420px, 80%); display: block; margin: 0 auto; filter: drop-shadow(0 0 40px rgba(255, 194, 51, .5)); animation: float 6s ease-in-out infinite; }
 @keyframes float { 50% { transform: translateY(-14px) rotate(-2deg); } }
-.shot { position: absolute; right: -4%; bottom: -8%; width: 62%; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 30px 70px -20px #000, 0 0 50px -20px var(--y); transform: rotateY(-14deg) rotateX(6deg); cursor: zoom-in; transition: transform .4s; }
+.shot { position: relative; display: block; width: 112%; margin-left: -4%; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 30px 70px -20px #000, 0 0 50px -20px var(--y); transform: rotateY(-14deg) rotateX(6deg); cursor: zoom-in; transition: transform .4s; }
 .shot:hover { transform: rotateY(-6deg) rotateX(2deg) scale(1.03); }
 
 /* Touche F8 */
@@ -113,7 +118,7 @@ footer a:hover { color: var(--y); }
   .hero, .show, .show.rev { grid-template-columns: 1fr; }
   .show.rev .pic { order: 0; }
   .hero { padding-top: 50px; text-align: center; } .lead { margin-inline: auto; } .ctas { justify-content: center; }
-  .visual { margin-bottom: 40px; }
+  .visual { margin-bottom: 40px; } .shot { width: 100%; margin-left: 0; }
   .feats, .steps { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; } }
@@ -128,6 +133,7 @@ footer a:hover { color: var(--y); }
   </div></header>
 
   <div class="hero">
+    <div class="herobg" aria-hidden="true"><img class="b1" src="tout.webp" alt=""><img class="b2" src="jeu.webp" alt=""></div>
     <div>
       <span class="rec"><b></b>Replay toujours prêt</span>
       <h1>Ton meilleur moment,<br><span class="grad">gardé en un appui.</span></h1>
@@ -140,7 +146,6 @@ footer a:hover { color: var(--y); }
     </div>
     <div class="visual">
       <div class="halo"></div>
-      <img class="big" src="logo.png" alt="Logo History Clips">
       <img class="shot zoom" src="home.webp" alt="Accueil de History Clips">
     </div>
   </div>
@@ -170,12 +175,12 @@ footer a:hover { color: var(--y); }
       <div><h3>Un accueil qui te dit tout</h3><p>L’état du replay en direct, ta touche, tes stats et tes derniers clips.</p><ul><li>Voyant REC quand ça enregistre</li><li>Bouton « Garder un clip » à tout moment</li><li>Espace utilisé sur ton disque</li></ul></div>
     </div>
     <div class="show rev reveal">
-      <div class="pic glass"><img class="zoom" src="tout.webp" alt="Galerie de clips" loading="lazy"></div>
-      <div><h3>Ta galerie, rangée toute seule</h3><p>Survole un clip pour le voir bouger, ouvre-le pour le couper, l’exporter ou l’envoyer.</p><ul><li>Tri par jeu dans le menu</li><li>Favoris et recherche</li><li>Suppression vers la corbeille</li></ul></div>
+      <div class="pic glass"><img class="zoom" src="tout.webp" alt="Tes jeux" loading="lazy"></div>
+      <div><h3>Tes jeux, avec leurs images</h3><p>Chaque clip est rangé dans son jeu, avec la bannière et l’icône du jeu. Ouvre un clip pour le couper, l’exporter ou l’envoyer.</p><ul><li>Page par jeu avec son image</li><li>Favoris, tri et recherche</li><li>Suppression vers la corbeille</li></ul></div>
     </div>
     <div class="show reveal">
       <div class="pic glass"><img class="zoom" src="set.webp" alt="Réglages" loading="lazy"></div>
-      <div><h3>Des réglages simples</h3><p>Durée, qualité, images par seconde, son, touches, dossier et démarrage avec Windows.</p><ul><li>Même compte que History Launcher</li><li>Démarrage discret en fond</li></ul></div>
+      <div><h3>Pensé pour tes FPS</h3><p>Le replay ne tourne que quand un jeu est en plein écran, et passe après le jeu. Choisis de filmer tout l’écran ou le jeu seulement.</p><ul><li>Réglage rapide « Max FPS »</li><li>6 thèmes de couleur</li><li>Même compte que History Launcher</li></ul></div>
     </div>
   </section>
 

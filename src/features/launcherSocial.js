@@ -572,6 +572,13 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
       toDiscordId = accs[to]?.discordId ?? null;
       if (!toDiscordId) return send(res, 400, { error: 'Ton ami n’a pas lié son compte Discord (Paramètres › Compte › Lier Discord).' });
     }
+    // Depuis History Clips (et pas à un ami) : dans le serveur History Clips si son bot est là
+    const seconds = Number(url.searchParams.get('duree')) || 45;
+    const clipsBot = url.searchParams.get('source') === 'clips' && !toDiscordId ? await import('../clips/bot.js') : null;
+    if (clipsBot?.clipsBotReady()) {
+      const r = await clipsBot.postClipToClipsServer({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, seconds, game: text(url.searchParams.get('jeu'), 80) || null }).catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
+      if (r) return send(res, r.ok ? 200 : 502, r);
+    }
     const r = await (await import('./launcherDiscord.js')).postClip({ discordId: acc.discordId, pseudo: acc.pseudo, buf, ext, toDiscordId, seconds: Number(url.searchParams.get('duree')) || 45, game: text(url.searchParams.get('jeu'), 80) || null, note: text(url.searchParams.get('texte'), 200) || null })
       .catch((err) => ({ ok: false, error: `Envoi impossible (${err.message}).` }));
     return send(res, r.ok ? 200 : 502, r);

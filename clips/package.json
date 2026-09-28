@@ -1,7 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.2.1",
+  "version": "0.3.0",
+  "releaseNotes": "Refonte complète dans le style de History Launcher : barre du haut intégrée, gros logo, fond animé et 6 thèmes de couleur. Connexion au compte History (ou en un clic avec History Launcher). Jeux avec leurs images et leurs icônes. Mode « le jeu seulement », replay seulement en jeu et priorité au jeu pour ne pas perdre de FPS. Espace maximum, copie des captures, mises à jour intégrées.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
