@@ -214,7 +214,7 @@ contextBridge.exposeInMainWorld('launcher', {
   onAppError: (fn) => ipcRenderer.on('app:error', (_e, m) => fn(m)),
   onOverlay: (fn) => ipcRenderer.on('overlay:data', (_e, d) => fn(d)),
   onRl: (fn) => ipcRenderer.on('rl:data', (_e, d) => fn(d)),
-  rlExpand: (open) => ipcRenderer.send('rl:expand', Boolean(open)),
+  rlSize: (h) => ipcRenderer.send('rl:size', h),
   openFree: (slug) => ipcRenderer.invoke('free:open', slug),
   stats: (period) => ipcRenderer.invoke('stats:get', period),
   nowPlaying: () => ipcRenderer.invoke('media:now'),

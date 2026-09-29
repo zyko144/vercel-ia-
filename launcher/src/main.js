@@ -18,7 +18,7 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
-import { RL_PORT, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, statsIni, trackerUrl } from './core/rocketleague.js';
+import { RL_PORT, classify, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, statsIni, trackerUrl } from './core/rocketleague.js';
 import { HOGS_PS, beforeAfter, fpsTone, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
@@ -1347,28 +1347,40 @@ function toggleOverlay() {
 }
 
 // ---------- Rocket League en direct (Ctrl+Alt+I) : victoires / défaites / série via l'API officielle du jeu, rang et MMR du profil ----------
-const rl = () => (store.data.rl ??= { games: [], player: null, profile: null, mmr: {} });
+const rl = () => (store.data.rl ??= { games: [], player: null, profile: null });
 const rlItem = () => items.find((i) => i.kind === 'game' && i.installed && /rocket league/i.test(i.name) && i.installDir);
 let rlSock = null; let rlTrack = null; let rlOv = null; let rlHideTimer = null;
 function rlData() {
   const r = rl();
-  return { player: r.player, profile: r.profile, games: r.games.slice(0, 10), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
+  return { player: r.player, profile: r.profile, games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
 }
 const rlPush = () => { if (rlOv && !rlOv.isDestroyed()) rlOv.webContents.send('rl:data', rlData()); };
+/** Profil public : requête directe, sinon via une fenêtre de navigateur cachée (le site bloque les requêtes hors navigateur). */
+const RL_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
+async function rlFetch(url) {
+  const direct = await net.fetch(url, { headers: { 'User-Agent': RL_UA, Accept: 'application/json' } }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  if (direct) return direct;
+  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:rltracker' } });
+  try {
+    await w.loadURL(url, { userAgent: RL_UA }).catch(() => {});
+    for (let i = 0; i < 15 && !w.isDestroyed(); i++) {
+      const t = await w.webContents.executeJavaScript('document.body ? document.body.innerText : ""').catch(() => '');
+      if (t.trim().startsWith('{')) return JSON.parse(t);
+      await new Promise((ok) => setTimeout(ok, 1000));
+    }
+  } catch { /* profil illisible : l'overlay garde victoires, défaites et série */ } finally { if (!w.isDestroyed()) w.destroy(); }
+  return null;
+}
 /** Profil public (rang, MMR) : au plus toutes les 3 min, et juste après un match pour le gain de MMR. */
 async function rlProfile(force = false) {
   const r = rl(); const url = trackerUrl(r.player);
   if (!url || (!force && Date.now() - (r.profileAt ?? 0) < 180_000)) return;
   r.profileAt = Date.now();
-  const p = parseTracker(await net.fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', Accept: 'application/json' } }).then((x) => (x.ok ? x.json() : null)).catch(() => null));
+  const p = parseTracker(await rlFetch(url));
   if (!p) return;
+  // Classé ou occa, et gain de MMR : le mode dont le profil a bougé depuis la dernière lecture (le jeu ne le dit pas)
   const g = r.games[0];
-  // Gain de MMR du dernier match : écart avec la valeur d'avant, dans le mode joué (compté « classé » seulement s'il a bougé)
-  if (g && g.mmr == null && Date.now() - g.at < 20 * 60_000) {
-    const before = r.mmr[g.mode]; const now = p.ranked[g.mode]?.mmr;
-    if (before != null && now != null && now !== before) { g.mmr = now - before; g.ranked = true; }
-  }
-  for (const [mode, x] of Object.entries(p.ranked)) if (x.mmr != null) r.mmr[mode] = x.mmr;
+  if (g && g.ranked == null && Date.now() - g.at < 20 * 60_000) Object.assign(g, classify(g, r.profile, p) ?? {});
   r.profile = p; store.save(); rlPush();
 }
 /** Connexion à l'API du jeu (le jeu doit tourner, API activée) ; retente toutes les 10 s tant qu'il tourne. */
@@ -1412,7 +1424,7 @@ async function toggleRlOverlay(auto = false) {
   if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
   const area = screen.getPrimaryDisplay().workArea;
   rlOv = new BrowserWindow({
-    width: 300, height: 162, x: area.x + area.width - 316, y: area.y + 16, frame: false, transparent: true, resizable: false,
+    width: 256, height: 330, x: area.x + area.width - 272, y: area.y + 16, frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
@@ -1427,8 +1439,8 @@ async function toggleRlOverlay(auto = false) {
   if (!auto) rlEnableStats(true).then(() => rlPush()).catch(() => {});
   rlConnect(); rlProfile().catch(() => {});
 }
-// Flèche : résumé des dernières parties (la fenêtre s'agrandit)
-ipcMain.on('rl:expand', (_e, open) => { if (rlOv && !rlOv.isDestroyed()) rlOv.setSize(300, open ? 390 : 162); });
+// La fenêtre suit la hauteur de la carte (flèche : résumé des dernières parties)
+ipcMain.on('rl:size', (_e, h) => { if (rlOv && !rlOv.isDestroyed()) rlOv.setSize(256, Math.min(620, Math.max(120, Math.round(Number(h) || 0)))); });
 
 function remember(id, how) {
   const entry = (store.data.items[id] ??= {});

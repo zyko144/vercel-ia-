@@ -7,15 +7,14 @@
 <link rel="stylesheet" href="rloverlay.css">
 </head>
 <body>
-<div class="card">
-  <div class="head">
-    <img id="avatar" class="av" src="icon.png" alt="">
-    <div class="who"><b id="name">Rocket League</b><span id="rank"></span></div>
-    <span id="live" class="dot" title="Stats en direct"></span>
-  </div>
+<div class="card" id="card">
+  <div class="top"><img class="logo" src="logo.png" alt=""><span id="live" class="dot" title="Stats en direct"></span><b id="streak"></b></div>
+  <div class="rank"><img id="rkimg" alt="" hidden><b id="tier"></b><div id="mmr"></div></div>
   <div class="res" id="res"></div>
-  <button class="foot" id="more" type="button"><span id="sum"></span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+  <div class="tabs" id="tabs"><button data-cat="ranked">Classé</button><button data-cat="casual">Occa</button><button data-cat="all">Tout</button></div>
+  <div class="modes" id="modes"></div>
   <div class="list" id="list" hidden></div>
+  <button class="more" id="more" type="button" title="Dernières parties"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
 </div>
 <script src="rloverlay.js"></script>
 </body>

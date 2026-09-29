@@ -1,6 +1,6 @@
 // Rocket League en direct (API officielle du jeu + profil) et couleur des FPS de l'overlay.
 import assert from 'node:assert/strict';
-import { enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
+import { classify, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
 import { fpsTone } from '../src/core/prelaunch.js';
 
 // Flux TCP : messages collés, coupés en plein milieu, accolades dans les textes
@@ -31,20 +31,32 @@ assert.equal(t.event({ Event: 'MatchEnded', Data: { WinnerTeamNum: 1 } }), null,
 
 // Série et bilan du jour (du plus récent au plus ancien)
 const now = Date.parse('2026-09-29T20:00:00');
-const games = [{ win: true, at: now - 1e5 }, { win: true, at: now - 2e5 }, { win: false, at: now - 3e5 }, { win: true, at: now - 90_000_000 }];
-assert.deepEqual(rlSummary(games, now), { streak: 2, wins: 2, losses: 1 });
+const games = [{ win: true, at: now - 1e5, mode: '2v2', ranked: true, mmr: 9 }, { win: true, at: now - 2e5, mode: '3v3', ranked: false }, { win: false, at: now - 3e5, mode: '2v2', ranked: true, mmr: -8 }, { win: true, at: now - 90_000_000, mode: '1v1', ranked: true, mmr: 10 }];
+const sum = rlSummary(games, now);
+assert.deepEqual([sum.streak, sum.wins, sum.losses, sum.net], [2, 2, 1, 1], 'net = MMR du jour');
+assert.deepEqual(sum.modes, { ranked: { '2v2': [1, 1] }, casual: { '3v3': [1, 0] }, all: { '2v2': [1, 1], '3v3': [1, 0] } }, 'chaque mode a ses compteurs, hier non compté');
 assert.equal(rlSummary([{ win: false, at: now }, { win: false, at: now }], now).streak, -2);
 
 // Profil : rang et MMR par mode classé
 const p = parseTracker({ data: { platformInfo: { platformUserHandle: 'Neyko.', avatarUrl: 'https://a/x.png' }, segments: [
   { type: 'overview', attributes: {}, stats: {} },
   { type: 'playlist', attributes: { playlistId: 13 }, stats: { rating: { value: 1342 }, tier: { metadata: { name: 'Champion II', iconUrl: 'https://i/c2.png' } }, division: { metadata: { name: 'Division III' } } } },
-  { type: 'playlist', attributes: { playlistId: 11 }, stats: { rating: { value: 1180 }, tier: { metadata: { name: 'Champion I' } }, division: { metadata: { name: 'Division I' } } } },
+  { type: 'playlist', attributes: { playlistId: 11 }, stats: { rating: { value: 1180 }, matchesPlayed: { value: 40 }, tier: { metadata: { name: 'Champion I' } }, division: { metadata: { name: 'Division I' } } } },
+  { type: 'playlist', attributes: { playlistId: 3 }, stats: { rating: { value: 900 }, matchesPlayed: { value: 7 } } },
 ] } });
-assert.deepEqual(p.ranked['3v3'], { mmr: 1342, tier: 'Champion II', division: 'Division III', icon: 'https://i/c2.png' });
+assert.deepEqual(p.ranked['3v3'], { mmr: 1342, played: null, tier: 'Champion II', division: 'Division III', icon: 'https://i/c2.png' });
+assert.deepEqual(p.casual['3v3'], { mmr: 900, played: 7 });
+// Classé ou occa : le mode du profil qui a bougé après la partie
+const after = structuredClone(p); after.ranked['2v2'].mmr = 1192; after.ranked['2v2'].played = 41;
+assert.deepEqual(classify({ mode: '2v2' }, p, after), { ranked: true, mmr: 12 });
+const after2 = structuredClone(p); after2.casual['3v3'].played = 8;
+assert.deepEqual(classify({ mode: '3v3' }, p, after2), { ranked: false, mmr: null });
+assert.equal(classify({ mode: '3v3' }, p, p), null, 'rien n’a bougé : on ne devine pas');
 assert.equal(p.ranked['2v2'].mmr, 1180);
 assert.equal(trackerUrl({ platform: 'epic', name: 'Neyko.' }), 'https://api.tracker.gg/api/v2/rocket-league/standard/profile/epic/Neyko.');
 assert.equal(trackerUrl(null), null);
+assert.match(trackerUrl({ platform: 'steam', id: '7656', name: 'x' }), /steam\/7656$/);
+assert.match(trackerUrl({ platform: 'ps4', name: 'Neyko' }), /psn\/Neyko$/);
 
 // Fichier de l'API du jeu : activée sans toucher au reste ; rien si déjà active
 const ini = '[TAGame.MatchStatsExporter_TA]\r\nPort=49123\r\nPacketSendRate=0\r\n';
