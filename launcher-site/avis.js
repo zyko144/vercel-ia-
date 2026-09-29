@@ -7,7 +7,8 @@
   const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
   let API = 'https://vercel-ia.onrender.com';
   const ready = fetch('https://zyko144.github.io/vercel-ia-/api.json').then((r) => r.json()).then((j) => { if (/^https:\/\//.test(j?.api)) API = j.api.replace(/\/+$/, ''); }).catch(() => {});
-  const card = (r) => `<article class="avcard">${r.img ? `<img src="${esc(API + r.img)}" alt="" loading="lazy">` : ''}<div><b class="avst">${stars(r.stars)}</b>${r.comment ? `<p>${esc(r.comment)}</p>` : ''}<small>${esc(r.name)} · ${new Date(r.at).toLocaleDateString('fr-FR')}</small></div></article>`;
+  const when = (t) => new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const card = (r) => `<article class="avcard">${r.img ? `<img src="${esc(API + r.img)}" alt="" loading="lazy">` : ''}<div><b class="avst">${stars(r.stars)}</b>${r.comment ? `<p>${esc(r.comment)}</p>` : ''}<small class="avwho">${r.avatar ? `<img class="avpp" src="${esc(r.avatar)}" alt="" loading="lazy">` : ''}${esc(r.name)}${r.from === 'discord' ? ' <span class="avdc">Discord</span>' : ''} · ${when(r.at)}</small></div></article>`;
   async function show() {
     await ready;
     const d = await fetch(`${API}/api/avis?app=${app}`).then((r) => r.json()).catch(() => null);
