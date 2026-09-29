@@ -62,6 +62,8 @@ h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; margin: 20px 0 18px; 
 .keybar p { margin: 0; font-size: 20px; max-width: 560px; }
 
 section { padding: 80px 0 0; }
+.vid { margin-top: 26px; padding: 8px; border-radius: 20px; }
+.vid video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; background: #000; }
 .kicker { color: var(--y); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; font-size: 13px; }
 h2 { font-size: clamp(30px, 4vw, 44px); margin: 8px 0 12px; letter-spacing: -.01em; }
 .sub { color: #cfc5b4; max-width: 640px; margin: 0 0 34px; }
@@ -124,7 +126,7 @@ footer a:hover { color: var(--y); }
 <div class="wrap">
   <header><div class="glass">
     <a class="logo" href="#top"><img src="logo.png" alt="">History Clips</a>
-    <nav><a href="#fonctions">Fonctions</a><a href="#apercu">Aperçu</a><a href="#faq">FAQ</a><a href="../">History Launcher</a></nav>
+    <nav><a href="#video">Vidéo</a><a href="#fonctions">Fonctions</a><a href="#apercu">Aperçu</a><a href="#faq">FAQ</a><a href="../">History Launcher</a></nav>
     <a class="btn y" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">Télécharger</a>
   </div></header>
 
@@ -136,13 +138,19 @@ footer a:hover { color: var(--y); }
       <p class="lead">History Clips filme ta partie en fond. Tu fais une dinguerie ? Appuie sur <kbd>F8</kbd> : les 30 dernières secondes sont gardées en MP4, rangées par jeu, prêtes à couper et envoyer sur Discord.</p>
       <div class="ctas">
         <a class="btn y" href="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History-Clips-Setup.exe">⬇ Télécharger pour Windows</a>
-        <a class="btn" href="#apercu">Voir l’appli</a>
+        <a class="btn" href="#video">▶ Voir la vidéo</a>
       </div>
       <p class="meta">Gratuit · Windows 10 / 11 · mises à jour automatiques</p>
     </div>
   </div>
 
   <div class="keybar glass reveal"><span class="keycap">F8</span><p>Un appui en pleine partie = <b class="grad">un clip de 15 s à 2 min</b>, sans couper le jeu. <kbd>F9</kbd> pour une capture d’écran.</p></div>
+
+  <section id="video" class="reveal">
+    <span class="kicker">Présentation</span>
+    <h2>History Clips <span class="grad">en vidéo</span></h2>
+    <div class="vid glass"><video src="clip.mp4" poster="home.webp" controls playsinline preload="metadata"></video></div>
+  </section>
 
   <section id="fonctions" class="reveal">
     <span class="kicker">Fonctions</span>
@@ -209,6 +217,11 @@ footer a:hover { color: var(--y); }
 </div>
 <div id="lb"><img alt=""></div>
 <script>
+// Vidéo de présentation absente (pas encore envoyée) : section cachée, les liens vont à l'aperçu
+document.querySelector('#video video').addEventListener('error', () => {
+  document.getElementById('video').hidden = true;
+  document.querySelectorAll('a[href="#video"]').forEach((a) => { if (a.closest('nav')) a.remove(); else { a.href = '#apercu'; a.textContent = 'Voir l’appli'; } });
+});
 document.querySelectorAll('.tape img').forEach((i) => i.addEventListener('error', () => i.remove()));
 const lb = document.getElementById('lb');
 document.addEventListener('click', (e) => { const z = e.target.closest('.zoom'); if (z) { lb.querySelector('img').src = z.src; lb.classList.add('on'); } else if (e.target.closest('#lb')) lb.classList.remove('on'); });
