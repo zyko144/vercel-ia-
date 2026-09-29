@@ -831,6 +831,15 @@ async function openProfileEditor() {
     loadHistory();
   };
 }
+// Optimisation en pause : seul « Remettre Windows comme avant » reste disponible
+$('maintReset').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  const r = await api.optiUndoAll?.().catch(() => null);
+  e.target.disabled = false;
+  if (r?.cancelled) return;
+  if (!r?.ok) return toast(r?.refused ? 'Autorisation refusée : rien n’a été changé' : r?.error ?? 'Impossible');
+  toast(r.changed ? `↩ ${r.changed} réglage(s) remis comme avant : redémarre le PC` : 'Tout est déjà comme Windows d’origine 👍');
+});
 $('meAv').addEventListener('click', openProfileEditor);
 $('meName').addEventListener('click', openProfileEditor);
 
@@ -1619,10 +1628,8 @@ requestAnimationFrame(padLoop);
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
   '0.38.0': [
-    ['🎯', 'Optimisation par jeu', 'FiveM, Garry’s Mod, Fortnite, Rainbow Six Siege, Rocket League et tes autres jeux : page rangée en 5 parties (menu A à E), chaque action avec son risque (Sûr, Modéré, Avancé) et ce qu’elle libère. Mods, plugins, addons et sauvegardes ne sont jamais touchés.', ['[data-view=optimisation]', 'wait1800']],
-    ['↩', 'Tout est annulable', 'Chaque fichier de jeu et valeur du registre est sauvegardé avant : « Annuler la dernière optimisation » ou « Tout remettre par défaut » en un clic.'],
-    ['🧾', 'Résumé avant, rapport après', 'Avant : les changements, les chemins exacts, le nombre de fichiers et la place libérée. Après : ce qui est fait, ce qui a échoué (jeu ouvert, fichier en lecture seule…) et le bouton Annuler.'],
-    ['🕹', 'Jeux avec anti-triche détectés', 'R6, Fortnite, Rocket League… sont maintenant bien repérés quand ils tournent : temps de jeu, FPS, et aucun fichier modifié tant que le jeu est ouvert.'],
+    ['🕹', 'Jeux avec anti-triche détectés', 'R6, Fortnite, Rocket League… sont maintenant bien repérés quand ils tournent : temps de jeu, « En cours » et mini-compteur de FPS.', ['[data-view=jeux]', 'wait1200']],
+    ['🛠', 'L’optimisation avance', 'Profils par jeu (FiveM, Garry’s Mod, Fortnite, R6, Rocket League) avec leurs logos, niveau de risque de chaque action et retour arrière en un clic : on la termine de notre côté avant de l’ouvrir.'],
   ],
   '0.37.3': [
     ['🟦', 'Fortnite avec ses vraies images', 'Logo, jaquette et grand fond officiels lus dans le catalogue Epic de ton PC (même hors ligne), avec nouvel essai du magasin Epic toutes les 6 h si besoin.', ['[data-view=jeux]', 'wait900']],
@@ -2526,7 +2533,10 @@ function renderOpti() {
   for (const a of o.games ?? []) (byGame[a.game] ??= []).push(a);
   Object.entries(byGame).forEach(([game, list], n) => {
     const bytes = list.reduce((t, a) => t + (a.bytes ?? 0), 0);
-    S.A.push(catCard(`game${n}`, GAME_ICONS[game] ?? '🎮', game, '', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
+    // Logo officiel du jeu (sinon son icône, sinon un emoji)
+    const it = game !== 'Autres jeux' && state.items.find((x) => x.id === list[0].itemId);
+    const logo = it && (it.art?.logo ?? it.art?.icon ?? it.iconData);
+    S.A.push(catCard(`game${n}`, logo ? `<img class="oglogo" src="${esc(logo)}" alt="">` : GAME_ICONS[game] ?? '🎮', game, '', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
       `<div class="checks">${list.map(gameRow).join('')}</div>`, { count: `${list.length} action${list.length > 1 ? 's' : ''}` }));
   });
   // Place prise par chaque jeu installé (et ceux pas lancés depuis 6 mois)
@@ -2703,6 +2713,9 @@ $('optiBody').addEventListener('click', async (e) => {
 });
 $('optiAuto').addEventListener('change', (e) => api.optiAuto?.(e.target.checked).then(() => toast(e.target.checked ? 'Optimisation automatique chaque semaine activée' : 'Optimisation automatique désactivée')));
 function openOpti() {
+  // Les bandes de chantier arrivent et se collent à chaque ouverture de la page
+  const m = document.querySelector('#view-optimisation .maint');
+  if (m) { m.classList.remove('go'); void m.offsetWidth; m.classList.add('go'); }
   api.optiAuto?.().then((a) => { $('optiAuto').checked = a?.on !== false; }).catch(() => {});
   if (!opti) setRing(state.health?.score ?? null, state.health?.label);
   api.optiSys?.().then((l) => { state.sys = l; if (opti) renderOpti(); }).catch(() => {});

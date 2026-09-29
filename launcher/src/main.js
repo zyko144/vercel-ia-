@@ -1010,6 +1010,7 @@ async function optiApply(plan, progress = () => {}) {
   return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: tweaks.length, games: games.length, errors: journal.errors, undo: Boolean(journal.entries.length || journal.tweaks.length) };
 }
 ipcMain.handle('opti:run', async (_e, plan) => {
+  if (OPTI_PAUSED) return { error: 'L’optimisation est en pause le temps qu’on la termine.' };
   try {
     const r = await optiApply(plan, (p) => send('opti:progress', p));
     // L'optimisation corrige aussi les réglages d'anciennes versions qui font bugger les jeux
@@ -1186,6 +1187,8 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
 ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto !== false, last: store.data.optiAutoLast ?? null }; });
+// Optimisation en maintenance : on la termine de notre côté. « Remettre Windows comme avant » reste disponible.
+const OPTI_PAUSED = true;
 // Annuler : la dernière optimisation (ou toutes) revient exactement à l'état d'avant (fichiers, registre, réglages)
 async function undoOpti(all = false) {
   const list = store.data.optiJournal ?? [];
@@ -1212,7 +1215,7 @@ ipcMain.handle('opti:undoAll', async () => {
 const SHADER_CACHES = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 // Optimisation automatique chaque semaine : seulement les caches qui se recréent (système, pilotes, launchers), en silence
 setInterval(async () => {
-  if (store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
+  if (OPTI_PAUSED || store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
   const scan = await optiScan().catch(() => null);
   if (!scan) return;
   const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs' && !SHADER_CACHES.includes(j.id)).map((j) => j.id) }).catch(() => null);
