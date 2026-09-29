@@ -216,6 +216,8 @@ contextBridge.exposeInMainWorld('launcher', {
   onRl: (fn) => ipcRenderer.on('rl:data', (_e, d) => fn(d)),
   ovSize: (w, h) => ipcRenderer.send('ov:size', w, h),
   ovDrag: (phase, dx, dy) => ipcRenderer.send('ov:drag', String(phase), Number(dx) || 0, Number(dy) || 0),
+  ovZoom: (z) => ipcRenderer.send('ov:zoom', Number(z)),
+  onBeat: (fn) => ipcRenderer.on('overlay:beat', (_e, v) => fn(v)),
   ovStyle: (style) => ipcRenderer.send('ov:style', String(style)),
   openSpotify: () => ipcRenderer.send('ov:spotify'),
   openFree: (slug) => ipcRenderer.invoke('free:open', slug),

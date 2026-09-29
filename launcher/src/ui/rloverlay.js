@@ -13,12 +13,12 @@ let open = false; let tab = null; let last = null;
 
 function draw(d) {
   last = d;
-  document.body.dataset.style = d.style ?? 'card';
+  document.body.dataset.style = d.style ?? 'card'; window.ovInit?.(d.zoom);
   const s = d.sum; const g = d.games[0]; const cat = tab ?? (g ? catOf(g) : 'ranked');
   $('card').style.setProperty('--c', s.net > 0 ? '#39ff8a' : s.net < 0 ? '#ff5a4f' : '#5aa8ff');
   $('live').className = `dot ${d.live ? 'on' : ''}`;
   $('streak').className = s.streak > 0 ? 'up' : 'ice';
-  $('streak').textContent = s.streak ? `${s.streak > 0 ? '🔥' : '🧊'} ${Math.abs(s.streak)}` : '';
+  $('streak').innerHTML = s.streak ? `<i class="${s.streak > 0 ? 'flame' : ''}">${s.streak > 0 ? '🔥' : '🧊'}</i> ${Math.abs(s.streak)}` : '';
   const ranked = d.profile?.ranked ?? {}; const rk = ranked[g?.mode] ?? ranked['3v3'] ?? Object.values(ranked)[0];
   $('rkimg').hidden = !rk?.tier;
   if (rk?.tier) $('rkimg').src = rankIcon(rk);
@@ -34,6 +34,15 @@ function draw(d) {
     return `<span class="${w + l ? '' : 'zero'}"><i>${m}</i><b class="up">${w}</b>-<b class="dn">${l}</b></span>`;
   }).join('');
   const games = d.games.filter((x) => cat === 'all' || catOf(x) === cat);
+  // Barre : mode en cours (Ranked / Occa, 2s…), rang + MMR classé ou MMR occa, bilan du jour de ce mode
+  const now = d.current ?? (g ? { mode: g.mode, cat: g.ranked === true ? 'ranked' : g.ranked === false ? 'casual' : null } : null);
+  if (now) {
+    const occa = now.cat === 'casual'; const bk = occa ? d.profile?.casual?.[now.mode] : ranked[now.mode];
+    const delta = !d.current && g?.mmr != null ? ` <small class="${g.mmr >= 0 ? 'up' : 'dn'}">${signed(g.mmr)}</small>` : '';
+    $('barinfo').innerHTML = `${now.cat ? `<b class="chip ${occa ? 'occa' : 'rk'}">${occa ? 'Occa' : 'Ranked'}</b>` : ''}<b class="chip">${esc(now.mode.replace(/v\d/, 's'))}</b>${!occa && bk?.tier ? `<img src="${esc(rankIcon(bk))}" alt="">` : ''}${bk?.mmr != null ? `<b class="bmmr">${Math.round(bk.mmr).toLocaleString('fr-FR')}${delta}</b>` : ''}${d.current ? '<b class="chip live">En jeu</b>' : ''}`;
+    const [w, l] = s.modes[now.cat ?? 'all'][now.mode] ?? [0, 0];
+    $('rec').innerHTML = w + l ? `<b class="up">${w}V</b> <b class="dn">${l}D</b>` : '';
+  } else { $('barinfo').innerHTML = ''; $('rec').innerHTML = ''; }
   $('list').innerHTML = games.length ? games.map((x) => `<div class="g ${x.win ? 'win' : 'loss'}"><i>${x.win ? 'V' : 'D'}</i><span>${x.us} - ${x.them}</span><small>${esc(x.mode)}</small>${x.mmr != null ? `<em class="${x.mmr >= 0 ? 'up' : 'dn'}">${signed(x.mmr)}</em>` : '<em></em>'}<time>${ago(x.at)}</time></div>`).join('') : '<small>Pas encore de parties</small>';
 }
 window.launcher?.onRl(draw);
@@ -47,5 +56,4 @@ $('sty').addEventListener('click', () => {
   const next = document.body.dataset.style === 'bar' ? 'card' : 'bar';
   document.body.dataset.style = next; window.launcher?.ovStyle(next);
 });
-new ResizeObserver(() => window.launcher?.ovSize($('card').offsetWidth + 28, $('card').offsetHeight + 28)).observe($('card'));
 setInterval(() => last && draw(last), 60_000); // « 12 min » à jour
