@@ -186,6 +186,7 @@ export async function startClipsBot() {
     await guild.commands.set(COMMANDS).catch((err) => console.warn('🎬 Commandes :', err.message));
     await postInfos();
     await announceReleases();
+    await (await import('../features/promoVideos.js')).postPromoVideos(chan('annonces')).catch(() => {}); // vidéos de présentation, une fois
     setInterval(() => announceReleases().catch(() => {}), 30 * 60_000);
     for (const g of c.guilds.cache.values()) if (g.id !== config.clips.guildId) await shareChannel(g);
   });

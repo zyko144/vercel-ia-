@@ -115,7 +115,12 @@ client.once(Events.ClientReady, async (c) => {
   startLevelLoops(c);
   startTreasury(c);
   (await import('./features/launcherReleases.js')).startLauncherReleases(c);
-  (await import('./features/launcherServers.js')).autoInstall(c).catch(() => {});
+  (await import('./features/launcherServers.js')).autoInstall(c).then(async () => {
+    // Vidéos de présentation : une fois dans les nouveautés de chaque serveur du launcher
+    const { postPromoVideos } = await import('./features/promoVideos.js');
+    const { load } = await import('./storage.js');
+    for (const s of (await load('launcher-serveurs', null)) ?? []) if (s.news) await postPromoVideos(await c.channels.fetch(s.news).catch(() => null));
+  }).catch(() => {});
   c.on(Events.GuildCreate, () => import('./features/launcherServers.js').then((m) => m.autoInstall(c)).catch(() => {}));
   (await import('./features/launcherDiscord.js')).startLauncherDiscord(c);
   loadMaintenance().catch(() => {});
