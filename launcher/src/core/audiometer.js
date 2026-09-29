@@ -18,12 +18,17 @@ interface IAudioSessionControl2 { int N1(); int N2(); int N3(); int N4(); int N5
 [Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IAudioMeterInformation { [PreserveSig] int GetPeakValue(out float v); }
 public static class SpMeter {
+  static IAudioSessionManager2 M; static int uses;
   public static float Peak(uint[] pids) {
     float max = 0;
-    var en = (IMMDeviceEnumerator)(new MMDeviceEnumeratorCom());
-    IMMDevice dev; if (en.GetDefaultAudioEndpoint(0, 1, out dev) != 0) return 0;
-    Guid iid = typeof(IAudioSessionManager2).GUID; object o; dev.Activate(ref iid, 23, IntPtr.Zero, out o);
-    IAudioSessionEnumerator se; ((IAudioSessionManager2)o).GetSessionEnumerator(out se);
+    if (M == null || ++uses > 60) { // sortie audio relue de temps en temps (casque branché…)
+      uses = 0;
+      var en = (IMMDeviceEnumerator)(new MMDeviceEnumeratorCom());
+      IMMDevice dev; if (en.GetDefaultAudioEndpoint(0, 1, out dev) != 0) return 0;
+      Guid iid = typeof(IAudioSessionManager2).GUID; object o; dev.Activate(ref iid, 23, IntPtr.Zero, out o);
+      M = (IAudioSessionManager2)o;
+    }
+    IAudioSessionEnumerator se; if (M.GetSessionEnumerator(out se) != 0) { M = null; return 0; }
     int n; se.GetCount(out n);
     for (int i = 0; i < n; i++) {
       IAudioSessionControl2 s; se.GetSession(i, out s); uint pid; s.GetProcessId(out pid);
@@ -32,14 +37,15 @@ public static class SpMeter {
     }
     return max;
   }
+  public static void Reset() { M = null; }
 }
 "@
 $pids = [uint32[]]@(); $i = 0
 while ($true) {
   if ($i % 25 -eq 0) { $pids = [uint32[]]@(Get-Process Spotify -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }) }
   $i++
-  $v = 0; if ($pids.Count) { try { $v = [SpMeter]::Peak($pids) } catch { $v = 0 } }
+  $v = 0; if ($pids.Count) { try { $v = [SpMeter]::Peak($pids) } catch { $v = 0; [SpMeter]::Reset() } }
   [Console]::Out.WriteLine($v.ToString('0.000', [Globalization.CultureInfo]::InvariantCulture))
-  Start-Sleep -Milliseconds 80
+  Start-Sleep -Milliseconds 120
 }
 `;
