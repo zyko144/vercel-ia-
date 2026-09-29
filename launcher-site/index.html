@@ -87,6 +87,8 @@ p { margin: 0; }
 
 /* Sections */
 section { padding: 90px 0; }
+.vid { padding: 8px; }
+.vid video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 16px; background: #000; }
 .head { text-align: center; max-width: 760px; margin: 0 auto 46px; }
 .kicker { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--cyan); font-weight: 800; }
 .head h2 { font-size: clamp(30px, 4.4vw, 50px); margin: 10px 0 14px; }
@@ -205,7 +207,7 @@ footer a { color: #cfe7ff; }
 <header class="nav">
   <div class="wrap glass">
     <a class="brand" href="#top"><img src="assets/logo.png" alt="">History</a>
-    <nav><a href="#fonctions">Fonctions</a><a href="#monpc">Mon PC</a><a href="#analyse">Analyse pro</a><a href="#benchmark">Benchmark</a><a href="#comparatif">Comparatif</a><a href="#versions">Nouveautés</a><a href="#faq">FAQ</a></nav>
+    <nav><a href="#video">Vidéo</a><a href="#fonctions">Fonctions</a><a href="#monpc">Mon PC</a><a href="#analyse">Analyse pro</a><a href="#benchmark">Benchmark</a><a href="#comparatif">Comparatif</a><a href="#versions">Nouveautés</a><a href="#faq">FAQ</a></nav>
     <a class="btn main sm dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">Télécharger</a>
   </div>
 </header>
@@ -218,7 +220,7 @@ footer a { color: #cfe7ff; }
     <p class="lead">Steam, Epic, Xbox, FiveM, Roblox et tes applis réunis dans un launcher en verre liquide, qui analyse ton PC pour de vrai, mesure ses performances et te connecte à tes amis en direct.</p>
     <div class="cta">
       <a class="btn main dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">⬇ Télécharger pour Windows <small id="dlSize"></small></a>
-      <a class="btn" href="#fonctions">Voir ce qu’il sait faire</a>
+      <a class="btn" href="#video">▶ Voir la vidéo</a>
     </div>
     <p class="meta" id="dlMeta">Gratuit · Windows 10 et 11 · mises à jour automatiques</p>
     <div class="stage">
@@ -226,6 +228,11 @@ footer a { color: #cfe7ff; }
         <img src="assets/accueil.webp" alt="L’accueil de History Launcher : la bibliothèque de jeux avec Rainbow Six Siege en vedette" width="1600" height="859">
       </div>
     </div>
+  </section>
+
+  <section id="video" class="wrap">
+    <div class="head rv"><span class="kicker">Présentation</span><h2>History Launcher <span class="grad">en vidéo</span></h2></div>
+    <div class="vid glass rv"><video poster="assets/accueil.webp" controls playsinline preload="metadata"><source src="launcher.mp4" type="video/mp4"><source src="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/launcher.mp4" type="video/mp4"></video></div>
   </section>
 
   <section id="fonctions" class="wrap">
@@ -399,6 +406,13 @@ footer a { color: #cfe7ff; }
 </main>
 <footer><a href="/">History IA</a> · <a href="/mentions">Mentions légales</a> · <a href="/confidentialite">Confidentialité</a></footer>
 
+<script>
+// Vidéo de présentation : à côté de la page, sinon jointe à la release « clips-latest » ; absente : section cachée
+document.querySelector('#video source:last-of-type').addEventListener('error', () => {
+  document.getElementById('video').hidden = true;
+  document.querySelectorAll('a[href="#video"]').forEach((a) => { if (a.closest('nav')) a.remove(); else { a.href = '#fonctions'; a.textContent = 'Voir ce qu’il sait faire'; } });
+});
+</script>
 <script src="site.js" defer></script>
 <dialog class="lightbox" id="lightbox"><img alt=""></dialog>
 </body>
