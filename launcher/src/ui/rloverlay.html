@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>History Launcher · Rocket League</title>
+<link rel="stylesheet" href="rloverlay.css">
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <img id="avatar" class="av" src="icon.png" alt="">
+    <div class="who"><b id="name">Rocket League</b><span id="rank"></span></div>
+    <span id="live" class="dot" title="Stats en direct"></span>
+  </div>
+  <div class="res" id="res"></div>
+  <button class="foot" id="more" type="button"><span id="sum"></span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+  <div class="list" id="list" hidden></div>
+</div>
+<script src="rloverlay.js"></script>
+</body>
+</html>
