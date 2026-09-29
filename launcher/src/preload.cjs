@@ -183,7 +183,7 @@ contextBridge.exposeInMainWorld('launcher', {
   optiSysApply: (changes) => ipcRenderer.invoke('opti:sysApply', changes),
   optiStorage: () => ipcRenderer.invoke('opti:storage'),
   optiRepair: () => ipcRenderer.invoke('opti:repair'),
-  onRepair: (fn) => ipcRenderer.on('opti:repairProgress', (_e, p) => fn(p)),
+  onJob: (fn) => ipcRenderer.on('job:progress', (_e, p) => fn(p)),
   onPcProgress: (fn) => ipcRenderer.on('pc:progress', (_e, p) => fn(p)),
   gmodAddons: () => ipcRenderer.invoke('gmod:addons'),
   gmodDetails: (x) => ipcRenderer.invoke('gmod:details', x),

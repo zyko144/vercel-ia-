@@ -1061,8 +1061,9 @@ ipcMain.handle('opti:startup', async (_e, name, enabled) => {
 ipcMain.handle('opti:tweak', async (_e, id, on) => (await snapshotSettings('Avant un réglage pour les jeux').catch(() => {}), { ok: await setTweak(String(id), Boolean(on)).catch(() => false), tweaks: await tweakStates().catch(() => []) }));
 ipcMain.handle('opti:deep', async () => {
   const before = await freeSpace();
-  const ok = await deepClean();
+  const ok = await deepClean(jobFile('deep'), jobSend('deep'));
   const after = await freeSpace();
+  notify(ok ? '✅ Nettoyage profond terminé' : 'Nettoyage profond arrêté', ok && before != null && after != null ? `${((after - before) / 1e9).toFixed(1).replace('.', ',')} Go libérés.` : 'Autorisation refusée ou tâche interrompue.');
   return { ok, freed: before != null && after != null ? Math.max(0, after - before) : null };
 });
 
@@ -1199,7 +1200,12 @@ ipcMain.handle('wu:search', async () => {
 ipcMain.handle('wu:install', async (_e, ids) => {
   if (wuBusy) return { ok: false, error: 'Une installation est déjà en cours.' };
   wuBusy = true;
-  try { return await installUpdates((Array.isArray(ids) ? ids : []).map(String), (p) => send('wu:progress', p)); } finally { wuBusy = false; }
+  try {
+    const r = await installUpdates((Array.isArray(ids) ? ids : []).map(String), (p) => send('wu:progress', p));
+    const n = (r?.results ?? []).filter((x) => x.ok).length;
+    notify('Mises à jour de Windows', r?.results ? `${n} sur ${r.results.length} installée${n > 1 ? 's' : ''}.${r.reboot ? ' Redémarre le PC pour finir.' : ''}` : 'Installation interrompue.');
+    return r;
+  } finally { wuBusy = false; }
 });
 ipcMain.handle('wu:reboot', async () => {
   if (!(await confirm('Redémarrer le PC maintenant ?', 'Enregistre ton travail : Windows redémarre dans 30 secondes pour finir d’installer les mises à jour.'))) return false;
@@ -1214,8 +1220,11 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
   const ok = await applySystemTweaks((Array.isArray(changes) ? changes : []).map((c) => ({ id: String(c?.id), on: Boolean(c?.on) })));
   return { ok, states: await systemTweakStates().catch(() => []) };
 });
-ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
-ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
+// Tâches longues : vrai pourcentage envoyé à l'interface, et notification Windows à la fin (même fenêtre fermée)
+const jobFile = (id) => path.join(os.tmpdir(), `history-${id}-${Date.now()}.json`);
+const jobSend = (id) => (p) => send('job:progress', { id, ...p });
+ipcMain.handle('opti:storage', async () => { const r = await optimizeStorage(jobFile('storage'), jobSend('storage')); notify(r.ok ? '✅ Disques optimisés' : 'Optimisation des disques arrêtée', r.ok ? 'TRIM des SSD et défragmentation des disques durs terminés.' : 'Autorisation refusée ou tâche interrompue.'); return r; });
+ipcMain.handle('opti:repair', async () => { const r = await repairWindows(jobFile('repair'), jobSend('repair')); notify(r.ok ? '✅ Vérification de Windows terminée' : 'Réparation de Windows arrêtée', r.ok ? 'Ouvre History Launcher › Optimisation pour voir le résultat.' : r.error); return r; });
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto === true, last: store.data.optiAutoLast ?? null }; });
 // Optimisation en maintenance : on la termine de notre côté. « Remettre Windows comme avant » reste disponible.
 const OPTI_PAUSED = false; // ouverte à tous (le panneau vert et l'animation de déblocage ne s'affichent qu'une fois)

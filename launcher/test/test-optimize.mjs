@@ -50,3 +50,18 @@ assert.equal(healthScore({}), 100);
 assert.equal(healthScore({ junkBytes: 20e9, orphanBytes: 30e9, heavyStartup: 10, tweaksOff: 10, freeRatio: 0.05 }), 0);
 assert.equal(scoreLabel(80), 'Bon');
 console.log('✅ catégories et score de santé : 7 vérifications');
+
+{
+  const { lastPercent, repairScript, STORAGE_SCRIPT } = await import('../src/core/optimize.js');
+  // Vrai pourcentage lu dans la sortie des outils de Windows
+  assert.equal(lastPercent('[==========          20.0%                ]\r[=====================  45.2%   ]'), 45.2, 'DISM');
+  assert.equal(lastPercent(Buffer.from('Vérification 37 % effectuée.\r\nVérification 38 % effectuée.', 'utf16le')), 38, 'SFC en UTF-16');
+  assert.equal(lastPercent('rien'), null);
+  // Réparation : DISM (vérif, puis réparation seulement si besoin) puis SFC, résultat SFC lu correctement (UTF-16)
+  const rs = repairScript("C:\\Temp\\it's.json");
+  assert.match(rs, /\$f='C:\\Temp\\it''s\.json'/, 'chemin échappé');
+  assert.match(rs, /\/ScanHealth[\s\S]*if\("\$h" -ne 'Healthy'\)\{ Run 'dism-repair'[\s\S]*\/RestoreHealth[\s\S]*sfc\.exe/);
+  assert.match(rs, /\[Text\.Encoding\]::Unicode\.GetString/, 'sortie de SFC en UTF-16');
+  assert.match(STORAGE_SCRIPT, /Optimize-Volume -DriveLetter/);
+  console.log('✅ Réparation, nettoyage profond, disques : vrai pourcentage, SFC bien lu');
+}

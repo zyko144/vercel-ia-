@@ -1627,6 +1627,12 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.42.0': [
+    ['📊', 'Vrai pourcentage partout', 'Réparer Windows (DISM + SFC), nettoyage profond, optimisation des disques et mises à jour de Windows : barre avec le % réel et l’étape en cours.', ['[data-view=optimisation]', 'wait3000']],
+    ['🌙', 'Ça continue en fond', 'Tu peux utiliser ton PC et même fermer la fenêtre : la tâche continue et Windows te prévient à la fin.'],
+    ['🩺', 'Réparation de Windows fiable', 'Le résultat du contrôle des fichiers système (SFC) est maintenant bien lu : réparé, sain ou à vérifier.'],
+    ['🎮', 'Vrais logos', 'FiveM et Fortnite ont leur logo officiel dans l’optimisation.'],
+  ],
   '0.41.0': [
     ['🔓', 'L’optimisation est ouverte', 'Profils par jeu (FiveM, Fortnite, R6, Rocket League, Garry’s Mod), nettoyage avec les chemins exacts avant de valider, et tout s’annule en un clic.', ['[data-view=optimisation]', 'wait3500']],
     ['🚪', 'Entrée spéciale', 'La 1re fois : cadenas 3D qui s’ouvre, portes blindées et fumée verte.'],
@@ -2584,7 +2590,8 @@ function renderOpti() {
     const bytes = list.reduce((t, a) => t + (a.bytes ?? 0), 0);
     // Logo officiel du jeu (sinon son icône, sinon un emoji)
     const it = game !== 'Autres jeux' && state.items.find((x) => x.id === list[0].itemId);
-    const logo = it && (it.art?.logo ?? it.art?.icon ?? it.iconData);
+    // Vrais logos : FiveM et Fortnite (Simple Icons, officiels) ; sinon logo du magasin, jamais l'icône du .exe
+    const logo = { FiveM: 'brands/fivem.svg', Fortnite: 'brands/fortnite.svg' }[game] ?? (it && (it.art?.logo ?? it.art?.icon));
     S.A.push(catCard(`game${n}`, logo ? `<img class="oglogo" src="${esc(logo)}" alt="">` : GAME_ICONS[game] ?? '🎮', game, '', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
       `<div class="checks">${list.map(gameRow).join('')}</div>`, { count: `${list.length} action${list.length > 1 ? 's' : ''}` }));
   });
@@ -2600,11 +2607,11 @@ function renderOpti() {
   S.C.push(catCard('', '⚙', 'Réglages système pro', 'Priorité aux jeux, planification GPU, alimentation, veille prolongée, télémétrie… Un point de restauration est créé avant. Demande l’autorisation administrateur.', state.sys ? `${state.sys.filter((t) => t.on).length}/${state.sys.length}` : '…',
     `<div id="sysTweaks">${sysTweaksHtml()}</div><div class="row"><button class="btn play" id="sysApply" type="button">Appliquer les réglages cochés</button></div><p class="hint">Chaque réglage est réversible : décoche puis applique pour revenir à la valeur de Windows.</p>`, { count: 'admin', open: Boolean(state.sys?.some((t) => !t.on)) }));
   S.D.push(catCard('', '💽', 'Stockage : TRIM et défragmentation', 'TRIM de chaque SSD (garde leurs performances d’écriture) et défragmentation des disques durs, comme l’outil officiel de Windows.', '',
-    '<button class="btn" id="optiStorage" type="button">Optimiser tous les disques</button>', { count: 'admin' }));
+    `<button class="btn" id="optiStorage" type="button" ${state.jobs.storage ? 'disabled' : ''}>Optimiser tous les disques</button><div data-job="storage">${jobHtml('storage')}</div>`, { count: 'admin' }));
   S.D.push(catCard('', '🩺', 'Réparer Windows (DISM + SFC)', 'Vérifie l’image de Windows et la répare depuis Windows Update, puis contrôle chaque fichier système un par un et remplace ceux qui sont abîmés.', '',
-    '<button class="btn" id="optiRepair" type="button">Vérifier et réparer Windows</button><p class="hint">15 à 40 minutes. Utile après des plantages, écrans bleus ou erreurs bizarres.</p><div id="repairOut"></div>', { count: 'admin' }));
+    `<button class="btn" id="optiRepair" type="button" ${state.jobs.repair ? 'disabled' : ''}>Vérifier et réparer Windows</button><p class="hint">15 à 40 minutes. Utile après des plantages, écrans bleus ou erreurs bizarres.</p><div data-job="repair">${jobHtml('repair')}</div><div id="repairOut"></div>`, { count: 'admin' }));
   S.D.push(catCard('', '🛡', 'Nettoyage profond de Windows', 'Anciennes mises à jour, fichiers temporaires système, cache de distribution, TRIM du SSD, nettoyage des composants. Demande l’autorisation administrateur.', '',
-    '<button class="btn" id="optiDeep" type="button">Lancer le nettoyage profond</button><p class="hint">Plusieurs minutes. Windows affiche une demande d’autorisation.</p>', { count: 'admin' }));
+    `<button class="btn" id="optiDeep" type="button" ${state.jobs.deep ? 'disabled' : ''}>Lancer le nettoyage profond</button><p class="hint">Plusieurs minutes. Windows affiche une demande d’autorisation.</p><div data-job="deep">${jobHtml('deep')}</div>`, { count: 'admin' }));
   // Rangé en 5 parties aérées : jeux, nettoyage, Windows, entretien, annuler
   // Menu A-E à gauche (fixe), contenu à droite
   const secs = OPTI_SECTIONS.filter(([k]) => S[k].length);
@@ -2735,18 +2742,13 @@ $('optiBody').addEventListener('click', async (e) => {
     return;
   }
   if (e.target.id === 'optiStorage') {
-    e.target.disabled = true; e.target.textContent = 'Optimisation des disques…';
-    const r = await api.optiStorage();
-    e.target.disabled = false; e.target.textContent = 'Optimiser tous les disques';
+    const r = await runJob('storage', e.target, () => api.optiStorage());
     toast(r?.ok ? '✓ Disques optimisés (TRIM / défragmentation)' : 'Autorisation refusée');
     return;
   }
   if (e.target.id === 'optiRepair') {
     if (!(await ui.confirm({ title: 'Vérifier et réparer Windows ?', text: '15 à 40 minutes. Windows va demander l’autorisation administrateur. Tu peux continuer à utiliser le PC.', list: ['DISM : état de l’image de Windows, réparée depuis Windows Update si besoin', 'SFC : contrôle de chaque fichier système, remplacement de ceux qui sont abîmés'], ok: '🩺 Lancer', icon: '🩺' }))) return;
-    e.target.disabled = true;
-    $('repairOut').innerHTML = '<div class="gbar big indet"><i></i></div><small class="hint" id="repairStep">Démarrage…</small>';
-    const r = await api.optiRepair();
-    e.target.disabled = false;
+    const r = await runJob('repair', e.target, () => api.optiRepair());
     const H = { Healthy: 'saine', Repairable: 'abîmée mais réparable', NonRepairable: 'abîmée et non réparable' };
     const S = { ok: 'aucun fichier système abîmé', repare: 'fichiers abîmés trouvés et réparés', echec: 'fichiers abîmés que Windows n’a pas pu réparer', inconnu: 'contrôle terminé' };
     $('repairOut').innerHTML = r?.ok ? `<div class="adv ${r.sfc === 'echec' || r.health === 'NonRepairable' ? 'p0' : 'p3'}"><div><b>✅ Vérification terminée</b><small>Image de Windows : ${esc(H[r.health] ?? r.health ?? '?')}${r.dismFixed ? ' (réparée)' : ''} · SFC : ${esc(S[r.sfc] ?? r.sfc)}.</small></div></div>` : `<p class="hint">${esc(r?.error ?? 'Réparation impossible')}</p>`;
@@ -2754,8 +2756,7 @@ $('optiBody').addEventListener('click', async (e) => {
   }
   if (e.target.id === 'optiDeep') {
     if (!(await ui.confirm({ title: 'Nettoyage profond de Windows ?', text: 'Windows va demander l’autorisation administrateur. Ça peut prendre plusieurs minutes.', list: ['Fichiers temporaires de Windows', 'Anciennes mises à jour téléchargées', 'Cache d’optimisation de la distribution', 'Rapports d’erreur système', 'TRIM du SSD et nettoyage des composants Windows'], ok: '🛡 Lancer', icon: '🛡' }))) return;
-    showProgress('<div class="oprog"><b>Nettoyage profond en cours…</b><div class="gbar big indet"><i></i></div><div class="hint">Accepte la demande d’autorisation de Windows. Ça peut prendre plusieurs minutes.</div></div>');
-    const r = await api.optiDeep();
+    const r = await runJob('deep', e.target, () => api.optiDeep());
     showProgress(r?.ok ? `<div class="oprog done"><b>✅ Nettoyage profond terminé</b><div class="odone"><div><b>${r.freed != null ? gb(r.freed) : '—'}</b><small>libérés</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>` : null);
     if (!r?.ok) toast('Nettoyage profond annulé');
   }
@@ -2934,12 +2935,23 @@ $('wuSearch').addEventListener('click', async () => {
   $('wuLast').textContent = `Dernière recherche : ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
   renderWu();
 });
-api.onRepair?.((p) => { const el = document.getElementById('repairStep'); if (el) el.textContent = { 'dism-scan': 'DISM : vérification de l’image de Windows…', 'dism-repair': 'DISM : réparation depuis Windows Update…', sfc: 'SFC : contrôle de chaque fichier système…', done: 'Terminé' }[p.step] ?? '…'; });
+// Tâches longues (réparation, nettoyage profond, disques) : barre avec le vrai %, gardée même si on change de page
+state.jobs = {};
+const JOB_TXT = { 'dism-scan': 'DISM : vérification de l’image de Windows', 'dism-repair': 'DISM : réparation depuis Windows Update', sfc: 'SFC : contrôle de chaque fichier système' };
+const jobHtml = (id) => { const j = state.jobs[id]; return j ? `<div class="jobbar"><div class="gbar big"><i style="width:${j.pct}%"></i></div><small class="hint"><b>${j.pct} %</b> · ${esc(JOB_TXT[j.step] ?? j.step ?? 'Accepte la demande d’autorisation de Windows…')}</small><small class="hint">Tu peux continuer à utiliser ton PC, et même fermer la fenêtre : ça continue en fond et Windows te prévient à la fin.</small></div>` : ''; };
+const drawJob = (id) => document.querySelectorAll(`[data-job="${id}"]`).forEach((el) => { el.innerHTML = jobHtml(id); });
+api.onJob?.((p) => { if (!state.jobs[p.id] || p.step === 'done') return; state.jobs[p.id] = { pct: Math.min(99, p.pct ?? 0), step: p.step }; drawJob(p.id); });
+async function runJob(id, btn, call) {
+  state.jobs[id] = { pct: 0, step: null }; drawJob(id); btn.disabled = true;
+  const r = await call().catch(() => null);
+  delete state.jobs[id]; drawJob(id); btn.disabled = false; document.getElementById(btn.id)?.removeAttribute('disabled'); // bouton redessiné entre-temps
+  return r;
+}
 api.onWu?.((p) => {
   $('wuLive').hidden = p.phase === 'done';
   if (p.phase === 'done') return;
   const pct = ((p.index - (p.phase === 'download' ? 1 : 0.5)) / Math.max(1, p.total)) * 100;
-  $('wuLive').innerHTML = `<div class="oprog"><b>${p.phase === 'download' ? 'Téléchargement' : 'Installation'} ${p.index}/${p.total}</b><div class="gbar big"><i style="width:${pct}%"></i></div><small class="hint">${esc(p.title ?? '')}</small></div>`;
+  $('wuLive').innerHTML = `<div class="oprog"><b>${p.phase === 'download' ? 'Téléchargement' : 'Installation'} ${p.index}/${p.total} · ${Math.round(pct)} %</b><div class="gbar big"><i style="width:${pct}%"></i></div><small class="hint">${esc(p.title ?? '')}</small><small class="hint">Tu peux continuer à utiliser ton PC, et même fermer la fenêtre : ça continue en fond.</small></div>`;
 });
 $('wuOut').addEventListener('click', async (e) => {
   if (e.target.id === 'wuReboot') return api.wuReboot();
@@ -4116,7 +4128,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.41.0',
+    version: async () => '0.42.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

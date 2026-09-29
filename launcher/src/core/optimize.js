@@ -203,17 +203,16 @@ export async function setTweak(id, on) {
 
 // ===================== Nettoyage profond (administrateur) =====================
 
-// Script fixe (aucune donnée de l'interface) lancé avec la fenêtre d'autorisation de Windows
-export const DEEP_CLEAN_SCRIPT = [
-  "$ErrorActionPreference='SilentlyContinue'",
-  "Remove-Item \"$env:windir\\Temp\\*\" -Recurse -Force",
-  'Stop-Service wuauserv -Force; Remove-Item "$env:windir\\SoftwareDistribution\\Download\\*" -Recurse -Force; Start-Service wuauserv',
-  'Delete-DeliveryOptimizationCache -Force',
-  "Remove-Item \"$env:ProgramData\\Microsoft\\Windows\\WER\\*\" -Recurse -Force",
-  'Clear-DnsClientCache',
-  'Get-Volume -DriveLetter ($env:SystemDrive.TrimEnd(\':\')) | Optimize-Volume -ReTrim',
-  'Dism.exe /Online /Cleanup-Image /StartComponentCleanup /Quiet',
-].join('; ');
+// Étapes fixes (aucune donnée de l'interface), lancées avec la fenêtre d'autorisation de Windows
+const DEEP_STEPS = [
+  ['Fichiers temporaires de Windows', "Remove-Item \"$env:windir\\Temp\\*\" -Recurse -Force"],
+  ['Anciennes mises à jour téléchargées', 'Stop-Service wuauserv -Force; Remove-Item "$env:windir\\SoftwareDistribution\\Download\\*" -Recurse -Force; Start-Service wuauserv'],
+  ['Cache de distribution des mises à jour', 'Delete-DeliveryOptimizationCache -Force'],
+  ['Rapports d’erreur', "Remove-Item \"$env:ProgramData\\Microsoft\\Windows\\WER\\*\" -Recurse -Force"],
+  ['Cache DNS', 'Clear-DnsClientCache'],
+  ['TRIM du SSD système', "Get-Volume -DriveLetter ($env:SystemDrive.TrimEnd(':')) | Optimize-Volume -ReTrim"],
+];
+export const DEEP_CLEAN_SCRIPT = ["$ErrorActionPreference='SilentlyContinue'", ...DEEP_STEPS.map((x) => x[1]), 'Dism.exe /Online /Cleanup-Image /StartComponentCleanup /Quiet'].join('; ');
 
 export async function freeSpace(drive = (process.env.SystemDrive ?? 'C:') + '\\') {
   const s = await statfs(drive).catch(() => null);
@@ -223,16 +222,12 @@ export async function diskSize(drive = (process.env.SystemDrive ?? 'C:') + '\\')
   const s = await statfs(drive).catch(() => null);
   return s ? s.blocks * s.bsize : null;
 }
-/** Lance le nettoyage profond en administrateur (Windows demande l'autorisation) et attend la fin. */
-export function deepClean() {
-  if (!win) return Promise.resolve(false);
-  const encoded = Buffer.from(DEEP_CLEAN_SCRIPT, 'utf16le').toString('base64');
-  const outer = `Start-Process powershell.exe -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','${encoded}'`;
-  return new Promise((resolve) => {
-    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', outer], { windowsHide: true, stdio: 'ignore' });
-    p.on('error', () => resolve(false));
-    p.on('close', (code) => resolve(code === 0));
-  });
+/** Nettoyage profond en administrateur : chaque étape, puis DISM (la plus longue) avec son vrai pourcentage. */
+export async function deepClean(outFile, onProgress = () => {}) {
+  const steps = DEEP_STEPS.map(([label, cmd], i) => `W @{ step='${label.replace(/'/g, "''")}'; base=${Math.round((45 * i) / DEEP_STEPS.length)}; span=0 }\n${cmd}`).join('\n');
+  const script = `${jobHead(outFile)}\n${steps}\nRun 'Nettoyage des composants de Windows' 45 55 'dism.exe' @('/Online','/Cleanup-Image','/StartComponentCleanup')\nW @{ step='done'; base=100; span=0 }`;
+  const { s } = await elevatedJob(script, outFile, onProgress, ['Nettoyage des composants de Windows']);
+  return s?.step === 'done';
 }
 
 // ===================== Réglages système pro (administrateur, réversibles) =====================
@@ -287,6 +282,33 @@ export function systemTweakScript(changes) {
   }
   return lines.join('\n');
 }
+// ===================== Tâches longues en administrateur, avec leur vrai pourcentage =====================
+/** Dernier pourcentage écrit par un outil de Windows (DISM « [===  45.2% ] », SFC « 45 % »), en UTF-16 ou non. */
+export function lastPercent(buf) {
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf ?? ''));
+  const text = b.length > 1 && b[1] === 0 ? b.toString('utf16le') : b.toString('latin1');
+  const all = [...text.matchAll(/(\d{1,3}(?:[.,]\d+)?)\s*%/g)].map((m) => Number(m[1].replace(',', '.'))).filter((n) => n <= 100);
+  return all.length ? all.at(-1) : null;
+}
+/** Début commun : W écrit l'état (étape, part de la barre), Run lance un outil en gardant sa sortie (pour son %). */
+export const jobHead = (outFile) => String.raw`$ErrorActionPreference='Continue'
+$f='${outFile.replace(/'/g, "''")}'
+function W($o){ $o | ConvertTo-Json -Compress | Set-Content -LiteralPath $f -Encoding UTF8 }
+function Run($step,$base,$span,$exe,[string[]]$a){ $log="$f.$step.log"; W @{ step=$step; base=$base; span=$span; log=$log }; Start-Process -FilePath $exe -ArgumentList $a -RedirectStandardOutput $log -Wait -NoNewWindow }`;
+/** Lance un script administrateur et lit son avancement chaque seconde (continue même si la fenêtre est fermée). */
+async function elevatedJob(script, outFile, onProgress = () => {}, logs = []) {
+  const read = async () => { const t = await readFile(outFile, 'utf8').catch(() => null); try { return t ? JSON.parse(t.replace(/^\uFEFF/, '')) : null; } catch { return null; } };
+  const poll = setInterval(async () => {
+    const st = await read(); if (!st) return;
+    const p = st.log ? lastPercent(await readFile(st.log).catch(() => '')) : null;
+    onProgress({ ...st, pct: Math.min(100, Math.round((st.base ?? 0) + ((st.span ?? 0) * (p ?? 0)) / 100)) });
+  }, 1000);
+  const ok = await runElevated(script);
+  clearInterval(poll);
+  const s = await read();
+  for (const f of [outFile, ...logs.map((l) => `${outFile}.${l}.log`)]) await rm(f, { force: true }).catch(() => {});
+  return { ok, s };
+}
 function runElevated(script) {
   if (!win) return Promise.resolve(false);
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
@@ -304,38 +326,29 @@ export async function applySystemTweaks(changes) {
 }
 
 // ===================== Stockage : TRIM des SSD, défragmentation des disques durs =====================
-export const STORAGE_SCRIPT = "$ErrorActionPreference='SilentlyContinue'; Get-Volume | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' } | ForEach-Object { Optimize-Volume -DriveLetter $_.DriveLetter -Verbose 4>&1 | Out-Null }";
-export const optimizeStorage = () => runElevated(STORAGE_SCRIPT);
+export const STORAGE_SCRIPT = String.raw`$v=@(Get-Volume | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' }); $i=0
+foreach($x in $v){ W @{ step="Disque $($x.DriveLetter): TRIM (SSD) ou défragmentation (disque dur)"; base=[int](100*$i/[Math]::Max(1,$v.Count)); span=0 }; Optimize-Volume -DriveLetter $x.DriveLetter; $i++ }
+W @{ step='done'; base=100; span=0 }`;
+export const optimizeStorage = async (outFile, onProgress) => ({ ok: (await elevatedJob(`${jobHead(outFile)}\n${STORAGE_SCRIPT}`, outFile, onProgress)).s?.step === 'done' });
 
 // ===================== Réparation de Windows (DISM + SFC) =====================
 /** Vérifie l'image de Windows, la répare si besoin, puis contrôle chaque fichier système (SFC). Résultat écrit dans un fichier. */
 export function repairScript(outFile) {
-  const f = outFile.replace(/'/g, "''");
-  return String.raw`
-$ErrorActionPreference='Continue'
-$f='${f}'
-function W($o){ $o | ConvertTo-Json -Compress | Set-Content -LiteralPath $f -Encoding UTF8 }
-W @{ step='dism-scan' }
-$h=(Repair-WindowsImage -Online -ScanHealth).ImageHealthState
-$fixed=$false
-if($h -ne 'Healthy'){ W @{ step='dism-repair'; health="$h" }; $r=Repair-WindowsImage -Online -RestoreHealth; $fixed=($r.ImageHealthState -eq 'Healthy'); $h=$r.ImageHealthState }
-W @{ step='sfc'; health="$h" }
-$o=(sfc /scannow) -join ' '
+  return `${jobHead(outFile)}
+Run 'dism-scan' 0 30 'dism.exe' @('/Online','/Cleanup-Image','/ScanHealth')
+$h=(Repair-WindowsImage -Online -CheckHealth).ImageHealthState
+$fixed=$false; $b=30
+if("$h" -ne 'Healthy'){ Run 'dism-repair' 30 35 'dism.exe' @('/Online','/Cleanup-Image','/RestoreHealth'); $h=(Repair-WindowsImage -Online -CheckHealth).ImageHealthState; $fixed=("$h" -eq 'Healthy'); $b=65 }
+Run 'sfc' $b (100-$b) 'sfc.exe' @('/scannow')
+$raw=[IO.File]::ReadAllBytes("$f.sfc.log")
+$o=if($raw.Length -gt 1 -and $raw[1] -eq 0){ [Text.Encoding]::Unicode.GetString($raw) } else { [Console]::OutputEncoding.GetString($raw) }
 $sfc=if($o -match 'did not find|n.a trouv. aucune|n.a d.tect. aucune'){ 'ok' } elseif($o -match 'successfully repaired|a r.par.'){ 'repare' } elseif($o -match 'unable to fix|n.a pas pu'){ 'echec' } else { 'inconnu' }
-W @{ step='done'; health="$h"; dismFixed=$fixed; sfc=$sfc }
-`;
+W @{ step='done'; base=100; span=0; health="$h"; dismFixed=$fixed; sfc=$sfc }`;
 }
 export async function repairWindows(outFile, onProgress = () => {}) {
-  const poll = setInterval(async () => {
-    const t = await readFile(outFile, 'utf8').catch(() => null);
-    if (t) try { onProgress(JSON.parse(t.replace(/^﻿/, ''))); } catch { /* en cours d'écriture */ }
-  }, 1500);
-  const ok = await runElevated(repairScript(outFile));
-  clearInterval(poll);
-  const t = await readFile(outFile, 'utf8').catch(() => null);
-  await rm(outFile, { force: true }).catch(() => {});
-  if (!t) return { ok: false, error: ok ? 'Réparation interrompue.' : 'Autorisation administrateur refusée.' };
-  return { ok: true, ...JSON.parse(t.replace(/^﻿/, '')) };
+  const { ok, s } = await elevatedJob(repairScript(outFile), outFile, onProgress, ['dism-scan', 'dism-repair', 'sfc']);
+  if (s?.step !== 'done') return { ok: false, error: ok ? 'Réparation interrompue.' : 'Autorisation administrateur refusée.' };
+  return { ok: true, ...s };
 }
 
 // ===================== Remettre Windows comme avant =====================
