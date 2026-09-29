@@ -1627,6 +1627,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.44.0': [
+    ['🚗', 'Overlay Rocket League refait', 'Rang au centre avec ton MMR, néon qui tourne autour (vert si ta journée est positive, rouge sinon), série 🔥 ou 🧊, et victoires/défaites séparées : classé, occa, et chaque mode (1v1, 2v2, 3v3, 4v4).', ['#openSettings', 'wait600', '.setnav [data-pane=raccourcis]', 'wait900']],
+    ['🏅', 'Rang et MMR fiables', 'Les logos officiels des rangs, et le profil est lu même quand le site bloque : le mode classé ou occa est détecté tout seul après chaque partie.'],
+  ],
   '0.43.0': [
     ['🚗', 'Rocket League en direct (Ctrl+Alt+I)', 'Victoire ou défaite, score, gain de MMR, rang, série et bilan du jour ; la flèche ouvre tes dernières parties. Au lancement du jeu, ta dernière game s’affiche en petit.', ['#openSettings', 'wait900']],
     ['📊', 'Infos en jeu plus petites (Ctrl+Alt+O)', 'Les vrais FPS du jeu en grand : vert si c’est bien, orange en baisse, rouge trop bas.'],
@@ -4132,7 +4136,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.43.0',
+    version: async () => '0.44.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
