@@ -1808,3 +1808,4 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 @keyframes herosweep { to { transform: translateX(100%); } }
 .optihero.enter #optiScan { animation: scanpulse 1.1s .5s ease 2; }
 @keyframes scanpulse { 50% { box-shadow: 0 0 0 6px rgba(46, 224, 122, .25), 0 0 32px rgba(46, 224, 122, .65); } }
+.jobbar { display: grid; gap: 6px; margin-top: 10px; } .jobbar .gbar i { transition: width .8s ease; }
