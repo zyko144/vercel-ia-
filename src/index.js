@@ -117,7 +117,7 @@ client.once(Events.ClientReady, async (c) => {
   startTreasury(c);
   (await import('./features/launcherReleases.js')).startLauncherReleases(c);
   // Vidéos de présentation : MP d'abord (indépendants), puis l'annonce dans les nouveautés des serveurs du launcher
-  import('./features/promoDM.js').then((m) => m.sendPromoDMs(c)).catch((err) => console.warn('[vidéos MP]', err.message));
+  import('./features/promoDM.js').then((m) => { m.startPromoReminders(c); return m.sendPromoDMs(c); }).catch((err) => console.warn('[vidéos MP]', err.message));
   (await import('./features/launcherServers.js')).autoInstall(c).then(async () => {
     const { postPromoVideos } = await import('./features/promoVideos.js');
     const { load } = await import('./storage.js');
