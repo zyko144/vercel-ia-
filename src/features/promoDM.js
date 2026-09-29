@@ -39,14 +39,14 @@ export function promoMessage(userId) {
 /** Envoie le MP à tous les membres des serveurs History puis aux personnes de DDV (une fois chacun, doucement). */
 export async function sendPromoDMs(client) {
   const done = new Set((await load(DONE, null)) ?? []);
-  const ids = new Set();
+  const ids = new Set(DDV); // DDV (dont le chef) en premier : reçu tout de suite
   for (const gid of GUILDS) {
     const g = await client.guilds.fetch(gid).catch(() => null);
     if (!g) { console.warn('[vidéos MP] le bot n’est pas sur le serveur', gid); continue; }
     const members = await g.members.fetch().catch((err) => { console.warn(`[vidéos MP] membres de ${g.name} illisibles (active « Server Members Intent » dans le portail Discord) :`, err.message); return null; });
     for (const m of members?.values() ?? []) if (!m.user.bot) ids.add(m.id);
   }
-  for (const id of DDV) ids.add(id);
+  console.log(`🎥 Vidéos en MP : ${[...ids].filter((x) => !done.has(x)).length} à envoyer`);
   let sent = 0;
   for (const id of ids) {
     if (done.has(id)) continue;
