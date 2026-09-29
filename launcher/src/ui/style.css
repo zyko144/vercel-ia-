@@ -1789,3 +1789,4 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 .maintlist li { display: flex !important; align-items: center; gap: 12px; line-height: 1.5; }
 .maintlist li > span { flex: 1; }
 .maintlist em { flex: none; }
+.odstats .since { grid-column: 1 / -1; } .odstats .since b { font-size: 16px; }
