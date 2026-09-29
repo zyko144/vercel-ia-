@@ -62,7 +62,12 @@ h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; margin: 20px 0 18px; 
 .keybar p { margin: 0; font-size: 20px; max-width: 560px; }
 
 section { padding: 80px 0 0; }
-.vid { margin-top: 26px; padding: 8px; border-radius: 20px; }
+.vid { position: relative; overflow: hidden; max-width: 720px; margin-left: auto; margin-right: auto; }
+.vcover { position: absolute; inset: 0; background: center / cover; filter: blur(22px) saturate(1.3) brightness(.55); transform: scale(1.15); }
+.vplay { position: absolute; inset: 0; margin: auto; width: 84px; height: 84px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .45); background: rgba(255, 255, 255, .16); backdrop-filter: blur(8px); box-shadow: 0 0 40px rgba(255, 255, 255, .25), inset 0 1px 0 rgba(255, 255, 255, .4); cursor: pointer; display: grid; place-items: center; transition: transform .2s; }
+.vplay:hover { transform: scale(1.08); }
+.vplay svg { width: 36px; height: 36px; fill: #fff; margin-left: 5px; }
+.vid.on .vcover, .vid.on .vplay { display: none; }
 .vid video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; background: #000; }
 .kicker { color: var(--y); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; font-size: 13px; }
 h2 { font-size: clamp(30px, 4vw, 44px); margin: 8px 0 12px; letter-spacing: -.01em; }
@@ -149,7 +154,7 @@ footer a:hover { color: var(--y); }
   <section id="video" class="reveal">
     <span class="kicker">Présentation</span>
     <h2>History Clips <span class="grad">en vidéo</span></h2>
-    <div class="vid glass"><video poster="home.webp" controls playsinline preload="metadata"><source src="clip.mp4" type="video/mp4"><source src="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History.Clips.mp4" type="video/mp4"></video></div>
+    <div class="vid glass"><video playsinline preload="metadata"><source src="clip.mp4" type="video/mp4"><source src="https://github.com/zyko144/vercel-ia-/releases/download/clips-latest/History.Clips.mp4" type="video/mp4"></video><div class="vcover" style="background-image:url('home.webp')"></div><button class="vplay" type="button" aria-label="Lire la vidéo"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button></div>
   </section>
 
   <section id="fonctions" class="reveal">
@@ -217,6 +222,8 @@ footer a:hover { color: var(--y); }
 </div>
 <div id="lb"><img alt=""></div>
 <script>
+// Couverture floutée + bouton lecture : la vraie vidéo (avec ses contrôles) démarre au clic
+document.querySelectorAll('.vid').forEach((v) => v.querySelector('.vplay').addEventListener('click', () => { const x = v.querySelector('video'); v.classList.add('on'); x.controls = true; x.play(); }));
 // Vidéo de présentation : dans le dossier du site, sinon jointe à la release « clips-latest » (fichiers lourds).
 // Absente des deux : section cachée, les liens vont à l'aperçu
 document.querySelector('#video source:last-of-type').addEventListener('error', () => {
