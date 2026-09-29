@@ -10,7 +10,7 @@ const SITE = 'https://zyko144.github.io/vercel-ia-';
 const DONE = 'promo-dm';
 const RATINGS = 'promo-notes';
 const GOT = 'promo-dm-ok'; // ceux qui ont bien reçu le MP (rappels)
-const DDV = ['681908406298083407', '923551925113323542', '855176142096039997', '1543726919168557087', '1242427559040253952', '1035337014620459028'];
+const DDV = ['681908406298083407', '923551925113323542', '855176142096039997', '1543726919168557087', '1242427559040253952', '1035337014620459028', '1369761283481800948', '734865069904756766', '764835391463096360'];
 const GUILDS = [HOME_GUILD, config.clips?.guildId].filter(Boolean);
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
