@@ -2148,14 +2148,16 @@ async function optiReady() {
   const nav = document.querySelector('[data-view=optimisation]');
   $('view-optimisation').classList.remove('paused');
   nav.classList.remove('navwork'); nav.querySelector('svg').outerHTML = '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>';
+  // 1re ouverture de la page après le déblocage : cadenas qui s'ouvre puis portes qui s'écartent (une seule fois)
+  try { if (!localStorage.getItem('hl-opti-unlocked')) state.unlockFx = true; } catch { /* rien */ }
   if (s.introSeen) return;
   if ($('modal').open) await new Promise((r) => $('modal').addEventListener('close', r, { once: true }));
   api.optiIntroSeen();
   setModal('optiok'), $('modalBox').innerHTML = `<div class="okbadge">✓</div><h2>L’optimisation est prête</h2>
     <p class="mtext">Testée jeu par jeu, sans rien d’irréversible : tu peux y accéder dès maintenant.</p>
     <div class="oklist"><span>🎯 Profils FiveM, Fortnite, R6, Rocket League, Garry’s Mod</span><span>🧹 Nettoyage avec les chemins exacts avant de valider</span><span>↩ Tout s’annule en un clic</span></div>
-    <div class="row end"><button type="button" class="btn ghost" data-m="1">Plus tard</button><button type="button" class="btn play" data-go="1">Découvrir l’optimisation</button></div>`;
-  $('modalBox').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; $('modal').close(); if (b.dataset.go) nav.click(); };
+    <div class="row end"><button type="button" class="btn ghost" data-m="1">Plus tard</button><button type="button" class="btn play" data-optigo="1" autofocus>Découvrir l’optimisation</button></div>`;
+  $('modalBox').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; $('modal').close(); if (b.dataset.optigo) nav.click(); };
   $('modal').showModal();
 }
 async function showWhatsNew(force = false) {
@@ -2755,7 +2757,19 @@ $('optiBody').addEventListener('click', async (e) => {
   }
 });
 $('optiAuto').addEventListener('change', (e) => api.optiAuto?.(e.target.checked).then(() => toast(e.target.checked ? 'Optimisation automatique chaque semaine activée' : 'Optimisation automatique désactivée')));
+function unlockFx() {
+  const r = $('view-optimisation').closest('main').getBoundingClientRect(); // zone de contenu (la page n'est pas encore affichée)
+  const fx = document.createElement('div');
+  fx.className = 'unlockfx';
+  Object.assign(fx.style, { left: `${r.left}px`, top: `${Math.max(0, r.top)}px`, width: `${r.width}px`, height: `${innerHeight - Math.max(0, r.top)}px` });
+  fx.innerHTML = '<i class="door l"></i><i class="door r"></i><div class="lockbox"><i class="lock3d"></i><b>Optimisation débloquée</b></div>';
+  document.body.append(fx);
+  window.sfx?.play('pop');
+  fx.addEventListener('animationend', (e) => { if (e.target === fx) fx.remove(); });
+  try { localStorage.setItem('hl-opti-unlocked', '1'); } catch { /* rien */ }
+}
 function openOpti() {
+  if (state.unlockFx) { state.unlockFx = false; requestAnimationFrame(unlockFx); }
   // Les bandes de chantier arrivent et se collent à chaque ouverture de la page
   const m = document.querySelector('#view-optimisation .maint');
   if (m) { m.classList.remove('go'); void m.offsetWidth; m.classList.add('go'); }
