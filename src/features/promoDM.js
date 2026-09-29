@@ -85,6 +85,8 @@ export async function onPromoInteraction(client, i) {
 
 /** Rappel toutes les 30 min, seulement à ceux qui ont reçu le MP et n'ont pas encore noté (s'arrête dès la note). */
 export function startPromoReminders(client) {
+  // Déjà envoyés avant les rappels : repris depuis la liste des envois (MP fermés retirés au 1er rappel)
+  load(GOT, null).then(async (g) => { if (!g) await save(GOT, (await load(DONE, null)) ?? []); }).catch(() => {});
   setInterval(async () => {
     const rated = (await load(RATINGS, null)) ?? {};
     const got = (await load(GOT, null)) ?? [];
