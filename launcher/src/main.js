@@ -18,7 +18,8 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
-import { HOGS_PS, beforeAfter, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
+import { RL_PORT, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, statsIni, trackerUrl } from './core/rocketleague.js';
+import { HOGS_PS, beforeAfter, fpsTone, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
@@ -62,6 +63,7 @@ import { enrich } from './core/art.js';
 import { startTracker } from './core/tracker.js';
 import { crashesFor, diskAlerts, diskHealth, loadVerdict, netAdvice, parsePing, readCrashes, windowScript } from './core/gamecare.js';
 import nodeNet from 'node:net';
+import { readFile, writeFile } from 'node:fs/promises';
 import { ps } from './core/pshost.js';
 import { collectConfigs, mergeConfigs, restoreConfigs } from './core/gameconfigs.js';
 import { setAppVolume } from './core/appvolume.js';
@@ -1318,7 +1320,7 @@ function toggleOverlay() {
   if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
   const area = screen.getPrimaryDisplay().workArea;
   overlay = new BrowserWindow({
-    width: 320, height: 420, x: area.x + area.width - 336, y: area.y + 16, frame: false, transparent: true, resizable: false,
+    width: 236, height: 190, x: area.x + area.width - 252, y: area.y + 16, frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
@@ -1336,11 +1338,97 @@ function toggleOverlay() {
       session: currentSession(), pc, music: music?.title ? { title: music.title, artist: music.artist } : null,
       friends: { online: friends.filter((f) => f.online).length, playing: friends.filter((f) => f.game).slice(0, 3).map((f) => ({ name: f.name, game: f.game })) },
       boost: Boolean(boosted),
+      // Vrais FPS du jeu (mesurés image par image, comme le compteur du jeu) et leur couleur
+      fps: sess?.live?.avg ? { now: Math.round(sess.live.avg), low1: sess.live.low1, tone: fpsTone(sess.live.avg, sess.fpsHist, perfBaseline(store.data.perf?.[sess.id] ?? [])?.avg ?? null) } : null,
     });
   };
   push();
   overlayTimer = setInterval(push, 2000);
 }
+
+// ---------- Rocket League en direct (Ctrl+Alt+I) : victoires / défaites / série via l'API officielle du jeu, rang et MMR du profil ----------
+const rl = () => (store.data.rl ??= { games: [], player: null, profile: null, mmr: {} });
+const rlItem = () => items.find((i) => i.kind === 'game' && i.installed && /rocket league/i.test(i.name) && i.installDir);
+let rlSock = null; let rlTrack = null; let rlOv = null; let rlHideTimer = null;
+function rlData() {
+  const r = rl();
+  return { player: r.player, profile: r.profile, games: r.games.slice(0, 10), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
+}
+const rlPush = () => { if (rlOv && !rlOv.isDestroyed()) rlOv.webContents.send('rl:data', rlData()); };
+/** Profil public (rang, MMR) : au plus toutes les 3 min, et juste après un match pour le gain de MMR. */
+async function rlProfile(force = false) {
+  const r = rl(); const url = trackerUrl(r.player);
+  if (!url || (!force && Date.now() - (r.profileAt ?? 0) < 180_000)) return;
+  r.profileAt = Date.now();
+  const p = parseTracker(await net.fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', Accept: 'application/json' } }).then((x) => (x.ok ? x.json() : null)).catch(() => null));
+  if (!p) return;
+  const g = r.games[0];
+  // Gain de MMR du dernier match : écart avec la valeur d'avant, dans le mode joué (compté « classé » seulement s'il a bougé)
+  if (g && g.mmr == null && Date.now() - g.at < 20 * 60_000) {
+    const before = r.mmr[g.mode]; const now = p.ranked[g.mode]?.mmr;
+    if (before != null && now != null && now !== before) { g.mmr = now - before; g.ranked = true; }
+  }
+  for (const [mode, x] of Object.entries(p.ranked)) if (x.mmr != null) r.mmr[mode] = x.mmr;
+  r.profile = p; store.save(); rlPush();
+}
+/** Connexion à l'API du jeu (le jeu doit tourner, API activée) ; retente toutes les 10 s tant qu'il tourne. */
+function rlConnect() {
+  if (rlSock || process.platform !== 'win32') return;
+  const r = rl();
+  rlTrack = matchTracker({ ids: [...epicAccounts.map((a) => a.id), ...steamAccounts.map((a) => a.id)], name: r.player?.name });
+  const sock = nodeNet.connect(RL_PORT, '127.0.0.1');
+  const feed = jsonStream((msg) => {
+    const res = rlTrack.event(msg);
+    if (rlTrack.player && rlTrack.player.name !== r.player?.name) { r.player = rlTrack.player; store.save(); rlProfile(true).catch(() => {}); }
+    if (res) {
+      r.games = [res, ...r.games].slice(0, 50); store.save(); rlPush();
+      setTimeout(() => rlProfile(true).catch(() => {}), 45_000); setTimeout(() => rlProfile(true).catch(() => {}), 180_000);
+    }
+  });
+  sock.setEncoding('utf8');
+  sock.on('connect', () => { rlSock = sock; rlPush(); });
+  sock.on('data', feed);
+  const drop = () => { if (rlSock === sock) rlSock = null; sock.destroy(); rlPush(); };
+  sock.on('error', drop); sock.on('close', drop);
+}
+setInterval(() => { if (currentSession() && /rocket league/i.test(currentSession().name ?? '')) rlConnect(); }, 10_000);
+/** L'API est coupée par défaut dans le jeu : on propose de l'activer une fois (fichier sauvegardé à côté). */
+async function rlEnableStats(ask = true) {
+  const it = rlItem(); if (!it) return false;
+  const file = statsIni(it.installDir);
+  const text = await readFile(file, 'utf8').catch(() => null);
+  if (text == null) return false;
+  const next = enableStatsIni(text);
+  rl().statsOff = Boolean(next);
+  if (!next) return true;
+  if (!ask) return false; // au lancement du jeu : on regarde seulement, jamais de modification sans accord
+  if (!(await confirm('Activer les stats en direct de Rocket League ?', 'Le jeu a une API de statistiques officielle, coupée par défaut. On l’active dans son fichier DefaultStatsAPI.ini (sauvegardé à côté) : relance Rocket League pour qu’elle marche.'))) return false;
+  await writeFile(`${file}.history-bak`, text).catch(() => {});
+  const ok = await writeFile(file, next).then(() => true, () => false);
+  rl().statsOff = !ok; store.save();
+  return ok;
+}
+async function toggleRlOverlay(auto = false) {
+  if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
+  const area = screen.getPrimaryDisplay().workArea;
+  rlOv = new BrowserWindow({
+    width: 300, height: 162, x: area.x + area.width - 316, y: area.y + 16, frame: false, transparent: true, resizable: false,
+    alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
+    webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  rlOv.setAlwaysOnTop(true, 'screen-saver');
+  rlOv.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  rlOv.webContents.on('will-navigate', (e) => e.preventDefault());
+  rlOv.on('closed', () => { rlOv = null; });
+  rlOv.loadFile(path.join(here, 'ui', 'rloverlay.html'));
+  rlOv.once('ready-to-show', () => { rlOv?.showInactive(); rlPush(); });
+  clearTimeout(rlHideTimer);
+  if (auto) rlHideTimer = setTimeout(() => { if (rlOv && !rlOv.isDestroyed()) rlOv.close(); }, 15_000);
+  if (!auto) rlEnableStats(true).then(() => rlPush()).catch(() => {});
+  rlConnect(); rlProfile().catch(() => {});
+}
+// Flèche : résumé des dernières parties (la fenêtre s'agrandit)
+ipcMain.on('rl:expand', (_e, open) => { if (rlOv && !rlOv.isDestroyed()) rlOv.setSize(300, open ? 390 : 162); });
 
 function remember(id, how) {
   const entry = (store.data.items[id] ??= {});
@@ -2702,6 +2790,7 @@ const HOTKEYS = {
   shot: ['CommandOrControl+Alt+S', () => { takeScreenshot().catch((err) => notify('Capture impossible', err.message)); }],
   toggle: ['CommandOrControl+Alt+H', () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow())],
   perfbar: ['CommandOrControl+Alt+P', () => togglePerfbar()],
+  rocketleague: ['CommandOrControl+Alt+I', () => toggleRlOverlay()],
 };
 const hotkeyOf = (k) => store.data.settings.hotkeys?.[k] || HOTKEYS[k][0];
 function registerHotkeys() {
@@ -3015,6 +3104,7 @@ async function sessionTick(s) {
   heatCheck(sess, snap);
 }
 async function sessionStart(s) {
+  if (/rocket league/i.test(s.name ?? '')) { toggleRlOverlay(true).catch(() => {}); rlEnableStats(false).catch(() => {}); } // dernière game en petit au lancement
   const item = items.find((i) => i.id === s.id);
   coreLoad();
   sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null, pings: [] };
@@ -3040,7 +3130,7 @@ async function sessionStart(s) {
   const pm = await ensurePresentMon(path.join(app.getPath('userData'), 'outils')).catch(() => null);
   if (!pm || !sess) return;
   sess.fpsState = 'wait';
-  sess.cap = captureFps(pm, exes, (live) => { if (sess) { sess.live = live; sess.fpsState = 'ok'; widgetPush(); perfbarPush(); } });
+  sess.cap = captureFps(pm, exes, (live) => { if (sess) { sess.live = live; sess.fpsHist = [...(sess.fpsHist ?? []), live.avg].slice(-15); sess.fpsState = 'ok'; widgetPush(); perfbarPush(); } });
   // Refus de Windows (droits) : dit dans la mini-barre au lieu de n'afficher que le GPU
   sess.cap.done.then((r) => { if (sess && r?.error === 'droits') { sess.fpsState = 'droits'; perfbarPush(); } });
 }

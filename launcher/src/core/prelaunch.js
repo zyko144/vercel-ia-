@@ -102,3 +102,11 @@ export function beforeAfter(records = [], mark = null) {
   const before = pick(withFps.filter((r) => r.at < mark).slice(-5)); const after = pick(withFps.filter((r) => r.at >= mark));
   return before && after ? { before, after, delta: perfDelta(after.avg, before.avg), deltaLow: perfDelta(after.low1, before.low1) } : null;
 }
+/** Couleur des FPS dans l'overlay : vert (bien), orange (en baisse), rouge (trop bas), par rapport à tes FPS habituels. */
+export function fpsTone(now, recent = [], base = null) {
+  if (!(now > 0)) return null;
+  const ref = base ?? (recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : now);
+  if (now < 45 || now < ref * 0.6) return 'bad';
+  if (now < ref * 0.9) return 'down';
+  return 'good';
+}
