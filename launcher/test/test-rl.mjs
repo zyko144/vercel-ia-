@@ -1,6 +1,6 @@
 // Rocket League en direct (API officielle du jeu + profil) et couleur des FPS de l'overlay.
 import assert from 'node:assert/strict';
-import { borderlessIni, classifyAll, enableStatsIni, playlistFromLog, trackerPage, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
+import { borderlessIni, classifyAll, fsoOff, fsoOn, enableStatsIni, playlistFromLog, trackerPage, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
 import { fpsTone } from '../src/core/prelaunch.js';
 
 // Flux TCP : messages collés, coupés en plein milieu, accolades dans les textes
@@ -90,6 +90,13 @@ assert.equal(enableStatsIni(enableStatsIni(ini)), null);
 // Plein écran exclusif → sans bordure ; rien si déjà sans bordure ou fenêtré
 assert.match(borderlessIni('[SystemSettings]\r\nFullscreen=True\r\nBorderless=False\r\n'), /Fullscreen=False[\s\S]*Borderless=True/);
 assert.equal(borderlessIni('[SystemSettings]\r\nFullscreen=False\r\nBorderless=True\r\n'), null);
+
+// Optimisations plein écran désactivées pour le jeu (registre) → réactivées sans toucher au reste
+const reg = 'HKEY_CURRENT_USER\\...\\Layers\r\n    C:\\Games\\RocketLeague\\Binaries\\Win64\\RocketLeague.exe    REG_SZ    ~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE\r\n';
+assert.deepEqual(fsoOff(reg), { path: 'C:\\Games\\RocketLeague\\Binaries\\Win64\\RocketLeague.exe', value: '~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE' });
+assert.equal(fsoOn('~ DISABLEDXMAXIMIZEDWINDOWEDMODE HIGHDPIAWARE'), '~ HIGHDPIAWARE');
+assert.equal(fsoOn('~ DISABLEDXMAXIMIZEDWINDOWEDMODE'), null);
+assert.equal(fsoOff('    C:\\x\\RocketLeague.exe    REG_SZ    ~ HIGHDPIAWARE'), null);
 
 // Couleur des FPS : vert, orange en baisse, rouge trop bas
 assert.equal(fpsTone(880, [900, 890], 870), 'good');
