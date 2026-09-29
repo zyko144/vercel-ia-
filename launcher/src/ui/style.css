@@ -1241,27 +1241,17 @@ ul.tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; line-hei
    Rouge = urgent (redémarrage en attente, menace, écran bleu…), orange = à surveiller, bleu = conseil.
    ===================================================================== */
 .adv, .evgrid > div.bad, .evgrid > div.warn, .flist > div.bad, .scansum > div.bad {
-  --g: 47, 139, 255;
-  position: relative; overflow: hidden; border-left: 0 !important;
-  background: linear-gradient(135deg, rgba(var(--g), .22), rgba(var(--g), .07) 55%, rgba(var(--g), .12)) !important;
-  border: 1px solid rgba(var(--g), .45) !important; outline: 0 !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 10px 30px -14px rgba(var(--g), .7);
-  backdrop-filter: blur(18px) saturate(160%);
+  --g: 96, 165, 250;
+  position: relative; background: rgba(255, 255, 255, .035) !important; border: 1px solid var(--line) !important; outline: 0 !important;
 }
-.adv::before, .evgrid > div.bad::before, .evgrid > div.warn::before, .flist > div.bad::before, .scansum > div.bad::before {
-  content: ''; position: absolute; inset: 0 0 55% 0; pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0));
-}
-.adv > *, .flist > div.bad > *, .scansum > div.bad > *, .evgrid > div > * { position: relative; }
-.adv.p0, .evgrid > div.bad, .flist > div.bad, .scansum > div.bad { --g: 239, 68, 68; }
-.adv.p0 b, .evgrid > div.bad b, .scansum > div.bad b { color: #ffd4d4; }
-.adv.p0 small, .evgrid > div.bad small { color: #f3b1b1; }
-.adv.p1, .evgrid > div.warn { --g: 245, 158, 11; }
-.adv.p1 b { color: #ffe3b0; }
-.adv.p0 .btn.play { background: linear-gradient(180deg, #f87171, #dc2626); border-color: rgba(255, 255, 255, .25); box-shadow: 0 6px 20px -6px rgba(239, 68, 68, .9); }
-.adv.p0 { animation: redpulse 3s ease-in-out infinite; }
-@keyframes redpulse { 50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 10px 36px -8px rgba(239, 68, 68, .95); } }
-@media (prefers-reduced-motion: reduce) { .adv.p0 { animation: none; } }
+/* La couleur dit seulement l'urgence : titre coloré + petite pastille (Urgent, À surveiller, Conseil) */
+.adv.p0, .evgrid > div.bad, .flist > div.bad, .scansum > div.bad { --g: 248, 113, 113; }
+.adv.p1, .evgrid > div.warn { --g: 251, 191, 36; }
+.adv b, .evgrid > div.bad b, .evgrid > div.warn b, .flist > div.bad b, .scansum > div.bad b { color: rgb(var(--g)) !important; }
+.adv > div:first-child { padding-right: 96px; }
+.adv::after { content: 'Conseil'; position: absolute; right: 12px; top: 12px; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 99px; color: rgb(var(--g)); background: rgba(var(--g), .12); }
+.adv.p0::after { content: 'Urgent'; } .adv.p1::after { content: 'À surveiller'; }
+.adv.p0 .btn.play { background: rgb(var(--g)); color: #1a0606; border-color: transparent; }
 
 /* Cloche à gauche (avant la recherche), centre de notifications ancré dessous */
 .top .bell { margin-left: 0; order: -1; }
@@ -1790,3 +1780,10 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 .maintlist li > span { flex: 1; }
 .maintlist em { flex: none; }
 .odstats .since { grid-column: 1 / -1; } .odstats .since b { font-size: 16px; }
+/* Panneau vert « l'optimisation est prête » (une seule fois par utilisateur) */
+#modalBox.optiok { text-align: center; border-color: rgba(46, 224, 122, .45); box-shadow: 0 30px 90px -30px rgba(46, 224, 122, .55), inset 0 1px 0 rgba(255, 255, 255, .1); }
+.optiok .okbadge { width: 64px; height: 64px; margin: 4px auto 10px; display: grid; place-items: center; border-radius: 50%; font-size: 32px; font-weight: 900; color: #06200f; background: #2ee07a; box-shadow: 0 0 34px rgba(46, 224, 122, .6); }
+.optiok h2 { margin: 0 0 6px; }
+.optiok .oklist { display: grid; gap: 8px; margin: 14px 0 18px; text-align: left; }
+.optiok .oklist span { padding: 10px 12px; border-radius: 12px; background: rgba(46, 224, 122, .07); border: 1px solid rgba(46, 224, 122, .2); }
+.adv:has(> .btn)::after { display: none; } .adv:has(> .btn) > div:first-child { padding-right: 0; }

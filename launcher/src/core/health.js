@@ -27,7 +27,8 @@ $ErrorActionPreference='SilentlyContinue'
 [Console]::OutputEncoding=[Text.Encoding]::UTF8
 $since=(Get-Date).AddDays(-7)
 $sys=@(Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2; StartTime=$since} -MaxEvents 3000)
-$app=@(Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1002; StartTime=$since} -MaxEvents 2000)
+# Vrais plantages seulement (« Application Error » / « Application Hang ») : d'autres programmes utilisent aussi l'id 1000 pour de simples infos
+$app=@(Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Application Error','Application Hang'; Id=1000,1002; StartTime=$since} -MaxEvents 2000)
 $crash=@($app | ForEach-Object { if($_.Properties.Count -gt 0){ [string]$_.Properties[0].Value } } | Group-Object | Sort-Object Count -Descending | Select-Object -First 8 | ForEach-Object { @{ name=$_.Name; count=$_.Count } })
 [pscustomobject]@{
   power=@($sys | Where-Object { $_.ProviderName -eq 'Microsoft-Windows-Kernel-Power' -and $_.Id -eq 41 }).Count

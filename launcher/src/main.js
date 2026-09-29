@@ -44,7 +44,7 @@ import { gogGames, ubisoftGames } from './core/stores.js';
 import { demoActivity, demoBench, demoEvents, demoFriends, demoGameActs, demoItems, demoPerf, demoScan, demoTemps, demoWu } from './core/demo.js';
 import { captureDir, captureName } from './core/capture.js';
 import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core/gmod.js';
-import { analyze, defenderRemove, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
+import { analyze, defenderRemove, defenderUpdate, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
 import { VERSION as BENCH_VERSION, cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
 import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
 import { graphicsAdvice } from './core/graphics.js';
@@ -663,6 +663,27 @@ ipcMain.handle('pc:kill', async (_e, pid, pathHint) => {
 });
 ipcMain.handle('pc:defscan', async (_e, type) => { send('pc:progress', { step: 'defender', label: type === 'full' ? 'Analyse antivirus complète (peut durer une heure)…' : 'Analyse antivirus rapide…' }); const r = await defenderScan(type === 'full' ? 'full' : 'quick'); diagCache = null; return r; });
 ipcMain.handle('pc:defremove', async () => { const r = await defenderRemove(); diagCache = null; return r; });
+// « Corriger » depuis un conseil de Mon PC : liste fixe d'actions sûres (réglages réversibles ou page officielle de Windows)
+ipcMain.handle('pc:fix', async (_e, id) => {
+  if (process.platform !== 'win32') return { ok: false, error: 'Windows seulement.' };
+  const open = (u) => shell.openExternal(u).then(() => ({ ok: true, opened: true }), () => ({ ok: false }));
+  diagCache = null;
+  switch (String(id)) {
+    case 'gamemode': await snapshotSettings('Avant « Corriger » : Mode Jeu').catch(() => {}); return { ok: await setTweak('gamemode', true).catch(() => false) };
+    case 'power': await setScheme(HIGH_PERFORMANCE).catch(() => {}); return { ok: (await activeScheme().catch(() => null)) === HIGH_PERFORMANCE };
+    case 'sigs': return { ok: await defenderUpdate() };
+    case 'threats': return defenderRemove();
+    case 'av': return open('windowsdefender://threatsettings');
+    case 'display': return open('ms-settings:display-advanced');
+    case 'storage': return open('ms-settings:storagesense');
+    case 'driver': return driverInfo?.link ? openLink(driverInfo.link).then(() => ({ ok: true, opened: true }), () => ({ ok: false })) : open('ms-settings:windowsupdate');
+    case 'reboot':
+      if (!(await confirm('Redémarrer le PC ?', 'Enregistre ton travail : le PC redémarre dans 1 minute (annulable avec « shutdown /a »).'))) return { ok: false, cancelled: true };
+      spawn('shutdown.exe', ['/r', '/t', '60', '/c', 'History Launcher : redémarrage demandé'], { windowsHide: true, detached: true, stdio: 'ignore' }).unref();
+      return { ok: true };
+    default: return { ok: false };
+  }
+});
 
 // Plus gros fichier d'un jeu installé (lu pour mesurer la vraie vitesse de lecture du disque, jamais modifié)
 async function bigGameFile() {
@@ -1197,7 +1218,10 @@ ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
 ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto === true, last: store.data.optiAutoLast ?? null }; });
 // Optimisation en maintenance : on la termine de notre côté. « Remettre Windows comme avant » reste disponible.
-const OPTI_PAUSED = true;
+const OPTI_PAUSED = !process.env.LAUNCHER_OPTI_OPEN; // LAUNCHER_OPTI_OPEN=1 : aperçu de la version ouverte (captures)
+// Ouverture : panneau vert « c'est prêt » montré une seule fois par utilisateur (retenu même après redémarrage)
+ipcMain.handle('opti:state', () => ({ paused: OPTI_PAUSED, introSeen: Boolean(store.data.optiIntroSeen) }));
+ipcMain.handle('opti:introSeen', () => { store.data.optiIntroSeen = true; store.save(); return true; });
 // Annuler : la dernière optimisation (ou toutes) revient exactement à l'état d'avant (fichiers, registre, réglages)
 async function undoOpti(all = false) {
   const list = store.data.optiJournal ?? [];
