@@ -2762,13 +2762,18 @@ function unlockFx() {
   const fx = document.createElement('div');
   fx.className = 'unlockfx';
   Object.assign(fx.style, { left: `${r.left}px`, top: `${Math.max(0, r.top)}px`, width: `${r.width}px`, height: `${innerHeight - Math.max(0, r.top)}px` });
-  fx.innerHTML = '<i class="door l"></i><i class="door r"></i><div class="lockbox"><i class="lock3d"></i><b>Optimisation débloquée</b></div>';
+  fx.innerHTML = '<img class="doors" src="doors0.webp" alt=""><div class="lockbox"><i class="lock3d"></i><b>Optimisation débloquée</b></div>';
   document.body.append(fx);
   window.sfx?.play('pop');
+  // Portes blindées 3D (rendu Blender) : fermées pendant le cadenas, puis la vidéo d'ouverture avec la fumée verte
+  setTimeout(() => { fx.querySelector('.doors').src = `doors3d.webp?${Date.now()}`; }, 1000);
   fx.addEventListener('animationend', (e) => { if (e.target === fx) fx.remove(); });
   try { localStorage.setItem('hl-opti-unlocked', '1'); } catch { /* rien */ }
 }
 function openOpti() {
+  // Entrée de la page : un reflet vert traverse la carte et « Analyser mon PC » s'illumine
+  const hero = document.querySelector('#view-optimisation .optihero');
+  if (hero) { hero.classList.remove('enter'); void hero.offsetWidth; hero.classList.add('enter'); }
   if (state.unlockFx) { state.unlockFx = false; requestAnimationFrame(unlockFx); }
   // Les bandes de chantier arrivent et se collent à chaque ouverture de la page
   const m = document.querySelector('#view-optimisation .maint');
