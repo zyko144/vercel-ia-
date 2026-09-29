@@ -182,3 +182,38 @@ console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, p
   assert.equal(activeItems([fn], ['fortnitelauncher.exe']).size, 0, 'le petit lanceur ne compte pas comme une partie');
   console.log('✅ Jeux anti-triche reconnus en cours (temps de jeu, FPS)');
 }
+
+{
+  const { overlayCheck, memoryHogs, stutterCause, beforeAfter, prelaunchChecks } = await import('../src/core/prelaunch.js');
+  // Superpositions : une seule ligne, avec comment les couper ; rien si aucune
+  assert.equal(overlayCheck(['c:\\windows\\explorer.exe']), null);
+  const ov = overlayCheck(['C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NVIDIA Overlay.exe', 'gamebar.exe', 'Discord.exe']);
+  assert.equal(ov.level, 'warn'); assert.match(ov.label, /NVIDIA, Xbox Game Bar, Discord/); assert.match(ov.detail, /Alt\+Z/);
+  // Mémoire : plus de 2 Go, jamais le jeu ni Windows
+  assert.deepEqual(memoryHogs('chrome|3100000000\nMemory Compression|2600000000\nRainbowSix|6000000000\nspotify|400000000', ['rainbowsix.exe']), [{ name: 'chrome', bytes: 3100000000 }]);
+  // Saccades : la vraie cause, rien si peu de saccades
+  assert.equal(stutterCause([{ ram: 95, core: 50, gpu: 60 }], 3), null);
+  assert.match(stutterCause([{ ram: 95, core: 50, gpu: 60 }], 12), /mémoire/);
+  assert.match(stutterCause([{ ram: 60, core: 99, gpu: 60 }], 12), /processeur/);
+  assert.match(stutterCause([{ ram: 60, core: 40, gpu: 60 }], 12), /disque/);
+  // Avant / après la 1re optimisation
+  const rec = [{ at: 1, avg: 100, low1: 60 }, { at: 2, avg: 110, low1: 70 }, { at: 10, avg: 126, low1: 81 }];
+  assert.deepEqual(beforeAfter(rec, 5), { before: { avg: 105, low1: 65, games: 2 }, after: { avg: 126, low1: 81, games: 1 }, delta: 20, deltaLow: 25 });
+  assert.equal(beforeAfter(rec, null), null); assert.equal(beforeAfter(rec, 50), null, 'pas encore de partie après : rien d’inventé');
+  // FiveM : alerte au-dessus de 5 Go, décoché, packs signalés ; pilote avec versions
+  const f = prelaunchChecks({ game: 'fivem', fivem: { bytes: 7.2e9, packs: ['ReShade'] } }).find((x) => x.id === 'fivemcache');
+  assert.equal(f.level, 'warn'); assert.equal(f.on, false); assert.match(f.label, /7,2 Go/); assert.match(f.detail, /ReShade détecté/);
+  assert.match(prelaunchChecks({ driver: { version: '560.94', latest: '581.29' } }).find((x) => x.id === 'driver').label, /560\.94 → 581\.29/);
+  console.log('✅ Avant de jouer : superpositions, mémoire, cache FiveM, pilote, saccades, avant / après');
+}
+{
+  const { installedAddons } = await import('../src/core/gmod.js');
+  const fs = await import('node:fs/promises'); const os = await import('node:os'); const p = await import('node:path');
+  const root = await fs.mkdtemp(p.join(os.tmpdir(), 'gmod-'));
+  const game = p.join(root, 'common', 'GarrysMod');
+  await fs.mkdir(p.join(game, 'garrysmod', 'addons', 'petit'), { recursive: true }); await fs.writeFile(p.join(game, 'garrysmod', 'addons', 'petit', 'a.lua'), 'x');
+  await fs.mkdir(p.join(root, 'workshop', 'content', '4000', '123456'), { recursive: true }); await fs.writeFile(p.join(root, 'workshop', 'content', '4000', '123456', 'map.gma'), 'x'.repeat(5000));
+  const l = await installedAddons(game, root);
+  assert.equal(l[0].id, '123456', 'le plus lourd en premier'); assert.equal(l[0].bytes, 5000);
+  console.log('✅ Addons Garry’s Mod : taille de chaque addon, les plus lourds d’abord');
+}

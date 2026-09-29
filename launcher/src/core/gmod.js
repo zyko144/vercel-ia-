@@ -2,6 +2,7 @@
 // lien, et installation par Steam (abonnement : Steam le télécharge et le tient à jour, comme depuis le Workshop).
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { folderSize } from './manage.js';
 
 export const GMOD_APPID = '4000';
 
@@ -17,15 +18,17 @@ export async function installedAddons(installDir, steamappsDir) {
   const out = [];
   const addons = path.join(installDir ?? '', 'garrysmod', 'addons');
   for (const e of await readdir(addons, { withFileTypes: true }).catch(() => [])) {
-    if (e.isDirectory() || /\.gma$/i.test(e.name)) out.push({ name: e.name.replace(/\.gma$/i, ''), where: 'addons' });
+    const full = path.join(addons, e.name);
+    if (e.isDirectory() || /\.gma$/i.test(e.name)) out.push({ name: e.name.replace(/\.gma$/i, ''), where: 'addons', bytes: e.isDirectory() ? (await folderSize(full)).bytes : (await stat(full).catch(() => null))?.size ?? 0 });
   }
   const ws = path.join(steamappsDir ?? path.join(installDir ?? '', '..', '..'), 'workshop', 'content', GMOD_APPID);
   for (const e of await readdir(ws, { withFileTypes: true }).catch(() => [])) {
     if (!e.isDirectory() || !/^\d+$/.test(e.name)) continue;
     const s = await stat(path.join(ws, e.name)).catch(() => null);
-    out.push({ id: e.name, name: `Workshop ${e.name}`, where: 'workshop', at: s?.mtimeMs ?? 0 });
+    out.push({ id: e.name, name: `Workshop ${e.name}`, where: 'workshop', at: s?.mtimeMs ?? 0, bytes: (await folderSize(path.join(ws, e.name))).bytes });
   }
-  return out;
+  // Les plus lourds d'abord : ce sont eux qui rallongent les chargements
+  return out.sort((a, b) => b.bytes - a.bytes);
 }
 
 export function parseDetails(json) {

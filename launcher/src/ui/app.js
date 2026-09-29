@@ -1627,6 +1627,16 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.39.0': [
+    ['🧪', 'Avant / après, en vrais FPS', '« Optimiser et jouer » compare tes FPS moyens et ton 1 % low d’avant ta 1re optimisation avec ceux d’après.', ['#hero .optiplay', 'wait1200']],
+    ['🪟', 'Superpositions qui coûtent des FPS', 'NVIDIA, Xbox Game Bar, Discord, Overwolf, Medal, OBS… repérées avant de jouer, avec où les couper.'],
+    ['🧠', 'Programmes gourmands', 'Un programme qui prend plus de 2 Go de mémoire est signalé avant la partie.'],
+    ['🚓', 'Cache FiveM surveillé', 'Taille du cache affichée, alerte au-dessus de 5 Go ; ReShade et ENB signalés et gardés tels quels.'],
+    ['🔧', 'Addons Garry’s Mod les plus lourds', 'Taille de chaque addon, les plus lourds d’abord, et leur page Steam pour te désabonner.'],
+    ['💥', 'Saccades expliquées', 'Après la partie : mémoire pleine, processeur au maximum ou disque, et quoi faire.'],
+    ['🖥', 'Pilote graphique', 'Ta version et la nouvelle, avec le lien officiel (rien n’est installé tout seul).'],
+    ['🧹', 'Nettoyage doux chaque semaine', 'À activer dans Paramètres : seulement les caches qui se recréent, avec un petit rapport. Désactivé par défaut.'],
+  ],
   '0.38.0': [
     ['🕹', 'Jeux avec anti-triche détectés', 'R6, Fortnite, Rocket League… sont maintenant bien repérés quand ils tournent : temps de jeu, « En cours » et mini-compteur de FPS.', ['[data-view=jeux]', 'wait1200']],
     ['🛠', 'L’optimisation avance', 'Profils par jeu (FiveM, Garry’s Mod, Fortnite, R6, Rocket League) avec leurs logos, niveau de risque de chaque action et retour arrière en un clic : on la termine de notre côté avant de l’ouvrir.'],
@@ -1947,8 +1957,9 @@ async function openGmod(found = null) {
     <div class="row"><input id="wsLink" class="wsin" placeholder="Colle le lien d’un addon du Workshop" value="${esc(found?.id ?? '')}"><button type="button" class="btn" id="wsGo">Voir</button></div>
     ${card}
     <p class="hint">Steam télécharge l’addon et le garde à jour ; il est disponible au prochain lancement de Garry’s Mod.</p>
-    <b class="sub">Installés (${list.length})</b>
-    <div class="wslist">${r?.error ? `<p class="hint">${esc(r.error)}</p>` : list.length ? list.slice(0, 60).map((a) => `<span>${a.where === 'workshop' ? '☁' : '📦'} ${esc(a.name)}</span>`).join('') : '<p class="hint">Aucun addon pour l’instant.</p>'}</div>
+    <b class="sub">Installés (${list.length}${list.length ? ` · ${gb(list.reduce((n, a) => n + (a.bytes ?? 0), 0))}` : ''})</b>
+    ${list.length ? '<p class="hint">Les plus lourds rallongent chaque chargement : désabonne-toi de ceux que tu n’utilises plus (☁ ouvre sa page Steam).</p>' : ''}
+    <div class="wslist">${r?.error ? `<p class="hint">${esc(r.error)}</p>` : list.length ? list.slice(0, 60).map((a) => `<span>${a.where === 'workshop' ? `<button type="button" class="linkbtn" data-gminst="${esc(a.id)}" title="Page Steam : se désabonner">☁</button>` : '📦'} ${esc(a.name)} <em>${gb(a.bytes ?? 0)}</em></span>`).join('') : '<p class="hint">Aucun addon pour l’instant.</p>'}</div>
     <div class="row end"><button type="button" class="btn ghost" id="wsBrowse">Parcourir le Workshop</button><button type="button" class="btn" data-m="1">Fermer</button></div>`;
   if (!$('modal').open) $('modal').showModal();
   $('modalBox').onclick = async (e) => {
@@ -1956,7 +1967,7 @@ async function openGmod(found = null) {
     if (b.dataset.m) return $('modal').close();
     if (b.id === 'wsBrowse') return api.gmodBrowse();
     if (b.id === 'wsGo') { const d = await api.gmodDetails($('wsLink').value); return openGmod(d?.error ? d : d); }
-    if (b.dataset.gminst) { await api.gmodInstall(b.dataset.gminst); toast('Steam s’ouvre sur l’addon : clique sur « S’abonner » pour l’installer'); }
+    if (b.dataset.gminst) { await api.gmodInstall(b.dataset.gminst); toast('Steam s’ouvre sur la page de l’addon (S’abonner ou Se désabonner)'); }
   };
 }
 // ---------- Outils du jeu : profil, sauvegardes, saccades, déplacement, performances ----------
@@ -2327,7 +2338,7 @@ async function openPc() {
   pcTimer = setInterval(() => (state.view === 'pc' ? renderPc() : clearInterval(pcTimer)), 2500);
   const b = await api.boost?.().catch(() => null);
   if (!b) return;
-  $('boostOn').checked = b.enabled; $('boostPower').checked = b.power; $('boostRestore').checked = b.restore; $('boostTune').checked = b.tune; $('heatAlerts').checked = b.heatAlerts;
+  $('boostOn').checked = b.enabled; $('boostPower').checked = b.power; $('boostRestore').checked = b.restore; $('boostTune').checked = b.tune; $('heatAlerts').checked = b.heatAlerts; $('weeklyClean').checked = b.weeklyClean;
   $('boostApps').innerHTML = b.apps.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}" ${b.close.includes(a.id) ? 'checked' : ''}>${esc(a.label)}</label>`).join('');
 }
 // ---------- Mon PC : diagnostic, composants, conseils, antivirus, programmes, benchmark, rapport ----------
@@ -2458,7 +2469,7 @@ document.querySelectorAll('[data-avscan]').forEach((b) => b.addEventListener('cl
 }));
 $('avRemove').addEventListener('click', async () => { const r = await api.pcDefRemove(); toast(r?.ok ? 'Menaces supprimées ✓' : 'Accepte la demande administrateur de Windows pour supprimer'); pcDiag(true); });
 $('pcProcs').addEventListener('click', async (e) => { const b = e.target.closest('[data-kill]'); if (!b) return; const r = await api.pcKill(Number(b.dataset.kill), b.dataset.kpath); if (r?.ok) { toast('Programme fermé'); renderProcs(); } else if (!r?.cancelled) toast(r?.error ?? 'Impossible'); });
-for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boostRestore', 'restore'], ['boostTune', 'tune'], ['heatAlerts', 'heatAlerts']]) {
+for (const [id, key] of [['boostOn', 'enabled'], ['boostPower', 'power'], ['boostRestore', 'restore'], ['boostTune', 'tune'], ['heatAlerts', 'heatAlerts'], ['weeklyClean', 'weeklyClean']]) {
   $(id).addEventListener('change', (e) => api.setBoost({ [key]: e.target.checked }).then(() => key === 'enabled' && toast(e.target.checked ? 'Boost activé pour les prochaines parties' : 'Boost désactivé')));
 }
 $('boostApps').addEventListener('change', () => api.setBoost({ close: [...document.querySelectorAll('#boostApps input:checked')].map((i) => i.value) }));
@@ -3490,14 +3501,14 @@ async function openOptiPlay(item) {
   $('odTitle').textContent = `Optimiser ${d.name}`;
   $('odSub').textContent = d.windows ? 'Réglages temporaires : tout est remis comme avant à la fin de la partie' : 'Optimisation disponible sous Windows';
   const g = d.gain;
-  $('odStats').innerHTML = `<div><b>${d.base?.avg ?? '–'}</b><small>FPS habituels${d.base ? ` (${d.base.games} partie${d.base.games > 1 ? 's' : ''})` : ''}</small></div><div><b>${d.base?.low1 ?? '–'}</b><small>1 % low habituel</small></div><div class="${g > 0 ? 'up' : g < 0 ? 'down' : ''}"><b>${g != null ? `<svg class="garr" viewBox="0 0 12 14"><path d="${g >= 0 ? 'M6 1 11 7H7.6v6H4.4V7H1Z' : 'M6 13 1 7h3.4V1h3.2v6H11Z'}"/></svg>${g > 0 ? '+' : ''}${g} %` : '–'}</b><small>${g != null ? 'avec l’optimisation' : 'gain mesuré après 2 parties'}</small></div>`;
+  $('odStats').innerHTML = `<div><b>${d.base?.avg ?? '–'}</b><small>FPS habituels${d.base ? ` (${d.base.games} partie${d.base.games > 1 ? 's' : ''})` : ''}</small></div><div><b>${d.base?.low1 ?? '–'}</b><small>1 % low habituel</small></div><div class="${g > 0 ? 'up' : g < 0 ? 'down' : ''}"><b>${g != null ? `<svg class="garr" viewBox="0 0 12 14"><path d="${g >= 0 ? 'M6 1 11 7H7.6v6H4.4V7H1Z' : 'M6 13 1 7h3.4V1h3.2v6H11Z'}"/></svg>${g > 0 ? '+' : ''}${g} %` : '–'}</b><small>${g != null ? 'avec l’optimisation' : 'gain mesuré après 2 parties'}</small></div>${d.since ? `<div class="since ${d.since.delta > 0 ? 'up' : d.since.delta < 0 ? 'down' : ''}"><b>${d.since.before.avg} → ${d.since.after.avg} FPS</b><small>avant / après ta 1re optimisation${d.since.before.low1 && d.since.after.low1 ? ` · 1 % low ${d.since.before.low1} → ${d.since.after.low1}` : ''}</small></div>` : ''}`;
   const hist = (d.history ?? []).filter((r) => r.avg);
   if (hist.length >= 2) {
     const max = Math.max(...hist.map((r) => r.avg));
     $('odStats').insertAdjacentHTML('beforeend', `<div class="odspark" title="FPS moyens de tes dernières parties (orange = avec optimisation)">${hist.map((r) => `<i class="${r.boost ? 'b' : ''}" style="height:${Math.max(8, Math.round((100 * r.avg) / max))}%" title="${r.avg} FPS"></i>`).join('')}<small>FPS de tes ${hist.length} dernières parties</small></div>`);
   }
   const icon = { wintweaks: '🎮', fnperf: '🚀', fivemcache: '🧊', close: '🧹', power: '🔋', priority: '🎯', quiet: '🔕', perfbar: '📊', ram: '🧠', disk: '💾', heat: '🌡', driver: '🖥' };
-  $('odChecks').innerHTML = d.checks.map((c) => `<label class="odck ${c.level}" ${c.apps ? `data-apps="${esc(c.apps.join(','))}"` : ''}><span class="ico">${c.level === 'ok' ? '✅' : c.level === 'warn' ? '⚠' : icon[c.id] ?? '⚡'}</span><span><b>${esc(c.label)}</b>${c.detail ? `<small>${esc(c.detail)}</small>` : ''}</span>${c.level === 'act' ? `<input type="checkbox" data-ck="${c.id}" ${c.on ? 'checked' : ''}>` : ''}</label>`).join('');
+  $('odChecks').innerHTML = d.checks.map((c) => `<label class="odck ${c.level}" ${c.apps ? `data-apps="${esc(c.apps.join(','))}"` : ''}><span class="ico">${c.level === 'ok' ? '✅' : c.level === 'warn' ? '⚠' : icon[c.id] ?? '⚡'}</span><span><b>${esc(c.label)}</b>${c.detail ? `<small>${esc(c.detail)}</small>` : ''}</span>${c.level === 'act' || c.act ? `<input type="checkbox" data-ck="${c.id}" ${c.on ? 'checked' : ''}>` : ''}</label>`).join('');
   $('odRun').hidden = true; $('odChecks').hidden = false; $('odFoot').hidden = false; $('odStats').hidden = false;
   $('odLog').innerHTML = ''; $('odFill').style.width = '0';
   $('optiDlg').showModal();
@@ -4050,7 +4061,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.38.0',
+    version: async () => '0.39.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

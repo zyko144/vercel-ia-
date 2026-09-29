@@ -18,7 +18,7 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
-import { perfBaseline, perfDelta, perfLine, prelaunchChecks } from './core/prelaunch.js';
+import { HOGS_PS, beforeAfter, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
 import { listSteamAccounts, steamAchievements, steamAppInfo, steamNames, lastSteamUser, steamStoreAssets } from './core/steam.js';
@@ -31,7 +31,7 @@ import { epicActions, epicStoreSearch } from './core/epic.js';
 import { steamActions, steamDetails } from './core/steam.js';
 import { createStore } from './core/store.js';
 import { folderSize, safeGameDir, uninstallFiles } from './core/manage.js';
-import { applyAction, gameActions, revertEntries } from './core/gameopti.js';
+import { applyAction, gameActions, graphicsPacks, revertEntries } from './core/gameopti.js';
 import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
 import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social.js';
@@ -508,18 +508,24 @@ ipcMain.handle('opti:prepare', async (_e, id) => {
   const { statfs } = await import('node:fs/promises');
   const fsInfo = item.installDir ? await statfs(item.installDir).catch(() => null) : null;
   const game = /fortnite/i.test(item.name) ? 'fortnite' : item.source === 'fivem' ? 'fivem' : null;
-  const [tweaks, fnPerf] = await Promise.all([tweakStates().catch(() => []), game === 'fortnite' ? fortniteState().catch(() => null) : null]);
+  const fivemData = item.installDir && path.join(item.installDir, 'FiveM.app');
+  const [tweaks, fnPerf, exes, hogText, fivem] = await Promise.all([
+    tweakStates().catch(() => []), game === 'fortnite' ? fortniteState().catch(() => null) : null, runningGameExes(item).catch(() => []), process.platform === 'win32' ? ps(HOGS_PS).catch(() => '') : '',
+    // FiveM : taille du cache + packs graphiques détectés (gardés tels quels)
+    game === 'fivem' ? Promise.all([Promise.all(['cache', 'server-cache', 'server-cache-priv'].map((d) => folderSize(path.join(fivemData, 'data', d)).then((x) => x.bytes))), graphicsPacks([path.join(fivemData, 'plugins')])]).then(([b, packs]) => ({ bytes: b.reduce((a, n) => a + n, 0), packs })).catch(() => null) : null,
+  ]);
   const checks = prelaunchChecks({
     apps, power, high: HIGH_PERFORMANCE, fpsOn: store.data.settings.fps === true, tweaks, game, fnPerf,
     ramUsedPct: pc?.ram ? Math.round((100 * pc.ram.used) / pc.ram.total) : null, temp: pc?.cpu?.temp ?? null,
-    diskFreeGb: fsInfo ? (fsInfo.bavail * fsInfo.bsize) / 1e9 : null, driverOld: Boolean(driverInfo),
+    diskFreeGb: fsInfo ? (fsInfo.bavail * fsInfo.bsize) / 1e9 : null, driver: driverInfo, fivem,
+    overlays: overlayCheck(paths), hogs: memoryHogs(hogText, exes).slice(0, 2),
   });
   const base = perfBaseline(store.data.perf?.[id] ?? []);
   const withAvg = (store.data.perf?.[id] ?? []).filter((r) => r.avg);
   const on = withAvg.filter((r) => r.boost); const off = withAvg.filter((r) => !r.boost);
   const mean = (l) => (l.length ? l.reduce((a, r) => a + r.avg, 0) / l.length : null);
   const gain = on.length && off.length ? perfDelta(mean(on), mean(off)) : null;
-  return { name: item.name, checks, base, gain, history: withAvg.slice(-10).map((r) => ({ avg: r.avg, boost: Boolean(r.boost) })), boosted: Boolean(boosted), windows: process.platform === 'win32' };
+  return { name: item.name, checks, base, gain, since: beforeAfter(store.data.perf?.[id] ?? [], store.data.optiMark?.[id]), history: withAvg.slice(-10).map((r) => ({ avg: r.avg, boost: Boolean(r.boost) })), boosted: Boolean(boosted), windows: process.platform === 'win32' };
 });
 ipcMain.handle('opti:launch', async (_e, id, choice = {}) => {
   const item = items.find((i) => i.id === id && i.installed);
@@ -528,6 +534,8 @@ ipcMain.handle('opti:launch', async (_e, id, choice = {}) => {
   const c0 = choice;
   const c = { close: Array.isArray(choice.close) ? choice.close.map(String).filter((x) => BOOST_APPS.some((a) => a.id === x)) : [], power: Boolean(choice.power), priority: Boolean(choice.priority), quiet: Boolean(choice.quiet) };
   step('Analyse de ton PC…', 10);
+  // Avant / après : la 1re optimisation de ce jeu sépare tes parties d'avant de celles d'après
+  (store.data.optiMark ??= {})[item.id] ??= Date.now();
   // Réglages de jeu Windows (photo des réglages prise avant : « Remettre Windows comme avant » les annule)
   if (c0.wintweaks && process.platform === 'win32') {
     step('Mode Jeu de Windows et capture Xbox en fond…', 20);
@@ -610,12 +618,13 @@ async function endBoost({ silent = false } = {}) {
   const mins = Math.round((Date.now() - start) / 60_000);
   if ((changed || top.length) && !silent) notify('Boost terminé', `${mins} min de jeu${closed.length ? `, ${closed.length} appli(s) fermée(s) puis rouvertes` : ''}. PC remis comme avant.${top.length ? ` ⚠ Ont pris du processeur pendant la partie : ${top.map(([n, p]) => `${n} (${p} %)`).join(', ')} : ferme-les avant de jouer si ça a freezé.` : ''}`);
 }
-ipcMain.handle('boost:get', () => ({ ...boostSettings(), heatAlerts: store.data.settings.heatAlerts !== false, apps: BOOST_APPS.map(({ id, label }) => ({ id, label })) }));
+ipcMain.handle('boost:get', () => ({ ...boostSettings(), heatAlerts: store.data.settings.heatAlerts !== false, weeklyClean: store.data.settings.optiAuto === true, apps: BOOST_APPS.map(({ id, label }) => ({ id, label })) }));
 ipcMain.handle('boost:set', (_e, patch) => {
   const b = boostSettings();
   for (const k of ['enabled', 'power', 'restore', 'tune']) if (k in patch) b[k] = Boolean(patch[k]);
   if (Array.isArray(patch.close)) b.close = patch.close.map(String).filter((id) => BOOST_APPS.some((a) => a.id === id));
   if ('heatAlerts' in patch) store.data.settings.heatAlerts = Boolean(patch.heatAlerts);
+  if ('weeklyClean' in patch) store.data.settings.optiAuto = Boolean(patch.weeklyClean);
   if (patch.game && typeof patch.game.id === 'string' && items.some((i) => i.id === patch.game.id)) {
     b.games = { ...(b.games ?? {}) };
     if (patch.game.mode === 'on') b.games[patch.game.id] = true;
@@ -1186,7 +1195,7 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 });
 ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
 ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
-ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto !== false, last: store.data.optiAutoLast ?? null }; });
+ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto === true, last: store.data.optiAutoLast ?? null }; });
 // Optimisation en maintenance : on la termine de notre côté. « Remettre Windows comme avant » reste disponible.
 const OPTI_PAUSED = true;
 // Annuler : la dernière optimisation (ou toutes) revient exactement à l'état d'avant (fichiers, registre, réglages)
@@ -1213,15 +1222,18 @@ ipcMain.handle('opti:undoAll', async () => {
 });
 // Caches de shaders : les vider fait saccader les jeux (FiveM surtout) le temps qu'ils se recréent
 const SHADER_CACHES = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
-// Optimisation automatique chaque semaine : seulement les caches qui se recréent (système, pilotes, launchers), en silence
+// Nettoyage doux chaque semaine (à activer dans Paramètres) : seulement les caches qui se recréent (système, pilotes,
+// launchers). Jamais les navigateurs, les caches de shaders, les jeux ni les fichiers perso. Petit rapport à la fin.
 setInterval(async () => {
-  if (OPTI_PAUSED || store.data.settings.optiAuto === false || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
+  if (store.data.settings.optiAuto !== true || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
   const scan = await optiScan().catch(() => null);
   if (!scan) return;
-  const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs' && !SHADER_CACHES.includes(j.id)).map((j) => j.id) }).catch(() => null);
+  const got = [];
+  const r = await optiApply({ junk: scan.junk.filter((j) => j.group !== 'navigateurs' && !SHADER_CACHES.includes(j.id)).map((j) => j.id) }, (p) => { if (p.got > 0) got.push(p); }).catch(() => null);
   store.data.optiAutoLast = Date.now();
   store.save();
-  if (r?.freed > 200e6) notify('Optimisation automatique', `${(r.freed / 1e9).toFixed(1).replace('.', ',')} Go libérés cette semaine.`);
+  const top = got.sort((a, b) => b.got - a.got).slice(0, 3).map((p) => `${p.label} ${(p.got / 1e6).toFixed(0)} Mo`).join(', ');
+  if (r?.freed > 100e6) notify('Nettoyage de la semaine', `${(r.freed / 1e9).toFixed(1).replace('.', ',')} Go libérés (${top}). Jeux, navigateurs et fichiers perso non touchés.`);
 }, 3 * 3_600_000);
 
 // Alertes de chauffe (toutes les minutes)
@@ -2964,7 +2976,7 @@ async function sessionTick(s) {
   if (!sess) return;
   const snap = await snapshot().catch(() => null);
   const c = coreLoad();
-  sess.samples.push({ gpu: snap?.gpu?.usage ?? null, core: c.max, cpu: c.avg });
+  sess.samples.push({ gpu: snap?.gpu?.usage ?? null, core: c.max, cpu: c.avg, ram: snap?.ram ? Math.round((100 * snap.ram.used) / snap.ram.total) : null });
   sess.cpuT = snap?.cpu?.temp ?? sess.cpuT ?? null;
   perfbarPush();
   heatCheck(sess, snap);
@@ -3025,7 +3037,8 @@ async function sessionEnd() {
   const played = items.find((i) => i.id === s.id);
   if (played && played.source !== 'steam' && minutes >= 5) setTimeout(() => cloudSaveUp(played).catch(() => {}), 20_000);
   const v = verdict(stats?.error ? null : stats, s.samples);
-  const rec = { at: Date.now(), minutes: Math.round(minutes), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
+  const why = stutterCause(s.samples, stats?.stutters);
+  const rec = { at: Date.now(), minutes: Math.round(minutes), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), ...(why ? { stutterWhy: why } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
   ((store.data.perf ??= {})[s.id] ??= []).push(rec);
   store.data.perf[s.id] = store.data.perf[s.id].slice(-60);
   store.save();
@@ -3037,7 +3050,7 @@ async function sessionEnd() {
   const on = avgOf(withAvg.filter((r) => r.boost)), off = avgOf(withAvg.filter((r) => !r.boost));
   const gain = rec.boost && on && off ? Math.round(((on - off) / off) * 100) : null;
   const B = { cpu: 'le processeur limite tes FPS', gpu: 'la carte graphique travaille à fond (normal pour un jeu exigeant)', mixte: 'processeur et carte graphique sont équilibrés' };
-  if (rec.avg || rec.bound) notify(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s) repérée(s).` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
+  if (rec.avg || rec.bound) notify(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s)${why ? ` : ${why}` : ' repérée(s)'}.` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
 }
 ipcMain.handle('fps:enable', () => enableFps());
 async function enableFps() {
