@@ -85,6 +85,9 @@ main { grid-area: main; overflow-y: auto; padding: 8px 34px 48px 26px; position:
 .playbtn > button { height: 46px; border: 0; cursor: pointer; color: #fff; font-weight: 800; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .playbtn .main { padding: 0 44px; border-radius: 11px 0 0 11px; }
 .playbtn .main.upd { background: linear-gradient(180deg, #4aa8ff, #1f6fe0); color: #fff; }
+.rvstars button { background: none; border: 0; font-size: 34px; color: rgba(255, 255, 255, .25); cursor: pointer; padding: 0 3px; }
+.rvstars button.on { color: #ffc233; text-shadow: 0 0 12px rgba(255, 194, 51, .7); }
+#rvText { width: 100%; box-sizing: border-box; margin: 10px 0; }
 .playbtn .main.live { background: linear-gradient(180deg, #2ee07a, #17a653); color: #04230f; cursor: default; box-shadow: 0 0 18px rgba(46, 224, 122, .45); }
 .playbtn .more { width: 44px; border-radius: 0 11px 11px 0; border-left: 1px solid rgba(255, 255, 255, .25); }
 .playbtn > button:hover { filter: brightness(1.12); }

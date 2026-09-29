@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.6.4",
-  "releaseNotes": "History Clips retrouve son serveur même s’il change d’adresse : envoi des clips et connexion au compte continuent de marcher sans rien réinstaller.",
+  "version": "0.7.0",
+  "releaseNotes": "Donne ton avis sur History Clips (Paramètres › À propos) : note, commentaire et capture, affichés sur le site.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

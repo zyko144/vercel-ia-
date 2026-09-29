@@ -1629,6 +1629,9 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.48.0': [
+    ['⭐', 'Donne ton avis', 'Paramètres › À propos › « Donner mon avis » : une note de 1 à 5 étoiles, un commentaire et une capture si tu veux. Ton avis s’affiche dans le bandeau des avis du site.', ['#openSettings', 'wait600', '.setnav [data-pane=about]', 'wait900']],
+  ],
   '0.47.3': [
     ['🛡', 'Toujours connecté', 'Le launcher sait retrouver son serveur même s’il change d’adresse : comptes, amis et messages continuent de marcher sans rien réinstaller.', ['#openSettings', 'wait600', '.setnav [data-pane=compte]', 'wait900']],
   ],
@@ -2296,6 +2299,35 @@ $('checkUpd').addEventListener('click', async () => {
   if (r.ready) return api.installUpdate();
 });
 $('openNews2').addEventListener('click', () => { $('settings').close(); showWhatsNew(true); });
+// Avis : note, commentaire et capture facultatifs, affichés sur le site (bandeau des avis)
+$('openReview').addEventListener('click', () => {
+  $('settings').close();
+  let stars = 0; let img = null;
+  setModal(), $('modalBox').innerHTML = `<h2>⭐ Ton avis sur History Launcher</h2><p class="mtext">Il s’affichera sur le site, avec ton pseudo.</p>
+    <div class="rvstars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-rv="${n}">★</button>`).join('')}</div>
+    <textarea id="rvText" maxlength="500" rows="3" placeholder="Ton commentaire (facultatif)"></textarea>
+    <label class="btn ghost rvpick">🖼 Ajouter une capture (facultatif)<input type="file" id="rvImg" accept="image/png,image/jpeg,image/webp" hidden></label><small class="hint" id="rvInfo"></small>
+    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" id="rvSend">Envoyer</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.rv) { stars = Number(b.dataset.rv); $('modalBox').querySelectorAll('[data-rv]').forEach((x) => x.classList.toggle('on', Number(x.dataset.rv) <= stars)); return; }
+    if (b.dataset.m) return $('modal').close();
+    if (b.id === 'rvSend') {
+      if (!stars) return toast('Choisis une note de 1 à 5 étoiles');
+      const r = await api.review(stars, $('rvText').value, img);
+      if (r?.ok) { $('modal').close(); toast('Merci pour ton avis ! Il est sur le site 🙏'); } else toast(r?.error ?? 'Impossible pour l’instant');
+    }
+  };
+  $('rvImg').onchange = async () => {
+    const f = $('rvImg').files[0]; if (!f) return;
+    // Réduite (1280 px, JPEG) pour un envoi léger
+    const bmp = await createImageBitmap(f); const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+    const c = Object.assign(document.createElement('canvas'), { width: Math.round(bmp.width * k), height: Math.round(bmp.height * k) });
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); img = c.toDataURL('image/jpeg', 0.82);
+    $('rvInfo').textContent = `✓ ${f.name}`;
+  };
+});
 
 // ---------- Recherche rapide (Ctrl+Espace, ou Ctrl+Alt+Espace depuis Windows) ----------
 const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']];
@@ -4187,7 +4219,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.47.3',
+    version: async () => '0.48.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

@@ -430,6 +430,33 @@ $('themes').addEventListener('click', async (e) => { const b = e.target.closest(
 $('sPick').addEventListener('click', async () => { const d = await api.pickFolder(); if (d) { $('sDir').textContent = d; load(); } });
 $('sOpenDir').addEventListener('click', () => api.root());
 $('openSite').addEventListener('click', () => api.site());
+// Avis : note, commentaire et capture facultatifs, ajoutés au bandeau des avis du site
+$('openReview').addEventListener('click', () => {
+  let stars = 0; let img = null;
+  $('modalBox').innerHTML = `<h2>⭐ Ton avis sur History Clips</h2><p class="fine">Il s’affichera sur le site, avec ton pseudo.</p>
+    <div class="rvstars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-rv="${n}">★</button>`).join('')}</div>
+    <textarea id="rvText" maxlength="500" rows="3" placeholder="Ton commentaire (facultatif)"></textarea>
+    <label class="btn sm">🖼 Ajouter une capture (facultatif)<input type="file" id="rvImg" accept="image/png,image/jpeg,image/webp" hidden></label> <small class="fine" id="rvInfo"></small>
+    <div class="row"><button type="button" class="btn" data-rvx="1">Annuler</button><button type="button" class="btn play" id="rvSend">Envoyer</button></div>`;
+  $('modal').showModal();
+  $('modalBox').onclick = async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.rv) { stars = Number(b.dataset.rv); $('modalBox').querySelectorAll('[data-rv]').forEach((x) => x.classList.toggle('on', Number(x.dataset.rv) <= stars)); return; }
+    if (b.dataset.rvx) return $('modal').close();
+    if (b.id === 'rvSend') {
+      if (!stars) return toast('Choisis une note de 1 à 5 étoiles');
+      const r = await api.review(stars, $('rvText').value, img);
+      if (r?.ok) { $('modal').close(); toast('Merci pour ton avis ! Il est sur le site 🙏'); } else toast(r?.error ?? 'Impossible pour l’instant');
+    }
+  };
+  $('rvImg').onchange = async () => {
+    const f = $('rvImg').files[0]; if (!f) return;
+    const bmp = await createImageBitmap(f); const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+    const c = Object.assign(document.createElement('canvas'), { width: Math.round(bmp.width * k), height: Math.round(bmp.height * k) });
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); img = c.toDataURL('image/jpeg', 0.82);
+    $('rvInfo').textContent = `✓ ${f.name}`;
+  };
+});
 $('acct').addEventListener('click', async (e) => {
   if (e.target.id === 'aOut') { await api.logout(); compte = null; paintProfile(); paintSettings(); toast('👋 Déconnecté'); }
   if (e.target.id === 'aIn') openAuth();

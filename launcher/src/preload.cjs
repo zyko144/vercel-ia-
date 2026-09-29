@@ -229,6 +229,7 @@ contextBridge.exposeInMainWorld('launcher', {
   transcribe: (audio, mime) => ipcRenderer.invoke('voice:transcribe', audio, mime),
   onVoice: (fn) => { ipcRenderer.on('voice:state', (_e, v) => fn('state', v)); ipcRenderer.on('voice:heard', (_e, v) => fn('heard', v)); ipcRenderer.on('voice:reply', (_e, v) => fn('reply', v)); ipcRenderer.on('voice:record', (_e, v) => fn('record', v)); },
   account: () => ipcRenderer.invoke('account:get'),
+  review: (stars, comment, img) => ipcRenderer.invoke('review:send', stars, comment, img),
   unlock2fa: (code) => ipcRenderer.invoke('account:unlock', code),
   discordCode: () => ipcRenderer.invoke('account:discordCode'),
   discordUnlink: () => ipcRenderer.invoke('account:discordUnlink'),
