@@ -1,4 +1,5 @@
 import './utils/logbuffer.js'; // en premier : capte tous les logs pour l'API d'admin
+import { onPromoInteraction } from './features/promoDM.js'; // chargé d'avance : la fenêtre de note doit s'ouvrir en moins de 3 s
 import { setArcadeClient } from './arcade/server.js';
 import { setPublicClient } from './features/publicStats.js';
 import { startAssistant } from './features/assistant.js';
@@ -155,7 +156,7 @@ client.on(Events.MessageCreate, (message) => {
 
 client.on(Events.InteractionCreate, (interaction) => {
   // Notes ⭐ des vidéos de présentation (MP)
-  if (String(interaction.customId ?? '').startsWith('promo:')) return void import('./features/promoDM.js').then((m) => m.onPromoInteraction(client, interaction)).catch((err) => console.error('[promo]', err));
+  if (String(interaction.customId ?? '').startsWith('promo:')) return void onPromoInteraction(client, interaction).catch((err) => console.error('[promo]', err));
   onInteraction(client, interaction).catch((err) => console.error('[interactionCreate]', err));
 });
 
