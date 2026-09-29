@@ -109,7 +109,7 @@ async function newSession(d, id) {
   return token;
 }
 // Profil personnalisé : photo (servie à part, en cache), couleur, bio. Visible par les amis.
-export const PUBLIC_BASE = (process.env.PUBLIC_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
+export const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
 // Choix possibles (vérifiés côté serveur : rien d'autre ne passe)
 export const PROFILE_CHOICES = {
   frame: ['aucun', 'perso', 'neon', 'or', 'arcenciel', 'feu', 'glace', 'toxique', 'galaxie'],

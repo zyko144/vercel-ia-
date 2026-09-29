@@ -26,4 +26,17 @@ services:
         sync: false
       - key: BREVO_FROM
         sync: false
+      # Bot History Clips (2e serveur) et lecture des versions GitHub sans limite
+      - key: CLIPS_BOT_TOKEN
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      # Connexion Discord du tableau de bord public (/app) et paiements
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_EMAIL
+        sync: false
+      # Chiffrement des sauvegardes (npm run backup)
+      - key: BACKUP_KEY
+        sync: false
       # Le reste a déjà les bonnes valeurs par défaut dans src/config.js

@@ -15,7 +15,13 @@ import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, gameLabel, isMedia, p
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(here, 'ui', 'icon.png');
-const API = 'https://vercel-ia.onrender.com';
+let API = 'https://vercel-ia.onrender.com';
+// Adresse du serveur modifiable sans nouvelle version (changement d'hébergeur) : launcher-site/api.json.
+// Seulement en https et chez un hébergeur connu.
+fetch('https://zyko144.github.io/vercel-ia-/api.json', { signal: AbortSignal.timeout(6000) }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+  const u = String(j?.api ?? '').replace(/\/+$/, '');
+  if (/^https:\/\/[\w.-]+\.(onrender\.com|vercel\.app|fly\.dev|railway\.app|koyeb\.app|up\.railway\.app)$/.test(u)) API = u;
+}).catch(() => {});
 const SITE = 'https://zyko144.github.io/vercel-ia-/clips/';
 if (!app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId('fr.historyia.clips');
