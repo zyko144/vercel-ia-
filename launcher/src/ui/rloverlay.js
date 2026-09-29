@@ -3,6 +3,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); if (m < 60) return `il y a ${Math.max(1, m)} min`; const d = new Date(t); const y = new Date(Date.now() - 86_400_000); return `${d.toDateString() === new Date().toDateString() ? 'Aujourd’hui' : d.toDateString() === y.toDateString() ? 'Hier' : d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`; };
 const short = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${Math.max(1, m)} min` : m < 1440 ? `${Math.round(m / 60)} h` : new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }); };
+// Logos des rangs fournis (ui/rl/) ; sinon celui du profil
+const rankIcon = (rk) => { const m = /^(bronze|silver|gold|platinum|diamond|champion|grand champion) (i{1,3})$|^supersonic legend$/i.exec(rk.tier); return m ? `rl/${(m[1] ?? 'supersonic-legend').toLowerCase().replace(' ', '-')}${m[2] ? `-${m[2].length}` : ''}.webp` : rk.icon; };
 const mmr = (g) => (g.mmr != null ? `<em class="${g.mmr >= 0 ? 'up' : 'down'}">${g.mmr > 0 ? '+' : ''}${g.mmr} MMR</em>` : '');
 let open = false;
 let last = null;
@@ -13,7 +15,7 @@ function draw(d) {
   const mode = g?.mode ?? '3v3'; const rk = r?.ranked?.[mode] ?? r?.ranked?.['3v3'] ?? Object.values(r?.ranked ?? {})[0];
   $('name').textContent = d.player?.name ?? r?.name ?? 'Rocket League';
   if (r?.avatar) $('avatar').src = r.avatar;
-  $('rank').innerHTML = rk?.tier ? `${rk.icon ? `<img src="${esc(rk.icon)}" alt="">` : ''}<span>${esc(rk.tier)}${rk.division ? ` · ${esc(rk.division.replace(/Division/i, 'Div.'))}` : ''}</span>${rk.mmr != null ? `<small>${Math.round(rk.mmr).toLocaleString('fr-FR')} MMR</small>` : ''}` : `<small>${d.player ? 'Rang : profil en cours de lecture' : 'Joue une partie pour relier ton compte'}</small>`;
+  $('rank').innerHTML = rk?.tier ? `${rankIcon(rk) ? `<img src="${esc(rankIcon(rk))}" alt="">` : ''}<span>${esc(rk.tier)}${rk.division ? ` · ${esc(rk.division.replace(/Division/i, 'Div.'))}` : ''}</span>${rk.mmr != null ? `<small>${Math.round(rk.mmr).toLocaleString('fr-FR')} MMR</small>` : ''}` : `<small>${d.player ? 'Rang : profil en cours de lecture' : 'Joue une partie pour relier ton compte'}</small>`;
   $('live').className = `dot ${d.live ? 'on' : ''}`;
   $('res').innerHTML = g
     ? `<div class="big ${g.win ? 'win' : 'loss'}"><span class="ic">${g.win ? '🏆' : '✖'}</span>${g.win ? 'Victoire' : 'Défaite'}</div><div class="score"><b class="blue">${g.us}</b> - <b class="orange">${g.them}</b></div>${mmr(g)}<small class="meta">${g.ranked ? 'Classé' : 'Partie'} ${esc(g.mode)} · ${ago(g.at)}</small>`
