@@ -24,8 +24,9 @@ $o.battFull = @(Get-CimInstance -Namespace root\wmi -ClassName BatteryFullCharge
 $o.battCycles = @(Get-CimInstance -Namespace root\wmi -ClassName BatteryCycleCount | Select-Object CycleCount)
 $o.power = (powercfg /getactivescheme) -join ' '
 $o.gameMode = (Get-ItemProperty HKCU:\Software\Microsoft\GameBar -Name AutoGameModeEnabled).AutoGameModeEnabled
-$o.hags = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name HwSchMode).HwSchMode
 $o.av = Get-MpComputerStatus | Select-Object AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureAge,QuickScanAge,FullScanAge
+# Autre antivirus actif (Avast, Kaspersky…) : Defender se met en retrait, ce n'est pas un problème
+$o.avOther = @(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct | Where-Object { $_.displayName -notmatch 'Defender' -and (($_.productState -shr 12) -band 0xF) -eq 1 } | ForEach-Object { [string]$_.displayName })
 $o.threats = @(Get-MpThreatDetection | Select-Object ThreatID,InitialDetectionTime,Resources,ActionSuccess -First 20)
 $o.thermal = @(Get-CimInstance -Namespace root\wmi MSAcpi_ThermalZoneTemperature | Select-Object CurrentTemperature)
 $o | ConvertTo-Json -Depth 5 -Compress
@@ -71,8 +72,8 @@ export function parseDiag(raw, now = Date.now()) {
     battery: design && full ? { design, full, cycles: num(arr(j.battCycles)[0]?.CycleCount) } : null,
     power: HIGH_PERF.some((g) => String(j.power ?? '').toLowerCase().includes(g)) ? 'high' : String(j.power ?? '') ? 'other' : null,
     gameMode: j.gameMode == null ? null : Number(j.gameMode) !== 0,
-    hags: j.hags == null ? null : Number(j.hags) === 2,
     av: j.av ? { on: Boolean(j.av.AntivirusEnabled), realtime: Boolean(j.av.RealTimeProtectionEnabled), sigAge: num(j.av.AntivirusSignatureAge), quickAge: num(j.av.QuickScanAge), fullAge: num(j.av.FullScanAge) } : null,
+    avOther: [j.avOther ?? []].flat().filter(Boolean).map(String),
     threats: arr(j.threats).map((t) => ({ id: String(t.ThreatID), at: psDate(t.InitialDetectionTime), files: arr(t.Resources).map(String).slice(0, 5), removed: Boolean(t.ActionSuccess) })),
   };
 }
@@ -168,22 +169,27 @@ export function analyze(d, { snap = null, drivers = null, now = Date.now() } = {
   // Windows et jeux
   if (d.power && d.power !== 'high') add(2, 'Mode d’alimentation « Performances élevées »', 'Windows économise l’énergie au détriment des FPS. Le Boost de jeu (plus haut) le bascule pendant tes parties.', 'fréquences maximales pendant les jeux');
   if (d.gameMode === false) add(2, 'Activer le Mode Jeu de Windows', 'Paramètres › Jeux › Mode Jeu : Windows donne la priorité au jeu et bloque les mises à jour pendant la partie.');
-  if (d.hags === false) add(3, 'Activer la planification GPU accélérée', 'Paramètres › Affichage › Graphiques : moins de latence avec les cartes récentes (NVIDIA 10xx+, AMD 5000+).', 'un peu moins de latence');
   if (d.os.uptimeDays >= 7) add(3, 'Redémarrer le PC', `Allumé depuis ${d.os.uptimeDays} jours sans redémarrage : un redémarrage vide la mémoire et applique les mises à jour.`);
 
   // Sécurité
-  if (d.av) {
+  // Planification GPU accélérée : jamais conseillée (forcée, elle fait saccader FiveM / GTA V avec certains pilotes)
+  // Antivirus : seulement si aucun autre n'est actif ; 65535 jours = « inconnu » pour Windows (Defender en retrait)
+  if (d.av && !d.avOther?.length) {
     if (!d.av.on || !d.av.realtime) add(0, 'Protection antivirus désactivée', 'La protection en temps réel de Windows est coupée : réactive-la (Sécurité Windows) ou installe un autre antivirus.');
-    if (d.av.sigAge > 7) add(1, 'Définitions de virus anciennes', `Dernière mise à jour il y a ${d.av.sigAge} jours : lance une mise à jour de Sécurité Windows.`);
+    if (d.av.sigAge > 7 && d.av.sigAge < 10000) add(1, 'Définitions de virus anciennes', `Dernière mise à jour il y a ${d.av.sigAge} jours : lance une mise à jour de Sécurité Windows.`);
   }
   const active = d.threats.filter((t) => !t.removed);
   if (active.length) add(0, `${active.length} menace${active.length > 1 ? 's' : ''} détectée${active.length > 1 ? 's' : ''}`, 'Windows a trouvé des fichiers dangereux pas encore supprimés : utilise « Supprimer les menaces » dans la section Sécurité.');
 
+  // Bouton « Corriger » : seulement ce qui se règle sans risque depuis l'app (le reste : matériel, BIOS…)
+  for (const a of advice) a.fix = FIXES.find(([re]) => re.test(a.title))?.[1] ?? null;
   advice.sort((a, b) => a.prio - b.prio);
   // Score : 100 − pénalités des points faibles
   const penalty = advice.reduce((n, a) => n + [25, 10, 5, 3, 1][a.prio], 0);
   return { components: comps, advice, score: Math.max(0, Math.min(100, 100 - penalty)), ramGb };
 }
+
+const FIXES = [[/^Pilote graphique ancien/, 'driver'], [/^Écran bridé/, 'display'], [/^Libérer de la place/, 'storage'], [/^Mode d’alimentation/, 'power'], [/^Activer le Mode Jeu/, 'gamemode'], [/^Redémarrer le PC/, 'reboot'], [/^Protection antivirus/, 'av'], [/^Définitions de virus/, 'sigs'], [/menaces? détectées?/, 'threats']];
 
 export async function pcDiagnostic() {
   if (process.platform !== 'win32') return null;
@@ -224,6 +230,7 @@ export async function defenderScan(type = 'quick') {
   return { found: /found \d+ threats|threat/i.test(r.stdout) && !/found no threats/i.test(r.stdout), text: String(r.stdout ?? '').trim().split(/\r?\n/).slice(-6).join('\n') };
 }
 /** Met à jour les définitions puis supprime les menaces trouvées (Windows demande l'autorisation administrateur). */
+export const defenderUpdate = () => run(MPCMD(), ['-SignatureUpdate'], { windowsHide: true, timeout: 180_000 }).then(() => true, () => false);
 export async function defenderRemove() {
   await run(MPCMD(), ['-SignatureUpdate'], { windowsHide: true, timeout: 180_000 }).catch(() => null);
   const direct = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Remove-MpThreat'], { windowsHide: true, timeout: 300_000 }).then(() => true).catch(() => false);

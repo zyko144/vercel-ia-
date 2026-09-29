@@ -1627,6 +1627,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.40.0': [
+    ['🛠', 'Bouton « Corriger »', 'Dans Mon PC, les conseils qui se règlent sans risque ont un bouton : Mode Jeu, alimentation, définitions antivirus, menaces, redémarrage, ou la bonne page de Windows.', ['[data-view=pc]', 'wait3000']],
+    ['🎨', 'Alertes plus lisibles', 'Fini les grosses cartes colorées : titre en couleur et petite pastille Urgent, À surveiller ou Conseil.'],
+    ['✅', 'Diagnostic plus juste', 'Plus de « 65535 jours » ni d’alerte antivirus quand un autre antivirus te protège, plus de faux plantages (messages d’info de services), et plus de conseil qui fait bugger FiveM.'],
+  ],
   '0.39.0': [
     ['🧪', 'Avant / après, en vrais FPS', '« Optimiser et jouer » compare tes FPS moyens et ton 1 % low d’avant ta 1re optimisation avec ceux d’après.', ['#hero .optiplay', 'wait1200']],
     ['🪟', 'Superpositions qui coûtent des FPS', 'NVIDIA, Xbox Game Bar, Discord, Overwolf, Medal, OBS… repérées avant de jouer, avec où les couper.'],
@@ -2136,6 +2141,23 @@ async function openFivemServers() {
     }
   };
 }
+// Optimisation ouverte : la page se débloque, et un panneau vert l'annonce UNE seule fois par utilisateur
+async function optiReady() {
+  const s = await api.optiState?.().catch(() => null);
+  if (!s || s.paused) return;
+  const nav = document.querySelector('[data-view=optimisation]');
+  $('view-optimisation').classList.remove('paused');
+  nav.classList.remove('navwork'); nav.querySelector('svg').outerHTML = '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>';
+  if (s.introSeen) return;
+  if ($('modal').open) await new Promise((r) => $('modal').addEventListener('close', r, { once: true }));
+  api.optiIntroSeen();
+  setModal('optiok'), $('modalBox').innerHTML = `<div class="okbadge">✓</div><h2>L’optimisation est prête</h2>
+    <p class="mtext">Testée jeu par jeu, sans rien d’irréversible : tu peux y accéder dès maintenant.</p>
+    <div class="oklist"><span>🎯 Profils FiveM, Fortnite, R6, Rocket League, Garry’s Mod</span><span>🧹 Nettoyage avec les chemins exacts avant de valider</span><span>↩ Tout s’annule en un clic</span></div>
+    <div class="row end"><button type="button" class="btn ghost" data-m="1">Plus tard</button><button type="button" class="btn play" data-go="1">Découvrir l’optimisation</button></div>`;
+  $('modalBox').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; $('modal').close(); if (b.dataset.go) nav.click(); };
+  $('modal').showModal();
+}
 async function showWhatsNew(force = false) {
   const v = await api.version?.().catch(() => null);
   let seen = null;
@@ -2354,7 +2376,7 @@ function renderDiag(d) {
     <ul>${c.specs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
     ${c.life?.pct != null ? `<div class="lifebar"><i style="width:${c.life.pct}%;background-position:${100 - c.life.pct}% 0"></i></div>` : ''}
     <div class="life">⏳ ${esc(c.life?.text ?? '')}</div></div>`).join('');
-  $('pcAdvice').innerHTML = d.advice.length ? d.advice.map((a) => `<div class="adv p${a.prio}"><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small>${a.gain ? `<em>↗ ${esc(a.gain)}</em>` : ''}</div></div>`).join('') : '<div class="empty">Rien à améliorer d’urgent : ton PC est en forme 👌</div>';
+  $('pcAdvice').innerHTML = d.advice.length ? d.advice.map((a) => `<div class="adv p${a.prio}"><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small>${a.gain ? `<em>↗ ${esc(a.gain)}</em>` : ''}</div>${a.fix ? `<button type="button" class="btn sm" data-pcfix="${esc(a.fix)}">Corriger</button>` : ''}</div>`).join('') : '<div class="empty">Rien à améliorer d’urgent : ton PC est en forme 👌</div>';
   const av = d.av;
   const threats = (d.threats ?? []).filter((t) => !t.removed);
   $('pcAv').innerHTML = av ? `${av.on && av.realtime ? '<span class="ok">● Protection en temps réel active</span>' : '<span class="bad">● Protection désactivée</span>'} · définitions de ${av.sigAge ?? '?'} j · dernière analyse rapide il y a ${av.quickAge ?? '?'} j, complète il y a ${av.fullAge ?? 'jamais'} j${threats.length ? `<br><b class="bad">${threats.length} menace(s) à supprimer :</b> ${threats.map((t) => esc(t.files[0] ?? t.id)).join(', ')}` : '<br>Aucune menace active.'}` : 'Antivirus de Windows introuvable (un autre antivirus est peut-être installé).';
@@ -2435,6 +2457,16 @@ function pcProgress(p) {
   $('pcProgText').textContent = `${p.pct != null ? `${p.pct} % · ` : ''}${p.label ?? ''}`;
 }
 api.onPcProgress?.(pcProgress);
+// « Corriger » : l'action sûre de ce conseil (réglage réversible ou page de Windows), puis nouvelle analyse
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-pcfix]'); if (!b) return;
+  b.disabled = true; b.textContent = '…';
+  const r = await api.pcFix(b.dataset.pcfix).catch(() => null);
+  b.disabled = false; b.textContent = 'Corriger';
+  if (r?.cancelled) return;
+  toast(r?.opened ? 'Réglage de Windows ouvert : termine là-bas' : r?.ok ? '✓ Corrigé' : r?.needAdmin ? 'Accepte la demande administrateur de Windows' : 'Impossible de corriger automatiquement');
+  if (r?.ok && !r.opened) pcDiag(true);
+});
 async function pcDiag(force) {
   pcProgress({ step: 'diag', pct: 20, label: 'Lecture des composants et de leur santé…' });
   const d = await api.pcDiag?.(force).catch((err) => ({ error: err.message }));
@@ -2759,7 +2791,7 @@ async function refreshHealth(force = false) {
 }
 function renderTop() {
   const list = [...(state.health?.events?.findings ?? []), ...(state.diag?.advice ?? [])].sort((a, b) => a.prio - b.prio).slice(0, 4);
-  $('pcTop').innerHTML = list.length ? list.map((a) => `<div class="adv p${a.prio}"><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small>${a.gain ? `<em>↗ ${esc(a.gain)}</em>` : ''}</div></div>`).join('') : '<div class="empty">Rien d’urgent : ton PC est en forme 👌</div>';
+  $('pcTop').innerHTML = list.length ? list.map((a) => `<div class="adv p${a.prio}"><div><b>${esc(a.title)}</b><small>${esc(a.text)}</small>${a.gain ? `<em>↗ ${esc(a.gain)}</em>` : ''}</div>${a.fix ? `<button type="button" class="btn sm" data-pcfix="${esc(a.fix)}">Corriger</button>` : ''}</div>`).join('') : '<div class="empty">Rien d’urgent : ton PC est en forme 👌</div>';
 }
 
 // ---------- Mon PC : onglets ----------
@@ -3959,7 +3991,7 @@ async function load() {
   api.news?.().then(renderNews).catch(() => {});
   // Actus, promos et jeux gratuits : remis à jour tout seuls (toutes les 30 min, quand la fenêtre est visible)
   setInterval(() => { if (document.hidden) return; api.news?.().then(renderNews).catch(() => {}); api.freeGames?.().then((f) => { state.free = f ?? []; renderFree(); }).catch(() => {}); }, 30 * 60_000);
-  api.recap?.().then((r) => { if (r?.fresh) showRecap(r); else showWhatsNew(); }).catch(() => showWhatsNew());
+  api.recap?.().then((r) => { if (r?.fresh) showRecap(r); else showWhatsNew(); }).catch(() => showWhatsNew()).finally(() => setTimeout(optiReady, 1500));
   api.collections?.().then((c) => { state.cols = c ?? {}; renderCollections(); }).catch(() => {});
 }
 api.onUpdate?.((lib) => { applyLibrary(lib); renderAll(); });
@@ -4061,7 +4093,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.39.0',
+    version: async () => '0.40.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

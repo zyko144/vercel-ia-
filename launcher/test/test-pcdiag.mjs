@@ -56,3 +56,19 @@ const sc = scores({ cpu: { single: 1500, multi: 7000 }, ram: { gbps: 12 }, disk:
 assert.equal(sc.total, 1000, 'PC de référence = 1000');
 assert.equal(tier(sc.total), 'Bon PC de jeu');
 console.log('✅ Diagnostic du PC et benchmark : 29 vérifications');
+
+{
+  // Plus de conseil HAGS (fait bugger FiveM), boutons « Corriger » sur ce qui se règle sans risque
+  const t = analyze(d, { now }).advice;
+  assert.ok(!t.some((x) => /planification GPU/i.test(x.title)), 'HAGS jamais conseillée');
+  assert.equal(t.find((x) => /Mode Jeu/.test(x.title))?.fix, 'gamemode');
+  assert.equal(t.find((x) => /Définitions de virus/.test(x.title))?.fix, 'sigs');
+  assert.equal(t.find((x) => /barrette/.test(x.title))?.fix, null, 'matériel : pas de bouton');
+  // Autre antivirus actif, ou âge 65535 (« inconnu ») : pas de fausse alerte
+  const off = parseDiag({ ...raw, av: { AntivirusEnabled: false, RealTimeProtectionEnabled: false, AntivirusSignatureAge: 65535 } }, now);
+  assert.ok(!analyze(off, { now }).advice.some((x) => /Définitions/.test(x.title)), '65535 jours ignoré');
+  assert.ok(analyze(off, { now }).advice.some((x) => /antivirus désactivée/.test(x.title)), 'sans autre antivirus : alerte');
+  const other = parseDiag({ ...raw, av: { AntivirusEnabled: false, RealTimeProtectionEnabled: false, AntivirusSignatureAge: 65535 }, avOther: ['Avast Antivirus'] }, now);
+  assert.ok(!analyze(other, { now }).advice.some((x) => /antivirus/.test(x.title)), 'Avast actif : pas d’alerte');
+  console.log('✅ Conseils fiables (antivirus, pas de HAGS) et boutons « Corriger »');
+}
