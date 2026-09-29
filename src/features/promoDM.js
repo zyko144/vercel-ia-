@@ -9,6 +9,7 @@ import { HOME_GUILD } from './launcherServers.js';
 const SITE = 'https://zyko144.github.io/vercel-ia-';
 const DONE = 'promo-dm';
 const RATINGS = 'promo-notes';
+const GOT = 'promo-dm-ok'; // ceux qui ont bien reçu le MP (rappels)
 const DDV = ['681908406298083407', '923551925113323542', '855176142096039997', '1543726919168557087', '1242427559040253952', '1035337014620459028'];
 const GUILDS = [HOME_GUILD, config.clips?.guildId].filter(Boolean);
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -54,7 +55,7 @@ export async function sendPromoDMs(client) {
     const user = await client.users.fetch(id).catch(() => null);
     const ok = user && await user.send(promoMessage(id)).then(() => true, (err) => { console.warn(`[vidéos MP] ${id} :`, err.message); return false; });
     done.add(id); await save(DONE, [...done]); // MP fermés : on ne réessaie pas
-    if (ok) sent += 1;
+    if (ok) { sent += 1; await save(GOT, [...new Set([...(await load(GOT, null)) ?? [], id])]); }
     await wait(2500); // doucement : Discord n'aime pas les envois en rafale
   }
   if (sent) console.log(`🎥 Vidéos envoyées en MP à ${sent} membre(s)`);
@@ -80,4 +81,23 @@ export async function onPromoInteraction(client, i) {
     return true;
   }
   return false;
+}
+
+/** Rappel toutes les 30 min, seulement à ceux qui ont reçu le MP et n'ont pas encore noté (s'arrête dès la note). */
+export function startPromoReminders(client) {
+  // Déjà envoyés avant les rappels : repris depuis la liste des envois (MP fermés retirés au 1er rappel)
+  load(GOT, null).then(async (g) => { if (!g) await save(GOT, (await load(DONE, null)) ?? []); }).catch(() => {});
+  setInterval(async () => {
+    const rated = (await load(RATINGS, null)) ?? {};
+    const got = (await load(GOT, null)) ?? [];
+    const keep = [];
+    for (const id of got) {
+      if (rated[id]) continue;
+      const user = await client.users.fetch(id).catch(() => null);
+      const ok = user && await user.send({ content: `⭐ Petit rappel <@${id}> : tu n’as pas encore noté **History Launcher** et **History Clips**. Un clic suffit (commentaire facultatif) 👇`, components: [promoMessage(id).components[0]], allowedMentions: { users: [id] } }).then(() => true, () => false);
+      if (ok) keep.push(id); // MP fermés : plus de rappel
+      await wait(2500);
+    }
+    if (keep.length !== got.filter((id) => !rated[id]).length) await save(GOT, [...keep, ...got.filter((id) => rated[id])]);
+  }, 30 * 60_000);
 }
