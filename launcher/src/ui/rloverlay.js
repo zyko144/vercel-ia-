@@ -1,5 +1,5 @@
 // Overlay Rocket League (Ctrl+Alt+I) : rang et MMR, dernier match, victoires/défaites du jour par catégorie et par mode ;
-// la flèche ouvre les dernières parties. Le néon autour de la carte est vert si la journée est positive, rouge sinon.
+// la flèche ouvre les dernières parties. Le néon autour de la carte suit la dernière partie (vert gagnée, rouge perdue).
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); if (m < 60) return `${Math.max(1, m)} min`; const d = new Date(t); const y = new Date(Date.now() - 86_400_000); return `${d.toDateString() === new Date().toDateString() ? '' : d.toDateString() === y.toDateString() ? 'hier ' : `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} `}${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`; };
@@ -15,7 +15,7 @@ function draw(d) {
   last = d;
   document.body.dataset.style = d.style ?? 'card'; window.ovInit?.(d.zoom);
   const s = d.sum; const g = d.games[0]; const cat = tab ?? (g ? catOf(g) : 'ranked');
-  $('card').style.setProperty('--c', s.net > 0 ? '#39ff8a' : s.net < 0 ? '#ff5a4f' : '#5aa8ff');
+  $('card').style.setProperty('--c', g ? (g.win ? '#39ff8a' : '#ff5a4f') : '#5aa8ff'); // néon : vert si la dernière partie est gagnée, rouge si perdue
   $('live').className = `dot ${d.live ? 'on' : ''}`;
   $('streak').className = s.streak > 0 ? 'up' : 'ice';
   $('streak').innerHTML = s.streak ? `<i class="${s.streak > 0 ? 'flame' : ''}">${s.streak > 0 ? '🔥' : '🧊'}</i> ${Math.abs(s.streak)}` : '';
