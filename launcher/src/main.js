@@ -18,7 +18,8 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
-import { RL_PORT, classifyAll, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, statsIni, trackerPage, trackerUrl } from './core/rocketleague.js';
+import { SPOTIFY_METER_PS } from './core/audiometer.js';
+import { RL_PORT, classifyAll, enableStatsIni, jsonStream, matchTracker, parseTracker, playlistFromLog, rlLogFile, rlSummary, statsIni, trackerPage, trackerUrl } from './core/rocketleague.js';
 import { HOGS_PS, beforeAfter, fpsTone, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
@@ -1318,6 +1319,11 @@ let overlay = null;
 let overlayTimer = null;
 function toggleOverlay() {
   if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
+  // Anneau Spotify qui bat au son de Spotify seulement (niveau lu tant que l'overlay est ouvert)
+  const meter = process.platform === 'win32' ? spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(SPOTIFY_METER_PS, 'utf16le').toString('base64')], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }) : null;
+  meter?.on('error', () => {});
+  meter?.stdout.setEncoding('utf8');
+  meter?.stdout.on('data', (t) => { const v = Number(String(t).trim().split(/\s+/).pop()); if (overlay && !overlay.isDestroyed() && Number.isFinite(v)) overlay.webContents.send('overlay:beat', v); });
   overlay = new BrowserWindow({
     width: 236, height: 190, ...ovPlace('fps', 236), frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
@@ -1326,6 +1332,7 @@ function toggleOverlay() {
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', (e) => e.preventDefault());
+  overlay.on('closed', () => meter?.kill());
   overlay.loadFile(path.join(here, 'ui', 'overlay.html'));
   overlay.once('ready-to-show', () => overlay?.showInactive());
   const push = async () => {
@@ -1333,7 +1340,7 @@ function toggleOverlay() {
     const [pc, music] = await Promise.all([snapshot().catch(() => null), nowPlaying().catch(() => null)]);
     const friends = friendsCache.data?.friends ?? [];
     overlay.webContents.send('overlay:data', {
-      style: store.data.ovStyle?.fps ?? 'card', session: currentSession(), pc, music: music?.title ? { title: music.title, artist: music.artist } : null,
+      style: store.data.ovStyle?.fps ?? 'card', zoom: store.data.ovZoom?.fps ?? 1, session: currentSession(), pc, music: music?.title ? { title: music.title, artist: music.artist } : null,
       friends: { online: friends.filter((f) => f.online).length, playing: friends.filter((f) => f.game).slice(0, 3).map((f) => ({ name: f.name, game: f.game })) },
       boost: Boolean(boosted),
       // Vrais FPS du jeu (mesurés image par image, comme le compteur du jeu) et leur couleur
@@ -1347,10 +1354,11 @@ function toggleOverlay() {
 // ---------- Rocket League en direct (Ctrl+Alt+I) : victoires / défaites / série via l'API officielle du jeu, rang et MMR du profil ----------
 const rl = () => (store.data.rl ??= { games: [], player: null, profile: null });
 const rlItem = () => items.find((i) => i.kind === 'game' && i.installed && /rocket league/i.test(i.name) && i.installDir);
-let rlSock = null; let rlTrack = null; let rlOv = null; let rlHideTimer = null;
+let rlSock = null; let rlTrack = null; let rlOv = null; let rlHideTimer = null; let rlLive = null;
 function rlData() {
   const r = rl();
-  return { player: r.player, profile: r.profile, style: store.data.ovStyle?.rl ?? 'card', games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
+  const cur = rlTrack?.match();
+  return { current: cur ? { mode: cur.mode, cat: rlLive?.guid === cur.guid ? rlLive.cat : null } : null, player: r.player, profile: r.profile, style: store.data.ovStyle?.rl ?? 'card', zoom: store.data.ovZoom?.rl ?? 1, games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
 }
 const rlPush = () => { if (rlOv && !rlOv.isDestroyed()) rlOv.webContents.send('rl:data', rlData()); };
 /** Profil public : requête directe, sinon via une fenêtre de navigateur cachée (le site bloque les requêtes hors navigateur). */
@@ -1390,6 +1398,13 @@ function rlConnect() {
   const sock = nodeNet.connect(RL_PORT, '127.0.0.1');
   const feed = jsonStream((msg) => {
     const res = rlTrack.event(msg);
+    // Nouvelle partie : classé ou occa lu dans le journal du jeu (un peu après le début, le temps qu'il l'écrive)
+    const cur = rlTrack.match();
+    if (cur && cur.guid !== rlLive?.guid) {
+      rlLive = { guid: cur.guid, cat: null }; rlPush();
+      for (const ms of [1500, 8000]) setTimeout(() => readFile(rlLogFile(app.getPath('documents')), 'utf8').then((t) => { const p = playlistFromLog(t.slice(-400_000)); if (p && rlLive?.guid === cur.guid) { rlLive.cat = p.cat; rlPush(); } }).catch(() => {}), ms);
+    }
+    if (res && rlLive?.cat) res.ranked = rlLive.cat === 'ranked';
     if (rlTrack.player && rlTrack.player.name !== r.player?.name) { r.player = rlTrack.player; store.save(); rlProfile(true).catch(() => {}); }
     if (res) {
       r.games = [res, ...r.games].slice(0, 50); store.save(); rlPush();
@@ -1455,7 +1470,9 @@ ipcMain.on('ov:drag', (e, phase, dx, dy) => {
   else if (phase === 'end') { ovFrom = null; const [x, y] = win.getPosition(); (store.data.ovPos ??= {})[key] = { x, y }; store.save(); }
 });
 // La fenêtre suit la taille de la carte (forme choisie, flèche des dernières parties…)
-ipcMain.on('ov:size', (e, w, h) => { const [, win] = ovKey(e); if (win && !win.isDestroyed()) win.setSize(Math.min(760, Math.max(60, Math.round(Number(w) || 0))), Math.min(640, Math.max(36, Math.round(Number(h) || 0)))); });
+ipcMain.on('ov:size', (e, w, h) => { const [, win] = ovKey(e); if (win && !win.isDestroyed()) win.setSize(Math.min(1200, Math.max(60, Math.round(Number(w) || 0))), Math.min(1000, Math.max(36, Math.round(Number(h) || 0)))); });
+// Taille (− / +) : gardée par overlay
+ipcMain.on('ov:zoom', (e, z) => { const [key] = ovKey(e); if (key && Number.isFinite(Number(z))) { (store.data.ovZoom ??= {})[key] = Math.min(1.6, Math.max(0.7, Number(z))); store.save(); } });
 ipcMain.on('ov:style', (e, style) => {
   const [key] = ovKey(e); if (!key || !OV_STYLES[key].includes(style)) return;
   (store.data.ovStyle ??= {})[key] = style; store.save();

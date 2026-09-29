@@ -67,6 +67,7 @@ export function matchTracker(me = {}) {
     if (ev === 'MatchDestroyed') m = null; // quitté avant la fin : pas compté
     return null;
   };
+  t.match = () => (m ? { guid: m.guid ?? 'match', mode: `${m.size}v${m.size}` } : null); // partie en cours
   return t;
 }
 
@@ -112,13 +113,25 @@ export function classifyAll(games, before, after) {
     return a.played != null && b.played != null ? a.played - b.played : Number(a.mmr !== b.mmr);
   })());
   const done = [];
-  for (const g of games.filter((x) => x.ranked == null && (!before.at || x.at > before.at - 60_000)).reverse()) {
-    if (n('ranked', g.mode) > 0) { left[`ranked${g.mode}`]--; g.ranked = true; done.push(g); } else if (n('casual', g.mode) > 0) { left[`casual${g.mode}`]--; g.ranked = false; done.push(g); }
+  // Parties non classées encore, et parties classées (vu dans le journal du jeu) sans gain de MMR
+  for (const g of games.filter((x) => (x.ranked == null || (x.ranked === true && x.mmr == null)) && (!before.at || x.at > before.at - 60_000)).reverse()) {
+    if (g.ranked !== false && n('ranked', g.mode) > 0) { left[`ranked${g.mode}`]--; g.ranked = true; done.push(g); } else if (g.ranked == null && n('casual', g.mode) > 0) { left[`casual${g.mode}`]--; g.ranked = false; done.push(g); }
   }
   for (const g of done.filter((x) => x.ranked)) {
     if (done.filter((x) => x.ranked && x.mode === g.mode).length === 1 && after.ranked[g.mode].mmr != null && before.ranked[g.mode].mmr != null) g.mmr = Math.round(after.ranked[g.mode].mmr - before.ranked[g.mode].mmr);
   }
   return done.length;
+}
+// Mode lancé (classé ou occa) : lu dans le journal du jeu (Launch.log) dès le début de la partie
+const RANKED_IDS = new Set([10, 11, 13, 27, 28, 29, 30, 34]); const CASUAL_IDS = new Set([1, 2, 3, 4]);
+export const rlLogFile = (documents) => path.join(documents, 'My Games', 'Rocket League', 'TAGame', 'Logs', 'Launch.log');
+export function playlistFromLog(text = '') {
+  const all = [...String(text).matchAll(/playlist\s*(?:id)?\s*[:=]?\s*(\d{1,3})\b/gi)];
+  for (let i = all.length - 1; i >= 0; i--) {
+    const id = Number(all[i][1]);
+    if (RANKED_IDS.has(id) || CASUAL_IDS.has(id)) return { id, cat: RANKED_IDS.has(id) ? 'ranked' : 'casual' };
+  }
+  return null;
 }
 const PLATFORM = { steam: 'steam', epic: 'epic', ps4: 'psn', ps5: 'psn', xboxone: 'xbl', xbox: 'xbl' };
 /** Page publique du profil : ouverte en fond, elle passe la protection du site et lit l'API depuis le navigateur. */

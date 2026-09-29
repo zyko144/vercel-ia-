@@ -1629,6 +1629,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.46.0': [
+    ['🚗', 'Barre Rocket League plus complète', 'La barre montre si tu joues en Ranked ou en Occa et dans quel mode (1s, 2s, 3s, 4s), avec le bon MMR : logo du rang et MMR classé en Ranked, MMR occa en Occa. Plus ton bilan du jour dans ce mode et « En jeu » pendant la partie.', ['#openSettings', 'wait600', '.setnav [data-pane=raccourcis]', 'wait900']],
+    ['🎯', 'Chaque partie au bon endroit', 'Le mode lancé (classé ou occa) est lu dans le jeu dès le début : ta victoire va direct dans Occa ou Classé, et dans son mode.'],
+    ['🔥', 'Flamme qui brûle', 'La série de victoires a une vraie flamme animée.'],
+    ['🎵', 'Spotify au rythme du son', 'L’anneau néon de Spotify bat au son de Spotify (et seulement de Spotify), le titre est en blanc et en gras.'],
+    ['🔍', 'Taille des overlays', 'Boutons − et + au survol pour agrandir ou réduire chaque overlay, gardé pour la prochaine fois. Fond moins transparent et néon vert qui tourne autour.'],
+  ],
   '0.45.1': [
     ['✨', 'Overlays plus propres', 'Plus de carré visible autour des overlays, le bouton ⇄ apparaît dès que la souris passe dessus, et on les glisse de n’importe où.', ['#openSettings', 'wait600', '.setnav [data-pane=raccourcis]', 'wait900']],
     ['🎵', 'Le son en cours', 'Le titre que tu écoutes s’affiche à côté du logo Spotify (entouré d’un léger néon), même en barre ou en mini.'],
@@ -4149,7 +4156,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.45.1',
+    version: async () => '0.46.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

@@ -1,6 +1,6 @@
 // Rocket League en direct (API officielle du jeu + profil) et couleur des FPS de l'overlay.
 import assert from 'node:assert/strict';
-import { classifyAll, enableStatsIni, trackerPage, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
+import { classifyAll, enableStatsIni, playlistFromLog, trackerPage, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
 import { fpsTone } from '../src/core/prelaunch.js';
 
 // Flux TCP : messages collés, coupés en plein milieu, accolades dans les textes
@@ -53,6 +53,14 @@ const played = [{ mode: '3v3', at: 300_000 }, { mode: '2v2', at: 200_000 }, { mo
 assert.equal(classifyAll(played, before, after), 2);
 assert.deepEqual(played.map((g) => [g.ranked, g.mmr]), [[false, undefined], [true, -8], [undefined, undefined], [null, undefined]], 'classé perdu -8, occa gagnée, 1v1 inconnue gardée, partie d’avant la lecture ignorée');
 assert.equal(classifyAll(played, null, after), 0, 'sans lecture d’avant : on ne devine pas');
+// Partie vue « classé » dans le journal du jeu : garde sa catégorie, reçoit son gain de MMR au profil suivant
+const seen = [{ mode: '2v2', at: 300_000, ranked: true }, { mode: '3v3', at: 290_000, ranked: false }];
+classifyAll(seen, before, after);
+assert.deepEqual(seen.map((g) => [g.ranked, g.mmr]), [[true, -8], [false, undefined]]);
+// Journal du jeu : dernier mode reconnu (classé ou occa), le reste ignoré
+assert.deepEqual(playlistFromLog('Playlist 13 ...\nLog: PlaylistId=2\nplaylist: 99'), { id: 2, cat: 'casual' });
+assert.deepEqual(playlistFromLog('Joining Playlist=11'), { id: 11, cat: 'ranked' });
+assert.equal(playlistFromLog('rien'), null);
 assert.equal(p.ranked['2v2'].mmr, 1180);
 assert.equal(trackerUrl({ platform: 'epic', name: 'Neyko.' }), 'https://api.tracker.gg/api/v2/rocket-league/standard/profile/epic/Neyko.');
 assert.equal(trackerUrl(null), null);

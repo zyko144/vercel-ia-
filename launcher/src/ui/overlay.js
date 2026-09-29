@@ -10,7 +10,7 @@ setInterval(tick, 5000);
 tick();
 
 window.launcher?.onOverlay((d) => {
-  document.body.dataset.style = d.style ?? 'card';
+  document.body.dataset.style = d.style ?? 'card'; window.ovInit?.(d.zoom);
   const s = d.session;
   $('game').textContent = s ? `${s.name}${s.start ? ` · ${dur(Date.now() - s.start)}` : ''}` : 'Aucun jeu détecté';
   const f = d.fps;
@@ -31,4 +31,6 @@ $('sty').addEventListener('click', () => {
   const next = STYLES[(STYLES.indexOf(document.body.dataset.style ?? 'card') + 1) % STYLES.length];
   document.body.dataset.style = next; window.launcher?.ovStyle(next);
 });
-new ResizeObserver(() => window.launcher?.ovSize($('ov').offsetWidth + 10, $('ov').offsetHeight + 10)).observe($('ov'));
+// Anneau Spotify : bat au niveau sonore de Spotify seulement (rien quand il n'y a pas de son)
+let beat = 0;
+window.launcher?.onBeat((v) => { beat = Math.max(Number(v) || 0, beat * 0.75); $('sp').style.setProperty('--lvl', beat < 0.02 ? 0 : Math.min(1, beat * 1.4).toFixed(2)); });
