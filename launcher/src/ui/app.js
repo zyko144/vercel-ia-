@@ -1629,6 +1629,9 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.46.5': [
+    ['⚡', 'Optimisation tout de suite', 'Plus de message « bientôt fini » pendant quelques secondes en ouvrant l’onglet Optimisation.', ['[data-view=optimisation]', 'wait1500']],
+  ],
   '0.46.4': [
     ['🚗', 'Néon selon ta dernière partie', 'Le néon de l’overlay Rocket League est vert si tu viens de gagner, rouge si tu viens de perdre. Le « V » / « D » de la barre est bien centré.', ['#openSettings', 'wait700']],
   ],
@@ -2195,10 +2198,10 @@ async function openFivemServers() {
 // Optimisation ouverte : la page se débloque, et un panneau vert l'annonce UNE seule fois par utilisateur
 async function optiReady() {
   const s = await api.optiState?.().catch(() => null);
-  if (!s || s.paused) return;
   const nav = document.querySelector('[data-view=optimisation]');
-  $('view-optimisation').classList.remove('paused');
-  nav.classList.remove('navwork'); nav.querySelector('svg').outerHTML = '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>';
+  // Ouverte dès l'affichage (plus de message « en travaux » pendant quelques secondes) ; remise en pause seulement si demandé
+  if (s?.paused) $('view-optimisation').classList.add('paused');
+  if (!s || s.paused) return;
   // 1re ouverture de la page après le déblocage : cadenas qui s'ouvre puis portes qui s'écartent (une seule fois)
   try { if (!localStorage.getItem('hl-opti-unlocked')) state.unlockFx = true; } catch { /* rien */ }
   if (s.introSeen) return;
@@ -4169,7 +4172,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.46.4',
+    version: async () => '0.46.5',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
