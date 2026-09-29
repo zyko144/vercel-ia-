@@ -1320,10 +1320,18 @@ let overlayTimer = null;
 function toggleOverlay() {
   if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
   // Anneau Spotify qui bat au son de Spotify seulement (niveau lu tant que l'overlay est ouvert)
-  const meter = process.platform === 'win32' ? spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(SPOTIFY_METER_PS, 'utf16le').toString('base64')], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }) : null;
-  meter?.on('error', () => {});
-  meter?.stdout.setEncoding('utf8');
-  meter?.stdout.on('data', (t) => { const v = Number(String(t).trim().split(/\s+/).pop()); if (overlay && !overlay.isDestroyed() && Number.isFinite(v)) overlay.webContents.send('overlay:beat', v); });
+  // (lancé seulement quand une musique joue, coupé sinon : pas de processus qui tourne pour rien)
+  let meter = null;
+  const setMeter = (on) => {
+    if (!on || process.platform !== 'win32') { meter?.kill(); meter = null; return; }
+    if (meter) return;
+    meter = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(SPOTIFY_METER_PS, 'utf16le').toString('base64')], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const me = meter;
+    me.on('error', () => {}); me.on('exit', () => { if (meter === me) meter = null; });
+    me.stdout.setEncoding('utf8');
+    me.stdout.on('data', (t) => { const v = Number(String(t).trim().split(/\s+/).pop()); if (overlay && !overlay.isDestroyed() && Number.isFinite(v)) overlay.webContents.send('overlay:beat', v); });
+  };
+  let music = null; let musicAt = 0;
   overlay = new BrowserWindow({
     width: 236, height: 190, ...ovPlace('fps', 236), frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
@@ -1332,12 +1340,15 @@ function toggleOverlay() {
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', (e) => e.preventDefault());
-  overlay.on('closed', () => meter?.kill());
+  overlay.on('closed', () => setMeter(false));
   overlay.loadFile(path.join(here, 'ui', 'overlay.html'));
   overlay.once('ready-to-show', () => overlay?.showInactive());
   const push = async () => {
     if (!overlay || overlay.isDestroyed()) return;
-    const [pc, music] = await Promise.all([snapshot().catch(() => null), nowPlaying().catch(() => null)]);
+    // Musique relue toutes les 6 s (elle change rarement), mesures du PC toutes les 2 s
+    if (Date.now() - musicAt > 6000) { musicAt = Date.now(); music = await nowPlaying().catch(() => null); setMeter(Boolean(music?.title && music.player === 'Spotify')); }
+    const pc = await snapshot().catch(() => null);
+    if (!overlay || overlay.isDestroyed()) return;
     const friends = friendsCache.data?.friends ?? [];
     overlay.webContents.send('overlay:data', {
       style: store.data.ovStyle?.fps ?? 'card', zoom: store.data.ovZoom?.fps ?? 1, session: currentSession(), pc, music: music?.title ? { title: music.title, artist: music.artist } : null,
@@ -1367,7 +1378,9 @@ async function rlFetch(url, page) {
   const direct = await net.fetch(url, { headers: { 'User-Agent': RL_UA, Accept: 'application/json' } }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   if (direct) return direct;
   // Page du profil ouverte en fond (elle passe la vérification du site), puis l'API lue depuis cette page
-  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:rltracker' } });
+  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:rltracker', images: false, webgl: false, spellcheck: false } });
+  // Page allégée : ni images, ni vidéos, ni polices, ni pubs (seulement le site et sa vérification)
+  w.webContents.session.webRequest.onBeforeRequest((d, cb) => cb({ cancel: ['image', 'media', 'font'].includes(d.resourceType) || !/^https:\/\/([\w-]+\.)*(tracker\.network|tracker\.gg|cloudflare\.com)\//.test(d.url) }));
   w.webContents.setAudioMuted(true);
   try {
     await w.loadURL(page, { userAgent: RL_UA }).catch(() => {});
@@ -1380,14 +1393,15 @@ async function rlFetch(url, page) {
   return null;
 }
 /** Profil public (rang, MMR) : au plus toutes les 3 min, et juste après un match pour le gain de MMR. */
-async function rlProfile(force = false) {
+async function rlProfile(force = false, retry = false) {
   const r = rl(); const url = trackerUrl(r.player);
-  if (!url || (!force && Date.now() - (r.profileAt ?? 0) < 180_000)) return;
+  if (!url || (!force && Date.now() - (r.profileAt ?? 0) < 300_000)) return;
   r.profileAt = Date.now();
   const p = parseTracker(await rlFetch(url, trackerPage(r.player)));
   if (!p) return;
   // Classé ou occa, et gain de MMR : les modes dont le profil a bougé depuis la dernière lecture (le jeu ne le dit pas)
-  classifyAll(r.games, r.profile, p);
+  // Pas encore à jour après la partie : une seule nouvelle lecture 2 min 30 plus tard
+  if (!classifyAll(r.games, r.profile, p) && retry && r.games.some((g) => g.ranked == null && Date.now() - g.at < 600_000)) setTimeout(() => rlProfile(true).catch(() => {}), 150_000);
   p.at = Date.now(); r.profile = p; store.save(); rlPush();
 }
 /** Connexion à l'API du jeu (le jeu doit tourner, API activée) ; retente toutes les 10 s tant qu'il tourne. */
@@ -1402,13 +1416,14 @@ function rlConnect() {
     const cur = rlTrack.match();
     if (cur && cur.guid !== rlLive?.guid) {
       rlLive = { guid: cur.guid, cat: null }; rlPush();
+      rlProfile().catch(() => {}); // point de départ pour classer la partie (au plus toutes les 5 min)
       for (const ms of [1500, 8000]) setTimeout(() => readFile(rlLogFile(app.getPath('documents')), 'utf8').then((t) => { const p = playlistFromLog(t.slice(-400_000)); if (p && rlLive?.guid === cur.guid) { rlLive.cat = p.cat; rlPush(); } }).catch(() => {}), ms);
     }
     if (res && rlLive?.cat) res.ranked = rlLive.cat === 'ranked';
     if (rlTrack.player && rlTrack.player.name !== r.player?.name) { r.player = rlTrack.player; store.save(); rlProfile(true).catch(() => {}); }
     if (res) {
       r.games = [res, ...r.games].slice(0, 50); store.save(); rlPush();
-      setTimeout(() => rlProfile(true).catch(() => {}), 45_000); setTimeout(() => rlProfile(true).catch(() => {}), 180_000);
+      setTimeout(() => rlProfile(true, true).catch(() => {}), 100_000); // le profil public se met à jour ~1-2 min après
     }
   });
   sock.setEncoding('utf8');
@@ -1417,7 +1432,7 @@ function rlConnect() {
   const drop = () => { if (rlSock === sock) rlSock = null; sock.destroy(); rlPush(); };
   sock.on('error', drop); sock.on('close', drop);
 }
-setInterval(() => { if (currentSession() && /rocket league/i.test(currentSession().name ?? '')) { rlConnect(); rlProfile().catch(() => {}); } }, 10_000); // profil relu toutes les 3 min en jeu : point de départ pour classer les parties
+setInterval(() => { if (currentSession() && /rocket league/i.test(currentSession().name ?? '')) rlConnect(); }, 10_000);
 /** L'API est coupée par défaut dans le jeu : on propose de l'activer une fois (fichier sauvegardé à côté). */
 async function rlEnableStats(ask = true) {
   const it = rlItem(); if (!it) return false;

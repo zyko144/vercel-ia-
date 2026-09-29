@@ -1299,7 +1299,7 @@ ul.tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; line-hei
 .comp::before { content: ''; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; padding: 2px; pointer-events: none;
   background: conic-gradient(from var(--ang), transparent 0 58%, color-mix(in srgb, var(--cc) 60%, transparent) 70%, var(--cc) 80%, #fff 84%, var(--cc) 88%, transparent 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
-  animation: compspin 4.5s linear infinite; }
+  animation: compspin 4.5s steps(135) infinite; }
 .comp::after { content: ''; position: absolute; inset: 0; z-index: -2; border-radius: inherit; pointer-events: none; border: 1px solid rgba(255, 255, 255, .07); }
 .comp:nth-child(2n)::before { animation-delay: -1.5s; } .comp:nth-child(3n)::before { animation-delay: -3s; }
 @keyframes compspin { to { --ang: 360deg; } }
@@ -1362,7 +1362,7 @@ button.plink:hover { background: color-mix(in srgb, var(--lc) 30%, transparent);
 .pav[class*="fr-"]::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; padding: 3px; z-index: 1; pointer-events: none;
   background: conic-gradient(from var(--ang), var(--f1), var(--f2), var(--f3), var(--f1));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
-  animation: compspin 3.5s linear infinite; filter: drop-shadow(0 0 5px var(--f2)); }
+  animation: compspin 3.5s steps(105) infinite; filter: drop-shadow(0 0 5px var(--f2)); }
 .pav.xl[class*="fr-"]::after { inset: -6px; padding: 5px; }
 .pav.fr-aucun::after { display: none; }
 .pav.fr-neon::after { --f1: #22d3ee; --f2: #3b82f6; --f3: #a855f7; }

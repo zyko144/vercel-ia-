@@ -30,7 +30,7 @@ button { border: 0; padding: 0; background: none; color: inherit; cursor: pointe
 /* Néon vert qui tourne autour */
 @property --a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @keyframes spin { to { --a: 360deg; } }
-.ov::before { content: ""; position: absolute; inset: -1.5px; padding: 1.5px; border-radius: 15px; pointer-events: none; background: conic-gradient(from var(--a), color-mix(in srgb, var(--c) 20%, transparent) 0 50%, var(--c) 72%, #fff 78%, var(--c) 84%, color-mix(in srgb, var(--c) 20%, transparent)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; filter: drop-shadow(0 0 2px var(--c)); animation: spin 3s linear infinite; }
+.ov::before { content: ""; position: absolute; inset: -1.5px; padding: 1.5px; border-radius: 15px; pointer-events: none; background: conic-gradient(from var(--a), color-mix(in srgb, var(--c) 20%, transparent) 0 50%, var(--c) 72%, #fff 78%, var(--c) 84%, color-mix(in srgb, var(--c) 20%, transparent)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; filter: drop-shadow(0 0 2px var(--c)); animation: spin 3s steps(90) infinite; }
 .sty svg { width: 14px; height: 14px; fill: none; stroke: #e8f0ff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* Barre : tout sur une ligne */
 [data-style=bar] .ov { width: max-content; display: flex; align-items: center; gap: 10px; padding: 6px 10px; }
