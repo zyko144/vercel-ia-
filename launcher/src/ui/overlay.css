@@ -1,5 +1,5 @@
 html, body { margin: 0; background: transparent; overflow: hidden; font: 12px/1.3 system-ui, "Segoe UI", sans-serif; color: #e8f0ff; user-select: none; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
-.ov { position: relative; box-sizing: border-box; width: 226px; -webkit-app-region: drag; margin: 5px; padding: 9px 11px; border-radius: 14px; background: linear-gradient(160deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .04) 45%, rgba(120, 160, 255, .08)), rgba(12, 18, 34, .38); backdrop-filter: blur(18px) saturate(170%); border: 1px solid rgba(255, 255, 255, .22); box-shadow: 0 10px 30px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .06); }
+.ov { position: relative; box-sizing: border-box; width: 226px; cursor: grab; margin: 5px; padding: 9px 11px; border-radius: 14px; background: linear-gradient(160deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .04) 45%, rgba(120, 160, 255, .08)), rgba(12, 18, 34, .38); border: 1px solid rgba(255, 255, 255, .22); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .06); }
 .top { display: flex; align-items: center; gap: 6px; }
 .top img { width: 16px; height: 16px; }
 .top b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -15,10 +15,11 @@ html, body { margin: 0; background: transparent; overflow: hidden; font: 12px/1.
 .g b { font-variant-numeric: tabular-nums; font-size: 12px; }
 .g.hot b { color: #ff6b6b; }
 .row { display: flex; align-items: center; gap: 6px; margin-top: 5px; color: #8ea3c4; }
+.row small:empty { display: none; }
 .row small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-button { -webkit-app-region: no-drag; border: 0; padding: 0; background: none; color: inherit; cursor: pointer; }
+button { border: 0; padding: 0; background: none; color: inherit; cursor: pointer; }
 /* Spotify en néon : ouvre l'appli */
-.sp { flex: none; filter: drop-shadow(0 0 3px #1ed760) drop-shadow(0 0 7px rgba(30, 215, 96, .8)); }
+.sp { flex: none; padding: 2px; border-radius: 50%; box-shadow: 0 0 0 1.5px #1ed760, 0 0 7px rgba(30, 215, 96, .55); }
 .sp svg { display: block; width: 17px; height: 17px; fill: #1ed760; }
 .sp:hover svg { fill: #5bff95; }
 /* Changer de forme : visible au survol */
@@ -27,7 +28,8 @@ button { -webkit-app-region: no-drag; border: 0; padding: 0; background: none; c
 .sty svg { width: 14px; height: 14px; fill: none; stroke: #e8f0ff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* Barre : tout sur une ligne */
 [data-style=bar] .ov { width: max-content; display: flex; align-items: center; gap: 10px; padding: 6px 30px 6px 10px; }
-[data-style=bar] .top b, [data-style=bar] .top span, [data-style=bar] .fps small, [data-style=bar] .row small { display: none; }
+[data-style=bar] .top b, [data-style=bar] .top span, [data-style=bar] .fps small { display: none; }
+[data-style=bar] .row small, [data-style=mini] .row small { max-width: 150px; }
 [data-style=bar] .fps, [data-style=bar] .row { margin: 0; }
 [data-style=bar] .fps b { font-size: 20px; }
 [data-style=bar] .gauges { display: flex; }
@@ -35,6 +37,6 @@ button { -webkit-app-region: no-drag; border: 0; padding: 0; background: none; c
 [data-style=bar] .g small { display: inline; }
 /* Mini : juste les FPS */
 [data-style=mini] .ov { width: max-content; display: flex; align-items: center; gap: 8px; padding: 5px 28px 5px 10px; }
-[data-style=mini] .top, [data-style=mini] .gauges, [data-style=mini] .fps small, [data-style=mini] .row small { display: none; }
+[data-style=mini] .top, [data-style=mini] .gauges, [data-style=mini] .fps small { display: none; }
 [data-style=mini] .fps, [data-style=mini] .row { margin: 0; }
 [data-style=mini] .fps b { font-size: 22px; }

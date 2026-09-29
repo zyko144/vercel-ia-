@@ -2,8 +2,8 @@ html, body { margin: 0; background: transparent; overflow: hidden; font: 12px/1.
 @property --a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @keyframes spin { to { --a: 360deg; } }
 /* Verre + néon qui tourne autour de la carte (--c : vert journée positive, rouge négative) */
-.card { --c: #5aa8ff; position: relative; box-sizing: border-box; width: 236px; -webkit-app-region: drag; margin: 10px; padding: 10px 12px 4px; border-radius: 16px; text-align: center; background: linear-gradient(160deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .03) 45%), rgba(10, 16, 30, .72); backdrop-filter: blur(18px) saturate(160%); box-shadow: 0 0 16px color-mix(in srgb, var(--c) 45%, transparent), 0 8px 24px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .25); }
-.card::before { content: ""; position: absolute; inset: -2px; padding: 2px; border-radius: 18px; pointer-events: none; background: conic-gradient(from var(--a), color-mix(in srgb, var(--c) 25%, transparent) 0 50%, var(--c) 72%, #fff 78%, var(--c) 84%, color-mix(in srgb, var(--c) 25%, transparent)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; filter: drop-shadow(0 0 5px var(--c)); animation: spin 3s linear infinite; }
+.card { --c: #5aa8ff; position: relative; box-sizing: border-box; width: 236px; cursor: grab; margin: 14px; padding: 10px 12px 4px; border-radius: 16px; text-align: center; background: linear-gradient(160deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .03) 45%), rgba(10, 16, 30, .72); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, .25); }
+.card::before { content: ""; position: absolute; inset: -2px; padding: 2px; border-radius: 18px; pointer-events: none; background: conic-gradient(from var(--a), color-mix(in srgb, var(--c) 25%, transparent) 0 50%, var(--c) 72%, #fff 78%, var(--c) 84%, color-mix(in srgb, var(--c) 25%, transparent)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; filter: drop-shadow(0 0 3px var(--c)); animation: spin 3s linear infinite; }
 .top { display: flex; align-items: center; gap: 6px; height: 22px; }
 .logo { width: 20px; height: 23px; object-fit: contain; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: #56627a; }
@@ -20,8 +20,8 @@ small { color: #9fb0cf; font-size: 11px; }
 .pill.win { color: #39ff8a; border: 1.5px solid #39ff8a; box-shadow: 0 0 10px #39ff8a, inset 0 0 10px rgba(57, 255, 138, .35); text-shadow: 0 0 8px #39ff8a; }
 .pill.loss { color: #ff5a4f; border: 1.5px solid #ff5a4f; box-shadow: 0 0 10px #ff5a4f, inset 0 0 10px rgba(255, 90, 79, .35); text-shadow: 0 0 8px #ff5a4f; }
 .tabs { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: rgba(0, 0, 0, .25); }
-.tabs button, .more, .sty { all: unset; cursor: pointer; -webkit-app-region: no-drag; }
-.sty { position: absolute; top: 8px; right: 34px; width: 20px; height: 20px; border-radius: 6px; background: rgba(0, 0, 0, .45); display: grid; place-items: center; opacity: 0; transition: opacity .15s; }
+.tabs button, .more, .sty { all: unset; cursor: pointer; }
+.sty { position: absolute; top: 10px; left: 52px; width: 20px; height: 20px; border-radius: 6px; background: rgba(0, 0, 0, .45); display: grid; place-items: center; opacity: 0; transition: opacity .15s; }
 .card:hover .sty { opacity: 1; }
 .sty svg { width: 14px; height: 14px; fill: none; stroke: #eaf1ff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* Barre : tout sur une ligne, gain de place */
