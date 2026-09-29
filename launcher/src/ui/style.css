@@ -1787,3 +1787,24 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 .optiok .oklist { display: grid; gap: 8px; margin: 14px 0 18px; text-align: left; }
 .optiok .oklist span { padding: 10px 12px; border-radius: 12px; background: rgba(46, 224, 122, .07); border: 1px solid rgba(46, 224, 122, .2); }
 .adv:has(> .btn)::after { display: none; } .adv:has(> .btn) > div:first-child { padding-right: 0; }
+
+/* Déblocage de l'Optimisation (une seule fois) : le cadenas s'ouvre et passe au vert, puis deux portes s'écartent */
+.unlockfx { position: fixed; z-index: 60; overflow: hidden; pointer-events: none; display: grid; place-items: center; animation: fxgone .35s 2.5s ease forwards; }
+.unlockfx .lockbox { position: relative; display: grid; justify-items: center; gap: 14px; animation: lockgone .45s 1.05s ease forwards; }
+.unlockfx b { font-size: 18px; color: #fff; opacity: 0; animation: fadein .3s .7s ease forwards; }
+/* Cadenas 3D (rendu Blender, 10 images) : l'anse se lève et pivote, puis une lueur verte */
+.unlockfx .lock3d { width: 260px; height: 260px; background: url(lock3d.webp) 0 0 / 1000% 100% no-repeat; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .55)); animation: lockplay .6s .2s steps(9, jump-none) forwards, lockglow .5s .75s ease forwards; }
+@keyframes lockplay { to { background-position: 100% 0; } }
+@keyframes lockglow { to { filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .55)) drop-shadow(0 0 28px rgba(46, 224, 122, .7)); } }
+@keyframes fadein { to { opacity: 1; } }
+@keyframes lockgone { to { opacity: 0; transform: scale(1.25); } }
+@keyframes fxgone { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .unlockfx { display: none; } }
+#view-optimisation:not(.paused) > .maint { display: none; }
+.unlockfx .doors { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Entrée de l'Optimisation : reflet vert qui traverse la carte, bouton « Analyser mon PC » qui s'illumine deux fois */
+#view-optimisation .optihero { position: relative; overflow: hidden; }
+.optihero.enter::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 35%, rgba(46, 224, 122, .2) 50%, transparent 65%); transform: translateX(-100%); animation: herosweep 1.4s .2s ease forwards; }
+@keyframes herosweep { to { transform: translateX(100%); } }
+.optihero.enter #optiScan { animation: scanpulse 1.1s .5s ease 2; }
+@keyframes scanpulse { 50% { box-shadow: 0 0 0 6px rgba(46, 224, 122, .25), 0 0 32px rgba(46, 224, 122, .65); } }

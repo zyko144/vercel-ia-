@@ -1627,6 +1627,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.41.0': [
+    ['🔓', 'L’optimisation est ouverte', 'Profils par jeu (FiveM, Fortnite, R6, Rocket League, Garry’s Mod), nettoyage avec les chemins exacts avant de valider, et tout s’annule en un clic.', ['[data-view=optimisation]', 'wait3500']],
+    ['🚪', 'Entrée spéciale', 'La 1re fois : cadenas 3D qui s’ouvre, portes blindées et fumée verte.'],
+  ],
   '0.40.0': [
     ['🛠', 'Bouton « Corriger »', 'Dans Mon PC, les conseils qui se règlent sans risque ont un bouton : Mode Jeu, alimentation, définitions antivirus, menaces, redémarrage, ou la bonne page de Windows.', ['[data-view=pc]', 'wait3000']],
     ['🎨', 'Alertes plus lisibles', 'Fini les grosses cartes colorées : titre en couleur et petite pastille Urgent, À surveiller ou Conseil.'],
@@ -2148,14 +2152,16 @@ async function optiReady() {
   const nav = document.querySelector('[data-view=optimisation]');
   $('view-optimisation').classList.remove('paused');
   nav.classList.remove('navwork'); nav.querySelector('svg').outerHTML = '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>';
+  // 1re ouverture de la page après le déblocage : cadenas qui s'ouvre puis portes qui s'écartent (une seule fois)
+  try { if (!localStorage.getItem('hl-opti-unlocked')) state.unlockFx = true; } catch { /* rien */ }
   if (s.introSeen) return;
   if ($('modal').open) await new Promise((r) => $('modal').addEventListener('close', r, { once: true }));
   api.optiIntroSeen();
   setModal('optiok'), $('modalBox').innerHTML = `<div class="okbadge">✓</div><h2>L’optimisation est prête</h2>
     <p class="mtext">Testée jeu par jeu, sans rien d’irréversible : tu peux y accéder dès maintenant.</p>
     <div class="oklist"><span>🎯 Profils FiveM, Fortnite, R6, Rocket League, Garry’s Mod</span><span>🧹 Nettoyage avec les chemins exacts avant de valider</span><span>↩ Tout s’annule en un clic</span></div>
-    <div class="row end"><button type="button" class="btn ghost" data-m="1">Plus tard</button><button type="button" class="btn play" data-go="1">Découvrir l’optimisation</button></div>`;
-  $('modalBox').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; $('modal').close(); if (b.dataset.go) nav.click(); };
+    <div class="row end"><button type="button" class="btn ghost" data-m="1">Plus tard</button><button type="button" class="btn play" data-optigo="1" autofocus>Découvrir l’optimisation</button></div>`;
+  $('modalBox').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; $('modal').close(); if (b.dataset.optigo) nav.click(); };
   $('modal').showModal();
 }
 async function showWhatsNew(force = false) {
@@ -2755,7 +2761,24 @@ $('optiBody').addEventListener('click', async (e) => {
   }
 });
 $('optiAuto').addEventListener('change', (e) => api.optiAuto?.(e.target.checked).then(() => toast(e.target.checked ? 'Optimisation automatique chaque semaine activée' : 'Optimisation automatique désactivée')));
+function unlockFx() {
+  const r = $('view-optimisation').closest('main').getBoundingClientRect(); // zone de contenu (la page n'est pas encore affichée)
+  const fx = document.createElement('div');
+  fx.className = 'unlockfx';
+  Object.assign(fx.style, { left: `${r.left}px`, top: `${Math.max(0, r.top)}px`, width: `${r.width}px`, height: `${innerHeight - Math.max(0, r.top)}px` });
+  fx.innerHTML = '<img class="doors" src="doors0.webp" alt=""><div class="lockbox"><i class="lock3d"></i><b>Optimisation débloquée</b></div>';
+  document.body.append(fx);
+  window.sfx?.play('pop');
+  // Portes blindées 3D (rendu Blender) : fermées pendant le cadenas, puis la vidéo d'ouverture avec la fumée verte
+  setTimeout(() => { fx.querySelector('.doors').src = `doors3d.webp?${Date.now()}`; }, 1000);
+  fx.addEventListener('animationend', (e) => { if (e.target === fx) fx.remove(); });
+  try { localStorage.setItem('hl-opti-unlocked', '1'); } catch { /* rien */ }
+}
 function openOpti() {
+  // Entrée de la page : un reflet vert traverse la carte et « Analyser mon PC » s'illumine
+  const hero = document.querySelector('#view-optimisation .optihero');
+  if (hero) { hero.classList.remove('enter'); void hero.offsetWidth; hero.classList.add('enter'); }
+  if (state.unlockFx) { state.unlockFx = false; requestAnimationFrame(unlockFx); }
   // Les bandes de chantier arrivent et se collent à chaque ouverture de la page
   const m = document.querySelector('#view-optimisation .maint');
   if (m) { m.classList.remove('go'); void m.offsetWidth; m.classList.add('go'); }
@@ -4093,7 +4116,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.40.0',
+    version: async () => '0.41.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

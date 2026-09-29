@@ -1218,7 +1218,7 @@ ipcMain.handle('opti:storage', async () => ({ ok: await optimizeStorage() }));
 ipcMain.handle('opti:repair', () => repairWindows(path.join(os.tmpdir(), `history-repair-${Date.now()}.json`), (p) => send('opti:repairProgress', p)));
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto === true, last: store.data.optiAutoLast ?? null }; });
 // Optimisation en maintenance : on la termine de notre côté. « Remettre Windows comme avant » reste disponible.
-const OPTI_PAUSED = !process.env.LAUNCHER_OPTI_OPEN; // LAUNCHER_OPTI_OPEN=1 : aperçu de la version ouverte (captures)
+const OPTI_PAUSED = false; // ouverte à tous (le panneau vert et l'animation de déblocage ne s'affichent qu'une fois)
 // Ouverture : panneau vert « c'est prêt » montré une seule fois par utilisateur (retenu même après redémarrage)
 ipcMain.handle('opti:state', () => ({ paused: OPTI_PAUSED, introSeen: Boolean(store.data.optiIntroSeen) }));
 ipcMain.handle('opti:introSeen', () => { store.data.optiIntroSeen = true; store.save(); return true; });
