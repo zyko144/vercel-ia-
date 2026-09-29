@@ -408,6 +408,36 @@ footer a { color: #cfe7ff; }
     </div>
   </section>
 </main>
+<section class="avis" data-avis="launcher" style="--acc: #2f8bff">
+  <div class="avhead"><h2>Avis des joueurs</h2><p class="avsum">Chargement des avis…</p><button class="avopen" type="button">⭐ Donner mon avis</button></div>
+  <form class="avform" hidden>
+    <div class="avpick" role="radiogroup" aria-label="Note"><button type="button">★</button><button type="button">★</button><button type="button">★</button><button type="button">★</button><button type="button">★</button></div>
+    <input name="name" maxlength="32" placeholder="Ton pseudo (facultatif)">
+    <textarea name="comment" maxlength="500" rows="3" placeholder="Ton commentaire (facultatif)"></textarea>
+    <button type="submit">Envoyer</button><small class="avmsg">Capture d’écran possible depuis l’appli.</small>
+  </form>
+  <div class="avtrack"><div class="avrow"></div></div>
+</section>
+<style>
+.avis { max-width: 1120px; margin: 40px auto 30px; padding: 0 20px; }
+.avhead { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.avhead h2 { margin: 0; } .avsum { margin: 0; color: #b8b2c2; } .avst { color: var(--acc); letter-spacing: 2px; }
+.avopen, .avform button[type=submit] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--acc) 50%, transparent); background: color-mix(in srgb, var(--acc) 16%, transparent); color: #fff; border-radius: 12px; padding: 9px 16px; font-weight: 700; cursor: pointer; }
+.avform { display: grid; gap: 10px; margin: 16px 0; padding: 16px; border-radius: 16px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); }
+.avform[hidden] { display: none; }
+.avform input, .avform textarea { background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; color: #fff; padding: 9px 12px; font: inherit; }
+.avform button[type=submit] { margin: 0; justify-self: start; } .avmsg { color: #b8b2c2; }
+.avpick button { background: none; border: 0; font-size: 30px; color: rgba(255, 255, 255, .25); cursor: pointer; padding: 0 2px; } .avpick button.on { color: var(--acc); text-shadow: 0 0 10px var(--acc); }
+.avtrack { overflow: hidden; margin-top: 18px; mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+.avrow { display: flex; gap: 14px; width: max-content; animation: avscroll 40s linear infinite; }
+.avtrack:hover .avrow { animation-play-state: paused; }
+@keyframes avscroll { to { transform: translateX(-50%); } }
+.avcard { display: flex; gap: 12px; width: 320px; padding: 14px; border-radius: 16px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); }
+.avcard img { width: 96px; height: 64px; object-fit: cover; border-radius: 10px; flex: none; }
+.avcard p { margin: 6px 0; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.avcard small { display: block; color: #9a94a6; } .avcard .avst { display: block; }
+</style>
+<script src="avis.js" defer></script>
 <footer><a href="/">History IA</a> · <a href="/mentions">Mentions légales</a> · <a href="/confidentialite">Confidentialité</a></footer>
 
 <script>

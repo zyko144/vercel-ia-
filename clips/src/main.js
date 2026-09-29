@@ -476,6 +476,12 @@ function loggedIn(r) {
   st.compte = r.compte ?? null; st.skip = false; tokenSet(r.token); send('account:changed');
   return { ok: true, compte: st.compte };
 }
+// Avis sur l'appli (note, commentaire, capture facultative) : affichés dans le bandeau des avis du site
+ipcMain.handle('review:send', async (_e, stars, comment, img) => {
+  if (!tokenGet()) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour donner ton avis.' };
+  const pic = /^data:image\/(png|jpeg|webp);base64,/.test(String(img ?? '')) && String(img).length < 1_900_000 ? img : null;
+  return api('/api/avis?app=clips', { method: 'POST', body: { stars: Number(stars), comment: String(comment ?? '').slice(0, 500), img: pic } });
+});
 ipcMain.handle('account:get', async () => {
   if (!tokenGet()) return { compte: null, skipped: Boolean(st.skip) };
   const r = await api('/api/compte/moi');

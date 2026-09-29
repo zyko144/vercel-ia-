@@ -147,6 +147,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     hardenResponse(req, res, url);
     // Surface d'attaque réduite : seulement GET, HEAD, POST et OPTIONS
     if (!['GET', 'HEAD', 'POST', 'OPTIONS'].includes(req.method)) return send(res, 405, 'méthode refusée');
+    if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/avis')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Methods', 'GET, POST'); res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); res.writeHead(204); return res.end(); }
     if (req.method === 'OPTIONS') return preflight(req, res);
     // Anti-automatisation : au-delà de 600 requêtes par minute depuis une même adresse, on refuse
     if (!url.pathname.startsWith('/health') && !allowAttempt('http', clientIp(req), 600, 60_000)) {
@@ -234,6 +235,11 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
       return send(res, 200, pay.statusJson());
     }
 
+    // Avis sur les applis (sites et applis) : lecture publique, envoi limité
+    if (url.pathname === '/api/avis' || url.pathname.startsWith('/api/avis/')) {
+      const { handleReviewsApi } = await import('./features/reviews.js');
+      return handleReviewsApi(req, res, url, { readJson, send, clientIp });
+    }
     // Comptes History Launcher (inscription, connexion, profil)
     if (url.pathname.startsWith('/api/compte/')) {
       const { handleAccountApi } = await import('./features/launcherAccounts.js');

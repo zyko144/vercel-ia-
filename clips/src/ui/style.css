@@ -277,3 +277,8 @@ body.picking .card { outline: 2px dashed rgba(var(--rgb), .35); outline-offset: 
 .sel .h { width: 18px; } .sel .h[data-h=a] { left: -9px; } .sel .h[data-h=b] { right: -9px; }
 .sel .h::before { content: ''; position: absolute; inset: -6px -10px; }
 .tl.dragging, .tl.dragging * { cursor: grabbing !important; }
+
+/* Avis */
+.rvstars button { background: none; border: 0; font-size: 34px; color: rgba(255, 255, 255, .25); cursor: pointer; padding: 0 3px; }
+.rvstars button.on { color: #ffc233; text-shadow: 0 0 12px rgba(255, 194, 51, .7); }
+#rvText { width: 100%; box-sizing: border-box; margin: 10px 0; }

@@ -2758,6 +2758,13 @@ async function api(pathname, { method = 'GET', body, token, timeout = 20_000 } =
   const data = await res.json().catch(() => ({}));
   return { status: res.status, ...data };
 }
+// Avis sur l'appli (note, commentaire, capture facultative) : affichés sur le site
+ipcMain.handle('review:send', async (_e, stars, comment, img) => {
+  const token = secret('account');
+  if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour donner ton avis.' };
+  const pic = /^data:image\/(png|jpeg|webp);base64,/.test(String(img ?? '')) && String(img).length < 1_900_000 ? img : null;
+  return api('/api/avis?app=launcher', { method: 'POST', token, body: { stars: Number(stars), comment: String(comment ?? '').slice(0, 500), img: pic } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
+});
 ipcMain.handle('account:get', async () => {
   const token = secret('account');
   if (!token) return { compte: null, skipped: Boolean(store.data.settings.skipAccount) };
