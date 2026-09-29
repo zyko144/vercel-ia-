@@ -138,6 +138,21 @@ export function borderlessIni(text) {
   if (!/^\s*true\s*$/i.test(iniGet(text, 'Fullscreen') ?? '') || /^\s*true\s*$/i.test(iniGet(text, 'Borderless') ?? '')) return null;
   return iniSet(text, { Fullscreen: 'False', Borderless: 'True' }, 'SystemSettings');
 }
+// « Optimisations plein écran » de Windows désactivées pour le jeu (compatibilité) : le plein écran devient exclusif
+export const LAYERS_KEY = 'HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers';
+/** Sortie de « reg query » → { path, value } de Rocket League si l'option est désactivée, sinon null. */
+export function fsoOff(regOutput = '') {
+  for (const line of String(regOutput).split(/\r?\n/)) {
+    const m = /^\s+(.*rocketleague\.exe)\s+REG_SZ\s+(.*)$/i.exec(line);
+    if (m && /\bDISABLEDXMAXIMIZEDWINDOWEDMODE\b/i.test(m[2])) return { path: m[1].trim(), value: m[2].trim() };
+  }
+  return null;
+}
+/** Valeur sans l'option (null = supprimer la valeur, il ne reste rien d'autre). */
+export function fsoOn(value) {
+  const rest = String(value).split(/\s+/).filter((x) => x && !/^DISABLEDXMAXIMIZEDWINDOWEDMODE$/i.test(x));
+  return rest.filter((x) => x !== '~').length ? rest.join(' ') : null;
+}
 export const rlLogFile = (documents) => path.join(documents, 'My Games', 'Rocket League', 'TAGame', 'Logs', 'Launch.log');
 export function playlistFromLog(text = '') {
   const all = [...String(text).matchAll(/playlist\s*(?:id)?\s*[:=]?\s*(\d{1,3})\b/gi)];
