@@ -47,5 +47,5 @@ $('sty').addEventListener('click', () => {
   const next = document.body.dataset.style === 'bar' ? 'card' : 'bar';
   document.body.dataset.style = next; window.launcher?.ovStyle(next);
 });
-new ResizeObserver(() => window.launcher?.ovSize($('card').offsetWidth + 20, $('card').offsetHeight + 20)).observe($('card'));
+new ResizeObserver(() => window.launcher?.ovSize($('card').offsetWidth + 28, $('card').offsetHeight + 28)).observe($('card'));
 setInterval(() => last && draw(last), 60_000); // « 12 min » à jour

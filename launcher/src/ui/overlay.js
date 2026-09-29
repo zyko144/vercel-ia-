@@ -23,7 +23,7 @@ window.launcher?.onOverlay((d) => {
       gauge('GPU', pc.gpu?.usage != null ? `${pc.gpu.usage} %${pc.gpu.temp != null ? ` · ${pc.gpu.temp}°` : ''}` : 'n/d', (pc.gpu?.temp ?? 0) >= 85),
     ].join('');
   }
-  $('music').textContent = d.music ? `${d.music.title}${d.music.artist ? ` · ${d.music.artist}` : ''}` : 'Spotify';
+  $('music').textContent = d.music ? `${d.music.title}${d.music.artist ? ` · ${d.music.artist}` : ''}` : '';
 });
 $('sp').addEventListener('click', () => window.launcher?.openSpotify());
 const STYLES = ['card', 'bar', 'mini'];

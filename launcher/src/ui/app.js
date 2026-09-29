@@ -1629,6 +1629,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.45.1': [
+    ['✨', 'Overlays plus propres', 'Plus de carré visible autour des overlays, le bouton ⇄ apparaît dès que la souris passe dessus, et on les glisse de n’importe où.', ['#openSettings', 'wait600', '.setnav [data-pane=raccourcis]', 'wait900']],
+    ['🎵', 'Le son en cours', 'Le titre que tu écoutes s’affiche à côté du logo Spotify (entouré d’un léger néon), même en barre ou en mini.'],
+  ],
   '0.45.0': [
     ['🖐', 'Overlays à ta façon', 'Glisse les overlays (Ctrl+Alt+O et Ctrl+Alt+I) où tu veux sur l’écran, ils restent à cette place. Le bouton ⇄ change leur forme : carte, barre ou mini, pour prendre plus ou moins de place.'],
     ['🎵', 'Spotify en un clic', 'Le logo Spotify en néon dans l’overlay en jeu ouvre l’appli directement.'],
@@ -4145,7 +4149,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.45.0',
+    version: async () => '0.45.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

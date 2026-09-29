@@ -1324,7 +1324,6 @@ function toggleOverlay() {
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   overlay.setAlwaysOnTop(true, 'screen-saver');
-  ovRemember(overlay, 'fps');
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', (e) => e.preventDefault());
   overlay.loadFile(path.join(here, 'ui', 'overlay.html'));
@@ -1423,7 +1422,7 @@ async function rlEnableStats(ask = true) {
 async function toggleRlOverlay(auto = false) {
   if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
   rlOv = new BrowserWindow({
-    width: 256, height: 330, ...ovPlace('rl', 256), frame: false, transparent: true, resizable: false,
+    width: 264, height: 340, ...ovPlace('rl', 264), frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
@@ -1431,7 +1430,6 @@ async function toggleRlOverlay(auto = false) {
   rlOv.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   rlOv.webContents.on('will-navigate', (e) => e.preventDefault());
   rlOv.on('closed', () => { rlOv = null; });
-  ovRemember(rlOv, 'rl');
   rlOv.loadFile(path.join(here, 'ui', 'rloverlay.html'));
   rlOv.once('ready-to-show', () => { rlOv?.showInactive(); rlPush(); });
   clearTimeout(rlHideTimer);
@@ -1448,7 +1446,14 @@ function ovPlace(key, w) {
   const seen = p && screen.getAllDisplays().some(({ workArea: a }) => p.x >= a.x - 20 && p.y >= a.y - 20 && p.x < a.x + a.width - 40 && p.y < a.y + a.height - 40);
   return seen ? { x: p.x, y: p.y } : { x: area.x + area.width - w - 16, y: area.y + 16 };
 }
-function ovRemember(w, key) { w.on('moved', () => { if (w.isDestroyed()) return; const [x, y] = w.getPosition(); (store.data.ovPos ??= {})[key] = { x, y }; store.save(); }); }
+// Glisser à la souris : position de départ + déplacement, gardée au lâcher
+let ovFrom = null;
+ipcMain.on('ov:drag', (e, phase, dx, dy) => {
+  const [key, win] = ovKey(e); if (!win || win.isDestroyed()) return;
+  if (phase === 'start') ovFrom = win.getPosition();
+  else if (phase === 'move' && ovFrom) win.setPosition(Math.round(ovFrom[0] + dx), Math.round(ovFrom[1] + dy));
+  else if (phase === 'end') { ovFrom = null; const [x, y] = win.getPosition(); (store.data.ovPos ??= {})[key] = { x, y }; store.save(); }
+});
 // La fenêtre suit la taille de la carte (forme choisie, flèche des dernières parties…)
 ipcMain.on('ov:size', (e, w, h) => { const [, win] = ovKey(e); if (win && !win.isDestroyed()) win.setSize(Math.min(760, Math.max(60, Math.round(Number(w) || 0))), Math.min(640, Math.max(36, Math.round(Number(h) || 0)))); });
 ipcMain.on('ov:style', (e, style) => {
