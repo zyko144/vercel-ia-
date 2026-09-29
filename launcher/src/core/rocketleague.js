@@ -49,6 +49,8 @@ export function matchTracker(me = {}) {
     if (ev === 'UpdateState' && d?.Game) {
       if (d.Game.bReplay) return null;
       const players = d.Players ?? [];
+      // Vraie partie seulement : deux équipes avec des joueurs (pas l'entraînement libre ni le menu)
+      if (!m && (players.length < 2 || new Set(players.map((p) => p.TeamNum)).size < 2)) return null;
       // Joueur suivi par la caméra seulement pour se reconnaître la 1re fois (après une démo, la caméra suit un autre joueur)
       const self = players.find(mine) ?? (!t.player && d.Game.bHasTarget && players.find((p) => p.Name === d.Game.Target?.Name));
       if (self) {
@@ -117,8 +119,10 @@ export function classifyAll(games, before, after) {
   for (const g of games.filter((x) => (x.ranked == null || (x.ranked === true && x.mmr == null)) && (!before.at || x.at > before.at - 60_000)).reverse()) {
     if (g.ranked !== false && n('ranked', g.mode) > 0) { left[`ranked${g.mode}`]--; g.ranked = true; done.push(g); } else if (g.ranked == null && n('casual', g.mode) > 0) { left[`casual${g.mode}`]--; g.ranked = false; done.push(g); }
   }
-  for (const g of done.filter((x) => x.ranked)) {
-    if (done.filter((x) => x.ranked && x.mode === g.mode).length === 1 && after.ranked[g.mode].mmr != null && before.ranked[g.mode].mmr != null) g.mmr = Math.round(after.ranked[g.mode].mmr - before.ranked[g.mode].mmr);
+  // Gain de MMR (classé ou occa) quand une seule partie de ce mode et de ce type
+  for (const g of done) {
+    const cat = g.ranked ? 'ranked' : 'casual'; const a = after[cat]?.[g.mode]?.mmr; const b = before[cat]?.[g.mode]?.mmr;
+    if (done.filter((x) => x.ranked === g.ranked && x.mode === g.mode).length === 1 && a != null && b != null) g.mmr = Math.round(a - b);
   }
   return done.length;
 }

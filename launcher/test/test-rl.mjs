@@ -21,6 +21,11 @@ const state = (score0, score1, extra = {}) => ({ Event: 'UpdateState', Data: JSO
 const t = matchTracker({ ids: ['ABC123'] });
 assert.equal(t.event(state(2, 2)), null);
 assert.deepEqual(t.player, { name: 'Neyko.', platform: 'epic', id: 'abc123' });
+// Entraînement libre / menu (un seul joueur) : pas une partie
+const solo = matchTracker({ ids: ['ABC123'] });
+solo.event({ Event: 'UpdateState', Data: { Players: [{ Name: 'Neyko.', PrimaryId: 'Epic|abc123|0', TeamNum: 0 }], Game: { Teams: [{ TeamNum: 0, Score: 0 }, { TeamNum: 1, Score: 0 }] } } });
+assert.equal(solo.match(), null);
+assert.equal(t.match().mode, '3v3');
 t.event(state(3, 2));
 t.event(state(0, 0, { bReplay: true }));
 const res = t.event({ Event: 'MatchEnded', Data: { WinnerTeamNum: 0 } });
@@ -51,7 +56,7 @@ const before = { ...structuredClone(p), at: 100_000 }; const after = structuredC
 after.ranked['2v2'] = { ...after.ranked['2v2'], mmr: 1172, played: 41 }; after.casual['3v3'].played = 8;
 const played = [{ mode: '3v3', at: 300_000 }, { mode: '2v2', at: 200_000 }, { mode: '1v1', at: 250_000 }, { mode: '2v2', at: 10, ranked: null }];
 assert.equal(classifyAll(played, before, after), 2);
-assert.deepEqual(played.map((g) => [g.ranked, g.mmr]), [[false, undefined], [true, -8], [undefined, undefined], [null, undefined]], 'classé perdu -8, occa gagnée, 1v1 inconnue gardée, partie d’avant la lecture ignorée');
+assert.deepEqual(played.map((g) => [g.ranked, g.mmr]), [[false, 0], [true, -8], [undefined, undefined], [null, undefined]], 'classé perdu -8, occa gagnée, 1v1 inconnue gardée, partie d’avant la lecture ignorée');
 assert.equal(classifyAll(played, null, after), 0, 'sans lecture d’avant : on ne devine pas');
 // Partie vue « classé » dans le journal du jeu : garde sa catégorie, reçoit son gain de MMR au profil suivant
 const seen = [{ mode: '2v2', at: 300_000, ranked: true }, { mode: '3v3', at: 290_000, ranked: false }];

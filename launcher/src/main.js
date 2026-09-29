@@ -1393,7 +1393,7 @@ async function rlFetch(url, page) {
   return null;
 }
 /** Profil public (rang, MMR) : au plus toutes les 3 min, et juste après un match pour le gain de MMR. */
-async function rlProfile(force = false, retry = false) {
+async function rlProfile(force = false, retry = 0) {
   const r = rl(); const url = trackerUrl(r.player);
   if (!url || (!force && Date.now() - (r.profileAt ?? 0) < 300_000)) return;
   r.profileAt = Date.now();
@@ -1401,7 +1401,8 @@ async function rlProfile(force = false, retry = false) {
   if (!p) return;
   // Classé ou occa, et gain de MMR : les modes dont le profil a bougé depuis la dernière lecture (le jeu ne le dit pas)
   // Pas encore à jour après la partie : une seule nouvelle lecture 2 min 30 plus tard
-  if (!classifyAll(r.games, r.profile, p) && retry && r.games.some((g) => g.ranked == null && Date.now() - g.at < 600_000)) setTimeout(() => rlProfile(true).catch(() => {}), 150_000);
+  classifyAll(r.games, r.profile, p);
+  if (retry > 0 && r.games.some((g) => (g.ranked == null || g.mmr == null) && g.ranked !== false && Date.now() - g.at < 600_000)) setTimeout(() => rlProfile(true, retry - 1).catch(() => {}), 30_000);
   p.at = Date.now(); r.profile = p; store.save(); rlPush();
 }
 /** Connexion à l'API du jeu (le jeu doit tourner, API activée) ; retente toutes les 10 s tant qu'il tourne. */
@@ -1423,7 +1424,7 @@ function rlConnect() {
     if (rlTrack.player && rlTrack.player.name !== r.player?.name) { r.player = rlTrack.player; store.save(); rlProfile(true).catch(() => {}); }
     if (res) {
       r.games = [res, ...r.games].slice(0, 50); store.save(); rlPush();
-      setTimeout(() => rlProfile(true, true).catch(() => {}), 100_000); // le profil public se met à jour ~1-2 min après
+      setTimeout(() => rlProfile(true, 5).catch(() => {}), 25_000); // gain de MMR au plus vite : relu toutes les 30 s jusqu'à ce que le profil bouge
     }
   });
   sock.setEncoding('utf8');
@@ -1485,7 +1486,13 @@ ipcMain.on('ov:drag', (e, phase, dx, dy) => {
   else if (phase === 'end') { ovFrom = null; const [x, y] = win.getPosition(); (store.data.ovPos ??= {})[key] = { x, y }; store.save(); }
 });
 // La fenêtre suit la taille de la carte (forme choisie, flèche des dernières parties…)
-ipcMain.on('ov:size', (e, w, h) => { const [, win] = ovKey(e); if (win && !win.isDestroyed()) win.setSize(Math.min(1200, Math.max(60, Math.round(Number(w) || 0))), Math.min(1000, Math.max(36, Math.round(Number(h) || 0)))); });
+ipcMain.on('ov:size', (e, w, h) => {
+  const [, win] = ovKey(e); if (!win || win.isDestroyed()) return;
+  const width = Math.min(1200, Math.max(60, Math.round(Number(w) || 0))); const height = Math.min(1000, Math.max(36, Math.round(Number(h) || 0)));
+  // Reste dans l'écran quand il grandit (plus grand, forme carte, flèche ouverte)
+  const b = win.getBounds(); const a = screen.getDisplayMatching(b).workArea;
+  win.setBounds({ x: Math.max(a.x, Math.min(b.x, a.x + a.width - width)), y: Math.max(a.y, Math.min(b.y, a.y + a.height - height)), width, height });
+});
 // Taille (− / +) : gardée par overlay
 ipcMain.on('ov:zoom', (e, z) => { const [key] = ovKey(e); if (key && Number.isFinite(Number(z))) { (store.data.ovZoom ??= {})[key] = Math.min(1.6, Math.max(0.7, Number(z))); store.save(); } });
 ipcMain.on('ov:style', (e, style) => {
