@@ -7,6 +7,15 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 
+// Chemin de chaque programme avec l'accès « limité » de Windows (QueryFullProcessImageName) : les anti-triche
+// (BattlEye de R6, EAC de Fortnite / Rocket League) le laissent passer, alors que Get-Process .Path est refusé.
+// Sans chemin du tout : juste le nom, ex. « fortniteclient-win64-shipping.exe ».
+export const PROC_SCRIPT = [
+  "if (-not ('HLProc' -as [type])) { Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class HLProc { [DllImport(\"kernel32.dll\")] static extern IntPtr OpenProcess(int a, bool b, int p); [DllImport(\"kernel32.dll\", CharSet=CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, int f, StringBuilder s, ref int n); [DllImport(\"kernel32.dll\")] static extern bool CloseHandle(IntPtr h); public static string Path(int pid) { IntPtr h = OpenProcess(0x1000, false, pid); if (h == IntPtr.Zero) return null; try { var sb = new StringBuilder(1024); int n = sb.Capacity; return QueryFullProcessImageName(h, 0, sb, ref n) ? sb.ToString() : null; } finally { CloseHandle(h); } } }' }",
+  // Seulement la session de l'utilisateur : les services Windows (session 0) ne comptent pas comme des applis ouvertes
+  "$ok = [bool]('HLProc' -as [type]); $sid = (Get-Process -Id $PID).SessionId; Get-Process | Where-Object SessionId -eq $sid | ForEach-Object { $p = if ($ok) { [HLProc]::Path($_.Id) } else { $_.Path }; if ($p) { $p } else { $_.ProcessName + '.exe' } }",
+].join('\n');
+
 // Liste des programmes ouverts, partagée : un seul PowerShell même si plusieurs parties du launcher la demandent
 // en même temps, et réutilisée pendant quelques secondes (le launcher reste léger pour le PC).
 let procCache = { at: 0, paths: [], pending: null };
@@ -14,8 +23,7 @@ export async function runningPaths(maxAgeMs = 8000) {
   if (process.platform !== 'win32') return [];
   if (Date.now() - procCache.at < maxAgeMs) return procCache.paths;
   if (procCache.pending) return procCache.pending;
-  // Sans chemin (jeu protégé par anti-triche : Fortnite, Rocket League…) : juste le nom, ex. « fortniteclient-win64-shipping.exe »
-  procCache.pending = ps("Get-Process | ForEach-Object { if ($_.Path) { $_.Path } else { $_.ProcessName + '.exe' } }", 20_000)
+  procCache.pending = ps(PROC_SCRIPT, 20_000)
     .then((stdout) => [...new Set(stdout.split(/\r?\n/).map((l) => l.trim().toLowerCase()).filter(Boolean))])
     .catch(() => procCache.paths)
     .then((paths) => { procCache = { at: Date.now(), paths, pending: null }; return paths; });
