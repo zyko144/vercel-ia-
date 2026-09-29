@@ -1,6 +1,6 @@
 // Rocket League en direct (API officielle du jeu + profil) et couleur des FPS de l'overlay.
 import assert from 'node:assert/strict';
-import { classify, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
+import { classifyAll, enableStatsIni, trackerPage, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
 import { fpsTone } from '../src/core/prelaunch.js';
 
 // Flux TCP : messages collés, coupés en plein milieu, accolades dans les textes
@@ -46,15 +46,17 @@ const p = parseTracker({ data: { platformInfo: { platformUserHandle: 'Neyko.', a
 ] } });
 assert.deepEqual(p.ranked['3v3'], { mmr: 1342, played: null, tier: 'Champion II', division: 'Division III', icon: 'https://i/c2.png' });
 assert.deepEqual(p.casual['3v3'], { mmr: 900, played: 7 });
-// Classé ou occa : le mode du profil qui a bougé après la partie
-const after = structuredClone(p); after.ranked['2v2'].mmr = 1192; after.ranked['2v2'].played = 41;
-assert.deepEqual(classify({ mode: '2v2' }, p, after), { ranked: true, mmr: 12 });
-const after2 = structuredClone(p); after2.casual['3v3'].played = 8;
-assert.deepEqual(classify({ mode: '3v3' }, p, after2), { ranked: false, mmr: null });
-assert.equal(classify({ mode: '3v3' }, p, p), null, 'rien n’a bougé : on ne devine pas');
+// Classé ou occa : les parties jouées de chaque mode entre deux lectures du profil ; rien n'est perdu
+const before = { ...structuredClone(p), at: 100_000 }; const after = structuredClone(p);
+after.ranked['2v2'] = { ...after.ranked['2v2'], mmr: 1172, played: 41 }; after.casual['3v3'].played = 8;
+const played = [{ mode: '3v3', at: 300_000 }, { mode: '2v2', at: 200_000 }, { mode: '1v1', at: 250_000 }, { mode: '2v2', at: 10, ranked: null }];
+assert.equal(classifyAll(played, before, after), 2);
+assert.deepEqual(played.map((g) => [g.ranked, g.mmr]), [[false, undefined], [true, -8], [undefined, undefined], [null, undefined]], 'classé perdu -8, occa gagnée, 1v1 inconnue gardée, partie d’avant la lecture ignorée');
+assert.equal(classifyAll(played, null, after), 0, 'sans lecture d’avant : on ne devine pas');
 assert.equal(p.ranked['2v2'].mmr, 1180);
 assert.equal(trackerUrl({ platform: 'epic', name: 'Neyko.' }), 'https://api.tracker.gg/api/v2/rocket-league/standard/profile/epic/Neyko.');
 assert.equal(trackerUrl(null), null);
+assert.equal(trackerPage({ platform: 'epic', name: 'Neyko.' }), 'https://rocketleague.tracker.network/rocket-league/profile/epic/Neyko./overview');
 assert.match(trackerUrl({ platform: 'steam', id: '7656', name: 'x' }), /steam\/7656$/);
 assert.match(trackerUrl({ platform: 'ps4', name: 'Neyko' }), /psn\/Neyko$/);
 

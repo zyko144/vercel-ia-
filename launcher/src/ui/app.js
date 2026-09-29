@@ -162,12 +162,14 @@ function renderHero() {
   const src = state.sources[i.source];
   const d = i.details ?? {};
   const ach = d.achievements ? `<dt>Succès</dt><dd>${d.achievements.done} / ${d.achievements.total}</dd>` : '';
-  const main = i.installed ? (isApp ? 'Ouvrir' : 'Jouer') : 'Installer';
+  const live = state.active.has(i.id); // déjà lancé : pas de 2e lancement, « En cours » en vert
+  const upd = !live && i.installed && i.updatePending && i.source === 'steam'; // mise à jour du jeu faite depuis le launcher
+  const main = live ? 'En cours' : upd ? '⟳ Mettre à jour' : i.installed ? (isApp ? 'Ouvrir' : 'Jouer') : 'Installer';
   hero.innerHTML = `
     ${i.brand?.bg ? `<div class="hbg brandimg" style="background-image:url('${esc(i.brand.bg)}')"></div>` : i.brand && isApp ? `<div class="hbg brandbg" style="--b:${esc(i.brand.color)}"></div>` : bg ? `<div class="hbg" data-hbg="${esc(i.id)}"></div>` : `<div class="hbg blur" style="background-image:${a.icon || i.iconData ? url(a.icon ?? i.iconData) : 'none'}"></div>`}
     ${title}
     <div class="hbottom">
-      <div class="playbtn"><button class="main" data-action="${i.installed ? 'launch' : 'install'}">${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>${i.installed && !isApp ? '<button class="optiplay" data-action="optiplay" title="Vérifie ton PC et prépare la partie (tout est remis comme avant à la fin)"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Optimiser</button>' : ''}
+      <div class="playbtn"><button class="main${live ? ' live' : upd ? ' upd' : ''}" data-action="${upd ? 'update' : i.installed ? 'launch' : 'install'}"${live ? ' disabled' : ''}>${main}</button><button class="more" id="moreBtn" title="Plus d’actions">▾</button></div>${i.installed && !isApp && !live ? '<button class="optiplay" data-action="optiplay" title="Vérifie ton PC et prépare la partie (tout est remis comme avant à la fin)"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Optimiser</button>' : ''}
       <div class="hstat"><small>${CLOCK}${isApp ? 'Temps d’utilisation' : 'Temps de jeu'}</small><b>${hours(i.minutes)}</b><em class="tsrc" title="D’où vient ce temps">${esc(timeSource(i))}</em></div>
       <div class="hstat"><small>${CLOCK}Dernière session</small><b>${state.active.has(i.id) ? '<span class="ok">En cours</span>' : ago(i.lastPlayed)}</b></div>
     </div>
@@ -188,7 +190,7 @@ function renderHero() {
 function menuFor(i) {
   const isApp = i.kind !== 'game';
   const m = [];
-  m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (isApp ? '▶ Ouvrir' : '▶ Jouer') : '⬇ Installer'}</button>`);
+  if (!state.active.has(i.id)) m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (isApp ? '▶ Ouvrir' : '▶ Jouer') : '⬇ Installer'}</button>`);
   if (state.active.has(i.id)) m.push('<button data-action="close">■ Fermer</button>');
   if (i.updatePending) m.push('<button data-action="update">⟳ Mettre à jour et jouer</button>');
   m.push('<hr>');
@@ -1627,6 +1629,13 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.45.0': [
+    ['🖐', 'Overlays à ta façon', 'Glisse les overlays (Ctrl+Alt+O et Ctrl+Alt+I) où tu veux sur l’écran, ils restent à cette place. Le bouton ⇄ change leur forme : carte, barre ou mini, pour prendre plus ou moins de place.'],
+    ['🎵', 'Spotify en un clic', 'Le logo Spotify en néon dans l’overlay en jeu ouvre l’appli directement.'],
+    ['🚗', 'Rocket League : plus aucune partie perdue', 'Le rang et le MMR se lisent enfin, et chaque partie est classée (classé ou occa) même si tu en joues plusieurs d’affilée.'],
+    ['🟢', 'Jeu en cours / mise à jour', 'Quand un jeu tourne, le bouton passe en vert « En cours » (pas de double lancement). Si le jeu a une mise à jour, le bouton devient « Mettre à jour ».', ['#hero .playbtn', 'wait900']],
+    ['⬆', 'Mises à jour qui rattrapent tout', 'Si tu as du retard, le launcher installe directement la dernière version, en une fois et en ne téléchargeant que ce qui change.'],
+  ],
   '0.44.0': [
     ['🚗', 'Overlay Rocket League refait', 'Rang au centre avec ton MMR, néon qui tourne autour (vert si ta journée est positive, rouge sinon), série 🔥 ou 🧊, et victoires/défaites séparées : classé, occa, et chaque mode (1v1, 2v2, 3v3, 4v4).', ['#openSettings', 'wait600', '.setnav [data-pane=raccourcis]', 'wait900']],
     ['🏅', 'Rang et MMR fiables', 'Les logos officiels des rangs, et le profil est lu même quand le site bloque : le mode classé ou occa est détecté tout seul après chaque partie.'],
@@ -3341,7 +3350,7 @@ async function act(action) {
   if (!item) return;
   if (action === 'optiplay') return openOptiPlay(item);
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
-  const labels = { launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
+  const labels = { update: 'Steam fait la mise à jour puis lance le jeu', launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
   // Mise à jour en attente : la faire d'abord plutôt que d'attendre devant l'écran de chargement
   if (action === 'launch' && item.updatePending && item.source === 'steam') {
     const c = await ui.confirm({ title: `${item.name} a une mise à jour`, text: 'Steam va la télécharger avant de lancer le jeu. Tu peux la faire maintenant (le jeu se lance tout seul après) ou jouer quand même si le jeu le permet.', ok: '⬇ Mettre à jour puis jouer', cancel: 'Jouer quand même', icon: '⬆' });
@@ -4136,7 +4145,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.44.0',
+    version: async () => '0.45.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
