@@ -115,14 +115,13 @@ client.once(Events.ClientReady, async (c) => {
   startLevelLoops(c);
   startTreasury(c);
   (await import('./features/launcherReleases.js')).startLauncherReleases(c);
+  // Vidéos de présentation : MP d'abord (indépendants), puis l'annonce dans les nouveautés des serveurs du launcher
+  import('./features/promoDM.js').then((m) => m.sendPromoDMs(c)).catch((err) => console.warn('[vidéos MP]', err.message));
   (await import('./features/launcherServers.js')).autoInstall(c).then(async () => {
-    // Vidéos de présentation : une fois dans les nouveautés de chaque serveur du launcher
     const { postPromoVideos } = await import('./features/promoVideos.js');
     const { load } = await import('./storage.js');
     for (const s of (await load('launcher-serveurs', null)) ?? []) if (s.news) await postPromoVideos(await c.channels.fetch(s.news).catch(() => null));
-    // Et en MP à tous les membres des serveurs History + quelques personnes de DDV (une fois chacun)
-    (await import('./features/promoDM.js')).sendPromoDMs(c).catch((err) => console.warn('[vidéos MP]', err.message));
-  }).catch(() => {});
+  }).catch((err) => console.warn('[vidéos salon]', err.message));
   c.on(Events.GuildCreate, () => import('./features/launcherServers.js').then((m) => m.autoInstall(c)).catch(() => {}));
   (await import('./features/launcherDiscord.js')).startLauncherDiscord(c);
   loadMaintenance().catch(() => {});

@@ -38,6 +38,7 @@ export function promoMessage(userId) {
 
 /** Envoie le MP à tous les membres des serveurs History puis aux personnes de DDV (une fois chacun, doucement). */
 export async function sendPromoDMs(client) {
+  console.log('🎥 Vidéos en MP : préparation…');
   const done = new Set((await load(DONE, null)) ?? []);
   const ids = new Set(DDV); // DDV (dont le chef) en premier : reçu tout de suite
   for (const gid of GUILDS) {
@@ -51,7 +52,7 @@ export async function sendPromoDMs(client) {
   for (const id of ids) {
     if (done.has(id)) continue;
     const user = await client.users.fetch(id).catch(() => null);
-    const ok = user && await user.send(promoMessage(id)).then(() => true, () => false);
+    const ok = user && await user.send(promoMessage(id)).then(() => true, (err) => { console.warn(`[vidéos MP] ${id} :`, err.message); return false; });
     done.add(id); await save(DONE, [...done]); // MP fermés : on ne réessaie pas
     if (ok) sent += 1;
     await wait(2500); // doucement : Discord n'aime pas les envois en rafale
