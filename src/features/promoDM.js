@@ -75,6 +75,7 @@ export async function onPromoInteraction(client, i) {
     const all = (await load(RATINGS, null)) ?? {};
     all[i.user.id] = { stars: n, comment, at: Date.now() };
     await save(RATINGS, all);
+    await (await import('./reviews.js')).addDiscordReview({ userId: i.user.id, name: i.user.globalName ?? i.user.username, avatar: i.user.displayAvatarURL({ size: 128 }), stars: n, comment }).catch(() => {});
     await i.reply({ content: `Merci pour ta note ${'⭐'.repeat(n)} ! 🙏` }).catch(() => {});
     const owner = await client.users.fetch(config.ownerId).catch(() => null);
     await owner?.send(`📝 **Nouvelle note** de <@${i.user.id}> (${i.user.username}) : ${'⭐'.repeat(n)}${'☆'.repeat(5 - n)} **${n}/5**${comment ? `\n> ${comment.replace(/\n/g, '\n> ')}` : ''}`).catch(() => {});
@@ -84,6 +85,17 @@ export async function onPromoInteraction(client, i) {
 }
 
 /** Rappel toutes les 30 min, seulement à ceux qui ont reçu le MP et n'ont pas encore noté (s'arrête dès la note). */
+/** Notes déjà données sur Discord : reprises sur le site (une fois, pseudo et photo relus). */
+export async function syncDiscordReviews(client) {
+  const { addDiscordReview } = await import('./reviews.js');
+  const done = new Set(Object.values((await load('avis', null)) ?? {}).flat().filter((r) => r.discord).map((r) => r.discord));
+  for (const [userId, r] of Object.entries((await load(RATINGS, null)) ?? {})) {
+    if (done.has(userId)) continue;
+    const u = await client.users.fetch(userId).catch(() => null);
+    await addDiscordReview({ userId, name: u?.globalName ?? u?.username, avatar: u?.displayAvatarURL({ size: 128 }), stars: r.stars, comment: r.comment, at: r.at }).catch(() => {});
+  }
+}
+
 export function startPromoReminders(client) {
   // Déjà envoyés avant les rappels : repris depuis la liste des envois (MP fermés retirés au 1er rappel)
   load(GOT, null).then(async (g) => { if (!g) await save(GOT, (await load(DONE, null)) ?? []); }).catch(() => {});

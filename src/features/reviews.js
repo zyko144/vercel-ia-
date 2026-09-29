@@ -14,6 +14,14 @@ const clean = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, ' ').repla
 const imgType = (b) => (b[0] === 0x89 && b[1] === 0x50 ? 'image/png' : b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg' : b.slice(8, 12).toString() === 'WEBP' ? 'image/webp' : null);
 const cors = (res) => { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Methods', 'GET, POST'); res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); res.setHeader('Access-Control-Max-Age', '600'); };
 
+/** Note donnée sur Discord (MP des vidéos) : ajoutée aux avis des deux applis, avec pseudo et photo Discord. */
+export async function addDiscordReview({ userId, name, avatar, stars, comment, at = Date.now() }) {
+  const all = (await load(KEY, null)) ?? {};
+  const entry = { id: `d${userId}`, discord: userId, name: clean(name, 32) || 'Membre Discord', avatar: /^https:\/\/cdn\.discordapp\.com\//.test(avatar ?? '') ? avatar : null, stars, comment: clean(comment, 500), img: null, at, app: 'discord' };
+  for (const app of APPS) all[app] = [entry, ...(all[app] ?? []).filter((r) => r.discord !== userId)].sort((a, b) => b.at - a.at).slice(0, 500);
+  await save(KEY, all);
+}
+
 export async function handleReviewsApi(req, res, url, { readJson, send, clientIp }) {
   cors(res);
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -30,7 +38,7 @@ export async function handleReviewsApi(req, res, url, { readJson, send, clientIp
   const list = all[app] ?? [];
   if (req.method === 'GET') {
     const avg = list.length ? Math.round((list.reduce((a, r) => a + r.stars, 0) / list.length) * 10) / 10 : 0;
-    return send(res, 200, { avg, count: list.length, items: list.slice(0, 60).map(({ id, name, stars, comment, img: i, at, app: from }) => ({ id, name, stars, comment, img: i ? `/api/avis/img/${i}` : null, at, from })) });
+    return send(res, 200, { avg, count: list.length, items: list.slice(0, 60).map(({ id, name, stars, comment, img: i, at, app: from, avatar }) => ({ id, name, stars, comment, img: i ? `/api/avis/img/${i}` : null, at, from, avatar: avatar ?? null })) });
   }
   if (req.method !== 'POST') return send(res, 405, { error: 'Méthode non prise en charge' });
   const body = await readJson(req).catch(() => ({}));
