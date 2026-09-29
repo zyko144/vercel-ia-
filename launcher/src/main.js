@@ -1453,17 +1453,23 @@ async function rlEnableStats(ask = true) {
   return ok;
 }
 /** Overlays visibles en jeu : proposé une fois de passer Rocket League en plein écran sans bordure (fichier sauvegardé à côté). */
-async function rlBorderless() {
-  const r = rl(); if (r.borderlessAsked) return;
+async function rlBorderless(ask = true) {
+  const r = rl();
   const file = rlSettingsFile(app.getPath('documents'));
   const text = await readFile(file, 'utf8').catch(() => null);
   const next = text != null && borderlessIni(text);
   if (!next) return;
-  r.borderlessAsked = true; store.save();
+  // Accepté une fois : remis tout seul à chaque fois (le jeu peut revenir en plein écran exclusif)
+  if (r.borderless) { await writeFile(file, next).catch(() => {}); return; }
+  if (!ask || rlBorderlessAsked) return;
+  rlBorderlessAsked = true; // redemandé au prochain démarrage du launcher si refusé
   if (!(await confirm('Voir les overlays par-dessus Rocket League ?', 'En plein écran « exclusif », Windows cache toutes les fenêtres par-dessus le jeu. On passe Rocket League en « plein écran sans bordure » : même rendu, et les overlays restent visibles. Fichier TASystemSettings.ini sauvegardé à côté ; relance le jeu pour que ça prenne effet.'))) return;
+  r.borderless = true; store.save();
   await writeFile(`${file}.history-bak`, text).catch(() => {});
   await writeFile(file, next).catch(() => {});
 }
+let rlBorderlessAsked = false;
+app.whenReady().then(() => setTimeout(() => rlBorderless(false).catch(() => {}), 5000)); // prêt pour le prochain lancement
 async function toggleRlOverlay(auto = false) {
   if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
   rlOv = new BrowserWindow({
@@ -3194,7 +3200,7 @@ async function sessionTick(s) {
   heatCheck(sess, snap);
 }
 async function sessionStart(s) {
-  if (/rocket league/i.test(s.name ?? '')) { toggleRlOverlay(true).catch(() => {}); rlEnableStats(false).catch(() => {}); } // dernière game en petit au lancement
+  if (/rocket league/i.test(s.name ?? '')) { toggleRlOverlay(true).catch(() => {}); rlEnableStats(false).catch(() => {}); rlBorderless().catch(() => {}); } // dernière game en petit au lancement
   const item = items.find((i) => i.id === s.id);
   coreLoad();
   sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null, pings: [] };
