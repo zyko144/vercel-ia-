@@ -33,3 +33,21 @@ alter table public.launcher_comptes enable row level security;
 -- Photos de profil, bannières et images des discussions : bucket privé « launcher »
 -- (créé tout seul par le serveur au premier envoi ; cette ligne le crée aussi si besoin)
 insert into storage.buckets (id, name, public) values ('launcher', 'launcher', false) on conflict (id) do nothing;
+
+-- Avis sur History Launcher et History Clips (sites, applis, Discord) : une ligne par avis.
+-- Pour retirer un avis du site : Table Editor › avis › supprimer la ligne.
+create table if not exists public.avis (
+  id text primary key,
+  app text not null,           -- launcher | clips
+  name text,
+  stars int not null check (stars between 1 and 5),
+  comment text default '',
+  img text,                    -- capture (stockage « bot-files », dossier avis/)
+  avatar text,                 -- photo Discord
+  at bigint not null,
+  source text,                 -- site | appli | discord
+  account text,
+  discord text
+);
+create index if not exists avis_app_at on public.avis (app, at desc);
+alter table public.avis enable row level security;

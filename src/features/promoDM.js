@@ -88,9 +88,11 @@ export async function onPromoInteraction(client, i) {
 /** Notes déjà données sur Discord : reprises sur le site (une fois, pseudo et photo relus). */
 export async function syncDiscordReviews(client) {
   const { addDiscordReview } = await import('./reviews.js');
-  const done = new Set(Object.values((await load('avis', null)) ?? {}).flat().filter((r) => r.discord).map((r) => r.discord));
+  // Reprises une seule fois : un avis supprimé dans Supabase ne revient pas au redémarrage
+  const done = new Set((await load('avis-discord-importes', null)) ?? []);
   for (const [userId, r] of Object.entries((await load(RATINGS, null)) ?? {})) {
     if (done.has(userId)) continue;
+    done.add(userId); await save('avis-discord-importes', [...done]);
     const u = await client.users.fetch(userId).catch(() => null);
     await addDiscordReview({ userId, name: u?.globalName ?? u?.username, avatar: u?.displayAvatarURL({ size: 128 }), stars: r.stars, comment: r.comment, at: r.at }).catch(() => {});
   }
