@@ -43,7 +43,7 @@ async function beat() {
 }
 
 // Adresse du bot sur Render : le PC lui demande s'il tourne, même sans Supabase
-const PRIMARY_URL = (process.env.PRIMARY_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
+const PRIMARY_URL = (process.env.PRIMARY_URL || process.env.RENDER_EXTERNAL_URL || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
 
 /** Sur le PC : le bot de Render est-il connecté à Discord ? (sa page /health répond « ready ») */
 async function renderOnline() {

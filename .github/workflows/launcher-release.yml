@@ -101,7 +101,7 @@ jobs:
           # Le bot redémarre souvent au même moment (déploiement Render) : on réessaie jusqu'à ce que l'annonce soit postée
           V="${{ steps.v.outputs.version }}"
           for i in $(seq 1 12); do
-            R=$(curl -fsS -m 90 -X POST "https://vercel-ia.onrender.com/api/launcher/annonce?version=$V" || true)
+            R=$(curl -fsS -m 90 -X POST "${{ vars.API_URL || 'https://vercel-ia.onrender.com' }}/api/launcher/annonce?version=$V" || true)
             echo "$R"
             if echo "$R" | grep -Eq '"(posted|already)": ?true'; then break; fi
             sleep 30

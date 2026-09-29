@@ -628,7 +628,7 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
     const acc = (await accounts())[id];
     links[lid] = { ext: file.ext, pseudo: acc?.pseudo ?? 'Un joueur', jeu: text(url.searchParams.get('jeu'), 80) || null, nom: text(url.searchParams.get('nom'), 80) || null, exp: Date.now() + 7 * 86_400_000 };
     save('clip-liens', links);
-    return send(res, 200, { ok: true, url: `https://vercel-ia.onrender.com/c/${lid}` });
+    return send(res, 200, { ok: true, url: `${PUBLIC_BASE}/c/${lid}` });
   }
   if (route === 'POST /api/compte/fichier') {
     if (!allowAttempt('launcher-fichier', id, 30, 86_400_000)) return send(res, 429, { error: 'Trop de fichiers aujourd’hui.' });
@@ -706,7 +706,7 @@ export async function clipLinkRoute(req, res, url, { send }) {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)} · History Clips</title>
 <meta property="og:title" content="🎬 ${escHtml(title)}"><meta property="og:description" content="Un clip partagé avec History Clips"><meta property="og:image" content="https://zyko144.github.io/vercel-ia-/clips/logo.png">
-${x.ext === 'png' ? `<meta property="og:image" content="https://vercel-ia.onrender.com/c/${lid}/f">` : `<meta property="og:video" content="https://vercel-ia.onrender.com/c/${lid}/f"><meta property="og:video:type" content="video/mp4">`}
+${x.ext === 'png' ? `<meta property="og:image" content="${PUBLIC_BASE}/c/${lid}/f">` : `<meta property="og:video" content="${PUBLIC_BASE}/c/${lid}/f"><meta property="og:video:type" content="video/mp4">`}
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(900px 500px at 50% 0%,rgba(255,194,51,.18),transparent 60%),#0b090e;color:#f6f3ee;font:15px/1.5 system-ui,sans-serif}main{width:min(1100px,94vw);text-align:center}video,img{width:100%;max-height:78vh;border-radius:16px;background:#000;box-shadow:0 30px 80px -20px #000,0 0 50px -20px #ffc233}h1{font-size:20px;margin:0 0 14px}a{display:inline-block;margin-top:16px;padding:10px 18px;border-radius:12px;background:linear-gradient(135deg,#ffc233,#ff8a00);color:#1a1206;font-weight:700;text-decoration:none}small{display:block;margin-top:10px;color:#9a9389}</style></head>
 <body><main><h1>🎬 ${escHtml(title)}</h1>${media}<a href="https://zyko144.github.io/vercel-ia-/clips/">Garder tes clips avec History Clips</a><small>Lien valable jusqu’au ${new Date(x.exp).toLocaleDateString('fr-FR')}</small></main></body></html>`);
   return true;

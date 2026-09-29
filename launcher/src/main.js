@@ -2741,7 +2741,15 @@ ipcMain.handle('voice:transcribe', async (_e, audio, mime) => {
 });
 
 // ---------- Compte History (hébergé par le bot) ----------
-const API = (process.env.HL_API || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
+let API = (process.env.HL_API || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
+if (!process.env.HL_API) {
+  // Adresse du serveur modifiable sans nouvelle version (changement d'hébergeur) : launcher-site/api.json.
+  // Seulement en https et chez un hébergeur connu.
+  fetch('https://zyko144.github.io/vercel-ia-/api.json', { signal: AbortSignal.timeout(6000) }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    const u = String(j?.api ?? '').replace(/\/+$/, '');
+    if (/^https:\/\/[\w.-]+\.(onrender\.com|vercel\.app|fly\.dev|railway\.app|koyeb\.app|up\.railway\.app)$/.test(u)) API = u;
+  }).catch(() => {});
+}
 async function api(pathname, { method = 'GET', body, token, timeout = 20_000 } = {}) {
   const res = await fetch(`${API}${pathname}`, {
     method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
