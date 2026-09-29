@@ -40,7 +40,7 @@ small { color: #9fb0cf; font-size: 11px; }
 [data-style=bar] .rank img { width: 30px; height: 30px; margin: 0; }
 [data-style=bar] #mmr { font-size: 17px; }
 .pill .short { display: none; }
-[data-style=bar] .pill { font-size: 13px; line-height: 1.25; padding: 2px 9px; align-self: center; }
+[data-style=bar] .pill { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 28px; height: 24px; padding: 0 8px; font-size: 13px; line-height: 1; }
 [data-style=bar] .pill .long { display: none; } [data-style=bar] .pill .short { display: inline; }
 [data-style=bar] #streak { order: 9; margin-left: 0; }
 [data-style=bar] .tools { top: 50%; left: auto; right: 8px; transform: translateY(-50%); }
