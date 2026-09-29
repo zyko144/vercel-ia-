@@ -46,8 +46,16 @@ export function matchTracker(me = {}) {
   t.event = (msg) => {
     const ev = msg?.Event; let d = msg?.Data;
     if (typeof d === 'string') try { d = JSON.parse(d); } catch { d = null; }
+    // Résultat donné une seule fois, au tout premier signal de fin (gagnant annoncé ou fin du match)
+    const finish = (winner) => {
+      const us = m.teams.find((x) => x.TeamNum === m.team)?.Score ?? 0;
+      const them = m.teams.find((x) => x.TeamNum !== m.team)?.Score ?? 0;
+      m.done = true;
+      return { at: Date.now(), win: winner != null ? winner === m.team : us > them, us, them, mode: `${m.size}v${m.size}` };
+    };
     if (ev === 'UpdateState' && d?.Game) {
       if (d.Game.bReplay) return null;
+      if (m?.done) { if (d.Game.bHasWinner) return null; m = null; } // podium, puis partie suivante
       const players = d.Players ?? [];
       // Vraie partie seulement : deux équipes avec des joueurs (pas l'entraînement libre ni le menu)
       if (!m && (players.length < 2 || new Set(players.map((p) => p.TeamNum)).size < 2)) return null;
@@ -58,18 +66,14 @@ export function matchTracker(me = {}) {
         t.player = { name: self.Name, platform: (plat ?? '').toLowerCase(), id: id ?? null };
       }
       m = { guid: d.MatchGuid ?? m?.guid, team: self?.TeamNum ?? m?.team ?? null, teams: d.Game.Teams ?? m?.teams ?? [], size: Math.max(m?.size ?? 1, Math.ceil(players.length / 2)) };
+      // Gagnant annoncé dans l'état du jeu : résultat tout de suite, sans attendre l'écran de fin
+      if (d.Game.bHasWinner && m.team != null) return finish(m.teams.find((x) => x.Name && x.Name === d.Game.Winner)?.TeamNum);
     }
-    if (ev === 'MatchEnded' && m && m.team != null) {
-      const us = m.teams.find((x) => x.TeamNum === m.team)?.Score ?? 0;
-      const them = m.teams.find((x) => x.TeamNum !== m.team)?.Score ?? 0;
-      const res = { at: Date.now(), win: d?.WinnerTeamNum === m.team, us, them, mode: `${m.size}v${m.size}` };
-      m = null;
-      return res;
-    }
+    if (ev === 'MatchEnded' && m && !m.done && m.team != null) return finish(d?.WinnerTeamNum);
     if (ev === 'MatchDestroyed') m = null; // quitté avant la fin : pas compté
     return null;
   };
-  t.match = () => (m ? { guid: m.guid ?? 'match', mode: `${m.size}v${m.size}` } : null); // partie en cours
+  t.match = () => (m && !m.done ? { guid: m.guid ?? 'match', mode: `${m.size}v${m.size}` } : null); // partie en cours
   return t;
 }
 
@@ -128,6 +132,12 @@ export function classifyAll(games, before, after) {
 }
 // Mode lancé (classé ou occa) : lu dans le journal du jeu (Launch.log) dès le début de la partie
 const RANKED_IDS = new Set([10, 11, 13, 27, 28, 29, 30, 34]); const CASUAL_IDS = new Set([1, 2, 3, 4]);
+// Plein écran exclusif : aucune fenêtre ne passe par-dessus. « Sans bordure » est identique à l'œil et garde les overlays.
+export const rlSettingsFile = (documents) => path.join(documents, 'My Games', 'Rocket League', 'TAGame', 'Config', 'TASystemSettings.ini');
+export function borderlessIni(text) {
+  if (!/^\s*true\s*$/i.test(iniGet(text, 'Fullscreen') ?? '') || /^\s*true\s*$/i.test(iniGet(text, 'Borderless') ?? '')) return null;
+  return iniSet(text, { Fullscreen: 'False', Borderless: 'True' }, 'SystemSettings');
+}
 export const rlLogFile = (documents) => path.join(documents, 'My Games', 'Rocket League', 'TAGame', 'Logs', 'Launch.log');
 export function playlistFromLog(text = '') {
   const all = [...String(text).matchAll(/playlist\s*(?:id)?\s*[:=]?\s*(\d{1,3})\b/gi)];

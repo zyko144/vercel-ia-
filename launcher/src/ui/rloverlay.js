@@ -41,7 +41,7 @@ function draw(d) {
     // Gain de la dernière partie de ce mode et de ce type (reste affiché en jeu et au menu)
     const same = d.games.find((x) => x.mode === now.mode && (!now.cat || catOf(x) === now.cat));
     const delta = same?.mmr != null ? ` <small class="${same.mmr >= 0 ? 'up' : 'dn'}">${signed(same.mmr)}</small>` : '';
-    $('barinfo').innerHTML = `${now.cat ? `<b class="chip ${occa ? 'occa' : 'rk'}">${occa ? 'Occa' : 'Ranked'}</b>` : ''}<b class="chip">${esc(now.mode.replace(/v\d/, 's'))}</b>${!occa && bk?.tier ? `<img src="${esc(rankIcon(bk))}" alt="">` : ''}${bk?.mmr != null ? `<b class="bmmr">${Math.round(bk.mmr).toLocaleString('fr-FR')}${delta}</b>` : ''}${d.current ? '<b class="chip live">En jeu</b>' : ''}`;
+    $('barinfo').innerHTML = `${now.cat ? `<b class="chip ${occa ? 'occa' : 'rk'}">${occa ? 'Occa' : 'Ranked'}</b>` : ''}<b class="chip">${esc(now.mode.replace(/v\d/, 's'))}</b>${!occa && bk?.tier ? `<img src="${esc(rankIcon(bk))}" alt="">` : ''}${bk?.mmr != null ? `<b class="bmmr">${Math.round(bk.mmr).toLocaleString('fr-FR')}${delta}</b>` : d.player ? `<b class="chip" title="${d.profileOk ? 'Lecture du profil public…' : 'Profil public illisible pour l’instant (site du profil)'}">MMR ${d.profileOk ? '…' : '?'}</b>` : ''}${d.current ? '<b class="chip live">En jeu</b>' : ''}`;
     const [w, l] = s.modes[now.cat ?? 'all'][now.mode] ?? [0, 0];
     $('rec').innerHTML = `<b class="up">${w}W</b> - <b class="dn">${l}L</b>`;
   } else { $('barinfo').innerHTML = ''; $('rec').innerHTML = ''; }

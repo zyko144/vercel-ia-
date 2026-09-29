@@ -19,7 +19,7 @@ import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupda
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
 import { SPOTIFY_METER_PS } from './core/audiometer.js';
-import { RL_PORT, classifyAll, enableStatsIni, jsonStream, matchTracker, parseTracker, playlistFromLog, rlLogFile, rlSummary, statsIni, trackerPage, trackerUrl } from './core/rocketleague.js';
+import { RL_PORT, borderlessIni, classifyAll, enableStatsIni, rlSettingsFile, jsonStream, matchTracker, parseTracker, playlistFromLog, rlLogFile, rlSummary, statsIni, trackerPage, trackerUrl } from './core/rocketleague.js';
 import { HOGS_PS, beforeAfter, fpsTone, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
@@ -1319,6 +1319,7 @@ let overlay = null;
 let overlayTimer = null;
 function toggleOverlay() {
   if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
+  if (/rocket league/i.test(currentSession()?.name ?? '')) rlBorderless().catch(() => {});
   // Anneau Spotify qui bat au son de Spotify seulement (niveau lu tant que l'overlay est ouvert)
   // (lancé seulement quand une musique joue, coupé sinon : pas de processus qui tourne pour rien)
   let meter = null;
@@ -1369,7 +1370,7 @@ let rlSock = null; let rlTrack = null; let rlOv = null; let rlHideTimer = null; 
 function rlData() {
   const r = rl();
   const cur = rlTrack?.match();
-  return { current: cur ? { mode: cur.mode, cat: rlLive?.guid === cur.guid ? rlLive.cat : null } : null, player: r.player, profile: r.profile, style: store.data.ovStyle?.rl ?? 'card', zoom: store.data.ovZoom?.rl ?? 1, games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
+  return { current: cur ? { mode: cur.mode, cat: rlLive?.guid === cur.guid ? rlLive.cat : null } : null, player: r.player, profile: r.profile, profileOk: r.profileOk !== false, style: store.data.ovStyle?.rl ?? 'card', zoom: store.data.ovZoom?.rl ?? 1, games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
 }
 const rlPush = () => { if (rlOv && !rlOv.isDestroyed()) rlOv.webContents.send('rl:data', rlData()); };
 /** Profil public : requête directe, sinon via une fenêtre de navigateur cachée (le site bloque les requêtes hors navigateur). */
@@ -1398,7 +1399,8 @@ async function rlProfile(force = false, retry = 0) {
   if (!url || (!force && Date.now() - (r.profileAt ?? 0) < 300_000)) return;
   r.profileAt = Date.now();
   const p = parseTracker(await rlFetch(url, trackerPage(r.player)));
-  if (!p) return;
+  r.profileOk = Boolean(p);
+  if (!p) { rlPush(); return; }
   // Classé ou occa, et gain de MMR : les modes dont le profil a bougé depuis la dernière lecture (le jeu ne le dit pas)
   // Pas encore à jour après la partie : une seule nouvelle lecture 2 min 30 plus tard
   classifyAll(r.games, r.profile, p);
@@ -1450,6 +1452,18 @@ async function rlEnableStats(ask = true) {
   rl().statsOff = !ok; store.save();
   return ok;
 }
+/** Overlays visibles en jeu : proposé une fois de passer Rocket League en plein écran sans bordure (fichier sauvegardé à côté). */
+async function rlBorderless() {
+  const r = rl(); if (r.borderlessAsked) return;
+  const file = rlSettingsFile(app.getPath('documents'));
+  const text = await readFile(file, 'utf8').catch(() => null);
+  const next = text != null && borderlessIni(text);
+  if (!next) return;
+  r.borderlessAsked = true; store.save();
+  if (!(await confirm('Voir les overlays par-dessus Rocket League ?', 'En plein écran « exclusif », Windows cache toutes les fenêtres par-dessus le jeu. On passe Rocket League en « plein écran sans bordure » : même rendu, et les overlays restent visibles. Fichier TASystemSettings.ini sauvegardé à côté ; relance le jeu pour que ça prenne effet.'))) return;
+  await writeFile(`${file}.history-bak`, text).catch(() => {});
+  await writeFile(file, next).catch(() => {});
+}
 async function toggleRlOverlay(auto = false) {
   if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
   rlOv = new BrowserWindow({
@@ -1465,7 +1479,7 @@ async function toggleRlOverlay(auto = false) {
   rlOv.once('ready-to-show', () => { rlOv?.showInactive(); rlPush(); });
   clearTimeout(rlHideTimer);
   if (auto) rlHideTimer = setTimeout(() => { if (rlOv && !rlOv.isDestroyed()) rlOv.close(); }, 15_000);
-  if (!auto) rlEnableStats(true).then(() => rlPush()).catch(() => {});
+  if (!auto) rlEnableStats(true).then(() => rlPush()).then(() => rlBorderless()).catch(() => {});
   rlConnect(); rlProfile().catch(() => {});
 }
 
