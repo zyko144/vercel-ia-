@@ -1629,6 +1629,11 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.46.3': [
+    ['🚗', 'Barre Rocket League au point', 'Juste « V » ou « D » pour la dernière partie, ton bilan du mode en « 4W - 3L », et le gain de MMR (+12) à côté du MMR. Au retour au menu, la barre reste sur ta dernière partie (plus de faux « 1s » avec l’entraînement libre).', ['#openSettings', 'wait700']],
+    ['⚡', 'MMR plus vite', 'Le gain de MMR et le nouveau MMR arrivent dès que le profil se met à jour (relu toutes les 30 s après la partie).'],
+    ['🖥', 'Overlay jamais coupé', 'En l’agrandissant ou en changeant de forme, l’overlay reste entièrement dans l’écran.'],
+  ],
   '0.46.2': [
     ['🔥', 'Flamme fixe', 'La flamme de la série de victoires ne bouge plus.', ['#openSettings', 'wait700']],
   ],
@@ -4161,7 +4166,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.46.2',
+    version: async () => '0.46.3',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

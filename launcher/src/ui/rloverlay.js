@@ -26,7 +26,7 @@ function draw(d) {
   $('tier').textContent = rk?.tier ? `${rk.tier}${rk.division ? ` · ${rk.division.replace(/Division\s*/i, '')}` : ''}` : d.player ? 'Lecture du profil…' : 'Joue une partie';
   $('mmr').innerHTML = rk?.mmr != null ? `${Math.round(rk.mmr).toLocaleString('fr-FR')}${g?.ranked && g.mmr != null ? ` <small class="${g.mmr >= 0 ? 'up' : 'dn'}">${signed(g.mmr)}</small>` : ''}` : '';
   $('res').innerHTML = g
-    ? `<span class="pill ${g.win ? 'win' : 'loss'}">${g.win ? 'Victoire' : 'Défaite'} ${g.us} - ${g.them}</span><small>${esc(g.mode)}${CAT[catOf(g)] ? ` · ${CAT[catOf(g)]}` : ''} · ${ago(g.at)}</small>`
+    ? `<span class="pill ${g.win ? 'win' : 'loss'}"><span class="long">${g.win ? 'Victoire' : 'Défaite'} ${g.us} - ${g.them}</span><span class="short">${g.win ? 'V' : 'D'}</span></span><small>${esc(g.mode)}${CAT[catOf(g)] ? ` · ${CAT[catOf(g)]}` : ''} · ${ago(g.at)}</small>`
     : `<small>${d.statsOff ? 'Stats du jeu coupées : Ctrl+Alt+I pour les activer' : 'Aucun match pour l’instant'}</small>`;
   for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.cat === cat);
   $('modes').innerHTML = (cat === 'ranked' ? ['1v1', '2v2', '3v3'] : ['1v1', '2v2', '3v3', '4v4']).map((m) => {
@@ -38,10 +38,12 @@ function draw(d) {
   const now = d.current ?? (g ? { mode: g.mode, cat: g.ranked === true ? 'ranked' : g.ranked === false ? 'casual' : null } : null);
   if (now) {
     const occa = now.cat === 'casual'; const bk = occa ? d.profile?.casual?.[now.mode] : ranked[now.mode];
-    const delta = !d.current && g?.mmr != null ? ` <small class="${g.mmr >= 0 ? 'up' : 'dn'}">${signed(g.mmr)}</small>` : '';
+    // Gain de la dernière partie de ce mode et de ce type (reste affiché en jeu et au menu)
+    const same = d.games.find((x) => x.mode === now.mode && (!now.cat || catOf(x) === now.cat));
+    const delta = same?.mmr != null ? ` <small class="${same.mmr >= 0 ? 'up' : 'dn'}">${signed(same.mmr)}</small>` : '';
     $('barinfo').innerHTML = `${now.cat ? `<b class="chip ${occa ? 'occa' : 'rk'}">${occa ? 'Occa' : 'Ranked'}</b>` : ''}<b class="chip">${esc(now.mode.replace(/v\d/, 's'))}</b>${!occa && bk?.tier ? `<img src="${esc(rankIcon(bk))}" alt="">` : ''}${bk?.mmr != null ? `<b class="bmmr">${Math.round(bk.mmr).toLocaleString('fr-FR')}${delta}</b>` : ''}${d.current ? '<b class="chip live">En jeu</b>' : ''}`;
     const [w, l] = s.modes[now.cat ?? 'all'][now.mode] ?? [0, 0];
-    $('rec').innerHTML = w + l ? `<b class="up">${w}V</b> <b class="dn">${l}D</b>` : '';
+    $('rec').innerHTML = `<b class="up">${w}W</b> - <b class="dn">${l}L</b>`;
   } else { $('barinfo').innerHTML = ''; $('rec').innerHTML = ''; }
   $('list').innerHTML = games.length ? games.map((x) => `<div class="g ${x.win ? 'win' : 'loss'}"><i>${x.win ? 'V' : 'D'}</i><span>${x.us} - ${x.them}</span><small>${esc(x.mode)}</small>${x.mmr != null ? `<em class="${x.mmr >= 0 ? 'up' : 'dn'}">${signed(x.mmr)}</em>` : '<em></em>'}<time>${ago(x.at)}</time></div>`).join('') : '<small>Pas encore de parties</small>';
 }
