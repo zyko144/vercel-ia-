@@ -1,6 +1,6 @@
 // Rocket League en direct (API officielle du jeu + profil) et couleur des FPS de l'overlay.
 import assert from 'node:assert/strict';
-import { classifyAll, enableStatsIni, playlistFromLog, trackerPage, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
+import { borderlessIni, classifyAll, enableStatsIni, playlistFromLog, trackerPage, jsonStream, matchTracker, parseTracker, rlSummary, trackerUrl } from '../src/core/rocketleague.js';
 import { fpsTone } from '../src/core/prelaunch.js';
 
 // Flux TCP : messages collés, coupés en plein milieu, accolades dans les textes
@@ -33,6 +33,15 @@ assert.equal(res.win, true); assert.equal(res.us, 3); assert.equal(res.them, 2);
 t.event(state(0, 1));
 t.event({ Event: 'MatchDestroyed', Data: {} });
 assert.equal(t.event({ Event: 'MatchEnded', Data: { WinnerTeamNum: 1 } }), null, 'match quitté avant la fin : pas compté');
+
+// Gagnant annoncé dans l'état du jeu : résultat immédiat, une seule fois (la fin du match ensuite est ignorée)
+const q = matchTracker({ ids: ['ABC123'] });
+q.event(state(1, 0));
+const fast = q.event({ Event: 'UpdateState', Data: { MatchGuid: 'g1', Players: players('abc123'), Game: { bHasWinner: true, Winner: 'BLUE', Teams: [{ TeamNum: 0, Name: 'BLUE', Score: 2 }, { TeamNum: 1, Name: 'ORANGE', Score: 1 }] } } });
+assert.deepEqual([fast.win, fast.us, fast.them], [true, 2, 1]);
+assert.equal(q.match(), null);
+assert.equal(q.event({ Event: 'MatchEnded', Data: { WinnerTeamNum: 0 } }), null, 'pas compté deux fois');
+q.event(state(0, 0)); assert.equal(q.match().mode, '3v3', 'partie suivante suivie');
 
 // Série et bilan du jour (du plus récent au plus ancien)
 const now = Date.parse('2026-09-29T20:00:00');
@@ -77,6 +86,10 @@ assert.match(trackerUrl({ platform: 'ps4', name: 'Neyko' }), /psn\/Neyko$/);
 const ini = '[TAGame.MatchStatsExporter_TA]\r\nPort=49123\r\nPacketSendRate=0\r\n';
 assert.match(enableStatsIni(ini), /PacketSendRate=30/);
 assert.equal(enableStatsIni(enableStatsIni(ini)), null);
+
+// Plein écran exclusif → sans bordure ; rien si déjà sans bordure ou fenêtré
+assert.match(borderlessIni('[SystemSettings]\r\nFullscreen=True\r\nBorderless=False\r\n'), /Fullscreen=False[\s\S]*Borderless=True/);
+assert.equal(borderlessIni('[SystemSettings]\r\nFullscreen=False\r\nBorderless=True\r\n'), null);
 
 // Couleur des FPS : vert, orange en baisse, rouge trop bas
 assert.equal(fpsTone(880, [900, 890], 870), 'good');
