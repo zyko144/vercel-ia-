@@ -120,6 +120,8 @@ client.once(Events.ClientReady, async (c) => {
     const { postPromoVideos } = await import('./features/promoVideos.js');
     const { load } = await import('./storage.js');
     for (const s of (await load('launcher-serveurs', null)) ?? []) if (s.news) await postPromoVideos(await c.channels.fetch(s.news).catch(() => null));
+    // Et en MP à tous les membres des serveurs History + quelques personnes de DDV (une fois chacun)
+    (await import('./features/promoDM.js')).sendPromoDMs(c).catch((err) => console.warn('[vidéos MP]', err.message));
   }).catch(() => {});
   c.on(Events.GuildCreate, () => import('./features/launcherServers.js').then((m) => m.autoInstall(c)).catch(() => {}));
   (await import('./features/launcherDiscord.js')).startLauncherDiscord(c);
@@ -153,6 +155,8 @@ client.on(Events.MessageCreate, (message) => {
 });
 
 client.on(Events.InteractionCreate, (interaction) => {
+  // Notes ⭐ des vidéos de présentation (MP)
+  if (String(interaction.customId ?? '').startsWith('promo:')) return void import('./features/promoDM.js').then((m) => m.onPromoInteraction(client, interaction)).catch((err) => console.error('[promo]', err));
   onInteraction(client, interaction).catch((err) => console.error('[interactionCreate]', err));
 });
 
