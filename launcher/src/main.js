@@ -18,7 +18,7 @@ import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from 
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
-import { RL_PORT, classify, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, statsIni, trackerUrl } from './core/rocketleague.js';
+import { RL_PORT, classifyAll, enableStatsIni, jsonStream, matchTracker, parseTracker, rlSummary, statsIni, trackerPage, trackerUrl } from './core/rocketleague.js';
 import { HOGS_PS, beforeAfter, fpsTone, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
@@ -1318,14 +1318,13 @@ let overlay = null;
 let overlayTimer = null;
 function toggleOverlay() {
   if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
-  const area = screen.getPrimaryDisplay().workArea;
   overlay = new BrowserWindow({
-    width: 236, height: 190, x: area.x + area.width - 252, y: area.y + 16, frame: false, transparent: true, resizable: false,
+    width: 236, height: 190, ...ovPlace('fps', 236), frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   overlay.setAlwaysOnTop(true, 'screen-saver');
-  overlay.setIgnoreMouseEvents(true);
+  ovRemember(overlay, 'fps');
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', (e) => e.preventDefault());
   overlay.loadFile(path.join(here, 'ui', 'overlay.html'));
@@ -1335,7 +1334,7 @@ function toggleOverlay() {
     const [pc, music] = await Promise.all([snapshot().catch(() => null), nowPlaying().catch(() => null)]);
     const friends = friendsCache.data?.friends ?? [];
     overlay.webContents.send('overlay:data', {
-      session: currentSession(), pc, music: music?.title ? { title: music.title, artist: music.artist } : null,
+      style: store.data.ovStyle?.fps ?? 'card', session: currentSession(), pc, music: music?.title ? { title: music.title, artist: music.artist } : null,
       friends: { online: friends.filter((f) => f.online).length, playing: friends.filter((f) => f.game).slice(0, 3).map((f) => ({ name: f.name, game: f.game })) },
       boost: Boolean(boosted),
       // Vrais FPS du jeu (mesurés image par image, comme le compteur du jeu) et leur couleur
@@ -1352,21 +1351,23 @@ const rlItem = () => items.find((i) => i.kind === 'game' && i.installed && /rock
 let rlSock = null; let rlTrack = null; let rlOv = null; let rlHideTimer = null;
 function rlData() {
   const r = rl();
-  return { player: r.player, profile: r.profile, games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
+  return { player: r.player, profile: r.profile, style: store.data.ovStyle?.rl ?? 'card', games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
 }
 const rlPush = () => { if (rlOv && !rlOv.isDestroyed()) rlOv.webContents.send('rl:data', rlData()); };
 /** Profil public : requête directe, sinon via une fenêtre de navigateur cachée (le site bloque les requêtes hors navigateur). */
 const RL_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
-async function rlFetch(url) {
+async function rlFetch(url, page) {
   const direct = await net.fetch(url, { headers: { 'User-Agent': RL_UA, Accept: 'application/json' } }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   if (direct) return direct;
+  // Page du profil ouverte en fond (elle passe la vérification du site), puis l'API lue depuis cette page
   const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:rltracker' } });
+  w.webContents.setAudioMuted(true);
   try {
-    await w.loadURL(url, { userAgent: RL_UA }).catch(() => {});
-    for (let i = 0; i < 15 && !w.isDestroyed(); i++) {
-      const t = await w.webContents.executeJavaScript('document.body ? document.body.innerText : ""').catch(() => '');
+    await w.loadURL(page, { userAgent: RL_UA }).catch(() => {});
+    for (let i = 0; i < 20 && !w.isDestroyed(); i++) {
+      const t = await w.webContents.executeJavaScript(`fetch(${JSON.stringify(url)}, { credentials: 'include' }).then((r) => (r.ok ? r.text() : '')).catch(() => '')`).catch(() => '');
       if (t.trim().startsWith('{')) return JSON.parse(t);
-      await new Promise((ok) => setTimeout(ok, 1000));
+      await new Promise((ok) => setTimeout(ok, 1500));
     }
   } catch { /* profil illisible : l'overlay garde victoires, défaites et série */ } finally { if (!w.isDestroyed()) w.destroy(); }
   return null;
@@ -1376,12 +1377,11 @@ async function rlProfile(force = false) {
   const r = rl(); const url = trackerUrl(r.player);
   if (!url || (!force && Date.now() - (r.profileAt ?? 0) < 180_000)) return;
   r.profileAt = Date.now();
-  const p = parseTracker(await rlFetch(url));
+  const p = parseTracker(await rlFetch(url, trackerPage(r.player)));
   if (!p) return;
-  // Classé ou occa, et gain de MMR : le mode dont le profil a bougé depuis la dernière lecture (le jeu ne le dit pas)
-  const g = r.games[0];
-  if (g && g.ranked == null && Date.now() - g.at < 20 * 60_000) Object.assign(g, classify(g, r.profile, p) ?? {});
-  r.profile = p; store.save(); rlPush();
+  // Classé ou occa, et gain de MMR : les modes dont le profil a bougé depuis la dernière lecture (le jeu ne le dit pas)
+  classifyAll(r.games, r.profile, p);
+  p.at = Date.now(); r.profile = p; store.save(); rlPush();
 }
 /** Connexion à l'API du jeu (le jeu doit tourner, API activée) ; retente toutes les 10 s tant qu'il tourne. */
 function rlConnect() {
@@ -1403,7 +1403,7 @@ function rlConnect() {
   const drop = () => { if (rlSock === sock) rlSock = null; sock.destroy(); rlPush(); };
   sock.on('error', drop); sock.on('close', drop);
 }
-setInterval(() => { if (currentSession() && /rocket league/i.test(currentSession().name ?? '')) rlConnect(); }, 10_000);
+setInterval(() => { if (currentSession() && /rocket league/i.test(currentSession().name ?? '')) { rlConnect(); rlProfile().catch(() => {}); } }, 10_000); // profil relu toutes les 3 min en jeu : point de départ pour classer les parties
 /** L'API est coupée par défaut dans le jeu : on propose de l'activer une fois (fichier sauvegardé à côté). */
 async function rlEnableStats(ask = true) {
   const it = rlItem(); if (!it) return false;
@@ -1422,9 +1422,8 @@ async function rlEnableStats(ask = true) {
 }
 async function toggleRlOverlay(auto = false) {
   if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
-  const area = screen.getPrimaryDisplay().workArea;
   rlOv = new BrowserWindow({
-    width: 256, height: 330, x: area.x + area.width - 272, y: area.y + 16, frame: false, transparent: true, resizable: false,
+    width: 256, height: 330, ...ovPlace('rl', 256), frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
@@ -1432,6 +1431,7 @@ async function toggleRlOverlay(auto = false) {
   rlOv.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   rlOv.webContents.on('will-navigate', (e) => e.preventDefault());
   rlOv.on('closed', () => { rlOv = null; });
+  ovRemember(rlOv, 'rl');
   rlOv.loadFile(path.join(here, 'ui', 'rloverlay.html'));
   rlOv.once('ready-to-show', () => { rlOv?.showInactive(); rlPush(); });
   clearTimeout(rlHideTimer);
@@ -1439,8 +1439,24 @@ async function toggleRlOverlay(auto = false) {
   if (!auto) rlEnableStats(true).then(() => rlPush()).catch(() => {});
   rlConnect(); rlProfile().catch(() => {});
 }
-// La fenêtre suit la hauteur de la carte (flèche : résumé des dernières parties)
-ipcMain.on('rl:size', (_e, h) => { if (rlOv && !rlOv.isDestroyed()) rlOv.setSize(256, Math.min(620, Math.max(120, Math.round(Number(h) || 0)))); });
+
+// ---------- Overlays en jeu : glissés où on veut (position gardée), forme au choix (carte, barre, mini), Spotify en un clic ----------
+const OV_STYLES = { fps: ['card', 'bar', 'mini'], rl: ['card', 'bar'] };
+const ovKey = (e) => { const w = BrowserWindow.fromWebContents(e.sender); return w && w === overlay ? ['fps', w] : w && w === rlOv ? ['rl', w] : [null, null]; };
+function ovPlace(key, w) {
+  const p = store.data.ovPos?.[key]; const area = screen.getPrimaryDisplay().workArea;
+  const seen = p && screen.getAllDisplays().some(({ workArea: a }) => p.x >= a.x - 20 && p.y >= a.y - 20 && p.x < a.x + a.width - 40 && p.y < a.y + a.height - 40);
+  return seen ? { x: p.x, y: p.y } : { x: area.x + area.width - w - 16, y: area.y + 16 };
+}
+function ovRemember(w, key) { w.on('moved', () => { if (w.isDestroyed()) return; const [x, y] = w.getPosition(); (store.data.ovPos ??= {})[key] = { x, y }; store.save(); }); }
+// La fenêtre suit la taille de la carte (forme choisie, flèche des dernières parties…)
+ipcMain.on('ov:size', (e, w, h) => { const [, win] = ovKey(e); if (win && !win.isDestroyed()) win.setSize(Math.min(760, Math.max(60, Math.round(Number(w) || 0))), Math.min(640, Math.max(36, Math.round(Number(h) || 0)))); });
+ipcMain.on('ov:style', (e, style) => {
+  const [key] = ovKey(e); if (!key || !OV_STYLES[key].includes(style)) return;
+  (store.data.ovStyle ??= {})[key] = style; store.save();
+  if (key === 'rl') rlPush();
+});
+ipcMain.on('ov:spotify', () => { shell.openExternal('spotify:').catch(() => shell.openExternal('https://open.spotify.com')); });
 
 function remember(id, how) {
   const entry = (store.data.items[id] ??= {});
@@ -2893,6 +2909,10 @@ async function startUpdater() {
   updater.autoInstallOnAppQuit = true;
   updater.logger = null;
   updater.on('update-available', (info) => {
+    // Une version déjà téléchargée mais pas installée et une plus récente sort : on prend directement la dernière
+    // (une seule installation qui rattrape tout, jamais plusieurs à la suite)
+    if (updateReady === info.version) return;
+    if (updateReady && updateReady !== info.version) { updateReady = null; downloadUpdate(false); return; }
     const fresh = updateInfo.version !== info.version;
     updateState({ state: 'available', version: info.version, error: null });
     // Fenêtre fermée ou rangée : une notification Windows (clic = ouvrir le launcher sur la question)
@@ -2914,7 +2934,7 @@ async function startUpdater() {
   });
   updater.on('error', (err) => { fatalLog(err); if (['checking', 'progress'].includes(updateInfo.state)) updateState({ state: 'error', error: String(err?.message ?? err).slice(0, 160) }); });
   let lastCheck = 0;
-  const check = () => { if (['progress', 'ready'].includes(updateInfo.state)) return; lastCheck = Date.now(); updater.checkForUpdates().catch((err) => fatalLog(err)); };
+  const check = () => { if (updateInfo.state === 'progress') return; lastCheck = Date.now(); updater.checkForUpdates().catch((err) => fatalLog(err)); };
   setTimeout(check, 10_000);
   setInterval(check, 30 * 60_000); // toutes les 30 min (avant : 3 h, une nouvelle version pouvait attendre longtemps)
   // Et dès qu'on revient sur le launcher, si la dernière recherche date de plus de 5 min

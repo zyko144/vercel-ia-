@@ -1,6 +1,6 @@
-// Écran d'infos en jeu (Ctrl+Alt+O), compact : vrais FPS du jeu en couleur, processeur, carte graphique, musique.
+// Écran d'infos en jeu (Ctrl+Alt+O) : vrais FPS du jeu en couleur, processeur, carte graphique, Spotify en un clic.
+// Se glisse où on veut ; le bouton ⇄ change la forme (carte, barre, mini).
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const dur = (ms) => { const m = Math.floor(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 const gauge = (label, value, hot = false) => `<div class="g ${hot ? 'hot' : ''}"><small>${label}</small><b>${value}</b></div>`;
 const TONE = { good: 'bien', down: 'en baisse', bad: 'trop bas' };
@@ -10,6 +10,7 @@ setInterval(tick, 5000);
 tick();
 
 window.launcher?.onOverlay((d) => {
+  document.body.dataset.style = d.style ?? 'card';
   const s = d.session;
   $('game').textContent = s ? `${s.name}${s.start ? ` · ${dur(Date.now() - s.start)}` : ''}` : 'Aucun jeu détecté';
   const f = d.fps;
@@ -22,5 +23,12 @@ window.launcher?.onOverlay((d) => {
       gauge('GPU', pc.gpu?.usage != null ? `${pc.gpu.usage} %${pc.gpu.temp != null ? ` · ${pc.gpu.temp}°` : ''}` : 'n/d', (pc.gpu?.temp ?? 0) >= 85),
     ].join('');
   }
-  $('music').innerHTML = d.music ? `<small>♪ ${esc(d.music.title)}${d.music.artist ? ` · ${esc(d.music.artist)}` : ''}</small>` : '';
+  $('music').textContent = d.music ? `${d.music.title}${d.music.artist ? ` · ${d.music.artist}` : ''}` : 'Spotify';
 });
+$('sp').addEventListener('click', () => window.launcher?.openSpotify());
+const STYLES = ['card', 'bar', 'mini'];
+$('sty').addEventListener('click', () => {
+  const next = STYLES[(STYLES.indexOf(document.body.dataset.style ?? 'card') + 1) % STYLES.length];
+  document.body.dataset.style = next; window.launcher?.ovStyle(next);
+});
+new ResizeObserver(() => window.launcher?.ovSize($('ov').offsetWidth + 10, $('ov').offsetHeight + 10)).observe($('ov'));

@@ -13,6 +13,7 @@ let open = false; let tab = null; let last = null;
 
 function draw(d) {
   last = d;
+  document.body.dataset.style = d.style ?? 'card';
   const s = d.sum; const g = d.games[0]; const cat = tab ?? (g ? catOf(g) : 'ranked');
   $('card').style.setProperty('--c', s.net > 0 ? '#39ff8a' : s.net < 0 ? '#ff5a4f' : '#5aa8ff');
   $('live').className = `dot ${d.live ? 'on' : ''}`;
@@ -42,5 +43,9 @@ $('more').addEventListener('click', () => {
   document.body.classList.toggle('open', open);
   $('list').hidden = !open;
 });
-new ResizeObserver(() => window.launcher?.rlSize($('card').offsetHeight + 20)).observe($('card'));
+$('sty').addEventListener('click', () => {
+  const next = document.body.dataset.style === 'bar' ? 'card' : 'bar';
+  document.body.dataset.style = next; window.launcher?.ovStyle(next);
+});
+new ResizeObserver(() => window.launcher?.ovSize($('card').offsetWidth + 20, $('card').offsetHeight + 20)).observe($('card'));
 setInterval(() => last && draw(last), 60_000); // « 12 min » à jour

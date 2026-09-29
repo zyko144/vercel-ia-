@@ -40,7 +40,8 @@ export function matchTracker(me = {}) {
   let m = null; const t = { player: null };
   const mine = (p) => {
     const id = String(p.PrimaryId ?? '').split('|');
-    return (id[1] && (me.ids ?? []).some((x) => String(x).toLowerCase() === id[1].toLowerCase())) || (me.name && p.Name === me.name);
+    const name = me.name ?? t.player?.name;
+    return (id[1] && (me.ids ?? []).some((x) => String(x).toLowerCase() === id[1].toLowerCase())) || (name && p.Name === name);
   };
   t.event = (msg) => {
     const ev = msg?.Event; let d = msg?.Data;
@@ -48,7 +49,8 @@ export function matchTracker(me = {}) {
     if (ev === 'UpdateState' && d?.Game) {
       if (d.Game.bReplay) return null;
       const players = d.Players ?? [];
-      const self = players.find(mine) ?? (d.Game.bHasTarget && players.find((p) => p.Name === d.Game.Target?.Name));
+      // Joueur suivi par la caméra seulement pour se reconnaître la 1re fois (après une démo, la caméra suit un autre joueur)
+      const self = players.find(mine) ?? (!t.player && d.Game.bHasTarget && players.find((p) => p.Name === d.Game.Target?.Name));
       if (self) {
         const [plat, id] = String(self.PrimaryId ?? '').split('|');
         t.player = { name: self.Name, platform: (plat ?? '').toLowerCase(), id: id ?? null };
@@ -97,13 +99,28 @@ export function parseTracker(json) {
   }
   return { name: d.platformInfo?.platformUserHandle ?? null, avatar: d.platformInfo?.avatarUrl ?? null, ranked, casual };
 }
-/** Classé ou occa : le mode dont le profil a bougé juste après la partie (le jeu ne le dit pas) ; null tant qu'on ne sait pas. */
-export function classify(g, before, after) {
-  const moved = (a, b) => a && b && (a.played > b.played || a.mmr !== b.mmr);
-  const rb = before?.ranked?.[g.mode]; const ra = after?.ranked?.[g.mode];
-  if (moved(ra, rb)) return { ranked: true, mmr: ra.mmr != null && rb.mmr != null ? Math.round(ra.mmr - rb.mmr) : null };
-  if (moved(after?.casual?.[g.mode], before?.casual?.[g.mode])) return { ranked: false, mmr: null };
-  return null;
+/**
+ * Classé ou occa (le jeu ne le dit pas) : entre deux lectures du profil, le nombre de parties jouées de chaque mode
+ * (classé / occa) dit à quelles parties non classées encore elles correspondent. Gain de MMR si une seule partie classée
+ * du mode. Les parties restent enregistrées quoi qu'il arrive (« Tout ») ; games : du plus récent au plus ancien.
+ */
+export function classifyAll(games, before, after) {
+  if (!before || !after) return 0;
+  const left = {}; const n = (cat, m) => (left[`${cat}${m}`] ??= (() => {
+    const a = after[cat]?.[m]; const b = before[cat]?.[m];
+    if (!a || !b) return 0;
+    return a.played != null && b.played != null ? a.played - b.played : Number(a.mmr !== b.mmr);
+  })());
+  const done = [];
+  for (const g of games.filter((x) => x.ranked == null && (!before.at || x.at > before.at - 60_000)).reverse()) {
+    if (n('ranked', g.mode) > 0) { left[`ranked${g.mode}`]--; g.ranked = true; done.push(g); } else if (n('casual', g.mode) > 0) { left[`casual${g.mode}`]--; g.ranked = false; done.push(g); }
+  }
+  for (const g of done.filter((x) => x.ranked)) {
+    if (done.filter((x) => x.ranked && x.mode === g.mode).length === 1 && after.ranked[g.mode].mmr != null && before.ranked[g.mode].mmr != null) g.mmr = Math.round(after.ranked[g.mode].mmr - before.ranked[g.mode].mmr);
+  }
+  return done.length;
 }
 const PLATFORM = { steam: 'steam', epic: 'epic', ps4: 'psn', ps5: 'psn', xboxone: 'xbl', xbox: 'xbl' };
+/** Page publique du profil : ouverte en fond, elle passe la protection du site et lit l'API depuis le navigateur. */
+export const trackerPage = (p) => trackerUrl(p)?.replace(/^https:\/\/api\.tracker\.gg\/api\/v2\/rocket-league\/standard\/profile\/(.+)$/, 'https://rocketleague.tracker.network/rocket-league/profile/$1/overview') ?? null;
 export const trackerUrl = (p) => { const pl = PLATFORM[p?.platform]; return pl && (p.id || p.name) ? `https://api.tracker.gg/api/v2/rocket-league/standard/profile/${pl}/${encodeURIComponent(pl === 'steam' ? p.id : p.name)}` : null; };
