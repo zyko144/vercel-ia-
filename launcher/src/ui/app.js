@@ -1,3 +1,4 @@
+import { initSettings } from './settings.js';
 import { scamCheck } from '../core/friendsync.js';
 // Interface du launcher : accueil (bannière, plus joués, applis, recommandations), bibliothèque, statistiques,
 // assistant IA et lecteur de musique. Toutes les images sont les images officielles trouvées par le launcher.
@@ -1571,7 +1572,7 @@ const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, VIEW: 8, MENU: 9, UP: 12, DO
 let padFocus = null;
 let padPrev = [];
 let padRepeat = 0;
-const focusables = () => [...document.querySelectorAll(document.querySelector('dialog[open]') ? 'dialog[open] button, dialog[open] input, dialog[open] select' : '#nav button, .view.on [data-id], .view.on .btn, .view.on [data-free], .view.on [data-deal], .view.on [data-news], #hero .playbtn .main')].filter((el) => el.offsetParent && el.getBoundingClientRect().width > 0);
+const focusables = () => [...document.querySelectorAll($('reviewDialog').open ? '#reviewDialog button:not([disabled]), #reviewDialog input:not([disabled]), #reviewDialog textarea:not([disabled])' : document.querySelector('dialog[open]') ? 'dialog[open] button, dialog[open] input, dialog[open] select' : '#nav button, .view.on [data-id], .view.on .btn, .view.on [data-free], .view.on [data-deal], .view.on [data-news], #hero .playbtn .main')].filter((el) => el.offsetParent && el.getBoundingClientRect().width > 0);
 function padMove(dx, dy) {
   const list = focusables();
   if (!list.length) return;
@@ -1599,7 +1600,10 @@ function setPadFocus(el) {
   if (el.dataset.id && !el.closest('dialog')) { const item = state.items.find((i) => i.id === el.dataset.id); if (item && state.view === 'accueil') { state.sel = item; renderHero(); } }
 }
 function padPress(b) {
-  const open = document.querySelector('dialog[open]');
+  const open = $('reviewDialog').open ? $('reviewDialog') : document.querySelector('dialog[open]');
+  if (open === $('reviewDialog') && b === PAD.B) return open.querySelector('[data-review-close]').click();
+  if (open === $('reviewDialog') && b === PAD.A) return (open.contains(padFocus) ? padFocus : document.activeElement)?.click();
+  if (open === $('reviewDialog') && b !== PAD.A) return;
   if (b === PAD.A && padFocus) { if (padFocus.dataset.id && state.sel?.id === padFocus.dataset.id && state.view === 'accueil' && state.sel.installed) return act('launch'); return padFocus.click(); }
   if (b === PAD.B) { if (open) return open.close(); if ($('aipop').classList.contains('open')) return openAssistant(false); return go('accueil'); }
   if (b === PAD.X && state.sel) return openSheet(state.sel);
@@ -1629,6 +1633,10 @@ requestAnimationFrame(padLoop);
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.49.0': [
+    ['✨', 'Des paramètres à ta façon', 'Navigation repensée, recherche de réglages et cartes aux contours néon animés. Tout est regroupé par usage.', ['#openSettings', 'wait600']],
+    ['⭐', 'Un nouvel espace pour ton avis', 'Une note, tes mots et une capture avec aperçu : partage ton expérience depuis Paramètres › Ton avis.', ['#openSettings', 'wait600', '.setnav [data-pane=avis]', '#openReview', 'wait600']],
+  ],
   '0.48.0': [
     ['⭐', 'Donne ton avis', 'Paramètres › À propos › « Donner mon avis » : une note de 1 à 5 étoiles, un commentaire et une capture si tu veux. Ton avis s’affiche dans le bandeau des avis du site.', ['#openSettings', 'wait600', '.setnav [data-pane=about]', 'wait900']],
   ],
@@ -2299,36 +2307,6 @@ $('checkUpd').addEventListener('click', async () => {
   if (r.ready) return api.installUpdate();
 });
 $('openNews2').addEventListener('click', () => { $('settings').close(); showWhatsNew(true); });
-// Avis : note, commentaire et capture facultatifs, affichés sur le site (bandeau des avis)
-$('openReview').addEventListener('click', () => {
-  $('settings').close();
-  let stars = 0; let img = null;
-  setModal(), $('modalBox').innerHTML = `<h2>⭐ Ton avis sur History Launcher</h2><p class="mtext">Il s’affichera sur le site, avec ton pseudo.</p>
-    <div class="rvstars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-rv="${n}">★</button>`).join('')}</div>
-    <textarea id="rvText" maxlength="500" rows="3" placeholder="Ton commentaire (facultatif)"></textarea>
-    <label class="btn ghost rvpick">🖼 Ajouter une capture (facultatif)<input type="file" id="rvImg" accept="image/png,image/jpeg,image/webp" hidden></label><small class="hint" id="rvInfo"></small>
-    <div class="row end"><button type="button" class="btn ghost" data-m="0">Annuler</button><button type="button" class="btn play" id="rvSend">Envoyer</button></div>`;
-  $('modal').showModal();
-  $('modalBox').onclick = async (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.rv) { stars = Number(b.dataset.rv); $('modalBox').querySelectorAll('[data-rv]').forEach((x) => x.classList.toggle('on', Number(x.dataset.rv) <= stars)); return; }
-    if (b.dataset.m) return $('modal').close();
-    if (b.id === 'rvSend') {
-      if (!stars) return toast('Choisis une note de 1 à 5 étoiles');
-      const r = await api.review(stars, $('rvText').value, img);
-      if (r?.ok) { $('modal').close(); toast('Merci pour ton avis ! Il est sur le site 🙏'); } else toast(r?.error ?? 'Impossible pour l’instant');
-    }
-  };
-  $('rvImg').onchange = async () => {
-    const f = $('rvImg').files[0]; if (!f) return;
-    // Réduite (1280 px, JPEG) pour un envoi léger
-    const bmp = await createImageBitmap(f); const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
-    const c = Object.assign(document.createElement('canvas'), { width: Math.round(bmp.width * k), height: Math.round(bmp.height * k) });
-    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); img = c.toDataURL('image/jpeg', 0.82);
-    $('rvInfo').textContent = `✓ ${f.name}`;
-  };
-});
-
 // ---------- Recherche rapide (Ctrl+Espace, ou Ctrl+Alt+Espace depuis Windows) ----------
 const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']];
 const PAL_ACTIONS = [
@@ -3735,11 +3713,7 @@ api.onStreamer?.((on) => { document.body.classList.toggle('streamer', Boolean(on
 $('discordStatus').addEventListener('change', (e) => api.setSettings({ discordStatus: e.target.checked }));
 $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActivity: e.target.checked }));
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
-document.querySelectorAll('.setnav [data-pane]').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('.setnav [data-pane]').forEach((x) => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.setpane').forEach((p) => { p.hidden = p.dataset.pane !== b.dataset.pane; });
-  window.sfx?.play('nav');
-}));
+initSettings(api);
 const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxNotif').checked, sfxVol: Number($('sfxVol').value) }; window.sfx?.set({ on: c.sfxOn, notif: c.sfxNotif, vol: c.sfxVol / 100 }); api.setSettings(c); };
 ['sfxOn', 'sfxNotif'].forEach((id) => $(id).addEventListener('change', sfxSave));
 $('sfxVol').addEventListener('change', () => { sfxSave(); window.sfx?.play('success'); });
@@ -3749,7 +3723,16 @@ $('compact').addEventListener('change', (e) => { document.body.classList.toggle(
 $('dnd').addEventListener('change', (e) => api.setSettings({ dnd: e.target.checked }).then(() => { window.sfx?.set({ notif: !e.target.checked && $('sfxNotif').checked }); toast(e.target.checked ? '⛔ Ne pas déranger activé' : 'Notifications réactivées'); }));
 $('tournament').addEventListener('change', (e) => api.setSettings({ tournament: e.target.checked }).then(() => toast(e.target.checked ? '🏆 Mode tournoi : boost sur chaque partie, zéro notification' : 'Mode tournoi désactivé')));
 $('libExport').addEventListener('click', async () => { const r = await api.libExport(); if (r?.ok) toast('📤 Bibliothèque exportée'); });
-$('libImport').addEventListener('click', async () => { const r = await api.libImport(); if (r?.ok) { toast('📥 Bibliothèque importée'); api.settings().then(showKeys); } else if (r?.error) toast(r.error); });
+$('libImport').addEventListener('click', async () => {
+  const button = $('libImport'); button.disabled = true;
+  $('libImportStatus').textContent = 'Choisis une sauvegarde History (.json) dans la fenêtre de fichiers.';
+  try {
+    const r = await api.libImport?.();
+    $('libImportStatus').textContent = r?.ok ? '✓ Bibliothèque importée.' : r?.error ?? (r ? 'Import annulé. Tu peux choisir un autre fichier.' : 'L’import est disponible dans l’application History Launcher.');
+    if (r?.ok) { toast('📥 Bibliothèque importée'); api.settings().then(showKeys); }
+  } catch { $('libImportStatus').textContent = 'Impossible d’importer ce fichier. Réessaie avec une sauvegarde History.'; }
+  finally { button.disabled = false; }
+});
 $('micTest').addEventListener('click', async (e) => {
   e.preventDefault();
   let stream;
@@ -4219,7 +4202,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.48.0',
+    version: async () => '0.49.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
@@ -4249,7 +4232,7 @@ function demoApi() {
   const NAV = ['accueil', 'jeux', 'applis', 'favoris', 'stats', 'classement', 'amis', 'pc', 'optimisation'];
   const prev = {}; let raf = null; let lastMove = 0;
   const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
-  const scope = () => ($('modal').open ? $('modal') : $('settings').open ? $('settings') : document);
+  const scope = () => ($('reviewDialog').open ? $('reviewDialog') : $('modal').open ? $('modal') : $('settings').open ? $('settings') : document);
   const targets = () => [...scope().querySelectorAll('button:not([disabled]), [data-id], input, select, .side [data-view]')].filter((el) => visible(el) && !el.closest('[hidden]'));
   function focusEl(el) {
     if (!el) return;
@@ -4287,7 +4270,8 @@ function demoApi() {
       if (!dir[0] && !dir[1]) lastMove = 0;
       const el = document.activeElement;
       if (press(0, pad) && el && el !== document.body) el.click();
-      if (press(1, pad)) { if (!$('ctx').hidden) hideCtx(); else if ($('modal').open) $('modal').close(); else if ($('settings').open) $('settings').close(); else go('accueil'); }
+      if (press(1, pad)) { if (!$('ctx').hidden) hideCtx(); else if ($('reviewDialog').open) $('reviewDialog').querySelector('[data-review-close]').click(); else if ($('modal').open) $('modal').close(); else if ($('settings').open) $('settings').close(); else go('accueil'); }
+      if ($('reviewDialog').open) continue;
       if (press(2, pad) && el?.dataset?.id) el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       if (press(3, pad) && el?.dataset?.id) { const r = el.getBoundingClientRect(); openCtx(state.items.find((x) => x.id === el.dataset.id), r.left, r.bottom); }
       if (press(4, pad) || press(5, pad)) { const i = NAV.indexOf(state.view); go(NAV[(Math.max(0, i) + (pad.buttons[5]?.pressed ? 1 : NAV.length - 1)) % NAV.length]); }
