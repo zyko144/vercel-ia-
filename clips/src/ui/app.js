@@ -492,18 +492,19 @@ function paintUpdate(u) {
   if (!u) return;
   if (u.state === 'available' && askedVersion !== u.version) {
     askedVersion = u.version; $('updDlgTitle').textContent = `🎉 History Clips ${u.version} est disponible`;
-    $('updDlgNotes').textContent = u.notes || 'Nouveautés et corrections. La mise à jour prend moins d’une minute.';
+    $('updDlgNotes').textContent = u.notes || 'Nouveautés et corrections. Tes clips et tes réglages sont conservés.';
     if (!$('updDlg').open) $('updDlg').showModal();
   }
-  $('updPill').hidden = !['available', 'ready'].includes(u.state);
-  $('updPill').textContent = u.state === 'ready' ? `⬆ Redémarrer pour la v${u.version}` : `⬆ Mettre à jour (v${u.version})`;
-  $('updScreen').hidden = !(u.state === 'progress' && u.now);
-  $('updTitle').textContent = `Mise à jour v${u.version ?? ''}`; $('updFill').style.width = `${u.percent ?? 0}%`; $('updText').textContent = `Téléchargement… ${u.percent ?? 0} %`;
-  $('updStatus').textContent = { checking: 'Recherche…', uptodate: '✅ Tu as la dernière version.', available: `Nouvelle version v${u.version} disponible.`, progress: `Téléchargement ${u.percent ?? 0} %…`, ready: `v${u.version} prête : elle s’installe au redémarrage.`, error: `Erreur : ${u.error ?? ''}` }[u.state] ?? 'Les mises à jour s’installent toutes seules.';
+  $('updPill').hidden = !['available', 'ready', 'error'].includes(u.state);
+  $('updPill').textContent = u.state === 'error' ? '↻ Réessayer la mise à jour' : u.state === 'ready' ? `⬆ Redémarrer pour la v${u.version}` : `⬆ Mettre à jour (v${u.version})`;
+  $('updScreen').hidden = !(['progress', 'preparing', 'installing'].includes(u.state) && u.now);
+  $('updTitle').textContent = `Mise à jour v${u.version ?? ''}`; $('updFill').style.width = `${u.percent ?? 0}%`; $('updText').textContent = u.state === 'preparing' ? 'Fin des exports en cours et fermeture de l’enregistreur…' : u.state === 'installing' ? 'Ouverture de l’installateur History Clips…' : `Téléchargement… ${u.percent ?? 0} %`;
+  $('updCheck').disabled = ['checking', 'progress', 'preparing', 'installing'].includes(u.state);
+  $('updStatus').textContent = { checking: 'Recherche…', uptodate: '✅ Tu as la dernière version.', available: `Nouvelle version v${u.version} disponible.`, progress: `Téléchargement ${u.percent ?? 0} %…`, ready: `v${u.version} prête : elle s’installe au redémarrage.`, preparing: 'Préparation : les exports en cours sont conservés.', installing: 'Installation en cours…', error: `Mise à jour interrompue : ${u.error ?? ''}. Réessaie avec le bouton en haut. Si l’installateur indique « anciens fichiers : 2 », quitte Clips depuis son icône près de l’horloge puis relance l’installateur. Si cela persiste, redémarre Windows avant de réessayer.` }[u.state] ?? 'Les mises à jour s’installent toutes seules.';
 }
 $('updPill').addEventListener('click', () => api.updNow());
 $('updYes').addEventListener('click', () => { $('updDlg').close(); api.updNow(); });
-$('updLater').addEventListener('click', () => { $('updDlg').close(); api.updLater(); toast('⬆ Téléchargée en fond, installée à la fermeture'); });
+$('updLater').addEventListener('click', () => { $('updDlg').close(); api.updLater(); toast('⬆ Téléchargement en arrière-plan ; installation après fermeture de Clips'); });
 $('updCheck').addEventListener('click', async () => { const r = await api.updCheck(); if (r?.dev) $('updStatus').textContent = 'Version développeur : pas de mise à jour automatique.'; });
 api.onUpdate(paintUpdate);
 

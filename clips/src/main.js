@@ -13,6 +13,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import updaterMod from 'electron-updater';
 import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
 
+import { createUpdateController, createMediaJobs } from './updateController.js';
+
+const mediaJobs = createMediaJobs();
+const mediaHandle = (name, fn) => ipcMain.handle(name, (...args) => mediaJobs.run(() => fn(...args)).catch(e => ({ ok: false, error: e.message })));
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(here, 'ui', 'icon.png');
 let API = 'https://vercel-ia.onrender.com';
@@ -93,7 +97,7 @@ while ($true) {
 let fg = { hwnd: '0', full: false, game: 'Bureau', exe: '' };
 let fgProc = null; let noGameTimer = null;
 function startFgWatch() {
-  if (process.platform !== 'win32' || fgProc) return;
+  if (process.platform !== 'win32' || fgProc || app.quitting || mediaJobs.closing) return;
   fgProc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', FG_LOOP], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
   try { os.setPriority(fgProc.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ }
   let buf = '';
@@ -104,6 +108,7 @@ function startFgWatch() {
   fgProc.on('exit', () => { fgProc = null; if (!app.quitting) setTimeout(startFgWatch, 10_000); });
 }
 function onForeground(v) {
+  if (mediaJobs.closing || app.quitting) return;
   const wasGame = fg.full && fg.game !== 'Bureau';
   fg = { ...v, game: gameLabel(v) };
   const isGame = fg.full && fg.game !== 'Bureau' && !/^(History Clips|History Launcher)$/i.test(fg.game);
@@ -132,6 +137,7 @@ async function pickSource() {
   return (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }).catch(() => []))[0] ?? null;
 }
 async function setReplay(on, keepSetting = false) {
+  if (on && (mediaJobs.closing || app.quitting)) return;
   if (!on) {
     if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); const w = recWin; setTimeout(() => { if (!w.isDestroyed()) w.destroy(); }, 500); }
     recWin = null; recSource = null; recState = keepSetting && st.replay ? 'wait' : 'off'; changed(); resetRing();
@@ -140,6 +146,7 @@ async function setReplay(on, keepSetting = false) {
   if (st.onlyGame && process.platform === 'win32' && !inGame()) { recState = 'wait'; changed(); tray?.setToolTip('History Clips · en attente d’un jeu'); return; }
   if (recWin && !recWin.isDestroyed()) return;
   const src = await pickSource();
+  if (mediaJobs.closing || app.quitting) return;
   if (!src) { recState = 'error:aucun écran trouvé'; changed(); return; }
   recSource = src.id;
   recWin = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { preload: path.join(here, 'recorder.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
@@ -201,7 +208,8 @@ async function concatTrack(t, from, dest) {
   for (const p of t.ring.filter((x) => x.n >= from)) await appendFile(dest, await readFile(p.file).catch(() => Buffer.alloc(0)));
 }
 
-async function saveClip(game) {
+const saveClip = (game) => mediaJobs.run(() => saveClipWork(game)).catch(err => notify('Clip non enregistré', err.message));
+async function saveClipWork(game) {
   if (!recWin || recState !== 'on') {
     if (!st.replay) { st.replay = true; saveSt(); }
     if (st.onlyGame && !inGame() && !game) return notify('Aucun jeu en cours', 'Le replay démarre tout seul quand un jeu est en plein écran (réglable dans les réglages).');
@@ -266,7 +274,7 @@ async function clean(src, out, opts = {}) {
   }
 }
 // Réparer un clip illisible : réencodé à la place de l'original (l'ancien part à la corbeille)
-ipcMain.handle('clips:repair', async (_e, t) => {
+mediaHandle('clips:repair', async (_e, t) => {
   const f = fileOf(t); if (!f || /\.png$/i.test(f)) return { ok: false };
   const tmp = path.join(path.dirname(f), `.${Date.now()}.mp4`);
   try { await clean(f, tmp, { fixup: true }); } catch (err) { await rm(tmp, { force: true }); return { ok: false, error: `Réparation impossible (${err.message}).` }; }
@@ -347,15 +355,17 @@ async function serveRange(f, range) {
 // Miniature d'un clip : faite une seule fois (petit JPG dans .miniatures), une à la fois pour ne pas charger le processeur
 const thumbJobs = new Map(); let thumbChain = Promise.resolve();
 function thumbOf(f) {
+  if (mediaJobs.closing) return Promise.resolve(null);
   const jpg = path.join(ROOT(), '.miniatures', `${createHash('sha1').update(f).digest('hex').slice(0, 20)}.jpg`);
   if (!thumbJobs.has(jpg)) {
-    const job = thumbChain.then(async () => {
+    const thumbChainForJob = thumbChain;
+    const job = mediaJobs.run(() => thumbChainForJob.then(async () => {
       const [a, b] = await Promise.all([stat(jpg).catch(() => null), stat(f).catch(() => null)]);
       if (a && b && a.mtimeMs >= b.mtimeMs) return jpg;
       await mkdir(path.dirname(jpg), { recursive: true });
       await runFfmpeg(['-y', '-ss', '1', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]).catch(() => runFfmpeg(['-y', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]));
       return jpg;
-    }).catch(() => null).finally(() => setTimeout(() => thumbJobs.delete(jpg), 60_000));
+    })).catch(() => null).finally(() => setTimeout(() => thumbJobs.delete(jpg), 60_000));
     thumbChain = job; thumbJobs.set(jpg, job);
   }
   return thumbJobs.get(jpg);
@@ -373,7 +383,7 @@ ipcMain.handle('clips:delete', async (_e, t) => {
 });
 // Découpe : nouveau fichier « (coupé) » réencodé en bonne qualité, l'original est gardé
 // Découpe réencodée en bonne qualité : en nouveau clip « (coupé) », ou à la place de l'original (qui part à la corbeille)
-ipcMain.handle('clips:trim', async (_e, t, start, end, mode) => {
+mediaHandle('clips:trim', async (_e, t, start, end, mode) => {
   const f = fileOf(t);
   if (!f || !(end > start)) return { ok: false, error: 'Choisis un début avant la fin.' };
   const base = path.basename(f).replace(/\.(mp4|webm)$/i, '');
@@ -390,7 +400,7 @@ ipcMain.handle('clips:trim', async (_e, t, start, end, mode) => {
   return { ok: true, token: tokenOf(dest) };
 });
 // Montage : plusieurs clips mis bout à bout en un seul (1080p 60 i/s, son gardé ou silence si le clip n'en a pas)
-ipcMain.handle('clips:montage', async (_e, list) => {
+mediaHandle('clips:montage', async (_e, list) => {
   const files = (Array.isArray(list) ? list : []).map(fileOf).filter((f) => f && !/\.png$/i.test(f)).slice(0, 20);
   if (files.length < 2) return { ok: false, error: 'Choisis au moins 2 clips.' };
   const info = await Promise.all(files.map(probe));
@@ -402,7 +412,7 @@ ipcMain.handle('clips:montage', async (_e, list) => {
   catch (err) { return { ok: false, error: `Montage impossible (${err.message}).` }; }
 });
 // Vertical 9:16 (TikTok, Shorts) : « flou » = toute l'image au centre sur un fond flouté, « zoom » = recadré au centre
-ipcMain.handle('clips:vertical', async (_e, t, mode) => {
+mediaHandle('clips:vertical', async (_e, t, mode) => {
   const f = fileOf(t); if (!f) return { ok: false };
   const vf = mode === 'zoom' ? 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
     : 'split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:2[bg];[b]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1';
@@ -423,7 +433,7 @@ ipcMain.handle('clips:link', async (_e, t) => {
   clipboard.writeText(r.url);
   return { ok: true, url: r.url };
 });
-ipcMain.handle('clips:export', async (_e, t) => {
+mediaHandle('clips:export', async (_e, t) => {
   const f = fileOf(t);
   if (!f) return { ok: false };
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('desktop'), path.basename(f).replace(/\.webm$/i, '.mp4')), filters: [{ name: 'Vidéo MP4', extensions: ['mp4'] }] });
@@ -594,34 +604,46 @@ ipcMain.handle('app:launcher', async () => { const has = Boolean(app.getApplicat
 
 // ---------- Mises à jour (comme le launcher : « Mettre à jour maintenant ? », sinon installée à la fermeture) ----------
 const updater = updaterMod.autoUpdater;
-let upd = { state: 'idle', version: null, percent: 0 };
-const updState = (p) => { upd = { ...upd, ...p }; send('update:state', upd); };
+const updates = createUpdateController(updater, {
+  changed: (state) => {
+    send('update:state', state);
+    if (state.state === 'error' && mediaJobs.closing) {
+      mediaJobs.reopen(); app.quitting = false; startFgWatch();
+      if (st.replay) void setReplay(true).catch(() => {});
+    }
+  },
+  prepare: async () => {
+    await mediaJobs.drain();
+    clearTimeout(restarting); clearTimeout(noGameTimer);
+    await setReplay(false, true);
+    if (fgProc) {
+      const proc = fgProc;
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Le veilleur de jeu ne se ferme pas. Ferme Clips puis relance la mise à jour.')), 5000);
+        proc.once('close', () => { clearTimeout(timer); resolve(); });
+        proc.kill();
+      });
+    }
+    await new Promise(resolve => setTimeout(resolve, 600));
+    await saveSt();
+  },
+  available: (i) => {
+    if ((!win || win.isDestroyed() || !win.isVisible()) && Notification.isSupported()) {
+      const n = new Notification({ title: `History Clips ${i.version} est disponible`, body: 'Clique pour télécharger et installer la mise à jour.', icon: ICON });
+      n.on('click', () => { showWindow(); setTimeout(() => send('update:state', updates.get()), 1500); }); n.show();
+    }
+    setTimeout(() => { if (updates.get().state === 'available') void updates.download(); }, 10 * 60_000);
+  },
+});
 function startUpdater() {
   if (!app.isPackaged) return;
-  updater.autoDownload = false; updater.autoInstallOnAppQuit = true;
   updater.logger = { info: () => {}, warn: () => {}, debug: () => {}, error: (e) => { st.updError = String(e?.message ?? e).slice(0, 200); } };
-  updater.on('update-available', (i) => {
-    const fresh = upd.version !== i.version;
-    updState({ state: 'available', version: i.version, notes: typeof i.releaseNotes === 'string' ? i.releaseNotes.replace(/<[^>]+>/g, '').slice(0, 600) : null });
-    // Fenêtre fermée : notification Windows (clic = ouvrir l'appli sur la question « Mettre à jour ? »)
-    if (fresh && (!win || win.isDestroyed() || !win.isVisible()) && Notification.isSupported()) {
-      const n = new Notification({ title: `History Clips ${i.version} est disponible`, body: 'Clique pour mettre à jour maintenant (moins d’une minute).', icon: ICON });
-      n.on('click', () => { showWindow(); setTimeout(() => send('update:state', upd), 1500); }); n.show();
-    }
-    // Sans réponse en 10 min : téléchargée en fond, installée à la prochaine fermeture
-    setTimeout(() => { if (upd.state === 'available') updater.downloadUpdate().catch(() => {}); }, 10 * 60_000);
-  });
-  updater.on('update-not-available', () => { if (upd.state === 'checking') updState({ state: 'uptodate' }); });
-  updater.on('download-progress', (p) => updState({ state: 'progress', percent: Math.round(p.percent) }));
-  updater.on('update-downloaded', (i) => { updState({ state: 'ready', version: i.version }); if (upd.now) setTimeout(() => { app.quitting = true; updater.quitAndInstall(true, true); }, 1200); });
-  updater.on('error', (err) => { st.updError = String(err?.message ?? err).slice(0, 200); updState({ state: 'error', error: st.updError.slice(0, 160) }); });
-  const check = () => { if (!['progress', 'ready'].includes(upd.state)) updater.checkForUpdates().catch(() => {}); };
-  setTimeout(check, 8000); setInterval(check, 30 * 60_000);
+  setTimeout(() => updates.check(), 8000); setInterval(() => updates.check(), 30 * 60_000);
 }
-ipcMain.handle('update:get', () => ({ ...upd, current: app.getVersion(), packaged: app.isPackaged }));
-ipcMain.handle('update:check', () => { if (!app.isPackaged) return { dev: true }; updState({ state: 'checking' }); updater.checkForUpdates().catch((e) => updState({ state: 'error', error: String(e?.message ?? e) })); return true; });
-ipcMain.handle('update:later', () => { if (upd.state === 'available') { updState({ state: 'progress', percent: 0, now: false }); updater.downloadUpdate().catch(() => {}); } return true; });
-ipcMain.handle('update:now', () => { if (upd.state === 'ready') { app.quitting = true; updater.quitAndInstall(true, true); return true; } updState({ now: true, state: 'progress', percent: 0 }); updater.downloadUpdate().catch(() => {}); return true; });
+ipcMain.handle('update:get', () => ({ ...updates.get(), current: app.getVersion(), packaged: app.isPackaged }));
+ipcMain.handle('update:check', () => { if (!app.isPackaged) return { dev: true }; void updates.check(); return true; });
+ipcMain.handle('update:later', () => { if (!app.isPackaged) return { dev: true }; void updates.download(); return true; });
+ipcMain.handle('update:now', () => { if (!app.isPackaged) return { dev: true }; void updates.download(true); return true; });
 
 // ---------- Liens history-clips:// (ouvert par History Launcher) ----------
 function handleLink(argv) {
@@ -635,7 +657,12 @@ function handleLink(argv) {
 // ---------- Démarrage ----------
 app.on('second-instance', (_e, argv) => { showWindow(); handleLink(argv); });
 app.on('window-all-closed', (e) => e.preventDefault?.());
-app.on('before-quit', () => { app.quitting = true; fgProc?.kill(); });
+app.on('before-quit', (e) => {
+  if (app.isPackaged && updates.canInstall() && !['installing', 'error'].includes(updates.get().state)) {
+    e.preventDefault(); void updates.install(); return;
+  }
+  app.quitting = true; fgProc?.kill();
+});
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.whenReady().then(async () => {
   try { st = { ...DEFAULTS, ...JSON.parse(await readFile(SET_FILE(), 'utf8')) }; } catch { /* premier lancement */ }

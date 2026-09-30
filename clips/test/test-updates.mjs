@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { createUpdateController, createMediaJobs } from '../src/updateController.js';
+const tick = () => new Promise(r => setImmediate(r));
+let checks = 0, downloads = 0, installs = 0, finishDownload, finishPrepare;
+const updater = new EventEmitter();
+updater.checkForUpdates = async () => { checks++; updater.emit('update-available', { version: '1.0.0' }); };
+updater.downloadUpdate = () => { downloads++; return new Promise(r => finishDownload = () => { updater.emit('update-downloaded', { version: '1.0.0' }); r(); }); };
+updater.quitAndInstall = (silent, restart) => { assert.equal(silent, false); assert.equal(restart, true); installs++; };
+const updates = createUpdateController(updater, { changed() {}, prepare: () => new Promise(r => finishPrepare = r) });
+assert.equal(updater.autoInstallOnAppQuit, false);
+assert.equal(updater.disableDifferentialDownload, true);
+const first = updates.download();
+const second = updates.download(true);
+assert.equal(first, second, 'clics répétés partagent le téléchargement');
+await tick(); assert.equal(checks, 1); assert.equal(downloads, 1);
+await updates.check(); assert.equal(checks, 1, 'pas de vérification concurrente au téléchargement');
+updater.emit('download-progress', { percent: 42.4 }); assert.equal(updates.get().percent, 42);
+finishDownload(); await tick(); assert.equal(updates.get().state, 'preparing'); assert.equal(installs, 0);
+const again = updates.install(); finishPrepare(); await Promise.all([first, again]); assert.equal(installs, 1, 'une installation après la préparation');
+
+let attempt = 0;
+const failed = new EventEmitter();
+failed.checkForUpdates = async () => failed.emit('update-available', { version: '1' });
+failed.downloadUpdate = async () => { if (++attempt === 1) throw Error('hors ligne'); failed.emit('update-downloaded', { version: '1' }); };
+failed.quitAndInstall = () => { throw Error('ne doit pas installer en arrière-plan'); };
+const retry = createUpdateController(failed, { changed() {}, prepare: async () => {} });
+await retry.download(); assert.equal(retry.get().state, 'error');
+await retry.download(); assert.equal(retry.get().state, 'ready'); assert.equal(attempt, 2);
+
+const current = new EventEmitter();
+current.checkForUpdates = async () => current.emit('update-not-available');
+current.downloadUpdate = () => { throw Error('pas de téléchargement sans nouvelle version'); };
+const noUpdate = createUpdateController(current, { changed() {}, prepare: async () => {} });
+assert.equal(await noUpdate.download(true), false); assert.equal(noUpdate.get().state, 'uptodate');
+
+const prep = new EventEmitter(); let prepareAttempts = 0, launched = 0;
+prep.checkForUpdates = async () => prep.emit('update-available', { version: '2' });
+prep.downloadUpdate = async () => prep.emit('update-downloaded', { version: '2' });
+prep.quitAndInstall = () => launched++;
+const prepareRetry = createUpdateController(prep, { changed() {}, prepare: async () => { if (++prepareAttempts === 1) throw Error('processus occupé'); } });
+await prepareRetry.download(true); assert.equal(prepareRetry.get().state, 'error'); assert.equal(launched, 0);
+await prepareRetry.download(true); assert.equal(launched, 1, 'reprend une installation prête sans retélécharger');
+
+const jobs = createMediaJobs(); let complete, writes = 0;
+const exportJob = jobs.run(async () => { await new Promise(r => complete = r); writes++; });
+await tick(); let drained = false;
+const drain = jobs.drain().then(() => drained = true);
+await assert.rejects(jobs.run(() => {}), /Installation/);
+await tick(); assert.equal(drained, false, 'attend l’export entier, pas seulement ffmpeg');
+complete(); await Promise.all([exportJob, drain]); assert.equal(writes, 1); assert.ok(drained);
+jobs.reopen(); await jobs.run(() => writes++); assert.equal(writes, 2);
+await assert.rejects(jobs.run(() => { throw Error('export échoué'); })); await jobs.drain();
+console.log('✅ Clips : mise à jour unique, vérification avant téléchargement, progression, fermeture après exports, reprise après erreur');

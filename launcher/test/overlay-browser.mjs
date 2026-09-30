@@ -1,0 +1,34 @@
+const $ = id => document.getElementById(id), results = [];
+const assert = (ok, text) => { if (!ok) throw Error(text); results.push('✓ ' + text); };
+const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+const tick = () => new Promise(r => setTimeout(r, 0));
+try {
+  const doc = new DOMParser().parseFromString(await (await fetch('../src/ui/bubble.html')).text(), 'text/html');
+  document.body.append(doc.getElementById('b'));
+  let receive, sends = 0, focus = 0, height = 0, complete;
+  window.bubble = { onData: fn => receive = fn, size: h => { height = h; window.frameElement.style.height = `${h}px`; }, open: async () => { focus++; return true; }, hover() {}, close() {}, app() {}, reply: () => { sends++; return new Promise(r => complete = r); } };
+  await import('../src/ui/bubble.js');
+  const data = key => ({ key, title: 'Joueur History', msgs: Array.from({ length: 3 }, () => ({ text: 'Tu viens jouer ? ' + 'Un message assez long pour vérifier les limites de la bulle. '.repeat(4) })), silent: true });
+  receive(data('f:1')); await frame();
+  assert(getComputedStyle($('rep')).display === 'none', 'Formulaire réellement masqué avant le clic');
+  assert($('b').getBoundingClientRect().right <= 340, 'Carte complète dans une fenêtre de 340 px');
+  assert($('msgs').clientHeight <= 160 && $('msgs').scrollHeight > 160, `Messages longs défilants (${$('msgs').clientHeight}/${$('msgs').scrollHeight})`);
+  const initialHeight = height;
+  $('msgs').click(); await tick(); await frame();
+  assert(focus === 1 && !$('rep').hidden, 'Clic demande le focus natif et ouvre la réponse');
+  assert(height > initialHeight, 'Fenêtre agrandie pour afficher le champ et les actions');
+  $('txt').value = 'Réponse conservée';
+  const submit = () => $('rep').dispatchEvent(new Event('submit', { cancelable: true }));
+  submit(); submit(); assert(sends === 1, 'Pas de double envoi');
+  complete({ ok: false, error: 'Hors ligne' }); await tick();
+  assert($('txt').value === 'Réponse conservée' && !$('txt').disabled, 'Erreur : brouillon conservé et nouvelle tentative possible');
+  submit(); receive(data('f:2')); complete({ ok: true }); await tick();
+  assert(!$('rep').querySelector('button').disabled && !$('msgs').textContent.includes('Réponse conservée'), 'Ancien résultat ignoré après changement de conversation');
+  receive({ ...data('f:2'), openReply: true }); await tick();
+  assert(!$('rep').hidden, 'Action Répondre ouvre directement le champ');
+  $('txt').value = 'Je termine cette partie et j’arrive !'; submit(); complete({ ok: true }); await tick();
+  assert($('hint').textContent.includes('Envoyé'), 'Envoi confirmé dans la bulle');
+  receive(null); receive({ ...data('f:3'), openReply: true }); await tick();
+  assert(!$('rep').hidden && !$('txt').disabled, 'Nouvelle réponse disponible après fermeture');
+  parent.document.getElementById('results').textContent = `PASS — ${results.length} checks\n` + results.join('\n');
+} catch (e) { parent.document.getElementById('results').textContent = 'FAIL: ' + e.stack + '\n' + results.join('\n'); }

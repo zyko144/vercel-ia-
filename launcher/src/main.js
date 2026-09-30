@@ -1,3 +1,4 @@
+import { updateCommand, readUpdateProgress } from './core/gameUpdates.js';
 import { cleanHome, cleanNotebook, validGameId } from './core/personal.js';
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
@@ -423,8 +424,11 @@ async function steamExe() {
 async function runSilentSteam(args) {
   const exe = await steamExe();
   if (!exe || process.platform !== 'win32') return false;
-  spawn(exe, ['-silent', ...args], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-  return true;
+  return new Promise((resolve) => {
+    const child = spawn(exe, ['-silent', ...args], { detached: true, stdio: 'ignore', windowsHide: true });
+    child.once('error', () => resolve(false));
+    child.once('spawn', () => { child.unref(); resolve(true); });
+  });
 }
 // Mode jeu : le launcher se range dans la barre des tâches pendant la partie (rien ne tourne à l'écran, zéro gêne)
 function gameMode(item) {
@@ -1588,6 +1592,14 @@ function startDirect(item, exe) {
 }
 const epicLauncherInstalled = () => path.join(process.env.ProgramData ?? 'C:\\ProgramData', 'Epic', 'UnrealEngineLauncher', 'LauncherInstalled.dat');
 
+ipcMain.handle('gameUpdate:progress', async (_e, id) => {
+  const item=items.find(i=>i.id===id);
+  if(!item)return {error:'Jeu introuvable.'};
+  try { const result=await readUpdateProgress(item);if(result.phase==='done'&&item.updatePending){item.updatePending=false;send('lib:update',library());}return result; }
+  catch(e){return {error:e.message};}
+});
+ipcMain.handle('gameUpdate:downloads', () => runSilentSteam(['steam://downloads']));
+
 async function doAction(id, action) {
   const item = items.find((i) => i.id === id); // jamais une commande venue de l'interface : seulement nos éléments
   if (!item) throw new Error('élément inconnu');
@@ -1627,9 +1639,11 @@ async function doAction(id, action) {
   }
 
   if (action === 'update' && item.source === 'steam') {
-    // Steam fait la mise à jour puis lance le jeu (en arrière-plan, sans fenêtre)
-    if (await runSilentSteam(['-applaunch', item.steamId])) { gameMode(item); return { ok: true }; }
-    throw new Error('Steam introuvable');
+    // Demande de téléchargement uniquement : ne jamais utiliser -applaunch ici.
+    const before = await readUpdateProgress(item);
+    if(before.phase === 'done')return {ok:true};
+    if (await runSilentSteam(updateCommand(item))) return { ok: true };
+    throw new Error('Plateforme de téléchargement introuvable');
   }
 
   if (action === 'verify') {
@@ -1992,6 +2006,7 @@ let notifWin = null;
 let notifFree = null;
 let notifCards = [];
 let notifHover = false;
+let notifHeight = 0;
 const notifTimers = new Map();
 function notifSync() {
   if (!notifCards.length) {
@@ -2002,7 +2017,7 @@ function notifSync() {
   }
   clearTimeout(notifFree);
   const area = screen.getPrimaryDisplay().workArea;
-  const h = Math.min(4, notifCards.length) * 118 + 24;
+  const h = Math.min(area.height - 16, notifHeight || Math.min(4, notifCards.length) * 150 + 24);
   if (!notifWin || notifWin.isDestroyed()) {
     notifWin = new BrowserWindow({
       width: 360, height: h, x: area.x + 8, y: area.y + area.height - h - 8, frame: false, transparent: true, resizable: false,
@@ -2045,20 +2060,20 @@ function bubblePlace() {
   bubbleWin.setBounds({ x: area.x + area.width - 340 - 8, y: area.y + 8, width: 340, height: Math.max(90, Math.min(420, bubbleH)) });
 }
 /** Affiche le message dans la bulle ; renvoie false si elle ne doit pas s'afficher (la carte classique prend le relais). */
-function bubbleMsg(x) {
+function bubbleMsg(x, forceReply = false) {
   const st = store.data.settings;
-  if (st.msgBubble === false || st.friendNotifs === false || st.dnd || gameDnd() || streaming()) return false; // mode tournoi : la bulle des messages passe quand même
-  if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) return false;
+  if (!forceReply && (st.msgBubble === false || st.friendNotifs === false || st.dnd || gameDnd() || streaming())) return false; // mode tournoi : la bulle des messages passe quand même
+  if (!forceReply && win && !win.isDestroyed() && win.isVisible() && win.isFocused()) return false;
   const group = x.type === 'gmsg';
   const key = group ? `g:${x.gid}` : `f:${x.from}`;
   const f = (socialLive?.amis ?? []).find((a) => a.id === x.from);
   const g = group ? (socialLive?.groupes ?? []).find((y) => y.id === x.gid) : null;
-  const m = { pseudo: x.pseudo ?? f?.pseudo ?? '?', text: String(x.text ?? '').slice(0, 300) };
+  const m = { pseudo: x.pseudo ?? f?.pseudo ?? '?', text: String(x.text ?? '').slice(0, 500) };
   if (bubble?.key === key) bubble.msgs = [...bubble.msgs, m].slice(-3);
   else if (!bubbleTyping) bubble = { key, from: x.from, gid: x.gid ?? null, title: group ? (g?.name ?? x.group ?? 'Groupe') : m.pseudo, group, avatar: group ? null : f?.avatar ?? null, color: f?.color ?? '#3b82f6', msgs: [m] };
   else return false; // en train de répondre à quelqu'un d'autre : la carte classique prend le relais
   clearTimeout(bubbleFree);
-  const data = { ...bubble, sound: st.sfxNotif !== false, vol: (st.sfxVol ?? 60) / 100 };
+  const data = { ...bubble, openReply: forceReply, sound: st.sfxNotif !== false, vol: (st.sfxVol ?? 60) / 100 };
   if (!bubbleWin || bubbleWin.isDestroyed()) {
     bubbleWin = new BrowserWindow({
       width: 340, height: bubbleH, frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
@@ -2067,9 +2082,9 @@ function bubbleMsg(x) {
     bubbleWin.setAlwaysOnTop(true, 'screen-saver');
     bubbleWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     bubbleWin.webContents.on('will-navigate', (e) => e.preventDefault());
-    bubbleWin.on('blur', () => { if (bubbleTyping) { bubbleTyping = false; bubbleWin.setFocusable(false); bubbleArm(); } });
+    // Le brouillon reste ouvert lorsque le jeu reprend le focus.
     bubbleWin.loadFile(path.join(here, 'ui', 'bubble.html'));
-    bubbleWin.webContents.once('did-finish-load', () => { if (!bubble) return; bubblePlace(); bubbleWin.webContents.send('bubble:data', { ...bubble, sound: data.sound, vol: data.vol }); bubbleWin.showInactive(); });
+    bubbleWin.webContents.once('did-finish-load', () => { if (!bubble) return; bubblePlace(); bubbleWin.webContents.send('bubble:data', { ...bubble, openReply: data.openReply, sound: data.sound, vol: data.vol }); bubbleWin.showInactive(); });
   } else {
     bubblePlace();
     bubbleWin.webContents.send('bubble:data', data);
@@ -2081,16 +2096,17 @@ function bubbleMsg(x) {
 ipcMain.on('bubble:hover', (_e, on) => { bubbleHover = Boolean(on); });
 ipcMain.on('bubble:size', (_e, h) => { bubbleH = Number(h) || bubbleH; if (bubbleWin && !bubbleWin.isDestroyed() && bubbleWin.isVisible()) bubblePlace(); });
 // Clic sur la bulle : elle prend le clavier (le jeu reste lancé derrière) le temps d'écrire
-ipcMain.on('bubble:open', () => { if (!bubbleWin || bubbleWin.isDestroyed()) return; bubbleTyping = true; clearTimeout(bubbleTimer); bubbleWin.setFocusable(true); bubbleWin.focus(); });
+ipcMain.handle('bubble:open', (e) => { if (e.sender!==bubbleWin?.webContents || !bubble || bubbleWin.isDestroyed()) return false; bubbleTyping = true; clearTimeout(bubbleTimer); bubbleWin.setFocusable(true); bubbleWin.show(); bubbleWin.focus(); return true; });
 ipcMain.on('bubble:close', () => bubbleHide());
 ipcMain.on('bubble:app', () => { const b = bubble; bubbleHide(); if (!b) return; showWindow(); if (b.group) send('group:open', { id: b.gid }); else send('chat:open', { id: b.from }); });
-ipcMain.handle('bubble:reply', async (_e, text) => {
-  if (!bubble) return { ok: false, error: 'Discussion fermée.' };
-  const id = bubble.key.slice(2);
+ipcMain.handle('bubble:reply', async (e, text, key) => {
+  if (e.sender!==bubbleWin?.webContents || !bubble || key!==bubble.key) return { ok: false, error: 'Discussion fermée ou remplacée.' };
+  const target={...bubble};text=String(text??'').trim().slice(0,500);if(!text)return {ok:false,error:'Écris un message.'};
+  const id = target.key.slice(2);
   const cid = randomUUID();
-  const r = bubble.group ? await sendReliable('/api/compte/groupes/messages', { id: CIDM(id), text: String(text).slice(0, 500), cid }) : await sendReliable('/api/compte/messages', { to: FID(id), text: String(text).slice(0, 500), cid });
+  const r = target.group ? await sendReliable('/api/compte/groupes/messages', { id: CIDM(id), text: String(text).slice(0, 500), cid }) : await sendReliable('/api/compte/messages', { to: FID(id), text: String(text).slice(0, 500), cid });
   if (r.error) return { ok: false, error: r.error };
-  send('social:sent', { key: bubble.key, fil: r.fil ?? null });
+  send('social:sent', { key: target.key, fil: r.fil ?? null });
   return { ok: true };
 });
 
@@ -2140,6 +2156,7 @@ function pushCard(c, force = false) {
   armCard(c);
   notifSync();
 }
+ipcMain.on('notif:size', (e,h) => { if(e.sender!==notifWin?.webContents||!Number.isFinite(h))return;const next=Math.max(90,Math.ceil(h));if(next!==notifHeight){notifHeight=next;notifSync();} });
 ipcMain.on('notif:hover', (_e, on) => { notifHover = Boolean(on); });
 ipcMain.on('notif:act', async (_e, id, action) => {
   const c = notifCards.find((x) => x.id === id);
@@ -2152,6 +2169,11 @@ async function cardAction(c, action) {
   markNotif(c.id, action);
   if (c.file) { if (action === 'discord') { await clipToDiscord(c.file); return; } if (action === 'play') shell.openPath(c.file); else shell.showItemInFolder(c.file); return; }
   if (c.kind === 'share') { if (action === 'saveget') await receiveShare(c.share); return; }
+  if(action==='reply' && (c.from || c.gid)) {
+    const shown=bubbleMsg({type:c.gid?'gmsg':'msg',from:c.from,gid:c.gid,pseudo:c.title,text:c.body},true);
+    if(!shown)notify('Réponse en cours','Termine ou ferme la réponse déjà ouverte en haut à droite.');
+    return;
+  }
   if ((action === 'reply' || action === 'open') && c.gid) { showWindow(); send('group:open', { id: c.gid }); return; }
   if (action === 'reply' || action === 'open') { showWindow(); send('chat:open', { id: c.from }); return; }
   if (action === 'ask') { const r = await social('/api/compte/inviter', { to: c.from, type: 'ask' }); if (r.error) notify('Demande non envoyée', r.error); return; }

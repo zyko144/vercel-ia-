@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { updateCommand, parseUpdateProgress } from '../src/core/gameUpdates.js';
+const acf=(fields)=>`"AppState" { "appid" "123" ${Object.entries(fields).map(([k,v])=>`"${k}" "${v}"`).join(' ')} }`;
+assert.deepEqual(updateCommand({source:'steam',steamId:'123'}),['steam://install/123']);
+assert.throws(()=>updateCommand({source:'epic',steamId:'123'}));assert.throws(()=>updateCommand({source:'steam',steamId:'123 -applaunch'}));
+assert.equal(parseUpdateProgress(acf({StateFlags:1026,BytesToDownload:1000,BytesDownloaded:250}),'123').percent,25);
+assert.equal(parseUpdateProgress(acf({StateFlags:2}),'123').percent,null);
+assert.equal(parseUpdateProgress(acf({StateFlags:1026,BytesToDownload:1000,BytesDownloaded:1000,BytesToStage:2000,BytesStaged:400}),'123').phase,'install');
+assert.notEqual(parseUpdateProgress(acf({StateFlags:2,BytesToDownload:1000,BytesDownloaded:1000}),'123').phase,'done');
+assert.equal(parseUpdateProgress(acf({StateFlags:4}),'123').phase,'done');
+assert.equal(parseUpdateProgress(acf({StateFlags:2,DownloadError:6}),'123').phase,'error');
+assert.throws(()=>parseUpdateProgress(acf({StateFlags:4}),'456'));
+assert.throws(()=>parseUpdateProgress('"AppState" { "appid" "123" "StateFlags" "4"','123'));
+assert.throws(()=>parseUpdateProgress(acf({}),'123'));
+const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');const branch=main.slice(main.indexOf("if (action === 'update'"),main.indexOf("if (action === 'verify')"));
+assert.ok(branch.includes('runSilentSteam(updateCommand(item))'));assert.ok(!branch.includes('gameMode(item)'));assert.ok(!branch.includes("['-applaunch'"));
+console.log('✓ Mises à jour : téléchargement sans lancement, octets réels, installation, attente, erreur, manifeste incomplet');
