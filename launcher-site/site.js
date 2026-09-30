@@ -23,7 +23,7 @@
   // Image de chaque version : capture faite pour le site (versions/index.json), sinon la capture de la release
   // (à partir de la 0.16.0, faites en mode démo avec la nouveauté à l'écran), sinon pas d'image.
   const vnum = (v) => String(v).split('.').reduce((n, x) => n * 1000 + Number(x || 0), 0);
-  Promise.all([
+  if (document.getElementById('versions-list')) Promise.all([
     fetch(`https://api.github.com/repos/${REPO}/releases?per_page=5`, { headers: { Accept: 'application/vnd.github+json' } }).then((r) => (r.ok ? r.json() : null)),
     fetch('versions/index.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
   ])
@@ -101,7 +101,7 @@
   frame();
 
   // Consommation : seulement des mesures réelles (fichier mesures.json), jamais de chiffres inventés
-  fetch('assets/mesures.json').then((r) => (r.ok ? r.json() : null)).then((m) => {
+  if (document.getElementById('conso')) fetch('assets/mesures.json').then((r) => (r.ok ? r.json() : null)).then((m) => {
     const box = document.getElementById('conso');
     const rows = (m?.apps ?? []).filter((a) => a.ramMo > 0);
     if (!rows.length) {
