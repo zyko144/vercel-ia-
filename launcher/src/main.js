@@ -1,3 +1,4 @@
+import { cleanHome, cleanNotebook, validGameId } from './core/personal.js';
 // History Launcher : toute la bibliothèque du PC (Steam, Epic, autres launchers, applis) dans une seule fenêtre.
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { pathToFileURL } from 'node:url';
@@ -1739,6 +1740,27 @@ ipcMain.handle('item:set', (_e, id, patch) => {
   store.save();
   return entry;
 });
+ipcMain.handle('notebook:get', (_e, id) => validGameId(id) ? store.data.notebooks?.[id] ?? {} : {});
+ipcMain.handle('notebook:set', (_e, id, value) => {
+  if (!validGameId(id)) return { error: 'Jeu inconnu.' };
+  try {
+    const note = cleanNotebook(value);
+    store.data.notebooks ??= {};
+    store.data.notebooks[id] = note; store.save(); return { ok: true, note };
+  } catch (error) { return { error: error.message }; }
+});
+ipcMain.handle('support:diagnostic', () => ({ version: app.getVersion(), platform: process.platform, release: os.release(), arch: process.arch, memoryGB: Math.round(os.totalmem() / 1073741824), games: raw.filter((i) => i.kind === 'game').length, apps: raw.filter((i) => i.kind === 'app').length }));
+ipcMain.handle('support:list', async () => {
+  const token = secret('account');
+  if (!token) return { error: 'Connecte-toi dans Compte & sauvegarde pour voir tes demandes.' };
+  return api('/api/compte/support', { token }).catch(() => ({ error: 'Serveur injoignable. Réessaie.' }));
+});
+ipcMain.handle('support:send', async (_e, body) => {
+  const token = secret('account');
+  if (!token) return { error: 'Connecte-toi dans Compte & sauvegarde pour envoyer un signalement.' };
+  if (JSON.stringify(body ?? {}).length > 1900000) return { error: 'Capture trop volumineuse.' };
+  return api('/api/compte/support', { token, method: 'POST', body }).catch(() => ({ error: 'Serveur injoignable. Réessaie.' }));
+});
 const publicSettings = async () => ({ ...store.data.settings, steamKey: Boolean(secret('steam')), gridKey: Boolean(secret('grid')), gemini: Boolean(await getAi()) });
 ipcMain.handle('settings:get', () => publicSettings());
 ipcMain.handle('accounts:get', async () => {
@@ -1758,6 +1780,10 @@ ipcMain.handle('accounts:set', async (_e, patch) => {
   return { ok: true };
 });
 ipcMain.handle('settings:set', async (_e, patch) => {
+  if ('home' in patch) store.data.settings.home = cleanHome(patch.home);
+  if ('neon' in patch) store.data.settings.neon = Math.max(0, Math.min(100, Number(patch.neon) || 0));
+  if ('themeColor' in patch && /^#[0-9a-f]{6}$/i.test(patch.themeColor)) store.data.settings.themeColor = patch.themeColor;
+  if ('bgMode' in patch && ['jeu', 'anime', 'sobre'].includes(patch.bgMode)) store.data.settings.bgMode = patch.bgMode;
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
@@ -1780,7 +1806,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   }
   if ('dailyLimit' in patch) store.data.settings.dailyLimit = Math.max(0, Math.min(1440, Number(patch.dailyLimit) || 0));
   if ('breakEvery' in patch) store.data.settings.breakEvery = Math.max(0, Math.min(600, Number(patch.breakEvery) || 0));
-  if ('theme' in patch && ['bleu', 'violet', 'rouge', 'vert', 'orange', 'rose', 'auto'].includes(patch.theme)) store.data.settings.theme = patch.theme;
+  if ('theme' in patch && ['bleu', 'violet', 'rouge', 'vert', 'orange', 'rose', 'auto', 'perso'].includes(patch.theme)) store.data.settings.theme = patch.theme;
   if ('dealAlerts' in patch) store.data.settings.dealAlerts = Boolean(patch.dealAlerts);
   if ('gameMode' in patch) store.data.settings.gameMode = Boolean(patch.gameMode);
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
@@ -1797,7 +1823,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
     return { ...(await publicSettings()), error: err.message };
   }
   store.save();
-  applyAutostart();
+  if ('autostart' in patch) applyAutostart();
   return publicSettings();
 });
 // Fiche complète d'un jeu, chargée quand on le sélectionne

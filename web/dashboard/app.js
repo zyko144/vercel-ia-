@@ -255,6 +255,22 @@
   const ETAT_ALERTE = { critique: 'critique', attention: 'attention', info: 'info' };
 
   const VUES = {
+    support: {
+      titre: 'Aide launcher', intro: 'Signalements privés des utilisateurs et réponses de l’équipe.',
+      async rendre(zone) {
+        const { tickets } = await api.get('launcher-support');
+        if (!tickets.length) { zone.append(h('p', { text: 'Aucun signalement.' })); return; }
+        for (const ticket of tickets) {
+          const status = h('select', { 'aria-label': 'Statut du signalement' }, ...Object.entries({ received: 'Reçue', investigating: 'En cours', resolved: 'Résolue' }).map(([value,text]) => h('option', { value, text, selected: value === ticket.status })));
+          const reply = h('textarea', { rows: 3, maxLength: 2000, 'aria-label': 'Réponse à l’utilisateur' }); reply.value = ticket.reply ?? '';
+          const feedback = h('p', { role: 'status' });
+          const save = h('button', { class: 'btn', text: 'Enregistrer la réponse', on: { click: async () => { save.disabled = true; try { await api.post('launcher-support', { id: ticket.id, status: status.value, reply: reply.value }); feedback.textContent = 'Réponse enregistrée, visible dans le launcher.'; } catch (e) { feedback.textContent = e.message; } finally { save.disabled = false; } } } });
+          const image = h('div');
+          const capture = ticket.hasImage ? h('button', { class: 'btn', text: 'Voir la capture', on: { click: async () => { try { const { ticket: detail } = await api.get(`launcher-support?id=${encodeURIComponent(ticket.id)}`); if (detail?.img) image.replaceChildren(h('img', { src: detail.img, alt: 'Capture du signalement', width: 500 })); } catch (e) { feedback.textContent = e.message; } } } }) : null;
+          zone.append(h('article', { class: 'card stack' }, h('h3', { text: ticket.title }), h('small', { text: `${ticket.name} · ${new Date(ticket.at).toLocaleString('fr-FR')}` }), h('p', { text: ticket.description }), h('pre', { text: Object.entries(ticket.diagnostic ?? {}).map(([k,v]) => `${k} : ${v}`).join('\n') }), capture, image, status, reply, save, feedback));
+        }
+      },
+    },
     apercu: {
       titre: 'Vue d’ensemble',
       intro: 'L’état du bot et de l’IA en un coup d’œil. Ce qui demande ton attention apparaît en haut.',
