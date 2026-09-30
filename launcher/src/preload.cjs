@@ -4,6 +4,11 @@ const { contextBridge, ipcRenderer, webUtils, webFrame } = require('electron');
 ipcRenderer.on('ui:trim', () => { try { webFrame.clearCache(); } catch { /* rien */ } });
 
 contextBridge.exposeInMainWorld('launcher', {
+  notebook: (id) => ipcRenderer.invoke('notebook:get', id),
+  saveNotebook: (id, value) => ipcRenderer.invoke('notebook:set', id, value),
+  supportDiagnostic: () => ipcRenderer.invoke('support:diagnostic'),
+  supportList: () => ipcRenderer.invoke('support:list'),
+  supportSend: (body) => ipcRenderer.invoke('support:send', body),
   scan: () => ipcRenderer.invoke('lib:scan'),
   action: (id, action) => ipcRenderer.invoke('item:action', id, action),
   setItem: (id, patch) => ipcRenderer.invoke('item:set', id, patch),

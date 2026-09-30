@@ -28,7 +28,7 @@ export function initSettings(api) {
     }
     $('settingsClear').hidden = !query;
     $('settingsEmpty').hidden = matches !== 0;
-    $('settingsResults').textContent = query ? `${matches} groupe${matches > 1 ? 's' : ''} de réglages trouvé${matches > 1 ? 's' : ''}` : 'Les réglages s’appliquent dès leur modification.';
+    $('settingsResults').textContent = query ? `${matches} groupe${matches > 1 ? 's' : ''} de réglages trouvé${matches > 1 ? 's' : ''}` : 'Réglages enregistrés automatiquement, sauf l’aperçu du thème.';
     settings.querySelector('.setbody').scrollTop = 0;
   }
   for (const button of buttons) button.addEventListener('click', () => {

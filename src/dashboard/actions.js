@@ -1,3 +1,4 @@
+import { supportList, supportDetail, supportUpdate } from '../features/launcherSupport.js';
 // Actions du tableau de bord : ce que le chef fait sur Discord depuis la page
 // (écrire en tant que le bot, sondages, modération, musique, rappels, pièces d'or, redémarrage).
 // Même règle que le reste : chaque entrée est vérifiée, chaque action est limitée et notée au journal.
@@ -92,6 +93,20 @@ export function actionRoutes(client, { json, audit, allowAttempt, who }) {
   };
 
   const routes = {
+    'GET launcher-support': async (req, res, body, session, url) => {
+      limit(session, 'support-staff-read', 60, MINUTE);
+      res.setHeader('Cache-Control', 'no-store');
+      const id = url.searchParams.get('id');
+      return json(res, 200, id ? { ticket: await supportDetail(id) } : { tickets: await supportList() });
+    },
+    'POST launcher-support': async (req, res, body, session) => {
+      limit(session, 'support-staff-write', 30, MINUTE);
+      try {
+        const result = await supportUpdate(body);
+        audit({ userId: session.userId, action: 'Signalement launcher traité', detail: `${body.id} · ${body.status}`, req });
+        return json(res, 200, result);
+      } catch { return json(res, 400, { error: 'Statut ou signalement invalide, ou enregistrement indisponible.' }); }
+    },
     // ---------- Ce que le bot voit : serveurs, salons, rôles ----------
     'GET serveurs': async (req, res) => json(res, 200, {
       instance: { where: instance.where, guarded: instance.guarded, storage: storageBackend },

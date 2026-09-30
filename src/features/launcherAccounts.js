@@ -480,6 +480,10 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const { handleBackupApi } = await import('./launcherBackup.js');
       return await handleBackupApi(req, res, { readJson, send });
     }
+    if (url.pathname === '/api/compte/support') {
+      const { handleSupportApi } = await import('./launcherSupport.js');
+      return await handleSupportApi(req, res, url, { readJson, send });
+    }
     if (route === 'POST /api/compte/ia') {
       const { handleLauncherAi } = await import('./launcherAi.js');
       return await handleLauncherAi(req, res, { readJson, send });
