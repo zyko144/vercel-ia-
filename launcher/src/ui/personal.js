@@ -75,7 +75,7 @@ export function initPersonal(api, { items, card, go, toast }) {
   const labels = { received: 'Reçue', investigating: 'En cours', resolved: 'Résolue' };
   async function tickets() {
     $('supportTickets').textContent = 'Chargement…';
-    try { const r = check(await api.supportList()); $('supportTickets').innerHTML = r.tickets?.length ? r.tickets.map((t) => `<article class="support-ticket"><span class="support-badge">${esc(labels[t.status] ?? t.status)}</span><h4>${esc(t.title)}</h4><small>${new Date(t.at).toLocaleDateString('fr-FR')}</small><p>${esc(t.description)}</p>${t.reply ? `<blockquote>${esc(t.reply)}</blockquote>` : '<p class="hint">L’équipe répondra ici.</p>'}</article>`).join('') : '<p class="hint">Aucune demande. On est là si tu en as besoin.</p>'; }
+    try { const r = check(await api.supportList()); $('supportTickets').innerHTML = r.tickets?.length ? r.tickets.map((t) => `<article class="support-ticket"><span class="support-badge" data-status="${esc(t.status)}">${esc(labels[t.status] ?? t.status)}</span><h4>${esc(t.title)}</h4><small>${new Date(t.at).toLocaleDateString('fr-FR')}</small><p>${esc(t.description)}</p>${t.reply ? `<blockquote>${esc(t.reply)}</blockquote>` : '<p class="hint">L’équipe répondra ici.</p>'}</article>`).join('') : '<p class="hint">Aucune demande. On est là si tu en as besoin.</p>'; }
     catch (e) { $('supportTickets').textContent = e.message; }
   }
   $('refreshSupport').addEventListener('click', tickets);

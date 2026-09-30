@@ -27,3 +27,5 @@ body.ui-paused *,body.ui-paused *::before,body.ui-paused *::after { animation-pl
 
 .support-drop input::file-selector-button { background:#20375b; color:#e7efff; border:1px solid #5c86bc; border-radius:8px; padding:9px 14px; margin-right:12px; cursor:pointer; font:inherit; }
 .support-drop:focus-within { border-color:var(--blue); box-shadow:0 0 0 3px #2f8bff15; }
+
+.support-badge[data-status="received"]{color:#9bcaff;background:#2f8bff20;border-color:#559cff70}.support-badge[data-status="investigating"]{color:#ffd18a;background:#f59e0b20;border-color:#f5ad4270}.support-badge[data-status="resolved"]{color:#8ee6b5;background:#22c55e20;border-color:#4bd98b70}
