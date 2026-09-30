@@ -1598,6 +1598,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.51.1': [
+    ['✉', 'Support bien visible', 'Le bouton rouge est placé à droite de la barre du haut, près des commandes de fenêtre.', ['.qs-trigger', 'wait600']],
+    ['●', 'Le suivi du support en couleurs', 'Bleu : reçue. Orange : en cours. Vert : résolue. Le statut reste écrit pour être lisible par tous.', ['.qs-trigger', '[data-tab="list"]', 'wait600']],
+  ],
   '0.51.0': [
     ['✉', 'Le support, à portée de clic', 'Un panneau en haut à droite pour envoyer une demande, joindre une capture et retrouver les réponses de l’équipe.', ['.qs-trigger', 'wait600']],
     ['◈', 'Des paramètres faciles à repérer', 'Des icônes identifient chaque catégorie de réglages.'],
@@ -4182,7 +4186,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.51.0',
+    version: async () => '0.51.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
