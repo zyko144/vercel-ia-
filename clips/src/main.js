@@ -477,6 +477,12 @@ function loggedIn(r) {
   return { ok: true, compte: st.compte };
 }
 // Avis sur l'appli (note, commentaire, capture facultative) : affichés dans le bandeau des avis du site
+ipcMain.handle('support:list', () => tokenGet() ? api('/api/compte/support') : { error: 'Connecte-toi à ton compte History dans Paramètres → Compte.' });
+ipcMain.handle('support:send', (_e, body) => {
+  if (!tokenGet()) return { error: 'Connecte-toi à ton compte History dans Paramètres → Compte.' };
+  if (JSON.stringify(body ?? {}).length > 1900000) return { error: 'Capture trop volumineuse.' };
+  return api('/api/compte/support', { method: 'POST', body: { ...body, app: 'clips' } });
+});
 ipcMain.handle('review:send', async (_e, stars, comment, img) => {
   if (!tokenGet()) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour donner ton avis.' };
   const pic = /^data:image\/(png|jpeg|webp);base64,/.test(String(img ?? '')) && String(img).length < 1_900_000 ? img : null;

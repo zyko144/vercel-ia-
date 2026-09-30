@@ -34,7 +34,7 @@ const MINUTE = 60_000;
 // En-têtes posés sur chaque réponse du tableau de bord.
 function securityHeaders(req, res) {
   res.setHeader('Content-Security-Policy', [
-    "default-src 'none'", "script-src 'self'", "style-src 'self' https://fonts.googleapis.com", "img-src 'self' data: https://cdn.discordapp.com",
+    "default-src 'none'", "script-src 'self'", "style-src 'self' https://fonts.googleapis.com", "img-src 'self' data: https://cdn.discordapp.com https://zyko144.github.io https://vercel-ia.onrender.com",
     "connect-src 'self'", "font-src 'self' https://fonts.gstatic.com", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -84,9 +84,9 @@ function readBody(req) {
 }
 
 /** Envoie un lien de connexion en MP à un compte autorisé. */
-export async function sendLoginLink(client, userId) {
+export async function sendLoginLink(client, userId, apps = false) {
   const token = createLoginToken(userId);
-  const url = `${dashboardBaseUrl()}/dashboard/connexion#${token}`; // voir loginLinkFor
+  const url = `${dashboardBaseUrl()}/${apps ? 'apps-admin' : 'dashboard'}/connexion#${token}`; // voir loginLinkFor
   const user = await client.users.fetch(userId);
   await user.send({
     embeds: [new EmbedBuilder()
@@ -209,7 +209,7 @@ export function createDashboard(client) {
       const id = String(body.discordId ?? '').trim();
       if (!allowAttempt('lien-ip', clientIp(req), 3, 10 * MINUTE)) return json(res, 429, { error: 'Trop de demandes. Réessaie dans 10 minutes.' });
       if (isAllowed(id) && allowAttempt('lien-compte', id, 3, 30 * MINUTE)) {
-        await sendLoginLink(client, id).then(
+        await sendLoginLink(client, id, body.apps === true).then(
           () => audit({ userId: id, action: 'Lien de connexion envoyé en MP', req }),
           (err) => console.warn('[tableau de bord] MP impossible :', err.message),
         );
@@ -318,15 +318,16 @@ export function createDashboard(client) {
 
   /** Renvoie true si la requête concerne le tableau de bord (et y a répondu). */
   return async function handleDashboard(req, res, url) {
-    if (url.pathname !== '/dashboard' && !url.pathname.startsWith('/dashboard/')) return false;
+    const apps = url.pathname === '/apps-admin' || url.pathname.startsWith('/apps-admin/');
+    if (!apps && url.pathname !== '/dashboard' && !url.pathname.startsWith('/dashboard/')) return false;
     securityHeaders(req, res);
-    const rest = url.pathname.slice('/dashboard'.length).replace(/^\/+/, '');
+    const rest = url.pathname.slice((apps ? '/apps-admin' : '/dashboard').length).replace(/^\/+/, '');
 
     if (!rest.startsWith('api/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: 'Méthode refusée.' }), true;
       const file = STATIC[rest] ? rest : 'index.html';
       try {
-        const data = await readFile(path.join(WEB, file));
+        const data = await readFile(path.join(apps ? path.resolve('web/apps-admin') : WEB, file));
         res.writeHead(200, { 'Content-Type': STATIC[file] ?? 'text/html; charset=utf-8', 'Content-Length': data.length });
         res.end(req.method === 'HEAD' ? undefined : data);
       } catch {
@@ -336,6 +337,7 @@ export function createDashboard(client) {
     }
 
     const key = `${req.method} ${rest.slice(4)}`;
+    if (apps && !['POST login','POST lien','GET moi','POST logout','GET launcher-support','POST launcher-support'].includes(key)) return json(res,404,{error:'Route inconnue.'}),true;
     const route = open[key] ?? protectedRoutes[key];
     if (!route) return json(res, 404, { error: 'Route inconnue.' }), true;
     if (req.method === 'POST' && !sameOriginWrite(req)) return json(res, 403, { error: 'Requête refusée (origine non vérifiée).' }), true;

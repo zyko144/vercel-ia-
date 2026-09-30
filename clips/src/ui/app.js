@@ -1,3 +1,4 @@
+import { initQuickSupport } from './quick-support.js';
 // Interface de History Clips : accueil, galerie, jeux (avec leurs images), lecteur + découpe, Discord, compte, réglages.
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -513,3 +514,5 @@ api.onUpdate(paintUpdate);
   paintUpdate(await api.updGet());
   load();
 })();
+
+initQuickSupport(api, 'clips');
