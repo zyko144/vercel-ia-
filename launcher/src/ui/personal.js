@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const check = (r) => { if (r?.error) throw new Error(r.error); return r; };
 export function initPersonal(api, { items, card, go, toast }) {
-  let home = cleanHome(); let saving = Promise.resolve();
+  let home = cleanHome(); let saving = Promise.resolve(); let editing = false; let dragging = null;
   const blocks = document.createElement('div'); blocks.id = 'homeBlocks';
   $('view-accueil').insertBefore(blocks, $('hero'));
   blocks.before($('diskAlert'));
@@ -13,10 +13,24 @@ export function initPersonal(api, { items, card, go, toast }) {
   for (const [key, id] of Object.entries({ rediscover: 'rediscBlock', updates: 'updBlock', recommendations: 'recoBlock', news: 'newsBlock', deals: 'dealBlock', free: 'freeBlock' })) wrap(key, [$(id)]);
   $('view-accueil').querySelector('.homesep')?.remove();
   for (const key of ['pins', 'actions']) { const el = document.createElement('div'); el.id = `home-${key}`; wrap(key, [el]); }
+  const editorPane = $('set-accueil'); const editorParent = editorPane.parentNode; const editorNext = editorPane.nextSibling;
+  const layout = document.createElement('div'); layout.className = 'home-live-layout'; blocks.before(layout); layout.append(blocks);
+  const side = document.createElement('aside'); side.className = 'home-live-editor'; side.hidden = true; layout.append(side);
+  const liveStatus = document.createElement('span'); liveStatus.className = 'home-live-status'; liveStatus.setAttribute('role','status'); $('customizeHome').before(liveStatus);
+  function status(message) { $('homeSaveStatus').textContent = message; liveStatus.textContent = message; }
+  function setEditing(on) {
+    editing = on; dragging = null; layout.classList.toggle('editing',on); side.hidden = !on;
+    $('customizeHome').textContent = on ? '✓ Terminer' : 'Personnaliser l’accueil'; $('customizeHome').setAttribute('aria-pressed',String(on));
+    if(on) { side.append(editorPane); editorPane.hidden = false; editor(); }
+    else { editorParent.insertBefore(editorPane,editorNext); editorPane.hidden = true; }
+    render();
+    if(!on)blocks.querySelectorAll('[data-id][draggable]').forEach(el=>el.removeAttribute('draggable'));
+  }
   function render() {
-    for (const key of home.order) { const el = blocks.querySelector(`[data-home-block="${key}"]`); el.hidden = home.hidden.includes(key); blocks.append(el); }
+    if(dragging)return;
+    for (const key of home.order) { const el = blocks.querySelector(`[data-home-block="${key}"]`); el.hidden = !editing && home.hidden.includes(key); el.classList.toggle('home-block-hidden',home.hidden.includes(key)); blocks.append(el); el.querySelector('.home-block-tools')?.remove(); if(editing) { const tools=document.createElement('div');tools.className='home-block-tools';tools.innerHTML=`<button type="button" class="btn home-grip" draggable="true" data-drag-block="${key}" aria-label="Déplacer ${esc(HOME_BLOCKS[key])}">⠿ ${esc(HOME_BLOCKS[key])}</button><button type="button" class="btn" data-toggle-block="${key}">${home.hidden.includes(key)?'Afficher':'Masquer'}</button>`;el.prepend(tools); } }
     const pinned = home.pins.map((id) => items().find((i) => i.id === id && !i.hidden)).filter(Boolean);
-    $('home-pins').innerHTML = `<div class="row-head"><h2>Mes jeux épinglés</h2></div><div class="cards">${pinned.length ? pinned.map((i) => card(i)).join('') : '<p class="hint">Épingle tes jeux depuis « Personnaliser l’accueil ».</p>'}</div>`;
+    $('home-pins').innerHTML = `<div class="row-head"><h2>Mes jeux épinglés</h2></div><div class="cards">${pinned.length ? pinned.map((i,n) => editing ? `<div class="home-pin-item" data-pin-id="${esc(i.id)}" draggable="true">${card(i)}<div class="home-pin-tools"><button class="btn" type="button" data-pin-move="${esc(i.id)}" data-dir="-1" aria-label="Avancer ${esc(i.name)}" ${n===0?'disabled':''}>←</button><button class="btn" type="button" data-pin-remove="${esc(i.id)}" aria-label="Désépingler ${esc(i.name)}">Retirer</button><button class="btn" type="button" data-pin-move="${esc(i.id)}" data-dir="1" aria-label="Reculer ${esc(i.name)}" ${n===pinned.length-1?'disabled':''}>→</button></div></div>` : card(i)).join('') : '<p class="hint">Glisse tes jeux ici ou choisis-les dans « Personnaliser l’accueil ».</p>'}</div>`;
     $('home-actions').innerHTML = `<div class="home-shortcuts">${home.actions.map((id) => `<button class="btn" data-go="${id}">${esc(HOME_ACTIONS[id])} ↗</button>`).join('')}</div>`;
   }
   function editor() {
@@ -30,8 +44,8 @@ export function initPersonal(api, { items, card, go, toast }) {
     $('homeGameChoices').innerHTML = list.length ? list.map((i) => `<label><input type="checkbox" data-pin="${esc(i.id)}" ${home.pins.includes(i.id) ? 'checked' : ''}>${esc(i.name)}</label>`).join('') : '<p class="hint">Aucun jeu trouvé.</p>';
   }
   function saveHome() {
-    const snapshot = cleanHome(home); render(); $('homeSaveStatus').textContent = 'Enregistrement…';
-    saving = saving.catch(() => {}).then(() => api.setSettings({ home: snapshot })).then(check).then(() => { $('homeSaveStatus').textContent = 'Accueil enregistré.'; }).catch((e) => { $('homeSaveStatus').textContent = `${e.message} Modifie un réglage pour réessayer.`; });
+    const snapshot = cleanHome(home); render(); status('Enregistrement…');
+    saving = saving.catch(() => {}).then(() => api.setSettings({ home: snapshot })).then(check).then(() => { status('Accueil enregistré.'); }).catch((e) => { status(`${e.message} Modifie un réglage pour réessayer.`); });
   }
   $('homeOrder').addEventListener('click', (e) => { const b = e.target.closest('[data-move]'); if (!b) return; const i = home.order.indexOf(b.dataset.move); const j = i + Number(b.dataset.dir); if (j < 0 || j >= home.order.length) return; [home.order[i],home.order[j]] = [home.order[j],home.order[i]]; editor(); saveHome(); $('homeOrder').querySelector(`[data-move="${b.dataset.move}"][data-dir="${b.dataset.dir}"]`)?.focus(); });
   $('set-accueil').addEventListener('change', (e) => {
@@ -45,7 +59,46 @@ export function initPersonal(api, { items, card, go, toast }) {
   });
   $('homeGameSearch').addEventListener('input', gameChoices);
   function pane(id) { if (!$('settings').open) $('openSettings').click(); document.querySelector(`.setnav [data-pane="${id}"]`).click(); }
-  $('customizeHome').addEventListener('click', () => { editor(); pane('accueil'); });
+  $('customizeHome').addEventListener('click', () => setEditing(!editing));
+  $('openSettings').addEventListener('click', () => { if(editing)setEditing(false); });
+  function movePin(id, target) {
+    const pins=home.pins.filter(x=>x!==id); const at=pins.indexOf(target); pins.splice(at<0?pins.length:at,0,id);home.pins=pins;
+    home.hidden=home.hidden.filter(x=>x!=='pins'); editor();saveHome();
+  }
+  blocks.addEventListener('click', e => {
+    if(!editing)return;
+    const b=e.target.closest('button');
+    if(b?.dataset.toggleBlock) { const id=b.dataset.toggleBlock;home.hidden=home.hidden.includes(id)?home.hidden.filter(x=>x!==id):[...home.hidden,id];editor();saveHome(); }
+    else if(b?.dataset.pinRemove) { home.pins=home.pins.filter(x=>x!==b.dataset.pinRemove);editor();saveHome(); }
+    else if(b?.dataset.pinMove) { const i=home.pins.indexOf(b.dataset.pinMove),j=i+Number(b.dataset.dir);if(j>=0&&j<home.pins.length){[home.pins[i],home.pins[j]]=[home.pins[j],home.pins[i]];editor();saveHome();} }
+    // During editing, a game click must never launch it or open its details.
+    e.stopPropagation(); e.preventDefault();
+  },true);
+  blocks.addEventListener('pointerdown', e => { if(editing){const c=e.target.closest('[data-id]');if(c)c.draggable=true;} });
+  blocks.addEventListener('dragstart', e => {
+    if(!editing)return;
+    const grip=e.target.closest('[data-drag-block]');const game=e.target.closest('[data-pin-id], [data-id]');
+    if(grip)dragging={block:grip.dataset.dragBlock};
+    else if(game){const id=game.dataset.pinId||game.dataset.id;if(!items().some(i=>i.id===id&&i.kind==='game'&&!i.hidden))return;dragging={game:id};}
+    else return;
+    e.stopPropagation();e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',dragging.block||dragging.game);
+  });
+  blocks.addEventListener('dragover', e => {
+    if(!dragging)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';
+    if(dragging.block){const target=e.target.closest('[data-home-block]');const source=[...blocks.children].find(x=>x.dataset.homeBlock===dragging.block);if(target&&target!==source){const r=target.getBoundingClientRect();blocks.insertBefore(source,e.clientY>r.top+r.height/2?target.nextSibling:target);}}
+    else { blocks.querySelector('[data-home-block="pins"]').classList.add('home-drop-target');const target=e.target.closest('.home-pin-item');const source=[...$('home-pins').querySelectorAll('.home-pin-item')].find(x=>x.dataset.pinId===dragging.game);if(source&&target&&source!==target){const r=target.getBoundingClientRect();target.parentNode.insertBefore(source,e.clientX>r.left+r.width/2?target.nextSibling:target);} }
+  });
+  blocks.addEventListener('drop', e => {
+    if(!dragging)return;e.preventDefault();e.stopPropagation();const drag=dragging;dragging=null;
+    if(drag.block){home.order=[...blocks.children].map(x=>x.dataset.homeBlock);editor();saveHome();}
+    else if(e.target.closest('[data-home-block="pins"]')){
+      if(!home.pins.includes(drag.game)&&home.pins.length>=12){toast('12 jeux épinglés maximum.');render();return;}
+      if(home.pins.includes(drag.game)){home.pins=[...$('home-pins').querySelectorAll('.home-pin-item')].map(x=>x.dataset.pinId);editor();saveHome();}
+      else movePin(drag.game,e.target.closest('.home-pin-item')?.dataset.pinId);
+    }else render();
+    blocks.querySelector('.home-drop-target')?.classList.remove('home-drop-target');
+  });
+  blocks.addEventListener('dragend',()=>{dragging=null;blocks.querySelector('.home-drop-target')?.classList.remove('home-drop-target');render();});
   document.querySelector('.setnav [data-pane="accueil"]').addEventListener('click', editor);
   api.settings().then((s) => { home = cleanHome(s.home); render(); editor(); }).catch(() => {});
   render(); editor();
