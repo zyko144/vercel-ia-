@@ -147,6 +147,18 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     hardenResponse(req, res, url);
     // Surface d'attaque réduite : seulement GET, HEAD, POST et OPTIONS
     if (!['GET', 'HEAD', 'POST', 'OPTIONS'].includes(req.method)) return send(res, 405, 'méthode refusée');
+    // The public support page uses the existing account authentication (including 2FA).
+    if (/^\/api\/compte\/(support|connexion(?:\/2fa)?|deconnexion)$/.test(url.pathname)) {
+      const origin = String(req.headers.origin ?? '');
+      if ([...siteOrigins(), 'https://zyko144.github.io'].includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin');
+        if (req.method === 'OPTIONS') {
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+          res.setHeader('Access-Control-Max-Age', '600'); res.writeHead(204); return res.end();
+        }
+      }
+    }
     if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/avis')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Methods', 'GET, POST'); res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); res.writeHead(204); return res.end(); }
     if (req.method === 'OPTIONS') return preflight(req, res);
     // Anti-automatisation : au-delà de 600 requêtes par minute depuis une même adresse, on refuse
