@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.8.1",
-  "releaseNotes": "Suivi du support plus lisible : badges bleus pour les demandes reçues, orange en cours et verts une fois résolues.",
+  "version": "0.8.2",
+  "releaseNotes": "Discord et Support sont regroupés côte à côte à droite de la barre du haut.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

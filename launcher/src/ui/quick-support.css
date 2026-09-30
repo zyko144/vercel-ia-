@@ -3,3 +3,5 @@
 .qs-panel .qs-badge{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 9px;border-radius:999px;font-weight:600;color:#c7d1e0;background:#ffffff0a;border:1px solid #ffffff25}.qs-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}.qs-panel .qs-badge[data-status="received"]{color:#9bcaff;background:#2f8bff20;border-color:#559cff70}.qs-panel .qs-badge[data-status="investigating"]{color:#ffd18a;background:#f59e0b20;border-color:#f5ad4270}.qs-panel .qs-badge[data-status="resolved"]{color:#8ee6b5;background:#22c55e20;border-color:#4bd98b70}
 
 .top .qs-trigger + .winbtns{margin-left:0}.top .qs-trigger:hover{background:#c42a43;border-color:#ff96a0}.top .qs-trigger:focus-visible{outline:2px solid #ffafba;outline-offset:3px}
+
+.top .dcbtn{margin-left:auto;flex:none}.top .dcbtn + .qs-trigger{margin-left:0}
