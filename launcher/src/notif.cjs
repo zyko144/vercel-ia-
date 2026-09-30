@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('notif', {
   onCards: (fn) => ipcRenderer.on('notif:cards', (_e, cards, opts) => fn(cards, opts ?? {})),
+  size: (height) => ipcRenderer.send('notif:size', Number(height)),
   act: (id, action) => ipcRenderer.send('notif:act', String(id), String(action)),
   hover: (on) => ipcRenderer.send('notif:hover', Boolean(on)),
 });

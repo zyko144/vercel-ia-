@@ -23,3 +23,6 @@ html, body { margin: 0; background: transparent; overflow: hidden; font: 13px/1.
 .foot button { border: 0; background: none; color: #8fb6ff; font: inherit; font-size: 11.5px; cursor: pointer; padding: 0; }
 .foot small { font-size: 10.5px; color: #6f6980; }
 @keyframes pop { from { transform: translateY(-14px) scale(.96); opacity: 0; } }
+
+*{box-sizing:border-box}[hidden]{display:none!important}.bub{width:calc(100% - 16px)}.msgs{max-height:160px;overflow-y:auto;overscroll-behavior:contain}.foot{flex-wrap:wrap;gap:6px}.hint{overflow-wrap:anywhere}button:focus-visible{outline:2px solid #9bcaff;outline-offset:2px}
+.msgs{scrollbar-width:thin;scrollbar-color:#5b5369 transparent}

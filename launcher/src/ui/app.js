@@ -199,7 +199,7 @@ function menuFor(i) {
   const m = [];
   if (!state.active.has(i.id)) m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (isApp ? '▶ Ouvrir' : '▶ Jouer') : '⬇ Installer'}</button>`);
   if (state.active.has(i.id)) m.push('<button data-action="close">■ Fermer</button>');
-  if (i.updatePending) m.push('<button data-action="update">⟳ Mettre à jour et jouer</button>');
+  if (i.updatePending) m.push('<button data-action="update">⟳ Mettre à jour</button>');
   m.push('<hr>');
   m.push(`<button data-set="favorite">${i.favorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}</button>`);
   m.push('<button data-cols="1">📚 Collections…</button>');
@@ -1598,6 +1598,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.52.1': [
+    ['⬇', 'Mets à jour sans lancer le jeu', 'History suit le téléchargement et l’installation avec les données réelles disponibles. Le jeu reste fermé après la mise à jour.', ['[data-upd="steam:359550"]', 'wait600']],
+    ['✉', 'Réponds directement en jeu', 'La bulle affiche ses boutons en entier. Répondre ouvre le champ de saisie par-dessus le jeu, et une erreur conserve ton message.'],
+  ],
   '0.52.0': [
     ['⠿', 'Personnalise directement ton accueil', 'Déplace les blocs et tes jeux épinglés directement sur la page. Les changements sont visibles et sauvegardés immédiatement.', ['#customizeHome', 'wait600']],
   ],
@@ -3383,16 +3387,47 @@ $('vRepair').addEventListener('click', async () => {
   toast(r.ok ? 'Réparation lancée en arrière-plan : seuls les fichiers abîmés sont re-téléchargés.' : `Impossible : ${r.error}`);
 });
 
+let gameUpdateGeneration=0,gameUpdateTimer=null;
+const gameUpdateRequests=new Map();
+async function startGameUpdate(item) {
+  if(!item)return;
+  const generation=++gameUpdateGeneration;clearTimeout(gameUpdateTimer);
+  const dialog=$('gameUpdateDialog');$('guTitle').textContent=`Mise à jour de ${item.name}`;$('guStatus').textContent='History prépare la demande…';$('guProgress').removeAttribute('value');$('guDetail').textContent='';
+  if(!dialog.open)dialog.showModal();
+  try {
+    if(!gameUpdateRequests.has(item.id))gameUpdateRequests.set(item.id,api.action(item.id,'update').then(r=>{if(!r?.ok)throw Error(r?.error||'Mise à jour indisponible.');return r;}).catch(e=>{gameUpdateRequests.delete(item.id);throw e;}));
+    await gameUpdateRequests.get(item.id);
+  } catch(e){if(generation===gameUpdateGeneration)$('guStatus').textContent=e.message;return;}
+  let previous=null;
+  async function poll(){
+    if(generation!==gameUpdateGeneration||!dialog.open)return;
+    let p;try{p=await api.gameUpdateProgress(item.id);}catch{p={error:'Connexion au suivi interrompue. Nouvelle tentative…'};}
+    if(generation!==gameUpdateGeneration||!dialog.open)return;
+    $('guStatus').textContent=p.error||p.label;
+    if(p.percent==null)$('guProgress').removeAttribute('value');else $('guProgress').value=p.percent;
+    const now=Date.now();let speed='';if(previous&&p.phase==='download'&&p.bytes>previous.bytes&&now>previous.at)speed=` · ${human((p.bytes-previous.bytes)*1000/(now-previous.at))}/s`;
+    $('guDetail').textContent=p.total?`${p.percent} % · ${human(p.bytes)} / ${human(p.total)}${speed}`:p.phase==='done'?'100 %':'';
+    previous={bytes:p.bytes??0,at:now};
+    if(p.phase==='done'||p.phase==='error'){gameUpdateRequests.delete(item.id);return;}
+    gameUpdateTimer=setTimeout(poll,2000);
+  }
+  await poll();
+}
+$('guClose').onclick=()=>$('gameUpdateDialog').close();
+$('guDownloads').onclick=async()=>{try{if(!await api.gameUpdateDownloads())$('guStatus').textContent='Impossible d’ouvrir les téléchargements.';}catch{$('guStatus').textContent='Impossible d’ouvrir les téléchargements.';}};
+$('gameUpdateDialog').addEventListener('close',()=>{gameUpdateGeneration++;clearTimeout(gameUpdateTimer);});
+
 async function act(action) {
   const item = state.sel;
   if (!item) return;
+  if (action === 'update') return startGameUpdate(item);
   if (action === 'optiplay') return openOptiPlay(item);
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
-  const labels = { update: 'Steam fait la mise à jour puis lance le jeu', launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
+  const labels = { update: 'Mise à jour demandée dans History', launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
   // Mise à jour en attente : la faire d'abord plutôt que d'attendre devant l'écran de chargement
   if (action === 'launch' && item.updatePending && item.source === 'steam') {
-    const c = await ui.confirm({ title: `${item.name} a une mise à jour`, text: 'Steam va la télécharger avant de lancer le jeu. Tu peux la faire maintenant (le jeu se lance tout seul après) ou jouer quand même si le jeu le permet.', ok: '⬇ Mettre à jour puis jouer', cancel: 'Jouer quand même', icon: '⬆' });
-    if (c) { const u = await api.action(item.id, 'update'); return toast(u?.ok ? 'Steam fait la mise à jour puis lance le jeu' : u?.error ?? 'Impossible'); }
+    const c = await ui.confirm({ title: `${item.name} a une mise à jour`, text: 'History peut suivre la mise à jour maintenant. Le jeu ne sera pas lancé automatiquement après.', ok: '⬇ Mettre à jour', cancel: 'Jouer quand même', icon: '⬆' });
+    if (c) return startGameUpdate(item);
   }
   if (action === 'launch') window.sfx?.play('launch');
   const r = await api.action(item.id, action);
@@ -3436,7 +3471,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.p) { document.querySelectorAll('#periods button').forEach((x) => x.classList.toggle('on', x === t)); state.period = t.dataset.p; return renderStats(); }
   if (t.dataset.rank) { document.querySelectorAll('#rankTabs button').forEach((x) => x.classList.toggle('on', x === t)); state.rank = t.dataset.rank; return renderRanking(); }
   if (t.dataset.ftab) return showFriendTab(t.dataset.ftab);
-  if (t.dataset.upd) { const r = await api.action(t.dataset.upd, 'update'); return toast(r?.ok ? 'Steam fait la mise à jour puis lance le jeu' : r?.error ?? 'Impossible pour l’instant'); }
+  if (t.dataset.upd) return startGameUpdate(state.items.find(i=>i.id===t.dataset.upd));
   if (t.dataset.surl) return api.storeOpen(t.dataset.surl).then(() => toast('Fiche du jeu ouverte'));
   if (t.dataset.nurl) return api.newsUrl?.(t.dataset.nurl).then(() => toast('Article ouvert'));
   if (t.dataset.news) return api.openNews(t.dataset.news, t.dataset.gid).then(() => toast('Article ouvert'));
@@ -4135,7 +4170,7 @@ function demoApi() {
     game('reg:cod', 'Call of Duty', 'pc', 17040, 3, 120, { cover: img('c3.jpg') }),
     game('epic:rl', 'Rocket League', 'epic', 11880, 6, 25, { cover: img('c4.jpg') }),
     game('reg:valorant', 'VALORANT', 'riot', 10560, 2, 30, { hero: img('h2.jpg'), logo: img('l1.png') }),
-    game('steam:359550', 'Rainbow Six Siege', 'steam', 9600, 9, 60, { cover: img('c1.jpg') }),
+    { ...game('steam:359550', 'Rainbow Six Siege', 'steam', 9600, 9, 60, { cover: img('c1.jpg') }), updatePending: true },
     app('Spotify', 'musique', 2418, img('i1.png')), app('Discord', 'discussion', 900, img('i2.png')), app('WinRAR', 'appli', 60, null), app('Avast Free Antivirus', 'appli', 30, null), app('Google Chrome', 'appli', 600, img('i3.png')), app('OBS Studio', 'video', 480, null),
   ];
   return {
@@ -4192,11 +4227,12 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.52.0',
+    version: async () => '0.52.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
+    gameUpdateProgress: async () => ({phase:'download',percent:42,bytes:420000000,total:1000000000,label:'Téléchargement · démonstration'}), gameUpdateDownloads: async () => true,
     action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => demoSettings, setSettings: async (s) => (demoSettings = { ...demoSettings, ...s }), notebook: async (id) => demoNotes[id] ?? {}, saveNotebook: async (id,note) => { demoNotes[id] = note; return { ok: true }; }, supportDiagnostic: async () => ({ version: '0.50.0', platform: 'Aperçu navigateur' }), supportList: async () => ({ tickets: demoTickets }), supportSend: async (body) => { demoTickets.unshift({ ...body, at: Date.now(), status: 'received', reply: 'Demande de démonstration : aucun envoi réel.' }); return { ok: true }; }, win: () => {},
     details: async () => ({ developers: ['Rockstar North'], screenshots: [img('h1.jpg'), img('c2.jpg'), img('h2.jpg')], achievements: { done: 45, total: 77 } }),
     reco: async () => [1, 2, 3, 4, 5].map((n) => ({ name: `Jeu recommandé ${n}`, why: 'Même style que GTA V', steamId: String(n), art: { header: img(n % 2 ? 'h1.jpg' : 'h2.jpg') } })),

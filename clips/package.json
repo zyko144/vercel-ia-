@@ -1,15 +1,15 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.8.2",
-  "releaseNotes": "Discord et Support sont regroupés côte à côte à droite de la barre du haut.",
+  "version": "0.8.3",
+  "releaseNotes": "Mise à jour plus fiable : téléchargement complet vérifié, attente des exports et arrêt du replay avant installation. Progression et bouton Réessayer.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-clips.mjs",
+    "test": "node test/test-clips.mjs && node test/test-updates.mjs",
     "dist": "electron-builder --win"
   },
   "devDependencies": {

@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('launcher', {
   supportList: () => ipcRenderer.invoke('support:list'),
   supportSend: (body) => ipcRenderer.invoke('support:send', body),
   scan: () => ipcRenderer.invoke('lib:scan'),
+  gameUpdateProgress: (id) => ipcRenderer.invoke('gameUpdate:progress', id),
+  gameUpdateDownloads: () => ipcRenderer.invoke('gameUpdate:downloads'),
   action: (id, action) => ipcRenderer.invoke('item:action', id, action),
   setItem: (id, patch) => ipcRenderer.invoke('item:set', id, patch),
   settings: () => ipcRenderer.invoke('settings:get'),

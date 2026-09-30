@@ -16,3 +16,5 @@ html, body { margin: 0; background: transparent; overflow: hidden; font: 13px/1.
 @keyframes in { from { transform: translateX(-110%); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes out { to { transform: translateX(-110%); opacity: 0; } }
 @keyframes life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+*{box-sizing:border-box}#stack{max-height:calc(100vh - 16px);overflow-y:auto;overflow-x:hidden}.card{flex-shrink:0}.txt b{padding-right:18px}.acts{flex-wrap:wrap}
