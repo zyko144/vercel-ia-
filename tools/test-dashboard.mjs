@@ -96,7 +96,7 @@ await new Promise((r) => server.listen(process.argv.includes('--serve') ? 8813 :
 const base = `http://127.0.0.1:${server.address().port}`;
 // --serve : laisse le tableau de bord allumé pour le regarder (jeton de connexion affiché)
 if (process.argv.includes('--serve')) {
-  console.log(`${base}/dashboard/connexion#${createLoginToken(OWNER)}`);
+  console.log(`${base}/apps-admin/connexion#${createLoginToken(OWNER)}`);
   await new Promise(() => {});
 }
 
@@ -113,6 +113,13 @@ async function request(path, { method = 'GET', body, headers = {}, withCookie = 
   return { status: res.status, headers: res.headers, text, json: raw ? null : (() => { try { return JSON.parse(text); } catch { return null; } })() };
 }
 const post = (path, body, extra = {}) => request(path, { ...extra, method: 'POST', body, headers: { 'x-dashboard': '1', ...(extra.headers ?? {}) } });
+
+await check('centre Apps : page dédiée, API privée et routes limitées', async () => {
+  const page = await request('/apps-admin'); assert.equal(page.status, 200); assert.match(page.text, /HISTORY/); assert.match(page.text, /Centre de support/);
+  assert.equal((await request('/apps-admin/api/launcher-support', { withCookie: false })).status, 401);
+  assert.equal((await request('/apps-admin/api/serveurs')).status, 404);
+  assert.equal((await request('/apps-admin/app.js')).status, 200);
+});
 
 await check('la page est servie avec des en-têtes de sécurité stricts', async () => {
   const r = await request('/dashboard');

@@ -5,7 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: clip:; media-src clip:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>History Clips</title>
 <link rel="stylesheet" href="style.css">
-</head>
+<link rel="stylesheet" href="quick-support.css"></head>
 <body data-theme="jaune">
 <div class="neon" aria-hidden="true"></div>
 <aside class="side">
@@ -166,6 +166,6 @@
 <div class="montagebar glass" id="montageBar" hidden><b id="montageCount">0 clip choisi</b><span class="hint">Clique sur les clips dans l’ordre voulu</span><button type="button" class="btn ghost sm" id="montageCancel">Annuler</button><button type="button" class="btn play sm" id="montageGo">🎞 Assembler</button></div>
 <dialog id="updDlg" class="modal upddlg"><img src="icon.png" alt=""><h2 id="updDlgTitle">Nouvelle version</h2><p class="fine" id="updDlgNotes"></p><div class="choice"><button type="button" class="btn play" id="updYes">⬆ Mettre à jour maintenant<small>moins d’une minute</small></button><button type="button" class="btn" id="updLater">Plus tard<small>installée à la fermeture</small></button></div></dialog>
 <div id="toast" hidden></div>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

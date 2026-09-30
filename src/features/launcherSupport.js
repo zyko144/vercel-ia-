@@ -13,10 +13,10 @@ export function cleanReport(body) {
   const diagnostic = {};
   // Explicit allowlist: no paths, account identifiers, logs or credentials.
   for (const key of ['version', 'platform', 'release', 'arch', 'memoryGB', 'games', 'apps']) if (body?.diagnostic?.[key] != null) diagnostic[key] = clean(body.diagnostic[key], 80);
-  return { title, description, diagnostic };
+  return { title, description, diagnostic, app: body?.app === 'clips' ? 'clips' : 'launcher' };
 }
 let queue = Promise.resolve();
-function mutate(fn) {
+export function mutateSupport(fn) {
   const result = queue.then(async () => {
     const all = structuredClone((await readFresh(KEY)) ?? {});
     const value = await fn(all);
@@ -41,12 +41,14 @@ export async function supportDetail(id, owner = null) {
 }
 export async function supportUpdate(body) {
   if (!SUPPORT_STATES.includes(body?.status)) throw new Error('Statut inconnu.');
-  return mutate((all) => {
+  const result = await mutateSupport((all) => {
     if (!Object.hasOwn(all, String(body.id))) throw new Error('Signalement introuvable.');
     const ticket = all[body.id];
     ticket.status = body.status; ticket.reply = clean(body.reply, 2000); ticket.updatedAt = Date.now();
     return { ok: true, ticket: summary(ticket) };
   });
+  import('./supportDiscord.js').then(m => m.queueSupport(result.ticket.id)).catch(() => {});
+  return result;
 }
 export async function handleSupportApi(req, res, url, { readJson, send }) {
   const account = await me(String(req.headers.authorization ?? '').replace(/^Bearer /, ''));
@@ -66,11 +68,14 @@ export async function handleSupportApi(req, res, url, { readJson, send }) {
     let image = null;
     if (body.img) { image = checkImage(body.img, 1400000); if (!image || typeof image === 'string') throw new Error('Capture invalide : PNG, JPG ou WebP, 1,4 Mo maximum.'); }
     id = randomUUID();
-    const ticket = await mutate(async (all) => {
+    const { supportIdentity } = await import('./supportDiscord.js');
+    const identity = await supportIdentity(account, report.app);
+    const ticket = await mutateSupport(async (all) => {
       if (Object.keys(all).length >= 2000 || Object.values(all).filter((t) => t.owner === account.id && t.status !== 'resolved').length >= 20) throw new Error('Trop de signalements ouverts. Attends la réponse à tes demandes.');
       if (image) await putBlob(`support/${id}`, Buffer.from(image.data, 'base64'), image.mime);
-      return all[id] = { id, owner: account.id, name: clean(account.pseudo, 40), ...report, image: !!image, status: 'received', reply: '', at: Date.now(), updatedAt: Date.now() };
+      return all[id] = { id, owner: account.id, name: clean(account.pseudo, 40), ...identity, ...report, image: !!image, status: 'received', reply: '', at: Date.now(), updatedAt: Date.now() };
     });
+    import('./supportDiscord.js').then(m => m.queueSupport(ticket.id)).catch(() => {});
     return send(res, 200, { ok: true, ticket: summary(ticket) });
   } catch (error) {
     if (id) await delBlob(`support/${id}`).catch(() => {});

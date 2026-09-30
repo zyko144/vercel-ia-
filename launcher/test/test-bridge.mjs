@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const pre = readFileSync(new URL('../src/preload.cjs', import.meta.url), 'utf8');
-const app = ['app.js','settings.js','personal.js'].map((name) => readFileSync(new URL(`../src/ui/${name}`, import.meta.url), 'utf8')).join('\n');
+const app = ['app.js','settings.js','personal.js','quick-support.js'].map((name) => readFileSync(new URL(`../src/ui/${name}`, import.meta.url), 'utf8')).join('\n');
 const keys = [...pre.matchAll(/^ {2}([A-Za-z0-9]+):/gm)].map((m) => m[1]);
 const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
 assert.deepEqual(dup, [], `noms en double dans preload.cjs : ${dup.join(', ')}`);

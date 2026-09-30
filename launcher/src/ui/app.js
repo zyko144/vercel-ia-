@@ -1,3 +1,4 @@
+import { initQuickSupport } from './quick-support.js';
 import { initPersonal } from './personal.js';
 import { cachedTask } from '../core/personal.js';
 import { initSettings } from './settings.js';
@@ -1597,6 +1598,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.51.0': [
+    ['✉', 'Le support, à portée de clic', 'Un panneau en haut à droite pour envoyer une demande, joindre une capture et retrouver les réponses de l’équipe.', ['.qs-trigger', 'wait600']],
+    ['◈', 'Des paramètres faciles à repérer', 'Des icônes identifient chaque catégorie de réglages.'],
+  ],
   '0.50.0': [
     ['🏠', 'Ton accueil, à ta façon', 'Réorganise les blocs, épingle tes jeux et choisis tes raccourcis.', ['#customizeHome', 'wait600'], 'accueil'],
     ['📓', 'Un carnet pour chaque jeu', 'Retrouve tes notes, builds, commandes et liens depuis la fiche du jeu.', [], 'carnet'],
@@ -3686,6 +3691,7 @@ $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActi
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
 personal = initPersonal(api, { items: () => state.items, card, go, toast });
 initSettings(api);
+initQuickSupport(api, 'launcher');
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('ui-paused', document.hidden));
 const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxNotif').checked, sfxVol: Number($('sfxVol').value) }; window.sfx?.set({ on: c.sfxOn, notif: c.sfxNotif, vol: c.sfxVol / 100 }); api.setSettings(c); };
 ['sfxOn', 'sfxNotif'].forEach((id) => $(id).addEventListener('change', sfxSave));
@@ -4176,7 +4182,7 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.50.0',
+    version: async () => '0.51.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
