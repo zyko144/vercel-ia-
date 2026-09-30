@@ -1599,6 +1599,7 @@ api.settings?.().then((s) => {
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
   '0.51.1': [
+    ['✉', 'Support bien visible', 'Le bouton rouge est placé à droite de la barre du haut, près des commandes de fenêtre.', ['.qs-trigger', 'wait600']],
     ['●', 'Le suivi du support en couleurs', 'Bleu : reçue. Orange : en cours. Vert : résolue. Le statut reste écrit pour être lisible par tous.', ['.qs-trigger', '[data-tab="list"]', 'wait600']],
   ],
   '0.51.0': [
