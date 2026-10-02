@@ -48,6 +48,9 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:FFMPEG_TEST_BIN = node -p "require('ffmpeg-static')"
+          npm run test:media
 
       - name: Construction de l'installateur
         if: steps.exists.outputs.yes == 'false'

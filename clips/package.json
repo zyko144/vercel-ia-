@@ -1,16 +1,17 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.8.3",
-  "releaseNotes": "Mise à jour plus fiable : téléchargement complet vérifié, attente des exports et arrêt du replay avant installation. Progression et bouton Réessayer.",
+  "version": "0.8.4",
+  "releaseNotes": "Enregistrement et lecture des clips fiabilisés, son du jeu et micro conservés. Suppression, découpe et exports sécurisés ; réparation sur une copie sans effacer l’original.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-clips.mjs && node test/test-updates.mjs",
-    "dist": "electron-builder --win"
+    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs",
+    "dist": "electron-builder --win",
+    "test:media": "node test/test-media.mjs"
   },
   "devDependencies": {
     "electron": "^44.4.5",

@@ -91,7 +91,7 @@ function renderHome() {
   const bg = art[g ?? top]?.hero ?? art[g ?? top]?.img;
   $('v-home').innerHTML = `<section class="hero glass">${bg ? `<div class="hbg" style="background-image:url('${esc(bg)}')"></div>` : ''}<div class="recdot ${on ? 'on' : wait ? 'wait' : ''}"><i></i></div>
     <div><h2>${on ? `Replay actif${g ? ` · ${esc(g)}` : ''}` : wait ? 'Prêt : en attente d’un jeu' : settings.replay ? 'Replay en démarrage…' : 'Replay en pause'}</h2>
-    <p>${wait ? 'Le replay démarre tout seul dès qu’un jeu passe en plein écran (0 ressource utilisée d’ici là).<br>' : ''}Appuie sur ${keyText(settings.hotClip)} pour garder les ${settings.seconds} dernières secondes · ${keyText(settings.hotShot)} pour une capture.<br>${settings.source === 'game' ? '🎮 Le jeu seulement' : '🖥 Écran entier'} · ${settings.height}p · ${settings.fps} i/s${settings.audio ? ' · son du PC' : ' · sans son'}</p>${err ? `<p class="err">⚠ L’enregistrement n’a pas démarré : ${esc(err)}</p>` : ''}${settings.noAudio && on ? '<p class="err">🔇 Windows ne donne pas le son du PC : vérifie ta sortie audio par défaut (Paramètres Windows › Son) puis redémarre History Clips.</p>' : ''}</div>
+    <p>${wait ? 'Le replay démarre tout seul dès qu’un jeu passe en plein écran (0 ressource utilisée d’ici là).<br>' : ''}Appuie sur ${keyText(settings.hotClip)} pour garder les ${settings.seconds} dernières secondes · ${keyText(settings.hotShot)} pour une capture.<br>${settings.source === 'game' ? '🎮 Le jeu seulement' : '🖥 Écran entier'} · ${settings.height}p · ${settings.fps} i/s${settings.audio ? ' · son du PC' : ' · sans son'}</p>${err ? `<p class="err">⚠ L’enregistrement n’a pas démarré : ${esc(err)}</p>` : ''}${settings.noAudio && on ? '<p class="err">🔇 Windows ne donne pas le son du PC : vérifie ta sortie audio par défaut (Paramètres Windows › Son) puis redémarre History Clips.</p>' : ''}${settings.noMic && on ? '<p class="err">🎙 Micro indisponible : vérifie son branchement et son autorisation Windows, puis relance le replay.</p>' : ''}</div>
     <div class="heroact"><button type="button" class="btn" data-act="toggle">${settings.replay ? '⏸ Pause' : '▶ Activer'}</button><button type="button" class="btn" data-v="reglages">⚙ Réglages</button></div></section>
   <div class="stats"><div class="glass"><b>${vids.length}</b><small>clips</small></div><div class="glass"><b>${clips.length - vids.length}</b><small>captures</small></div><div class="glass"><b>${games().length}</b><small>jeux</small></div><div class="glass"><b>${size(clips.reduce((t, c) => t + c.size, 0))}</b><small>sur le disque</small></div></div>
   <div class="row-head"><h2>Derniers clips</h2>${vids.length > 6 ? '<button class="seeall" data-v="tout">Voir tout ›</button>' : ''}</div><div class="grid">${vids.slice(0, 6).map(card).join('') || emptyMsg()}</div>
@@ -118,12 +118,17 @@ document.addEventListener('error', (e) => { if (e.target.classList?.contains('gl
 // Survol : la vidéo n'est chargée que sur la carte survolée (une seule à la fois), puis libérée
 $('main').addEventListener('mouseover', (e) => {
   const card = e.target.closest('.card'); if (!card || card.querySelector('video')) return;
-  const c = clips.find((x) => x.token === card.dataset.t); if (!c || c.image || !c.url) return;
+  const c = clips.find((x) => x.token === card.dataset.t); if (!c || c.image || !c.url || clipBusy.has(c.token)) return;
   const v = document.createElement('video'); v.muted = true; v.loop = true; v.src = c.url; v.play().catch(() => {});
   card.querySelector('.thumb').prepend(v);
 });
 $('main').addEventListener('mouseout', (e) => { const card = e.target.closest('.card'); const v = card?.querySelector('video'); if (v && !card.contains(e.relatedTarget)) { v.pause(); v.removeAttribute('src'); v.load(); v.remove(); } });
-$('saveNow').addEventListener('click', () => { api.saveNow(); toast('🎬 Clip en cours d’enregistrement…'); });
+$('saveNow').addEventListener('click', async () => {
+  if ($('saveNow').disabled) return; $('saveNow').disabled = true; toast('🎬 Clip en cours d’enregistrement…');
+  try { const r = await api.saveNow(); if (r) toast(r.ok ? '🎬 Clip enregistré' : r.error ?? 'Clip pas encore prêt'); }
+  catch (e) { toast(`Clip non enregistré : ${e.message}`); }
+  finally { $('saveNow').disabled = false; }
+});
 $('profile').addEventListener('click', () => (compte ? (show('reglages'), pane('acct')) : openAuth()));
 api.onChanged(async () => { settings = await api.settings() ?? settings; paintPill(); load(); });
 api.onFocus((f) => document.body.classList.toggle('idle', !f));
@@ -132,15 +137,32 @@ api.onMax((m) => { document.querySelector('[data-win=max]').textContent = m ? '�
 // ---------- Lecteur + découpe ----------
 function openViewer(c) {
   if (!c) return;
-  cur = c;
+  releaseClipMedia(); cur = c;
+  $('vStatus').hidden = true;
   $('vTitle').textContent = `${c.name} · ${c.game}`;
   $('vImg').hidden = !c.image; $('vVideo').hidden = c.image; $('trim').hidden = c.image; $('vExport').hidden = c.image; $('vCopy').hidden = !c.image;
-  if (c.image) $('vImg').src = c.url; else { $('vVideo').src = c.url; $('vVideo').play().catch(() => {}); }
+  if (c.image) $('vImg').src = c.url; else { $('vVideo').src = c.url; $('vVideo').load(); $('vVideo').play().catch(e => { if (cur === c && e.name !== 'AbortError') { $('vStatus').hidden = false; $('vStatus').textContent = 'Clique sur Lecture. Si le clip reste bloqué, ouvre-le depuis son dossier ou réessaie sa réparation.'; } }); }
   $('vFav').textContent = c.fav ? '⭐ Retirer des favoris' : '⭐ Favori';
   $('viewer').showModal();
 }
 // ---------- Découpe : timeline avec poignées, bande d'images, lecture de la sélection ----------
 const V = $('vVideo');
+let filmGeneration = 0; const clipBusy = new Set(), previewVideos = new Set();
+function releaseVideo(v) { v.pause(); v.removeAttribute('src'); v.load(); }
+function releaseClipMedia() {
+  filmGeneration++;
+  for (const v of previewVideos) releaseVideo(v);
+  previewVideos.clear();
+  document.querySelectorAll('.card video').forEach(v => { releaseVideo(v); v.remove(); });
+  releaseVideo(V);
+}
+async function clipAction(c, fn) {
+  if (!c || clipBusy.has(c.token)) return null;
+  clipBusy.add(c.token);
+  try { return await fn(); }
+  catch (e) { toast(`Impossible : ${e.message ?? 'réessaie dans un instant'}`); return null; }
+  finally { clipBusy.delete(c.token); }
+}
 let dur = 0; let tA = 0; let tB = 0; let selPlay = false;
 const pct = (t) => `${dur ? (t / dur) * 100 : 0}%`;
 function paintTrim() {
@@ -153,12 +175,15 @@ const setB = (t) => { tB = Math.min(dur, Math.max(t, tA + 0.5)); paintTrim(); };
 // Clip illisible (souvent un ancien replay aux horodatages abîmés) : réparé tout seul puis rouvert
 const repaired = new Set();
 V.addEventListener('error', async () => {
-  if (!cur || cur.image || !V.getAttribute('src') || repaired.has(cur.token)) return;
-  repaired.add(cur.token); toast('🛠 Ce clip ne se lit pas : réparation en cours…');
-  const r = await api.repair(cur.token).catch(() => null);
-  if (!r?.ok) return toast(r?.error ?? 'Réparation impossible');
-  await load(); const c = clips.find((x) => x.token === r.token);
-  if (c && $('viewer').open) { repaired.add(c.token); openViewer(c); toast('✅ Clip réparé'); }
+  const c = cur;
+  if (!c || c.image || !V.getAttribute('src') || repaired.has(c.token)) return;
+  repaired.add(c.token); releaseClipMedia();
+  $('vStatus').hidden = false; $('vStatus').textContent = 'Réparation du clip en cours… L’original est conservé.';
+  const r = await clipAction(c, () => api.repair(c.token));
+  if (cur !== c || !$('viewer').open) return;
+  if (!r?.ok) { $('vStatus').textContent = r?.error ?? 'Ce clip ne peut pas être lu. Son fichier original est conservé.'; return; }
+  await load(); const fixed = clips.find(x => x.token === r.token);
+  if (fixed && cur === c && $('viewer').open) { repaired.add(fixed.token); openViewer(fixed); toast('✅ Copie réparée créée'); }
 });
 V.addEventListener('loadedmetadata', () => { dur = Number.isFinite(V.duration) ? V.duration : 0; tA = 0; tB = dur; paintTrim(); filmstrip(cur); });
 V.addEventListener('timeupdate', () => {
@@ -167,16 +192,24 @@ V.addEventListener('timeupdate', () => {
 });
 // Bande d'images : 10 vignettes prises dans la vidéo
 async function filmstrip(c) {
-  const strip = $('strip'); strip.innerHTML = '';
+  const gen = ++filmGeneration, strip = $('strip'); strip.innerHTML = '';
   if (!c?.url || !dur) return;
-  const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = c.url;
-  await new Promise((ok) => { v.onloadeddata = ok; v.onerror = ok; });
-  for (let i = 0; i < 10 && cur === c; i++) {
-    await new Promise((ok) => { v.onseeked = ok; v.currentTime = (dur * (i + 0.5)) / 10; setTimeout(ok, 1500); });
-    const cv = document.createElement('canvas'); cv.width = 160; cv.height = 90;
-    cv.getContext('2d').drawImage(v, 0, 0, 160, 90); strip.append(cv);
-  }
-  v.removeAttribute('src'); v.load();
+  const duration = dur, v = document.createElement('video'); v.muted = true; v.preload = 'auto';
+  previewVideos.add(v);
+  const ready = (event, action) => new Promise(resolve => {
+    const done = () => { clearTimeout(timer); v.removeEventListener(event, done); v.removeEventListener('error', done); resolve(); };
+    const timer = setTimeout(done, 2000); v.addEventListener(event, done, { once: true }); v.addEventListener('error', done, { once: true }); action();
+  });
+  try {
+    await ready('loadeddata', () => { v.src = c.url; });
+    for (let i = 0; i < 10 && gen === filmGeneration && cur === c && v.readyState >= 2; i++) {
+      await ready('seeked', () => { v.currentTime = duration * (i + 0.5) / 10; });
+      if (gen !== filmGeneration || cur !== c || v.readyState < 2) break;
+      const cv = document.createElement('canvas'); cv.width = 160; cv.height = 90;
+      cv.getContext('2d').drawImage(v, 0, 0, 160, 90); strip.append(cv);
+    }
+  } catch { /* La lecture reste utilisable si les vignettes ne sont pas disponibles. */ }
+  finally { releaseVideo(v); previewVideos.delete(v); }
 }
 // Glisser : une poignée, toute la sélection, ou un clic pour placer la lecture
 // Glisser : une poignée, toute la sélection, ou un simple clic pour placer la lecture (même dans la sélection).
@@ -227,8 +260,10 @@ $('doTrim').addEventListener('click', () => {
   if (!dur || (tA < 0.05 && tB > dur - 0.05)) return toast('Déplace les poignées pour choisir le passage à garder.');
   ask(`✂ Garder ${sec(tB - tA)}`, `<p class="fine">De ${sec(tA)} à ${sec(tB)}. Comment l’enregistrer ?</p><div class="choice"><button type="button" class="btn play" data-to="new">💾 Nouveau clip<small>l’original reste intact</small></button><button type="button" class="btn" data-to="replace">♻ Remplacer l’original<small>l’ancien part à la corbeille</small></button></div>`, null, async (mode) => {
     toast('✂ Découpe en cours…');
-    const r = await api.trim(cur.token, tA, tB, mode).catch(() => null);
-    if (!r?.ok) return toast(r?.error ?? 'Découpe impossible');
+    const c = cur, start = tA, end = tB;
+    if (mode === 'replace') releaseClipMedia();
+    const r = await clipAction(c, () => api.trim(c.token, start, end, mode));
+    if (!r?.ok) { if (mode === 'replace' && cur === c) openViewer(c); return toast(r?.error ?? 'Découpe impossible'); }
     toast(mode === 'replace' ? '♻ Clip remplacé par le passage choisi' : '💾 Nouveau clip enregistré');
     if (mode === 'replace') $('viewer').close();
     load();
@@ -238,16 +273,21 @@ $('vFav').addEventListener('click', async () => { cur.fav = await api.fav(cur.to
 $('vRename').addEventListener('click', () => ask('✏ Renommer le clip', `<input type="text" id="mName" maxlength="80" value="${esc(cur.name)}">`, async () => { await api.rename(cur.token, $('mName').value); $('vTitle').textContent = `${$('mName').value} · ${cur.game}`; load(); }));
 $('vFolder').addEventListener('click', () => api.open(cur.token, 'folder'));
 $('vCopy').addEventListener('click', async () => toast((await api.copy(cur.token)) ? '📋 Image copiée' : 'Copie impossible'));
-$('vExport').addEventListener('click', async () => { toast('⬇ Export en MP4…'); const r = await api.exportMp4(cur.token); if (!r?.cancelled) toast(r?.ok ? '⬇ Exporté en MP4' : r?.error ?? 'Export impossible'); });
+$('vExport').addEventListener('click', async () => { toast('⬇ Export en MP4…'); const c = cur; const r = await clipAction(c, () => api.exportMp4(c.token)); if (!r?.cancelled) toast(r?.ok ? '⬇ Exporté en MP4' : r?.error ?? 'Export impossible'); });
 // Suppression : notre propre fenêtre de confirmation (plus l'alerte Windows)
 function confirmDelete(c, after) {
   ask('🗑 Supprimer ce clip ?', `<p class="fine">« ${esc(c.name)} » part dans la corbeille : tu peux encore le récupérer.</p><div class="choice"><button type="button" class="btn danger" data-to="yes">🗑 Supprimer</button><button type="button" class="btn" data-to="no">Annuler</button></div>`, null, async (v) => {
     if (v !== 'yes') return;
-    if (await api.remove(c.token)) { toast('🗑 Clip supprimé'); after?.(); load(); } else toast('Suppression impossible');
+    await clipAction(c, async () => {
+      releaseClipMedia();
+      const r = await api.remove(c.token).catch(e => ({ ok: false, error: e.message }));
+      if (r?.ok || r === true) { toast('🗑 Clip supprimé'); after?.(); await load(); }
+      else { if ($('viewer').open && cur === c) openViewer(c); toast(r?.error ?? 'Suppression impossible'); }
+    });
   });
 }
 $('vDelete').addEventListener('click', () => confirmDelete(cur, () => $('viewer').close()));
-$('viewer').addEventListener('close', () => { $('vVideo').pause(); $('vVideo').removeAttribute('src'); $('vVideo').load(); });
+$('viewer').addEventListener('close', () => { releaseClipMedia(); cur = null; });
 
 // ---------- Discord ----------
 $('vDiscord').addEventListener('click', () => shareDiscord(cur));
@@ -259,7 +299,7 @@ async function shareDiscord(c) {
   const sv = (servs ?? []).map((g) => `<button type="button" class="btn ${g.home ? 'play' : ''}" data-to="g:${esc(g.id)}">${g.icon ? `<img src="${esc(g.icon)}" alt="" class="gicon">` : '📢'} ${g.home ? 'Serveur History Clips' : `${esc(g.name)} <small>· salon clips-history</small>`}</button>`).join('');
   ask('📤 Envoyer sur Discord', `<div class="pick">${sv || '<button type="button" class="btn play" data-to="">📢 Serveur History Clips</button>'}${(amis ?? []).map((a) => `<button type="button" class="btn ghost" data-to="${esc(a.id)}">💬 En privé à ${esc(a.pseudo)}</button>`).join('')}</div><p class="fine">Pour partager sur un autre serveur, ajoute le bot History Clips dessus : il crée tout seul le salon <b>clips-history</b>. Ton compte Discord doit être lié dans History Launcher.</p>`, null, async (to) => {
     toast('📤 Envoi du clip…');
-    const r = to.startsWith('g:') ? await api.discord(c.token, '', to.slice(2)) : await api.discord(c.token, to);
+    const r = await clipAction(c, () => to.startsWith('g:') ? api.discord(c.token, '', to.slice(2)) : api.discord(c.token, to));
     toast(r?.ok ? '✅ Clip envoyé sur Discord' : r?.error ?? 'Envoi impossible');
   });
 }
@@ -268,13 +308,13 @@ async function shareDiscord(c) {
 function vertical(c) {
   ask('📱 Exporter en vertical (9:16)', '<div class="choice"><button type="button" class="btn play" data-to="flou">🌫 Image entière<small>sur un fond flouté</small></button><button type="button" class="btn" data-to="zoom">🔍 Zoom au centre<small>plein écran, bords coupés</small></button></div>', null, async (mode) => {
     toast('📱 Export vertical en cours…');
-    const r = await api.vertical(c.token, mode); toast(r?.ok ? '📱 Clip vertical prêt (dans le même dossier)' : r?.error ?? 'Export impossible'); if (r?.ok) load();
+    const r = await clipAction(c, () => api.vertical(c.token, mode)); toast(r?.ok ? '📱 Clip vertical prêt (dans le même dossier)' : r?.error ?? 'Export impossible'); if (r?.ok) load();
   });
 }
 async function shareLink(c) {
   if (!compte) { toast('Connecte ton compte History pour créer un lien'); return openAuth(); }
   toast('🔗 Mise en ligne du clip…');
-  const r = await api.link(c.token);
+  const r = await clipAction(c, () => api.link(c.token));
   toast(r?.ok ? '🔗 Lien copié ! Colle-le où tu veux (valable 7 jours)' : r?.error ?? 'Lien impossible');
 }
 $('vVertical').addEventListener('click', () => vertical(cur));
@@ -294,7 +334,7 @@ $('montageCancel').addEventListener('click', () => { picks = null; paintPicks();
 $('montageGo').addEventListener('click', async () => {
   if ((picks?.length ?? 0) < 2) return toast('Choisis au moins 2 clips.');
   const list = picks; picks = null; paintPicks(); toast(`🎞 Montage de ${list.length} clips en cours…`);
-  const r = await api.montage(list); toast(r?.ok ? '🎞 Montage prêt : dossier « Montages »' : r?.error ?? 'Montage impossible'); if (r?.ok) load();
+  const r = await clipAction({token: 'montage'}, () => api.montage(list)); toast(r?.ok ? '🎞 Montage prêt : dossier « Montages »' : r?.error ?? 'Montage impossible'); if (r?.ok) load();
 });
 
 // ---------- Discord et History Launcher ----------
@@ -316,7 +356,7 @@ document.addEventListener('contextmenu', (e) => {
     if (m === 'open') openViewer(c);
     else if (m === 'discord') shareDiscord(c);
     else if (m === 'copy') toast((await api.copy(c.token)) ? '📋 Image copiée' : 'Copie impossible');
-    else if (m === 'export') { const r = await api.exportMp4(c.token); if (!r?.cancelled) toast(r?.ok ? '⬇ Exporté en MP4' : r?.error ?? 'Export impossible'); }
+    else if (m === 'export') { const r = await clipAction(c, () => api.exportMp4(c.token)); if (!r?.cancelled) toast(r?.ok ? '⬇ Exporté en MP4' : r?.error ?? 'Export impossible'); }
     else if (m === 'fav') { await api.fav(c.token); load(); }
     else if (m === 'rename') ask('✏ Renommer le clip', `<input type="text" id="mName" maxlength="80" value="${esc(c.name)}">`, async () => { await api.rename(c.token, $('mName').value); load(); });
     else if (m === 'folder') api.open(c.token, 'folder');
@@ -333,9 +373,13 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape') menu.hidden = true;
 function ask(title, html, ok, pick) {
   $('modalBox').innerHTML = `<div class="vhead"><h2>${title}</h2><button type="button" class="x" data-close>✕</button></div>${html}${ok ? '<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn play" id="mOk">Valider</button></div>' : ''}`;
   $('modal').showModal();
+  let submitted = false;
   $('modalBox').onclick = async (e) => {
-    if (e.target.id === 'mOk') { $('modal').close(); await ok?.(); }
-    const b = e.target.closest('[data-to]'); if (b) { $('modal').close(); await pick?.(b.dataset.to); }
+    const b = e.target.closest('[data-to]'), confirm = e.target.id === 'mOk';
+    if ((!confirm && !b) || submitted) return;
+    submitted = true; $('modal').close();
+    try { if (confirm) await ok?.(); else await pick?.(b.dataset.to); }
+    catch (err) { toast(`Impossible : ${err.message ?? 'réessaie'}`); }
   };
 }
 

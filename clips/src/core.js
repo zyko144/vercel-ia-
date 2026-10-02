@@ -35,10 +35,17 @@ export function ffmpegArgs(src, out, { start = null, end = null, reencode = fals
   if (start != null) a.push('-ss', String(Math.max(0, start)));
   a.push('-i', src);
   if (end != null) a.push('-t', String(Math.max(0.5, end - (start ?? 0))));
-  if (reencode) a.push(...encArgs(enc), '-fps_mode', 'vfr');
+  a.push('-map', '0:v:0', '-map', '0:a:0?');
+  if (reencode) a.push(...encArgs(enc), '-vf', 'setpts=PTS-STARTPTS', '-fps_mode', 'vfr');
   else a.push('-c:v', 'copy');
-  a.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out);
+  a.push('-af', 'asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0', '-c:a', 'aac', '-b:a', '192k', '-disposition:a:0', 'default', '-movflags', '+faststart', out);
   return a;
+}
+/** Jeu + micro audibles sur la piste par défaut ; micro isolé conservé pour le montage. */
+export function micMixArgs(video, mic, out, { videoAudio, delta = 0, volume = 1, enc = 'libx264' }) {
+  const shift = delta >= 0 ? `adelay=${Math.round(delta * 1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
+  const graph = `[0:v:0]setpts=PTS-STARTPTS[v];[1:a:0]asetpts=PTS-STARTPTS,${shift},volume=${volume}[m];` + (videoAudio ? '[m]asplit[m1][m2];[0:a:0]asetpts=PTS-STARTPTS[a];[a][m1]amix=inputs=2:duration=longest:normalize=0[mix]' : '[m]asplit[mix][m2]');
+  return ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic, '-filter_complex', graph, '-map', '[v]', '-map', '[mix]', '-map', '[m2]', ...encArgs(enc), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '192k', '-disposition:a:0', 'default', '-disposition:a:1', '0', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', '-movflags', '+faststart', out];
 }
 /** Chemin de ffmpeg dans l'appli installée (hors de l'archive asar). */
 export const unpacked = (p) => String(p ?? '').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
