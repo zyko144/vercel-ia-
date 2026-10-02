@@ -458,9 +458,11 @@ mediaHandle('clips:export', async (_e, t) => {
 ipcMain.handle('clips:save', () => saveClip(inGame() ? fg.game : 'Bureau'));
 
 // Images des jeux : bannière Steam (recherche par nom) + icône du .exe
+let genericExeIcon;
 ipcMain.handle('games:art', async (_e, names) => {
   const out = {};
   for (const name of (Array.isArray(names) ? names : []).slice(0, 40).map(String)) {
+    if (!artTerm(name) || /roblox/i.test(name)) { out[name] = {}; continue; }
     let a = st.art2[name];
     if (!a || (!a.img && Date.now() - (a.at ?? 0) > 7 * 86_400_000)) {
       a = { at: Date.now() };
@@ -482,7 +484,12 @@ ipcMain.handle('games:art', async (_e, names) => {
       st.art2[name] = a; saveSt();
     }
     let icon = null;
-    if (st.exes[name]) icon = await app.getFileIcon(st.exes[name], { size: 'large' }).then((i) => i.toDataURL()).catch(() => null);
+    // Une ancienne installation peut laisser un chemin périmé : Windows renvoie alors son icône générique.
+    if (st.exes[name] && (await stat(st.exes[name]).catch(() => null))?.isFile()) {
+      genericExeIcon ??= app.getFileIcon(path.join(app.getPath('temp'), 'history-missing-icon.exe'), { size: 'large' }).then(i => i.toDataURL()).catch(() => null);
+      icon = await app.getFileIcon(st.exes[name], { size: 'large' }).then(i => i.isEmpty() ? null : i.toDataURL()).catch(() => null);
+      if (icon === await genericExeIcon) icon = null;
+    }
     out[name] = { ...a, icon };
   }
   return out;

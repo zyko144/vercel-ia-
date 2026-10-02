@@ -35,6 +35,6 @@ http.createServer(async(req,res)=>{
     }
     const file=path.resolve(root,'.'+decodeURIComponent(url.pathname.replace(/^\/clips/,'')));
     if(!file.startsWith(root+path.sep))throw Error('chemin');
-    const data=await readFile(file);res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.png':'image/png'})[path.extname(file)]??'application/octet-stream');res.end(data);
+    const data=await readFile(file);res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml'})[path.extname(file)]??'application/octet-stream');res.end(data);
   }catch{res.writeHead(404);res.end();}
 }).listen(8767,'127.0.0.1',()=>console.log('Tests Clips sur http://127.0.0.1:8767/clips/test/gallery-browser.html'));

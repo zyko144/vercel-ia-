@@ -21,12 +21,16 @@ const hue = (g) => [...g].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 40)
 let clips = []; let settings = {}; let art = {}; let view = 'home'; let game = null; let sortBy = 'new'; let cur = null; let compte = null;
 
 // ---------- Icône et image d'un jeu ----------
+const brandIcon = g => /^bureau$/i.test(g) ? 'brands/windows.svg' : /roblox/i.test(g) ? (/studio/i.test(g) ? 'brands/robloxstudio.svg' : 'brands/roblox.svg') : null;
 function gico(g) {
+  const brand = brandIcon(g);
+  if (brand) return `<img class="gico brand-icon" src="${brand}" alt="">`;
   const a = art[g] ?? {};
   if (a.icon) return `<img class="gico" src="${esc(a.icon)}" alt="">`;
   // Image par-dessus la lettre : si elle ne charge pas, la lettre colorée reste
   return `<span class="gico" style="background:${a.img ? `url('${esc(a.img)}') center / cover, ` : ''}hsl(${hue(g)} 80% 60%)">${a.img ? '' : esc(g.slice(0, 1).toUpperCase())}</span>`;
 }
+const gamePlaceholder = g => brandIcon(g) ? `<img class="game-brand" src="${brandIcon(g)}" alt="">` : `<span class="gletter">${esc(g.slice(0, 1))}</span>`;
 const gbg = (g) => `background:${art[g]?.img ? `url('${esc(art[g].img)}') center / cover, ` : ''}linear-gradient(135deg,hsl(${hue(g)} 70% 45%),#120e0a)`;
 function card(c) {
   const poster = !c.url && art[c.game]?.img ? ` style="background-image:url('${esc(art[c.game].img)}')"` : '';
@@ -67,7 +71,7 @@ function render() {
   if (q && !['tout', 'favs', 'captures', 'game'].includes(view)) { show('tout'); return; }
   if (view === 'home') return renderHome();
   if (view === 'jeux') {
-    $('gamegrid').innerHTML = games().filter((g) => !q || g.toLowerCase().includes(q)).map((g) => { const n = clips.filter((c) => c.game === g); return `<button class="gcard glass" data-g="${esc(g)}"><div class="gart" style="${gbg(g)}">${art[g]?.img ? '' : `<span class="gletter">${esc(g.slice(0, 1))}</span>`}</div><div class="gmeta">${gico(g)}<span><b>${esc(g)}</b><small>${n.filter((c) => !c.image).length} clips · ${n.filter((c) => c.image).length} captures · ${size(n.reduce((t, c) => t + c.size, 0))}</small></span></div></button>`; }).join('') || emptyMsg('Aucun jeu pour l’instant');
+    $('gamegrid').innerHTML = games().filter((g) => !q || g.toLowerCase().includes(q)).map((g) => { const n = clips.filter((c) => c.game === g); return `<button class="gcard glass" data-g="${esc(g)}"><div class="gart" style="${gbg(g)}">${art[g]?.img ? '' : gamePlaceholder(g)}</div><div class="gmeta">${gico(g)}<span><b>${esc(g)}</b><small>${n.filter((c) => !c.image).length} clips · ${n.filter((c) => c.image).length} captures · ${size(n.reduce((t, c) => t + c.size, 0))}</small></span></div></button>`; }).join('') || emptyMsg('Aucun jeu pour l’instant');
     return;
   }
   if (view === 'game') {
@@ -95,7 +99,7 @@ function renderHome() {
     <div class="heroact"><button type="button" class="btn" data-act="toggle">${settings.replay ? '⏸ Pause' : '▶ Activer'}</button><button type="button" class="btn" data-v="reglages">⚙ Réglages</button></div></section>
   <div class="stats"><div class="glass"><b>${vids.length}</b><small>clips</small></div><div class="glass"><b>${clips.length - vids.length}</b><small>captures</small></div><div class="glass"><b>${games().length}</b><small>jeux</small></div><div class="glass"><b>${size(clips.reduce((t, c) => t + c.size, 0))}</b><small>sur le disque</small></div></div>
   <div class="row-head"><h2>Derniers clips</h2>${vids.length > 6 ? '<button class="seeall" data-v="tout">Voir tout ›</button>' : ''}</div><div class="grid">${vids.slice(0, 6).map(card).join('') || emptyMsg()}</div>
-  ${games().length ? `<div class="row-head"><h2>Tes jeux</h2><button class="seeall" data-v="jeux">Voir tout ›</button></div><div class="gamegrid">${games().slice(0, 4).map((x) => `<button class="gcard glass" data-g="${esc(x)}"><div class="gart" style="${gbg(x)}">${art[x]?.img ? '' : `<span class="gletter">${esc(x.slice(0, 1))}</span>`}</div><div class="gmeta">${gico(x)}<span><b>${esc(x)}</b><small>${clips.filter((c) => c.game === x).length} fichiers</small></span></div></button>`).join('')}</div>` : ''}`;
+  ${games().length ? `<div class="row-head"><h2>Tes jeux</h2><button class="seeall" data-v="jeux">Voir tout ›</button></div><div class="gamegrid">${games().slice(0, 4).map((x) => `<button class="gcard glass" data-g="${esc(x)}"><div class="gart" style="${gbg(x)}">${art[x]?.img ? '' : gamePlaceholder(x)}</div><div class="gmeta">${gico(x)}<span><b>${esc(x)}</b><small>${clips.filter((c) => c.game === x).length} fichiers</small></span></div></button>`).join('')}</div>` : ''}`;
 }
 
 // ---------- Navigation (un seul écouteur pour tous les clics) ----------

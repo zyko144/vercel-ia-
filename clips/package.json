@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.8.4",
-  "releaseNotes": "Enregistrement et lecture des clips fiabilisés, son du jeu et micro conservés. Suppression, découpe et exports sécurisés ; réparation sur une copie sans effacer l’original.",
+  "version": "0.8.5",
+  "releaseNotes": "Logos Roblox et Roblox Studio intégrés ; logo Windows pour les clips Bureau. Les anciennes icônes génériques Windows sont écartées.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
