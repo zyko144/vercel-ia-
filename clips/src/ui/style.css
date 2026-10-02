@@ -282,3 +282,6 @@ body.picking .card { outline: 2px dashed rgba(var(--rgb), .35); outline-offset: 
 .rvstars button { background: none; border: 0; font-size: 34px; color: rgba(255, 255, 255, .25); cursor: pointer; padding: 0 3px; }
 .rvstars button.on { color: #ffc233; text-shadow: 0 0 12px rgba(255, 194, 51, .7); }
 #rvText { width: 100%; box-sizing: border-box; margin: 10px 0; }
+
+.gico.brand-icon { object-fit: contain; border-radius: 0; padding: 2px; }
+.gart .game-brand { width: 64px; height: 64px; object-fit: contain; }
