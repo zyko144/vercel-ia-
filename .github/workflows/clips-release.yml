@@ -23,7 +23,7 @@ jobs:
       run:
         working-directory: clips
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Version
         id: v
