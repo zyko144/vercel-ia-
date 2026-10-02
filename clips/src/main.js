@@ -3,20 +3,26 @@
 // un enregistreur caché qui ne tourne que pendant les parties (option) et passe après le jeu (priorité basse).
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, screen, session, shell, Tray } from 'electron';
 import { spawn } from 'node:child_process';
-import { createReadStream } from 'node:fs';
-import { Readable } from 'node:stream';
 import { createHash, randomUUID } from 'node:crypto';
-import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import updaterMod from 'electron-updater';
-import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
+import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, micMixArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
 
+import { serveMedia } from './mediaFile.js';
+import { ReplayBuffer } from './replay.js';
 import { createUpdateController, createMediaJobs } from './updateController.js';
 
 const mediaJobs = createMediaJobs();
-const mediaHandle = (name, fn) => ipcMain.handle(name, (...args) => mediaJobs.run(() => fn(...args)).catch(e => ({ ok: false, error: e.message })));
+const clipLocks = new Set();
+const mediaHandle = (name, fn) => ipcMain.handle(name, (...args) => {
+  const ids = (Array.isArray(args[1]) ? args[1] : [args[1]]).filter(x => typeof x === 'string');
+  if (ids.some(id => clipLocks.has(id))) return { ok: false, error: 'Une opération utilise déjà ce clip. Attends sa fin puis réessaie.' };
+  ids.forEach(id => clipLocks.add(id));
+  return mediaJobs.run(() => fn(...args)).catch(e => ({ ok: false, error: e.message })).finally(() => ids.forEach(id => clipLocks.delete(id)));
+});
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(here, 'ui', 'icon.png');
 let API = 'https://vercel-ia.onrender.com';
@@ -127,7 +133,7 @@ function onForeground(v) {
 const inGame = () => fg.full && fg.game !== 'Bureau' && !/^(History Clips|History Launcher)$/i.test(fg.game);
 
 // ---------- Replay ----------
-let recSource = null;
+let recSource = null, replayGeneration = 0, replayStarting = false;
 async function pickSource() {
   if (st.source === 'game' && inGame()) {
     const id = `window:${fg.hwnd}:0`;
@@ -139,21 +145,24 @@ async function pickSource() {
 async function setReplay(on, keepSetting = false) {
   if (on && (mediaJobs.closing || app.quitting)) return;
   if (!on) {
+    replayGeneration++; replayStarting = false;
     if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); const w = recWin; setTimeout(() => { if (!w.isDestroyed()) w.destroy(); }, 500); }
     recWin = null; recSource = null; recState = keepSetting && st.replay ? 'wait' : 'off'; changed(); resetRing();
     tray?.setToolTip(recState === 'wait' ? 'History Clips · en attente d’un jeu' : 'History Clips · replay en pause'); return;
   }
   if (st.onlyGame && process.platform === 'win32' && !inGame()) { recState = 'wait'; changed(); tray?.setToolTip('History Clips · en attente d’un jeu'); return; }
-  if (recWin && !recWin.isDestroyed()) return;
-  const src = await pickSource();
-  if (mediaJobs.closing || app.quitting) return;
+  if (replayStarting || (recWin && !recWin.isDestroyed())) return;
+  const generation = ++replayGeneration; replayStarting = true;
+  const src = await pickSource().finally(() => { if (generation === replayGeneration) replayStarting = false; });
+  if (generation !== replayGeneration || mediaJobs.closing || app.quitting) return;
   if (!src) { recState = 'error:aucun écran trouvé'; changed(); return; }
   recSource = src.id;
   recWin = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { preload: path.join(here, 'recorder.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   const me = recWin; recWin.on('closed', () => { if (recWin === me) recWin = null; });
   resetRing();
-  await recWin.loadFile(path.join(here, 'ui', 'recorder.html'));
-  recWin.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio, mic: st.mic });
+  await me.loadFile(path.join(here, 'ui', 'recorder.html'));
+  if (generation !== replayGeneration || recWin !== me || me.isDestroyed()) return;
+  me.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio, mic: st.mic });
   tray?.setToolTip(`History Clips · replay actif (${st.hotClip} pour garder les ${st.seconds} dernières secondes)`);
 }
 let restarting = null;
@@ -167,87 +176,89 @@ function lowerPriority() {
 ipcMain.on('rec:state', (e, s) => {
   if (e.sender !== recWin?.webContents) return;
   if (s === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
-  recState = s; changed();
-  if (s === 'on:noaudio') { recState = 'on'; st.noAudio = true; notify('Son du PC indisponible', 'Le replay filme, mais Windows ne donne pas le son. Vérifie ta sortie audio par défaut (Paramètres Windows › Son), puis redémarre History Clips.'); }
-  else if (s === 'on') st.noAudio = false;
-  if (s === 'on:nomic') { recState = 'on'; notify('Micro introuvable', 'Le replay tourne, mais sans ton micro (vérifie qu’il est branché et autorisé dans Windows).'); }
+  if (s.startsWith('on')) {
+    recState = 'on'; st.noAudio = s.includes('noaudio'); st.noMic = s.includes('nomic');
+    if (st.noAudio) notify('Son du PC indisponible', 'Vérifie la sortie audio Windows puis relance le replay. Aucun clip silencieux ne sera enregistré à ta place.');
+    if (st.noMic) notify('Micro indisponible', 'Vérifie le micro et son autorisation Windows puis relance le replay.');
+  } else recState = s;
+  changed();
   if (recState === 'on') lowerPriority();
   if (s.startsWith('error')) notify('Replay indisponible', `L’enregistrement n’a pas démarré (${s.slice(6, 120)}).`);
 });
 
-// ---------- Tampon tournant sur le disque : 1 fichier par seconde de vidéo, les plus vieux sont effacés ----------
-const RING = () => path.join(app.getPath('temp'), 'history-clips-replay');
-// Deux tampons : la vidéo (image + son du PC) et le micro. Le morceau n° k des deux couvre la même seconde.
-let tracks = { video: { head: null, ring: [], n: 0 }, mic: { head: null, ring: [], n: 0 } }; let ringGen = 0;
+// Chaque session a son dossier : un redémarrage ne peut pas effacer le nouveau replay.
+let replayBuffer = null;
 function resetRing() {
-  ringGen++; tracks = { video: { head: null, ring: [], n: 0 }, mic: { head: null, ring: [], n: 0 } };
-  rm(RING(), { recursive: true, force: true }).then(() => mkdir(RING(), { recursive: true })).catch(() => {});
+  const old = replayBuffer;
+  replayBuffer = recWin ? new ReplayBuffer(path.join(app.getPath('temp'), 'history-clips-replay', randomUUID()), st.seconds) : null;
+  void old?.close().catch(() => {});
 }
-const CLUSTER = Buffer.from([0x1f, 0x43, 0xb6, 0x75]); // début d'un « cluster » WebM
-ipcMain.on('rec:chunk', async (e, ab, kind) => {
-  if (e.sender !== recWin?.webContents) return;
-  const t = tracks[kind === 'mic' ? 'mic' : 'video']; const gen = ringGen; let buf = Buffer.from(ab);
-  // Le tout premier morceau contient l'en-tête du fichier : gardé à part pour recoller n'importe quelle fin de replay
-  if (!t.head) { const at = buf.indexOf(CLUSTER); if (at < 0) return; t.head = buf.subarray(0, at); buf = buf.subarray(at); }
-  const n = t.n++;
-  const file = path.join(RING(), `${kind === 'mic' ? 'm' : 'v'}${n}.bin`);
-  await writeFile(file, buf).catch(() => null);
-  if (gen !== ringGen) return rm(file, { force: true }).catch(() => {});
-  t.ring.push({ file, n });
-  while (t.ring.length > st.seconds + 4) rm(t.ring.shift().file, { force: true }).catch(() => {});
+ipcMain.on('rec:chunk', (e, ab, kind) => {
+  if (e.sender !== recWin?.webContents || !replayBuffer || !['video', 'mic'].includes(kind)) return;
+  const buffer = replayBuffer, audioWanted = st.audio, micWanted = st.mic, micVolume = st.micVol;
+  void buffer.push(kind, Buffer.from(ab)).catch(err => {
+    if (buffer !== replayBuffer) return;
+    recState = `error:${err.message}`; changed();
+  });
 });
 /** Durée, début et présence de son d'un fichier (lu dans ce qu'affiche ffmpeg). */
 async function probe(f) {
   const bin = await FFMPEG();
-  const out = await new Promise((ok) => { let err = ''; const p = spawn(bin, ['-hide_banner', '-i', f], { windowsHide: true }); p.stderr.on('data', (d) => { err += d; }); p.on('close', () => ok(err)); p.on('error', () => ok('')); });
+  const out = await new Promise((ok) => {
+    let err = ''; const p = spawn(bin, ['-hide_banner', '-analyzeduration', '3000000', '-probesize', '5000000', '-i', f], { windowsHide: true });
+    const timer = setTimeout(() => p.kill(), 12000);
+    p.stderr.on('data', d => { err = (err + d).slice(-32768); });
+    p.on('close', () => { clearTimeout(timer); ok(err); }); p.on('error', () => { clearTimeout(timer); ok(''); });
+  });
   const d = /Duration: (\d+):(\d+):([\d.]+)/.exec(out); const st0 = /start: ([\d.-]+)/.exec(out);
   return { dur: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : 0, start: st0 ? Number(st0[1]) : 0, audio: /Stream #.*Audio:/.test(out) };
 }
-async function concatTrack(t, from, dest) {
-  await writeFile(dest, t.head);
-  for (const p of t.ring.filter((x) => x.n >= from)) await appendFile(dest, await readFile(p.file).catch(() => Buffer.alloc(0)));
-}
-
-const saveClip = (game) => mediaJobs.run(() => saveClipWork(game)).catch(err => notify('Clip non enregistré', err.message));
+let savingClip = null;
+const saveClip = (game) => {
+  if (!savingClip) savingClip = mediaJobs.run(() => saveClipWork(game)).catch(err => { notify('Clip non enregistré', err.message); return { ok: false, error: err.message }; }).finally(() => { savingClip = null; });
+  return savingClip;
+};
 async function saveClipWork(game) {
   if (!recWin || recState !== 'on') {
     if (!st.replay) { st.replay = true; saveSt(); }
     if (st.onlyGame && !inGame() && !game) return notify('Aucun jeu en cours', 'Le replay démarre tout seul quand un jeu est en plein écran (réglable dans les réglages).');
-    setReplay(true).catch(() => {});
-    return notify('Replay activé', `Il enregistre maintenant : rappuie sur ${st.hotClip} pour garder les dernières secondes.`);
+    if (recWin) await setReplay(false, true);
+    await setReplay(true);
+    const message = `Replay en démarrage : attends quelques secondes puis rappuie sur ${st.hotClip}.`;
+    notify('Replay activé', message);
+    return { ok: false, error: message };
   }
-  const V = tracks.video; const M = tracks.mic;
-  if (!V.head || V.ring.length < 2) return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
+  const buffer = replayBuffer, audioWanted = st.audio, micWanted = st.mic, micVolume = st.micVol;
   const label = safeName(game ?? (inGame() ? fg.game : 'Bureau')) || 'Clip';
-  // On attend la seconde en cours, puis on recolle en-tête + dernières secondes (depuis le disque, pas la mémoire)
-  await new Promise((ok) => setTimeout(ok, 1100));
-  const from = V.ring[Math.max(0, V.ring.length - (st.seconds + 1))].n;
+  const dir = path.join(ROOT(), label);
+  const tmp = path.join(dir, `.${randomUUID()}.webm`), micTmp = `${tmp}.micro.webm`, encoded = `${tmp}.mp4`;
   try {
-    const dir = path.join(ROOT(), label);
+    if (!buffer) throw Error('Le replay n’est pas encore prêt.');
     await mkdir(dir, { recursive: true });
-    const tmp = path.join(dir, `.${Date.now()}.webm`);
-    await concatTrack(V, from, tmp);
-    const out = path.join(dir, clipName(label, 'mp4'));
-    const micTmp = M.head && M.ring.some((x) => x.n >= from) ? `${tmp}.micro.webm` : null;
-    if (micTmp) await concatTrack(M, from - 12, micTmp);
-    if (micTmp) await withMic(tmp, micTmp, out).catch(() => clean(tmp, out, { fixup: true }));
-    else await clean(tmp, out, { fixup: true }).catch(async () => { await rename(tmp, out.replace(/\.mp4$/, '.webm')); });
-    await rm(tmp, { force: true }); if (micTmp) await rm(micTmp, { force: true });
+    const snap = await buffer.snapshot(tmp, micWanted ? micTmp : null);
+    const source = await probe(tmp);
+    if (audioWanted && !source.audio) throw Error('Le son du PC manque dans l’enregistrement. Relance le replay et vérifie la sortie audio Windows.');
+    if (micWanted && !snap.mic) throw Error('Le micro n’a pas encore fourni de son. Vérifie son autorisation puis relance le replay.');
+    if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume);
+    else await clean(tmp, encoded, { fixup: true });
+    const result = await probe(encoded);
+    if (!result.dur || ((audioWanted || micWanted) && !result.audio)) throw Error('Le clip produit est incomplet : il n’a pas été ajouté à la galerie.');
+    const out = path.join(dir, clipName(label, 'mp4').replace('.mp4', `-${randomUUID().slice(0, 6)}.mp4`));
+    await rename(encoded, out);
     notify('🎬 Clip enregistré', `${label} · ouvre History Clips pour le couper ou l’envoyer.`);
-    changed(); saveSt(); prune().catch(() => {});
-  } catch (err) { notify('Clip non enregistré', err.message); }
+    changed(); await saveSt(); void prune().catch(() => {});
+    return { ok: true };
+  } catch (err) { notify('Clip non enregistré', err.message); return { ok: false, error: err.message }; }
+  finally { await Promise.all([tmp, micTmp, encoded].map(f => rm(f, { force: true }).catch(() => {}))); }
 }
 /** Clip avec micro : piste 1 = jeu + micro (volume réglable), piste 2 = micro seul (pour le montage). */
-async function withMic(video, mic, out) {
+async function withMic(video, mic, out, micVolume) {
   const [pv, pm] = await Promise.all([probe(video), probe(mic)]);
-  const delta = pm.start - pv.start; // le micro commence un peu après / avant la vidéo : on recale
-  const shift = delta >= 0 ? `adelay=${Math.round(delta * 1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
-  const vol = Math.max(0, Math.min(2, (st.micVol ?? 100) / 100));
-  const graph = pv.audio ? `[1:a]${shift},volume=${vol}[m];[m]asplit[m1][m2];[0:a][m1]amix=inputs=2:duration=first:normalize=0[mix]` : `[1:a]${shift},volume=${vol}[m];[m]asplit[mix][m2]`;
-  const common = ['-filter_complex', graph, '-map', '0:v', '-map', '[mix]', '-map', '[m2]', '-c:a', 'aac', '-b:a', '192k', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', ...(pv.dur ? ['-t', pv.dur.toFixed(2)] : []), '-movflags', '+faststart', out];
-  const inputs = ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic];
+  if (!pm.audio) throw Error('La piste micro est illisible. Relance le replay avant de réessayer.');
+  const opts = { videoAudio: pv.audio, delta: pm.start - pv.start, volume: Math.max(0, Math.min(2, (micVolume ?? 100) / 100)) };
   const enc = await bestEncoder();
-  try { await runFfmpeg([...inputs, ...encArgs(enc), '-fps_mode', 'vfr', ...common]); } catch { await runFfmpeg([...inputs, ...encArgs('libx264'), '-fps_mode', 'vfr', ...common]); }
+  try { await runFfmpeg(micMixArgs(video, mic, out, { ...opts, enc })); }
+  catch { await runFfmpeg(micMixArgs(video, mic, out, opts)); }
 }
 const FFMPEG = async () => unpacked((await import('ffmpeg-static')).default);
 const runFfmpeg = async (args) => { const bin = await FFMPEG(); return new Promise((resolve, reject) => { const p = spawn(bin, args, { windowsHide: true, stdio: 'ignore' }); try { os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`)))); }); };
@@ -273,18 +284,18 @@ async function clean(src, out, opts = {}) {
     await runFfmpeg(ffmpegArgs(src, out, { ...opts, reencode: true, enc: 'libx264' }));
   }
 }
-// Réparer un clip illisible : réencodé à la place de l'original (l'ancien part à la corbeille)
+// Réparer sur une copie : l’original est conservé.
 mediaHandle('clips:repair', async (_e, t) => {
   const f = fileOf(t); if (!f || /\.png$/i.test(f)) return { ok: false };
-  const tmp = path.join(path.dirname(f), `.${Date.now()}.mp4`);
-  try { await clean(f, tmp, { fixup: true }); } catch (err) { await rm(tmp, { force: true }); return { ok: false, error: `Réparation impossible (${err.message}).` }; }
-  const dest = f.replace(/\.(webm|mp4)$/i, '.mp4');
-  await shell.trashItem(f).catch(() => rm(f, { force: true }));
-  await rename(tmp, dest);
-  if (st.names[f]) { st.names[dest] = st.names[f]; delete st.names[f]; }
-  if (st.favs.includes(f)) st.favs = [...st.favs.filter((x) => x !== f), dest];
-  tokens.delete(String(t)); saveSt(); changed();
-  return { ok: true, token: tokenOf(dest) };
+  const tmp = path.join(path.dirname(f), `.${randomUUID()}.mp4`);
+  try {
+    await clean(f, tmp, { fixup: true });
+    if (!(await probe(tmp)).dur) throw Error('La vidéo réparée est vide.');
+    const dest = f.replace(/\.(webm|mp4)$/i, ` (réparé ${randomUUID().slice(0,6)}).mp4`);
+    await rename(tmp, dest); changed();
+    return { ok: true, token: tokenOf(dest) };
+  } catch (err) { return { ok: false, error: `Réparation impossible (${err.message}). L’original est conservé.` }; }
+  finally { await rm(tmp, { force: true }).catch(() => {}); }
 });
 async function screenshot() {
   const d = screen.getPrimaryDisplay();
@@ -340,22 +351,10 @@ async function prune() {
   changed();
 }
 const fileOf = (t) => tokens.get(String(t));
-/** Sert un fichier par morceaux (en-tête Range) : indispensable pour avancer dans une vidéo sans tout charger. */
-async function serveRange(f, range) {
-  const s = await stat(f).catch(() => null);
-  if (!s) return new Response('introuvable', { status: 404 });
-  const type = /\.png$/i.test(f) ? 'image/png' : /\.webm$/i.test(f) ? 'video/webm' : 'video/mp4';
-  const m = /bytes=(\d*)-(\d*)/.exec(range ?? '');
-  if (!m) return new Response(Readable.toWeb(createReadStream(f)), { status: 200, headers: { 'Content-Type': type, 'Content-Length': String(s.size), 'Accept-Ranges': 'bytes' } });
-  const start = m[1] ? Number(m[1]) : Math.max(0, s.size - Number(m[2]));
-  const end = m[1] && m[2] ? Math.min(Number(m[2]), s.size - 1) : Math.min(start + 4 * 1024 * 1024 - 1, s.size - 1);
-  if (start >= s.size) return new Response('', { status: 416, headers: { 'Content-Range': `bytes */${s.size}` } });
-  return new Response(Readable.toWeb(createReadStream(f, { start, end })), { status: 206, headers: { 'Content-Type': type, 'Content-Length': String(end - start + 1), 'Content-Range': `bytes ${start}-${end}/${s.size}`, 'Accept-Ranges': 'bytes' } });
-}
 // Miniature d'un clip : faite une seule fois (petit JPG dans .miniatures), une à la fois pour ne pas charger le processeur
 const thumbJobs = new Map(); let thumbChain = Promise.resolve();
 function thumbOf(f) {
-  if (mediaJobs.closing) return Promise.resolve(null);
+  if (mediaJobs.closing || clipLocks.has(tokenOf(f))) return Promise.resolve(null);
   const jpg = path.join(ROOT(), '.miniatures', `${createHash('sha1').update(f).digest('hex').slice(0, 20)}.jpg`);
   if (!thumbJobs.has(jpg)) {
     const thumbChainForJob = thumbChain;
@@ -375,29 +374,40 @@ ipcMain.handle('clips:root', () => { mkdir(ROOT(), { recursive: true }).then(() 
 ipcMain.handle('clips:copy', async (_e, t) => { const f = fileOf(t); if (!f || !/\.png$/i.test(f)) return false; clipboard.writeImage(nativeImage.createFromPath(f)); return true; });
 ipcMain.handle('clips:fav', (_e, t) => { const f = fileOf(t); if (!f) return false; st.favs = st.favs.includes(f) ? st.favs.filter((x) => x !== f) : [...st.favs, f]; saveSt(); return st.favs.includes(f); });
 ipcMain.handle('clips:rename', (_e, t, name) => { const f = fileOf(t); if (!f) return false; const n = String(name ?? '').trim().slice(0, 80); if (n) st.names[f] = n; else delete st.names[f]; saveSt(); return true; });
-ipcMain.handle('clips:delete', async (_e, t) => {
+mediaHandle('clips:delete', async (_e, t) => {
   const f = fileOf(t);
-  if (!f) return false;
-  await shell.trashItem(f); tokens.delete(String(t)); st.favs = st.favs.filter((x) => x !== f); saveSt();
-  return true;
+  if (!f) return { ok: false, error: 'Clip introuvable. Actualise la galerie.' };
+  await thumbChain.catch(() => {});
+  try { await shell.trashItem(f); }
+  catch { return { ok: false, error: 'Impossible de déplacer ce clip dans la corbeille. Ferme les lecteurs externes puis réessaie.' }; }
+  tokens.delete(String(t)); st.favs = st.favs.filter(x => x !== f); delete st.names[f];
+  await saveSt(); changed();
+  return { ok: true };
 });
 // Découpe : nouveau fichier « (coupé) » réencodé en bonne qualité, l'original est gardé
 // Découpe réencodée en bonne qualité : en nouveau clip « (coupé) », ou à la place de l'original (qui part à la corbeille)
 mediaHandle('clips:trim', async (_e, t, start, end, mode) => {
   const f = fileOf(t);
-  if (!f || !(end > start)) return { ok: false, error: 'Choisis un début avant la fin.' };
+  if (!f || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return { ok: false, error: 'Choisis un début avant la fin.' };
   const base = path.basename(f).replace(/\.(mp4|webm)$/i, '');
-  const out = path.join(path.dirname(f), mode === 'replace' ? `.${Date.now()}.mp4` : `${base} (coupé).mp4`);
-  try { await clean(f, out, { start, end }); } catch (err) { return { ok: false, error: `Découpe impossible (${err.message}).` }; }
-  if (mode !== 'replace') return { ok: true };
-  const dest = path.join(path.dirname(f), `${base}.mp4`);
-  await shell.trashItem(f).catch(() => rm(f, { force: true }));
-  await rename(out, dest);
-  // Le nom choisi et le favori suivent le clip
-  if (st.names[f]) { st.names[dest] = st.names[f]; delete st.names[f]; }
-  if (st.favs.includes(f)) st.favs = [...st.favs.filter((x) => x !== f), dest];
-  tokens.delete(String(t)); saveSt(); changed();
-  return { ok: true, token: tokenOf(dest) };
+  const out = path.join(path.dirname(f), `.${randomUUID()}.mp4`);
+  const dest = path.join(path.dirname(f), `${base} (coupé ${randomUUID().slice(0, 6)}).mp4`);
+  try {
+    await clean(f, out, { start, end });
+    if (!(await probe(out)).dur) throw Error('La vidéo produite est vide.');
+    await rename(out, dest);
+    if (mode === 'replace') {
+      await thumbChain.catch(() => {});
+      // La copie terminée existe avant de déplacer l’original dans la corbeille.
+      try { await shell.trashItem(f); }
+      catch (err) { changed(); return { ok: false, error: `La copie découpée est conservée, mais l’original n’a pas pu être supprimé (${err.message}).` }; }
+      if (st.names[f]) { st.names[dest] = st.names[f]; delete st.names[f]; }
+      if (st.favs.includes(f)) st.favs = [...st.favs.filter(x => x !== f), dest];
+      tokens.delete(String(t)); await saveSt();
+    }
+    changed(); return { ok: true, token: tokenOf(dest) };
+  } catch (err) { return { ok: false, error: `Découpe impossible (${err.message}).` }; }
+  finally { await rm(out, { force: true }).catch(() => {}); }
 });
 // Montage : plusieurs clips mis bout à bout en un seul (1080p 60 i/s, son gardé ou silence si le clip n'en a pas)
 mediaHandle('clips:montage', async (_e, list) => {
@@ -407,9 +417,11 @@ mediaHandle('clips:montage', async (_e, list) => {
   const parts = files.map((_, i) => `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=60,format=yuv420p[v${i}];${info[i].audio ? `[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}]` : `aevalsrc=0|0:d=${info[i].dur || 1}:s=48000[a${i}]`}`);
   const graph = `${parts.join(';')};${files.map((_, i) => `[v${i}][a${i}]`).join('')}concat=n=${files.length}:v=1:a=1[v][a]`;
   const dir = path.join(ROOT(), 'Montages'); await mkdir(dir, { recursive: true });
-  const out = path.join(dir, clipName('Montage', 'mp4'));
-  try { await runFfmpeg(['-y', ...files.flatMap((f) => ['-i', f]), '-filter_complex', graph, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]); changed(); return { ok: true }; }
+  const dest = path.join(dir, clipName('Montage', 'mp4').replace('.mp4', ` ${randomUUID().slice(0, 6)}.mp4`));
+  const out = path.join(dir, `.${randomUUID()}.mp4`);
+  try { await runFfmpeg(['-y', ...files.flatMap((f) => ['-i', f]), '-filter_complex', graph, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]); await rename(out, dest); changed(); return { ok: true }; }
   catch (err) { return { ok: false, error: `Montage impossible (${err.message}).` }; }
+  finally { await rm(out, { force: true }).catch(() => {}); }
 });
 // Vertical 9:16 (TikTok, Shorts) : « flou » = toute l'image au centre sur un fond flouté, « zoom » = recadré au centre
 mediaHandle('clips:vertical', async (_e, t, mode) => {
@@ -417,13 +429,15 @@ mediaHandle('clips:vertical', async (_e, t, mode) => {
   const vf = mode === 'zoom' ? 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1'
     : 'split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:2[bg];[b]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1';
   // Un fichier par mode (avant : les deux écrivaient le même « (vertical) », l'un écrasait l'autre)
-  const out = path.join(path.dirname(f), `${path.basename(f).replace(/\.(mp4|webm)$/i, '')} (vertical ${mode === 'zoom' ? 'zoom' : 'flou'}).mp4`);
+  const dest = path.join(path.dirname(f), `${path.basename(f).replace(/\.(mp4|webm)$/i, '')} (vertical ${mode === 'zoom' ? 'zoom' : 'flou'} ${randomUUID().slice(0, 6)}).mp4`);
+  const out = path.join(path.dirname(f), `.${randomUUID()}.mp4`);
   const run = (enc) => runFfmpeg(['-y', '-fflags', '+genpts+discardcorrupt', '-i', f, '-filter_complex', `[0:v]${vf}[v]`, '-map', '[v]', '-map', '0:a?', ...encArgs(enc), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]);
-  try { await run(await bestEncoder()).catch(() => run('libx264')); changed(); shell.showItemInFolder(out); return { ok: true }; }
+  try { await run(await bestEncoder()).catch(() => run('libx264')); await rename(out, dest); changed(); shell.showItemInFolder(dest); return { ok: true }; }
   catch (err) { return { ok: false, error: `Export vertical impossible (${err.message}).` }; }
+  finally { await rm(out, { force: true }).catch(() => {}); }
 });
 // Lien de partage web : le clip (allégé) est mis en ligne 7 jours, lien copié
-ipcMain.handle('clips:link', async (_e, t) => {
+mediaHandle('clips:link', async (_e, t) => {
   const f = fileOf(t); if (!f) return { ok: false };
   if (!tokenGet()) return { ok: false, error: 'Connecte ton compte History pour créer un lien.' };
   const ext = /\.png$/i.test(f) ? 'png' : 'mp4';
@@ -438,6 +452,7 @@ mediaHandle('clips:export', async (_e, t) => {
   if (!f) return { ok: false };
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('desktop'), path.basename(f).replace(/\.webm$/i, '.mp4')), filters: [{ name: 'Vidéo MP4', extensions: ['mp4'] }] });
   if (r.canceled || !r.filePath) return { ok: false, cancelled: true };
+  if (path.resolve(r.filePath).toLowerCase() === path.resolve(f).toLowerCase()) return { ok: false, error: 'Choisis un autre nom pour conserver le clip original.' };
   try { await toMp4(f, r.filePath); shell.showItemInFolder(r.filePath); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; }
 });
 ipcMain.handle('clips:save', () => saveClip(inGame() ? fg.game : 'Bureau'));
@@ -552,7 +567,7 @@ async function autoLink() {
 }
 ipcMain.handle('account:launcher', () => autoLink());
 ipcMain.handle('account:servers', async () => (await api('/api/compte/discord/serveurs')).serveurs ?? []);
-ipcMain.handle('clips:discord', async (_e, t, to, guild) => {
+mediaHandle('clips:discord', async (_e, t, to, guild) => {
   const f = fileOf(t);
   if (!f) return { ok: false };
   if (!tokenGet()) return { ok: false, error: 'Connecte ton compte History pour envoyer sur Discord.' };
@@ -568,7 +583,7 @@ ipcMain.handle('clips:discord', async (_e, t, to, guild) => {
 });
 
 // ---------- Réglages ----------
-ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
+ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), noMic: Boolean(st.noMic), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
 ipcMain.handle('settings:set', (_e, p) => {
   let replayChanged = false; let restart = false;
   if ('replay' in p) { st.replay = Boolean(p.replay); replayChanged = true; }
@@ -679,7 +694,7 @@ app.whenReady().then(async () => {
     const f = fileOf(u.pathname.replace(/^\//, '').replace(/\.\w+$/, ''));
     if (!f) return new Response('introuvable', { status: 404 });
     if (u.hostname === 't') { const jpg = await thumbOf(f); return jpg ? net.fetch(pathToFileURL(jpg).toString()) : new Response('', { status: 404 }); }
-    return serveRange(f, req.headers.get('range'));
+    return serveMedia(f, req.headers.get('range'), req.method);
   });
   if (app.isPackaged) { app.setLoginItemSettings({ openAtLogin: st.autostart, args: ['--demarrage'] }); app.setAsDefaultProtocolClient('history-clips'); }
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
