@@ -1,15 +1,15 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.8.5",
-  "releaseNotes": "Logos Roblox et Roblox Studio intégrés ; logo Windows pour les clips Bureau. Les anciennes icônes génériques Windows sont écartées.",
+  "version": "0.8.6",
+  "releaseNotes": "Fonds illustrés pour les jeux et le Bureau : images Steam locales en priorité, cache compact, visuel Roblox et miniatures des clips en secours. Cadrage complet sans zoom excessif.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs",
+    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs && node test/test-game-art.mjs",
     "dist": "electron-builder --win",
     "test:media": "node test/test-media.mjs"
   },

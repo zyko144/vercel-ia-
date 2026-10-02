@@ -285,3 +285,9 @@ body.picking .card { outline: 2px dashed rgba(var(--rgb), .35); outline-offset: 
 
 .gico.brand-icon { object-fit: contain; border-radius: 0; padding: 2px; }
 .gart .game-brand { width: 64px; height: 64px; object-fit: contain; }
+
+.gart { aspect-ratio: 16 / 9; overflow: hidden; }
+.gart .game-picture { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.gart .game-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .4; }
+.gart::after { z-index: 2; pointer-events: none; }

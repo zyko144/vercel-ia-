@@ -2,7 +2,7 @@
 // Appli légère à part de History Launcher : même compte, même style. Une fenêtre qui se libère quand elle est cachée,
 // un enregistreur caché qui ne tourne que pendant les parties (option) et passe après le jeu (priorité basse).
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, safeStorage, screen, session, shell, Tray } from 'electron';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import updaterMod from 'electron-updater';
 import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, micMixArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
 
+import { promisify } from 'node:util';
+import { localGameArt } from './gameArt.js';
 import { serveMedia } from './mediaFile.js';
 import { ReplayBuffer } from './replay.js';
 import { createUpdateController, createMediaJobs } from './updateController.js';
@@ -459,12 +461,49 @@ ipcMain.handle('clips:save', () => saveClip(inGame() ? fg.game : 'Bureau'));
 
 // Images des jeux : bannière Steam (recherche par nom) + icône du .exe
 let genericExeIcon;
+let steamRoots;
+const artPending = new Map();
+async function cachedArt(name, exe, remote) {
+  const key = createHash('sha256').update(name).digest('hex');
+  const dir = path.join(app.getPath('userData'), 'game-art');
+  const dest = path.join(dir, `${key}.jpg`);
+  const saved = await readFile(dest).catch(() => null);
+  if (saved) return `data:image/jpeg;base64,${saved.toString('base64')}`;
+  steamRoots ??= (async () => {
+    const reg = process.platform === 'win32' ? await promisify(execFile)('reg.exe', ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamPath'], { windowsHide: true, timeout: 3000 }).then(r => /SteamPath\s+REG_SZ\s+([^\r\n]+)/i.exec(r.stdout)?.[1]?.trim()).catch(() => null) : null;
+    return [reg, path.join(process.env['ProgramFiles(x86)'] || 'C:/Program Files (x86)', 'Steam')].filter(Boolean);
+  })();
+  const file = await localGameArt(await steamRoots, name, exe);
+  let bytes = file ? await readFile(file).catch(() => null) : null;
+  if (!bytes && remote) {
+    const r = await fetch(remote, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok || !r.headers.get('content-type')?.startsWith('image/')) return null;
+    const chunks = []; let size = 0;
+    for await (const chunk of r.body) { size += chunk.length; if (size > 8 * 1024 * 1024) throw Error('Image trop grande'); chunks.push(chunk); }
+    bytes = Buffer.concat(chunks);
+  }
+  if (!bytes) return null;
+  const image = nativeImage.createFromBuffer(bytes); if (image.isEmpty()) return null;
+  const size = image.getSize();
+  const scale = Math.min(1, 960 / size.width, 540 / size.height);
+  const jpg = image.resize({ width: Math.max(1, Math.round(size.width * scale)), height: Math.max(1, Math.round(size.height * scale)), quality: 'good' }).toJPEG(82);
+  await mkdir(dir, { recursive: true }); await writeFile(dest, jpg);
+  // Maximum 128 fonds conservés ; les plus anciens sont renouvelés à la demande.
+  const files = (await readdir(dir)).filter(f => /^[a-f0-9]{64}\.jpg$/.test(f));
+  if (files.length > 128) {
+    const dated = await Promise.all(files.map(async f => ({ f, at: (await stat(path.join(dir, f))).mtimeMs })));
+    for (const old of dated.sort((a,b) => a.at-b.at).slice(0, files.length-128)) await rm(path.join(dir, old.f), { force: true });
+  }
+  return `data:image/jpeg;base64,${jpg.toString('base64')}`;
+}
 ipcMain.handle('games:art', async (_e, names) => {
   const out = {};
   for (const name of (Array.isArray(names) ? names : []).slice(0, 40).map(String)) {
     if (!artTerm(name) || /roblox/i.test(name)) { out[name] = {}; continue; }
     let a = st.art2[name];
-    if (!a || (!a.img && Date.now() - (a.at ?? 0) > 7 * 86_400_000)) {
+    if (!artPending.has(name)) artPending.set(name, cachedArt(name, st.exes[name], null).catch(() => null));
+    let background = await artPending.get(name);
+    if (!background && (!a || Date.now() - (a.at ?? 0) > (a.img ? 30 : 7) * 86_400_000)) {
       a = { at: Date.now() };
       try {
         const r = await (await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(artTerm(name))}&l=french&cc=FR`, { signal: AbortSignal.timeout(8000) })).json();
@@ -490,7 +529,13 @@ ipcMain.handle('games:art', async (_e, names) => {
       icon = await app.getFileIcon(st.exes[name], { size: 'large' }).then(i => i.isEmpty() ? null : i.toDataURL()).catch(() => null);
       if (icon === await genericExeIcon) icon = null;
     }
-    out[name] = { ...a, icon };
+    if (!background && a?.img) {
+      const remoteKey = `${name}:remote`;
+      if (!artPending.has(remoteKey)) artPending.set(remoteKey, cachedArt(name, st.exes[name], a.img).catch(() => null));
+      background = await artPending.get(remoteKey);
+    }
+    out[name] = { img: background, hero: background, icon };
+    if (artPending.size > 160) artPending.delete(artPending.keys().next().value);
   }
   return out;
 });
