@@ -90,3 +90,19 @@ assert.equal(iniSet('[A]\nx=1', { y: '2' }, 'B'), '[A]\nx=1\n\n[B]\ny=2');
 assert.equal(iniSet('[A]\n X = 1', { x: '0' }), '[A]\n X = 0');
 await assert.rejects(applyAction({ kind: 'ini', file: fnIni, set: { a: 1 }, readonly: true }, io), /lecture seule/);
 console.log('✅ Fichiers .ini : modifiés sur place, rien d’inventé, lecture seule respectée');
+
+// Un journal invalide ne doit déclencher aucune écriture, même après une entrée valide.
+let writes = 0;
+const guardIo = { writeFile: async () => writes++, rmFile: async () => writes++, regSet: async () => writes++, regDel: async () => writes++ };
+for (const bad of [
+  { kind: 'file', file: 'C:\\Program Files (x86)\\Steam\\steam.exe', before: null },
+  { kind: 'file', file: 'C:\\Program Files (x86)\\Steam', before: null },
+  { kind: 'reg', key: 'HKCU\\Software\\Valve\\Steam', name: 'SteamPath', before: null },
+  { kind: 'file', file: path.join(gmodDir, 'garrysmod', 'cfg', 'autoexec.cfg') },
+]) {
+  await assert.rejects(revertEntries([journal[0], bad], guardIo), /refusé/);
+  assert.equal(writes, 0);
+}
+await assert.rejects(revertEntries([{ kind: 'file', file: path.join(gmodDir, 'garrysmod', 'cfg', 'history_perf.cfg'), before: null }], { ...guardIo, readFile: async () => 'configuration personnelle' }), /conservé/);
+assert.equal(writes, 0);
+console.log('✅ Annulation : Steam, dossiers, registre étranger et journal incomplet refusés avant écriture');
