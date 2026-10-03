@@ -23,10 +23,10 @@ export function gameLabel({ desc = '', title = '', proc = '' } = {}) {
 /** Arguments ffmpeg : remise en MP4 (durée et avance rapide corrects), avec ou sans découpe. */
 /** Réglages d'encodage H.264 : carte graphique (NVIDIA, Intel, AMD) si elle est là, sinon processeur. Toujours lisible partout. */
 export function encArgs(enc = 'libx264') {
-  if (enc === 'h264_nvenc') return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '21', '-b:v', '0', '-pix_fmt', 'yuv420p'];
-  if (enc === 'h264_qsv') return ['-c:v', 'h264_qsv', '-global_quality', '22'];
-  if (enc === 'h264_amf') return ['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '20', '-qp_p', '22', '-pix_fmt', 'yuv420p'];
-  return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p'];
+  if (enc === 'h264_nvenc') return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '19', '-b:v', '0', '-pix_fmt', 'yuv420p'];
+  if (enc === 'h264_qsv') return ['-c:v', 'h264_qsv', '-global_quality', '20'];
+  if (enc === 'h264_amf') return ['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '18', '-qp_p', '20', '-pix_fmt', 'yuv420p'];
+  return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p'];
 }
 /** Arguments ffmpeg : remise en MP4 (durée et avance rapide corrects), avec ou sans découpe. */
 export function ffmpegArgs(src, out, { start = null, end = null, reencode = false, fixup = false, enc = 'libx264' } = {}) {
@@ -42,10 +42,10 @@ export function ffmpegArgs(src, out, { start = null, end = null, reencode = fals
   return a;
 }
 /** Jeu + micro audibles sur la piste par défaut ; micro isolé conservé pour le montage. */
-export function micMixArgs(video, mic, out, { videoAudio, delta = 0, volume = 1, enc = 'libx264' }) {
+export function micMixArgs(video, mic, out, { videoAudio, delta = 0, volume = 1, enc = 'libx264', copyVideo = false }) {
   const shift = delta >= 0 ? `adelay=${Math.round(delta * 1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
-  const graph = `[0:v:0]setpts=PTS-STARTPTS[v];[1:a:0]asetpts=PTS-STARTPTS,${shift},volume=${volume}[m];` + (videoAudio ? '[m]asplit[m1][m2];[0:a:0]asetpts=PTS-STARTPTS[a];[a][m1]amix=inputs=2:duration=longest:normalize=0[mix]' : '[m]asplit[mix][m2]');
-  return ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic, '-filter_complex', graph, '-map', '[v]', '-map', '[mix]', '-map', '[m2]', ...encArgs(enc), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '192k', '-disposition:a:0', 'default', '-disposition:a:1', '0', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', '-movflags', '+faststart', out];
+  const graph = (copyVideo ? '' : '[0:v:0]setpts=PTS-STARTPTS[v];') + `[1:a:0]asetpts=PTS-STARTPTS,${shift},volume=${volume}[m];` + (videoAudio ? '[m]asplit[m1][m2];[0:a:0]asetpts=PTS-STARTPTS[a];[a][m1]amix=inputs=2:duration=longest:normalize=0[mix]' : '[m]asplit[mix][m2]');
+  return ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic, '-filter_complex', graph, '-map', copyVideo ? '0:v:0' : '[v]', '-map', '[mix]', '-map', '[m2]', ...(copyVideo ? ['-c:v', 'copy'] : encArgs(enc)), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '192k', '-disposition:a:0', 'default', '-disposition:a:1', '0', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', '-movflags', '+faststart', out];
 }
 /** Chemin de ffmpeg dans l'appli installée (hors de l'archive asar). */
 export const unpacked = (p) => String(p ?? '').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
