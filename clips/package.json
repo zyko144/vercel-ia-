@@ -1,15 +1,15 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.8.7",
-  "releaseNotes": "Clips plus nets : débit augmenté, capture orientée mouvement et FPS réappliqués après sélection. Sauvegarde H.264 sans recompression, y compris avec le micro ; priorité GPU préservée.",
+  "version": "0.8.8",
+  "releaseNotes": "Nouvelle capture Windows Desktop Duplication avec encodeur matériel sur un écran, repli compatible automatique. Audio jeu 256 kb/s, micro sans gain automatique, mélange protégé contre la saturation et sauvegarde vidéo sans recompression.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs && node test/test-game-art.mjs",
+    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs && node test/test-game-art.mjs && node test/test-native.mjs",
     "dist": "electron-builder --win",
     "test:media": "node test/test-media.mjs"
   },

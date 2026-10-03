@@ -32,3 +32,17 @@ context.navigator.mediaDevices.getDisplayMedia = () => new Promise(r => resolveC
 const pending = start('screen:1', { audio: false }); stop(); resolveCapture(late); await pending;
 assert.ok(late.getTracks().every(t => t.stopped), 'capture tardive libérée après arrêt');
 console.log('✅ Enregistreur : codec avec son, micro, ordre des fragments, arrêt et capture tardive');
+
+// Mode natif : ne pas encoder une seconde vidéo dans Chromium ; seulement le loopback et le micro.
+const nativeScreen=stream([track('video'),track('audio')]), nativeMic=stream([track('audio')]);
+context.navigator.mediaDevices.getDisplayMedia=async()=>nativeScreen;
+context.navigator.mediaDevices.getUserMedia=async()=>nativeMic;
+context.MediaStream=function(tracks){return stream(tracks);};
+const count=made.length;
+await start('screen:1',{nativeVideo:true,audio:true,mic:true});
+assert.ok(nativeScreen.getVideoTracks()[0].stopped);
+assert.equal(made[count].opts.mimeType,'audio/webm;codecs=opus');
+assert.equal(made[count].opts.audioBitsPerSecond,256000);
+assert.equal(nativeScreen.getAudioTracks()[0].constraints.autoGainControl,false);
+assert.equal(states.at(-1),'on');stop();
+console.log('✅ Native : capture vidéo navigateur arrêtée, audio stéréo 48 kHz sans gain automatique');

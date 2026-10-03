@@ -38,14 +38,14 @@ export function ffmpegArgs(src, out, { start = null, end = null, reencode = fals
   a.push('-map', '0:v:0', '-map', '0:a:0?');
   if (reencode) a.push(...encArgs(enc), '-vf', 'setpts=PTS-STARTPTS', '-fps_mode', 'vfr');
   else a.push('-c:v', 'copy');
-  a.push('-af', 'asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0', '-c:a', 'aac', '-b:a', '192k', '-disposition:a:0', 'default', '-movflags', '+faststart', out);
+  a.push('-af', 'asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0', '-c:a', 'aac', '-b:a', '256k', '-disposition:a:0', 'default', '-movflags', '+faststart', out);
   return a;
 }
 /** Jeu + micro audibles sur la piste par défaut ; micro isolé conservé pour le montage. */
 export function micMixArgs(video, mic, out, { videoAudio, delta = 0, volume = 1, enc = 'libx264', copyVideo = false }) {
   const shift = delta >= 0 ? `adelay=${Math.round(delta * 1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
-  const graph = (copyVideo ? '' : '[0:v:0]setpts=PTS-STARTPTS[v];') + `[1:a:0]asetpts=PTS-STARTPTS,${shift},volume=${volume}[m];` + (videoAudio ? '[m]asplit[m1][m2];[0:a:0]asetpts=PTS-STARTPTS[a];[a][m1]amix=inputs=2:duration=longest:normalize=0[mix]' : '[m]asplit[mix][m2]');
-  return ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic, '-filter_complex', graph, '-map', copyVideo ? '0:v:0' : '[v]', '-map', '[mix]', '-map', '[m2]', ...(copyVideo ? ['-c:v', 'copy'] : encArgs(enc)), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '192k', '-disposition:a:0', 'default', '-disposition:a:1', '0', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', '-movflags', '+faststart', out];
+  const graph = (copyVideo ? '' : '[0:v:0]setpts=PTS-STARTPTS[v];') + `[1:a:0]asetpts=PTS-STARTPTS,${shift},volume=${volume}[m];` + (videoAudio ? '[m]asplit[m1][m2];[0:a:0]asetpts=PTS-STARTPTS[a];[a][m1]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=false:latency=true[mix]' : '[m]asplit[mix][m2]');
+  return ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic, '-filter_complex', graph, '-map', copyVideo ? '0:v:0' : '[v]', '-map', '[mix]', '-map', '[m2]', ...(copyVideo ? ['-c:v', 'copy'] : encArgs(enc)), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '256k', '-disposition:a:0', 'default', '-disposition:a:1', '0', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', '-movflags', '+faststart', out];
 }
 /** Chemin de ffmpeg dans l'appli installée (hors de l'archive asar). */
 export const unpacked = (p) => String(p ?? '').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
@@ -74,4 +74,20 @@ export function artMatch(term, name) {
   const n = (v) => String(v ?? '').normalize('NFD').replace(/[^a-z0-9]/gi, '').toLowerCase();
   const a = n(term); const b = n(name);
   return a.length >= 3 && b.length >= 3 && (a === b || b.startsWith(a) || a.startsWith(b));
+}
+
+/** Vidéo native inchangée, audio PC/micro synchronisés sur leur démarrage respectif. */
+export function nativeMixArgs(video, audio, out, duration) {
+  const args = ['-y','-i',video], graph = [];
+  const shift = delta => delta >= 0 ? `adelay=${Math.round(delta*1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
+  audio.forEach((a,i) => {
+    args.push('-i',a.file);
+    graph.push(`[${i+1}:a:0]asetpts=PTS-STARTPTS,${shift(a.delta)},volume=${a.volume ?? 1},apad` + (a.kind === 'mic' ? `,asplit[a${i}][mic]` : `[a${i}]`));
+  });
+  if (audio.length) {
+    graph.push(`${audio.map((_,i)=>`[a${i}]`).join('')}amix=inputs=${audio.length}:duration=longest:normalize=0,alimiter=limit=0.95:level=false:latency=true[mix]`);
+    args.push('-filter_complex',graph.join(';'),'-map','0:v:0','-map','[mix]','-c:a','aac','-b:a','256k');
+    if (audio.some(a => a.kind === 'mic')) args.push('-map','[mic]','-disposition:a:0','default','-disposition:a:1','0','-metadata:s:a:1','title=Micro seul');
+  } else args.push('-map','0:v:0','-an');
+  return [...args,'-c:v','copy','-t',String(duration),'-movflags','+faststart',out];
 }

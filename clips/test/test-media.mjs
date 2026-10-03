@@ -5,7 +5,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { ReplayBuffer } from '../src/replay.js';
-import { ffmpegArgs, micMixArgs } from '../src/core.js';
+import { ffmpegArgs, micMixArgs, nativeMixArgs } from '../src/core.js';
 const bin = process.env.FFMPEG_TEST_BIN;
 if (!bin) throw Error('Définis FFMPEG_TEST_BIN pour exécuter les tests audio/vidéo.');
 const dir = await mkdtemp(path.join(os.tmpdir(), 'clips-media-test-'));
@@ -48,3 +48,19 @@ assert.equal(frames('copy-mix.mp4').length,180);
 assert.ok(tone('copy-mix.mp4',0,440)>0.015);
 assert.ok(tone('copy-mix.mp4',0,880)>0.015);
 console.log('✅ Qualité : 180 images à 60 i/s conservées sans recompression avec son jeu + micro');
+
+// Pipeline natif complet : H264 1080p60 -> clusters de replay -> MP4 + deux pistes audio.
+run(['-y','-f','lavfi','-i','testsrc2=size=1920x1080:rate=60','-t','3','-c:v','libx264','-preset','ultrafast','-g','60','-bf','0','-f','matroska','-cluster_time_limit','1000',file('native.mkv')]);
+const nativeBuffer = new ReplayBuffer(file('native-ring'),1,60);
+for (const [kind,src] of [['video','native.mkv'],['game','source.webm'],['mic','micro.webm']]) {
+  const data = await readFile(file(src));
+  for (let i=0;i<data.length;i+=32768) await nativeBuffer.push(kind,data.subarray(i,i+32768));
+}
+const ns = await nativeBuffer.snapshot(file('native-cut.mkv'),file('native-mic.webm'),file('native-game.webm'));
+assert.ok(ns.game && ns.mic && ns.duration>1 && ns.duration<=3.1);
+run(nativeMixArgs(file('native-cut.mkv'),[{file:file('native-game.webm'),kind:'game',delta:0},{file:file('native-mic.webm'),kind:'mic',delta:0}],file('native.mp4'),ns.duration));
+assert.deepEqual(frames('native.mp4'),frames('native-cut.mkv'),'1080p60 natif sans aucune recompression');
+assert.ok(tone('native.mp4',0,440)>0.015);assert.ok(tone('native.mp4',0,880)>0.015);
+assert.ok(tone('native.mp4',1,880)>0.015);
+await nativeBuffer.close();
+console.log('✅ Capture native simulée : replay 1080p60, durée bornée, vidéo identique, jeu + micro et piste isolée');
