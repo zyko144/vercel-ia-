@@ -4,7 +4,7 @@
 // (« n'existait pas » compris) dans un journal : « Annuler la dernière optimisation » remet tout exactement comme avant.
 // Jamais touchés : anti-triche, fichiers du jeu, mods, plugins (ReShade/ENB), addons, sauvegardes, configs du joueur.
 import { execFile } from 'node:child_process';
-import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rm, stat, writeFile, realpath, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { folderSize } from './manage.js';
@@ -148,6 +148,12 @@ export async function gameActions(items, { env = process.env, docs = '' } = {}) 
 
 // ===================== Appliquer / annuler =====================
 const defaultIo = {
+  validateFile: async f => {
+    const info = await lstat(f).catch(err => { if (err.code === 'ENOENT') return null; throw err; });
+    if (info && (!info.isFile() || info.isSymbolicLink())) throw Error('Fichier refusé');
+    const parent = await realpath(path.dirname(f));
+    if (path.resolve(parent).toLowerCase() !== path.resolve(path.dirname(f)).toLowerCase()) throw Error('Chemin redirigé refusé');
+  },
   readFile: (f) => readFile(f, 'utf8').catch(() => null),
   writeFile: (f, t) => writeFile(f, t),
   rmFile: (f) => rm(f, { force: true }),
@@ -184,10 +190,34 @@ export async function applyAction(a, io = defaultIo) {
   return { entries, freed: 0 };
 }
 
-/** Remet exactement l'état d'avant (du plus récent au plus ancien). « N'existait pas » = supprimé. */
+/** Valider tout le journal avant la première écriture : jamais un programme ou un dossier. */
+export function validUndoEntry(e) {
+  if (!e || !Object.hasOwn(e, 'before') || !(e.before === null || typeof e.before === 'string')) return false;
+  if (e.kind === 'reg') return e.key === GPU_KEY && /^[a-z]:\\.+\.exe$/i.test(e.name ?? '') && (e.before === null || /^GpuPreference=[012];$/.test(e.before));
+  if (e.kind !== 'file' || typeof e.file !== 'string') return false;
+  const f = e.file.replace(/\\/g, '/');
+  if (!path.isAbsolute(e.file) || f.split('/').includes('..') || f.includes('\0')) return false;
+  const allowed = /\/garrysmod\/cfg\/(autoexec|history_perf)\.cfg$/i.test(f)
+    || /\/FortniteGame\/Saved\/Config\/WindowsClient\/GameUserSettings\.ini$/i.test(f)
+    || /\/My Games\/Rainbow Six - Siege\/[^/]+\/GameSettings\.ini$/i.test(f)
+    || /\/My Games\/Rocket League\/TAGame\/Config\/TASystemSettings\.ini$/i.test(f);
+  return allowed && (e.before === null || e.before.length <= 512 * 1024);
+}
+/** Annulation limitée aux configurations connues ; aucune suppression de fichier arbitraire. */
 export async function revertEntries(entries, io = defaultIo) {
+  if (!Array.isArray(entries) || !entries.every(validUndoEntry)) throw Error('Journal refusé : chemin ou valeur non autorisé');
+  for (const e of entries) if (e.kind === 'file') await io.validateFile?.(e.file);
   for (const e of [...entries].reverse()) {
-    if (e.kind === 'file') await (e.before == null ? io.rmFile(e.file) : io.writeFile(e.file, e.before));
-    if (e.kind === 'reg') await (e.before == null ? io.regDel(e.key, e.name) : io.regSet(e.key, e.name, e.before));
+    if (e.kind === 'file') {
+      if (e.before === null) {
+        const text = await io.readFile(e.file);
+        if (text === null) continue;
+        // Un fichier créé depuis l’optimisation appartient désormais à l’utilisateur : le garder.
+        const generated = /history_perf\.cfg$/i.test(e.file) ? GMOD_CFG : `${GMOD_LINE}\r\n`;
+        if (text !== generated) throw Error('Fichier modifié depuis l’optimisation : conservé');
+        await io.rmFile(e.file);
+      } else await io.writeFile(e.file, e.before);
+    }
+    if (e.kind === 'reg') await (e.before === null ? io.regDel(e.key, e.name) : io.regSet(e.key, e.name, e.before));
   }
 }

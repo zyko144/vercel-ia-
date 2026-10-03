@@ -1244,7 +1244,8 @@ async function undoOpti(all = false) {
   const list = store.data.optiJournal ?? [];
   const todo = all ? list : list.slice(0, 1);
   for (const j of todo) {
-    await revertEntries(j.entries ?? []).catch((err) => fatalLog(err));
+    try { await revertEntries(j.entries ?? []); }
+    catch (err) { fatalLog(err); return { ok: false, error: 'Annulation interrompue : entrée non vérifiable ou fichier inaccessible. Le journal est conservé.' }; }
     for (const t of j.tweaks ?? []) await setTweak(t.id, t.was).catch(() => {});
   }
   store.data.optiJournal = all ? [] : list.slice(1);
@@ -1256,11 +1257,7 @@ ipcMain.handle('opti:undo', async () => {
   if (!(await confirm('Annuler la dernière optimisation ?', 'Chaque fichier de jeu et chaque réglage modifié revient exactement comme avant (les caches vidés, eux, se recréent tout seuls).'))) return { ok: false, cancelled: true };
   return undoOpti(false);
 });
-ipcMain.handle('opti:undoAll', async () => {
-  if (!(await confirm('Tout remettre par défaut ?', 'Toutes les optimisations sont annulées (fichiers de jeux, réglages) et Windows revient à son état d’avant ta première optimisation. Un point de restauration est créé avant les réglages système.'))) return { ok: false, cancelled: true };
-  await undoOpti(true);
-  return resetWindows({ ask: false });
-});
+ipcMain.handle('opti:undoAll', async () => ({ ok: false, error: 'La remise à zéro globale est temporairement désactivée après un signalement. Aucun fichier ni réglage n’a été modifié.' }));
 // Caches de shaders : les vider fait saccader les jeux (FiveM surtout) le temps qu'ils se recréent
 const SHADER_CACHES = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 // Nettoyage doux chaque semaine (à activer dans Paramètres) : seulement les caches qui se recréent (système, pilotes,
