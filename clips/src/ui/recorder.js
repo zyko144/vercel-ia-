@@ -13,13 +13,19 @@ window.rec.onStart(async (id, o = {}) => {
     streams.push(stream); return stream;
   };
   const h = [720, 1080, 1440].includes(o.height) ? o.height : 1080, fps = o.fps === 30 ? 30 : 60;
-  const bitrate = Math.round((h === 1440 ? 16 : h === 1080 ? 10 : 5) * (fps === 60 ? 1 : 0.65) * 1_000_000);
+  const bitrate = Math.round((h === 1440 ? 40 : h === 1080 ? 24 : 12) * (fps === 60 ? 1 : 0.65) * 1_000_000);
   try {
-    const video = { width: { max: Math.round(h * 16 / 9) }, height: { max: h }, frameRate: { ideal: fps, max: fps } };
+    const video = { width: { ideal: Math.round(h * 16 / 9), max: Math.round(h * 16 / 9) }, height: { ideal: h, max: h }, frameRate: { ideal: fps, max: fps } };
     const legacy = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: Math.round(h * 16 / 9), maxHeight: h, maxFrameRate: fps } };
     const screen = own(await navigator.mediaDevices.getDisplayMedia({ video, audio: o.audio !== false })
       .catch(() => navigator.mediaDevices.getUserMedia({ audio: o.audio === false ? false : { mandatory: { chromeMediaSource: 'desktop' } }, video: legacy }))
       .catch(() => navigator.mediaDevices.getDisplayMedia({ video, audio: false })));
+    const videoTrack = screen.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.contentHint = 'motion';
+      // Appliquer aussi après sélection : la valeur par défaut de la source peut rester à 30 i/s.
+      if (videoTrack.applyConstraints) await videoTrack.applyConstraints({ frameRate: { ideal: fps, max: fps }, width: { ideal: Math.round(h * 16 / 9), max: Math.round(h * 16 / 9) }, height: { ideal: h, max: h } }).catch(() => {});
+    }
     if (o.audio !== false && !screen.getAudioTracks().length) {
       const alt = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: 16, maxHeight: 16 } } }).catch(() => null);
       if (alt) { own(alt); const track = alt.getAudioTracks()[0]; alt.getVideoTracks().forEach(t => t.stop()); if (track) screen.addTrack(track); }

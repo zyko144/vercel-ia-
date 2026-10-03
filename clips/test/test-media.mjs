@@ -38,3 +38,13 @@ for (const name of ['mix.mp4','trim.mp4']) {
 assert.ok(tone('mix.mp4',1,880)>0.015,'piste micro séparée conservée');
 console.log('✅ FFmpeg : replay réellement décodé, sons 440/880 Hz présents dans MP4 et découpe, piste micro séparée');
 console.log('Fixtures : '+dir);
+
+// Remuxer une capture H264 60 i/s avec le micro sans altérer les images.
+run(['-y','-f','lavfi','-i','testsrc2=size=320x180:rate=60','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','3','-c:v','libx264','-preset','ultrafast','-g','60','-c:a','libopus','-f','matroska',file('h264.webm')]);
+run(micMixArgs(file('h264.webm'),file('micro.webm'),file('copy-mix.mp4'),{videoAudio:true,copyVideo:true}));
+const frames = name => run(['-i',file(name),'-map','0:v:0','-an','-f','framemd5','-']).toString().split('\n').filter(l => l && !l.startsWith('#')).map(l=>l.split(',').at(-1).trim());
+assert.deepEqual(frames('copy-mix.mp4'),frames('h264.webm'),'toutes les images 60 i/s restent identiques après mélange micro');
+assert.equal(frames('copy-mix.mp4').length,180);
+assert.ok(tone('copy-mix.mp4',0,440)>0.015);
+assert.ok(tone('copy-mix.mp4',0,880)>0.015);
+console.log('✅ Qualité : 180 images à 60 i/s conservées sans recompression avec son jeu + micro');

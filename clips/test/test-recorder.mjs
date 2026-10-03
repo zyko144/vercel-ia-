@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 const source = await readFile(new URL('../src/ui/recorder.js', import.meta.url), 'utf8');
-const track = kind => ({ kind, stopped: false, stop() { this.stopped = true; }, addEventListener() {} });
+const track = kind => ({ kind, stopped: false, stop() { this.stopped = true; }, addEventListener() {}, async applyConstraints(c) { this.constraints = c; } });
 const stream = tracks => ({ getTracks: () => tracks, getAudioTracks: () => tracks.filter(t => t.kind === 'audio'), getVideoTracks: () => tracks.filter(t => t.kind === 'video'), addTrack: t => tracks.push(t) });
 let start, stop; const made = [], states = [], chunks = [];
 class Recorder {
@@ -15,6 +15,10 @@ const context = { MediaRecorder: Recorder, navigator: { mediaDevices: { getDispl
 vm.runInNewContext(source, context);
 await start('screen:1', { audio: true, mic: true });
 assert.equal(made[0].opts.mimeType, 'video/webm;codecs=vp8,opus', 'aucun repli H264 sans audio');
+assert.equal(made[0].opts.videoBitsPerSecond, 24000000);
+assert.equal(screen.getVideoTracks()[0].contentHint, 'motion');
+assert.equal(screen.getVideoTracks()[0].constraints.frameRate.ideal, 60);
+assert.equal(screen.getVideoTracks()[0].constraints.height.ideal, 1080);
 assert.equal(made[1].opts.mimeType, 'audio/webm;codecs=opus'); assert.equal(states.at(-1), 'on');
 let resolveFirst;
 made[0].ondataavailable({ data: { size: 1, arrayBuffer: () => new Promise(r => resolveFirst = r) } });

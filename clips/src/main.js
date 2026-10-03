@@ -172,7 +172,8 @@ const restartReplay = () => { clearTimeout(restarting); if (!st.replay) return; 
 // Priorité au jeu : l'enregistreur et l'encodage vidéo passent après le jeu (moins de FPS perdus)
 function lowerPriority() {
   if (!st.gamePriority) return;
-  const pids = [recWin?.webContents.getOSProcessId(), ...app.getAppMetrics().filter((m) => m.type === 'GPU').map((m) => m.pid)].filter(Boolean);
+  // Ne pas rétrograder le processus GPU : il porte aussi la capture et l’encodeur.
+  const pids = [recWin?.webContents.getOSProcessId()].filter(Boolean);
   for (const pid of pids) { try { os.setPriority(pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } }
 }
 ipcMain.on('rec:state', (e, s) => {
@@ -213,7 +214,7 @@ async function probe(f) {
     p.on('close', () => { clearTimeout(timer); ok(err); }); p.on('error', () => { clearTimeout(timer); ok(''); });
   });
   const d = /Duration: (\d+):(\d+):([\d.]+)/.exec(out); const st0 = /start: ([\d.-]+)/.exec(out);
-  return { dur: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : 0, start: st0 ? Number(st0[1]) : 0, audio: /Stream #.*Audio:/.test(out) };
+  return { dur: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : 0, start: st0 ? Number(st0[1]) : 0, audio: /Stream #.*Audio:/.test(out), h264: /Video: h264\b/.test(out) };
 }
 let savingClip = null;
 const saveClip = (game) => {
@@ -242,6 +243,7 @@ async function saveClipWork(game) {
     if (audioWanted && !source.audio) throw Error('Le son du PC manque dans l’enregistrement. Relance le replay et vérifie la sortie audio Windows.');
     if (micWanted && !snap.mic) throw Error('Le micro n’a pas encore fourni de son. Vérifie son autorisation puis relance le replay.');
     if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume);
+    else if (source.h264) await toMp4(tmp, encoded, { fixup: true });
     else await clean(tmp, encoded, { fixup: true });
     const result = await probe(encoded);
     if (!result.dur || ((audioWanted || micWanted) && !result.audio)) throw Error('Le clip produit est incomplet : il n’a pas été ajouté à la galerie.');
@@ -258,6 +260,9 @@ async function withMic(video, mic, out, micVolume) {
   const [pv, pm] = await Promise.all([probe(video), probe(mic)]);
   if (!pm.audio) throw Error('La piste micro est illisible. Relance le replay avant de réessayer.');
   const opts = { videoAudio: pv.audio, delta: pm.start - pv.start, volume: Math.max(0, Math.min(2, (micVolume ?? 100) / 100)) };
+  if (pv.h264) {
+    try { await runFfmpeg(micMixArgs(video, mic, out, { ...opts, copyVideo: true })); return; } catch { /* Repli si la source ne se remuxe pas. */ }
+  }
   const enc = await bestEncoder();
   try { await runFfmpeg(micMixArgs(video, mic, out, { ...opts, enc })); }
   catch { await runFfmpeg(micMixArgs(video, mic, out, opts)); }
