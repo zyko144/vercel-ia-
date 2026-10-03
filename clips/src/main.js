@@ -9,11 +9,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import updaterMod from 'electron-updater';
-import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, micMixArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
+import { artMatch, artTerm, clipName, encArgs, ffmpegArgs, micMixArgs, nativeMixArgs, gameLabel, isMedia, parseFg, safeName, unpacked, validAccel } from './core.js';
 
 import { promisify } from 'node:util';
 import { localGameArt } from './gameArt.js';
 import { serveMedia } from './mediaFile.js';
+import { startNativeCapture } from './nativeCapture.js';
 import { ReplayBuffer } from './replay.js';
 import { createUpdateController, createMediaJobs } from './updateController.js';
 
@@ -135,6 +136,7 @@ function onForeground(v) {
 const inGame = () => fg.full && fg.game !== 'Bureau' && !/^(History Clips|History Launcher)$/i.test(fg.game);
 
 // ---------- Replay ----------
+let nativeCapture = null, nativeFailed = false, captureBackend = 'compatible';
 let recSource = null, replayGeneration = 0, replayStarting = false;
 async function pickSource() {
   if (st.source === 'game' && inGame()) {
@@ -148,6 +150,7 @@ async function setReplay(on, keepSetting = false) {
   if (on && (mediaJobs.closing || app.quitting)) return;
   if (!on) {
     replayGeneration++; replayStarting = false;
+    nativeCapture?.stop(); nativeCapture = null;
     if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); const w = recWin; setTimeout(() => { if (!w.isDestroyed()) w.destroy(); }, 500); }
     recWin = null; recSource = null; recState = keepSetting && st.replay ? 'wait' : 'off'; changed(); resetRing();
     tray?.setToolTip(recState === 'wait' ? 'History Clips · en attente d’un jeu' : 'History Clips · replay en pause'); return;
@@ -164,7 +167,29 @@ async function setReplay(on, keepSetting = false) {
   resetRing();
   await me.loadFile(path.join(here, 'ui', 'recorder.html'));
   if (generation !== replayGeneration || recWin !== me || me.isDestroyed()) return;
-  me.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio, mic: st.mic });
+  captureBackend = 'compatible';
+  // DDA output 0 n’est pas un identifiant Electron : activer seulement avec un écran pour éviter de filmer le mauvais.
+  if (process.platform === 'win32' && !nativeFailed && src.id.startsWith('screen:') && screen.getAllDisplays().length === 1) {
+    const enc = await bestEncoder();
+    if (generation !== replayGeneration) return;
+    if (enc !== 'libx264') {
+      const display = screen.getAllDisplays()[0], buffer = replayBuffer;
+      try {
+        const bin = await FFMPEG();
+        if (generation !== replayGeneration) return;
+        const handle = startNativeCapture(bin, { height: st.height, fps: st.fps, enc, width: Math.round(display.size.width * display.scaleFactor), sourceHeight: Math.round(display.size.height * display.scaleFactor) }, chunk => buffer.push('video', chunk), () => {
+          if (generation !== replayGeneration) return;
+          nativeFailed = true; notify('Capture de secours', 'La capture native s’est arrêtée. Reprise avec la source compatible.'); restartReplay();
+        });
+        nativeCapture = handle;
+        await handle.ready;
+        if (generation !== replayGeneration) { handle.stop(); return; }
+        captureBackend = 'native';
+      } catch { if (generation !== replayGeneration) return; nativeCapture?.stop(); nativeCapture = null; nativeFailed = true; resetRing(); }
+    }
+  }
+  if (generation !== replayGeneration || me.isDestroyed()) return;
+  me.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio, mic: st.mic, nativeVideo: captureBackend === 'native' });
   tray?.setToolTip(`History Clips · replay actif (${st.hotClip} pour garder les ${st.seconds} dernières secondes)`);
 }
 let restarting = null;
@@ -180,10 +205,11 @@ ipcMain.on('rec:state', (e, s) => {
   if (e.sender !== recWin?.webContents) return;
   if (s === 'empty') return notify('Clip pas encore prêt', 'Le replay vient de démarrer : réessaie dans quelques secondes.');
   if (s.startsWith('on')) {
+    if (captureBackend === 'native' && nativeCapture && replayBuffer) { const offset = Math.max(0, Date.now() - nativeCapture.startedAt); replayBuffer.offsets.game = offset; replayBuffer.offsets.mic = offset; }
     recState = 'on'; st.noAudio = s.includes('noaudio'); st.noMic = s.includes('nomic');
     if (st.noAudio) notify('Son du PC indisponible', 'Vérifie la sortie audio Windows puis relance le replay. Aucun clip silencieux ne sera enregistré à ta place.');
     if (st.noMic) notify('Micro indisponible', 'Vérifie le micro et son autorisation Windows puis relance le replay.');
-  } else recState = s;
+  } else { recState = s; if (s.startsWith('error')) nativeCapture?.stop(); }
   changed();
   if (recState === 'on') lowerPriority();
   if (s.startsWith('error')) notify('Replay indisponible', `L’enregistrement n’a pas démarré (${s.slice(6, 120)}).`);
@@ -193,12 +219,13 @@ ipcMain.on('rec:state', (e, s) => {
 let replayBuffer = null;
 function resetRing() {
   const old = replayBuffer;
-  replayBuffer = recWin ? new ReplayBuffer(path.join(app.getPath('temp'), 'history-clips-replay', randomUUID()), st.seconds) : null;
+  replayBuffer = recWin ? new ReplayBuffer(path.join(app.getPath('temp'), 'history-clips-replay', randomUUID()), st.seconds, st.fps) : null;
   void old?.close().catch(() => {});
 }
 ipcMain.on('rec:chunk', (e, ab, kind) => {
-  if (e.sender !== recWin?.webContents || !replayBuffer || !['video', 'mic'].includes(kind)) return;
-  const buffer = replayBuffer, audioWanted = st.audio, micWanted = st.mic, micVolume = st.micVol;
+  if (e.sender !== recWin?.webContents || !replayBuffer || !['video', 'mic', 'game'].includes(kind)) return;
+  const buffer = replayBuffer;
+  if (captureBackend === 'native' && kind === 'video') return;
   void buffer.push(kind, Buffer.from(ab)).catch(err => {
     if (buffer !== replayBuffer) return;
     recState = `error:${err.message}`; changed();
@@ -234,15 +261,26 @@ async function saveClipWork(game) {
   const buffer = replayBuffer, audioWanted = st.audio, micWanted = st.mic, micVolume = st.micVol;
   const label = safeName(game ?? (inGame() ? fg.game : 'Bureau')) || 'Clip';
   const dir = path.join(ROOT(), label);
-  const tmp = path.join(dir, `.${randomUUID()}.webm`), micTmp = `${tmp}.micro.webm`, encoded = `${tmp}.mp4`;
+  const tmp = path.join(dir, `.${randomUUID()}.webm`), micTmp = `${tmp}.micro.webm`, gameTmp = `${tmp}.game.webm`, encoded = `${tmp}.mp4`;
+  const native = captureBackend === 'native';
   try {
     if (!buffer) throw Error('Le replay n’est pas encore prêt.');
     await mkdir(dir, { recursive: true });
-    const snap = await buffer.snapshot(tmp, micWanted ? micTmp : null);
+    const snap = await buffer.snapshot(tmp, micWanted ? micTmp : null, native && audioWanted ? gameTmp : null);
     const source = await probe(tmp);
-    if (audioWanted && !source.audio) throw Error('Le son du PC manque dans l’enregistrement. Relance le replay et vérifie la sortie audio Windows.');
+    if (audioWanted && !(native ? snap.game : source.audio)) throw Error('Le son du PC manque dans l’enregistrement. Relance le replay et vérifie la sortie audio Windows.');
     if (micWanted && !snap.mic) throw Error('Le micro n’a pas encore fourni de son. Vérifie son autorisation puis relance le replay.');
-    if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume);
+    if (native) {
+      const audio = [];
+      for (const [file, kind, volume] of [[snap.game && gameTmp, 'game', 1], [snap.mic && micTmp, 'mic', Math.max(0, Math.min(2, (micVolume ?? 100)/100))]]) if (file) {
+        const p = await probe(file); if (!p.audio) throw Error('Piste audio native illisible');
+        audio.push({ file, kind, delta: p.start - source.start + buffer.offsets[kind]/1000, volume });
+      }
+      // Les segments du replay peuvent commencer après zéro : conserver seulement leur durée utile.
+      if (!(snap.duration > 0)) throw Error('Durée native indisponible');
+      await runFfmpeg(nativeMixArgs(tmp, audio, encoded, snap.duration));
+    }
+    else if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume);
     else if (source.h264) await toMp4(tmp, encoded, { fixup: true });
     else await clean(tmp, encoded, { fixup: true });
     const result = await probe(encoded);
@@ -253,7 +291,7 @@ async function saveClipWork(game) {
     changed(); await saveSt(); void prune().catch(() => {});
     return { ok: true };
   } catch (err) { notify('Clip non enregistré', err.message); return { ok: false, error: err.message }; }
-  finally { await Promise.all([tmp, micTmp, encoded].map(f => rm(f, { force: true }).catch(() => {}))); }
+  finally { await Promise.all([tmp, micTmp, gameTmp, encoded].map(f => rm(f, { force: true }).catch(() => {}))); }
 }
 /** Clip avec micro : piste 1 = jeu + micro (volume réglable), piste 2 = micro seul (pour le montage). */
 async function withMic(video, mic, out, micVolume) {
@@ -640,7 +678,7 @@ mediaHandle('clips:discord', async (_e, t, to, guild) => {
 });
 
 // ---------- Réglages ----------
-ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), noMic: Boolean(st.noMic), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
+ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), noMic: Boolean(st.noMic), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, captureBackend, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
 ipcMain.handle('settings:set', (_e, p) => {
   let replayChanged = false; let restart = false;
   if ('replay' in p) { st.replay = Boolean(p.replay); replayChanged = true; }

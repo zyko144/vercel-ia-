@@ -51,14 +51,16 @@ export class WebmClusters {
       this.pending = this.pending.subarray(end);
       if (e.id === CLUSTER) {
         this.started = true;
-        let time = null;
+        let time = null, lastBlock = 0;
         for (let at = e.head; at < data.length;) {
           const c = element(data, at); if (!c || c.size === null || at + c.head + c.size > data.length) throw Error('Cluster WebM incomplet');
           if (c.id === 0xe7) time = data.subarray(at + c.head, at + c.head + c.size).reduce((n, b) => n * 256 + b, 0) * this.scale;
+          if (c.id === 0xa3) { const atBlock = at+c.head; const track = vint(data, atBlock); if (track && atBlock+track.width+2 <= at+c.head+c.size) lastBlock = Math.max(lastBlock, data.readInt16BE(atBlock+track.width)); }
+          if (c.id === 0xa0) for (let b = at+c.head; b < at+c.head+c.size;) { const block = element(data,b); if (!block || block.size === null) break; if (block.id === 0xa1) { const track = vint(data,b+block.head); if (track && b+block.head+track.width+2 <= b+block.head+block.size) lastBlock = Math.max(lastBlock,data.readInt16BE(b+block.head+track.width)); } b += block.head+block.size; }
           at += c.head + c.size;
         }
         if (time === null) throw Error('Horodatage WebM absent');
-        out.push({ time, data });
+        out.push({ time, end: time + lastBlock * this.scale, data });
       } else if (!this.started) {
         if (e.id === 0x1549a966) {
           for (let at = e.head; at < data.length;) {
@@ -76,9 +78,10 @@ export class WebmClusters {
 }
 
 export class ReplayBuffer {
-  tracks = { video: { parser: new WebmClusters(), files: [], next: 0 }, mic: { parser: new WebmClusters(), files: [], next: 0 } };
+  offsets = { video: 0, mic: 0, game: 0 };
+  tracks = { game: { parser: new WebmClusters(), files: [], next: 0 }, video: { parser: new WebmClusters(), files: [], next: 0 }, mic: { parser: new WebmClusters(), files: [], next: 0 } };
   closed = false;
-  constructor(dir, seconds) { this.dir = dir; this.seconds = seconds; this.queue = mkdir(dir, { recursive: true }); }
+  constructor(dir, seconds, fps = 60) { this.dir = dir; this.seconds = seconds; this.fps = fps; this.queue = mkdir(dir, { recursive: true }); }
   run(fn) { const work = this.queue.then(fn); this.queue = work.catch(() => {}); return work; }
   push(kind, bytes) {
     if (this.closed) return Promise.resolve();
@@ -86,27 +89,29 @@ export class ReplayBuffer {
       const t = this.tracks[kind]; if (!t) throw Error('Piste inconnue');
       for (const part of t.parser.push(bytes)) {
         const file = path.join(this.dir, `${kind}-${t.next++}.webm`);
-        await writeFile(file, part.data); t.files.push({ file, time: part.time });
+        await writeFile(file, part.data); t.files.push({ file, time: part.time, end: part.end });
         while (t.files.length > 2 && t.files[1].time < part.time - (this.seconds + 5) * 1000) await rm(t.files.shift().file, { force: true });
       }
     });
   }
-  snapshot(video, mic) {
+  snapshot(video, mic, game) {
     if (this.closed) return Promise.reject(Error('Le replay a redémarré. Réessaie dans quelques secondes.'));
     return this.run(async () => {
       const v = this.tracks.video;
       if (v.files.length < 2) throw Error('Clip pas encore prêt : quelques secondes d’enregistrement sont nécessaires.');
       const cutoff = v.files.at(-1).time - this.seconds * 1000;
-      let micSaved = false;
-      for (const [kind, dest] of [['video', video], ['mic', mic]]) {
+      let micSaved = false, gameSaved = false, duration = 0;
+      for (const [kind, dest] of [['video', video], ['mic', mic], ['game', game]]) {
         const t = this.tracks[kind]; if (!t.files.length || !dest) continue;
-        let first = t.files.findLastIndex(f => f.time <= cutoff);
+        let first = t.files.findLastIndex(f => f.time + this.offsets[kind] <= cutoff);
         first = Math.max(0, first);
+        if (kind === 'video') duration = (t.files.at(-1).end - t.files[first].time)/1000 + 1/this.fps;
         await writeFile(dest, t.parser.header);
         for (const part of t.files.slice(first)) await appendFile(dest, await readFile(part.file));
         if (kind === 'mic') micSaved = true;
+        if (kind === 'game') gameSaved = true;
       }
-      return { mic: micSaved };
+      return { mic: micSaved, game: gameSaved, duration };
     });
   }
   close() { this.closed = true; return this.run(() => rm(this.dir, { recursive: true, force: true })); }
