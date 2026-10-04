@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.9': [
+    ['💳', 'Réponse du paiement dans l’appli', 'Quand ton paiement Premium est accepté ou refusé, le launcher te le dit directement. Et tu peux lier ton Discord et rejoindre le serveur en un clic après l’achat.', ['#premiumBtn', 'wait900']],
+  ],
   '0.53.8': [
     ['⭐', 'De nouveaux visuels Premium', 'Des images dédiées à chaque offre, avec un léger flou et un voile jaune doux.', ['#premiumBtn', 'wait900']],
   ],
@@ -3740,6 +3743,7 @@ let prem = null;
 const PREM_NAMES = { ia: 'History IA', opti: 'Opti Pro' };
 async function loadPremium(fresh = false) {
   prem = (await api.premiumGet?.(fresh).catch(() => null)) ?? prem ?? { ia: false, opti: false };
+  if (prem.news?.length) premNews(prem.news[prem.news.length - 1]);
   document.documentElement.classList.toggle('isprem', Boolean(prem.ia || prem.opti));
   document.documentElement.classList.toggle('noia', !prem.ia);
   $('aiState').textContent = prem.ia ? 'History IA · en ligne' : 'Réservé à History IA';
@@ -3775,11 +3779,23 @@ document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click
   $('pdTitle').textContent = name; $('pdPrice').textContent = price; $('pdAmount').textContent = price;
   $('pdDone').hidden = true; $('premClaim').classList.remove('sent');
   $('premDlg').showModal(); $('premPaypal').focus();
-  api.premiumBuy?.(b.dataset.buy);
 }));
 $('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack));
 $('pdClose').addEventListener('click', () => $('premDlg').close());
 $('pdOk').addEventListener('click', () => $('premDlg').close());
+$('pdLink').addEventListener('click', () => { $('premDlg').close(); $('openSettings').click(); document.querySelector('.setnav [data-pane=compte]')?.click(); });
+$('pdJoin').addEventListener('click', () => api.discordInvite?.());
+// Réponse du chef (paiement accepté ou refusé) : affichée dans la même fenêtre, une seule fois
+function premNews(n) {
+  const name = PACK_INFO[n.pack]?.[0] ?? 'Premium';
+  $('pdDoneT').textContent = n.ok ? `${name} est actif` : 'Paiement non validé';
+  $('pdDoneS').textContent = n.ok ? 'Ton paiement a été vérifié : profite de ton Premium, sans redémarrer.' : 'Le paiement n’a pas pu être vérifié. Si tu as bien payé, écris au support (bouton Support en haut).';
+  $('pdDoneIco').classList.toggle('no', !n.ok); $('pdDoneIco').classList.remove('wait');
+  const t = $('pdTrack').children; t[1].className = n.ok ? 'ok' : 'bad'; t[2].className = n.ok ? 'ok' : ''; $('pdStep2').textContent = n.ok ? 'Vérifié' : 'Refusé';
+  $('premClaim').classList.add('sent'); $('pdDone').hidden = false;
+  if (!$('premDlg').open) $('premDlg').showModal();
+}
+setInterval(() => { if (prem?.logged) loadPremium(true); }, 120_000); // réponse du chef visible en moins de 3 min
 $('premShot').addEventListener('change', () => claimFile($('premShot').files[0]));
 $('pdDrop').addEventListener('dragover', (e) => { e.preventDefault(); $('pdDrop').classList.add('over'); });
 $('pdDrop').addEventListener('dragleave', () => $('pdDrop').classList.remove('over'));
@@ -3795,6 +3811,8 @@ $('premClaim').addEventListener('submit', async (e) => {
   btn.disabled = false; btn.textContent = 'Envoyer pour vérification';
   if (!r?.ok) return toast(r?.error ?? 'Impossible pour le moment');
   $('premPaypal').value = ''; $('premShot').value = ''; claimShotSet(null);
+  $('pdDoneT').textContent = 'Demande envoyée'; $('pdDoneS').textContent = 'On vérifie ton paiement. Tu auras la réponse ici, sans redémarrer.'; $('pdDoneIco').classList.remove('no'); $('pdDoneIco').classList.add('wait');
+  const t = $('pdTrack').children; t[1].className = 'now'; t[2].className = ''; $('pdStep2').textContent = 'Vérification';
   e.target.classList.add('sent'); $('pdDone').hidden = false;
 });
 api.onPremiumOpen?.((pack) => openPremium(pack));
@@ -4383,7 +4401,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.8',
+    version: async () => '0.53.9',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
