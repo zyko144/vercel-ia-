@@ -5,7 +5,7 @@
 // - Avec PAYPAL_EMAIL (l'adresse du compte PayPal qui reçoit l'argent) : bouton PayPal classique, et PayPal
 //   prévient le bot (/paypal/ipn). Le bot vérifie le paiement auprès de PayPal, puis active l'offre 31 jours
 //   tout seul (et récompense le parrain).
-// - Sans PAYPAL_EMAIL : lien paypal.me (PAYPAL_ME, « steamapp » par défaut) ; le chef active à la main.
+// - Sans PAYPAL_EMAIL : lien paypal.me (PAYPAL_ME, « zyko921 » par défaut) ; le chef active à la main.
 //
 // PARRAINAGE : chaque serveur a un code. Un nouveau serveur entre le code de celui qui l'a invité ;
 // au premier paiement du nouveau serveur, le parrain gagne 1 mois offert.
@@ -20,7 +20,7 @@ const DAYS = 31;
 const baseOf = (offer) => String(offer).replace(/-an$/, '');
 const daysOf = (offer) => (String(offer).endsWith('-an') ? 365 : DAYS);
 const PAYPAL_EMAIL = (process.env.PAYPAL_EMAIL ?? '').trim();
-const PAYPAL_ME = (process.env.PAYPAL_ME ?? 'steamapp').trim();
+const PAYPAL_ME = (process.env.PAYPAL_ME ?? 'zyko921').trim();
 const IPN_VERIFY = 'https://ipnpb.paypal.com/cgi-bin/webscr';
 const ID = /^\d{15,21}$/;
 
