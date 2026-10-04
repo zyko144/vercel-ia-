@@ -1600,6 +1600,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.13': [
+    ['📊', 'FPS toujours affichés', 'La mesure des FPS se relance toute seule si le jeu redémarre ou si plus rien n’arrive : fini le compteur sans FPS en pleine partie.', ['#openSettings', 'wait600', '.setnav [data-pane=jeux]', 'wait900']],
+    ['🖥', 'Overlays et plein écran', 'Pour tous les jeux : si le jeu est en plein écran, une voix et un message te disent de passer en « Plein écran fenêtré » au lieu de forcer l’overlay.'],
+  ],
   '0.53.12': [
     ['🚗', 'Overlay Rocket League stable', 'L’overlay ne fait plus sortir Rocket League de son écran et le launcher ne touche plus aux réglages du jeu. En plein écran, une voix et un message te disent de passer en « Plein écran fenêtré ».', ['#openSettings', 'wait600', '.setnav [data-pane=jeux]', 'wait900']],
   ],
@@ -3833,7 +3837,7 @@ $('premClaim').addEventListener('submit', async (e) => {
 });
 api.onPremiumOpen?.((pack) => openPremium(pack));
 // Overlay demandé alors que Rocket League est en plein écran exclusif : message visible dès le retour sur le launcher
-api.onRlFullscreen?.((msg) => ui.confirm({ title: 'Mets Rocket League en fenêtré', text: msg, ok: 'OK', cancel: 'Fermer', icon: '🖥' }));
+api.onRlFullscreen?.((msg) => ui.confirm({ title: 'Mets ton jeu en fenêtré', text: msg, ok: 'OK', cancel: 'Fermer', icon: '🖥' }));
 $('premiumBtn').addEventListener('click', () => openPremium());
 addEventListener('focus', () => { if (prem && !prem.dev) loadPremium(true); });
 loadPremium();
@@ -4419,7 +4423,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.12',
+    version: async () => '0.53.13',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
