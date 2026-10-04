@@ -73,7 +73,7 @@ async function rewardSponsor(guildId) {
   console.log(`[parrainage] ${r.by} gagne 1 mois (${plan.label}) grâce à ${guildId}`);
   const sponsor = client?.guilds.cache.get(r.by);
   const owner = await sponsor?.fetchOwner().catch(() => null);
-  await owner?.send(`🎁 Merci pour le parrainage ! Un serveur que tu as invité vient de s’abonner : **1 mois de ${plan.label}** offert sur **${sponsor.name}**.`).catch(() => {});
+  if (process.env.BOT_DM === '1') await owner?.send(`🎁 Merci pour le parrainage ! Un serveur que tu as invité vient de s’abonner : **1 mois de ${plan.label}** offert sur **${sponsor.name}**.`).catch(() => {});
   return plan;
 }
 
@@ -190,7 +190,7 @@ export async function handleIpn(rawBody) {
   await rewardSponsor(guildId).catch(() => {});
   const guild = client?.guilds.cache.get(guildId);
   const owner = await guild?.fetchOwner().catch(() => null);
-  await owner?.send(`✅ Paiement reçu, merci ! **${PLANS[baseOf(plan)].emoji} ${PLANS[baseOf(plan)].label}** est actif sur **${guild?.name ?? guildId}** jusqu’au ${new Date(result.until).toLocaleDateString('fr-FR')}.`).catch(() => {});
+  if (process.env.BOT_DM === '1') await owner?.send(`✅ Paiement reçu, merci ! **${PLANS[baseOf(plan)].emoji} ${PLANS[baseOf(plan)].label}** est actif sur **${guild?.name ?? guildId}** jusqu’au ${new Date(result.until).toLocaleDateString('fr-FR')}.`).catch(() => {});
   const chef = await client?.users.fetch(config.ownerId).catch(() => null);
   await chef?.send(`💶 Nouveau paiement PayPal : ${p.get('mc_gross')} € · ${PLANS[baseOf(plan)].label} · ${guild?.name ?? guildId}`).catch(() => {});
   return { ok: true, plan: result };

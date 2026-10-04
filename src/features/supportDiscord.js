@@ -24,17 +24,38 @@ async function deliver(id) {
     const identity=await supportIdentity({id:t.owner,pseudo:t.name,profile:account?profileOf(account):{}},t.app);
     Object.assign(t,identity);await mutateSupport(all=>{if(all[id])Object.assign(all[id],identity);});
   }
-  const owner=await client.users.fetch(config.ownerId); const dm=await owner.createDM();
+  // Chaque demande a son fil dans le salon privé #support-launcher (plus en MP) ; un message du chef dans le fil = la réponse
+  const ch=await supportChannel(); if(!ch)return;
   const components=[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`support:reply:${id}`).setLabel('Répondre').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`support:resolve:${id}`).setLabel('Marquer résolue').setStyle(ButtonStyle.Success))];
   const payload={embeds:[supportEmbed(t)],components,allowedMentions:{parse:[]}};
-  if(t.discordMessage) { const msg=await dm.messages.fetch(t.discordMessage);if(t.img)payload.embeds[0].setImage(msg.embeds[0]?.image?.url ?? null);await msg.edit(payload);await mutateSupport(all=>{if(all[id])all[id].discordSyncedAt=t.updatedAt;});return; }
+  if(t.discordThread) { const msg=await ch.messages.fetch(t.discordMessage);if(t.img)payload.embeds[0].setImage(msg.embeds[0]?.image?.url ?? null);await msg.edit(payload);await mutateSupport(all=>{if(all[id])all[id].discordSyncedAt=t.updatedAt;});return; }
   if(t.img) {const [header,data]=t.img.split(',');const ext=header.includes('png')?'png':header.includes('webp')?'webp':'jpg';payload.files=[{attachment:Buffer.from(data,'base64'),name:`capture.${ext}`}];payload.embeds[0].setImage(`attachment://capture.${ext}`);}
-  const sent=await dm.send({...payload,nonce:id.replaceAll('-','').slice(0,25),enforceNonce:true});
-  await mutateSupport(all=>{if(all[id]){all[id].discordMessage=sent.id;all[id].discordSyncedAt=t.updatedAt;}});
+  const sent=await ch.send({...payload,nonce:id.replaceAll('-','').slice(0,25),enforceNonce:true});
+  const thread=await sent.startThread({name:`${t.displayName||t.name} · ${t.title}`.slice(0,100),autoArchiveDuration:10080}).catch(()=>null);
+  await thread?.send({content:'✍️ Écris ta réponse ici : elle arrive tout de suite dans l’appli de la personne.',allowedMentions:{parse:[]}}).catch(()=>{});
+  await mutateSupport(all=>{if(all[id]){all[id].discordMessage=sent.id;all[id].discordThread=thread?.id??'aucun';all[id].discordSyncedAt=t.updatedAt;}});
 }
 async function flush(){if(running||!client)return;running=true;try{for(const id of [...pending].slice(0,10)){try{await deliver(id);pending.delete(id);}catch{ /* The saved report remains accessible; retry on next tick. */ }}}finally{running=false;}}
 export function queueSupport(id){pending.add(id);void flush();}
-export function startSupportDiscord(c){if(client)return;client=c;const retry=async()=>{try{for(const t of await supportList())if(!t.discordMessage||(t.discordSyncedAt??0)<t.updatedAt)pending.add(t.id);await flush();}catch{}};void retry();setInterval(retry,60000).unref();}
+const SUPPORT_SALON='🎫・support-launcher';
+let supportCh=null;
+async function supportChannel(){
+  if(supportCh)return supportCh;
+  const { HOME_GUILD }=await import('./launcherServers.js');
+  const guild=await client.guilds.fetch(HOME_GUILD).catch(()=>null);if(!guild)return null;
+  const { ChannelType, PermissionFlagsBits }=await import('discord.js');
+  await guild.channels.fetch().catch(()=>{});
+  supportCh=guild.channels.cache.find((c)=>c.name===SUPPORT_SALON)??await guild.channels.create({name:SUPPORT_SALON,type:ChannelType.GuildText,reason:'Demandes de support History Launcher',
+    permissionOverwrites:[{id:guild.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]},{id:config.ownerId,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessagesInThreads]},{id:client.user.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.CreatePublicThreads,PermissionFlagsBits.SendMessagesInThreads,PermissionFlagsBits.ManageThreads]}]}).catch(()=>null);
+  return supportCh;
+}
+// Réponse écrite dans le fil d'une demande (par l'équipe) : enregistrée comme réponse, visible dans l'appli et sur le site
+async function onThreadMessage(m){
+  if(m.author.bot||!m.channel?.isThread?.()||m.channel.parentId!==supportCh?.id||!isAllowed(m.author.id)||!m.content.trim())return;
+  const t=(await supportList()).find((x)=>x.discordThread===m.channel.id);if(!t)return;
+  await supportUpdate({id:t.id,status:t.status==='resolved'?'resolved':'investigating',reply:m.content.slice(0,2000)}).then(()=>m.react('✅')).catch(()=>m.react('⚠️').catch(()=>{}));
+}
+export function startSupportDiscord(c){if(client)return;client=c;c.on('messageCreate',(m)=>{onThreadMessage(m).catch(()=>{});});const retry=async()=>{try{await supportChannel();for(const t of await supportList()){if(!t.discordThread&&t.status==='resolved')continue;if(!t.discordThread||(t.discordSyncedAt??0)<t.updatedAt)pending.add(t.id);}await flush();}catch{}};void retry();setInterval(retry,60000).unref();}
 export async function onSupportInteraction(interaction){
   const parts=String(interaction.customId??'').split(':');if(parts[0]!=='support')return false;
   if(!isAllowed(interaction.user.id)){await interaction.reply({content:'Accès réservé à l’équipe de support.',ephemeral:true});return true;}

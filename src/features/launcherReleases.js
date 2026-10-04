@@ -8,7 +8,7 @@ import { alreadyPosted, broadcast } from './launcherServers.js';
 const KEY = 'launcher-annonces';
 const REPO = 'zyko144/vercel-ia-';
 // Ancien salon (ddv) coupé : tout le launcher est sur son serveur (launcherServers.js). Variable pour en ajouter un.
-export const RELEASES_CHANNEL = process.env.LAUNCHER_ANNONCES_SALON || '';
+export const RELEASES_CHANNEL = process.env.LAUNCHER_ANNONCES_SALON || '1556411993500426290'; // annonces du bot
 
 /** Message Discord (2000 caractères max) à partir de la release GitHub. */
 export function releaseMessage(rel) {

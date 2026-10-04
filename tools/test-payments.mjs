@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+process.env.BOT_DM = '1'; // ces tests vérifient les MP (envoyés seulement avec l'accord du chef : BOT_DM=1)
 
 process.env.DISCORD_TOKEN = ['T'.repeat(26), 'E'.repeat(6), 'S'.repeat(30)].join('.');
 process.env.GEMINI_API_KEY = 'essai';

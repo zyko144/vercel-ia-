@@ -106,6 +106,7 @@ export function startPremiumSync(client) {
       const end = Math.max(...ends);
       if (end - Date.now() > 3 * 86_400_000 || sent[id] === end) continue;
       sent[id] = end;
+      if (process.env.BOT_DM !== '1') continue; // jamais de MP aux membres sans l'accord du chef (BOT_DM=1)
       const u = await client.users.fetch(id).catch(() => null);
       await u?.send(`⭐ Ton History Premium se termine le **${new Date(end).toLocaleDateString('fr-FR')}**. Pour le garder : ⭐ Premium dans History Launcher, ou ${payLink(p.ia && p.opti ? 'pack' : p.ia ? 'ia' : 'opti', null)}`).catch(() => {});
     }
@@ -187,5 +188,5 @@ export async function onPremiumInteraction(interaction) {
   await save('premium-demandes', all);
   await interaction.update({ content: act === 'ok' ? `✅ Activé jusqu’au ${new Date(row.jusqua).toLocaleDateString('fr-FR')}` : '❌ Refusé', components: [] });
   const a = await findAccount(d.account);
-  if (a?.discordId) await (await bot.users.fetch(a.discordId).catch(() => null))?.send(act === 'ok' ? `⭐ Paiement reçu : **${PACKS[d.pack].label}** est actif dans History Launcher. Merci !` : 'Ton paiement Premium n’a pas pu être vérifié. Écris au support dans History Launcher si besoin.').catch(() => {});
+  if (a?.discordId && process.env.BOT_DM === '1') await (await bot.users.fetch(a.discordId).catch(() => null))?.send(act === 'ok' ? `⭐ Paiement reçu : **${PACKS[d.pack].label}** est actif dans History Launcher. Merci !` : 'Ton paiement Premium n’a pas pu être vérifié. Écris au support dans History Launcher si besoin.').catch(() => {});
 }
