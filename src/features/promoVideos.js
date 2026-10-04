@@ -10,7 +10,7 @@ export const VIDEOS = [
   { title: '🚀 History Launcher', name: 'History.Launcher.mp4', page: `${SITE}/#video` },
   { title: '🎬 History Clips', name: 'History.Clips.mp4', page: `${SITE}/clips/#video` },
 ];
-export const promoMessage = () => ['@everyone', '# 🎥 Les vidéos de présentation sont là !',
+export const promoMessage = () => ['# 🎥 Les vidéos de présentation sont là !',
   ...VIDEOS.map((v) => `## ${v.title}\n▶ [Voir la vidéo](${v.page}) · [Télécharger la vidéo](${file(v.name)})`)].join('\n');
 
 /** Poste les deux vidéos dans ce salon (une seule fois, même après un redémarrage). */
@@ -18,7 +18,7 @@ export async function postPromoVideos(channel) {
   if (!channel?.send) return false;
   const done = (await load(KEY, null)) ?? [];
   if (done.includes(channel.id)) return false;
-  const base = { content: promoMessage(), allowedMentions: { parse: ['everyone'] } };
+  const base = { content: promoMessage(), allowedMentions: { parse: [] } }; // jamais de @everyone sans demande du chef
   const files = [];
   for (const v of VIDEOS) {
     const r = await fetch(file(v.name), { redirect: 'follow', signal: AbortSignal.timeout(60_000) }).catch(() => null);

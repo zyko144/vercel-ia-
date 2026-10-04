@@ -304,6 +304,7 @@ async function checkWatch(client, fetchImpl = fetch) {
       for (const x of deals) w.wish[x.appid] = x.pct;
     }
     if (!embeds.length) continue;
+    if (process.env.BOT_DM !== '1') continue; // jamais de MP aux membres sans l'accord du chef (BOT_DM=1)
     const user = await client.users.fetch(acc.discordId).catch(() => null);
     await user?.send({ content: '🔔 **Promos pour toi** (History Launcher)\n-# Pour arrêter : Paramètres › Amis & partage › « Promos en message privé Discord ».', embeds: embeds.slice(0, 10) }).then(() => { sent += 1; }).catch(() => {});
   }
@@ -384,8 +385,34 @@ export async function launcherInvite() {
   return inv?.url ?? null;
 }
 
+// Rôle « 🎮 <jeu> » pendant qu'un membre (compte lié) joue dans History Launcher : ajouté au lancement, retiré à la fin.
+// Les rôles de jeu vides sont supprimés. Toutes les 60 s, seulement les comptes liés (peu de travail pour Render).
+async function syncPlayingRoles(client) {
+  const guild = await client.guilds.fetch(HOME_GUILD).catch(() => null);
+  if (!guild) return;
+  const d = await socialData();
+  const want = new Map(); // discordId -> jeu
+  for (const a of await linkedAccounts()) {
+    const p = d.presence?.[a.id];
+    if (p?.playing && Date.now() - (p.seen ?? 0) < 3 * 60_000) want.set(a.discordId, `🎮 ${String(p.playing).replace(/\s+—.*$/, '').slice(0, 90)}`);
+  }
+  await guild.roles.fetch().catch(() => {});
+  const roleFor = async (name) => guild.roles.cache.find((r) => r.name === name) ?? guild.roles.create({ name, color: 0x2ee07a, hoist: true, mentionable: false, reason: 'En jeu dans History Launcher' }).catch(() => null);
+  for (const [id, name] of want) {
+    const m = await guild.members.fetch(id).catch(() => null);
+    if (!m) continue;
+    const role = await roleFor(name);
+    if (role && !m.roles.cache.has(role.id)) await m.roles.add(role).catch(() => {});
+    for (const r of m.roles.cache.values()) if (r.name.startsWith('🎮 ') && r.id !== role?.id) await m.roles.remove(r).catch(() => {});
+  }
+  for (const r of guild.roles.cache.filter((x) => x.name.startsWith('🎮 ')).values()) {
+    for (const m of r.members.values()) if (want.get(m.id) !== r.name) await m.roles.remove(r).catch(() => {});
+    if (!r.members.size || ![...want.values()].includes(r.name)) await r.delete('Plus personne en jeu').catch(() => {});
+  }
+}
 export function startLauncherDiscord(client) {
   clientRef = client;
+  setInterval(() => syncPlayingRoles(client).catch((err) => console.warn('[rôles en jeu]', err.message)), 60_000).unref();
   setTimeout(() => checkWatch(client).catch((err) => console.warn('[promos mp]', err.message)), 8 * 60_000).unref();
   setInterval(() => checkWatch(client).catch((err) => console.warn('[promos mp]', err.message)), 6 * 3_600_000).unref();
   setTimeout(() => announceDeals(client).catch((err) => console.warn('[bons plans]', err.message)), 4 * 60_000).unref();
