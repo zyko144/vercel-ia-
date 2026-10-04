@@ -10,6 +10,7 @@ import path from 'node:path';
 
 process.env.DISCORD_TOKEN = ['T'.repeat(26), 'E'.repeat(6), 'S'.repeat(30)].join('.');
 process.env.GEMINI_API_KEY ||= 'essai';
+process.env.LAUNCHER_LIER_SALON = 'salon-lier';
 process.env.SUPABASE_URL = '';
 process.env.SUPABASE_SERVICE_KEY = '';
 process.env.PORT = String(20000 + Math.floor(Math.random() * 20000));
@@ -71,12 +72,14 @@ await check('liaison Discord : code à usage unique, profil /launcher avec nivea
   await call('presence', noam, { playing: 'Rocket League', week: 600, top: 'Rocket League', level: 27 });
   await call('benchmark', noam, { v: 2, scores: { total: 1650 }, cpu: 'Ryzen 7 7800X3D', gpu: 'RTX 4070' });
   const replies = [];
-  const inter = (sub, opts = {}) => ({ user: { id: 'd1', username: 'noam', displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), options: { getSubcommand: () => sub, getString: () => opts.code, getUser: () => null }, reply: async (p) => replies.push(p) });
+  const inter = (sub, opts = {}) => ({ channelId: 'salon-lier', user: { id: 'd1', username: 'noam', displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), options: { getSubcommand: () => sub, getString: () => opts.code, getUser: () => null }, reply: async (p) => replies.push(p) });
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: 'ZZZZZZ' }));
   assert.match(replies.at(-1).content, /inconnu ou expiré/);
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: c.code }));
   assert.match(replies.at(-1).content, /Noam/);
-  assert.equal(replies.at(-1).files[0].attachment.subarray(0, 4).toString(), 'GIF8', 'carte envoyée à la liaison');
+  assert.match(replies.at(-1).content, /Ton compte a bien été lié/, 'réponse immédiate à la liaison');
+  await handleLauncherCommand({ channels: { fetch: async () => null } }, { ...inter('lier', { code: 'ZZZZZZ' }), channelId: 'autre' });
+  assert.match(replies.at(-1).content, /salon-lier/, 'liaison refusée hors du salon dédié');
   await handleLauncherCommand({ channels: { fetch: async () => null } }, inter('lier', { code: c.code }));
   assert.match(replies.at(-1).content, /inconnu ou expiré/, 'code à usage unique');
   await handleLauncherCommand({}, inter('profil'));
@@ -142,7 +145,7 @@ const posted = { clips1: [], parties1: [] }; const dms = [];
 const fakeChannel = (id) => ({ id, isTextBased: () => true, send: async (p) => { posted[id].push(p); return { url: `https://discord.com/channels/x/${id}/1` }; } });
 _test.setClient({ channels: { fetch: async (id) => (posted[id] ? fakeChannel(id) : null) }, users: { fetch: async (id) => ({ send: async (p) => dms.push({ id, ...p }) }) } });
 const raw = (p, token, buf) => realFetch(`${base}/${p}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' }, body: buf }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
-const linkAs = async (token, discordId) => { const c = await call('discord/code', token, {}); const replies = []; await handleLauncherCommand({ channels: { fetch: async () => null } }, { user: { id: discordId, username: discordId, displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), options: { getSubcommand: () => 'lier', getString: () => c.code, getUser: () => null }, reply: async (p) => replies.push(p) }); };
+const linkAs = async (token, discordId) => { const c = await call('discord/code', token, {}); const replies = []; await handleLauncherCommand({ channels: { fetch: async () => null } }, { channelId: 'salon-lier', user: { id: discordId, username: discordId, displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), options: { getSubcommand: () => 'lier', getString: () => c.code, getUser: () => null }, reply: async (p) => replies.push(p) }); };
 
 await check('clips : refusé sans Discord lié, image envoyée dans le salon des clips, vidéo trop lourde réencodée', async () => {
   const png = Buffer.from('89504e470d0a1a0a0000', 'hex');
@@ -193,7 +196,7 @@ await check('partie de groupe : mention des membres liés, « Je viens » prévi
 
 await check('/launcher comparer (duel en GIF) et /launcher fps (classement du jeu, autocomplétion)', async () => {
   const replies = [];
-  const inter = (sub, o = {}) => ({ user: { id: 'd1', username: 'noam', displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), reply: async (p) => replies.push(p),
+  const inter = (sub, o = {}) => ({ channelId: 'salon-lier', user: { id: 'd1', username: 'noam', displayAvatarURL: () => 'https://x/a.png' }, deferReply: async () => {}, editReply: async (p) => replies.push(p), reply: async (p) => replies.push(p),
     options: { getSubcommand: () => sub, getUser: (n) => o[n] ?? null, getString: () => o.jeu, getFocused: () => o.focus } });
   await handleLauncherCommand({}, inter('comparer', { membre: { id: 'd3', username: 'zoe' } }));
   assert.match(replies.at(-1).content, /Pas de compte History lié pour zoe/);

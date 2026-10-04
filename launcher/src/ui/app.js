@@ -557,7 +557,7 @@ $('secDiscord').addEventListener('click', async () => {
   if (!r?.ok) return toast(r?.error ?? 'Connecte-toi d’abord');
   $('settings').close();
   setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🔗</span><h2>Lier ton compte Discord</h2></div>
-    <p class="mtext">Sur le serveur Discord, tape la commande :</p><div class="codebox big"><b>/launcher lier code:${esc(r.code)}</b></div>
+    <p class="mtext">Dans le salon <b>#lier-son-compte</b> du serveur History, colle la commande :</p><div class="codebox big"><b>/launcher lier code:${esc(r.code)}</b></div>
     <p class="hint">Le code est valable 10 minutes. Ensuite : <b>/launcher profil</b> montre ton niveau, ton benchmark et ton jeu du moment, et tu reçois automatiquement les rôles de ton niveau et de ton PC.${r.lie ? '<br>Ton compte est déjà lié : le lier à nouveau remplace l’ancien compte Discord.' : ''}</p>
     <div class="row end">${r.lie ? '<button type="button" class="btn ghost" data-unlink="1">Délier</button>' : ''}<button type="button" class="btn" data-copy="1">Copier la commande</button><button type="button" class="btn play" data-m="1">OK</button></div>`;
   $('modal').showModal();
@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.14': [
+    ['🔗', 'Lier Discord simplifié', 'La commande est copiée et le launcher te dit où la coller (#lier-son-compte). Dès que c’est lié, un message « Ton compte a bien été lié » s’affiche.', ['#premiumBtn', 'wait900']],
+  ],
   '0.53.13': [
     ['📊', 'FPS toujours affichés', 'La mesure des FPS se relance toute seule si le jeu redémarre ou si plus rien n’arrive : fini le compteur sans FPS en pleine partie.', ['#openSettings', 'wait600', '.setnav [data-pane=jeux]', 'wait900']],
     ['🖥', 'Overlays et plein écran', 'Pour tous les jeux : si le jeu est en plein écran, une voix et un message te disent de passer en « Plein écran fenêtré » au lieu de forcer l’overlay.'],
@@ -3790,19 +3793,27 @@ document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click
   const [name, price] = PACK_INFO[b.dataset.buy];
   $('premClaim').dataset.pack = b.dataset.buy;
   $('pdTitle').textContent = name; $('pdPrice').textContent = price; $('pdAmount').textContent = price;
-  $('pdDone').hidden = true; $('premClaim').classList.remove('sent');
+  $('pdDone').hidden = true; $('premClaim').classList.remove('sent'); $('pdLink').hidden = false;
   $('premDlg').showModal(); $('premPaypal').focus();
 }));
 $('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack));
 $('pdClose').addEventListener('click', () => $('premDlg').close());
 $('pdOk').addEventListener('click', () => $('premDlg').close());
-// Lier Discord en un clic : la commande est copiée et le serveur s'ouvre, il reste juste à la coller
+// Lier Discord : la commande est copiée, on dit où la coller, et on affiche le succès dès que c'est lié
+let linkWatch = null;
 $('pdLink').addEventListener('click', async () => {
   const r = await api.discordCode?.().catch(() => null);
   if (!r?.ok) return toast(r?.error ?? 'Connecte-toi d’abord');
   copyText(`/launcher lier code:${r.code}`);
-  api.discordInvite?.();
-  $('pdDisc').innerHTML = `<b>Colle dans Discord (Ctrl+V)</b><small>La commande <code>/launcher lier code:${esc(r.code)}</code> est copiée, valable 10 min.</small>`;
+  $('pdDisc').innerHTML = `<b>Commande copiée ✓</b><small>Colle-la (Ctrl+V) dans le salon <b>#lier-son-compte</b> du serveur History. Valable 10 min.</small>`;
+  $('pdLink').hidden = true;
+  clearInterval(linkWatch);
+  const until = Date.now() + 600_000;
+  linkWatch = setInterval(async () => {
+    const a = await api.account?.().catch(() => null);
+    if (a?.compte?.discord) { clearInterval(linkWatch); $('pdDisc').innerHTML = '<b>✅ Ton compte a bien été lié</b><small>Tes avantages Premium arrivent sur Discord dans quelques minutes.</small>'; toast('✅ Ton compte Discord a bien été lié'); }
+    else if (Date.now() > until) { clearInterval(linkWatch); $('pdLink').hidden = false; }
+  }, 4000);
 });
 $('pdJoin').addEventListener('click', () => api.discordInvite?.());
 // Réponse du chef (paiement accepté ou refusé) : affichée dans la même fenêtre, une seule fois
@@ -4423,7 +4434,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.13',
+    version: async () => '0.53.14',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
