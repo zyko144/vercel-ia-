@@ -617,6 +617,7 @@ function togglePerfbar() {
   const on = !(perfbar && !perfbar.isDestroyed());
   store.data.settings.perfbar = on; store.save();
   if (on && store.data.settings.fps !== true && process.platform === 'win32') enableFps().then((f) => { if (f.relog) notify('Mesure des FPS activée', 'Reconnecte-toi à Windows une fois : ensuite tes FPS s’affichent dans le mini-compteur.'); }).catch(() => {});
+  if (on && sess && process.platform === 'win32') exclusiveFs().then((x) => { if (x) warnFullscreen(); }).catch(() => {});
   if (on && !sess) { notify('Mini-compteur de performances', 'Il s’affichera pendant ta prochaine partie (Ctrl+Alt+P pour le cacher).'); return; }
   setPerfbar(on);
 }
@@ -1338,7 +1339,7 @@ let overlayTimer = null;
 async function toggleOverlay() {
   if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
   if (!currentSession()) { notify('Aucun jeu lancé', 'Les infos en jeu (Ctrl+Alt+O) s’affichent seulement pendant une partie.'); return; }
-  if (/rocket league/i.test(currentSession()?.name ?? '') && await rlExclusive()) return warnFullscreen();
+  if ((/rocket league/i.test(currentSession()?.name ?? '') && await rlExclusive()) || await exclusiveFs()) return warnFullscreen();
   // Anneau Spotify qui bat au son de Spotify seulement (niveau lu tant que l'overlay est ouvert)
   // (lancé seulement quand une musique joue, coupé sinon : pas de processus qui tourne pour rien)
   let meter = null;
@@ -1477,10 +1478,17 @@ async function rlExclusive() {
   const text = await readFile(rlSettingsFile(app.getPath('documents')), 'utf8').catch(() => null);
   return text != null && Boolean(borderlessIni(text));
 }
-function warnFullscreen() {
-  const msg = 'Rocket League est en plein écran : passe-le en « Fenêtré » ou « Plein écran fenêtré » (Options › Vidéo › Mode d’affichage) pour voir l’overlay.';
-  speakRaw('Passe Rocket League en plein écran fenêtré pour voir l’overlay.', store.data.settings.voiceName);
-  notify('Overlay : mets Rocket League en fenêtré', msg);
+// N'importe quel jeu en plein écran exclusif (DirectX) : Windows le signale par SHQueryUserNotificationState = 3
+const QUNS_PS = "if (-not ('HL.Qn' -as [type])) { Add-Type -Namespace HL -Name Qn -MemberDefinition '[DllImport(\"shell32.dll\")] public static extern int SHQueryUserNotificationState(out int s);' }; $s = 0; [void][HL.Qn]::SHQueryUserNotificationState([ref]$s); $s";
+async function exclusiveFs() {
+  if (process.platform !== 'win32') return false;
+  return (await ps(QUNS_PS, 4000).catch(() => '')).trim() === '3';
+}
+function warnFullscreen(game = currentSession()?.name ?? 'Le jeu') {
+  const rlg = /rocket league/i.test(game);
+  const msg = `${game} est en plein écran : passe-le en « Fenêtré » ou « Plein écran fenêtré » (${rlg ? 'Options › Vidéo › Mode d’affichage' : 'dans ses options vidéo'}) pour voir l’overlay.`;
+  speakRaw(`Passe ${game} en plein écran fenêtré pour voir l’overlay.`, store.data.settings.voiceName);
+  notify(`Overlay : mets ${game} en fenêtré`, msg);
   if (win && !win.isDestroyed()) win.flashFrame(true);
   send('rl:fullscreen', msg);
 }
@@ -1508,7 +1516,7 @@ setInterval(async () => {
 async function toggleRlOverlay(auto = false) {
   if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
   if (!/rocket league/i.test(currentSession()?.name ?? '')) { notify('Rocket League n’est pas lancé', 'L’overlay Rocket League (Ctrl+Alt+I) s’affiche seulement sur le jeu.'); return; }
-  if (await rlExclusive()) { if (!auto) warnFullscreen(); return; }
+  if (await rlExclusive() || await exclusiveFs()) { if (!auto) warnFullscreen(); return; }
   rlOv = new BrowserWindow({
     width: 264, height: 340, ...ovPlace('rl', 264), frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
@@ -3360,21 +3368,29 @@ async function sessionStart(s) {
   // Tous les exe du jeu en cours (ex. Fortnite : FortniteClient-Win64-Shipping + sa version anti-triche)
   // Le jeu peut démarrer bien après (Epic, anti-triche) : on le cherche jusqu'à 2 min
   const me = sess;
-  let exes = [];
-  for (let n = 0; n < 24 && sess === me; n++) {
-    exes = (await runningGameExes(item).catch(() => [])).filter((x) => !/(crash|report|launcher|helper|updater|redist|unins|webhelper|cefprocess)/i.test(x));
-    if (exes.length) break;
-    sess.fpsState = 'wait'; perfbarPush();
-    await new Promise((r) => setTimeout(r, 5000));
-  }
-  if (sess !== me) return;
-  if (!exes.length) { sess.fpsState = 'nogame'; perfbarPush(); return; }
   const pm = await ensurePresentMon(path.join(app.getPath('userData'), 'outils')).catch(() => null);
-  if (!pm || !sess) return;
-  sess.fpsState = 'wait';
-  sess.cap = captureFps(pm, exes, (live) => { if (sess) { sess.live = live; sess.fpsHist = [...(sess.fpsHist ?? []), live.avg].slice(-15); sess.fpsState = 'ok'; widgetPush(); perfbarPush(); } });
-  // Refus de Windows (droits) : dit dans la mini-barre au lieu de n'afficher que le GPU
-  sess.cap.done.then((r) => { if (sess && r?.error === 'droits') { sess.fpsState = 'droits'; perfbarPush(); } });
+  if (!pm || sess !== me) return;
+  // La mesure se relance toute seule : jeu qui redémarre (anti-triche, lanceur), mauvais exe ou plus aucune image
+  // depuis 20 s. Avant, une mesure arrêtée laissait le compteur sans FPS jusqu'à la fin de la partie.
+  for (let tries = 0; tries < 30 && sess === me; tries++) {
+    let exes = [];
+    for (let n = 0; n < 24 && sess === me; n++) {
+      exes = (await runningGameExes(item).catch(() => [])).filter((x) => !/(crash|report|launcher|helper|updater|redist|unins|webhelper|cefprocess)/i.test(x));
+      if (exes.length) break;
+      me.fpsState = 'wait'; perfbarPush();
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+    if (sess !== me) return;
+    if (!exes.length) { me.fpsState = 'nogame'; perfbarPush(); return; }
+    me.fpsState = me.live ? me.fpsState : 'wait'; me.lastLive = Date.now();
+    const cap = captureFps(pm, exes, (live) => { if (sess === me) { me.lastLive = Date.now(); me.live = live; me.fpsHist = [...(me.fpsHist ?? []), live.avg].slice(-15); me.fpsState = 'ok'; widgetPush(); perfbarPush(); } });
+    me.cap = cap;
+    const dog = setInterval(() => { if (sess !== me || Date.now() - me.lastLive > 20_000) cap.stop(); }, 5000);
+    const r = await cap.done;
+    clearInterval(dog);
+    if (r?.error === 'droits') { if (sess === me) { me.fpsState = 'droits'; perfbarPush(); } return; }
+    await new Promise((res) => setTimeout(res, 3000));
+  }
 }
 function verdict(stats, samples) {
   const g = samples.map((x) => x.gpu).filter((x) => x != null);
