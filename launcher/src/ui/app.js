@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.15': [
+    ['💳', 'Paiement plus sûr', 'Chaque achat a une note unique à copier dans le paiement PayPal « Entre proches » : elle est vérifiée sur ta capture pour activer ton Premium plus vite.', ['#premiumBtn', 'wait900']],
+  ],
   '0.53.14': [
     ['🔗', 'Lier Discord simplifié', 'La commande est copiée et le launcher te dit où la coller (#lier-son-compte). Dès que c’est lié, un message « Ton compte a bien été lié » s’affiche.', ['#premiumBtn', 'wait900']],
   ],
@@ -3795,8 +3798,11 @@ document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click
   $('pdTitle').textContent = name; $('pdPrice').textContent = price; $('pdAmount').textContent = price;
   $('pdDone').hidden = true; $('premClaim').classList.remove('sent'); $('pdLink').hidden = false;
   $('premDlg').showModal(); $('premPaypal').focus();
+  $('pdNote').textContent = '…';
+  api.premiumNote?.(b.dataset.buy).then((r) => { $('pdNote').textContent = r?.note ?? 'indisponible'; if (r?.error) toast(r.error); }).catch(() => {});
 }));
 $('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack));
+$('pdCopyNote').addEventListener('click', () => { if (/^HIST-/.test($('pdNote').textContent)) { copyText($('pdNote').textContent); toast('Note copiée : colle-la dans le message du paiement'); } });
 $('pdClose').addEventListener('click', () => $('premDlg').close());
 $('pdOk').addEventListener('click', () => $('premDlg').close());
 // Lier Discord : la commande est copiée, on dit où la coller, et on affiche le succès dès que c'est lié
@@ -4434,7 +4440,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.14',
+    version: async () => '0.53.15',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

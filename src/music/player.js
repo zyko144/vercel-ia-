@@ -7,11 +7,13 @@ import { followedChannel, heldChannel, lockedChannel } from '../features/voice.j
 import { LavalinkBackend } from './backend-lavalink.js';
 import { LocalBackend } from './backend-local.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
-import { normalizeFilters } from './filters.js';
+import { normalizeFilters, speedOf } from './filters.js';
 import { recommendNext } from './sources.js';
 import { recordPlay } from './stats.js';
 import { saveSession, clearSession } from './session.js';
 import { endedPayload, nowPlayingPayload } from './ui.js';
+import { findLyrics } from './lyrics.js';
+import { currentLineIndex, parseLrc } from './livelyrics.js';
 
 const DEFAULT_VOLUME = 100;
 const MAX_VOLUME = 100; // au-dessus, le serveur audio amplifie le son et il sature (voix déformées)
@@ -146,6 +148,7 @@ export class GuildPlayer {
       this.preloadNext();
       // Sert au blind test : le chrono ne démarre qu'une fois le son vraiment lancé
       if (newTrack) this.onStarted?.(track);
+      this.startLyrics(track, newTrack);
     } catch (err) {
       if (token !== this.playToken) return;
 
@@ -467,6 +470,30 @@ export class GuildPlayer {
     }, config.music.panelRefreshMs);
     clearInterval(this.timers.session);
     this.timers.session = setInterval(() => saveSession(this).catch(() => {}), 15_000);
+  }
+
+  // Paroles en direct dans le panneau (tout le monde les voit) : le panneau est modifié pile à l'heure de chaque ligne
+  async startLyrics(track, newTrack) {
+    clearTimeout(this.timers.lyrics);
+    if (newTrack) {
+      this.lyrics = null; this.lyricIndex = -1;
+      const found = this.blind || track.isLive ? null : await findLyrics(track).catch(() => null);
+      if (this.current !== track) return;
+      const lines = parseLrc(found?.syncedLyrics ?? '').filter((l) => l.text);
+      this.lyrics = lines.length ? lines : null;
+    }
+    if (!this.lyrics) return;
+    const tick = () => {
+      if (this.current !== track || !this.lyrics) return;
+      const speed = speedOf(this.filters) || 1;
+      const pos = this.position() * 1000;
+      const i = currentLineIndex(this.lyrics, pos);
+      if (i !== this.lyricIndex && !this.paused) { this.lyricIndex = i; this.refreshPanel(true); }
+      const next = this.lyrics[i + 1];
+      const wait = this.paused || !next ? 1000 : Math.max(1100 - (Date.now() - (this.lastPanelEdit ?? 0)), (next.at - pos) / speed);
+      this.timers.lyrics = setTimeout(tick, Math.max(60, wait));
+    };
+    tick();
   }
 
   refreshPanel(force = false) {

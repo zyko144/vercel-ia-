@@ -490,6 +490,12 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const { premiumOf, PACKS, payLink, takeNews } = await import('./launcherPremium.js');
       return send(res, 200, { ...(await premiumOf(compte)), news: await takeNews(compte.id), packs: PACKS, pay: Object.fromEntries(Object.keys(PACKS).map((k) => [k, payLink(k, compte.id)])) });
     }
+    if (route === 'POST /api/compte/premium/note') {
+      const compte = await me(token);
+      if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History.' });
+      const r = await (await import('./launcherPremium.js')).paymentNote(compte, String((await readJson(req)).pack ?? ''));
+      return send(res, r.status, r);
+    }
     if (route === 'POST /api/compte/premium/demande') {
       const compte = await me(token);
       if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History.' });

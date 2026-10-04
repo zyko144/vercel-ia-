@@ -2849,6 +2849,11 @@ ipcMain.handle('premium:buy', (_e, pack) => {
   return shell.openExternal(`https://paypal.me/zyko921/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));
 });
 // « J'ai payé » : le serveur poste la demande dans #paiement-verif ; le Premium arrive quand le chef valide
+ipcMain.handle('premium:note', (_e, pack) => {
+  const token = secret('account');
+  if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour acheter.' };
+  return api('/api/compte/premium/note', { method: 'POST', token, body: { pack: String(pack) } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
+});
 ipcMain.handle('premium:claim', async (_e, pack, paypal, shot) => {
   const token = secret('account');
   if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour acheter.' };
