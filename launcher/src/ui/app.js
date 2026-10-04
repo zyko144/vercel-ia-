@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.11': [
+    ['🔗', 'Lier Discord en 1 clic', 'Après un achat Premium, « Lier en 1 clic » copie la commande et ouvre le serveur : il ne reste qu’à la coller.', ['#premiumBtn', 'wait900']],
+  ],
   '0.53.10': [
     ['⭐', 'Offres Premium plus complètes', 'Cartes mieux remplies et 2 avantages de plus par offre (fermer un jeu en une phrase, soirées entre amis, nettoyage profond, support prioritaire…).', ['#premiumBtn', 'wait900']],
   ],
@@ -3786,7 +3789,14 @@ document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click
 $('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack));
 $('pdClose').addEventListener('click', () => $('premDlg').close());
 $('pdOk').addEventListener('click', () => $('premDlg').close());
-$('pdLink').addEventListener('click', () => { $('premDlg').close(); $('openSettings').click(); document.querySelector('.setnav [data-pane=compte]')?.click(); });
+// Lier Discord en un clic : la commande est copiée et le serveur s'ouvre, il reste juste à la coller
+$('pdLink').addEventListener('click', async () => {
+  const r = await api.discordCode?.().catch(() => null);
+  if (!r?.ok) return toast(r?.error ?? 'Connecte-toi d’abord');
+  copyText(`/launcher lier code:${r.code}`);
+  api.discordInvite?.();
+  $('pdDisc').innerHTML = `<b>Colle dans Discord (Ctrl+V)</b><small>La commande <code>/launcher lier code:${esc(r.code)}</code> est copiée, valable 10 min.</small>`;
+});
 $('pdJoin').addEventListener('click', () => api.discordInvite?.());
 // Réponse du chef (paiement accepté ou refusé) : affichée dans la même fenêtre, une seule fois
 function premNews(n) {
@@ -4404,7 +4414,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.10',
+    version: async () => '0.53.11',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
