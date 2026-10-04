@@ -90,13 +90,7 @@ export function paymentPage(url) {
     : PAYPAL_EMAIL
       ? `<h1>${esc(PLANS[baseOf(plan)].emoji)} ${esc(PLANS[baseOf(plan)].label)} · ${PRICES[plan].replace('.', ',')} €</h1>
 <p>Pour ${guildName ? `le serveur <b>${esc(guildName)}</b>` : `le serveur <code>${esc(guildId)}</code>`}, pendant ${daysOf(plan)} jours. Activation automatique après le paiement.</p>
-<form id="pp" method="post" action="https://www.paypal.com/cgi-bin/webscr">
-<input type="hidden" name="cmd" value="_xclick"><input type="hidden" name="business" value="${esc(PAYPAL_EMAIL)}">
-<input type="hidden" name="item_name" value="History IA ${esc(PLANS[baseOf(plan)].label)} (${daysOf(plan)} jours)"><input type="hidden" name="amount" value="${PRICES[plan]}">
-<input type="hidden" name="currency_code" value="EUR"><input type="hidden" name="no_shipping" value="1">
-<input type="hidden" name="custom" value="${esc(`${guildId}|${plan}`)}"><input type="hidden" name="notify_url" value="${esc(`${base()}/paypal/ipn`)}">
-<input type="hidden" name="return" value="${esc(`${base()}/merci`)}"><input type="hidden" name="cancel_return" value="${esc(`${base()}/#offres`)}">
-<button type="submit">Payer avec PayPal</button></form>`
+${ppForm(`History IA ${PLANS[baseOf(plan)].label} (${daysOf(plan)} jours)`, PRICES[plan], `${guildId}|${plan}`, '/merci', '/#offres')}`
       : `<h1>${esc(PLANS[baseOf(plan)].emoji)} ${esc(PLANS[baseOf(plan)].label)} · ${PRICES[plan].replace('.', ',')} €</h1>
 <p>Paie avec PayPal, et <b>mets l’identifiant du serveur dans le message du paiement</b> : <code>${esc(guildId)}</code></p>
 <p><a class="bouton" href="https://paypal.me/${encodeURIComponent(PAYPAL_ME)}/${PRICES[plan]}EUR">Payer ${PRICES[plan].replace('.', ',')} € sur PayPal</a></p>
@@ -104,14 +98,41 @@ export function paymentPage(url) {
   return page('Paiement', body);
 }
 
+// Formulaire PayPal envoyé tout seul (PayPal prévient ensuite le bot par /paypal/ipn)
+const ppForm = (item, amount, custom, back, cancel) => `<form id="pp" method="post" action="https://www.paypal.com/cgi-bin/webscr">
+<input type="hidden" name="cmd" value="_xclick"><input type="hidden" name="business" value="${esc(PAYPAL_EMAIL)}">
+<input type="hidden" name="item_name" value="${esc(item)}"><input type="hidden" name="amount" value="${amount}">
+<input type="hidden" name="currency_code" value="EUR"><input type="hidden" name="no_shipping" value="1">
+<input type="hidden" name="custom" value="${esc(custom)}"><input type="hidden" name="notify_url" value="${esc(`${base()}/paypal/ipn`)}">
+<input type="hidden" name="return" value="${esc(`${base()}${back}`)}"><input type="hidden" name="cancel_return" value="${esc(cancel.startsWith('http') ? cancel : `${base()}${cancel}`)}">
+<button type="submit">Payer avec PayPal</button></form>`;
+
+/** Page /payer-launcher : Premium de History Launcher (pack ia, opti ou pack) pour un compte. */
+export async function launcherPaymentPage(url) {
+  const { PACKS, DAYS, accountForPayment } = await import('./launcherPremium.js');
+  const pack = url.searchParams.get('pack') ?? '';
+  const q = String(url.searchParams.get('compte') ?? '').slice(0, 120);
+  const P = PACKS[pack];
+  if (!P) return page('Premium', '<h1>Lien incomplet</h1><p>Choisis un pack dans History Launcher (⭐ Premium) ou sur le site.</p>', true);
+  const a = q ? await accountForPayment(q) : null;
+  const head = `<h1>${P.emoji} ${esc(P.label)} · ${P.price.replace('.', ',')} €</h1>`;
+  if (!a) return page('Premium', `${head}<p>Ton pseudo ou ton e-mail History Launcher :</p><form method="get"><input type="hidden" name="pack" value="${esc(pack)}"><input name="compte" required maxlength="120" value="${esc(q)}" placeholder="Pseudo ou e-mail"><button type="submit">Continuer</button></form>${q ? '<p class="petit">Compte introuvable : vérifie le pseudo (ou crée ton compte dans le launcher).</p>' : ''}`, true);
+  return page('Premium', PAYPAL_EMAIL
+    ? `${head}<p>Pour <b>${esc(a.pseudo)}</b>, pendant ${DAYS} jours. Activé tout seul après le paiement, sans redémarrer le launcher.</p>${ppForm(`History Launcher ${P.label} (${DAYS} jours)`, P.price, `L|${a.id}|${pack}`, '/merci-launcher', 'https://zyko144.github.io/vercel-ia-/#premium')}`
+    : `${head}<p>Pour <b>${esc(a.pseudo)}</b> : paie avec PayPal et <b>mets ton pseudo dans le message du paiement</b> : <code>${esc(a.pseudo)}</code></p><p><a class="bouton" href="https://paypal.me/${encodeURIComponent(PAYPAL_ME)}/${P.price}EUR">Payer ${P.price.replace('.', ',')} € sur PayPal</a></p><p class="petit">Activé dès que le paiement est vu (en général dans l’heure), pendant ${DAYS} jours.</p>`, true);
+}
+
 export function thanksPage() {
   return page('Merci', '<h1>🎉 Merci !</h1><p>Le paiement est en cours de vérification par PayPal. L’offre s’active toute seule dans quelques instants : regarde <b>/serveur</b> › Offre du serveur.</p><p><a class="bouton" href="/">Retour au site</a></p>');
 }
 
-function page(title, body) {
+export const launcherThanksPage = () => page('Merci', '<h1>⭐ Merci !</h1><p>PayPal vérifie le paiement : ton Premium s’active tout seul dans History Launcher dans quelques instants (pas besoin de redémarrer).</p>', true);
+
+function page(title, body, gold = false) {
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · History IA</title>
 <style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07060d;color:#e9e3ff;font:16px/1.5 system-ui,sans-serif;padding:24px}
-main{max-width:560px;padding:32px;border-radius:18px;background:#120d1c;box-shadow:0 0 0 1px #5ff0ff66,0 0 40px #5ff0ff22}
+main{max-width:560px;padding:32px;border-radius:18px;background:#120d1c;box-shadow:0 0 0 1px ${gold ? '#ffc43999,0 0 40px #ffc43933' : '#5ff0ff66,0 0 40px #5ff0ff22'}}
+input{width:100%;box-sizing:border-box;margin-top:8px;padding:12px 14px;border-radius:12px;border:1px solid #ffffff22;background:#1f1830;color:inherit;font:inherit}
 h1{margin:0 0 12px;font-size:26px}code{background:#1f1830;padding:2px 6px;border-radius:6px}
 button,.bouton{display:inline-block;margin-top:12px;background:#ffc439;color:#111;border:0;border-radius:999px;padding:12px 22px;font-weight:700;font-size:16px;cursor:pointer;text-decoration:none}
 .petit{color:#a9b0c0;font-size:14px}</style></head><body><main>${body}</main>
@@ -135,9 +156,14 @@ export async function handleIpn(rawBody) {
   if (['Refunded', 'Reversed'].includes(p.get('payment_status'))) return revokePayment(p);
   if (p.get('payment_status') !== 'Completed') return { ok: false, why: `statut ${p.get('payment_status')}` };
   if (!PAYPAL_EMAIL || (p.get('receiver_email') ?? '').toLowerCase() !== PAYPAL_EMAIL.toLowerCase()) return { ok: false, why: 'mauvais destinataire' };
-  const [guildId, plan] = String(p.get('custom') ?? '').split('|');
-  if (!ID.test(guildId) || !PRICES[plan]) return { ok: false, why: 'serveur ou offre inconnus' };
-  if (p.get('mc_currency') !== 'EUR' || Number(p.get('mc_gross')) + 0.001 < Number(PRICES[plan])) return { ok: false, why: 'montant incorrect' };
+  const custom = String(p.get('custom') ?? '').split('|');
+  // « L|compte|pack » : Premium de History Launcher ; sinon « serveur|offre » : offre d'un serveur Discord
+  const launcher = custom[0] === 'L' ? { account: custom[1], pack: custom[2] } : null;
+  const { PACKS, grantPack } = launcher ? await import('./launcherPremium.js') : {};
+  const [guildId, plan] = custom;
+  const price = launcher ? PACKS[launcher.pack]?.price : PRICES[plan];
+  if (launcher ? !/^[\w-]{8,64}$/.test(launcher.account ?? '') || !price : !ID.test(guildId) || !price) return { ok: false, why: 'compte, serveur ou offre inconnus' };
+  if (p.get('mc_currency') !== 'EUR' || Number(p.get('mc_gross')) + 0.001 < Number(price)) return { ok: false, why: 'montant incorrect' };
   const txn = p.get('txn_id');
   if (!txn || !/^[A-Z0-9-]{1,32}$/i.test(txn)) return { ok: false, why: 'transaction invalide' };
   // Deux notifications identiques en même temps : la seconde attend, puis voit le paiement déjà traité
@@ -146,10 +172,17 @@ export async function handleIpn(rawBody) {
   try {
     const all = await payments();
     if (all[txn]) return { ok: false, why: 'paiement déjà traité' };
-    all[txn] = { guildId, plan, amount: p.get('mc_gross'), at: Date.now() }; // pas d'adresse e-mail gardée : inutile, donc jamais exposée
+    all[txn] = launcher ? { ...launcher, amount: p.get('mc_gross'), at: Date.now() } : { guildId, plan, amount: p.get('mc_gross'), at: Date.now() }; // pas d'adresse e-mail gardée : inutile, donc jamais exposée
     await writeNow('paiements', all);
   } finally {
     inFlight.delete(txn);
+  }
+  if (launcher) {
+    const row = await grantPack(launcher.account, launcher.pack, txn);
+    paymentLog('premium-launcher', { txn, ...launcher, amount: p.get('mc_gross') });
+    const chef = await client?.users.fetch(config.ownerId).catch(() => null);
+    await chef?.send(`⭐ Premium History Launcher payé : ${p.get('mc_gross')} € · ${PACKS[launcher.pack].label} · compte ${launcher.account} (jusqu’au ${new Date(row.jusqua).toLocaleDateString('fr-FR')})`).catch(() => {});
+    return { ok: true, premium: row };
   }
   paymentLog('paiement', { txn, guildId, plan, amount: p.get('mc_gross') });
   const result = setPlan(guildId, baseOf(plan), daysOf(plan));
@@ -183,6 +216,11 @@ async function revokePayment(p) {
   if (original.revoked) return { ok: false, why: 'déjà retiré' };
   original.revoked = { at: Date.now(), status: p.get('payment_status') };
   await writeNow('paiements', all);
+  if (original.account) {
+    await (await import('./launcherPremium.js')).revokePack(parent);
+    paymentLog('remboursement', { txn: parent, account: original.account, status: p.get('payment_status') });
+    return { ok: true, revoked: true };
+  }
   // Les autres paiements encore valables de ce serveur restent acquis ; sinon, retour à l'offre gratuite
   const still = Object.values(all)
     .filter((x) => x.guildId === original.guildId && !x.revoked)

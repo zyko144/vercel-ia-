@@ -217,7 +217,7 @@ footer a { color: #cfe7ff; }
 <header class="nav">
   <div class="wrap glass">
     <a class="brand" href="#top"><img src="assets/logo.png" alt="">History</a>
-    <nav><a href="#video">Vidéo</a><a href="#fonctions">Fonctions</a><a href="#faq">FAQ</a><a href="#avis">Avis</a></nav>
+    <nav><a href="#video">Vidéo</a><a href="#fonctions">Fonctions</a><a href="#premium">Premium</a><a href="#faq">FAQ</a><a href="#avis">Avis</a></nav>
     <a class="btn sm" href="support.html">Support</a>
     <a class="btn main sm dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">Télécharger</a>
   </div>
@@ -260,6 +260,27 @@ footer a { color: #cfe7ff; }
       </div>
     </div>
   </section>
+
+  <section id="premium" class="wrap prem">
+    <div class="head rv"><span class="kicker">History Premium</span><h2>L’IA et l’opti pro, à petit prix</h2><p>Le launcher reste gratuit. Ajoute l’assistant IA, l’optimisation en un clic, ou les deux. Sans engagement : chaque paiement donne 31 jours.</p></div>
+    <div class="pgrid">
+      <article class="pcard glass rv"><h3><svg viewBox="0 0 24 24"><path d="M12 3.5 13.9 9l5.6 2-5.6 2L12 18.5 10.1 13l-5.6-2 5.6-2zM19 2.5v4M17 4.5h4M5 16.5v4M3 18.5h4"/></svg>History IA</h3><b class="pp">2,49 €<small> / mois</small></b><ul><li>Assistant qui agit : « lance », « ferme », « installe », « vide la corbeille »…</li><li>Commandes vocales « Hey History »</li><li>Réponses à tes questions (jeux, PC, amis) avec recherche web</li><li>Images et infos des jeux trouvées automatiquement</li></ul><a class="btn pbuy" data-pack="ia" href="https://vercel-ia.onrender.com/payer-launcher?pack=ia">Acheter avec PayPal</a></article>
+      <article class="pcard glass rv"><h3><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Opti Pro</h3><b class="pp">2,49 €<small> / mois</small></b><ul><li>Corrections en un clic selon les problèmes trouvés sur ton PC</li><li>Boost automatique à chaque partie</li><li>Optimisation par jeu : FiveM, GMod, Fortnite, R6, Rocket League…</li><li>Nettoyage profond, démarrage rapide, réparation de Windows, tout réversible</li></ul><a class="btn pbuy" data-pack="opti" href="https://vercel-ia.onrender.com/payer-launcher?pack=opti">Acheter avec PayPal</a></article>
+      <article class="pcard glass rv best"><span class="ptag">-20 %</span><h3><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg>Pack Premium</h3><b class="pp">3,99 €<small> / mois</small></b><ul><li>History IA + Opti Pro</li><li>Sur le bot Discord History IA : rôle Premium, IA sans attente, 4× plus d’images</li><li>Réponse prioritaire au support</li></ul><a class="btn pbuy" data-pack="pack" href="https://vercel-ia.onrender.com/payer-launcher?pack=pack">Acheter avec PayPal</a></article>
+    </div>
+    <p class="pnote rv">Paiement PayPal sécurisé : tu donnes ton pseudo History, et le Premium s’active tout seul dans l’appli en moins d’une minute. Toujours gratuit : bibliothèque, amis, messages, appels, analyse du PC et clips.</p>
+  </section>
+<style>
+.prem { --gold: #ffc439; --gold-2: #ff9f1a; } .prem .kicker { color: var(--gold); }
+.pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; } @media (max-width: 860px) { .pgrid { grid-template-columns: 1fr; } }
+.pcard { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 26px; border-color: rgba(255, 196, 57, .3); background: linear-gradient(160deg, rgba(255, 196, 57, .12), rgba(255, 255, 255, .03) 45%); }
+.pcard.best { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(255, 196, 57, .5), 0 20px 60px -20px rgba(255, 170, 0, .45); }
+.pcard h3 { font-size: 19px; display: flex; align-items: center; gap: 10px; } .pcard h3 svg { width: 22px; height: 22px; fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; } .pp { font-size: 32px; color: var(--gold); } .pp small { font-size: 14px; color: #c9bfa0; font-weight: 500; }
+.pcard ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 15px; line-height: 1.55; flex: 1; }
+.pbuy { border: 0; background: linear-gradient(100deg, var(--gold), var(--gold-2)); color: #1a1205; box-shadow: 0 14px 34px -12px var(--gold); }
+.ptag { position: absolute; top: -12px; right: 18px; background: linear-gradient(100deg, var(--gold), var(--gold-2)); color: #1a1205; font-weight: 800; font-size: 12px; padding: 4px 10px; border-radius: 999px; }
+.pnote { margin-top: 18px; color: var(--muted); font-size: 14px; text-align: center; }
+</style>
 
   <section class="wrap">
     <div class="dl glass rv">

@@ -224,7 +224,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     }
 
     // Paiement PayPal, statut public (voir features/payments.js)
-    if (['/payer', '/merci', '/statut', '/api/statut', '/paypal/ipn', '/avatar.png'].includes(url.pathname)) {
+    if (['/payer', '/payer-launcher', '/merci', '/merci-launcher', '/statut', '/api/statut', '/paypal/ipn', '/avatar.png'].includes(url.pathname)) {
       const pay = await import('./features/payments.js');
       const html = (body) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(body); };
       if (url.pathname === '/paypal/ipn' && req.method === 'POST') {
@@ -241,6 +241,8 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
         return res.end(img.body);
       }
       if (url.pathname === '/payer') return html(pay.paymentPage(url));
+      if (url.pathname === '/payer-launcher') return html(await pay.launcherPaymentPage(url));
+      if (url.pathname === '/merci-launcher') return html(pay.launcherThanksPage());
       if (url.pathname === '/merci') return html(pay.thanksPage());
       if (url.pathname === '/statut') return html(pay.statusPage());
       allowSiteOrigin(req, res);

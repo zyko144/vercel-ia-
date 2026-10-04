@@ -9,7 +9,9 @@ import { filterSort } from '../core/sort.js';
 
 const $ = (id) => document.getElementById(id);
 let demoVerify = null; // aperçu hors Electron seulement
-const api = window.launcher ?? demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
+const api = window.launcher ? { ...window.launcher } : demoApi(); // hors Electron (aperçu dans un navigateur) : données d'exemple
+const CROS = api.platform === 'linux'; // Chromebook : pas d'outils Windows (Mon PC, Optimisation, overlays)
+if (CROS) document.documentElement.classList.add('cros');
 const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], cols: {}, friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
 let personal = null;
 const readProgress = cachedTask(() => api.progress?.(), 30000);
@@ -1598,6 +1600,13 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.0': [
+    ['⭐', 'History Premium', 'Nouvelle page Premium : History IA (2,49 €), Opti Pro (2,49 €) ou les deux (3,99 €) par mois, sans engagement. Paiement PayPal, activé en moins d’une minute.', ['#nav [data-view=premium]', 'wait900']],
+    ['🩺', 'L’opti suit ton PC', 'L’optimisation propose une correction pour chaque problème trouvé par l’analyse (fichiers inutiles, démarrage, réglages, plantages…), ou « Tout corriger » en un clic.'],
+    ['❌', '« Ferme le jeu » marche', 'Le jeu en cours se ferme, même installé dans un dossier court (D:\\Fortnite), et l’assistant dit quand ça échoue. « Stop Fortnite » ne met plus la musique en pause.'],
+    ['🔕', 'Moins de notifications', 'Jamais deux fois la même en 6 h, 3 par heure au plus. Le boost et le bilan de chaque partie restent dans la cloche.'],
+    ['💻', 'Chromebook', 'Les outils propres à Windows (Mon PC, Optimisation, overlays) sont cachés sur Chromebook.'],
+  ],
   '0.52.2': [
     ['💻', 'History Launcher sur Chromebook', 'Une version pour Chromebook est disponible sur le site (Linux de ChromeOS, processeurs Intel/AMD et ARM) : comptes, amis, messages, avis et jeux gratuits. Les outils propres à Windows restent sur PC.', ['#openSettings', 'wait600', '.setnav [data-pane=about]', 'wait900']],
   ],
@@ -2301,9 +2310,9 @@ $('checkUpd').addEventListener('click', async () => {
 });
 $('openNews2').addEventListener('click', () => { $('settings').close(); showWhatsNew(true); });
 // ---------- Recherche rapide (Ctrl+Espace, ou Ctrl+Alt+Espace depuis Windows) ----------
-const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']];
+const PAL_VIEWS = [['accueil', 'Accueil', '🏠'], ['premium', 'Premium', '⭐'], ['bibliotheque', 'Bibliothèque', '📚'], ['jeux', 'Jeux', '🎮'], ['applis', 'Applications', '🧩'], ['favoris', 'Favoris', '★'], ['stats', 'Statistiques', '📊'], ['classement', 'Classement', '🏆'], ['amis', 'Amis', '👥'], ['pc', 'Mon PC', '🖥'], ['optimisation', 'Optimisation', '⚡']].filter(([v]) => !CROS || !['pc', 'optimisation'].includes(v));
 const PAL_ACTIONS = [
-  ['Optimiser mon PC', '🚀', () => go('optimisation')],
+  ...(CROS ? [] : [['Optimiser mon PC', '🚀', () => go('optimisation')]]),
   ['Paramètres', '⚙', () => $('openSettings').click()],
   ['Ajouter un jeu', '➕', () => $('addGame').click()],
   ['Mode grand écran', '📺', () => toggleBig()],
@@ -2679,7 +2688,53 @@ function renderOpti() {
   const secs = OPTI_SECTIONS.filter(([k]) => S[k].length);
   $('optiBody').innerHTML = `<nav class="onav">${secs.map(([k, t], i) => `<a data-osec="${k}" class="${i ? '' : 'on'}"><b>${k}</b>${t}</a>`).join('')}</nav>${secs.map(([k, t]) => `<section class="osec" id="osec${k}"><h3><span>${k}</span>${t}</h3>${S[k].join('')}</section>`).join('')}`;
   renderSetHist();
+  renderOptiDiag(o);
 }
+// ---------- Ce que l'analyse a trouvé : une correction proposée pour chaque vrai problème du PC ----------
+function optiFindings(o) {
+  const f = [];
+  const junk = o.junk.filter((x) => !SHADERS.includes(x.id));
+  const junkB = junk.reduce((n, x) => n + x.bytes, 0) + o.recycle;
+  const heavy = o.startup.filter((x) => x.enabled && x.heavy);
+  const tweaksOff = o.tweaks.filter((t) => !t.on && !t.optional && !t.retired);
+  const gamesTodo = (o.games ?? []).filter((a) => !a.applied);
+  const part = (id) => state.health?.parts?.find((p) => p.id === id)?.score;
+  const s = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+  if (o.free != null && o.disk && o.free / o.disk < 0.1) f.push(['bad', '💽', `Disque presque plein : ${gb(o.free)} libres`, 'Windows et les jeux ralentissent sous 10 % libres.', 'space', 'Voir quoi libérer']);
+  if (junkB > 500e6) f.push([junkB > 3e9 ? 'bad' : 'warn', '🗑', `${gb(junkB)} de fichiers inutiles`, 'Temporaires, caches et corbeille. Tes fichiers perso ne sont pas touchés.', 'junk', 'Nettoyer']);
+  if (heavy.length) f.push(['warn', '⏻', `${s(heavy.length, 'appli lourde')} au démarrage`, heavy.map((x) => x.name).join(', '), 'startup', 'Retirer du démarrage']);
+  if (tweaksOff.length) f.push(['warn', '🎯', `${s(tweaksOff.length, 'réglage')} Windows pas optimisé${tweaksOff.length > 1 ? 's' : ''} pour le jeu`, tweaksOff.slice(0, 3).map((t) => t.label).join(' · '), 'tweaks', 'Appliquer']);
+  if (gamesTodo.length) f.push(['info', '🎮', `${s(gamesTodo.length, 'optimisation')} possible${gamesTodo.length > 1 ? 's' : ''} pour tes jeux`, [...new Set(gamesTodo.map((a) => a.game))].join(', '), 'games', 'Voir']);
+  if (o.orphans.length) f.push(['info', '🧩', `${s(o.orphans.length, 'reste')} de jeux désinstallés`, gb(o.orphans.reduce((n, x) => n + x.bytes, 0)), 'space', 'Voir']);
+  if (part('stabilite') != null && part('stabilite') < 70) f.push(['bad', '🩺', 'Plantages de Windows cette semaine', 'La réparation (DISM + SFC) remplace les fichiers système abîmés.', 'repair', 'Réparer Windows']);
+  if (part('materiel') != null && part('materiel') < 60) f.push(['bad', '🖥', 'Problèmes de matériel ou de sécurité', 'Températures, pilote ou protection : le détail est dans Mon PC.', 'pc', 'Voir dans Mon PC']);
+  return f;
+}
+function renderOptiDiag(o) {
+  const f = optiFindings(o);
+  const fixable = f.some(([, , , , k]) => ['junk', 'startup', 'tweaks'].includes(k));
+  $('optiDiag').innerHTML = `<div class="odiag"><div class="odhead"><b>🩺 Ce que l’analyse a trouvé</b>${fixable ? '<button class="btn play" type="button" data-fix="all">⚡ Tout corriger</button>' : ''}</div>${f.length
+    ? f.map(([lvl, ico, t, d, k, b]) => `<div class="odrow ${lvl}"><i>${ico}</i><div><b>${esc(t)}</b><small>${esc(d)}</small></div><button class="btn" type="button" data-fix="${k}">${b}</button></div>`).join('')
+    : '<p class="hint">✅ Rien à corriger : ton PC est bien réglé.</p>'}</div>`;
+}
+$('optiDiag').addEventListener('click', async (e) => {
+  const k = e.target.closest('[data-fix]')?.dataset.fix;
+  if (!k || !opti) return;
+  const goSec = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (k === 'space') return goSec('osecB');
+  if (k === 'games') return goSec('osecA');
+  if (k === 'pc') return go('pc');
+  if (!(await premOk('opti'))) return openPremium('opti');
+  if (k === 'repair') return $('optiRepair')?.click();
+  const none = { games: [], junk: [], orphans: [], recycle: false, tweaks: [] };
+  const junk = { junk: opti.junk.filter((x) => !SHADERS.includes(x.id)).map((x) => x.id), recycle: opti.recycle > 0 };
+  const tweaks = { tweaks: opti.tweaks.filter((t) => !t.on && !t.optional && !t.retired).map((t) => t.id) };
+  if (k === 'startup' || k === 'all') {
+    for (const x of opti.startup.filter((y) => y.enabled && y.heavy)) { const r = await api.optiStartup(x.name, false).catch(() => null); if (r?.ok) opti.startup = r.startup; }
+    if (k === 'startup') { renderOpti(); return toast('⏻ Applis lourdes retirées du démarrage'); }
+  }
+  return runOpti({ ...none, ...(k === 'junk' || k === 'all' ? junk : {}), ...(k === 'tweaks' || k === 'all' ? tweaks : {}) });
+});
 async function renderSetHist() {
   const el = document.getElementById('setHist'); if (!el) return;
   const h = await api.settingsHistory().catch(() => null);
@@ -2727,8 +2782,9 @@ api.onOpti?.((p) => {
     <div class="olog">${runLog.map((r) => r && (r.error ? `<div class="err">✗ ${esc(r.label)} : ${esc(r.error)}</div>` : `<div class="ok">✓ ${esc(r.label)}${r.got ? ` <em>${gb(r.got)}</em>` : ''}</div>`)).filter(Boolean).slice(-6).join('')}${p.status === 'en cours' ? `<div class="run"><i class="spin"></i> ${esc(p.label)}</div>` : ''}</div></div>`);
 });
 $('optiScan').addEventListener('click', optiScanUi);
-$('optiRun').addEventListener('click', async () => {
-  const plan = planFromUi();
+$('optiRun').addEventListener('click', () => runOpti());
+async function runOpti(plan = planFromUi()) {
+  if (!(await premOk('opti'))) return openPremium('opti');
   // Résumé exact avant d'appliquer : chaque dossier vidé (chemin, fichiers, taille) et chaque changement
   const dels = [...opti.junk.filter((x) => plan.junk.includes(x.id)), ...opti.orphans.filter((x) => plan.orphans.includes(x.id)), ...(opti.games ?? []).filter((a) => a.kind === 'clean' && plan.games.includes(a.id))];
   const changes = [...plan.tweaks.map((id) => opti.tweaks.find((t) => t.id === id)?.label), ...(opti.games ?? []).filter((a) => a.kind !== 'clean' && plan.games.includes(a.id)).map((a) => `${a.game} : ${a.label}`)].filter(Boolean);
@@ -2753,7 +2809,8 @@ $('optiRun').addEventListener('click', async () => {
   if (gain && benchBefore && !benchBefore.error) { showProgress('<div class="oprog"><b>Mesure après optimisation (≈ 10 s)…</b><div class="gbar big indet"><i></i></div></div>'); benchAfter = await api.benchQuick().catch(() => null); }
   const delta = benchAfter?.total && benchBefore?.total ? Math.round((100 * (benchAfter.total - benchBefore.total)) / benchBefore.total) : null;
   showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks + (r.games ?? 0)}</b><small>changement${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''} appliqué${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div>${delta != null ? `<div><b>${benchBefore.total} → ${benchAfter.total}</b><small>mini-benchmark (${delta >= 0 ? '+' : ''}${delta} %${Math.abs(delta) <= 2 ? ', dans la marge de mesure' : ''})</small></div>` : ''}</div>${r.errors?.length ? `<div class="olog">${r.errors.map((x) => `<div class="err">✗ ${esc(x)}</div>`).join('')}</div>` : ''}<div class="row">${r.undo ? '<button class="btn" data-undo="1" type="button">↩ Annuler cette optimisation</button>' : ''}<button class="btn ghost" data-closeprog="1">Fermer</button></div></div>`);
-});
+}
+
 $('optiProgress').addEventListener('click', (e) => { if (e.target.closest('[data-closeprog]')) showProgress(null); });
 // Annuler la dernière optimisation (depuis le rapport ou la carte « Annuler ») : fichiers et réglages reviennent comme avant
 document.addEventListener('click', async (e) => {
@@ -3185,7 +3242,7 @@ function renderChips() {
     ['🎉', 'Organise une soirée demain à 21h'],
     ['🗑', 'Quel jeu je pourrais désinstaller ?'],
     ['⏱', 'Quel est mon jeu le plus joué ?'],
-  ].filter(Boolean);
+  ].filter(Boolean).slice(0, 3); // 3 idées seulement : la place reste à la conversation
   $('chips').innerHTML = chips.map(([ico, t]) => `<button data-ask="${esc(t)}"><i>${ico}</i>${esc(t)}</button>`).join('');
 }
 function applyReply(r) {
@@ -3193,6 +3250,7 @@ function applyReply(r) {
   say(r.reply || 'D’accord.');
   const views = { jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque', accueil: 'accueil', amis: 'amis', pc: 'pc', optimisation: 'optimisation' };
   if (r.action === 'show') { if (r.value === 'parametres') $('openSettings').click(); else go(views[r.value] ?? 'bibliotheque'); }
+  if (r.action === 'premium') openPremium(r.value);
   if (r.action === 'optimize') go('optimisation');
   if (r.action === 'deep_clean') go('optimisation');
   if (r.action === 'theme' && r.value) { savedTheme.theme = r.value; themeName = r.value; $('themeSel').value = r.value; if (r.value === 'auto') themeFor(state.sel); else applyTheme(THEMES[r.value]); }
@@ -3206,6 +3264,7 @@ function applyReply(r) {
 }
 async function ask(text) {
   if (!text.trim()) return;
+  $('chips').hidden = true; // les idées laissent la place à la conversation
   say(text, 'me');
   const wait = say('…', 'wait');
   const r = await api.ask(text).catch((err) => ({ reply: `Erreur : ${err.message}` }));
@@ -3250,6 +3309,7 @@ function showView(name) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === `view-${name}`));
 }
 function go(view) {
+  if (CROS && (view === 'pc' || view === 'optimisation')) view = 'accueil';
   if (view !== state.view) window.sfx?.play('nav');
   const lists = { bibliotheque: 'tout', jeux: 'jeux', applis: 'applis', favoris: 'favoris' };
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
@@ -3262,6 +3322,7 @@ function go(view) {
   if (state.view === 'amis') showFriendTab(state.ftab);
   if (state.view === 'pc') openPc();
   if (state.view === 'optimisation') openOpti();
+  if (state.view === 'premium') loadPremium(true);
   $('main').scrollTop = 0;
 }
 
@@ -3631,8 +3692,6 @@ function showKeys(s) {
   $('sfxOn').checked = s.sfxOn !== false;
   $('sfxNotif').checked = s.sfxNotif !== false;
   $('sfxVol').value = String(s.sfxVol ?? 60);
-  $('aiState').textContent = s.gemini ? '● en ligne' : '● hors ligne';
-  $('aiState').classList.toggle('on', Boolean(s.gemini));
 }
 const backupTxt = (at) => (at ? `Dernière sauvegarde : ${new Date(at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Pas encore sauvegardé');
 function showBackup() { api.backupInfo?.().then((b) => { $('backupStatus').textContent = b?.logged ? backupTxt(b.at) : 'Connecte-toi pour sauvegarder en ligne'; }).catch(() => {}); }
@@ -3651,6 +3710,39 @@ $('preloadSteam').addEventListener('change', (e) => api.setSettings({ preloadSte
 $('nightUpdates').addEventListener('change', (e) => api.setSettings({ nightUpdates: e.target.checked }));
 $('clipsLink').addEventListener('click', () => api.clipsSite?.());
 $('discordBtn').addEventListener('click', () => { toast('🎮 Ouverture du serveur Discord…'); api.discordInvite?.(); });
+
+// ---------- ⭐ Premium : History IA, Opti Pro ou les deux (thème jaune). Le serveur décide, relu à chaque retour sur l'appli ----------
+let prem = null;
+const PREM_NAMES = { ia: 'History IA', opti: 'Opti Pro' };
+async function loadPremium(fresh = false) {
+  prem = (await api.premiumGet?.(fresh).catch(() => null)) ?? prem ?? { ia: false, opti: false };
+  document.documentElement.classList.toggle('isprem', Boolean(prem.ia || prem.opti));
+  document.documentElement.classList.toggle('noia', !prem.ia);
+  $('aiState').textContent = prem.ia ? 'History IA · en ligne' : 'Réservé à History IA';
+  $('aiState').classList.toggle('on', Boolean(prem.ia));
+  const on = ['ia', 'opti'].filter((k) => prem[k]);
+  $('premState').innerHTML = !prem.logged && !prem.dev ? 'Connecte-toi à ton compte History (Compte & sauvegarde) : ton Premium te suit sur tous tes PC.'
+    : on.length ? `Actif : ${on.map((k) => `<b>${PREM_NAMES[k]}</b>${prem.until?.[k] ? ` jusqu’au ${new Date(prem.until[k]).toLocaleDateString('fr-FR')}` : ''}`).join(' · ')}` : 'Pas encore de Premium : choisis ton pack.';
+  document.querySelectorAll('[data-buy]').forEach((b) => { const have = b.dataset.buy === 'pack' ? prem.ia && prem.opti : prem[b.dataset.buy]; b.textContent = have ? '✓ Actif' : 'Acheter avec PayPal'; b.disabled = Boolean(have); });
+  return prem;
+}
+const premOk = async (pack) => Boolean((prem ?? await loadPremium())[pack]);
+function openPremium(pack) {
+  if ($('settings').open) $('settings').close();
+  document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  go('premium');
+  document.querySelectorAll('.premcard').forEach((c) => c.classList.toggle('want', c.dataset.pack === pack));
+  loadPremium(true);
+}
+// Opti Pro : les actions qui modifient le PC (l'analyse reste gratuite)
+for (const n of ['optiRun', 'optiTweak', 'optiStartup', 'optiSysApply', 'optiStorage', 'optiRepair', 'optiDeep', 'pcFix', 'fortnitePerf', 'shadersClear', 'cleanRun', 'optiLaunch']) {
+  const f = api[n];
+  if (f) api[n] = async (...a) => ((await premOk('opti')) ? f(...a) : (openPremium('opti'), { ok: false, error: 'réservé à ⭐ Opti Pro' }));
+}
+document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', () => { api.premiumBuy?.(b.dataset.buy); toast('Paiement ouvert dans ton navigateur : le Premium s’active tout seul juste après'); }));
+$('premiumBtn').addEventListener('click', () => openPremium());
+addEventListener('focus', () => { if (prem && !prem.dev) loadPremium(true); });
+loadPremium();
 
 // ---------- ⚡ Optimiser et jouer : vérifie le PC, applique des réglages temporaires, lance le jeu ----------
 let odItem = null;
@@ -3677,6 +3769,7 @@ $('odClose').addEventListener('click', () => $('optiDlg').close());
 $('odPlain').addEventListener('click', () => { $('optiDlg').close(); if (odItem) { state.sel = odItem; act('launch'); } });
 $('odGo').addEventListener('click', async () => {
   if (!odItem) return;
+  if (!(await premOk('opti'))) { $('optiDlg').close(); return openPremium('opti'); }
   const on = (k) => Boolean(document.querySelector(`[data-ck="${k}"]`)?.checked);
   const choice = { wintweaks: on('wintweaks'), fnperf: on('fnperf'), fivemcache: on('fivemcache'), close: on('close') ? (document.querySelector('.odck[data-apps]')?.dataset.apps ?? '').split(',').filter(Boolean) : [], power: on('power'), priority: on('priority'), quiet: on('quiet'), perfbar: on('perfbar') };
   $('odChecks').hidden = true; $('odFoot').hidden = true; $('odStats').hidden = true; $('odRun').hidden = false;
@@ -3783,6 +3876,7 @@ function openAssistant(open = !$('aipop').classList.contains('open')) {
   if (open) setTimeout(() => $('askInput').focus(), 50);
 }
 $('aifab').addEventListener('click', () => openAssistant());
+$('aiPayBtn').addEventListener('click', () => { openAssistant(false); openPremium('ia'); });
 $('fold').addEventListener('click', () => openAssistant(false));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openAssistant(false); });
 
@@ -4230,7 +4324,8 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    version: async () => '0.52.2',
+    premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
+    version: async () => '0.53.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

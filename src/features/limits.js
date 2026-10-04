@@ -2,10 +2,12 @@ import { config } from '../config.js';
 import { load, save } from '../storage.js';
 
 const cooldowns = new Map();
+/** Membres Discord liés à un compte History Premium (rempli par launcherPremium.js) : pas d'attente, 4× plus d'images. */
+export const premiumUsers = new Set();
 
 /** Renvoie le temps restant (ms) si l'utilisateur est en cooldown, sinon 0 et démarre le cooldown. */
 export function hitCooldown(userId, bucket, ms) {
-  if (userId === config.ownerId) return 0;
+  if (userId === config.ownerId || premiumUsers.has(userId)) return 0;
   const key = `${bucket}:${userId}`;
   const remaining = (cooldowns.get(key) ?? 0) - Date.now();
   if (remaining > 0) return remaining;
@@ -26,7 +28,7 @@ async function usage() {
 
 /** Vérifie et consomme 1 image du quota journalier. */
 export async function takeImageQuota(userId) {
-  const limit = config.limits.imagesPerDay;
+  const limit = config.limits.imagesPerDay * (premiumUsers.has(userId) ? 4 : 1);
   if (userId === config.ownerId) return { ok: true, left: Infinity, limit };
   const data = await usage();
   const used = data.counts[userId] ?? 0;

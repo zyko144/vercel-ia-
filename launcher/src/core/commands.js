@@ -126,7 +126,7 @@ export function understand(text, items, { music = null } = {}) {
   // Volume d'une appli : « baisse le son de Discord », « coupe le son du jeu », « remets le son de Spotify »
   const av = t.match(/^(baisse|diminue|monte|augmente|coupe|mute|remets?)\s+(le |la )?(son|volume)\s+(de |d |du |sur )(la |le |l )?([a-z0-9 .-]{2,40})$/);
   if (av) { const mode = /^(baisse|diminue)/.test(av[1]) ? 'down' : /^(coupe|mute)/.test(av[1]) ? 'mute' : 'up'; const app = av[6].trim(); return { action: 'appvol', value: mode, target: app, reply: `${mode === 'down' ? 'Je baisse' : mode === 'mute' ? 'Je coupe' : 'Je remets'} le son de ${app}.` }; }
-  if (/\b(pause|stop)\b.*(musique|son|chanson|spotify|deezer)?|mets? (la musique )?en pause/.test(t) && !/lance|ouvre/.test(t)) return { action: 'music', value: 'pause', reply: 'Musique en pause.' };
+  if (/^(pause|stop)$|\b(pause|stop)\b.*(musique|son|chanson|spotify|deezer)|mets? (la musique )?en pause/.test(t) && !/lance|ouvre/.test(t)) return { action: 'music', value: 'pause', reply: 'Musique en pause.' };
   if (/(chanson|musique|titre|son) suivant|\bsuivant(e)?\b|\bnext\b|passe (la|le|a la)/.test(t)) return { action: 'music', value: 'next', reply: 'Titre suivant.' };
   if (/precedent|reviens|\bprevious\b/.test(t)) return { action: 'music', value: 'previous', reply: 'Titre précédent.' };
   if (/(reprend|relance|remets?) (la )?musique|^(play|lecture)$|remets? le son/.test(t)) return { action: 'music', value: 'play', reply: 'Lecture.' };
@@ -174,7 +174,11 @@ export function understand(text, items, { music = null } = {}) {
   if (/^(desinstalle|supprime|efface|vire)\b/.test(t)) return withItem('uninstall', /(desinstalle|désinstalle|supprime|efface|vire)/, 'Je prépare la désinstallation de');
   if (/^(installe|telecharge)\b/.test(t)) return withItem('install', /(installe|télécharge|telecharge)/, 'Installation de');
   if (/^(verifie|repare|check)\b/.test(t)) return withItem('verify', /(vérifie|verifie|répare|repare|check)(\s+les\s+fichiers\s+(de|du|d))?/, 'Je vérifie les fichiers de');
-  if (/^(ferme|quitte|arrete|kill|stoppe)\b/.test(t)) return withItem('close', /(ferme|quitte|arrête|arrete|kill|stoppe)/, 'Je ferme');
+  if (/^(ferme|quitte|arrete|kill|stoppe|stop)\b/.test(t)) {
+    // « ferme le jeu », « ferme-le », « ferme ça » : le jeu en cours (trouvé par le launcher)
+    if (/^((le |mon |ce |la )?(jeu|game|partie)( en cours| actuel| ouvert| lance)?|ca|le|la|tout)?$/.test(rest(/(ferme|quitte|arrete|kill|stoppe|stop)/))) return { action: 'close', value: 'current', reply: 'Je ferme ton jeu.' };
+    return withItem('close', /(ferme|quitte|arrête|arrete|kill|stoppe|stop)/, 'Je ferme');
+  }
   if (/^(ouvre|montre) (le )?dossier/.test(t)) return withItem('folder', /dossier\s+(de|du|d)?/, 'Dossier de');
   if (/(ajoute|mets?).*(favori)/.test(t)) {
     const item = findItem(items, raw.replace(/^(ajoute|mets?)\s+/i, '').replace(/\s+(aux|en|dans les)\s+favoris?.*$/i, ''));

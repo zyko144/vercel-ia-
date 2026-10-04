@@ -51,3 +51,16 @@ create table if not exists public.avis (
 );
 create index if not exists avis_app_at on public.avis (app, at desc);
 alter table public.avis enable row level security;
+
+-- Premium de History Launcher : une ligne = un pack pour un compte (ajout à la main ou paiement PayPal).
+-- compte : pseudo, e-mail ou identifiant du compte History · pack : ia, opti ou pack (les deux)
+-- jusqua : date de fin (vide = à vie). Effet dans l'appli en moins d'une minute, sans mise à jour.
+create table if not exists public.premium (
+  id bigint generated always as identity primary key,
+  compte text not null,
+  pack text not null check (pack in ('ia', 'opti', 'pack')),
+  jusqua timestamptz,
+  note text,
+  created_at timestamptz not null default now()
+);
+alter table public.premium enable row level security;
