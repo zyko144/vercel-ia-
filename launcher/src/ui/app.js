@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.6': [
+    ['💳', 'Nouvelle fenêtre d’achat', 'Acheter le Premium se fait en 3 étapes claires : payer sur PayPal, ton nom PayPal, puis la capture (glisser, coller ou cliquer).', ['#premiumBtn', 'wait900']],
+  ],
   '0.53.5': [
     ['⭐', 'Des offres Premium plus lisibles', 'Trois cartes épurées, des accents jaune doux et des prix bien visibles pour choisir History IA, Opti Pro ou le duo.', ['#premiumBtn', 'wait900']],
   ],
@@ -3754,25 +3757,39 @@ for (const n of ['optiRun', 'optiTweak', 'optiStartup', 'optiSysApply', 'optiSto
   const f = api[n];
   if (f) api[n] = async (...a) => ((await premOk('opti')) ? f(...a) : (openPremium('opti'), { ok: false, error: 'réservé à ⭐ Opti Pro' }));
 }
+// Achat : fenêtre maison en 3 étapes (payer, nom PayPal, capture), puis vérification à la main sur Discord
+const PACK_INFO = { ia: ['History IA', '2,49 €'], opti: ['Opti Pro', '2,49 €'], pack: ['Pack Premium', '3,99 €'] };
+let claimShot = null;
+function claimShotSet(src) { claimShot = src; $('pdPrev').hidden = !src; if (src) $('pdPrev').src = src; $('pdDropTxt').hidden = Boolean(src); $('pdDrop').classList.toggle('has', Boolean(src)); }
+async function claimFile(f) { if (f?.type?.startsWith('image/')) claimShotSet(await shrinkImage(f).catch(() => null)); }
 document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', () => {
   if (!prem?.logged && !prem?.dev) return toast('Connecte-toi à ton compte History (Paramètres › Compte) pour acheter');
+  const [name, price] = PACK_INFO[b.dataset.buy];
+  $('premClaim').dataset.pack = b.dataset.buy;
+  $('pdTitle').textContent = name; $('pdPrice').textContent = price; $('pdAmount').textContent = price;
+  $('pdDone').hidden = true; $('premClaim').classList.remove('sent');
+  $('premDlg').showModal(); $('premPaypal').focus();
   api.premiumBuy?.(b.dataset.buy);
-  $('premClaim').dataset.pack = b.dataset.buy; $('premClaim').hidden = false; $('premPaypal').focus();
-  toast('Paie sur PayPal, puis indique ton nom PayPal ici');
 }));
-$('premShot').addEventListener('change', () => { $('premShotLbl').firstChild.textContent = $('premShot').files[0] ? '✓ Capture ajoutée' : 'Capture du paiement'; });
+$('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack));
+$('pdClose').addEventListener('click', () => $('premDlg').close());
+$('pdOk').addEventListener('click', () => $('premDlg').close());
+$('premShot').addEventListener('change', () => claimFile($('premShot').files[0]));
+$('pdDrop').addEventListener('dragover', (e) => { e.preventDefault(); $('pdDrop').classList.add('over'); });
+$('pdDrop').addEventListener('dragleave', () => $('pdDrop').classList.remove('over'));
+$('pdDrop').addEventListener('drop', (e) => { e.preventDefault(); $('pdDrop').classList.remove('over'); claimFile(e.dataTransfer.files[0]); });
+$('premDlg').addEventListener('paste', (e) => claimFile([...e.clipboardData.files][0]));
 $('premClaim').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const btn = e.target.querySelector('[type=submit]');
+  const btn = $('pdSend');
   if (btn.disabled) return; // un seul envoi, même en double-cliquant
-  const shot = $('premShot').files[0] && await shrinkImage($('premShot').files[0]).catch(() => null);
-  if (!shot) return toast('Ajoute la capture d’écran du paiement PayPal');
-  btn.disabled = true;
-  const r = await api.premiumClaim?.(e.target.dataset.pack, $('premPaypal').value, shot).catch(() => null);
-  btn.disabled = false;
+  if (!claimShot) return toast('Ajoute la capture d’écran du paiement PayPal');
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  const r = await api.premiumClaim?.(e.target.dataset.pack, $('premPaypal').value, claimShot).catch(() => null);
+  btn.disabled = false; btn.textContent = 'Envoyer pour vérification';
   if (!r?.ok) return toast(r?.error ?? 'Impossible pour le moment');
-  e.target.hidden = true; $('premPaypal').value = ''; $('premShot').value = ''; $('premShot').dispatchEvent(new Event('change'));
-  toast('Merci ! Ton Premium s’active dès que le paiement est vérifié');
+  $('premPaypal').value = ''; $('premShot').value = ''; claimShotSet(null);
+  e.target.classList.add('sent'); $('pdDone').hidden = false;
 });
 api.onPremiumOpen?.((pack) => openPremium(pack));
 $('premiumBtn').addEventListener('click', () => openPremium());
@@ -4360,7 +4377,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.5',
+    version: async () => '0.53.6',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
