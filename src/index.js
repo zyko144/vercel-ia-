@@ -105,7 +105,7 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
   c.on(Events.GuildCreate, (guild) => registerOn(guild));
   // Résumé des commandes « !! » dans le salon agora (une fois par version)
-  import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));
+  if (FULL) import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));
 
   // Le nom du bot (History IA) : Discord n'autorise que 2 changements par heure, on ne le fait que s'il diffère
   if (config.botName && c.user.username !== config.botName) {
@@ -113,14 +113,15 @@ client.once(Events.ClientReady, async (c) => {
   }
   putSiteInBio(c, { tag: 'bot' });
   lavalink.init(c);
-  startVoiceGuard(c);
-  startLevelLoops(c);
-  startTreasury(c);
+  // Base légère : seulement la musique (/play) et History Launcher. BOT_FULL=1 remet les anciennes fonctions
+  // (vocal 24/24, surveillance vocale, IA dans les messages, niveaux, modération…), qui consomment beaucoup sur Render.
+  if (FULL) { startVoiceGuard(c); startLevelLoops(c); startTreasury(c); }
   (await import('./features/launcherReleases.js')).startLauncherReleases(c);
   // Vidéos de présentation : MP d'abord (indépendants), puis l'annonce dans les nouveautés des serveurs du launcher
   import('./features/launcherPremium.js').then((m) => m.startPremiumSync(c)).catch((err) => console.warn('[premium]', err.message));
-  import('./features/promoDM.js').then((m) => { m.startPromoReminders(c); m.syncDiscordReviews(c).catch(() => {}); return m.sendPromoDMs(c); }).catch((err) => console.warn('[vidéos MP]', err.message));
+  if (FULL) import('./features/promoDM.js').then((m) => { m.startPromoReminders(c); m.syncDiscordReviews(c).catch(() => {}); return m.sendPromoDMs(c); }).catch((err) => console.warn('[vidéos MP]', err.message));
   (await import('./features/launcherServers.js')).autoInstall(c).then(async () => {
+    if (!FULL) return;
     const { postPromoVideos } = await import('./features/promoVideos.js');
     const { load } = await import('./storage.js');
     for (const s of (await load('launcher-serveurs', null)) ?? []) if (s.news) await postPromoVideos(await c.channels.fetch(s.news).catch(() => null));
@@ -128,6 +129,7 @@ client.once(Events.ClientReady, async (c) => {
   c.on(Events.GuildCreate, () => import('./features/launcherServers.js').then((m) => m.autoInstall(c)).catch(() => {}));
   (await import('./features/launcherDiscord.js')).startLauncherDiscord(c);
   loadMaintenance().catch(() => {});
+  if (FULL) {
   startAssistant(c);
   startModeration(c);
   startServerTools(c);
@@ -145,15 +147,17 @@ client.once(Events.ClientReady, async (c) => {
   startBattleLoop(c);
   startDefis(c);
   setLiveClient(c);
+  }
   startSupportDiscord(c);
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);
 });
 
-attachSecurityEvents(client);
-import('./features/antiNuke.js').then((m) => m.attachAntiNuke(client)).catch((err) => console.warn('[anti-nuke]', err.message));
+const FULL = process.env.BOT_FULL === '1';
+if (FULL) attachSecurityEvents(client);
+if (FULL) import('./features/antiNuke.js').then((m) => m.attachAntiNuke(client)).catch((err) => console.warn('[anti-nuke]', err.message));
 
-client.on(Events.MessageCreate, (message) => {
+if (FULL) client.on(Events.MessageCreate, (message) => {
   onMessage(client, message).catch((err) => console.error('[messageCreate]', err));
 });
 
