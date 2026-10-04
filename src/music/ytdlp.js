@@ -6,8 +6,8 @@ import { COOKIES_PATH, YTDLP_PATH, ensureBinaries } from './binaries.js';
 const META_TEMPLATE = '%(.{id,title,duration,channel,uploader,artist,track,thumbnail,webpage_url,extractor_key,live_status,acodec,format_id,protocol})j';
 // Jamais les extraits de 30 s (SoundCloud Go+)
 const AUDIO_FORMAT = 'bestaudio[acodec=opus][format_id!*=preview]/bestaudio[format_id!*=preview]/best[format_id!*=preview]';
-// Autres "clients" YouTube essayés quand YouTube demande de prouver qu'on n'est pas un robot
-const FALLBACK_CLIENTS = 'youtube:player_client=tv_simply,tv,web_embedded,mweb';
+// Réessaie les formats publics avec les clients web ; le client TV peut ne proposer que du DRM.
+const FALLBACK_CLIENTS = 'youtube:player_client=default,-tv,-tv_downgraded,web_safari,web_embedded';
 
 export const MUSIC_PROXY = process.env.MUSIC_PROXY?.trim() || '';
 
@@ -20,10 +20,16 @@ export class MusicError extends Error {
 
 const isBotCheck = (stderr) => /Sign in to confirm|not a bot|confirm you.re not/i.test(stderr);
 
+function terminalError(stderr) {
+  // Un avertissement DRM peut précéder une erreur sans rapport : seule l’erreur finale explique l’échec.
+  return stderr.trim().split('\n').filter((line) => /^ERROR:/i.test(line.trim())).pop() ?? stderr;
+}
+
 function explain(stderr) {
+  stderr = terminalError(stderr);
   if (isBotCheck(stderr)) return 'YouTube bloque le serveur (vérification anti-bot)';
   if (/DRM/i.test(stderr)) return 'ce son est protégé (DRM)';
-  if (/Requested format is not available/i.test(stderr)) return 'seul un extrait est disponible sur cette plateforme';
+  if (/Requested format is not available|Only images are available/i.test(stderr)) return 'aucun flux audio lisible n’est disponible sur cette plateforme';
   if (/Private video|private/i.test(stderr)) return 'la vidéo est privée';
   if (/age|inappropriate/i.test(stderr)) return 'la vidéo est limitée par âge';
   if (/geo|country/i.test(stderr)) return "le son n'est pas disponible dans ce pays";
@@ -64,8 +70,10 @@ export async function ytdlp(args, { timeout = 60_000 } = {}) {
   await ensureBinaries();
   let result = await run(args, timeout);
 
-  // Blocage anti-bot : on réessaie avec d'autres clients YouTube et en IPv4
-  if (result.code !== 0 && !result.stdout.trim() && isBotCheck(result.stderr)) {
+  // Échec d’extraction YouTube : réessayer les formats publics avant de déclarer le son illisible.
+  const youtube = args.some((arg) => /^(?:ytsearch\d*:|https?:\/\/(?:[^/]+\.)?(?:youtube\.com|youtu\.be)\/)/i.test(arg));
+  if (youtube && result.code !== 0 && !result.stdout.trim() && !result.timedOut
+    && (isBotCheck(result.stderr) || /DRM|Requested format is not available|Only images are available/i.test(result.stderr))) {
     result = await run(['--force-ipv4', '--extractor-args', FALLBACK_CLIENTS, ...args], timeout);
   }
 
