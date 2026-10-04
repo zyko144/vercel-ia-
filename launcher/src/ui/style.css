@@ -1820,7 +1820,7 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 .premtop { margin-left: auto; height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255, 196, 57, .55); background: linear-gradient(120deg, rgba(255, 196, 57, .22), rgba(255, 159, 26, .1)); color: #ffd978; font-weight: 700; cursor: pointer; }
 .premtop:hover, .isprem .premtop { background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #1a1205; }
 .isprem .premtop { box-shadow: 0 0 18px rgba(255, 196, 57, .45); }
-.premtop + .dcbtn { margin-left: 8px; }
+.premtop + .dcbtn { margin-left: -6px !important; }
 #nav button.premnav { color: #ffd978; }
 #nav button.premnav svg { stroke: var(--gold); }
 #nav button.premnav.on { background: linear-gradient(120deg, rgba(255, 196, 57, .45), rgba(255, 159, 26, .22)); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 196, 57, .5); }
