@@ -154,3 +154,39 @@
   .setcard::before { animation: none; --settings-angle: 35deg; }
   .setdlg *, .review-dialog *, .setdlg[open] > .dlg { animation: none !important; transition: none !important; }
 }
+
+/* ===== Paramètres v2 : plus grand, menu rangé par catégories, icônes en couleur, textes plus marqués ===== */
+.setdlg { width: min(1240px, 96vw); }
+.setdlg .setbox { height: min(900px, 94vh); max-height: 94vh; grid-template: 100px minmax(0, 1fr) 46px / 280px minmax(0, 1fr); }
+.settop h2 { font-size: 28px; font-weight: 800; }
+.setsearch input { font-size: 14px; height: 46px; }
+.setnav { padding: 24px 16px 16px; }
+.setbrand > span { font-size: 13px; }
+.setbrand small { font-size: 11.5px; }
+.setnav-label { font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #c3cee0; margin: 18px 10px 8px; display: flex; align-items: center; gap: 8px; }
+.setnav-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, #ffffff22, transparent); }
+.setnav nav { gap: 4px; }
+.setnav button[data-pane] { --pc: #5aa9ff; justify-content: flex-start; gap: 12px; min-height: 44px; padding: 7px 10px; font-size: 14px; font-weight: 600; color: #c9d4e6; text-align: left; }
+.setnav button[data-pane] > span:nth-child(2) { flex: 1; text-align: left; }
+.setnav button[data-pane]:hover { background: #ffffff0a; color: #fff; }
+.setnav .setnav-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; font-size: 15px; color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); border: 1px solid color-mix(in srgb, var(--pc) 30%, transparent); }
+.setnav button[data-pane].on { color: #fff; font-weight: 700; background: linear-gradient(100deg, color-mix(in srgb, var(--pc) 24%, #121a2a), #121a2a); border-color: color-mix(in srgb, var(--pc) 45%, transparent); box-shadow: inset 3px 0 0 var(--pc); }
+.setnav button[data-pane].on .setnav-icon { color: #0b101a; background: var(--pc); }
+.setnav-arrow { color: var(--pc); }
+.setnav button[data-pane=general] { --pc: #5aa9ff; } .setnav button[data-pane=apparence] { --pc: #a78bfa; } .setnav button[data-pane=sons] { --pc: #f472b6; }
+.setnav button[data-pane=jeux] { --pc: #34d399; } .setnav button[data-pane=raccourcis] { --pc: #fbbf24; } .setnav button[data-pane=assistant] { --pc: #22d3ee; } .setnav button[data-pane=clips] { --pc: #fb923c; }
+.setnav button[data-pane=social] { --pc: #2dd4bf; } .setnav button[data-pane=telephone] { --pc: #38bdf8; } .setnav button[data-pane=compte] { --pc: #818cf8; } .setnav button[data-pane=accueil] { --pc: #a3e635; }
+.setnav button[data-pane=aide] { --pc: #f87171; } .setnav button[data-pane=avis] { --pc: #ffc439; } .setnav button[data-pane=about] { --pc: #94a3b8; }
+.setbody { padding: 36px 40px; }
+.set-eyebrow { font-size: 11px; font-weight: 800; color: #9fb0ca; }
+.setpane .setintro h3 { font-size: 34px; font-weight: 800; }
+.setintro > p { font-size: 14.5px; }
+.setcard { padding: 24px 26px; gap: 10px; }
+.setcard h4 { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+.setcard h4::before { content: ''; width: 4px; height: 18px; border-radius: 4px; background: linear-gradient(var(--accent), #77e5f1); }
+.setpane .toggle, .setpane .setrow { min-height: 56px; font-size: 14px; font-weight: 500; color: #dbe3f0; }
+.setpane .hint, .setpane .sub, .setpane .secbox small { font-size: 13px; }
+.setpane .btn { font-size: 13.5px; min-height: 42px; font-weight: 600; }
+.setpane .setrow select { font-size: 13.5px; }
+.setfooter { font-size: 11.5px; }
+@media (max-height: 820px) and (min-width: 721px) { .setnav button[data-pane] { min-height: 38px; padding: 5px 10px; } .setnav .setnav-icon { width: 26px; height: 26px; } }
