@@ -22,6 +22,7 @@
     <button data-view="amis"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Amis<em class="navcount" id="friendsOnline"></em></button>
     <button data-view="pc"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Mon PC</button>
     <button data-view="optimisation"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Optimisation<em class="navcount warnc" id="optiBadge"></em></button>
+    <button data-view="premium" class="premnav"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg>Premium</button>
   </nav>
   <h5>Plateformes</h5>
   <nav id="platforms" class="platforms"></nav>
@@ -37,6 +38,7 @@
   <button class="bell" id="bellBtn" type="button" title="Centre de notifications" popovertarget="notifCenter"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><em id="bellCount"></em></button>
   <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Rechercher un jeu, une application…" autocomplete="off"></label>
   <span class="netpill" id="netPill" hidden title="Le serveur History ne répond pas : messages et amis reviennent dès que la connexion revient">⚠ Hors ligne · reconnexion…</span>
+  <button type="button" class="premtop" id="premiumBtn" title="History Premium : IA et Opti Pro"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg>Premium</button>
   <button type="button" class="dcbtn" id="discordBtn" title="Rejoindre le serveur Discord History Launcher"><svg class="dc" viewBox="0 0 24 24"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.9 19.9 0 0 0 6 3l1.3-2a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2a19.8 19.8 0 0 0 6-3c.5-5.2-.8-9.7-3.7-13.7zM8.3 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></button>
   <div class="winbtns"><button data-win="min" title="Réduire">—</button><button data-win="max" title="Agrandir">▢</button><button data-win="close" class="x" title="Fermer (reste près de l’horloge)">✕</button></div>
 </header>
@@ -283,10 +285,21 @@
         <div class="row optibtns"><button class="btn play big" id="optiScan" type="button">Analyser mon PC</button><button class="btn big" id="optiRun" type="button" hidden>⚡ Tout optimiser</button><label class="toggle"><input type="checkbox" id="optiAuto"><span></span>Optimisation automatique chaque semaine</label><label class="toggle"><input type="checkbox" id="optiGain"><span></span>Mesurer le gain (mini-benchmark avant / après)</label></div>
       </div>
     </div>
+    <div id="optiDiag"></div>
     <div id="optiProgress" hidden></div>
     <div class="opticats" id="optiBody"><div class="empty">Lance l’analyse pour voir ce qui peut être optimisé.</div></div>
   </section>
 
+  <section id="view-premium" class="view prempane">
+    <div class="premhero"><span class="premkick">HISTORY PREMIUM</span><h2><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg>L’IA et l’opti pro, à petit prix</h2><p>Sans engagement · 31 jours par paiement</p></div>
+    <p class="premstate" id="premState">Chargement…</p>
+    <div class="premgrid">
+<article class="premcard" data-pack="ia"><span class="pbg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 13.9 9l5.6 2-5.6 2L12 18.5 10.1 13l-5.6-2 5.6-2zM19 2.5v4M17 4.5h4M5 16.5v4M3 18.5h4"/></svg></span><h4><svg viewBox="0 0 24 24"><path d="M12 3.5 13.9 9l5.6 2-5.6 2L12 18.5 10.1 13l-5.6-2 5.6-2zM19 2.5v4M17 4.5h4M5 16.5v4M3 18.5h4"/></svg>History IA</h4><b class="pprice">2,49 €<small> / mois</small></b><ul><li>Assistant à la voix ou à l’écrit</li><li>Lance, ferme, installe pour toi</li><li>Répond à tes questions</li></ul><button type="button" class="btn premgo" data-buy="ia">Acheter avec PayPal</button></article>
+<article class="premcard" data-pack="opti"><span class="pbg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span><h4><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Opti Pro</h4><b class="pprice">2,49 €<small> / mois</small></b><ul><li>Corrige les problèmes de ton PC</li><li>Boost à chaque partie</li><li>Opti par jeu, tout réversible</li></ul><button type="button" class="btn premgo" data-buy="opti">Acheter avec PayPal</button></article>
+<article class="premcard best" data-pack="pack"><span class="pbg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><span class="premtag">-20 %</span><h4><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg>Pack Premium</h4><b class="pprice">3,99 €<small> / mois</small></b><ul><li>History IA + Opti Pro</li><li>Avantages sur le bot Discord</li></ul><button type="button" class="btn premgo" data-buy="pack">Acheter avec PayPal</button></article>
+    </div>
+    <p class="premnote">Paiement PayPal · activé en moins d’une minute</p>
+  </section>
   <section id="view-classement" class="view">
     <div class="list-head"><h2>Classement des meilleurs jeux</h2><div class="tabs" id="rankTabs"><button data-rank="tout" class="on">Depuis toujours</button><button data-rank="deux">2 dernières semaines</button><button data-rank="amis">Entre amis (7 jours)</button></div></div>
     <div class="podium" id="podium"></div>
@@ -296,8 +309,9 @@
 
 <button class="aifab" id="aifab" title="Assistant IA (ou dis « Hey History »)"><img src="icon.png" alt=""><span class="pulse"></span></button>
 <section class="aipop" id="aipop" aria-label="Assistant IA">
-  <div class="panel-head"><img src="icon.png" alt=""><div><b>Assistant History</b><small id="aiState">Gratuit · commandes et voix</small></div><button class="fold" id="fold" title="Réduire">✕</button></div>
+  <div class="panel-head"><img src="icon.png" alt=""><div><b>Assistant History</b><small id="aiState">History IA</small></div><button class="fold" id="fold" title="Réduire">✕</button></div>
   <div class="chat" id="chat"></div>
+  <div class="aipay"><b><svg viewBox="0 0 24 24"><path d="M12 3.5 13.9 9l5.6 2-5.6 2L12 18.5 10.1 13l-5.6-2 5.6-2zM19 2.5v4M17 4.5h4M5 16.5v4M3 18.5h4"/></svg>Débloque l’assistant IA</b><p>Il lance, ferme et installe tes jeux, règle ton PC et répond à tes questions, à la voix ou à l’écrit.</p><button type="button" class="btn premgo" id="aiPayBtn">History IA · 2,49 € / mois</button></div>
   <div class="chips" id="chips"></div>
   <form class="ask" id="askForm"><button type="button" class="mic" id="micBtn" title="Parler (maintiens ou clique)">🎙</button><input id="askInput" placeholder="« Lance Rocket League », « monte le son »…" autocomplete="off" maxlength="500"><button title="Envoyer">➤</button></form>
   <label class="toggle voice"><input type="checkbox" id="voiceToggle"><span></span>Écouter « Hey History » en permanence</label>

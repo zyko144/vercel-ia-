@@ -1811,3 +1811,75 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 .optihero.enter #optiScan { animation: scanpulse 1.1s .5s ease 2; }
 @keyframes scanpulse { 50% { box-shadow: 0 0 0 6px rgba(46, 224, 122, .25), 0 0 32px rgba(46, 224, 122, .65); } }
 .jobbar { display: grid; gap: 6px; margin-top: 10px; } .jobbar .gbar i { transition: width .8s ease; }
+
+/* Chromebook : les outils propres à Windows sont cachés */
+.cros #nav [data-view=pc], .cros #nav [data-view=optimisation], .cros label.toggle:has(#tournament, #gameMode, #fpsOn, #widgetOn, #widgetTop, #widgetGame, #batterySaver) { display: none !important; }
+
+/* ⭐ Premium : thème jaune */
+:root { --gold: #ffc439; --gold-2: #ff9f1a; }
+.premtop { margin-left: auto; height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255, 196, 57, .55); background: linear-gradient(120deg, rgba(255, 196, 57, .22), rgba(255, 159, 26, .1)); color: #ffd978; font-weight: 700; cursor: pointer; }
+.premtop:hover, .isprem .premtop { background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #1a1205; }
+.isprem .premtop { box-shadow: 0 0 18px rgba(255, 196, 57, .45); }
+.premtop + .dcbtn { margin-left: 8px; }
+#nav button.premnav { color: #ffd978; }
+#nav button.premnav svg { stroke: var(--gold); }
+#nav button.premnav.on { background: linear-gradient(120deg, rgba(255, 196, 57, .45), rgba(255, 159, 26, .22)); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 196, 57, .5); }
+.prempane { max-width: 1100px; }
+.premhero { padding: 26px 28px; margin-bottom: 16px; border-radius: 22px; border: 1px solid rgba(255, 196, 57, .35); background: radial-gradient(120% 140% at 0% 0%, rgba(255, 196, 57, .22), transparent 55%), linear-gradient(160deg, rgba(255, 159, 26, .08), rgba(255, 255, 255, .02)); }
+.premkick { color: var(--gold); font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+.premhero h2 { margin: 6px 0; font-size: 26px; }
+.premhero p { margin: 0; color: #d9d2c0; }
+.premstate { padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(255, 196, 57, .35); background: rgba(255, 196, 57, .08); color: #ffe7a8; margin: 0 0 16px; }
+.premstate b { color: var(--gold); }
+.premgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+.premcard { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: 18px; background: linear-gradient(160deg, rgba(255, 196, 57, .1), rgba(255, 255, 255, .03) 45%); border: 1px solid rgba(255, 196, 57, .25); }
+.premcard.best, .premcard.want { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(255, 196, 57, .5), 0 12px 40px rgba(255, 170, 0, .18); }
+.premcard h4 { margin: 0; font-size: 15px; }
+.pprice { font-size: 26px; color: var(--gold); }
+.pprice small { font-size: 12px; color: #c9bfa0; font-weight: 500; }
+.premcard ul { margin: 0; padding-left: 18px; color: #d9d2c0; font-size: 12.5px; line-height: 1.5; flex: 1; }
+.premgo { background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #1a1205; border: 0; font-weight: 700; }
+.premgo:disabled { background: rgba(255, 196, 57, .15); color: var(--gold); opacity: 1; }
+.premtag { position: absolute; top: 16px; right: 16px; background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #1a1205; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
+.premnote { color: #a99f86; font-size: 12px; }
+
+/* Assistant IA : look Premium, 3 idées en pastilles, écran d'achat si pas de History IA */
+.aipop { border-color: rgba(255, 196, 57, .3); background: radial-gradient(120% 50% at 100% 0%, rgba(255, 196, 57, .1), transparent 60%), rgba(20, 16, 25, .97); box-shadow: 0 30px 70px rgba(0, 0, 0, .65), 0 0 50px -18px var(--gold); }
+.aipop .panel-head b { background: linear-gradient(90deg, #fff, var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.aipop #aiState.on { color: var(--gold); }
+.chips { flex-direction: row; flex-wrap: wrap; max-height: none; overflow: visible; }
+.chips button { padding: 6px 11px; border-radius: 999px; font-size: 12px; gap: 6px; }
+.chips button:hover { border-color: var(--gold); background: rgba(255, 196, 57, .08); }
+.chips button i { color: var(--gold); width: auto; }
+.aipay { display: none; padding: 16px; border-radius: 16px; border: 1px solid rgba(255, 196, 57, .45); background: linear-gradient(160deg, rgba(255, 196, 57, .16), rgba(255, 159, 26, .05)); }
+.aipay b { color: #ffe7a8; } .aipay p { margin: 6px 0 12px; color: #d9d2c0; font-size: 12.5px; line-height: 1.5; }
+.aipay .premgo { width: 100%; }
+.noia .aipay { display: block; }
+.noia .chips, .noia .aipop .ask, .noia .aipop .voice { display: none; }
+/* Cartes Premium : grandes, fond doré, gros pictogramme en filigrane, néon qui tourne sur le pack */
+.premgrid { gap: 18px; }
+.premcard { min-height: 330px; padding: 26px 24px; gap: 12px; overflow: hidden; isolation: isolate; background: radial-gradient(120% 70% at 0% 0%, rgba(255, 196, 57, .2), transparent 60%), linear-gradient(170deg, #1d1710, #100d0a); transition: transform .2s, box-shadow .2s; }
+.premcard:hover { transform: translateY(-4px); box-shadow: 0 18px 50px -12px rgba(255, 170, 0, .35); }
+.premcard .pbg { position: absolute; right: -24px; bottom: -28px; opacity: .13; transform: rotate(-12deg); z-index: -1; pointer-events: none; }
+.premcard .pbg svg { width: 170px; height: 170px; fill: none; stroke: var(--gold); stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
+.premtop svg, .premhero h2 svg, .premcard h4 svg, .aipay b svg { width: 1.05em; height: 1.05em; margin-right: 8px; vertical-align: -.15em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.premhero h2 svg, .premcard h4 svg, .aipay b svg { color: var(--gold); }
+.premtop { display: inline-flex; align-items: center; }
+.premcard h4 { font-size: 18px; }
+.pprice { font-size: 38px; line-height: 1.1; }
+.premcard ul { list-style: none; padding: 0; display: grid; align-content: start; gap: 9px; font-size: 13.5px; }
+.premcard li::before { content: '✓'; color: var(--gold); font-weight: 800; margin-right: 8px; }
+.premgo { height: 44px; font-size: 14px; }
+.premcard.best { background: radial-gradient(120% 70% at 100% 0%, rgba(255, 196, 57, .34), transparent 60%), linear-gradient(170deg, #2a1f0c, #130f09); }
+@property --pa { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.premcard.best::before { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; background: conic-gradient(from var(--pa), transparent 65%, var(--gold), transparent); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: premspin 4s linear infinite; pointer-events: none; }
+@keyframes premspin { to { --pa: 360deg; } }
+body.idle .premcard.best::before { animation-play-state: paused; }
+
+/* Optimisation : ce que l'analyse a trouvé (une correction par problème) */
+.odiag { margin: 0 0 18px; padding: 18px 20px; border-radius: 18px; background: rgba(255, 255, 255, .035); border: 1px solid rgba(255, 255, 255, .08); display: grid; gap: 10px; }
+.odhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.odrow { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .03); border-left: 3px solid #5aa9ff; }
+.odrow.warn { border-left-color: #f59e0b; } .odrow.bad { border-left-color: #ef4444; }
+.odrow i { font-style: normal; font-size: 20px; text-align: center; }
+.odrow small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }

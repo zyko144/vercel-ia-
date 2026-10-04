@@ -290,7 +290,8 @@ const timeOptions = () => ({ total: Boolean(store.data.settings.totalTime), stea
 // IA : clé perso si elle existe (anciens réglages ou version développeur), sinon via le serveur History (compte connecté)
 let aiCache = { key: null, ai: null };
 async function getAi() {
-  const key = secret('gemini') ?? await geminiKeyFromEnv(path.join(here, '..'));
+  if (app.isPackaged && !(await premium()).ia) return null; // l'IA fait partie de ⭐ History IA
+  const key = app.isPackaged ? null : secret('gemini') ?? await geminiKeyFromEnv(path.join(here, '..'));
   if (key) {
     if (key !== aiCache.key) aiCache = { key, ai: await createAi(key) };
     return aiCache.ai;
@@ -466,19 +467,31 @@ const boostSettings = () => ({ enabled: false, power: true, close: [], restore: 
 // Mode streamer : pas de notifications Windows ni de cartes d'amis (pseudos, messages) pendant un live
 let obsRunning = false;
 const streaming = () => Boolean(store.data.settings.streamer || (store.data.settings.streamerAuto !== false && obsRunning));
+// Notifications Windows limitées : jamais deux fois la même en 6 h et 3 par heure au plus (toutes restent dans la cloche du launcher)
+const shownNotifs = [];
 class Notif extends Notification {
   constructor(o) { super(o); this.o = o; }
-  show() { logNotif({ kind: 'app', icon: '🔔', title: this.o?.title, body: this.o?.body }); if (!streaming()) super.show(); }
+  show() {
+    logNotif({ kind: 'app', icon: '🔔', title: this.o?.title, body: this.o?.body });
+    const key = String(this.o?.title ?? '').replace(/[\d\s,.%€+-]+/g, '');
+    const now = Date.now();
+    while (shownNotifs.length && now - shownNotifs[0].at > 6 * 3_600_000) shownNotifs.shift();
+    if (streaming() || shownNotifs.some((n) => n.key === key) || shownNotifs.filter((n) => now - n.at < 3_600_000).length >= 3) return;
+    shownNotifs.push({ key, at: now });
+    super.show();
+  }
 }
 function notify(title, body) {
   if (Notification.isSupported()) new Notif({ title, body, icon: ICON, silent: true }).show();
 }
+// Infos de chaque partie (boost, FPS) : seulement dans la cloche du launcher, pas en notification Windows
+const bell = (title, body) => logNotif({ kind: 'app', icon: '🔔', title, body });
 async function startBoost(item, force = null) {
   const b = force ? { ...boostSettings(), enabled: true, close: force.close ?? [], power: Boolean(force.power), tune: Boolean(force.priority) } : boostSettings();
   // Réglage par jeu : « toujours » (même si l'opti auto est coupée) ou « jamais » pour ce jeu
   const perGame = b.games?.[item.id];
   const prof = profileOf(item.id);
-  if ((!force && (perGame === false || (!b.enabled && perGame !== true && !prof.enabled && !store.data.settings.tournament))) || boosted || process.platform !== 'win32') return;
+  if ((!force && (perGame === false || (!b.enabled && perGame !== true && !prof.enabled && !store.data.settings.tournament))) || boosted || process.platform !== 'win32' || !(await premium()).opti) return;
   const power = force ? b.power : prof.enabled ? prof.power !== 'none' : b.power;
   const scheme = power ? await activeScheme() : null;
   if (scheme && scheme !== HIGH_PERFORMANCE) await setScheme(HIGH_PERFORMANCE);
@@ -487,7 +500,7 @@ async function startBoost(item, force = null) {
   const quiet = Boolean(force ? force.quiet : prof.enabled && prof.quiet) && await windowsToasts(false);
   boosted = { item, scheme, closed, quiet, start: Date.now(), misses: 0, hogs: {} };
   (store.data.boostedAt ??= {})[item.id] = Date.now();
-  if (!force) notify('Boost activé', `${item.name} : performances élevées${closed.length ? `, ${closed.length} appli(s) fermée(s)` : ''}.`);
+  if (!force) bell('Boost activé', `${item.name} : performances élevées${closed.length ? `, ${closed.length} appli(s) fermée(s)` : ''}.`);
   boosted.timer = setInterval(async () => {
     const paths = await runningPaths();
     if (!boosted) return;
@@ -624,7 +637,7 @@ async function endBoost({ silent = false } = {}) {
   // Rapport de fin de partie : durée, applis fermées, et ce qui a pris du processeur (cause probable des freezes)
   const top = Object.entries(hogs).sort((a, b) => b[1] - a[1]).slice(0, 2);
   const mins = Math.round((Date.now() - start) / 60_000);
-  if ((changed || top.length) && !silent) notify('Boost terminé', `${mins} min de jeu${closed.length ? `, ${closed.length} appli(s) fermée(s) puis rouvertes` : ''}. PC remis comme avant.${top.length ? ` ⚠ Ont pris du processeur pendant la partie : ${top.map(([n, p]) => `${n} (${p} %)`).join(', ')} : ferme-les avant de jouer si ça a freezé.` : ''}`);
+  if ((changed || top.length) && !silent) bell('Boost terminé', `${mins} min de jeu${closed.length ? `, ${closed.length} appli(s) fermée(s) puis rouvertes` : ''}. PC remis comme avant.${top.length ? ` ⚠ Ont pris du processeur pendant la partie : ${top.map(([n, p]) => `${n} (${p} %)`).join(', ')} : ferme-les avant de jouer si ça a freezé.` : ''}`);
 }
 ipcMain.handle('boost:get', () => ({ ...boostSettings(), heatAlerts: store.data.settings.heatAlerts !== false, weeklyClean: store.data.settings.optiAuto === true, apps: BOOST_APPS.map(({ id, label }) => ({ id, label })) }));
 ipcMain.handle('boost:set', (_e, patch) => {
@@ -1730,19 +1743,27 @@ async function runningGameExes(item) {
   return [...new Set(running.filter((n) => own.has(n)))];
 }
 async function closeItem(item) {
-  const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
-  if (!dir || dir.split('\\').filter(Boolean).length < 3) return false;
-  const targets = (await runningPaths()).filter((p) => p.startsWith(`${dir}\\`) && p.endsWith('.exe'));
-  // Chemin exact transmis par variable d'environnement : rien n'est collé dans la commande PowerShell
-  for (const exe of targets) {
-    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Process | Where-Object { $_.Path -and $_.Path.ToLower() -eq $env:HL_CLOSE } | Stop-Process -Force'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, HL_CLOSE: exe } });
-  }
-  if (targets.length) return true;
-  // Jeux avec anti-triche (Rocket League, Fortnite…) : Windows cache leur chemin, on les ferme par le nom du programme
   if (process.platform !== 'win32') return false;
-  const kill = await runningGameExes(item);
-  if (!kill.length) return false;
-  return new Promise((resolve) => execFile('taskkill.exe', [...kill.flatMap((n) => ['/IM', n]), '/F', '/T'], { windowsHide: true, timeout: 10_000 }, (err) => resolve(!err)));
+  const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
+  const parts = dir.split('\\').filter(Boolean).length;
+  // Jamais un disque ou un dossier système entier (D:\Fortnite est accepté) : seulement les programmes du jeu
+  const safeDir = parts >= 3 || (parts === 2 && !/^[a-z]:\\(program files|windows|users|programdata)/.test(dir)) ? dir : '';
+  // Jeux avec anti-triche : Windows cache leur chemin, on les reconnaît par le nom de leurs .exe
+  const names = (await runningGameExes(item).catch(() => [])).map((n) => n.replace(/\.exe$/i, ''));
+  if (!safeDir && !names.length) return false;
+  // Données passées en base64 : rien ne peut casser le script. D'abord comme la croix de la fenêtre (le jeu enregistre),
+  // puis de force si le jeu tient encore après 5 s ; on vérifie à la fin qu'il est vraiment fermé.
+  const arg = Buffer.from(JSON.stringify({ d: safeDir, n: names }), 'utf8').toString('base64');
+  const out = await ps(`$a = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${arg}')) | ConvertFrom-Json
+$ids = @(Get-Process | Where-Object { ($_.Path -and $a.d -and $_.Path.ToLower().StartsWith($a.d + '\\')) -or (-not $_.Path -and @($a.n) -contains $_.ProcessName.ToLower()) } | ForEach-Object { $_.Id })
+if (-not $ids.Count) { 'aucun'; return }
+$alive = { @($ids | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }) }
+foreach ($i in $ids) { try { [void](Get-Process -Id $i).CloseMainWindow() } catch {} }
+for ($t = 0; $t -lt 10 -and (& $alive).Count; $t++) { Start-Sleep -Milliseconds 500 }
+foreach ($i in (& $alive)) { Stop-Process -Id $i -Force -ErrorAction SilentlyContinue; & taskkill.exe /PID $i /F /T 2>$null | Out-Null }
+Start-Sleep -Milliseconds 800
+if ((& $alive).Count) { 'reste' } else { 'ferme' }`, 30_000).catch(() => '');
+  return out.includes('ferme');
 }
 
 ipcMain.handle('lib:scan', () => scan());
@@ -2685,8 +2706,13 @@ async function execAction(c) {
 async function runCommand(text, { voice = false } = {}) {
   const clean = String(text ?? '').slice(0, 500).trim();
   if (!clean) return { reply: '…', action: 'none' };
+  if (!(await premium()).ia) return { reply: 'L’assistant fait partie de ⭐ History IA (2,49 € par mois) : ouvre Premium pour l’activer.', action: 'premium', value: 'ia' };
   const np = await nowPlaying().catch(() => null);
   const c = understand(stripWake(clean) ?? clean, items, { music: np });
+  if (c.action === 'close' && !c.itemId) {
+    const cur = currentSession();
+    Object.assign(c, cur ? { itemId: cur.id, reply: `Je ferme ${cur.name}.` } : { action: 'answer', reply: 'Aucun jeu en cours à fermer : dis-moi lequel (« ferme Rocket League »).' });
+  }
   let out = { reply: c.reply, action: c.action, value: c.value, itemId: c.itemId };
   if (['launch', 'install', 'verify', 'uninstall', 'folder', 'close'].includes(c.action)) {
     const done = await doAction(c.itemId, c.action).catch((err) => ({ ok: false, error: err.message }));
@@ -2725,8 +2751,17 @@ async function runCommand(text, { voice = false } = {}) {
           const reply = await execAction({ ...r, itemId: r.target ? findByName(items, r.target)?.id : undefined }).catch((err) => `Impossible pour l’instant (${err.message}).`);
           if (reply) out.reply = reply;
         }
-        const item = r.target ? items.find((i) => norm(i.name) === norm(r.target)) ?? findByName(items, r.target) : null;
-        if (item && ['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) { out.itemId = item.id; await doAction(item.id, r.action).catch(() => {}); }
+        // « ferme le jeu » sans nom : le jeu en cours ; un échec est dit tel quel (plus de « je ferme » sans effet)
+        const cur = !r.target && r.action === 'close' ? currentSession() : null;
+        const item = r.target ? items.find((i) => norm(i.name) === norm(r.target)) ?? findByName(items, r.target) : cur ? items.find((i) => i.id === cur.id) : null;
+        if (['launch', 'close', 'install', 'verify', 'uninstall', 'folder', 'store'].includes(r.action)) {
+          if (!item) out.reply = r.target ? `Je ne trouve pas « ${r.target} » dans ta bibliothèque.` : 'Aucun jeu en cours à fermer : dis-moi lequel.';
+          else {
+            out.itemId = item.id;
+            const done = await doAction(item.id, r.action).catch((err) => ({ ok: false, error: err.message }));
+            if (done?.ok === false) out.reply = done.error ? `${item.name} : impossible (${done.error}).` : 'D’accord, j’annule.';
+          }
+        }
       } catch (err) {
         out = { reply: `Je n’arrive pas à joindre l’IA (${err.message}).`, action: 'none' };
       }
@@ -2798,6 +2833,23 @@ if (!process.env.HL_API) {
     if (/^https:\/\/[\w.-]+\.(onrender\.com|vercel\.app|fly\.dev|railway\.app|koyeb\.app|up\.railway\.app)$/.test(u)) API = u;
   }).catch(() => {});
 }
+// ⭐ Premium (packs IA / Opti) : le serveur décide (table Supabase « premium »), relu au plus toutes les minutes,
+// donc un premium ajouté à la main marche tout de suite, sans mise à jour. Version développeur et démo : tout est ouvert.
+let premCache = { at: 0, v: { ia: false, opti: false } };
+async function premium() {
+  if (!app.isPackaged || process.env.LAUNCHER_DEMO) return { ia: true, opti: true, dev: true };
+  if (Date.now() - premCache.at < 60_000) return premCache.v;
+  const token = secret('account');
+  const r = token ? await api('/api/compte/premium', { token }).catch(() => null) : { status: 401 };
+  if (r) premCache = { at: Date.now(), v: r.status === 200 ? { ia: Boolean(r.ia), opti: Boolean(r.opti), until: r.until } : { ia: false, opti: false } };
+  return premCache.v;
+}
+ipcMain.handle('premium:get', async (_e, fresh) => { if (fresh) premCache.at = 0; return { ...(await premium()), logged: Boolean(secret('account')) }; });
+ipcMain.handle('premium:buy', (_e, pack) => {
+  if (!['ia', 'opti', 'pack'].includes(pack)) return { ok: false };
+  const id = store.data.settings.lastAccount?.id;
+  return shell.openExternal(`${API}/payer-launcher?pack=${pack}${id ? `&compte=${encodeURIComponent(id)}` : ''}`).then(() => ({ ok: true }));
+});
 async function api(pathname, { method = 'GET', body, token, timeout = 20_000 } = {}) {
   const res = await fetch(`${API}${pathname}`, {
     method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -3367,7 +3419,7 @@ async function sessionEnd() {
   const on = avgOf(withAvg.filter((r) => r.boost)), off = avgOf(withAvg.filter((r) => !r.boost));
   const gain = rec.boost && on && off ? Math.round(((on - off) / off) * 100) : null;
   const B = { cpu: 'le processeur limite tes FPS', gpu: 'la carte graphique travaille à fond (normal pour un jeu exigeant)', mixte: 'processeur et carte graphique sont équilibrés' };
-  if (rec.avg || rec.bound) notify(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s)${why ? ` : ${why}` : ' repérée(s)'}.` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
+  if (rec.avg || rec.bound) bell(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s)${why ? ` : ${why}` : ' repérée(s)'}.` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
 }
 ipcMain.handle('fps:enable', () => enableFps());
 async function enableFps() {

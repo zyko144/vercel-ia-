@@ -15,6 +15,9 @@ export async function handleLauncherAi(req, res, { readJson, send }) {
   const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
   const compte = await me(token);
   if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History pour utiliser l’IA.' });
+  // L'IA fait partie du Premium (pack « History IA » ou « Pack Premium ») : la table Supabase « premium » décide
+  const { premiumOf } = await import('./launcherPremium.js');
+  if (!(await premiumOf(compte)).ia) return send(res, 402, { error: 'L’IA fait partie de History IA Premium : ouvre ⭐ Premium dans le launcher.', premium: 'ia' });
   if (!allowAttempt('launcher-ia-h', compte.id, 120, 60 * 60_000) || !allowAttempt('launcher-ia-j', compte.id, 600, 24 * 3_600_000)) {
     return send(res, 429, { error: 'Tu as beaucoup utilisé l’IA : réessaie un peu plus tard.' });
   }

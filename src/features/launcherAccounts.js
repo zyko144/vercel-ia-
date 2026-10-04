@@ -484,6 +484,12 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const { handleSupportApi } = await import('./launcherSupport.js');
       return await handleSupportApi(req, res, url, { readJson, send });
     }
+    if (route === 'GET /api/compte/premium') {
+      const compte = await me(token);
+      if (!compte) return send(res, 401, { error: 'Non connecté.' });
+      const { premiumOf, PACKS, payLink } = await import('./launcherPremium.js');
+      return send(res, 200, { ...(await premiumOf(compte)), packs: PACKS, pay: Object.fromEntries(Object.keys(PACKS).map((k) => [k, payLink(k, compte.id)])) });
+    }
     if (route === 'POST /api/compte/ia') {
       const { handleLauncherAi } = await import('./launcherAi.js');
       return await handleLauncherAi(req, res, { readJson, send });
@@ -512,6 +518,13 @@ export async function linkDiscord(code, discordId) {
   a.discordId = String(discordId);
   store(d);
   return { ok: true, pseudo: a.pseudo, id: a.id };
+}
+/** Compte par identifiant, pseudo, e-mail ou identifiant Discord (premium ajouté à la main, paiement depuis le site). */
+export async function findAccount(q) {
+  const k = String(q ?? '').trim().toLowerCase();
+  if (!k) return null;
+  const d = await data();
+  return d.accounts[String(q).trim()] ?? Object.values(d.accounts).find((a) => [a.pseudo, a.email, a.discordId].some((v) => String(v ?? '').toLowerCase() === k)) ?? null;
 }
 export async function accountByDiscord(discordId) {
   const d = await data();
