@@ -2852,10 +2852,10 @@ ipcMain.handle('premium:buy', (_e, pack) => {
   return shell.openExternal(`https://paypal.me/zyko921/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));
 });
 // « J'ai payé » : le serveur poste la demande dans #paiement-verif ; le Premium arrive quand le chef valide
-ipcMain.handle('premium:claim', async (_e, pack, paypal) => {
+ipcMain.handle('premium:claim', async (_e, pack, paypal, shot) => {
   const token = secret('account');
   if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour acheter.' };
-  return api('/api/compte/premium/demande', { method: 'POST', token, body: { pack: String(pack), paypal: String(paypal ?? '').slice(0, 120) } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
+  return api('/api/compte/premium/demande', { method: 'POST', token, body: { pack: String(pack), paypal: String(paypal ?? '').slice(0, 120), shot: /^data:image\/jpeg;base64,/.test(String(shot ?? '')) && String(shot).length < 1_600_000 ? shot : null } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
 });
 async function api(pathname, { method = 'GET', body, token, timeout = 20_000 } = {}) {
   const res = await fetch(`${API}${pathname}`, {
