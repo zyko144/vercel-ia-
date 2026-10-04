@@ -86,12 +86,10 @@ client.once(Events.ClientReady, async (c) => {
     status: 'online',
   });
 
-  // Anciennes commandes du bot gardées dans le code (commands/definitions.js) : OLD_COMMANDS=1 pour les remettre.
-  // Sinon, seule /launcher est proposée (profil, lier, comparer, fps, telecharger, installer).
-  const old = process.env.OLD_COMMANDS === '1';
+  const old = false; // /serveur, /pannel, /ia, /jeux, /musique… supprimées : seulement /play (et /launcher sur le serveur du launcher)
   try {
     await c.application.commands.set(old ? commandDefinitions.map((cmd) => cmd.toJSON()) : []);
-    console.log(old ? `📜 ${commandDefinitions.length} commandes enregistrées` : '📜 Anciennes commandes retirées (OLD_COMMANDS=1 pour les remettre)');
+    console.log(old ? `📜 ${commandDefinitions.length} commandes enregistrées` : '📜 Commandes globales retirées : seulement /play (et /launcher)');
   } catch (err) {
     console.error('❌ Enregistrement des commandes impossible :', err);
   }
@@ -99,7 +97,7 @@ client.once(Events.ClientReady, async (c) => {
   const { HOME_GUILD } = await import('./features/launcherServers.js');
   const pick = (name) => guildCommandDefinitions.filter((cmd) => cmd.name === name).map((cmd) => cmd.toJSON());
   // /launcher sur le serveur du launcher, /play (musique) sur les autres
-  const payloadFor = (guild) => (old ? guildCommandDefinitions.map((cmd) => cmd.toJSON()) : pick(guild.id === HOME_GUILD ? 'launcher' : 'play'));
+  const payloadFor = (guild) => (old ? guildCommandDefinitions.map((cmd) => cmd.toJSON()) : [...pick('play'), ...(guild.id === HOME_GUILD ? pick('launcher') : [])]);
   const registerOn = (guild) => guild.commands.set(payloadFor(guild)).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
   await Promise.all([...c.guilds.cache.values()].map(registerOn));
   console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
