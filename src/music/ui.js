@@ -57,13 +57,16 @@ export function nowPlayingPayload(player) {
     : `\`${formatTime(position)}\` ${progressBar(position, track.duration)} \`${formatTime(track.duration)}\`\n${player.paused ? '⏸️ En pause' : `Fin <t:${endsAt}:R>`}`;
   // Une seule ligne de réglages (plus de grille de 6 cases), les 3 prochains sons, la pochette en grand
   const infos = [`🔊 ${player.volume}%`, `🔁 ${LOOP_LABELS[player.loop]}`, `🎛️ ${filtersLabel(player.filters)}`, player.autoplay ? '♾️ Autoplay' : null].filter(Boolean).join('  ·  ');
+  // Paroles en direct (ligne en cours en gras, la précédente et la suivante en gris)
+  const L = player.lyrics; const li = player.lyricIndex ?? -1;
+  const lyricBlock = L ? `\n\n${[L[li - 1], L[li], L[li + 1]].map((l, k) => (!l ? null : k === 1 ? `> 🎤 **${escape(l.text)}**` : `> -# ${escape(l.text)}`)).filter(Boolean).join('\n') || '> -# 🎤 Les paroles arrivent…'}` : '';
   const upNext = player.queue.slice(0, 3).map((t, i) => `\`${i + 1}\` ${trackLine(t)}`).join('\n');
 
   const embed = new EmbedBuilder()
     .setColor(source.color)
     .setAuthor({ name: `${player.paused ? '⏸️ En pause' : '🎶 En cours'} · ${source.label}` })
     .setTitle(cut(track.title, 250))
-    .setDescription(`${track.artist ? `### ${escape(cut(track.artist, 80))}\n` : ''}${timeLine}\n\n${infos}\nDemandé par ${requester(track)}`)
+    .setDescription(`${track.artist ? `### ${escape(cut(track.artist, 80))}\n` : ''}${timeLine}${lyricBlock}\n\n${infos}\nDemandé par ${requester(track)}`)
     .addFields({ name: '⏭️ À suivre', value: upNext || (player.autoplay ? 'L’autoplay choisit la suite ♾️' : 'File vide : ajoute un son avec ➕') })
     .setFooter({ text: `${player.queue.length} son${player.queue.length > 1 ? 's' : ''} dans la file${queueDuration ? ` · ${formatTime(queueDuration)}` : ''}` });
   if (track.url) embed.setURL(track.url);

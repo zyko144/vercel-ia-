@@ -321,9 +321,11 @@
   <form id="premClaim" method="dialog">
     <header><span class="pdico"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><div><small>FINALISE TON ACHAT</small><b id="pdTitle">Pack Premium</b></div><span class="pdprice" id="pdPrice">3,99 €</span><button type="button" class="pdx" id="pdClose" aria-label="Fermer">✕</button></header>
     <ol class="pdsteps">
-      <li><i>1</i><div><b>Paie sur PayPal</b><small>Envoie <span id="pdAmount">3,99 €</span> à <u>paypal.me/zyko921</u></small></div><button type="button" class="btn sm" id="pdPay">Ouvrir PayPal</button></li>
+      <li><i>1</i><div><b>Paie sur PayPal</b><small>Envoie <span id="pdAmount">3,99 €</span> à <u>paypal.me/zyko921</u></small>
+        <div class="pdwarn"><b>⚠ Envoie en « Entre proches » (Amis et famille)</b><span>Pas « Biens et services ». Sinon le paiement est refusé.</span></div>
+        <div class="pdnote"><span>Note obligatoire dans le paiement</span><b id="pdNote">…</b><button type="button" class="btn sm" id="pdCopyNote">Copier</button></div></div><button type="button" class="btn sm" id="pdPay">Ouvrir PayPal</button></li>
       <li><i>2</i><div><b>Ton compte PayPal</b><input id="premPaypal" maxlength="120" placeholder="Nom ou e-mail utilisé pour payer" required></div></li>
-      <li><i>3</i><div><b>Capture du paiement</b><label class="pddrop" id="pdDrop" tabindex="0"><input type="file" id="premShot" accept="image/*" hidden><img id="pdPrev" alt="" hidden><span id="pdDropTxt">Glisse la capture ici, colle-la (Ctrl+V) ou clique</span></label></div></li>
+      <li><i>3</i><div><b>Capture du paiement (avec la note visible)</b><label class="pddrop" id="pdDrop" tabindex="0"><input type="file" id="premShot" accept="image/*" hidden><img id="pdPrev" alt="" hidden><span id="pdDropTxt">Glisse la capture ici, colle-la (Ctrl+V) ou clique</span></label></div></li>
     </ol>
     <footer><small>Vérifié à la main, en général dans l’heure. Tu es prévenu dès que c’est actif.</small><button type="submit" class="btn premgo" id="pdSend">Envoyer pour vérification</button></footer>
     <div class="pddone" id="pdDone" hidden>

@@ -1944,3 +1944,9 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .pddisc .btn:hover { background: #5865f2; }
 .pddone > .premgo { justify-self: center; min-width: 160px; height: 44px; }
 .pddisc code { color: #fff; background: rgba(0, 0, 0, .3); padding: 1px 5px; border-radius: 5px; }
+.pdwarn { display: grid; gap: 2px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(239, 68, 68, .14); border: 1px solid rgba(239, 68, 68, .55); }
+.pdwarn b { color: #fecaca; font-size: 13px; } .pdwarn span { color: #fca5a5; font-size: 12px; }
+.pdnote { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 196, 57, .1); border: 1px dashed rgba(255, 196, 57, .6); }
+.pdnote span { flex: 1; font-size: 12px; color: #c9bfa0; } .pdnote b { font: 800 16px ui-monospace, monospace; color: var(--gold); letter-spacing: .06em; }
+.pdsteps li:first-child { grid-template-columns: 30px 1fr; } #pdPay { grid-column: 2; justify-self: start; }
+.pdnote b { white-space: nowrap; } .pdnote span { min-width: 0; }
