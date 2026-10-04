@@ -1943,3 +1943,4 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .pddisc .btn { min-height: 36px; padding: 0 14px; font-size: 13px; background: rgba(88, 101, 242, .35); border-color: rgba(88, 101, 242, .6); }
 .pddisc .btn:hover { background: #5865f2; }
 .pddone > .premgo { justify-self: center; min-width: 160px; height: 44px; }
+.pddisc code { color: #fff; background: rgba(0, 0, 0, .3); padding: 1px 5px; border-radius: 5px; }
