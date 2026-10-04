@@ -114,6 +114,10 @@ client.once(Events.ClientReady, async (c) => {
   // Base légère : seulement la musique (/play) et History Launcher. BOT_FULL=1 remet les anciennes fonctions
   // (vocal 24/24, surveillance vocale, IA dans les messages, niveaux, modération…), qui consomment beaucoup sur Render.
   if (FULL) { startVoiceGuard(c); startLevelLoops(c); startTreasury(c); }
+  // Le vocal sert à la musique (comme avant) : le bot rejoint le salon de la personne pour /play,
+  // mais sans vocal 24/24 en base légère (il part quand la musique s'arrête)
+  if (!FULL) { config.voice.enabled = false; config.voice.lockHome = false; } // sinon le bot restait bloqué dans son salon et /play ne le rejoignait pas
+  startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   (await import('./features/launcherReleases.js')).startLauncherReleases(c);
   // Vidéos de présentation : MP d'abord (indépendants), puis l'annonce dans les nouveautés des serveurs du launcher
   import('./features/launcherPremium.js').then((m) => m.startPremiumSync(c)).catch((err) => console.warn('[premium]', err.message));
@@ -137,7 +141,6 @@ client.once(Events.ClientReady, async (c) => {
   autoInstallBotChannels(c).catch((err) => console.warn('[salons] installation :', err.message));
   startVoiceExtras(c);
   startWeeklyReports(c).catch((err) => console.warn('[rapport] démarrage :', err.message));
-  startVoiceKeeper(c).catch((err) => console.warn('[voc] démarrage :', err.message));
   startVoiceAssistant(c).catch((err) => console.warn('[vocal] démarrage :', err.message));
   startReminderLoop(c);
   startSpotifyWatch(c);
@@ -155,6 +158,13 @@ const FULL = process.env.BOT_FULL === '1';
 if (FULL) attachSecurityEvents(client);
 if (FULL) import('./features/antiNuke.js').then((m) => m.attachAntiNuke(client)).catch((err) => console.warn('[anti-nuke]', err.message));
 
+// Base légère : seulement les commandes « !! » (!!clear, !!ban, !!play…), pas l'IA ni le reste
+if (!FULL) {
+  client.on(Events.MessageCreate, (message) => {
+    if (message.author.bot || !message.inGuild() || !message.content.startsWith('!!')) return;
+    import('./features/prefixCommands.js').then((m) => m.prefixCommand(message)).catch((err) => console.warn('[!!]', err.message));
+  });
+}
 if (FULL) client.on(Events.MessageCreate, (message) => {
   onMessage(client, message).catch((err) => console.error('[messageCreate]', err));
 });
