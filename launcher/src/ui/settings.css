@@ -170,7 +170,7 @@
 .setnav button[data-pane] > span:nth-child(2) { flex: 1; text-align: left; }
 .setnav button[data-pane]:hover { background: #ffffff0a; color: #fff; }
 .setnav .setnav-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; font-size: 15px; color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); border: 1px solid color-mix(in srgb, var(--pc) 30%, transparent); }
-.setnav button[data-pane].on { color: #fff; font-weight: 700; background: linear-gradient(100deg, color-mix(in srgb, var(--pc) 24%, #121a2a), #121a2a); border-color: color-mix(in srgb, var(--pc) 45%, transparent); box-shadow: inset 3px 0 0 var(--pc); }
+.setnav button[data-pane].on { color: #fff; font-weight: 700; background: linear-gradient(100deg, color-mix(in srgb, var(--pc) 24%, #121a2a), #121a2a); border-color: color-mix(in srgb, var(--pc) 45%, transparent); box-shadow: none; }
 .setnav button[data-pane].on .setnav-icon { color: #0b101a; background: var(--pc); }
 .setnav-arrow { color: var(--pc); }
 .setnav button[data-pane=general] { --pc: #5aa9ff; } .setnav button[data-pane=apparence] { --pc: #a78bfa; } .setnav button[data-pane=sons] { --pc: #f472b6; }

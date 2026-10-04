@@ -46,3 +46,10 @@
 @media(max-width:1100px) { .prempane.premium-refresh .premgrid { gap: 12px; } .prempane.premium-refresh .premium-copy { padding: 120px 20px 24px; } .prempane.premium-refresh .premium-art { padding-inline: 20px; } }
 @media(max-width:860px) { .premium-refresh .pgrid, .prempane.premium-refresh .premgrid { grid-template-columns: 1fr; } .premium-refresh .premium-offer { min-height: 0; } }
 @media(prefers-reduced-motion:reduce) { .premium-refresh .premium-offer { transition: none; } .premium-refresh .premium-offer:hover { transform: none; } }
+/* Cartes remplies : plus de grand vide en haut, contenu aéré mais serré */
+.premium-refresh .premium-offer { min-height: 0; }
+.premium-copy, .prempane.premium-refresh .premium-copy { padding: 48px 26px 24px; }
+.premium-desc { min-height: 0; }
+.premium-price { margin-top: 14px; }
+.premium-period { margin: 4px 0 16px; }
+.premium-refresh .premium-offer ul { padding: 16px 0 20px; gap: 10px; }
