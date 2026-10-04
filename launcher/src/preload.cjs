@@ -226,6 +226,7 @@ contextBridge.exposeInMainWorld('launcher', {
   onAppError: (fn) => ipcRenderer.on('app:error', (_e, m) => fn(m)),
   onOverlay: (fn) => ipcRenderer.on('overlay:data', (_e, d) => fn(d)),
   onRl: (fn) => ipcRenderer.on('rl:data', (_e, d) => fn(d)),
+  onRlFullscreen: (fn) => ipcRenderer.on('rl:fullscreen', (_e, msg) => fn(msg)),
   ovSize: (w, h) => ipcRenderer.send('ov:size', w, h),
   ovDrag: (phase, dx, dy) => ipcRenderer.send('ov:drag', String(phase), Number(dx) || 0, Number(dy) || 0),
   ovZoom: (z) => ipcRenderer.send('ov:zoom', Number(z)),
