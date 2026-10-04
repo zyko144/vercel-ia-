@@ -1,0 +1,42 @@
+/* Premium : mêmes visuels et hiérarchie dans l’application et sur le site. */
+.premium-refresh { --premium-accent: #e8c65d; --premium-blue: #e8c65d; }
+.prempane.premium-refresh { max-width: 1280px; margin-inline: auto; }
+.premium-refresh .premhero { padding: 12px 0 24px; border: 0; background: none; box-shadow: none; }
+.premium-refresh .premhero h2 { font-size: clamp(28px,3vw,40px); letter-spacing: -.04em; line-height: 1.12; margin: 12px 0; }
+.premium-refresh .premhero h2 svg { display: none; }
+.premium-refresh .premhero p { color: #aaa79f; max-width: 620px; line-height: 1.65; }
+.premium-refresh .premkick, .premium-refresh .kicker { color: var(--premium-accent); }
+.premium-refresh .premstate { color: #c5c0b3; background: #191814; border-color: #38342a; padding: 12px 16px; }
+.premium-refresh .premstate b { color: #e8c65d; }
+.premium-refresh .premgrid, .premium-refresh .pgrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; align-items: stretch; }
+.premium-refresh .premium-offer { padding: 0; gap: 0; min-height: 480px; border: 1px solid #36332a; border-radius: 20px; background: #171612; overflow: hidden; isolation: isolate; box-shadow: 0 18px 45px #0003; display: flex; flex-direction: column; transition: transform .2s,border-color .2s; }
+.premium-refresh .premium-offer:hover { transform: translateY(-2px); border-color: #8d7843; box-shadow: 0 22px 45px #0005; }
+.premium-refresh .premium-offer.best { background: #1c1a13; border-color: #89753e; box-shadow: 0 18px 45px #0004; }
+.premium-refresh .premium-offer.want { outline: 2px solid #e8c65d; outline-offset: 4px; }
+.premium-refresh .premium-offer.best::before { display: none; animation: none; }
+/* Static radial gradients create a soft yellow glow without animated blur or images. */
+.premium-art { position: relative; height: 110px; flex: none; display: flex; align-items: center; padding: 0 28px; background: radial-gradient(ellipse at 16% 25%, #e8bd3620, transparent 70%); }
+.premium-symbol { display: grid; place-items: center; width: 48px; height: 48px; color: #e8c65d; border: 1px solid #e8c65d35; background: #e8c65d09; border-radius: 14px; }
+.premium-symbol svg { width: 26px; height: 26px; }
+.premium-badge { position: absolute; z-index: 1; top: 16px; right: 16px; border: 1px solid #e8c65d70; color: #ead99a; background: #282416; font-size: 11px; font-weight: 750; padding: 7px 11px; border-radius: 99px; }
+.premium-copy { flex: 1; display: flex; flex-direction: column; padding: 0 28px 28px; }
+.premium-eyebrow { font-size: 10px; color: #aea58c; letter-spacing: .13em; font-weight: 750; }
+.premium-refresh .premium-copy h3 { font-size: 24px; color: #f5f2e9; margin: 9px 0 7px; letter-spacing: -.025em; }
+.premium-desc { color: #b4afa2; font-size: 13px; line-height: 1.6; margin: 0; min-height: 42px; }
+.premium-price { color: #faf7ee; font-size: 40px; font-weight: 750; letter-spacing: -.045em; margin-top: 16px; line-height: 1.2; }
+.premium-price small { color: #aaa597; font-size: 13px; font-weight: 400; letter-spacing: 0; }
+.premium-period { font-size: 11px; color: #969184; margin: 5px 0 20px; }
+.premium-refresh .premium-offer ul { list-style: none; padding: 19px 0 22px; margin: 0; display: grid; gap: 11px; border-top: 1px solid #353127; flex: 1; align-content: start; color: #cec8b9; font-size: 13px; line-height: 1.5; }
+.premium-refresh .premium-offer li::before { content: '✓'; color: #dfc46f; margin-right: 9px; font-weight: 700; }
+.premium-refresh .premium-offer .btn { min-height: 46px; height: auto; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; width: 100%; box-sizing: border-box; border: 1px solid #514731; background: #2c271b; color: #eee3bd; box-shadow: none; font-size: 13px; font-weight: 650; border-radius: 12px; text-decoration: none; white-space: normal; text-align: center; }
+.premium-refresh .premium-offer.best .btn { background: #e8c65d; color: #231e11; border-color: #e8c65d; }
+.premium-refresh .premium-offer .btn:hover { filter: brightness(1.12); }
+.premium-refresh .premium-offer .btn:focus-visible { outline: 3px solid #ead281; outline-offset: 3px; }
+.premium-refresh .premium-offer .btn:disabled { color: #a9dfc7; background: #15342c; border-color: #2b5a4b; }
+.premium-refresh .premnote, .premium-refresh .pnote { color: #aaa395; font-size: 12px; line-height: 1.7; }
+.premium-refresh .premclaim { flex-wrap: wrap; background: #201e18; border-color: #45402f; }
+.premium-refresh .premclaim input { min-width: 180px; }
+.premium-refresh .premclaim .premgo { background: #e8c65d; color: #231e11; }
+@media(max-width:1100px) { .prempane.premium-refresh .premgrid { gap: 12px; } .prempane.premium-refresh .premium-copy { padding: 0 20px 24px; } .prempane.premium-refresh .premium-art { padding-inline: 20px; } }
+@media(max-width:860px) { .premium-refresh .pgrid, .prempane.premium-refresh .premgrid { grid-template-columns: 1fr; } .premium-refresh .premium-offer { min-height: 0; } .premium-art { height: 94px; } }
+@media(prefers-reduced-motion:reduce) { .premium-refresh .premium-offer { transition: none; } .premium-refresh .premium-offer:hover { transform: none; } }
