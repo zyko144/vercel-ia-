@@ -345,7 +345,7 @@ pour un rôle) → **Construire**. Tests : `npm run test:tickets`.
 - `PAYPAL_EMAIL` = l'adresse du compte PayPal qui reçoit l'argent. Rempli : bouton PayPal classique, PayPal prévient
   le bot (`/paypal/ipn`), le bot vérifie le paiement auprès de PayPal (bon compte, bon montant, en euros, jamais deux
   fois), puis **active l'offre 31 jours tout seul** et envoie un MP au propriétaire et au chef.
-- Vide : lien `paypal.me/steamapp` (`PAYPAL_ME`), et le chef active à la main.
+- Vide : lien `paypal.me/zyko921` (`PAYPAL_ME`), et le chef active à la main.
 - Dans Discord : `/serveur` › Offre du serveur › **Payer Veilleur / Payer Gardien** (lien déjà rempli).
 
 ### Parrainage

@@ -2849,7 +2849,7 @@ async function premium() {
 ipcMain.handle('premium:get', async (_e, fresh) => { if (fresh) premCache.at = 0; return { ...(await premium()), logged: Boolean(secret('account')) }; });
 ipcMain.handle('premium:buy', (_e, pack) => {
   if (!['ia', 'opti', 'pack'].includes(pack)) return { ok: false };
-  return shell.openExternal(`https://paypal.me/steamapp/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));
+  return shell.openExternal(`https://paypal.me/zyko921/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));
 });
 // « J'ai payé » : le serveur poste la demande dans #paiement-verif ; le Premium arrive quand le chef valide
 ipcMain.handle('premium:claim', async (_e, pack, paypal) => {
