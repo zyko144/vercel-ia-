@@ -1600,17 +1600,20 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.4': [
+    ['✨', 'Menu plus léger', 'Le Premium s’ouvre avec le bouton doré en haut, à côté de Discord : une ligne de moins dans le menu de gauche.', ['#premiumBtn', 'wait900']],
+  ],
   '0.53.3': [
-    ['💳', 'Capture du paiement', 'Pour activer le Premium, ajoute la capture d’écran de ton paiement PayPal avec ton nom PayPal : la vérification va plus vite.', ['#nav [data-view=premium]', 'wait900']],
+    ['💳', 'Capture du paiement', 'Pour activer le Premium, ajoute la capture d’écran de ton paiement PayPal avec ton nom PayPal : la vérification va plus vite.', ['#premiumBtn', 'wait900']],
   ],
   '0.53.2': [
-    ['💳', 'Nouveau compte PayPal', 'Les achats Premium se paient maintenant sur paypal.me/zyko921.', ['#nav [data-view=premium]', 'wait900']],
+    ['💳', 'Nouveau compte PayPal', 'Les achats Premium se paient maintenant sur paypal.me/zyko921.', ['#premiumBtn', 'wait900']],
   ],
   '0.53.1': [
-    ['⭐', 'Achat du Premium vérifié', 'Achète depuis la page Premium (connecté à ton compte), paie sur PayPal puis indique ton nom PayPal : le Premium s’active dès que le paiement est vérifié. Le bouton du site ouvre directement le launcher.', ['#nav [data-view=premium]', 'wait900']],
+    ['⭐', 'Achat du Premium vérifié', 'Achète depuis la page Premium (connecté à ton compte), paie sur PayPal puis indique ton nom PayPal : le Premium s’active dès que le paiement est vérifié. Le bouton du site ouvre directement le launcher.', ['#premiumBtn', 'wait900']],
   ],
   '0.53.0': [
-    ['⭐', 'History Premium', 'Nouvelle page Premium : History IA (2,49 €), Opti Pro (2,49 €) ou les deux (3,99 €) par mois, sans engagement. Paiement PayPal, activé en moins d’une minute.', ['#nav [data-view=premium]', 'wait900']],
+    ['⭐', 'History Premium', 'Nouvelle page Premium : History IA (2,49 €), Opti Pro (2,49 €) ou les deux (3,99 €) par mois, sans engagement. Paiement PayPal, activé en moins d’une minute.', ['#premiumBtn', 'wait900']],
     ['🩺', 'L’opti suit ton PC', 'L’optimisation propose une correction pour chaque problème trouvé par l’analyse (fichiers inutiles, démarrage, réglages, plantages…), ou « Tout corriger » en un clic.'],
     ['❌', '« Ferme le jeu » marche', 'Le jeu en cours se ferme, même installé dans un dossier court (D:\\Fortnite), et l’assistant dit quand ça échoue. « Stop Fortnite » ne met plus la musique en pause.'],
     ['🔕', 'Moins de notifications', 'Jamais deux fois la même en 6 h, 3 par heure au plus. Le boost et le bilan de chaque partie restent dans la cloche.'],
@@ -4354,7 +4357,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.3',
+    version: async () => '0.53.4',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
