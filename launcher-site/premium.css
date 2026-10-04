@@ -9,14 +9,18 @@
 .premium-refresh .premstate { color: #c5c0b3; background: #191814; border-color: #38342a; padding: 12px 16px; }
 .premium-refresh .premstate b { color: #e8c65d; }
 .premium-refresh .premgrid, .premium-refresh .pgrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; align-items: stretch; }
-.premium-refresh .premium-offer { padding: 0; gap: 0; min-height: 480px; border: 1px solid #36332a; border-radius: 20px; background: #171612; overflow: hidden; isolation: isolate; box-shadow: 0 18px 45px #0003; display: flex; flex-direction: column; transition: transform .2s,border-color .2s; }
+.premium-refresh .premium-offer { padding: 0; gap: 0; min-height: 480px; border: 1px solid #36332a; border-radius: 20px; background: radial-gradient(ellipse at 100% 0%, #e8ba3430, transparent 65%), #171612; overflow: hidden; isolation: isolate; box-shadow: 0 18px 45px #0003; display: flex; flex-direction: column; transition: transform .2s,border-color .2s; }
 .premium-refresh .premium-offer:hover { transform: translateY(-2px); border-color: #8d7843; box-shadow: 0 22px 45px #0005; }
-.premium-refresh .premium-offer.best { background: #1c1a13; border-color: #89753e; box-shadow: 0 18px 45px #0004; }
+.premium-refresh .premium-offer.best { background: radial-gradient(ellipse at 100% 0%, #edc84540, transparent 70%), #1c1a13; border-color: #89753e; box-shadow: 0 18px 45px #0004; }
 .premium-refresh .premium-offer.want { outline: 2px solid #e8c65d; outline-offset: 4px; }
 .premium-refresh .premium-offer.best::before { display: none; animation: none; }
-/* Static radial gradients create a soft yellow glow without animated blur or images. */
-.premium-art { position: relative; height: 110px; flex: none; display: flex; align-items: center; padding: 0 28px; background: radial-gradient(ellipse at 16% 25%, #e8bd3620, transparent 70%); }
-.premium-symbol { display: grid; place-items: center; width: 48px; height: 48px; color: #e8c65d; border: 1px solid #e8c65d35; background: #e8c65d09; border-radius: 14px; }
+/* Lightweight local illustrations with static soft yellow lighting. */
+.premium-art { position: relative; height: 160px; flex: none; display: flex; align-items: center; padding: 0 28px; background: radial-gradient(ellipse at 70% 40%, #e8bd364d, transparent 70%); }
+.premium-art::before { content: ""; position: absolute; inset: 0; background: var(--premium-illustration) right center / auto 100% no-repeat; pointer-events: none; }
+.ia { --premium-illustration: url("premium/ia.svg"); }
+.opti { --premium-illustration: url("premium/opti.svg"); }
+.pack { --premium-illustration: url("premium/pack.svg"); }
+.premium-symbol { position: relative; display: grid; place-items: center; width: 48px; height: 48px; color: #e8c65d; border: 1px solid #e8c65d35; background: #e8c65d09; border-radius: 14px; }
 .premium-symbol svg { width: 26px; height: 26px; }
 .premium-badge { position: absolute; z-index: 1; top: 16px; right: 16px; border: 1px solid #e8c65d70; color: #ead99a; background: #282416; font-size: 11px; font-weight: 750; padding: 7px 11px; border-radius: 99px; }
 .premium-copy { flex: 1; display: flex; flex-direction: column; padding: 0 28px 28px; }
@@ -38,5 +42,5 @@
 .premium-refresh .premclaim input { min-width: 180px; }
 .premium-refresh .premclaim .premgo { background: #e8c65d; color: #231e11; }
 @media(max-width:1100px) { .prempane.premium-refresh .premgrid { gap: 12px; } .prempane.premium-refresh .premium-copy { padding: 0 20px 24px; } .prempane.premium-refresh .premium-art { padding-inline: 20px; } }
-@media(max-width:860px) { .premium-refresh .pgrid, .prempane.premium-refresh .premgrid { grid-template-columns: 1fr; } .premium-refresh .premium-offer { min-height: 0; } .premium-art { height: 94px; } }
+@media(max-width:860px) { .premium-refresh .pgrid, .prempane.premium-refresh .premgrid { grid-template-columns: 1fr; } .premium-refresh .premium-offer { min-height: 0; } .premium-art { height: 150px; } }
 @media(prefers-reduced-motion:reduce) { .premium-refresh .premium-offer { transition: none; } .premium-refresh .premium-offer:hover { transform: none; } }
