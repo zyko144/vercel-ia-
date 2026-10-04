@@ -246,14 +246,26 @@ async function findAudio(track) {
     if (best) return best;
   }
 
+  // Le premier résultat SoundCloud peut être Go+, un extrait ou une autre version.
+  // Chercher quelques candidats publics et essayer le suivant si le premier est illisible.
   try {
-    const result = await extractAudio(`scsearch1:${query}`, { firstResult: true });
-    // Pas d'extrait : si SoundCloud ne donne qu'un bout du son, on refuse
-    if (track.duration > 60 && result.meta.duration && result.meta.duration < track.duration * 0.6) {
-      throw new MusicError('seul un extrait est disponible sur SoundCloud');
+    const data = await flatPlaylist(`scsearch5:${query}`, 5);
+    const candidates = (data.entries ?? []).filter((item) => item
+      && matchRatio(query, `${item.title ?? ''} ${item.uploader ?? ''}`) >= 0.7
+      && (!track.duration || !item.duration || Math.abs(item.duration - track.duration) <= 25));
+    let lastError = null;
+    for (const item of candidates.slice(0, 3)) {
+      try {
+        const target = item.webpage_url || item.url;
+        if (!target || !await isPublicUrl(target)) continue;
+        const result = await extractAudio(target);
+        if (!closeEnough(result) || (track.duration > 60 && result.meta.duration < track.duration * 0.6)) continue;
+        return result;
+      } catch (err) { lastError = err; }
     }
-    return result;
+    throw lastError ?? new MusicError('aucune version audio complète disponible sur SoundCloud');
   } catch (err) {
+    if (firstError?.blocked) throw new MusicError(`YouTube bloque le serveur ; ${err.message}`);
     throw firstError ?? err ?? new MusicError('son introuvable');
   }
 }
@@ -268,8 +280,19 @@ export async function prepareTrack(track, { force = false } = {}) {
       .catch(() => null);
   }
 
-  const result = track.playUrl ? await extractAudio(track.playUrl) : await findAudio(track);
+  let result;
+  let recovered = false;
+  if (track.playUrl) {
+    try { result = await extractAudio(track.playUrl); }
+    catch (err) {
+      if (!err.blocked || track.isLive || !track.title || track.source !== 'youtube') throw err;
+      youtubeBlockedUntil = Date.now() + YOUTUBE_BLOCK_PAUSE_MS;
+      result = await findAudio(track);
+      recovered = true;
+    }
+  } else result = await findAudio(track);
   const found = trackFromMeta(result.meta);
+  if (recovered) { track.playUrl = found.playUrl; track.url = found.url; track.source = found.source; }
   track.streamUrl = result.streamUrl;
   track.streamExpiresAt = streamExpiry(result.streamUrl);
   // Un son trouvé via la recherche Deezer est joué depuis YouTube : on affiche la vraie source

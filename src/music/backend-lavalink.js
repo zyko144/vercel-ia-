@@ -398,7 +398,7 @@ export class LavalinkBackend {
     }
 
     if (!serverError && this.node?.usable) throw new MusicError("pas de version d'origine fiable trouvée pour ce son");
-    throw new MusicError(lastError ? `aucun serveur audio n'a pu le lire (${shortError(lastError.message)})` : 'aucun serveur audio disponible');
+    throw new NoAudioNodeError(lastError ? `aucun serveur audio n'a pu le lire (${shortError(lastError.message)})` : 'aucun serveur audio disponible');
   }
 
   /** Code ISRC du son (Deezer) : c'est la recherche la plus sûre pour tomber sur l'enregistrement d'origine. */
