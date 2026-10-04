@@ -3790,7 +3790,8 @@ function premNews(n) {
   const name = PACK_INFO[n.pack]?.[0] ?? 'Premium';
   $('pdDoneT').textContent = n.ok ? `${name} est actif` : 'Paiement non validé';
   $('pdDoneS').textContent = n.ok ? 'Ton paiement a été vérifié : profite de ton Premium, sans redémarrer.' : 'Le paiement n’a pas pu être vérifié. Si tu as bien payé, écris au support (bouton Support en haut).';
-  $('pdDoneIco').classList.toggle('no', !n.ok);
+  $('pdDoneIco').classList.toggle('no', !n.ok); $('pdDoneIco').classList.remove('wait');
+  const t = $('pdTrack').children; t[1].className = n.ok ? 'ok' : 'bad'; t[2].className = n.ok ? 'ok' : ''; $('pdStep2').textContent = n.ok ? 'Vérifié' : 'Refusé';
   $('premClaim').classList.add('sent'); $('pdDone').hidden = false;
   if (!$('premDlg').open) $('premDlg').showModal();
 }
@@ -3810,7 +3811,8 @@ $('premClaim').addEventListener('submit', async (e) => {
   btn.disabled = false; btn.textContent = 'Envoyer pour vérification';
   if (!r?.ok) return toast(r?.error ?? 'Impossible pour le moment');
   $('premPaypal').value = ''; $('premShot').value = ''; claimShotSet(null);
-  $('pdDoneT').textContent = 'Demande envoyée'; $('pdDoneS').textContent = 'Ton Premium s’active dès que le paiement est vérifié, sans redémarrer. Tu auras la réponse ici.'; $('pdDoneIco').classList.remove('no');
+  $('pdDoneT').textContent = 'Demande envoyée'; $('pdDoneS').textContent = 'On vérifie ton paiement. Tu auras la réponse ici, sans redémarrer.'; $('pdDoneIco').classList.remove('no'); $('pdDoneIco').classList.add('wait');
+  const t = $('pdTrack').children; t[1].className = 'now'; t[2].className = ''; $('pdStep2').textContent = 'Vérification';
   e.target.classList.add('sent'); $('pdDone').hidden = false;
 });
 api.onPremiumOpen?.((pack) => openPremium(pack));

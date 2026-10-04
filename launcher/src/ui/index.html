@@ -326,9 +326,12 @@
       <li><i>3</i><div><b>Capture du paiement</b><label class="pddrop" id="pdDrop" tabindex="0"><input type="file" id="premShot" accept="image/*" hidden><img id="pdPrev" alt="" hidden><span id="pdDropTxt">Glisse la capture ici, colle-la (Ctrl+V) ou clique</span></label></div></li>
     </ol>
     <footer><small>Vérifié à la main, en général dans l’heure. Tu es prévenu dès que c’est actif.</small><button type="submit" class="btn premgo" id="pdSend">Envoyer pour vérification</button></footer>
-    <div class="pddone" id="pdDone" hidden><span class="pdico" id="pdDoneIco"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><b id="pdDoneT">Demande envoyée</b><small id="pdDoneS">Ton Premium s’active dès que le paiement est vérifié, sans redémarrer. Tu auras la réponse ici.</small>
-      <div class="pdlink"><small>Facultatif · pour les avantages sur Discord</small><div><button type="button" class="btn" id="pdLink">Lier mon Discord</button><button type="button" class="btn" id="pdJoin">Rejoindre le serveur</button></div></div>
-      <button type="button" class="btn premgo" id="pdOk">Super</button></div>
+    <div class="pddone" id="pdDone" hidden>
+      <div class="pdstat"><span class="pdring" id="pdDoneIco"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><b id="pdDoneT">Demande envoyée</b><small id="pdDoneS">On vérifie ton paiement. Tu auras la réponse ici, sans redémarrer.</small></div>
+      <ol class="pdtrack" id="pdTrack"><li class="ok"><i></i><span>Paiement envoyé</span></li><li class="now"><i></i><span id="pdStep2">Vérification</span></li><li><i></i><span>Premium actif</span></li></ol>
+      <div class="pddisc"><svg class="dc" viewBox="0 0 24 24"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.9 19.9 0 0 0 6 3l1.3-2a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2a19.8 19.8 0 0 0 6-3c.5-5.2-.8-9.7-3.7-13.7zM8.3 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg><div><b>Avantages sur Discord</b><small>Facultatif : rôle Premium doré et IA sans attente.</small></div><button type="button" class="btn" id="pdLink">Lier</button><button type="button" class="btn" id="pdJoin">Rejoindre</button></div>
+      <button type="button" class="btn premgo" id="pdOk">Fermer</button>
+    </div>
   </form>
 </dialog>
 <footer class="player" id="player" hidden>

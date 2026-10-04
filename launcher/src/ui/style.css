@@ -1912,11 +1912,34 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .pddone[hidden] { display: none; }
 .pddone .pdico { width: 64px; height: 64px; border-radius: 20px; } .pddone .pdico svg { width: 32px; height: 32px; }
 .pddone b { font-size: 20px; } .pddone small { color: #c9bfa0; max-width: 320px; }
-.pdlink { display: grid; gap: 8px; justify-items: center; margin: 6px 0 4px; padding: 12px 16px; border-radius: 14px; border: 1px dashed rgba(255, 255, 255, .14); }
-.pdlink > div { display: flex; gap: 8px; } .pdlink small { font-size: 11.5px; }
 .pdico.no { background: linear-gradient(135deg, #f87171, #dc2626); color: #fff; }
 /* Barre du haut : Support, puis Premium collé, puis Discord à sa droite */
 .top .qs-trigger { order: 1; margin-left: auto !important; }
 .top .premtop { order: 2; margin-left: -6px !important; }
 .top .dcbtn { order: 3; margin-left: -6px !important; }
 .top .winbtns { order: 4; }
+/* Écran « demande envoyée » : suivi en 3 étapes + Discord facultatif */
+.pddone { place-content: stretch; align-content: center; justify-items: stretch; gap: 18px; padding: 28px 26px; text-align: left; }
+.pdstat { display: grid; justify-items: center; gap: 8px; text-align: center; }
+.pdring { position: relative; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: #1a1205; box-shadow: 0 0 40px -6px var(--gold); }
+.pdring svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pdring.wait::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--gold); animation: pdspin 1.1s linear infinite; }
+.pdring.no { background: linear-gradient(135deg, #f87171, #dc2626); color: #fff; box-shadow: 0 0 40px -6px #ef4444; }
+@keyframes pdspin { to { transform: rotate(360deg); } }
+.pdstat b { font-size: 21px; } .pdstat small { color: #c9bfa0; max-width: 340px; font-size: 13px; }
+.pdtrack { list-style: none; margin: 0; padding: 14px 16px; display: grid; grid-template-columns: repeat(3, 1fr); border-radius: 16px; background: rgba(255, 255, 255, .035); border: 1px solid rgba(255, 255, 255, .07); }
+.pdtrack li { position: relative; display: grid; justify-items: center; gap: 7px; font-size: 12px; color: #8f876f; text-align: center; }
+.pdtrack li + li::before { content: ''; position: absolute; top: 9px; right: 50%; width: 100%; height: 2px; background: rgba(255, 255, 255, .1); z-index: 0; }
+.pdtrack li.ok + li::before, .pdtrack li.ok::before { background: var(--gold); }
+.pdtrack i { position: relative; z-index: 1; width: 20px; height: 20px; border-radius: 50%; background: #2a2418; border: 2px solid rgba(255, 255, 255, .15); }
+.pdtrack li.ok { color: #ffe7a8; } .pdtrack li.ok i { background: var(--gold); border-color: var(--gold); }
+.pdtrack li.ok i::after { content: '✓'; display: grid; place-items: center; height: 100%; font-size: 11px; font-weight: 900; color: #1a1205; font-style: normal; }
+.pdtrack li.now { color: #fff; } .pdtrack li.now i { border-color: var(--gold); box-shadow: 0 0 0 4px rgba(255, 196, 57, .2); animation: pdpulse 1.4s ease-in-out infinite; }
+.pdtrack li.bad { color: #fca5a5; } .pdtrack li.bad i { background: #ef4444; border-color: #ef4444; }
+@keyframes pdpulse { 50% { box-shadow: 0 0 0 8px rgba(255, 196, 57, 0); } }
+.pddisc { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: linear-gradient(120deg, rgba(88, 101, 242, .2), rgba(88, 101, 242, .06)); border: 1px solid rgba(88, 101, 242, .45); }
+.pddisc .dc { flex: none; width: 34px; height: 34px; padding: 7px; border-radius: 10px; background: #5865f2; fill: #fff; }
+.pddisc > div { flex: 1; min-width: 0; } .pddisc b { display: block; font-size: 14px; } .pddisc small { color: #c7cdfa; font-size: 12px; }
+.pddisc .btn { min-height: 36px; padding: 0 14px; font-size: 13px; background: rgba(88, 101, 242, .35); border-color: rgba(88, 101, 242, .6); }
+.pddisc .btn:hover { background: #5865f2; }
+.pddone > .premgo { justify-self: center; min-width: 160px; height: 44px; }
