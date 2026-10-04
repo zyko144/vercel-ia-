@@ -1821,9 +1821,6 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 .premtop:hover, .isprem .premtop { background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #1a1205; }
 .isprem .premtop { box-shadow: 0 0 18px rgba(255, 196, 57, .45); }
 .premtop + .dcbtn { margin-left: -6px !important; }
-#nav button.premnav { color: #ffd978; }
-#nav button.premnav svg { stroke: var(--gold); }
-#nav button.premnav.on { background: linear-gradient(120deg, rgba(255, 196, 57, .45), rgba(255, 159, 26, .22)); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 196, 57, .5); }
 .prempane { max-width: 1100px; }
 .premhero { padding: 26px 28px; margin-bottom: 16px; border-radius: 22px; border: 1px solid rgba(255, 196, 57, .35); background: radial-gradient(120% 140% at 0% 0%, rgba(255, 196, 57, .22), transparent 55%), linear-gradient(160deg, rgba(255, 159, 26, .08), rgba(255, 255, 255, .02)); }
 .premkick { color: var(--gold); font-size: 11px; font-weight: 800; letter-spacing: .14em; }
