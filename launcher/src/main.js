@@ -1950,6 +1950,8 @@ function handleInvite(argv) {
   const clipCode = url && String(url).match(/^history:\/\/clips\/([A-Z0-9]{4}-?[A-Z0-9]{4})\/?$/i)?.[1];
   if (clipCode) return approveClips(clipCode.toUpperCase().replace(/^(.{4})-?/, '$1-'));
   const m = url && decodeURIComponent(String(url)).match(/^history:\/\/ami\/([\p{L}\p{N}._-]{2,20}#[0-9A-Fa-f]{6})\/?$/u);
+  const prem = url && String(url).match(/^history:\/\/premium\/(ia|opti|pack)\/?$/i)?.[1];
+  if (prem) { showWindow(); setTimeout(() => send('premium:open', prem.toLowerCase()), 800); return; }
   if (!m) return;
   showWindow();
   setTimeout(() => send('invite:friend', { code: m[1] }), 800);
@@ -2837,7 +2839,7 @@ if (!process.env.HL_API) {
 // donc un premium ajouté à la main marche tout de suite, sans mise à jour. Version développeur et démo : tout est ouvert.
 let premCache = { at: 0, v: { ia: false, opti: false } };
 async function premium() {
-  if (!app.isPackaged || process.env.LAUNCHER_DEMO) return { ia: true, opti: true, dev: true };
+  if (process.env.LAUNCHER_DEMO) return { ia: true, opti: true, dev: true };
   if (Date.now() - premCache.at < 60_000) return premCache.v;
   const token = secret('account');
   const r = token ? await api('/api/compte/premium', { token }).catch(() => null) : { status: 401 };
@@ -2847,8 +2849,13 @@ async function premium() {
 ipcMain.handle('premium:get', async (_e, fresh) => { if (fresh) premCache.at = 0; return { ...(await premium()), logged: Boolean(secret('account')) }; });
 ipcMain.handle('premium:buy', (_e, pack) => {
   if (!['ia', 'opti', 'pack'].includes(pack)) return { ok: false };
-  const id = store.data.settings.lastAccount?.id;
-  return shell.openExternal(`${API}/payer-launcher?pack=${pack}${id ? `&compte=${encodeURIComponent(id)}` : ''}`).then(() => ({ ok: true }));
+  return shell.openExternal(`https://paypal.me/steamapp/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));
+});
+// « J'ai payé » : le serveur poste la demande dans #paiement-verif ; le Premium arrive quand le chef valide
+ipcMain.handle('premium:claim', async (_e, pack, paypal) => {
+  const token = secret('account');
+  if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour acheter.' };
+  return api('/api/compte/premium/demande', { method: 'POST', token, body: { pack: String(pack), paypal: String(paypal ?? '').slice(0, 120) } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
 });
 async function api(pathname, { method = 'GET', body, token, timeout = 20_000 } = {}) {
   const res = await fetch(`${API}${pathname}`, {

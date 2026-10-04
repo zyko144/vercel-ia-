@@ -1842,6 +1842,9 @@ body.idle .maint.go .mainttape { animation-play-state: paused; }
 .premgo:disabled { background: rgba(255, 196, 57, .15); color: var(--gold); opacity: 1; }
 .premtag { position: absolute; top: 16px; right: 16px; background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #1a1205; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
 .premnote { color: #a99f86; font-size: 12px; }
+.premclaim { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255, 196, 57, .45); background: rgba(255, 196, 57, .08); }
+.premclaim[hidden] { display: none; }
+.premclaim input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(0, 0, 0, .25); color: inherit; }
 
 /* Assistant IA : look Premium, 3 idées en pastilles, écran d'achat si pas de History IA */
 .aipop { border-color: rgba(255, 196, 57, .3); background: radial-gradient(120% 50% at 100% 0%, rgba(255, 196, 57, .1), transparent 60%), rgba(20, 16, 25, .97); box-shadow: 0 30px 70px rgba(0, 0, 0, .65), 0 0 50px -18px var(--gold); }
