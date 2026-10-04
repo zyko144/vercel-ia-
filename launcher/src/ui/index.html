@@ -297,7 +297,6 @@
 <article class="premcard premium-offer opti" data-pack="opti"><div class="premium-art"><span class="premium-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4m-6-9 3-3 3 3 5-5"/></svg></span></div><div class="premium-copy"><span class="premium-eyebrow">PERFORMANCES PC</span><h3>Opti Pro</h3><p class="premium-desc">Un PC prêt pour ta prochaine partie.</p><div class="premium-price">2,49 €<small> / mois</small></div><p class="premium-period">31 jours d’accès par paiement</p><ul><li>Des corrections selon ton diagnostic</li><li>Boost automatique au lancement du jeu</li><li>Réglages adaptés à tes jeux</li></ul><button type="button" class="btn premgo" data-buy="opti">Acheter avec PayPal</button></div></article>
 <article class="premcard premium-offer pack best" data-pack="pack"><div class="premium-art"><span class="premium-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></span><span class="premium-badge">Le duo · −20 %</span></div><div class="premium-copy"><span class="premium-eyebrow">LE DUO COMPLET</span><h3>Pack Premium</h3><p class="premium-desc">L’assistant et l’optimisation, réunis.</p><div class="premium-price">3,99 €<small> / mois</small></div><p class="premium-period">31 jours d’accès par paiement</p><ul><li>Tout History IA + tout Opti Pro</li><li>Avantages Premium sur le bot Discord</li><li>Un seul accès pour les deux outils</li></ul><button type="button" class="btn premgo" data-buy="pack">Acheter avec PayPal</button></div></article>
     </div>
-    <form class="premclaim" id="premClaim" hidden><b>Paiement envoyé ?</b><input id="premPaypal" maxlength="120" placeholder="Nom ou e-mail de ton compte PayPal" required><label class="btn" id="premShotLbl">Capture du paiement<input type="file" id="premShot" accept="image/*" hidden required></label><button type="submit" class="btn premgo">J’ai payé</button></form>
     <p class="premnote">Paiement PayPal · activé dès que le paiement est vérifié</p>
   </section>
   <section id="view-classement" class="view">
@@ -318,6 +317,18 @@
   <small class="fine" id="voiceState"></small>
 </section>
 
+<dialog class="premdlg" id="premDlg">
+  <form id="premClaim" method="dialog">
+    <header><span class="pdico"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><div><small>FINALISE TON ACHAT</small><b id="pdTitle">Pack Premium</b></div><span class="pdprice" id="pdPrice">3,99 €</span><button type="button" class="pdx" id="pdClose" aria-label="Fermer">✕</button></header>
+    <ol class="pdsteps">
+      <li><i>1</i><div><b>Paie sur PayPal</b><small>Envoie <span id="pdAmount">3,99 €</span> à <u>paypal.me/zyko921</u></small></div><button type="button" class="btn sm" id="pdPay">Ouvrir PayPal</button></li>
+      <li><i>2</i><div><b>Ton compte PayPal</b><input id="premPaypal" maxlength="120" placeholder="Nom ou e-mail utilisé pour payer" required></div></li>
+      <li><i>3</i><div><b>Capture du paiement</b><label class="pddrop" id="pdDrop" tabindex="0"><input type="file" id="premShot" accept="image/*" hidden><img id="pdPrev" alt="" hidden><span id="pdDropTxt">Glisse la capture ici, colle-la (Ctrl+V) ou clique</span></label></div></li>
+    </ol>
+    <footer><small>Vérifié à la main, en général dans l’heure. Tu es prévenu dès que c’est actif.</small><button type="submit" class="btn premgo" id="pdSend">Envoyer pour vérification</button></footer>
+    <div class="pddone" id="pdDone" hidden><span class="pdico"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><b>Demande envoyée</b><small>Ton Premium s’active dès que le paiement est vérifié, sans redémarrer.</small><button type="button" class="btn premgo" id="pdOk">Super</button></div>
+  </form>
+</dialog>
 <footer class="player" id="player" hidden>
   <img class="pcover" id="pCover" alt="">
   <div class="pmeta"><b id="pTitle">Aucune musique</b><small id="pArtist">Lance Spotify ou Deezer</small></div>
