@@ -106,3 +106,38 @@ jobs:
             if echo "$R" | grep -Eq '"(posted|already)": ?true'; then break; fi
             sleep 30
           done || true
+
+  # Version Chromebook : paquet .deb (Linux de ChromeOS), processeurs Intel/AMD et ARM, ajouté à la même release
+  linux:
+    needs: release
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: launcher
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Déjà publiée ?
+        id: exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "v$V" --json assets -q '.assets[].name' 2>/dev/null | grep -qx latest-linux.yml; then echo "yes=true" >> "$GITHUB_OUTPUT"; else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.exists.outputs.yes == 'false'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - name: Construction et publication du .deb
+        if: steps.exists.outputs.yes == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci --no-audit --no-fund
+          npx electron-builder --linux --publish never
+          gh release upload "v${{ steps.exists.outputs.version }}" dist/*.deb dist/latest-linux*.yml --clobber

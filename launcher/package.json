@@ -1,8 +1,10 @@
 {
   "name": "history-launcher",
   "productName": "History Launcher",
-  "version": "0.52.1",
+  "version": "0.52.2",
   "description": "Toute la bibliothèque du PC (Steam, Epic, applis) au même endroit, triée par temps de jeu",
+  "homepage": "https://zyko144.github.io/vercel-ia-/",
+  "author": "History",
   "main": "src/main.js",
   "type": "module",
   "private": true,
@@ -35,6 +37,24 @@
       "deleteAppDataOnUninstall": false,
       "perMachine": false,
       "runAfterFinish": true
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "src/ui/icon.png",
+      "category": "Game",
+      "maintainer": "History",
+      "synopsis": "History Launcher"
+    },
+    "deb": {
+      "artifactName": "History-Launcher-${version}-${arch}.${ext}"
     },
     "directories": {
       "output": "dist"

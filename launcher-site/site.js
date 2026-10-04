@@ -10,6 +10,7 @@
       if (!rel) return;
       const exe = (rel.assets ?? []).find((a) => /\.exe$/i.test(a.name));
       const v = String(rel.tag_name ?? '').replace(/^v/, '');
+      for (const [sel, arch] of [['.dl-cros', 'amd64'], ['.dl-cros-arm', 'arm64']]) { const deb = (rel.assets ?? []).find((a) => a.name.endsWith(`-${arch}.deb`)); if (deb) document.querySelector(sel).href = deb.browser_download_url; }
       if (exe) document.querySelectorAll('.dl-link').forEach((a) => { a.href = exe.browser_download_url; });
       document.getElementById('verPill').textContent = `Version ${v} disponible`;
       if (exe) document.getElementById('dlSize').textContent = `v${v} · ${Math.round(exe.size / 1e6)} Mo`;
