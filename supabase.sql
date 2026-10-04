@@ -64,3 +64,6 @@ create table if not exists public.premium (
   created_at timestamptz not null default now()
 );
 alter table public.premium enable row level security;
+
+-- Premium en un clic : cocher « premium » sur un compte dans launcher_comptes (IA + Opti, à vie)
+alter table public.launcher_comptes add column if not exists premium boolean not null default false;

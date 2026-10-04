@@ -1,5 +1,6 @@
 // Premium de History Launcher : packs IA, Opti, ou les deux (thème jaune dans l'appli).
 // - Payé avec PayPal (/payer-launcher) : activé tout seul 31 jours (voir payments.js, IPN).
+// - Le plus simple : Supabase › launcher_comptes › cocher « premium » (tout, à vie).
 // - Ajouté à la main : Supabase › Table editor › « premium » › Insert row
 //   (compte = pseudo, e-mail ou identifiant du compte ; pack = ia, opti ou pack ; jusqua vide = à vie).
 //   Effet en moins d'une minute, sans mise à jour de l'appli. Supprimer la ligne retire le premium.
@@ -25,6 +26,9 @@ async function rows() {
   if (Date.now() - cache.at < 30_000) return cache.rows;
   const r = SB ? await fetch(`${SB.url}?select=compte,pack,jusqua,note`, { headers: SB.headers }).catch(() => null) : null;
   const list = r?.ok ? await r.json().catch(() => null) : null;
+  // Case « premium » cochée dans la table des comptes (launcher_comptes) : tout le Premium, à vie
+  const ticked = SB ? await fetch(`${config.supabase.url}/rest/v1/launcher_comptes?select=id&premium=eq.true`, { headers: SB.headers }).then((x) => (x.ok ? x.json() : [])).catch(() => []) : [];
+  if (Array.isArray(list) && Array.isArray(ticked)) list.push(...ticked.map((c) => ({ compte: c.id, pack: 'pack', jusqua: null })));
   cache = { at: Date.now(), rows: Array.isArray(list) ? list : ((await load(KEY, [])) ?? []), sb: Array.isArray(list) };
   return cache.rows;
 }
