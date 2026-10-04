@@ -21,7 +21,7 @@ import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupda
 import { unifiedHealth, windowsEvents } from './core/health.js';
 import { PERF_GROUP_SCRIPT, captureFps, ensurePresentMon } from './core/fps.js';
 import { SPOTIFY_METER_PS } from './core/audiometer.js';
-import { LAYERS_KEY, RL_PORT, borderlessIni, classifyAll, fsoOff, fsoOn, enableStatsIni, rlSettingsFile, jsonStream, matchTracker, parseTracker, playlistFromLog, rlLogFile, rlSummary, statsIni, trackerPage, trackerUrl } from './core/rocketleague.js';
+import { RL_PORT, borderlessIni, classifyAll, enableStatsIni, rlSettingsFile, jsonStream, matchTracker, parseTracker, playlistFromLog, rlLogFile, rlSummary, statsIni, trackerPage, trackerUrl } from './core/rocketleague.js';
 import { HOGS_PS, beforeAfter, fpsTone, memoryHogs, overlayCheck, perfBaseline, perfDelta, perfLine, prelaunchChecks, stutterCause } from './core/prelaunch.js';
 import { BALANCED, POWER_SAVER, backupSaves, bestDeal, brightness, clearDir, dirSize, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaLatest, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, unpackSaves, shaderCaches, fortnitePerf, fortniteState, steamPrice, windowsToasts } from './core/gametools.js';
 import { steamLibraries } from './core/steam.js';
@@ -1335,10 +1335,10 @@ setInterval(() => checkDriver().catch(() => {}), 24 * 3_600_000);
 // ---------- Écran d'infos en jeu (Ctrl+Alt+O) : par-dessus les jeux en « plein écran fenêtré » ----------
 let overlay = null;
 let overlayTimer = null;
-function toggleOverlay() {
+async function toggleOverlay() {
   if (overlay && !overlay.isDestroyed()) { clearInterval(overlayTimer); overlay.close(); overlay = null; return; }
   if (!currentSession()) { notify('Aucun jeu lancé', 'Les infos en jeu (Ctrl+Alt+O) s’affichent seulement pendant une partie.'); return; }
-  if (/rocket league/i.test(currentSession()?.name ?? '')) rlBorderless().catch(() => {});
+  if (/rocket league/i.test(currentSession()?.name ?? '') && await rlExclusive()) return warnFullscreen();
   // Anneau Spotify qui bat au son de Spotify seulement (niveau lu tant que l'overlay est ouvert)
   // (lancé seulement quand une musique joue, coupé sinon : pas de processus qui tourne pour rien)
   let meter = null;
@@ -1471,33 +1471,18 @@ async function rlEnableStats(ask = true) {
   rl().statsOff = !ok; store.save();
   return ok;
 }
-/** Overlays visibles en jeu : proposé une fois de passer Rocket League en plein écran sans bordure (fichier sauvegardé à côté). */
-async function rlBorderless(ask = true) {
-  const r = rl();
-  const file = rlSettingsFile(app.getPath('documents'));
-  const text = await readFile(file, 'utf8').catch(() => null);
-  const next = text != null && borderlessIni(text);
-  if (!next) return;
-  // Accepté une fois : remis tout seul à chaque fois (le jeu peut revenir en plein écran exclusif)
-  if (r.borderless) { await writeFile(file, next).catch(() => {}); return; }
-  if (!ask || rlBorderlessAsked) return;
-  rlBorderlessAsked = true; // redemandé au prochain démarrage du launcher si refusé
-  if (!(await confirm('Voir les overlays par-dessus Rocket League ?', 'En plein écran « exclusif », Windows cache toutes les fenêtres par-dessus le jeu. On passe Rocket League en « plein écran sans bordure » : même rendu, et les overlays restent visibles. Fichier TASystemSettings.ini sauvegardé à côté ; relance le jeu pour que ça prenne effet.'))) return;
-  r.borderless = true; store.save();
-  await writeFile(`${file}.history-bak`, text).catch(() => {});
-  await writeFile(file, next).catch(() => {});
+// Plein écran exclusif : Windows cache tout par-dessus le jeu, et forcer l'overlay faisait sortir Rocket League.
+// On ne touche plus au jeu : on prévient (voix tout de suite, notification, message dans le launcher).
+async function rlExclusive() {
+  const text = await readFile(rlSettingsFile(app.getPath('documents')), 'utf8').catch(() => null);
+  return text != null && Boolean(borderlessIni(text));
 }
-let rlBorderlessAsked = false;
-/** Optimisations plein écran coupées pour Rocket League : on propose de les remettre (valeur d'origine gardée). */
-async function rlFso() {
-  if (process.platform !== 'win32' || rl().fsoAsked) return;
-  const out = await new Promise((ok) => execFile('reg.exe', ['query', LAYERS_KEY], { windowsHide: true, timeout: 8000 }, (_e, o) => ok(String(o ?? ''))));
-  const off = fsoOff(out); if (!off) return;
-  rl().fsoAsked = true; store.save();
-  if (!(await confirm('Réactiver les optimisations plein écran de Rocket League ?', 'Elles sont désactivées pour le jeu (propriétés › Compatibilité) : le plein écran devient alors exclusif et cache tout par-dessus. Réactivées, les overlays peuvent s’afficher en plein écran. Réglage Windows réversible (valeur d’origine gardée).'))) return;
-  rl().fsoBak = off; store.save();
-  const next = fsoOn(off.value);
-  execFile('reg.exe', next ? ['add', LAYERS_KEY, '/v', off.path, '/t', 'REG_SZ', '/d', next, '/f'] : ['delete', LAYERS_KEY, '/v', off.path, '/f'], { windowsHide: true, timeout: 8000 }, () => {});
+function warnFullscreen() {
+  const msg = 'Rocket League est en plein écran : passe-le en « Fenêtré » ou « Plein écran fenêtré » (Options › Vidéo › Mode d’affichage) pour voir l’overlay.';
+  speakRaw('Passe Rocket League en plein écran fenêtré pour voir l’overlay.', store.data.settings.voiceName);
+  notify('Overlay : mets Rocket League en fenêtré', msg);
+  if (win && !win.isDestroyed()) win.flashFrame(true);
+  send('rl:fullscreen', msg);
 }
 // Overlays seulement sur le jeu : cachés dès qu'une autre fenêtre est devant (Discord, navigateur…), remis au premier
 // plan en continu quand le jeu est devant (son plein écran repasse devant sinon). Fermés quand le jeu se ferme.
@@ -1517,14 +1502,13 @@ setInterval(async () => {
     if (w.isDestroyed()) continue;
     if (!onGame) { if (w.isVisible()) w.hide(); continue; }
     if (w === rlOv && !/rocket league/i.test(s.name ?? '')) { if (w.isVisible()) w.hide(); continue; }
-    if (!w.isVisible()) w.showInactive();
-    w.setAlwaysOnTop(true, 'screen-saver'); w.moveTop();
+    if (!w.isVisible()) w.showInactive(); // jamais remis devant de force : ça faisait sortir le jeu de son écran
   }
 }, 1000);
-app.whenReady().then(() => setTimeout(() => rlBorderless(false).catch(() => {}), 5000)); // prêt pour le prochain lancement
 async function toggleRlOverlay(auto = false) {
   if (rlOv && !rlOv.isDestroyed()) { if (auto) return; rlOv.close(); rlOv = null; return; }
   if (!/rocket league/i.test(currentSession()?.name ?? '')) { notify('Rocket League n’est pas lancé', 'L’overlay Rocket League (Ctrl+Alt+I) s’affiche seulement sur le jeu.'); return; }
+  if (await rlExclusive()) { if (!auto) warnFullscreen(); return; }
   rlOv = new BrowserWindow({
     width: 264, height: 340, ...ovPlace('rl', 264), frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, hasShadow: false,
@@ -1538,7 +1522,7 @@ async function toggleRlOverlay(auto = false) {
   rlOv.once('ready-to-show', () => { rlOv?.showInactive(); rlPush(); });
   clearTimeout(rlHideTimer);
   if (auto) rlHideTimer = setTimeout(() => { if (rlOv && !rlOv.isDestroyed()) rlOv.close(); }, 15_000);
-  if (!auto) rlEnableStats(true).then(() => rlPush()).then(() => rlBorderless()).catch(() => {});
+  if (!auto) rlEnableStats(true).then(() => rlPush()).catch(() => {});
   rlConnect(); rlProfile().catch(() => {});
 }
 
@@ -3362,7 +3346,7 @@ async function sessionTick(s) {
   heatCheck(sess, snap);
 }
 async function sessionStart(s) {
-  if (/rocket league/i.test(s.name ?? '')) { toggleRlOverlay(true).catch(() => {}); rlEnableStats(false).catch(() => {}); rlBorderless().catch(() => {}); rlFso().catch(() => {}); } // dernière game en petit au lancement
+  if (/rocket league/i.test(s.name ?? '')) { toggleRlOverlay(true).catch(() => {}); rlEnableStats(false).catch(() => {}); } // dernière game en petit au lancement
   const item = items.find((i) => i.id === s.id);
   coreLoad();
   sess = { id: s.id, name: s.name, start: Date.now(), samples: [], cap: null, live: null, pings: [] };
