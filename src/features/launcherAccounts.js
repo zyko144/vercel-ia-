@@ -494,7 +494,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const compte = await me(token);
       if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History.' });
       const b = await readJson(req);
-      const r = await (await import('./launcherPremium.js')).requestValidation(compte, String(b.pack ?? ''), b.paypal);
+      const r = await (await import('./launcherPremium.js')).requestValidation(compte, String(b.pack ?? ''), b.paypal, b.shot);
       return send(res, r.status, r);
     }
     if (route === 'POST /api/compte/ia') {

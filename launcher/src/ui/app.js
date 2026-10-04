@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.3': [
+    ['💳', 'Capture du paiement', 'Pour activer le Premium, ajoute la capture d’écran de ton paiement PayPal avec ton nom PayPal : la vérification va plus vite.', ['#nav [data-view=premium]', 'wait900']],
+  ],
   '0.53.2': [
     ['💳', 'Nouveau compte PayPal', 'Les achats Premium se paient maintenant sur paypal.me/zyko921.', ['#nav [data-view=premium]', 'wait900']],
   ],
@@ -3751,11 +3754,18 @@ document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click
   $('premClaim').dataset.pack = b.dataset.buy; $('premClaim').hidden = false; $('premPaypal').focus();
   toast('Paie sur PayPal, puis indique ton nom PayPal ici');
 }));
+$('premShot').addEventListener('change', () => { $('premShotLbl').firstChild.textContent = $('premShot').files[0] ? '✓ Capture ajoutée' : 'Capture du paiement'; });
 $('premClaim').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const r = await api.premiumClaim?.(e.target.dataset.pack, $('premPaypal').value).catch(() => null);
+  const btn = e.target.querySelector('[type=submit]');
+  if (btn.disabled) return; // un seul envoi, même en double-cliquant
+  const shot = $('premShot').files[0] && await shrinkImage($('premShot').files[0]).catch(() => null);
+  if (!shot) return toast('Ajoute la capture d’écran du paiement PayPal');
+  btn.disabled = true;
+  const r = await api.premiumClaim?.(e.target.dataset.pack, $('premPaypal').value, shot).catch(() => null);
+  btn.disabled = false;
   if (!r?.ok) return toast(r?.error ?? 'Impossible pour le moment');
-  e.target.hidden = true; $('premPaypal').value = '';
+  e.target.hidden = true; $('premPaypal').value = ''; $('premShot').value = ''; $('premShot').dispatchEvent(new Event('change'));
   toast('Merci ! Ton Premium s’active dès que le paiement est vérifié');
 });
 api.onPremiumOpen?.((pack) => openPremium(pack));
@@ -4344,7 +4354,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.2',
+    version: async () => '0.53.3',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

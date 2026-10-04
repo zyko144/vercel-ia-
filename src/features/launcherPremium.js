@@ -120,17 +120,27 @@ export function startPremiumSync(client) {
 // L'appli envoie « j'ai payé » (nom PayPal) : une carte arrive dans #paiement-verif (visible du chef seulement),
 // avec toutes les infos. ✅ active le pack 31 jours, ❌ refuse. Rien n'est activé sans ce clic.
 const VERIF = '💳・paiement-verif';
-async function verifChannel() {
+let verifP = null;
+const verifChannel = () => (verifP ??= findOrCreateVerif().then((c) => c ?? (verifP = null)));
+async function findOrCreateVerif() {
   const guild = await bot?.guilds.fetch(HOME_GUILD).catch(() => null);
   if (!guild) return null;
   const { ChannelType, PermissionFlagsBits } = await import('discord.js');
   return guild.channels.cache.find((c) => c.name === VERIF) ?? guild.channels.create({ name: VERIF, type: ChannelType.GuildText, reason: 'Paiements Premium à vérifier',
     permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }, { id: config.ownerId, allow: [PermissionFlagsBits.ViewChannel] }, { id: bot.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }] }).catch(() => null);
 }
-export async function requestValidation(compte, pack, paypal) {
+export async function requestValidation(compte, pack, paypal, shot) {
   if (!PACKS[pack]) return { status: 400, error: 'Pack inconnu.' };
   const pp = String(paypal ?? '').trim().slice(0, 120);
   if (pp.length < 2) return { status: 400, error: 'Indique le nom ou l’e-mail de ton compte PayPal.' };
+  const img = /^data:image\/jpeg;base64,/.test(String(shot ?? '')) ? Buffer.from(String(shot).split(',')[1], 'base64') : null;
+  if (!img || img.length > 1_200_000) return { status: 400, error: 'Ajoute la capture d’écran du paiement PayPal.' };
+  if (pending.has(compte.id)) return { status: 200, ok: true }; // même demande envoyée deux fois : un seul message
+  pending.add(compte.id);
+  try { return await postRequest(compte, pack, pp, img); } finally { setTimeout(() => pending.delete(compte.id), 60_000); }
+}
+const pending = new Set();
+async function postRequest(compte, pack, pp, img) {
   const all = (await load('premium-demandes', {})) ?? {};
   if (Object.values(all).filter((d) => d.account === compte.id && d.status === 'attente').length >= 3) return { status: 429, error: 'Tu as déjà des paiements en attente de vérification.' };
   const ch = await verifChannel();
@@ -148,7 +158,8 @@ export async function requestValidation(compte, pack, paypal) {
         { name: 'Discord lié', value: a.discordId ? `<@${a.discordId}>` : 'non', inline: true },
         { name: 'Premium actuel', value: cur.ia || cur.opti ? ['ia', 'opti'].filter((k) => cur[k]).join(' + ') : 'aucun', inline: true },
         { name: 'Identifiant du compte', value: `\`${a.id}\``, inline: false },
-      ], timestamp: new Date().toISOString(), footer: { text: `Demande ${id}` } }],
+      ], image: { url: 'attachment://paiement.jpg' }, timestamp: new Date().toISOString(), footer: { text: `Demande ${id}` } }],
+    files: [{ attachment: img, name: 'paiement.jpg' }],
     components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`prem:ok:${id}`).setLabel('Paiement reçu : activer').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`prem:no:${id}`).setLabel('Refuser').setStyle(ButtonStyle.Danger))],
     allowedMentions: { users: [config.ownerId] },
   });
