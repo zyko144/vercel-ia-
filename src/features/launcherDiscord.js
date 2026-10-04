@@ -70,6 +70,7 @@ export async function profileOf(accountId) {
 }
 const hours = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, '0')}` : `${Math.round(m)} min`);
 
+const LINK_CHANNEL = process.env.LAUNCHER_LIER_SALON || '1556408553982402671';
 export async function handleLauncherCommand(client, interaction) {
   const sub = interaction.options.getSubcommand();
   if (sub === 'telecharger') {
@@ -84,19 +85,20 @@ export async function handleLauncherCommand(client, interaction) {
     return interaction.editReply(r.error ? `❌ Impossible : ${r.error} (le bot a besoin de « Gérer les salons »).` : `✅ Salons prêts : <#${r.infos}> · <#${r.news}> · <#${r.deals}>. Les 3 dernières mises à jour sont postées, les suivantes arriveront toutes seules.`);
   }
   if (sub === 'lier') {
-    const r = await linkDiscord(interaction.options.getString('code', true), interaction.user.id);
-    if (!r.ok) return interaction.reply({ content: `❌ ${r.error}`, ...PRIVATE });
+    // Seulement dans #lier-son-compte ; réponse tout de suite (plus de « réfléchit » sans fin), rôles ensuite en fond
+    if (interaction.channelId !== LINK_CHANNEL) return interaction.reply({ content: `🔗 Colle cette commande dans le salon <#${LINK_CHANNEL}>.`, ...PRIVATE });
     await interaction.deferReply(PRIVATE);
-    const p = await profileOf(r.id);
-    syncMember(client, interaction.user.id, p).catch(() => {});
-    return cardReply(interaction, { id: r.id, pseudo: r.pseudo }, interaction.user, p, `✅ Ton compte Discord est lié au compte History **${r.pseudo}**. Tes rôles arrivent dans quelques secondes.`);
+    const r = await linkDiscord(interaction.options.getString('code', true), interaction.user.id).catch((err) => ({ ok: false, error: err.message }));
+    if (!r.ok) return interaction.editReply({ content: `❌ ${r.error}` });
+    profileOf(r.id).then((p) => syncMember(client, interaction.user.id, p)).catch(() => {});
+    return interaction.editReply({ content: `✅ **Ton compte a bien été lié** au compte History **${r.pseudo}**. Tes rôles arrivent dans quelques secondes.` });
   }
   if (sub === 'comparer') return compareCommand(interaction);
   if (sub === 'fps') return fpsCommand(interaction);
   const user = interaction.options.getUser('membre') ?? interaction.user;
   const acc = await accountByDiscord(user.id);
   if (!acc) {
-    return interaction.reply({ content: user.id === interaction.user.id ? '🔗 Ton compte n’est pas encore lié : dans le launcher, ouvre Paramètres › Compte › « Lier Discord », puis tape `/launcher lier code:XXXXXX`.' : `${user.username} n’a pas lié de compte History.`, ...PRIVATE });
+    return interaction.reply({ content: user.id === interaction.user.id ? `🔗 Ton compte n’est pas encore lié : dans le launcher, ouvre Paramètres › Compte › « Lier Discord », puis colle \`/launcher lier code:XXXXXX\` dans <#${LINK_CHANNEL}>.` : `${user.username} n’a pas lié de compte History.`, ...PRIVATE });
   }
   const p = await profileOf(acc.id);
   // Carte animée aux couleurs du launcher (texte seul si trop de demandes ou si le rendu échoue)
