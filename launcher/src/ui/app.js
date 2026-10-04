@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.10': [
+    ['⭐', 'Offres Premium plus complètes', 'Cartes mieux remplies et 2 avantages de plus par offre (fermer un jeu en une phrase, soirées entre amis, nettoyage profond, support prioritaire…).', ['#premiumBtn', 'wait900']],
+  ],
   '0.53.9': [
     ['💳', 'Réponse du paiement dans l’appli', 'Quand ton paiement Premium est accepté ou refusé, le launcher te le dit directement. Et tu peux lier ton Discord et rejoindre le serveur en un clic après l’achat.', ['#premiumBtn', 'wait900']],
   ],
@@ -4401,7 +4404,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.9',
+    version: async () => '0.53.10',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
