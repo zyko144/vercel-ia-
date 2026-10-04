@@ -2843,10 +2843,15 @@ async function premium() {
   if (Date.now() - premCache.at < 60_000) return premCache.v;
   const token = secret('account');
   const r = token ? await api('/api/compte/premium', { token }).catch(() => null) : { status: 401 };
-  if (r) premCache = { at: Date.now(), v: r.status === 200 ? { ia: Boolean(r.ia), opti: Boolean(r.opti), until: r.until } : { ia: false, opti: false } };
+  if (r) premCache = { at: Date.now(), v: r.status === 200 ? { ia: Boolean(r.ia), opti: Boolean(r.opti), until: r.until, news: r.news } : { ia: false, opti: false } };
   return premCache.v;
 }
-ipcMain.handle('premium:get', async (_e, fresh) => { if (fresh) premCache.at = 0; return { ...(await premium()), logged: Boolean(secret('account')) }; });
+ipcMain.handle('premium:get', async (_e, fresh) => {
+  if (fresh) premCache.at = 0;
+  const p = { ...(await premium()), logged: Boolean(secret('account')) };
+  delete premCache.v.news; // réponse du chef montrée une seule fois
+  return p;
+});
 ipcMain.handle('premium:buy', (_e, pack) => {
   if (!['ia', 'opti', 'pack'].includes(pack)) return { ok: false };
   return shell.openExternal(`https://paypal.me/zyko921/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));

@@ -167,6 +167,15 @@ async function postRequest(compte, pack, pp, img) {
   await save('premium-demandes', all);
   return { status: 200, ok: true };
 }
+/** Réponses du chef (acceptée / refusée) pas encore montrées dans l'appli : rendues une seule fois. */
+export async function takeNews(accountId) {
+  const all = (await load('premium-demandes', {})) ?? {};
+  const news = Object.entries(all).filter(([, d]) => d.account === accountId && d.status !== 'attente' && !d.seen);
+  if (!news.length) return [];
+  for (const [, d] of news) d.seen = true;
+  await save('premium-demandes', all);
+  return news.map(([id, d]) => ({ id, pack: d.pack, ok: d.status === 'validé' }));
+}
 export async function onPremiumInteraction(interaction) {
   if (interaction.user.id !== config.ownerId) return interaction.reply({ content: 'Réservé au chef.', ephemeral: true });
   const [, act, id] = interaction.customId.split(':');

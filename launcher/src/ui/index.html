@@ -326,7 +326,9 @@
       <li><i>3</i><div><b>Capture du paiement</b><label class="pddrop" id="pdDrop" tabindex="0"><input type="file" id="premShot" accept="image/*" hidden><img id="pdPrev" alt="" hidden><span id="pdDropTxt">Glisse la capture ici, colle-la (Ctrl+V) ou clique</span></label></div></li>
     </ol>
     <footer><small>Vérifié à la main, en général dans l’heure. Tu es prévenu dès que c’est actif.</small><button type="submit" class="btn premgo" id="pdSend">Envoyer pour vérification</button></footer>
-    <div class="pddone" id="pdDone" hidden><span class="pdico"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><b>Demande envoyée</b><small>Ton Premium s’active dès que le paiement est vérifié, sans redémarrer.</small><button type="button" class="btn premgo" id="pdOk">Super</button></div>
+    <div class="pddone" id="pdDone" hidden><span class="pdico" id="pdDoneIco"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><b id="pdDoneT">Demande envoyée</b><small id="pdDoneS">Ton Premium s’active dès que le paiement est vérifié, sans redémarrer. Tu auras la réponse ici.</small>
+      <div class="pdlink"><small>Facultatif · pour les avantages sur Discord</small><div><button type="button" class="btn" id="pdLink">Lier mon Discord</button><button type="button" class="btn" id="pdJoin">Rejoindre le serveur</button></div></div>
+      <button type="button" class="btn premgo" id="pdOk">Super</button></div>
   </form>
 </dialog>
 <footer class="player" id="player" hidden>
