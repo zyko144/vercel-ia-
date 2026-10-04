@@ -3,9 +3,6 @@
 (() => {
   const REPO = 'zyko144/vercel-ia-';
 
-  // Premium : liens de paiement vers le serveur du moment (api.json, changement d'hébergeur sans toucher au site)
-  fetch('api.json').then((r) => r.json()).then((j) => { if (/^https:\/\/[\w.-]+$/.test(String(j?.api ?? '').replace(/\/+$/, ''))) document.querySelectorAll('.pbuy').forEach((a) => { a.href = `${j.api.replace(/\/+$/, '')}/payer-launcher?pack=${a.dataset.pack}`; }); }).catch(() => {});
-
   // Dernière version publiée : lien direct vers l'installateur .exe
   fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
     .then((r) => (r.ok ? r.json() : null))

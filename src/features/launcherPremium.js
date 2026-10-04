@@ -37,7 +37,6 @@ async function rows() {
 export async function premiumOf(compte) {
   const a = (await findAccount(compte.id)) ?? compte;
   const out = { ia: false, opti: false, until: { ia: undefined, opti: undefined } };
-  if (a.discordId && a.discordId === config.ownerId) return { ia: true, opti: true, until: { ia: null, opti: null } };
   const keys = new Set([a.id, a.pseudo, a.email, a.discordId].filter(Boolean).map((k) => String(k).toLowerCase()));
   for (const r of await rows()) {
     if (!keys.has(String(r.compte ?? '').trim().toLowerCase()) || !PACKS[r.pack]) continue;
@@ -79,7 +78,9 @@ export const accountForPayment = (q) => findAccount(q);
 // Compte Premium lié à Discord (Paramètres › Compte) : rôle « ⭐ Premium » doré sur le serveur History,
 // IA du bot sans attente et 4× plus d'images par jour, rappel en MP 3 jours avant la fin.
 const ROLE = '⭐ Premium';
+let bot = null;
 export function startPremiumSync(client) {
+  bot = client;
   const tick = async () => {
     const ids = new Map();
     for (const a of await linkedAccounts()) {
@@ -113,4 +114,58 @@ export function startPremiumSync(client) {
   const run = () => tick().catch((err) => console.warn('[premium]', err.message));
   run();
   setInterval(run, 5 * 60_000).unref?.();
+}
+
+// ===================== Paiement validé à la main sur Discord =====================
+// L'appli envoie « j'ai payé » (nom PayPal) : une carte arrive dans #paiement-verif (visible du chef seulement),
+// avec toutes les infos. ✅ active le pack 31 jours, ❌ refuse. Rien n'est activé sans ce clic.
+const VERIF = '💳・paiement-verif';
+async function verifChannel() {
+  const guild = await bot?.guilds.fetch(HOME_GUILD).catch(() => null);
+  if (!guild) return null;
+  const { ChannelType, PermissionFlagsBits } = await import('discord.js');
+  return guild.channels.cache.find((c) => c.name === VERIF) ?? guild.channels.create({ name: VERIF, type: ChannelType.GuildText, reason: 'Paiements Premium à vérifier',
+    permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }, { id: config.ownerId, allow: [PermissionFlagsBits.ViewChannel] }, { id: bot.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }] }).catch(() => null);
+}
+export async function requestValidation(compte, pack, paypal) {
+  if (!PACKS[pack]) return { status: 400, error: 'Pack inconnu.' };
+  const pp = String(paypal ?? '').trim().slice(0, 120);
+  if (pp.length < 2) return { status: 400, error: 'Indique le nom ou l’e-mail de ton compte PayPal.' };
+  const all = (await load('premium-demandes', {})) ?? {};
+  if (Object.values(all).filter((d) => d.account === compte.id && d.status === 'attente').length >= 3) return { status: 429, error: 'Tu as déjà des paiements en attente de vérification.' };
+  const ch = await verifChannel();
+  if (!ch) return { status: 503, error: 'Vérification indisponible pour le moment, réessaie plus tard.' };
+  const a = (await findAccount(compte.id)) ?? compte;
+  const cur = await premiumOf(a);
+  const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
+  await ch.send({
+    content: `<@${config.ownerId}> nouveau paiement à vérifier`,
+    embeds: [{ color: 0xffc439, title: `${PACKS[pack].emoji} ${PACKS[pack].label} · ${PACKS[pack].price.replace('.', ',')} €`, description: 'Vérifie dans PayPal qu’un paiement de ce montant est bien arrivé avec ce nom, puis valide.',
+      fields: [
+        { name: 'Nom / e-mail PayPal déclaré', value: pp, inline: false },
+        { name: 'Compte History', value: `${a.pseudo}\n${a.email ?? '—'}`, inline: true },
+        { name: 'Discord lié', value: a.discordId ? `<@${a.discordId}>` : 'non', inline: true },
+        { name: 'Premium actuel', value: cur.ia || cur.opti ? ['ia', 'opti'].filter((k) => cur[k]).join(' + ') : 'aucun', inline: true },
+        { name: 'Identifiant du compte', value: `\`${a.id}\``, inline: false },
+      ], timestamp: new Date().toISOString(), footer: { text: `Demande ${id}` } }],
+    components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`prem:ok:${id}`).setLabel('Paiement reçu : activer').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`prem:no:${id}`).setLabel('Refuser').setStyle(ButtonStyle.Danger))],
+    allowedMentions: { users: [config.ownerId] },
+  });
+  all[id] = { account: a.id, pack, paypal: pp, at: Date.now(), status: 'attente' };
+  await save('premium-demandes', all);
+  return { status: 200, ok: true };
+}
+export async function onPremiumInteraction(interaction) {
+  if (interaction.user.id !== config.ownerId) return interaction.reply({ content: 'Réservé au chef.', ephemeral: true });
+  const [, act, id] = interaction.customId.split(':');
+  const all = (await load('premium-demandes', {})) ?? {};
+  const d = all[id];
+  if (!d || d.status !== 'attente') return interaction.reply({ content: 'Demande déjà traitée ou introuvable.', ephemeral: true });
+  d.status = act === 'ok' ? 'validé' : 'refusé';
+  const row = act === 'ok' ? await grantPack(d.account, d.pack, `manuel-${id}`) : null;
+  await save('premium-demandes', all);
+  await interaction.update({ content: act === 'ok' ? `✅ Activé jusqu’au ${new Date(row.jusqua).toLocaleDateString('fr-FR')}` : '❌ Refusé', components: [] });
+  const a = await findAccount(d.account);
+  if (a?.discordId) await (await bot.users.fetch(a.discordId).catch(() => null))?.send(act === 'ok' ? `⭐ Paiement reçu : **${PACKS[d.pack].label}** est actif dans History Launcher. Merci !` : 'Ton paiement Premium n’a pas pu être vérifié. Écris au support dans History Launcher si besoin.').catch(() => {});
 }

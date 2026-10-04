@@ -6,7 +6,9 @@ ipcRenderer.on('ui:trim', () => { try { webFrame.clearCache(); } catch { /* rien
 contextBridge.exposeInMainWorld('launcher', {
   platform: process.platform,
   premiumGet: (fresh) => ipcRenderer.invoke('premium:get', fresh),
-  premiumBuy: (pack) => ipcRenderer.invoke('premium:buy', pack), // Chromebook (Linux) : les outils Windows sont cachés
+  premiumBuy: (pack) => ipcRenderer.invoke('premium:buy', pack),
+  premiumClaim: (pack, paypal) => ipcRenderer.invoke('premium:claim', pack, paypal),
+  onPremiumOpen: (cb) => ipcRenderer.on('premium:open', (_e, pack) => cb(pack)), // Chromebook (Linux) : les outils Windows sont cachés
   notebook: (id) => ipcRenderer.invoke('notebook:get', id),
   saveNotebook: (id, value) => ipcRenderer.invoke('notebook:set', id, value),
   supportDiagnostic: () => ipcRenderer.invoke('support:diagnostic'),

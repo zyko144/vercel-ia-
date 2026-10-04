@@ -160,6 +160,7 @@ client.on(Events.MessageCreate, (message) => {
 client.on(Events.InteractionCreate, (interaction) => {
   if (String(interaction.customId ?? '').startsWith('support:')) return void onSupportInteraction(interaction).catch(err => console.warn('[support]', err.message));
   // Notes ⭐ des vidéos de présentation (MP)
+  if (String(interaction.customId ?? '').startsWith('prem:')) return void import('./features/launcherPremium.js').then((m) => m.onPremiumInteraction(interaction)).catch((err) => console.error('[premium]', err));
   if (String(interaction.customId ?? '').startsWith('promo:')) return void onPromoInteraction(client, interaction).catch((err) => console.error('[promo]', err));
   onInteraction(client, interaction).catch((err) => console.error('[interactionCreate]', err));
 });

@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.1': [
+    ['⭐', 'Achat du Premium vérifié', 'Achète depuis la page Premium (connecté à ton compte), paie sur PayPal puis indique ton nom PayPal : le Premium s’active dès que le paiement est vérifié. Le bouton du site ouvre directement le launcher.', ['#nav [data-view=premium]', 'wait900']],
+  ],
   '0.53.0': [
     ['⭐', 'History Premium', 'Nouvelle page Premium : History IA (2,49 €), Opti Pro (2,49 €) ou les deux (3,99 €) par mois, sans engagement. Paiement PayPal, activé en moins d’une minute.', ['#nav [data-view=premium]', 'wait900']],
     ['🩺', 'L’opti suit ton PC', 'L’optimisation propose une correction pour chaque problème trouvé par l’analyse (fichiers inutiles, démarrage, réglages, plantages…), ou « Tout corriger » en un clic.'],
@@ -3739,7 +3742,20 @@ for (const n of ['optiRun', 'optiTweak', 'optiStartup', 'optiSysApply', 'optiSto
   const f = api[n];
   if (f) api[n] = async (...a) => ((await premOk('opti')) ? f(...a) : (openPremium('opti'), { ok: false, error: 'réservé à ⭐ Opti Pro' }));
 }
-document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', () => { api.premiumBuy?.(b.dataset.buy); toast('Paiement ouvert dans ton navigateur : le Premium s’active tout seul juste après'); }));
+document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', () => {
+  if (!prem?.logged && !prem?.dev) return toast('Connecte-toi à ton compte History (Paramètres › Compte) pour acheter');
+  api.premiumBuy?.(b.dataset.buy);
+  $('premClaim').dataset.pack = b.dataset.buy; $('premClaim').hidden = false; $('premPaypal').focus();
+  toast('Paie sur PayPal, puis indique ton nom PayPal ici');
+}));
+$('premClaim').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await api.premiumClaim?.(e.target.dataset.pack, $('premPaypal').value).catch(() => null);
+  if (!r?.ok) return toast(r?.error ?? 'Impossible pour le moment');
+  e.target.hidden = true; $('premPaypal').value = '';
+  toast('Merci ! Ton Premium s’active dès que le paiement est vérifié');
+});
+api.onPremiumOpen?.((pack) => openPremium(pack));
 $('premiumBtn').addEventListener('click', () => openPremium());
 addEventListener('focus', () => { if (prem && !prem.dev) loadPremium(true); });
 loadPremium();
@@ -4325,7 +4341,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.0',
+    version: async () => '0.53.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
