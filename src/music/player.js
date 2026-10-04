@@ -393,7 +393,7 @@ export class GuildPlayer {
     return undefined;
   }
 
-  /** Sans musique pendant 3 min : le bot retourne dans son vocal habituel (sans se déconnecter). */
+  /** Sans musique pendant 3 min : le bot quitte le vocal. */
   scheduleIdle() {
     clearTimeout(this.timers.idle);
     this.timers.idle = setTimeout(() => {
@@ -404,7 +404,8 @@ export class GuildPlayer {
   /** Retour au vocal habituel en gardant la connexion : le prochain /play démarre tout de suite. */
   async goHome() {
     clearSession(this.guild.id).catch(() => {});
-    if (this.backend?.moveToHome && config.voice.enabled) {
+    // Le bot ne reste plus en vocal 24/24 : sans musique, il quitte le salon (sauf BOT_FULL=1)
+    if (this.backend?.moveToHome && config.voice.enabled && process.env.BOT_FULL === '1') {
       await this.backend.moveToHome().catch((err) => console.warn('[musique] retour au vocal :', err.message));
       return;
     }

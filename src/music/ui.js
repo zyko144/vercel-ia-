@@ -28,11 +28,10 @@ export function parseTime(input) {
   return parts.reduce((total, n) => total * 60 + n, 0);
 }
 
-function progressBar(position, duration, size = 16) {
+function progressBar(position, duration, size = 18) {
   if (!duration) return '';
-  const ratio = Math.min(Math.max(position / duration, 0), 1);
-  const index = Math.min(size - 1, Math.round(ratio * (size - 1)));
-  return Array.from({ length: size }, (_, i) => (i < index ? '▬' : i === index ? '🔘' : '─')).join('');
+  const index = Math.round(Math.min(Math.max(position / duration, 0), 1) * (size - 1));
+  return Array.from({ length: size }, (_, i) => (i < index ? '━' : i === index ? '●' : '─')).join('');
 }
 
 const requester = (track) => (track.requestedBy === 'autoplay' ? '♾️ Autoplay' : track.requestedBy ? `<@${track.requestedBy}>` : '—');
@@ -49,31 +48,26 @@ export function nowPlayingPayload(player) {
 
   const source = SOURCES[track.source] ?? SOURCES.web;
   const position = player.position();
-  const next = player.queue[0];
   const queueDuration = player.queue.reduce((sum, t) => sum + (t.duration || 0), 0);
   // Minuterie de fin : Discord la fait défiler tout seul chez chaque personne, sans rien renvoyer
   const speed = speedOf(player.filters) || 1;
   const endsAt = Math.floor((Date.now() + Math.max(0, (track.duration - position) / speed) * 1000) / 1000);
   const timeLine = track.isLive
     ? '🔴 **EN DIRECT**'
-    : `${progressBar(position, track.duration)}\n\`${formatTime(position)} / ${formatTime(track.duration)}\`${player.paused ? ' · ⏸️ en pause' : ` · fin <t:${endsAt}:R>`}`;
+    : `\`${formatTime(position)}\` ${progressBar(position, track.duration)} \`${formatTime(track.duration)}\`\n${player.paused ? '⏸️ En pause' : `Fin <t:${endsAt}:R>`}`;
+  // Une seule ligne de réglages (plus de grille de 6 cases), les 3 prochains sons, la pochette en grand
+  const infos = [`🔊 ${player.volume}%`, `🔁 ${LOOP_LABELS[player.loop]}`, `🎛️ ${filtersLabel(player.filters)}`, player.autoplay ? '♾️ Autoplay' : null].filter(Boolean).join('  ·  ');
+  const upNext = player.queue.slice(0, 3).map((t, i) => `\`${i + 1}\` ${trackLine(t)}`).join('\n');
 
   const embed = new EmbedBuilder()
     .setColor(source.color)
-    .setAuthor({ name: player.paused ? '⏸️ En pause' : '🎶 En cours de lecture' })
+    .setAuthor({ name: `${player.paused ? '⏸️ En pause' : '🎶 En cours'} · ${source.label}` })
     .setTitle(cut(track.title, 250))
-    .setDescription(`${track.artist ? `**${escape(track.artist)}**\n\n` : ''}${timeLine}`)
-    .addFields(
-      { name: '👤 Demandé par', value: requester(track), inline: true },
-      { name: '🔊 Volume', value: `${player.volume}%`, inline: true },
-      { name: '🔁 Boucle', value: LOOP_LABELS[player.loop], inline: true },
-      { name: '🎛️ Effets', value: filtersLabel(player.filters), inline: true },
-      { name: '📜 File', value: `${player.queue.length} son(s)${queueDuration ? ` · ${formatTime(queueDuration)}` : ''}`, inline: true },
-      { name: '♾️ Autoplay', value: player.autoplay ? 'Activé' : 'Désactivé', inline: true },
-    )
-    .setFooter({ text: cut(`${source.label}${player.backend ? ` · ${player.backend.name}` : ''}${next ? ` · Ensuite : ${next.title}${next.artist ? ` — ${next.artist}` : ''}` : ''}`, 200) });
+    .setDescription(`${track.artist ? `### ${escape(cut(track.artist, 80))}\n` : ''}${timeLine}\n\n${infos}\nDemandé par ${requester(track)}`)
+    .addFields({ name: '⏭️ À suivre', value: upNext || (player.autoplay ? 'L’autoplay choisit la suite ♾️' : 'File vide : ajoute un son avec ➕') })
+    .setFooter({ text: `${player.queue.length} son${player.queue.length > 1 ? 's' : ''} dans la file${queueDuration ? ` · ${formatTime(queueDuration)}` : ''}` });
   if (track.url) embed.setURL(track.url);
-  if (track.thumbnail) embed.setThumbnail(track.thumbnail);
+  if (track.thumbnail) embed.setImage(track.thumbnail);
 
   return { content: '', embeds: [embed], components: controlRows(player), allowedMentions: { parse: [] } };
 }
