@@ -17,7 +17,7 @@ import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } f
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
 import { cleanOldGpuDrivers, oldGpuDrivers } from './core/optimize.js';
 import { CPUS, cpuOptions, cpuScore, diskOptions, gpuOptions, matchGpu, platformOf, ramOptions, simulate } from './core/upgrade.js';
-import { biosLink, ocPlan } from './core/oc.js';
+import { biosLink, ocPlan, personalPlan } from './core/oc.js';
 import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
 import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from './core/deepscan.js';
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
@@ -1308,7 +1308,7 @@ const proPc = async () => {
 };
 ipcMain.handle('pro:get', () => proPc());
 // Ticket guidé : même conversation que le fil Discord, l'IA du serveur répond à chaque étape
-const proDemo = () => ({ id: 'demo', step: 4, closed: false, thread: true, links: [['🔄 Dernier BIOS de ta carte mère', 'https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios'], ['🧪 OCCT (stabilité)', 'https://www.ocbase.com/download'], ['🧠 TestMem5 (RAM)', 'https://github.com/CoolCmd/TestMem5'], ['🌡 HWiNFO (températures)', 'https://www.hwinfo.com/download/']], advice: { cpu: 'recommandé', why: 'Processeur débloqué, carte mère et refroidissement compatibles.' }, log: [
+const proDemo = () => ({ id: 'demo', step: 4, closed: false, thread: true, ocOptIn: false, ocWarning: '- Le processeur chauffe plus : il faut un bon refroidissement.\n- Un réglage trop poussé peut faire planter le PC : on teste chaque palier.\n- La garantie peut ne plus couvrir un dégât lié à l’overclocking.\n- Tout se remet comme avant avec « Load Optimized Defaults ».', todo: personalPlan({ cpu: 'AMD Ryzen 5 7600', board: 'MSI MAG B650 TOMAHAWK WIFI', cooling: 'AIO 240', games: 'Fortnite', need: 'FPS stables en 240 Hz', ram: [{ speed: 6000, configured: 4800, type: 'DDR5' }] }), links: [['🔄 Dernier BIOS de ta carte mère', 'https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios'], ['🧪 OCCT (stabilité)', 'https://www.ocbase.com/download'], ['🧠 TestMem5 (RAM)', 'https://github.com/CoolCmd/TestMem5'], ['🌡 HWiNFO (températures)', 'https://www.hwinfo.com/download/']], advice: { cpu: 'recommandé', why: 'Processeur débloqué, carte mère et refroidissement compatibles.' }, log: [
   { who: 'user', step: 1, text: 'Mon setup : AMD Ryzen 5 7600 · RTX 4070 · 16 Go\nFortnite en 1080p 240 Hz, je veux des FPS stables.' },
   { who: 'bot', step: 1, text: '## ✅ Demande validée\nTon PC a un vrai potentiel, on y va.\n## 🧭 Ton parcours\n- 💾 Clé USB et 🧹 formatage : **tu peux passer**, Windows est récent\n- 🧠 BIOS : **à faire**, ta RAM tourne à **4800** au lieu de **6000 MHz**' },
   { who: 'user', step: 4, text: '⏭ Je passe : 💾 Clé USB bootable, 🧹 Formatage propre.' },

@@ -5,7 +5,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder
 import { readFresh, writeNow } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
 import { config } from '../config.js';
-import { biosLink, ocAdvice, ocPlan, parseRam } from '../../launcher/src/core/oc.js';
+import { biosLink, ocAdvice, ocPlan, parseRam, personalPlan } from '../../launcher/src/core/oc.js';
 
 const KEY = 'opti-pro';
 const SALON = '🚀・opti-pro';
@@ -21,7 +21,7 @@ export const STEPS = [
   ['test', '🏁 Test & validation', 0xffc439],
 ];
 const GUIDE = {
-  valider: 'Valide la demande. Sections « ## » : « ## ✅ Demande validée » (1 phrase), « ## 🧭 Ton parcours » (pour CHAQUE étape suivante — clé USB, formatage, BIOS & overclocking, optimisation finale — dis « à faire » ou « tu peux passer » et pourquoi, d’après son PC et son besoin : formatage conseillé seulement si Windows est vieux, lent, plein de restes ou s’il le demande), « ## 🧠 Overclocking » (reprends le verdict calculé, explique simplement), « ## 🎯 Gains réalistes » (fourchette honnête, jamais garantie).',
+  valider: 'Valide la demande. Sections « ## » : « ## ✅ Demande validée » (1 phrase), « ## 🎯 Ton plan à toi » (reprends le PLAN OPTI PRO DE CE CLIENT dans l’ordre, une puce par point avec pourquoi pour LUI, et le marqueur [[faire:id]] quand c’est automatique), « ## 🧠 Processeur » (verdict calculé ; si l’overclocking est proposé, explique gain et risques et dis qu’il faut cliquer « 🔥 Je veux overclocker » pour le débloquer), « ## 🎯 Gains réalistes » (fourchette honnête, jamais garantie).',
   usb: 'Guide la création de la clé USB Windows 11 : clé de 8 Go minimum (elle sera effacée), outil officiel https://www.microsoft.com/fr-fr/software-download/windows11 (« Créer un support d’installation »), étapes de l’outil, puis la touche du menu de démarrage selon la marque de SA carte mère (MSI F11, ASUS F8, Gigabyte F12, ASRock F11, portables : F12/F9/Échap).',
   format: 'Guide le formatage propre : « ## 💾 Avant » (sauvegarder saves de jeux, documents, mots de passe du navigateur, télécharger le pilote réseau de SA carte mère sur une clé), « ## 🧹 Installation » (démarrer sur la clé, supprimer seulement les partitions du disque Windows, installer), « ## 🚚 Après » (dans l’ordre : pilotes chipset AMD/Intel du site officiel, pilote de SA carte graphique du site NVIDIA/AMD, Windows Update, puis History Launcher et tes jeux).',
   bios: 'Guide BIOS pour SON matériel. Cherche sur le web le manuel / la page officielle de CETTE carte mère et VÉRIFIE que chaque option existe vraiment dessus (PBO, Curve Optimizer, XMP/EXPO, Resizable BAR, limites de puissance) avec son chemin exact de menus ; si une option n’existe pas sur ce modèle ou ce BIOS, dis-le et propose l’alternative. Pars des repères par marque fournis. « ## 🔄 Mets à jour ton BIOS » (cherche sur le web la DERNIÈRE version stable du BIOS de CETTE carte mère sur le site du fabricant, donne son numéro et sa date, compare avec le BIOS actuel, donne le lien de la page officielle fourni TEL QUEL ; puis la méthode : fichier sur clé USB FAT32, outil M-Flash / EZ Flash / Q-Flash / Instant Flash selon la marque, ne jamais couper le courant pendant la mise à jour ; si déjà à jour, dis-le), « ## 🧠 Processeur » (suis le verdict : « recommandé » = overclocking pas à pas avec valeurs prudentes ; « BIOS seulement » = PBO / Curve Optimizer ou limites de puissance / undervolt, sans hausse de fréquence ; « déconseillé » = pas d’overclocking, explique quoi faire à la place), « ## 🧩 Mémoire » (Resizable BAR + Above 4G Decoding activés, XMP/EXPO, puis si la RAM le permet fréquence / timings ; si elle est limitée : Gear 1, double canal, Memory Context Restore), « ## 🧪 Stabilité » (OCCT 30 min, TestMem5, processeur sous 90 °C ; écran bleu = revenir au réglage d’avant ; « Load Optimized Defaults » remet tout). Jamais plus de 1,40 V sur Intel, jamais de tension manuelle sur les Ryzen X3D.',
@@ -47,6 +47,7 @@ export function specsOf(raw = {}) {
   s.cpuTempMax = Number(raw.cpuTempMax) || null; s.gpuTempMax = Number(raw.gpuTempMax) || null; s.ramGb = Number(raw.ramGb) || null;
   s.plan = ocPlan({ cpu: s.cpu, board: s.board, ram: s.ram });
   s.advice = ocAdvice(s.plan, s);
+  s.todo = personalPlan(s);
   s.biosUrl = biosLink(s.board, s.cpu);
   return s;
 }
@@ -64,7 +65,8 @@ export function promptFor(t, kind, text = '') {
   const log = t.log.slice(-10).map((m) => `${m.who === 'bot' ? 'Technicien' : m.who === 'staff' ? 'Staff' : 'Client'} : ${m.text.slice(0, 600)}`).join('\n');
   const step = STEPS[t.step];
   const links = linksFor(t).map(([l, u]) => `${l.replace(/^\S+\s/, '')} : ${u}`).join('\n');
-  return `MATÉRIEL DU CLIENT\n${facts(t.specs)}${['bios', 'valider'].includes(step[0]) || /bios|xmp|expo|pbo|overclock|ram|menu/i.test(text) ? `\n\n${BIOS_MAP}` : ''}\n\nÉTAPE EN COURS : ${t.step + 1}/7 ${step[1]}\n${links ? `\nLIENS OFFICIELS DE L'ÉTAPE (à donner en Markdown [texte](lien) quand c'est utile, tels quels)\n${links}\n` : ''}\nCONVERSATION RÉCENTE\n${log || '—'}\n\nCONSIGNE\n${kind === 'detail' ? `Le client veut le DÉTAIL complet, pas à pas, de cette tâche : « ${text.slice(0, 600)} ». Uniquement cette tâche. Étapes numérotées dans l'ordre exact : où aller (touche à presser, chemin complet des menus pour SA carte mère / SON Windows), quoi cliquer, quelle valeur mettre pour SON matériel, ce qu'il doit voir à l'écran, puis comment vérifier que c'est bon et quoi faire si ça ne marche pas. Lien officiel si utile.` : kind === 'msg' ? `Le client écrit : « ${text.slice(0, 1500)} ». Réponds-lui précisément pour l'étape en cours (dépannage, valeur exacte, quoi cliquer). Court.` : GUIDE[step[0]]}`;
+  const todo = (t.specs.todo ?? personalPlan(t.specs)).map((x) => `- ${x.label} — ${x.why}${x.auto ? ` → action automatique [[faire:${x.auto}]]` : ''}${x.buy ? ' (achat conseillé, pas obligatoire)' : ''}${x.optin ? (t.ocOptIn ? ' → le client A ACCEPTÉ l’avertissement : guide l’overclocking pas à pas, valeurs prudentes, tests de stabilité' : ' → PAS ENCORE ACCEPTÉ : présente-le seulement comme une option ; aucun réglage d’overclocking tant qu’il n’a pas cliqué « 🔥 Je veux overclocker » et lu l’avertissement') : ''}`).join('\n');
+  return `MATÉRIEL DU CLIENT\n${facts(t.specs)}\n\nPLAN OPTI PRO DE CE CLIENT (unique à sa demande ; suis-le, dans cet ordre, sans ajouter d’autres réglages)\n${todo}${['bios', 'valider'].includes(step[0]) || /bios|xmp|expo|pbo|overclock|ram|menu/i.test(text) ? `\n\n${BIOS_MAP}` : ''}\n\nÉTAPE EN COURS : ${t.step + 1}/7 ${step[1]}\n${links ? `\nLIENS OFFICIELS DE L'ÉTAPE (à donner en Markdown [texte](lien) quand c'est utile, tels quels)\n${links}\n` : ''}\nCONVERSATION RÉCENTE\n${log || '—'}\n\nCONSIGNE\n${kind === 'detail' ? `Le client veut le DÉTAIL complet, pas à pas, de cette tâche : « ${text.slice(0, 600)} ». Uniquement cette tâche. Étapes numérotées dans l'ordre exact : où aller (touche à presser, chemin complet des menus pour SA carte mère / SON Windows), quoi cliquer, quelle valeur mettre pour SON matériel, ce qu'il doit voir à l'écran, puis comment vérifier que c'est bon et quoi faire si ça ne marche pas. Lien officiel si utile.` : kind === 'msg' ? `Le client écrit : « ${text.slice(0, 1500)} ». Réponds-lui précisément pour l'étape en cours (dépannage, valeur exacte, quoi cliquer). Court.` : GUIDE[step[0]]}`;
 }
 
 // Liens officiels utiles à chaque étape (boutons sur Discord et dans le launcher, donnés aussi à l'IA)
@@ -115,6 +117,7 @@ export async function act(id, action, text = '', who = 'user', images = []) {
   const t = (await all())[id]; if (!t || t.closed) return { error: 'Ticket fermé. Ouvre une nouvelle demande Opti Pro.' };
   if (action === 'detail') return { detail: (await askImpl(promptFor(t, 'detail', text), true).catch(() => null)) || 'Je n’arrive pas à joindre l’IA pour le moment. Réessaie dans une minute.' };
   if (action === 'msg') { if (!String(text).trim() && !images.length) return t; await push(id, { who, text: `${String(text).slice(0, 1500)}${images.length ? ` 📷 ${images.length} capture(s) jointe(s)` : ''}` }); return who === 'staff' ? (await all())[id] : botSay(id, 'msg', text, images); }
+  if (action === 'oc') { if (t.ocOptIn) return t; await mutate((a) => { a[id].ocOptIn = Date.now(); }); await push(id, { who: 'user', text: '🔥 Je veux overclocker mon processeur. J’ai lu l’avertissement (chaleur, stabilité, garantie).' }); return botSay(id, 'msg', 'Le client accepte l’overclocking du processeur : explique ce qu’on va faire, à quelle étape, et les précautions.'); }
   if (action === 'human') { await callHuman(t); return push(id, { who: 'bot', text: '👤 Un membre de l’équipe est prévenu et va te répondre ici. En attendant, je reste là pour tes questions.' }); }
   if (action === 'close' || (action === 'done' && t.step === STEPS.length - 1)) {
     await push(id, { who: 'bot', text: action === 'done' ? '# Ton PC est prêt 🚀\nMerci pour ta confiance ! Toutes les étapes sont validées. Si un souci revient, rouvre un ticket Opti Pro.' : '🔒 Ticket fermé. Tu peux en rouvrir un quand tu veux.' });
@@ -131,6 +134,7 @@ export async function act(id, action, text = '', who = 'user', images = []) {
   return { error: 'Action inconnue.' };
 }
 
+export const OC_WARNING = '- Le processeur chauffe plus et consomme plus : il faut un bon refroidissement.\n- Un réglage trop poussé peut faire planter le PC (écran bleu) : on teste chaque palier.\n- Certains fabricants ne couvrent plus la garantie en cas de dégât lié à l’overclocking.\n- Tout se remet comme avant avec « Load Optimized Defaults » dans le BIOS.\n- Gain attendu : 5 à 10 % de FPS dans les jeux limités par le processeur, jamais garanti.';
 // ---------- Discord ----------
 let client = null; let chan = null;
 const isStaff = (id) => id === config.ownerId;
@@ -144,6 +148,7 @@ function embedFor(t, m) {
 function buttons(t) {
   const last = t.step >= STEPS.length - 1, next = STEPS[t.step + 1];
   const row = [new ButtonBuilder().setCustomId(`opro:${last ? 'done' : 'next'}:${t.id}`).setLabel(last ? '🚀 Terminé' : `✅ Fait · ${next[1]}`.slice(0, 80)).setStyle(ButtonStyle.Success)];
+  if ((t.specs?.todo ?? []).some((x) => x.optin) && !t.ocOptIn) row.push(new ButtonBuilder().setCustomId(`opro:ocask:${t.id}`).setLabel('🔥 Je veux overclocker').setStyle(ButtonStyle.Secondary));
   row.push(new ButtonBuilder().setCustomId(`opro:human:${t.id}`).setLabel('👤 Parler à un humain').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId(`opro:close:${t.id}`).setLabel('🔒 Fermer').setStyle(ButtonStyle.Danger));
   const links = linksFor(t);
   return [new ActionRowBuilder().addComponents(row), ...(links.length ? [new ActionRowBuilder().addComponents(links.slice(0, 5).map(([l, u]) => new ButtonBuilder().setLabel(l).setURL(u).setStyle(ButtonStyle.Link)))] : [])];
@@ -225,6 +230,8 @@ export async function onOptiProInteraction(interaction) {
   if (!t) return interaction.reply({ content: 'Ticket introuvable.', ...eph }), true;
   if (interaction.user.id !== t.discordId && !isStaff(interaction.user.id)) return interaction.reply({ content: 'Ce ticket n’est pas le tien.', ...eph }), true;
   if (!allowAttempt('opti-pro-act', t.owner, 40, 3_600_000)) return interaction.reply({ content: '⏳ Doucement : réessaie dans quelques minutes.', ...eph }), true;
+  if (action === 'ocask') return interaction.reply({ ...eph, content: `## ⚠️ Overclocking du processeur\n${OC_WARNING}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`opro:ocyes:${id}`).setLabel('J’ai compris, je veux overclocker').setStyle(ButtonStyle.Danger))] }), true;
+  if (action === 'ocyes') { await interaction.update({ content: '🔥 C’est noté : le technicien va te guider pas à pas.', components: [] }).catch(() => {}); await act(id, 'oc'); return true; }
   await interaction.deferUpdate().catch(() => {});
   await interaction.message?.edit({ components: [] }).catch(() => {}); // un seul clic par étape
   await act(id, action);
@@ -244,7 +251,7 @@ async function onMessage(m) {
 export function startOptiPro(c) { if (client) return; client = c; c.on('messageCreate', (m) => { onMessage(m).catch(() => {}); }); setTimeout(() => salon().catch(() => {}), 15_000).unref?.(); }
 
 // ---------- API du launcher ----------
-const view = (t) => t && { id: t.id, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
+const view = (t) => t && { id: t.id, todo: t.specs?.todo ?? personalPlan(t.specs ?? {}), ocOptIn: Boolean(t.ocOptIn), ocWarning: OC_WARNING, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
 export async function handleOptiProApi(req, res, url, account, { readJson, send }) {
   res.setHeader('Cache-Control', 'no-store');
   account = { ...account, discordId: (await (await import('./launcherAccounts.js')).findAccount(account.id))?.discordId ?? null };
