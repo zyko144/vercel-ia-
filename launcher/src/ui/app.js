@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.22': [
+    ['🛰️', 'Support plus rapide', 'Le launcher indique sa version à ton compte : en cas de souci, l’équipe sait tout de suite si tu as la dernière mise à jour.', ['#openSettings', 'wait600', '.setnav [data-pane=aide]', 'wait900']],
+  ],
   '0.53.21': [
     ['🛒', 'Upgrade refait', 'Une grande carte « ta carte → carte conseillée » avec le gain en %, tes jeux avec leur vraie pochette et tes vrais FPS avant / après, ce que ton processeur et ton écran peuvent suivre. Premium : avis détaillé de l’IA.', ['[data-view=pc]', 'wait600', '[data-pctab=upgrade]', 'wait1200']],
     ['🛠', 'Réparation par History', 'Vérifier et réparer : History vérifie chaque fichier lui-même, retire ceux qui sont abîmés et les fait re-télécharger en arrière-plan, sans ouvrir la fenêtre de Steam.'],
@@ -4642,7 +4645,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.21',
+    version: async () => '0.53.22',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

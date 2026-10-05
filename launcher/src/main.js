@@ -2988,7 +2988,7 @@ ipcMain.handle('premium:claim', async (_e, pack, paypal, shot) => {
 });
 async function api(pathname, { method = 'GET', body, token, timeout = 20_000 } = {}) {
   const res = await fetch(`${API}${pathname}`, {
-    method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    method, headers: { 'Content-Type': 'application/json', 'X-History-Version': app.getVersion(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout),
   });
   const data = await res.json().catch(() => ({}));

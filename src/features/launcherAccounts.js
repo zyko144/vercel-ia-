@@ -38,11 +38,19 @@ export async function mirrorAccounts(d) {
       id: a.id, pseudo: a.pseudo, email: a.email, cree_le: new Date(a.createdAt ?? Date.now()).toISOString(), email_verifie: a.verified !== false,
       double_auth: Boolean(a.totp?.on), discord_lie: Boolean(a.discordId), photo: Boolean(p.av), couleur: p.color ?? null, bio: p.bio ?? null, jeu_prefere: p.favGame ?? null,
       amis: (social.friends?.[a.id] ?? []).length, appareils: (a.devices ?? []).length, derniere_activite: last ? new Date(last).toISOString() : null, joue_a: pres.playing ?? null,
+      version_launcher: a.appLauncher ?? null, version_clips: a.appClips ?? null, version_vue_le: a.appSeen ? new Date(a.appSeen).toISOString() : null,
     };
   });
   const changed = rows.filter((r) => { const h = JSON.stringify(r); if (mirrorSeen.get(r.id) === h) return false; mirrorSeen.set(r.id, h); return true; });
   const gone = [...mirrorSeen.keys()].filter((id) => !d.accounts?.[id]);
-  for (let i = 0; i < changed.length; i += 200) if (!(await upsertRows('launcher_comptes', changed.slice(i, i + 200)))) { for (const r of changed) mirrorSeen.delete(r.id); return { rows: 0, error: true }; }
+  const VCOLS = ['version_launcher', 'version_clips', 'version_vue_le'];
+  for (let i = 0; i < changed.length; i += 200) {
+    const part = changed.slice(i, i + 200);
+    if (await upsertRows('launcher_comptes', part)) continue;
+    // Colonnes des versions absentes (supabase.sql pas encore relancé) : le reste est quand même recopié
+    console.warn('[comptes] colonnes version_* absentes : lance supabase.sql dans Supabase › SQL Editor');
+    if (!(await upsertRows('launcher_comptes', part.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !VCOLS.includes(k))))))) { for (const r of changed) mirrorSeen.delete(r.id); return { rows: 0, error: true }; }
+  }
   if (gone.length && await deleteRows('launcher_comptes', gone)) for (const id of gone) mirrorSeen.delete(id);
   return { rows: changed.length };
 }
@@ -249,6 +257,19 @@ export async function login(body, ip) {
   return { status: 200, token, compte: publicAccount(account) };
 }
 
+/** Version de History Launcher / History Clips de chaque compte (envoyée par les applis), visible dans Supabase › launcher_comptes. */
+async function noteVersion(token, launcher, clips) {
+  const ok = (v) => (/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(String(v ?? '')) ? String(v) : null);
+  const l = ok(launcher), c = ok(clips);
+  if ((!l && !c) || !/^[A-Za-z0-9_-]{40,50}$/.test(token)) return;
+  const d = await data();
+  const a = d.accounts[d.sessions[sha(token)]?.id];
+  if (!a) return;
+  const now = Date.now();
+  if ((l && a.appLauncher !== l) || (c && a.appClips !== c) || now - (a.appSeen ?? 0) > 3_600_000) {
+    if (l) a.appLauncher = l; if (c) a.appClips = c; a.appSeen = now; store(d);
+  }
+}
 export async function me(token) {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
   const d = await data();
@@ -390,6 +411,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
   const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
   const ip = clientIp(req);
   res.setHeader('Cache-Control', 'no-store');
+  noteVersion(token, req.headers['x-history-version'], req.headers['x-history-clips-version']).catch(() => {});
   try {
     if (route === 'POST /api/compte/inscription') { const r = await register(await readJson(req), ip); return send(res, r.status, r); }
     if (route === 'POST /api/compte/connexion') { const r = await login(await readJson(req), ip); return send(res, r.status, r); }
