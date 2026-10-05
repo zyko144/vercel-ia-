@@ -4,7 +4,7 @@
   let ctx = null;
   let master = null;
   let verb = null;
-  const cfg = { on: true, notif: true, vol: 0.6 };
+  const cfg = { on: true, notif: true, vol: 0.6, pack: 'verre' }; // packs : verre (défaut), doux, retro
   function init() {
     if (ctx) return ctx;
     ctx = new AudioContext();
@@ -22,9 +22,12 @@
   function tone(freq, t0, dur, { type = 'sine', gain = 0.2, attack = 0.005, glide = null, wet = true } = {}) {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
+    const k = cfg.pack === 'doux' ? 0.5 : 1; // doux : une octave plus bas, sans réverbération ; rétro : ondes carrées 8 bits
+    if (cfg.pack === 'retro') type = 'square';
+    if (cfg.pack === 'doux') { wet = false; gain *= 0.8; }
     o.type = type;
-    o.frequency.setValueAtTime(freq, t0);
-    if (glide) o.frequency.exponentialRampToValueAtTime(glide, t0 + dur);
+    o.frequency.setValueAtTime(freq * k, t0);
+    if (glide) o.frequency.exponentialRampToValueAtTime(glide * k, t0 + dur);
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);

@@ -3,6 +3,22 @@
 (() => {
   const REPO = 'zyko144/vercel-ia-';
 
+  // Téléchargement selon l'appareil : Windows → installateur ; Chromebook → paquet .deb ; Mac / téléphone → explication
+  const ua = navigator.userAgent;
+  const os = /CrOS/.test(ua) ? 'cros' : /Windows/.test(ua) ? 'win' : /Android|iPhone|iPad/.test(ua) ? 'mobile' : /Mac OS X/.test(ua) ? 'mac' : 'autre';
+  if (os !== 'win') document.querySelectorAll('.hero .dl-link').forEach((a) => {
+    if (os === 'cros') { a.classList.remove('dl-link'); a.classList.add('dl-cros'); a.firstChild.textContent = '⬇ Télécharger pour Chromebook '; }
+    else a.insertAdjacentHTML('afterend', `<p class="meta">${os === 'mobile' ? '📱 History Launcher s’installe sur un PC Windows : ouvre cette page sur ton PC. Depuis le téléphone, tu pourras ensuite contrôler ton PC sur le même Wi-Fi.' : '🍎 History Launcher est disponible sur Windows et Chromebook (pas encore sur Mac).'}</p>`);
+  });
+  // FAQ : recherche instantanée
+  document.getElementById('faqQ')?.addEventListener('input', (e) => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll('#faq details').forEach((d) => { d.hidden = q && !d.textContent.toLowerCase().includes(q); if (q && !d.hidden) d.open = true; }); });
+  // Classement public des benchmarks et gains Opti Pro (serveur History)
+  fetch('api.json').then((r) => r.json()).then(({ api }) => fetch(`${api}/api/public/launcher`)).then((r) => r.json()).then((d) => {
+    const e = (t) => String(t ?? '').replace(/[<>&"]/g, '');
+    document.getElementById('pubBench').innerHTML = (d.bench ?? []).map((b) => `<li><b>${e(b.pseudo)}</b> · ${b.score} pts<small>${e([b.cpu, b.gpu].filter(Boolean).join(' · '))}</small></li>`).join('') || '<li>Pas encore de score : sois le premier !</li>';
+    document.getElementById('pubGains').innerHTML = (d.gains ?? []).map((g) => `<li><b>${e(g.pseudo)}</b> · +${g.gain} %<small>${g.fps ? `${e(g.fps.jeu)} : ${g.fps.before} → ${g.fps.after} FPS` : `santé du PC ${g.before} → ${g.after}`}</small></li>`).join('') || '<li>Les premiers résultats arrivent ce mois-ci.</li>';
+  }).catch(() => { for (const id of ['pubBench', 'pubGains']) document.getElementById(id).innerHTML = '<li>Classement indisponible pour le moment.</li>'; });
+
   // Dernière version publiée : lien direct vers l'installateur .exe
   fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
     .then((r) => (r.ok ? r.json() : null))

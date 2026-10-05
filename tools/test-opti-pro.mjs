@@ -35,3 +35,8 @@ const oc2 = await m.act(oc.id, 'oc'); assert.ok(oc2.ocOptIn); assert.match(promp
 const gpu = await m.startSession({ id: 'acc4', pseudo: 'D' }, { cpu: 'Intel Core i7-13700K', board: 'ASUS TUF Z790', cooling: 'AIO 360', games: 'Cyberpunk', need: 'beaux graphismes' });
 assert.ok(!gpu.specs.todo.some((x) => x.id === 'cpu_oc')); assert.notDeepEqual(gpu.specs.todo.map((x) => x.id), oc.specs.todo.map((x) => x.id));
 console.log('✅ Opti Pro : ticket guidé, verdict overclocking, passer des étapes, staff, fin, IA en panne');
+{
+  const g = m.gainsBoard({ a: { pseudo: 'A', before: 60, after: 90 }, b: { pseudo: 'B', fps: { jeu: 'Fortnite', before: 100, after: 200 } }, c: { pseudo: 'C' } });
+  assert.deepEqual(g.map((x) => [x.pseudo, x.gain]), [['B', 100], ['A', 50]]);
+  console.log('✅ Classement des gains Opti Pro');
+}

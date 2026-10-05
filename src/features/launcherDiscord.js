@@ -50,6 +50,9 @@ export const launcherCommand = new SlashCommandBuilder().setName('launcher').set
     .addStringOption((o) => o.setName('jeu').setDescription('Le jeu').setRequired(true).setAutocomplete(true).setMaxLength(80)))
   .addSubcommand((s) => s.setName('opti').setDescription('🚀 Ticket Opti Pro : ton PC optimisé pas à pas par l’IA (BIOS, overclocking, Windows, NVIDIA)'))
   .addSubcommand((s) => s.setName('aide').setDescription('Un souci avec History Launcher ? Écris au support (réponse dans l’appli)'))
+  .addSubcommand((s) => s.setName('pc').setDescription('🖥 La config de ton PC (ou d’un membre), lue par History Launcher')
+    .addUserOption((o) => o.setName('membre').setDescription('Voir le PC de quelqu’un d’autre')))
+  .addSubcommand((s) => s.setName('bug').setDescription('🐛 Signaler un bug du launcher (réponse dans l’appli)'))
   .addSubcommand((s) => s.setName('telecharger').setDescription('Lien de la dernière version de History Launcher'))
   .addSubcommand((s) => s.setName('installer').setDescription('Admin : crée les salons infos, nouveautés et jeux gratuits ici'));
 
@@ -86,6 +89,20 @@ export async function handleLauncherCommand(client, interaction) {
     const { ModalBuilder, TextInputBuilder, TextInputStyle } = await import('discord.js');
     const field = (id, label, style, min, max) => new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setMinLength(min).setMaxLength(max).setRequired(true));
     return interaction.showModal(new ModalBuilder().setCustomId('hlaide').setTitle('🆘 Support History Launcher').addComponents(field('title', 'Le souci en quelques mots', TextInputStyle.Short, 4, 100), field('description', 'Explique ce qui se passe', TextInputStyle.Paragraph, 10, 4000)));
+  }
+  if (sub === 'bug') {
+    if (!(await accountByDiscord(interaction.user.id))) return interaction.reply({ content: `🔗 Lie d’abord ton compte History dans <#${LINK_CHANNEL}> : la réponse arrive dans ton launcher.`, ...PRIVATE });
+    const { ModalBuilder, TextInputBuilder, TextInputStyle } = await import('discord.js');
+    const field = (id, label, style, min, max) => new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setMinLength(min).setMaxLength(max).setRequired(true));
+    return interaction.showModal(new ModalBuilder().setCustomId('hlbug').setTitle('🐛 Signaler un bug').addComponents(field('title', 'Le bug en quelques mots', TextInputStyle.Short, 4, 100), field('description', 'Ce que tu faisais, ce qui s’est passé', TextInputStyle.Paragraph, 10, 1500)));
+  }
+  if (sub === 'pc') {
+    const who = interaction.options.getUser('membre') ?? interaction.user, acc = await accountByDiscord(who.id);
+    if (!acc) return interaction.reply({ content: who.id === interaction.user.id ? `🔗 Lie ton compte History dans <#${LINK_CHANNEL}> puis lance un benchmark dans Mon PC.` : 'Ce membre n’a pas lié son compte History.', ...PRIVATE });
+    const p = await profileOf(acc.id), o = ((await load('opti-pro-specs', {})) ?? {})[acc.id] ?? {};
+    const rows = [['🧠 Processeur', p.benchCpu ?? o.cpu], ['🎮 Carte graphique', p.benchGpu ?? o.gpu], ['🧩 Mémoire', o.ramText], ['🔧 Carte mère', o.board], ['❄️ Refroidissement', o.cooling], ['🏁 Benchmark History', p.bench && `${p.bench} points`]].filter(([, v]) => v);
+    if (!rows.length) return interaction.reply({ content: 'Pas encore de config : ouvre Mon PC › Performances dans le launcher et lance le benchmark.', ...PRIVATE });
+    return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x619fff).setAuthor({ name: `🖥 PC de ${acc.pseudo}`, iconURL: who.displayAvatarURL() }).setDescription(rows.map(([k, v]) => `**${k}** · ${String(v).slice(0, 120)}`).join('\n')).setFooter({ text: 'Lu par History Launcher' })], allowedMentions: { parse: [] } });
   }
   if (sub === 'installer') {
     if (!interaction.inGuild() || !interaction.memberPermissions?.has('ManageGuild')) return interaction.reply({ content: '❌ Réservé aux admins du serveur (permission « Gérer le serveur »).', ...PRIVATE });
@@ -435,13 +452,13 @@ export function startLauncherDiscord(client) {
 export const _test = { announceFree, announceDeals, syncMember, checkWatch, fitForDiscord, setClient: (c) => { clientRef = c; } };
 
 /** Fenêtre de /launcher aide envoyée : même demande que depuis l'appli (réponse visible dans le launcher). */
-export async function handleHelpModal(interaction) {
+export async function handleHelpModal(interaction, bug = false) {
   const account = await accountByDiscord(interaction.user.id);
   if (!account) return interaction.reply({ content: '🔗 Lie d’abord ton compte History.', ...PRIVATE });
   if (!allowAttempt('support-create', account.id, 5, 3600000)) return interaction.reply({ content: '⏳ Cinq demandes par heure maximum.', ...PRIVATE });
   const { cleanReport, createTicket } = await import('./launcherSupport.js');
   try {
-    await createTicket(account, cleanReport({ title: interaction.fields.getTextInputValue('title'), description: `${interaction.fields.getTextInputValue('description')}\n\n(Envoyé depuis Discord)` }));
+    await createTicket(account, cleanReport({ title: `${bug ? '🐛 Bug : ' : ''}${interaction.fields.getTextInputValue('title')}`, description: `${interaction.fields.getTextInputValue('description')}\n\n(Envoyé depuis Discord)` }));
     return interaction.reply({ content: '✅ **Demande envoyée !** La réponse arrive dans ton launcher (Paramètres › Aide).', ...PRIVATE });
   } catch (err) { return interaction.reply({ content: `❌ ${err.message}`, ...PRIVATE }); }
 }

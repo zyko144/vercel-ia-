@@ -155,6 +155,7 @@ async function paintHeroBg(i) {
   el.style.backgroundImage = url(b.u);
   el.innerHTML = wide ? '' : `<div class="hfit" style="background-image:${url(b.u)}"></div>`;
   el.classList.add('ready');
+  moreUi?.heroTrailer(i, el);
   if (!i.brand?.bg) $('ambient').style.setProperty('--amb', url(i.art?.header ?? i.art?.cover ?? b.u)); // fond flou : une petite image suffit
 }
 function renderHero() {
@@ -220,6 +221,7 @@ function menuFor(i) {
     if (i.steamId) m.push('<button data-reqs="1">✅ Mon PC peut-il le faire tourner ?</button>');
     m.push('<button data-tips="1">🤖 Conseils de l’IA pour ce jeu</button>');
     m.push('<button data-invgame="1">📨 Inviter un ami à y jouer</button>');
+    if (i.installed && i.installDir) m.push('<button data-modscan="1">🛡 Analyser les mods (antivirus)</button>');
     if (i.source === 'steam' && i.steamId) m.push('<button data-gift="1">🎁 Offrir ce jeu à un ami</button>');
     const g = boostGames[i.id];
     m.push(`<button data-boostgame="${g === true ? 'off' : g === false ? 'auto' : 'on'}">${g === true ? '⚡ Opti auto : toujours (changer → jamais)' : g === false ? '⚡ Opti auto : jamais (changer → par défaut)' : '⚡ Toujours optimiser ce jeu'}</button>`);
@@ -1611,6 +1613,13 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.55.0': [
+    ['🔐', 'Sécurité & compte', 'Appareils connectés (déconnecte-les à distance), code PIN du launcher, contrôle parental, export de toutes tes données, suppression du compte, alerte si ton mot de passe a fuité, analyse antivirus des mods et alerte si un outil peut te faire bannir.', ['#openSettings', 'wait700', '.setnav [data-pane="compte"]', 'wait1200']],
+    ['🎨', 'Confort et design', 'Mode clair, couleurs pour daltoniens, animations réduites, packs de sons, mode focus (Ctrl+Maj+F), Ctrl+Z pour annuler, économiseur d’écran, bande-annonce en fond, menus en anglais, accueil guidé et astuce du jour.'],
+    ['🎄', 'Saisons', 'Calendrier de l’Avent, feux d’artifice du Nouvel an, Saint-Valentin, été, anniversaire de ton compte et ton récap de l’année.'],
+    ['📱', 'Téléphone', 'Installer un jeu, températures, notifications, clips, ticket Opti Pro, veille / extinction, second écran et mode TV depuis ton téléphone. QR code pour lier Discord.'],
+    ['📊', 'Statistiques et Premium', 'Statistiques avancées (jour préféré, heure de pointe, record, tendance) et ce que Premium t’a apporté. 200 Mo par jeu pour les sauvegardes en ligne avec Premium.'],
+  ],
   '0.54.0': [
     ['🧩', 'Tes composants, un par un', 'Mon PC › Composants montre chaque pièce de TON PC en 3D réaliste (rendue dans Blender) : Ryzen AM4/AM5 ou Intel Core, RTX / GTX / Radeon / Arc, DDR4 / DDR5 / SO-DIMM, SSD NVMe / SATA ou disque dur, avec la marque, le modèle exact et ses détails.', ['[data-view="pc"]', 'wait700', '#pcTabs [data-pctab="composants"]', 'wait1800']],
     ['🧪', 'Onglet Vérifs', 'Écran bridé en Hz, câble branché sur la carte mère, PCIe, double canal, XMP, Secure Boot, TPM, pilotes, BIOS, disques presque pleins, écrans bleus expliqués, batterie. Plus : revente estimée, alim et écran conseillés, températures sur 30 jours, rappel de poussière, test de stabilité, test RAM, test souris, journal avec annulation une par une, jeux à réinstaller.'],
@@ -3793,7 +3802,7 @@ function go(view) {
   if (view in lists) { state.list.kind = lists[view]; state.list.source = 'tout'; state.list.collection = null; showView('liste'); } else showView(view);
   renderPlatforms();
   if (state.view === 'liste') renderList();
-  if (state.view === 'stats') renderStats();
+  if (state.view === 'stats') { renderStats(); moreUi?.renderAdv(); }
   if (state.view === 'classement') renderRanking();
   if (state.view === 'amis') showFriendTab(state.ftab);
   if (state.view === 'pc') openPc();
@@ -4276,7 +4285,7 @@ $('pdLink').addEventListener('click', async () => {
   const r = await api.discordCode?.().catch(() => null);
   if (!r?.ok) return toast(r?.error ?? 'Connecte-toi d’abord');
   copyText(`/launcher lier code:${r.code}`);
-  $('pdDisc').innerHTML = `<b>Commande copiée ✓</b><small>Colle-la (Ctrl+V) dans le salon <b>#lier-son-compte</b> du serveur History. Valable 10 min.</small>`;
+  $('pdDisc').innerHTML = `<b>Commande copiée ✓</b><small>Colle-la (Ctrl+V) dans le salon <b>#lier-son-compte</b> du serveur History. Valable 10 min.</small>${r.qr ? `<small>📱 Sur téléphone : scanne pour ouvrir le salon, puis tape <b>/launcher lier code:${esc(r.code)}</b></small><img class="dcqr" src="${r.qr}" alt="QR du salon Discord">` : ''}`;
   $('pdLink').hidden = true;
   clearInterval(linkWatch);
   const until = Date.now() + 600_000;
@@ -4413,7 +4422,7 @@ $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActi
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
 personal = initPersonal(api, { items: () => state.items, card, go, toast });
 initSettings(api);
-moreUi = initMore(api, { $, esc, toast, ui, setModal, state, rich: richText, pro: () => pro, redraw: () => renderProTicket(false), setPro: (s) => { pro = s; renderPro(false); } });
+moreUi = initMore(api, { $, esc, toast, ui, setModal, state, rich: richText, prem: () => prem, pro: () => pro, redraw: () => renderProTicket(false), setPro: (s) => { pro = s; renderPro(false); } });
 initQuickSupport(api, 'launcher');
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('ui-paused', document.hidden));
 const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxNotif').checked, sfxVol: Number($('sfxVol').value) }; window.sfx?.set({ on: c.sfxOn, notif: c.sfxNotif, vol: c.sfxVol / 100 }); api.setSettings(c); };
@@ -4932,7 +4941,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.54.0',
+    version: async () => '0.55.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

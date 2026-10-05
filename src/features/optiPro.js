@@ -265,7 +265,19 @@ async function onMessage(m) {
   await mutate((a) => { a[t.id].log.push({ who, text, step: a[t.id].step, at: Date.now(), fromDiscord: true }); a[t.id].updatedAt = Date.now(); });
   if (who === 'user') await botSay(t.id, 'msg', m.content, images);
 }
-export function startOptiPro(c) { if (client) return; client = c; c.on('messageCreate', (m) => { onMessage(m).catch(() => {}); }); setTimeout(() => salon().catch(() => {}), 15_000).unref?.(); }
+/** Classement du mois précédent (gain de FPS, sinon de santé), posté une fois le 1er du mois dans #opti-pro. */
+export function gainsBoard(month = {}) {
+  const pct = (a, b) => (a && b ? Math.round(((b - a) / a) * 100) : null);
+  return Object.values(month).map((x) => ({ ...x, gain: pct(x.fps?.before, x.fps?.after) ?? pct(x.before, x.after) })).filter((x) => x.gain != null).sort((a, b) => b.gain - a.gain).slice(0, 10);
+}
+async function postGains() {
+  const prev = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+  const all = (await readFresh('opti-pro-gains')) ?? {}; if (all.posted?.[prev]) return;
+  const top = gainsBoard(all[prev]); const c = await salon(); if (!c) return;
+  if (top.length) await c.send({ embeds: [new EmbedBuilder().setColor(0xffc439).setAuthor({ name: 'History · Opti Pro', iconURL: LOGO }).setTitle(`🏆 Plus gros gains Opti Pro · ${prev}`).setDescription(top.map((x, i) => `${['🥇', '🥈', '🥉'][i] ?? `**${i + 1}.**`} **${x.pseudo}** · **+${x.gain} %** ${x.fps ? `(${x.fps.jeu} : ${x.fps.before} → ${x.fps.after} FPS)` : `(santé ${x.before} → ${x.after})`}`).join('\n'))], allowedMentions: { parse: [] } }).catch(() => {});
+  all.posted = { ...all.posted, [prev]: true }; await writeNow('opti-pro-gains', all);
+}
+export function startOptiPro(c) { if (client) return; client = c; setInterval(() => { if (new Date().getUTCDate() <= 3) postGains().catch(() => {}); }, 6 * 3_600_000).unref?.(); c.on('messageCreate', (m) => { onMessage(m).catch(() => {}); }); setTimeout(() => salon().catch(() => {}), 15_000).unref?.(); }
 
 // ---------- API du launcher ----------
 const view = (t) => t && { id: t.id, at: t.at, board: t.specs?.board ?? '', cpu: t.specs?.cpu ?? '', stepAt: t.log.find((m) => m.step === t.step)?.at ?? t.at, rating: t.rating ?? null, closedAt: t.closedAt ?? null, todo: t.specs?.todo ?? personalPlan(t.specs ?? {}), ocOptIn: Boolean(t.ocOptIn), ocWarning: OC_WARNING, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
@@ -273,6 +285,13 @@ export async function handleOptiProApi(req, res, url, account, { readJson, send 
   res.setHeader('Cache-Control', 'no-store');
   account = { ...account, discordId: (await (await import('./launcherAccounts.js')).findAccount(account.id))?.discordId ?? null };
   if (req.method === 'GET') return send(res, 200, { session: view(await sessionOf(account.id) ?? await recentDone(account.id)) });
+  if (url.pathname.endsWith('/gain')) { // résultat avant / après d'un ticket réussi, pour le classement du mois
+    const b = await readJson(req), t = await recentDone(account.id); if (!t) return send(res, 404, { error: 'Aucun ticket terminé.' });
+    const n = (x) => (Number.isFinite(Number(x)) ? Math.round(Number(x)) : null), fps = b.fps && n(b.fps.before) && n(b.fps.after) ? { jeu: String(b.fps.name ?? '').slice(0, 60), before: n(b.fps.before), after: n(b.fps.after) } : null;
+    const all = (await readFresh('opti-pro-gains')) ?? {}; const m = new Date().toISOString().slice(0, 7);
+    (all[m] ??= {})[account.id] = { pseudo: String(account.pseudo ?? t.name ?? 'Joueur').slice(0, 40), before: n(b.before), after: n(b.after), fps };
+    await writeNow('opti-pro-gains', all); return send(res, 200, { ok: true });
+  }
   if (!(await allowed(account, account.discordId))) return send(res, 403, { error: 'premium' });
   const b = await readJson(req);
   if (url.pathname.endsWith('/action')) {

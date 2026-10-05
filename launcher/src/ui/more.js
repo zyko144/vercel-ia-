@@ -292,8 +292,138 @@ export function initMore(api, h) {
     const sp = $('pgSponsor'); if (sp && p?.parrain) sp.innerHTML = `👥 ${p.parrain.filleuls} filleul${p.parrain.filleuls > 1 ? 's' : ''}${p.parrain.ambassadeur ? ' · 🏅 Ambassadeur' : ''}${p.parrain.prochain ? ` · prochain palier à ${p.parrain.prochain.a} : ${esc(p.parrain.prochain.gain)}` : ''}`;
   }
 
+  // Statistiques avancées + ce que Premium t'a apporté (vue Statistiques)
+  async function renderAdv() {
+    const box = $('advStats'); if (!box) return;
+    const r = await more('stats'); if (!r?.adv) return;
+    const p = h.prem?.() ?? {}, a = r.adv, g = r.gains ?? {}, D = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'], max = Math.max(1, ...a.byDay);
+    const locked = !(p.ia || p.opti);
+    box.innerHTML = `<div class="panel ${locked ? 'advlock' : ''}"><h3>📊 Statistiques avancées ${locked ? '<small class="hint">⭐ Premium</small>' : ''}</h3>
+      <div class="advgrid"><div><small>Jour préféré</small><b>${D[a.topDay]}</b></div><div><small>Heure de pointe</small><b>${a.topHour} h</b></div><div><small>Session moyenne</small><b>${a.avg} min</b></div><div><small>Record</small><b>${a.longest ? `${Math.round(a.longest.minutes / 6) / 10} h` : '–'}</b><em>${esc(a.longest?.name ?? '')}</em></div><div><small>30 derniers jours</small><b>${a.month} h</b><em class="${a.trend >= 0 ? 'ok' : 'bad'}">${a.trend == null ? '' : `${a.trend >= 0 ? '+' : ''}${a.trend} %`}</em></div></div>
+      <div class="advbars">${a.byDay.map((m, i) => `<i title="${D[i]} · ${Math.round(m / 60)} h"><b style="height:${(m / max) * 100}%"></b><small>${D[i][0].toUpperCase()}</small></i>`).join('')}</div>
+      ${locked ? '<div class="advcta"><button type="button" class="btn premgo" data-view="premium">Débloquer avec ⭐ Premium</button></div>' : ''}</div>
+      ${locked ? '' : `<div class="panel"><h3>⭐ Ce que Premium t’a apporté</h3><div class="advgrid"><div><small>Questions à l’IA</small><b>${g.ia ?? 0}</b></div><div><small>Optimisations</small><b>${g.optis ?? 0}</b></div><div><small>Place libérée</small><b>${((g.freed ?? 0) / 1e9).toFixed(1).replace('.', ',')} Go</b></div><div><small>Opti Pro</small><b>${g.pro ? '✓ PC optimisé' : '–'}</b></div></div></div>`}`;
+  }
+  document.querySelector('#view-stats')?.insertAdjacentHTML('beforeend', '<div id="advStats"></div>');
+
+  // ---------- Confort : mode clair, daltoniens, animations réduites, langue, packs de sons, économiseur, focus, annuler ----------
+  const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(`h.${k}`); localStorage.setItem(`h.${k}`, v); } catch { return null; } return v; };
+  const root = document.documentElement;
+  const applyPrefs = () => {
+    root.dataset.mode = pref('light') === '1' ? 'light' : ''; root.dataset.cb = pref('cb') ?? ''; root.classList.toggle('lessmotion', pref('motion') === '0');
+    window.sfx?.set({ pack: pref('pack') || 'verre' }); translate(pref('lang') || 'fr');
+  };
+  for (const [id, k, on] of [['lightMode', 'light', '1'], ['lessMotion', 'motion', '0'], ['saver', 'saver', '1']]) { const el = $(id); if (!el) continue; el.checked = pref(k) === on; el.addEventListener('change', () => { pref(k, el.checked ? on : ''); applyPrefs(); }); }
+  for (const [id, k, d] of [['cbMode', 'cb', ''], ['langSel', 'lang', 'fr'], ['sfxPack', 'pack', 'verre']]) { const el = $(id); if (!el) continue; el.value = pref(k) ?? d; el.addEventListener('change', () => { pref(k, el.value); applyPrefs(); if (k === 'pack') window.sfx?.play('success'); }); }
+  // Anglais : menus et titres principaux seulement (le reste de l'appli reste en français pour l'instant)
+  const EN = { Accueil: 'Home', Jeux: 'Games', Favoris: 'Favorites', Classement: 'Leaderboard', Amis: 'Friends', 'Mon PC': 'My PC', Optimisation: 'Optimization', Paramètres: 'Settings', Bibliothèque: 'Library', Statistiques: 'Stats', Applications: 'Apps', Support: 'Support', 'Vue d’ensemble': 'Overview', Composants: 'Components', Sécurité: 'Security', Performances: 'Performance', Réseau: 'Network', Entretien: 'Maintenance', Vérifs: 'Checks', 'Jouer': 'Play', 'Installer': 'Install', 'Ouvrir': 'Open' };
+  const FR = Object.fromEntries(Object.entries(EN).map(([a, b]) => [b, a]));
+  function translate(lang) {
+    const dict = lang === 'en' ? EN : FR;
+    const walk = (el) => { for (const n of el.childNodes) { if (n.nodeType === 3) { const t = n.nodeValue.trim(); if (dict[t]) n.nodeValue = n.nodeValue.replace(t, dict[t]); } else if (n.nodeType === 1 && !/^(SCRIPT|STYLE|INPUT|TEXTAREA)$/.test(n.tagName)) walk(n); } };
+    document.querySelectorAll('.side nav, #pcTabs, .setnav, .list-head h2, .playbtn').forEach(walk);
+  }
+  applyPrefs();
+  // Mode focus (Ctrl+Maj+F) : menu et décor masqués, seulement le contenu
+  document.addEventListener('keydown', (e) => { if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') { root.classList.toggle('focusmode'); toast(root.classList.contains('focusmode') ? '🎯 Mode focus (Ctrl+Maj+F pour quitter)' : 'Mode focus désactivé'); } });
+  // Annuler la dernière action (favori, masquer, options, fusion) : Ctrl+Z ou le bouton du message
+  let undo = null;
+  if (api.setItem) { const set = api.setItem; api.setItem = async (id, patch) => { const it = state.items.find((i) => i.id === id); if (it) undo = { id, patch: Object.fromEntries(Object.keys(patch).map((k) => [k, it[k] ?? (k === 'favorite' || k === 'hidden' ? false : '')])) }; return set(id, patch); }; }
+  document.addEventListener('keydown', async (e) => { if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'z' && undo && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName ?? '')) { const u = undo; undo = null; await api.setItem(u.id, u.patch); undo = null; const it = state.items.find((i) => i.id === u.id); if (it) Object.assign(it, u.patch); toast('↩ Action annulée'); } });
+  // Économiseur d'écran : après 10 min sans rien toucher (appli au premier plan), défilé des images de tes jeux ; un geste le ferme
+  let idle = 0, saverEl = null;
+  const wake = () => { idle = Date.now(); if (saverEl) { saverEl.remove(); saverEl = null; } };
+  ['pointermove', 'keydown', 'wheel', 'pointerdown'].forEach((ev) => document.addEventListener(ev, wake, { passive: true }));
+  wake();
+  setInterval(() => {
+    if (saverEl || pref('saver') !== '1' || document.hidden || Date.now() - idle < 600_000) return;
+    const arts = state.items.filter((i) => i.kind === 'game' && (i.art?.hero || i.art?.header)).map((i) => [i.name, i.art.hero ?? i.art.header]); if (!arts.length) return;
+    saverEl = document.createElement('div'); saverEl.className = 'saver'; document.body.append(saverEl);
+    let k = 0; const show = () => { if (!saverEl) return; const [n, a] = arts[k++ % arts.length]; saverEl.innerHTML = `<div class="svimg" style="background-image:url('${String(a).replace(/["'\\\n<>]/g, '')}')"></div><b>${esc(n)}</b><small>${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small>`; setTimeout(show, 8000); };
+    show();
+  }, 30_000);
+  // Bande-annonce en fond du jeu sélectionné (option « Fond de l’appli ») : muette, en pause quand l'appli est cachée
+  function heroTrailer(i, el) {
+    if ($('bgMode')?.value !== 'trailer' || !i.details?.trailer || pref('motion') === '0') return;
+    el.insertAdjacentHTML('beforeend', `<video class="htrailer" src="${esc(i.details.trailer)}" autoplay muted loop playsinline preload="auto"></video>`);
+    const v = el.querySelector('.htrailer'); v.onerror = () => v.remove();
+  }
+  document.addEventListener('visibilitychange', () => document.querySelectorAll('.htrailer').forEach((v) => (document.hidden ? v.pause() : v.play().catch(() => {}))));
+
+  // ---------- Accueil guidé (1re ouverture), astuce du jour, saisons, récap de l'année ----------
+  const TIPS = ['Ctrl+K ouvre la recherche rapide : jeux, pages, réglages.', 'Clic droit sur un jeu : options de lancement, fusion de fiches, invitation d’un ami.', 'Mon PC › Vérifs repère un écran bridé en 60 Hz ou une RAM sans XMP en 10 secondes.', 'Ctrl+Alt+P affiche les FPS en jeu.', 'F7 dans History Clips pose un marqueur sur ton action du moment.', 'Ctrl+Z annule ta dernière action (favori, masquer, fusion).', 'Ctrl+Maj+F : mode focus, seulement le contenu.', 'Le filtre « Jamais lancés » de la bibliothèque montre les jeux qui t’attendent.', '« Hey History, lance Fortnite » marche aussi à la voix (History IA).', 'Ton code ami offre −20 % à un ami et 7 jours de Premium pour toi.'];
+  const today = new Date(), dayN = Math.floor(today / 86400000), M = today.getMonth() + 1, D = today.getDate();
+  function homeCards() {
+    const home = document.querySelector('#view-accueil'); if (!home || $('homeExtras')) return;
+    const cards = [];
+    if (pref('tip') !== String(dayN)) cards.push(`<div class="hx tip"><b>💡 Astuce du jour</b><span>${esc(TIPS[dayN % TIPS.length])}</span><button type="button" class="linkbtn" data-hx="tip">OK</button></div>`);
+    if (M === 12 && D <= 24) cards.push(`<div class="hx advent"><b>🎄 Calendrier de l’Avent</b><div class="adv24">${Array.from({ length: 24 }, (_, k) => `<button type="button" data-advent="${k + 1}" class="${k + 1 < D ? 'past' : k + 1 === D ? 'now' : ''}" ${k + 1 > D ? 'disabled' : ''}>${k + 1}</button>`).join('')}</div></div>`);
+    if (M === 12 || (M === 1 && D <= 15)) cards.push('<div class="hx wrap"><b>🎁 Ton année History</b><span>Tes heures, tes jeux préférés, ton record.</span><button type="button" class="btn sm play" data-hx="wrapped">Voir mon récap</button></div>');
+    if (!cards.length) return;
+    home.insertAdjacentHTML('afterbegin', `<div id="homeExtras">${cards.join('')}</div>`);
+  }
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-hx], [data-advent], [data-onb]'); if (!t) return;
+    if (t.dataset.hx === 'tip') { pref('tip', String(dayN)); return t.closest('.hx').remove(); }
+    if (t.dataset.advent) return modal(`<div class="mhead"><span class="micon">🎁</span><h2>Case ${t.dataset.advent}</h2></div><p class="mtext">${esc(TIPS[(Number(t.dataset.advent) * 7) % TIPS.length])}</p><p class="hint">Et regarde les jeux offerts du moment sur l’accueil 🎄</p>`);
+    if (t.dataset.hx === 'wrapped') {
+      const w = await more('wrapped'); if (!w) return;
+      return modal(`<div class="wrapped"><small>TON ANNÉE ${w.year}</small><h2>${w.hours} h de jeu</h2><p>${w.days} jours joués${w.best ? ` · record le ${new Date(w.best.day).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} (${String(w.best.hours).replace('.', ',')} h)` : ''}</p><ol>${w.top.map((g) => `<li><b>${esc(g.name)}</b><span>${g.hours} h</span></li>`).join('') || '<li>Joue un peu pour remplir ton récap 🎮</li>'}</ol></div>`, true);
+    }
+    if (t.dataset.onb) { const n = Number(t.dataset.onb); if (n >= ONB.length) { pref('onboarded', '1'); return $('modal').close(); } return onboarding(n); }
+  });
+  const ONB = [['🎮', 'Tous tes jeux au même endroit', 'Steam, Epic, Riot, EA, GOG, Ubisoft, Xbox, FiveM… History les trouve tout seul. Clic droit sur un jeu pour tout le reste.'], ['🖥', 'Mon PC', 'La santé de ton PC, tes composants un par un, les vérifications et le benchmark.'], ['⚡', 'Optimisation', 'Nettoyage, réglages Windows pour jouer, et le ticket Opti Pro où un technicien IA te guide pas à pas.'], ['🤖', 'L’assistant', 'Le bouton en bas à droite : « lance Rocket League », outils IA, explication d’erreurs…']];
+  function onboarding(n = 0) {
+    const [ic, t, d] = ONB[n];
+    setModal(); $('modalBox').innerHTML = `<div class="mhead"><span class="micon">${ic}</span><h2>${esc(t)}</h2></div><p class="mtext">${esc(d)}</p><div class="onbdots">${ONB.map((_, k) => `<i class="${k === n ? 'on' : ''}"></i>`).join('')}</div><div class="row end"><button type="button" class="btn ghost" data-onb="${ONB.length}">Passer</button><button type="button" class="btn play" data-onb="${n + 1}">${n === ONB.length - 1 ? 'C’est parti' : 'Suivant'}</button></div>`;
+    $('modalBox').onclick = null; if (!$('modal').open) $('modal').showModal();
+  }
+  // Décor de saison (seulement pendant ces jours) : feux d'artifice, cœurs, soleil d'été ; anniversaire du compte
+  const season = (M === 12 && D === 31) || (M === 1 && D <= 2) ? 'newyear' : M === 2 && D >= 10 && D <= 14 ? 'valentin' : M === 7 || M === 8 ? 'ete' : '';
+  if (season && pref('motion') !== '0') document.body.insertAdjacentHTML('beforeend', `<div class="sdeco ${season}" aria-hidden="true">${Array.from({ length: 18 }, (_, k) => `<i style="--x:${(k * 53) % 100}%;--d:${(k % 6) * 1.3}s"></i>`).join('')}</div>`);
+  setTimeout(async () => {
+    homeCards();
+    if (!pref('onboarded') && !(await api.demo?.().catch(() => null))) onboarding(0);
+    const c = (await api.account?.().catch(() => null))?.compte;
+    if (c?.createdAt) { const a = new Date(c.createdAt); const yrs = today.getFullYear() - a.getFullYear(); if (yrs > 0 && a.getMonth() === today.getMonth() && a.getDate() === D && pref('anniv') !== String(today.getFullYear())) { pref('anniv', String(today.getFullYear())); modal(`<div class="mhead"><span class="micon">🎂</span><h2>${yrs} an${yrs > 1 ? 's' : ''} avec History !</h2></div><p class="mtext">Merci d’être là depuis le ${a.toLocaleDateString('fr-FR')}, ${esc(c.pseudo)} 💛</p>`); } }
+  }, 2500);
+
+  // ---------- Sécurité & compte : appareils, PIN, contrôle parental, export, suppression, mot de passe fuité, mods ----------
+  async function sessions(k, tout) {
+    const r = await more('sessions', k, tout), box = $('secSessions'); if (!box) return;
+    box.innerHTML = r?.sessions ? r.sessions.map((x) => `<div class="mvline"><b>${esc(x.app)}${x.actuelle ? ' · cet appareil' : ''}</b><span>connecté le ${new Date(x.at).toLocaleDateString('fr-FR')} · vu ${new Date(x.seen).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>${x.actuelle ? '' : `<button type="button" class="btn ghost sm" data-sesk="${esc(x.k)}">Déconnecter</button>`}</div>`).join('') : esc(r?.error ?? 'Indisponible.');
+  }
+  async function pinState() { const p = await more('pin', 'status'); if (!p || !$('pinSave')) return p; $('pinOld').hidden = !p.on; $('pinClear').hidden = !p.on; $('parental').checked = p.parental; $('parental').disabled = !p.on; return p; }
+  const askPin = (title) => ui.prompt({ title, text: 'Entre le code PIN du launcher.', placeholder: '••••', ok: 'Valider', icon: '🔒' });
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest('#secRefresh, #secOthers, [data-sesk], #pinSave, #pinClear, #dataExport, #accDelete, [data-modscan]'); if (!t) return;
+    if (t.id === 'secRefresh') return sessions();
+    if (t.id === 'secOthers') { await sessions(null, true); return toast('Les autres appareils sont déconnectés'); }
+    if (t.dataset.sesk) { await sessions(t.dataset.sesk); return toast('Appareil déconnecté'); }
+    if (t.id === 'pinSave') { const r = await more('pin', 'set', $('pinOld').value, $('pinNew').value); toast(r?.ok ? '🔒 Code PIN enregistré' : r?.error ?? 'Impossible'); $('pinOld').value = $('pinNew').value = ''; return pinState(); }
+    if (t.id === 'pinClear') { const r = await more('pin', 'clear', $('pinOld').value); toast(r?.ok ? 'Code PIN retiré' : r?.error ?? 'Impossible'); return pinState(); }
+    if (t.id === 'dataExport') { const r = await more('export'); if (!r?.cancelled) toast(r?.ok ? '📦 Données exportées' : r?.error ?? 'Export impossible'); return; }
+    if (t.id === 'accDelete') { const pw = await ui.prompt({ title: 'Supprimer mon compte', text: 'Ton mot de passe pour confirmer.', placeholder: 'Mot de passe', ok: 'Continuer', icon: '🗑' }); if (!pw) return; const r = await more('deleteAccount', pw); if (!r?.cancelled) toast(r?.ok ? 'Compte supprimé. Merci d’avoir utilisé History.' : r?.error ?? 'Impossible'); if (r?.ok) setTimeout(() => location.reload(), 1500); return; }
+    if (t.dataset.modscan && state.sel) { toast('🛡 Analyse antivirus des mods… (quelques minutes)'); const r = await more('modscan', state.sel.id); return modal(`<div class="mhead"><span class="micon">${r?.threats?.length ? '🚨' : '🛡'}</span><h2>${r?.threats?.length ? 'Fichier dangereux trouvé' : r?.ok ? 'Aucune menace' : 'Analyse impossible'}</h2></div><p class="mtext">${r?.ok ? `Analysé par Windows Defender : ${esc(r.scanned.join(', '))}.${r.threats.length ? ` Menace dans : ${esc(r.threats.join(', '))}. Supprime ce mod puis lance Mon PC › Sécurité › Supprimer les menaces.` : ''}` : esc(r?.error ?? '')}</p>`); }
+  });
+  $('parental')?.addEventListener('change', async (e) => { const pin = await askPin('Contrôle parental'); const r = pin ? await more('pin', 'parental', pin, e.target.checked) : null; if (!r?.ok) { e.target.checked = !e.target.checked; if (pin) toast(r?.error ?? 'Code incorrect'); } else toast(e.target.checked ? '👪 Contrôle parental activé' : 'Contrôle parental désactivé'); });
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-pane="compte"]')) { sessions(); pinState(); } });
+  // Verrou à l'ouverture si un code PIN existe
+  pinState().then(async (p) => {
+    if (!p?.on) return;
+    document.body.insertAdjacentHTML('beforeend', '<div class="pinlock" id="pinLock"><img src="logo.png" alt=""><b>History Launcher est verrouillé</b><form id="pinForm"><input class="minput" id="pinIn" type="password" inputmode="numeric" maxlength="8" autofocus placeholder="Code PIN"><button class="btn play">Déverrouiller</button></form><small id="pinErr"></small></div>');
+    $('pinForm').onsubmit = async (e) => { e.preventDefault(); const r = await more('pin', 'check', $('pinIn').value); if (r?.ok) $('pinLock').remove(); else { $('pinErr').textContent = 'Code incorrect'; $('pinIn').value = ''; } };
+  });
+  // Contrôle parental : la limite bloque le lancement → le code PIN débloque 1 h
+  if (api.action) { const act = api.action; api.action = async (id, a) => { const r = await act(id, a); if (a === 'launch' && /contrôle parental/.test(r?.error ?? '')) { const pin = await askPin('Limite de jeu du jour atteinte'); if (pin && (await more('pin', 'unlock', pin))?.ok) return act(id, a); } return r; }; }
+  // Inscription / nouveau mot de passe : alerte si le mot de passe figure dans une fuite connue
+  for (const [fn, key] of [['register', 'motDePasse'], ['resetPassword', 2]]) {
+    const orig = api[fn]; if (!orig) continue;
+    api[fn] = async (...a) => { const pw = key === 2 ? a[2] : a[0]?.[key]; const n = await more('pwned', pw).catch(() => 0); if (n > 0) toast(`⚠ Ce mot de passe apparaît dans ${Number(n).toLocaleString('fr-FR')} fuites de données : choisis-en un autre.`); return orig(...a); };
+  }
+
   return {
-    premExtras, proBar, proEnd, pc3d,
+    heroTrailer, renderAdv, premExtras, proBar, proEnd, pc3d,
     verifs() { renderChecks(); renderPcExtra(); renderJournal(); },
     sheetMore, genreCols,
   };

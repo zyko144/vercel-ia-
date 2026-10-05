@@ -102,7 +102,7 @@ function hardenResponse(req, res, url) {
 
 /** Origines du site public (Vercel, Render) : les seules autorisées à lire l'API publique depuis un navigateur. */
 function siteOrigins() {
-  return [config.publicUrl, config.site.url, process.env.APP_URL, 'https://historyia.vercel.app']
+  return [config.publicUrl, config.site.url, process.env.APP_URL, 'https://historyia.vercel.app', 'https://zyko144.github.io']
     .filter(Boolean).map((u) => { try { return new URL(u).origin; } catch { return null; } }).filter(Boolean);
 }
 function allowSiteOrigin(req, res) {
@@ -277,6 +277,17 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     if (url.pathname.startsWith('/c/') && req.method === 'GET') {
       const { clipLinkRoute } = await import('./features/launcherSocial.js');
       return clipLinkRoute(req, res, url, { send });
+    }
+    // Site du launcher : classement public des benchmarks + plus gros gains Opti Pro (témoignages chiffrés)
+    if (url.pathname === '/api/public/launcher' && req.method === 'GET') {
+      const { load } = await import('./storage.js'); const { readFresh } = await import('./storage.js');
+      const [soc, comptes, gains] = await Promise.all([load('launcher-social', {}), load('launcher-comptes', {}), readFresh('opti-pro-gains')]);
+      const acc = comptes?.accounts ?? {};
+      const bench = Object.entries(soc?.bench2 ?? {}).filter(([id, b]) => acc[id] && b?.total).map(([id, b]) => ({ pseudo: acc[id].pseudo, score: b.total, cpu: b.cpu ?? null, gpu: b.gpuName ?? null })).sort((a, b) => b.score - a.score).slice(0, 15);
+      const { gainsBoard } = await import('./features/optiPro.js');
+      const m = new Date().toISOString().slice(0, 7), prev = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+      allowSiteOrigin(req, res); res.setHeader('Cache-Control', 'public, max-age=300');
+      return send(res, 200, { bench, gains: gainsBoard({ ...(gains?.[prev] ?? {}), ...(gains?.[m] ?? {}) }) });
     }
     if ((url.pathname === '/api/public' || url.pathname === '/api/classement') && req.method === 'GET') {
       const { publicStats, publicRanking } = await import('./features/publicStats.js');

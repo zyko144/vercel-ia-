@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opti Pro · History Launcher</title>
+<meta name="description" content="Ton PC optimisé pas à pas par un technicien IA, d’après ton vrai matériel : BIOS, XMP, Windows, avant / après mesuré.">
+<link rel="icon" href="assets/logo.png">
+<meta name="theme-color" content="#07060b">
+<meta property="og:title" content="Opti Pro · History Launcher"><meta property="og:description" content="Ton PC optimisé pas à pas par un technicien IA, d’après ton vrai matériel : BIOS, XMP, Windows, avant / après mesuré."><meta property="og:image" content="https://zyko144.github.io/vercel-ia-/assets/banniere.jpg">
+<link rel="stylesheet" href="base.css">
+<style>.page { padding: 120px 0 60px; } .page h1 { font-size: clamp(32px, 5vw, 52px); margin: 0 0 10px; } .card { padding: 20px 24px; border-radius: 20px; margin: 16px 0; } .card h2 { margin-top: 0; } .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; } .card img { max-width: 100%; border-radius: 12px; } .ok { color: #4ade80; } .bad { color: #f87171; } ol li, ul li { margin: 6px 0; }</style>
+</head>
+<body>
+<header class="nav"><div class="wrap glass"><a class="brand" href="index.html"><img src="assets/logo.png" alt="">History</a><nav><a href="index.html">Accueil</a><a href="opti-pro.html">Opti Pro</a><a href="guides.html">Guides</a><a href="statut.html">Statut</a></nav><a class="btn main sm dl-link" href="https://github.com/zyko144/vercel-ia-/releases/latest">Télécharger</a></div></header>
+<main class="wrap page">
+<span class="pill glass"><b></b>Ticket guidé · IA + équipe History</span>
+<h1>🚀 Opti Pro</h1>
+<p class="lead">Un technicien IA te guide pas à pas d’après <b>ton</b> matériel, et l’équipe peut intervenir à tout moment sur Discord. Tout ce que le launcher sait faire seul, il le fait pour toi, avec ta validation.</p>
+<div class="cols">
+<div class="glass card"><h2>Les 7 étapes</h2><ol><li>🎫 Ton setup (lu automatiquement)</li><li>✅ Ton plan personnalisé</li><li>💾 Clé USB Windows (outil officiel en 1 clic)</li><li>🧹 Formatage propre (facultatif)</li><li>🧠 BIOS : mise à jour, XMP / EXPO, PBO si c’est rentable</li><li>⚙️ Optimisation finale de Windows et de tes jeux</li><li>🏁 Test et validation : FPS avant / après</li></ol></div>
+<div class="glass card"><h2>Où cliquer dans TON BIOS</h2><p>Une animation pour ta marque de carte mère (MSI, ASUS, Gigabyte, ASRock), sur l’appli et sur Discord.</p><img src="assets/bios/msi-xmp.gif" alt="Animation : activer XMP dans un BIOS MSI" loading="lazy"></div>
+</div>
+<div class="glass card"><h2>Résultats réels de la communauté</h2><p>Gains mesurés par les joueurs après leur ticket (FPS moyens avant / après, ou score de santé du PC).</p><ol id="pubGains"><li>Chargement…</li></ol></div>
+<div class="glass card"><h2>Inclus</h2><ul><li>Overclocking du processeur seulement s’il est rentable sur ton PC, avec avertissement clair</li><li>Mode express : uniquement les actions automatiques (≈ 15 min)</li><li>Carte avant / après à partager, badge « PC optimisé par History »</li><li>Suivi automatique chaque mois</li></ul><p><a class="btn main" href="index.html#premium">Voir les offres</a></p></div>
+<script>fetch('api.json').then((r) => r.json()).then(({ api }) => fetch(api + '/api/public/launcher')).then((r) => r.json()).then((d) => { const e = (t) => String(t ?? '').replace(/[<>&"]/g, ''); document.getElementById('pubGains').innerHTML = (d.gains ?? []).map((g) => `<li><b>${e(g.pseudo)}</b> · +${g.gain} % <small>${g.fps ? `${e(g.fps.jeu)} : ${g.fps.before} → ${g.fps.after} FPS` : `santé ${g.before} → ${g.after}`}</small></li>`).join('') || '<li>Les premiers résultats arrivent ce mois-ci.</li>'; }).catch(() => { document.getElementById('pubGains').innerHTML = '<li>Indisponible pour le moment.</li>'; });</script>
+</main>
+<footer><a href="index.html">History Launcher</a> · <a href="support.html">Support</a> · <a href="statut.html">Statut</a> · <a href="presse.html">Presse</a> · <a href="en.html" lang="en">English</a></footer>
+</body></html>

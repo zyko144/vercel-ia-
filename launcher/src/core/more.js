@@ -263,3 +263,30 @@ export function pcParts(d = {}) {
   }
   return out;
 }
+
+/** Statistiques avancées (Premium) : jour de la semaine préféré, heure de pointe, durée moyenne et record de session, tendance du mois. */
+export function advancedStats(sessions = [], days = {}, items = [], now = Date.now()) {
+  const games = sessions.filter((s) => s.end > s.start && items.find((i) => i.id === s.id)?.kind === 'game');
+  const len = (s) => (s.end - s.start) / 60000;
+  const byDay = Array(7).fill(0), byHour = Array(24).fill(0);
+  for (const s of games) { byDay[(new Date(s.start).getDay() + 6) % 7] += len(s); byHour[new Date(s.start).getHours()] += len(s); }
+  const best = games.reduce((b, s) => (len(s) > (b ? len(b) : 0) ? s : b), null);
+  const sum = (from, to) => Object.entries(days).filter(([k]) => { const t = Date.parse(k); return t >= now - from && t < now - to; }).reduce((n, [, v]) => n + (v.jeux ?? 0), 0);
+  const cur = sum(30 * 86400000, 0), prev = sum(60 * 86400000, 30 * 86400000);
+  return {
+    byDay: byDay.map(Math.round), topDay: byDay.indexOf(Math.max(...byDay)), topHour: byHour.indexOf(Math.max(...byHour)),
+    avg: games.length ? Math.round(games.reduce((n, s) => n + len(s), 0) / games.length) : 0,
+    longest: best ? { name: items.find((i) => i.id === best.id)?.name, minutes: Math.round(len(best)) } : null,
+    trend: prev ? Math.round(((cur - prev) / prev) * 100) : null, month: Math.round(cur / 60),
+  };
+}
+
+/** Ton année History (récap de fin d'année) : heures, jours joués, top 5 des jeux, meilleur jour. */
+export function wrapped(days = {}, items = [], year = new Date().getFullYear()) {
+  const list = Object.entries(days).filter(([k]) => k.startsWith(String(year)));
+  const by = {};
+  for (const [, d] of list) for (const [id, m] of Object.entries(d.items ?? {})) by[id] = (by[id] ?? 0) + m;
+  const top = Object.entries(by).map(([id, m]) => ({ name: items.find((i) => i.id === id && i.kind === 'game')?.name, hours: Math.round(m / 60) })).filter((x) => x.name).sort((a, b) => b.hours - a.hours).slice(0, 5);
+  const best = list.reduce((b, [k, d]) => ((d.jeux ?? 0) > (b?.[1] ?? 0) ? [k, d.jeux] : b), null);
+  return { year, hours: Math.round(list.reduce((n, [, d]) => n + (d.jeux ?? 0), 0) / 60), days: list.filter(([, d]) => d.jeux > 0).length, top, best: best ? { day: best[0], hours: Math.round(best[1] / 6) / 10 } : null };
+}
