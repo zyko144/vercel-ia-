@@ -438,6 +438,19 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     return done(200, { ok: true, join: oui && item.type === 'invite' ? item.join : null });
   }
 
+  // Un jeu de sa bibliothèque vient de recevoir une mise à jour : annonce sur Discord
+  if (route === 'POST /api/compte/maj-jeu') {
+    const name = text(body.name, 80); const steamId = /^\d{1,10}$/.test(String(body.steamId ?? '')) ? String(body.steamId) : null;
+    if (!name || !allowAttempt('maj-jeu', id, 10, 3_600_000)) return send(res, 400, { error: 'Refusé.' });
+    (await import('./launcherDiscord.js')).announceGameUpdate({ name, steamId, version: text(body.version, 40) }).catch(() => {});
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'POST /api/compte/gain-opti') {
+    const jeu = text(body.jeu, 80), avant = Math.round(Number(body.avant)), apres = Math.round(Number(body.apres));
+    if (!jeu || !(avant > 0 && avant < 2000 && apres > avant && apres < 2000) || !allowAttempt('gain-opti', id, 5, 3_600_000)) return send(res, 400, { error: 'Refusé.' });
+    (await import('./launcherDiscord.js')).announceOptiGain({ jeu, avant, apres }).catch(() => {});
+    return send(res, 200, { ok: true });
+  }
   // Classement mondial des benchmarks (meilleur score de chaque compte)
   if (route === 'POST /api/compte/benchmark') {
     const sc = body.scores ?? {};

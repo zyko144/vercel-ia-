@@ -91,6 +91,7 @@ export async function scanSteam(steamPath) {
         installDir: path.join(dir, 'common', pick(acf, 'installdir') ?? ''), steamLibrary: dir, manifest: path.join(dir, file),
         steamRoot: steamPath, steamDepots: installedDepots(acf),
         size: Number(pick(acf, 'SizeOnDisk') ?? 0),
+        version: String(pick(acf, 'buildid') ?? ''),
         minutes: t.minutes, lastPlayed: t.lastPlayed || Number(pick(acf, 'LastPlayed') ?? 0) * 1000 || 0, steamTimes: times[id] ?? {},
         art: {}, cdnArt: art(id), localArt: await steamLocalArt(steamPath, id), steamId: id,
         // Steam : 2 = mise à jour à faire, 1024/512 = mise à jour en cours

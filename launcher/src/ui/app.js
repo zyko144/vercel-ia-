@@ -83,7 +83,7 @@ function art(item) {
   const a = item.art ?? {};
   const bg = a.hero ?? a.header ?? a.cover ?? null;
   const back = bg ? `<div class="bgl" style="background-image:${url(bg)}"></div>` : '<div class="bgl none"></div>';
-  const inner = a.logo ? `<img class="logo" src="${esc(a.logo)}" alt="">`
+  const inner = a.logo ? `<img class="logo" loading="lazy" decoding="async" src="${esc(a.logo)}" alt="">`
     : a.header ? `<img class="banner" src="${esc(a.header)}" alt="">`
       : a.icon || item.iconData ? `<img class="appicon" src="${esc(a.icon ?? item.iconData)}" alt="">`
         : `<span class="letter">${esc((item.name ?? '?')[0].toUpperCase())}</span>`;
@@ -308,7 +308,7 @@ function card(i, cls = 'gcard') {
   const live = state.active.has(i.id);
   const icon = srcIcon(i);
   return `<div class="${cls} ${i.installed ? '' : 'off'} ${state.sel?.id === i.id ? 'sel' : ''}" data-id="${esc(i.id)}" style="--c:${esc(colorOf(i))}">
-    ${art(i)}${icon ? `<img class="srcicon" src="${esc(icon)}" alt="">` : ''}
+    ${art(i)}${icon ? `<img class="srcicon" loading="lazy" decoding="async" src="${esc(icon)}" alt="">` : ''}
     ${live ? '<span class="badge live">En cours</span>' : !i.installed ? '<span class="badge">Non installé</span>' : i.updatePending ? '<span class="badge upd">Mise à jour</span>' : ''}
     <div class="meta"><b>${esc(i.name)}</b><small>${CLOCK}${hours(i.minutes)}</small></div></div>`;
 }
@@ -1476,6 +1476,7 @@ function notifActions(e) {
   if (e.kind === 'call' && age < 45_000) return `${b('answer', '📞 Décrocher', 'play')}${b('hangup', 'Refuser', 'ghost')}`;
   if (e.kind === 'missed' && e.from) return b('callback', '📞 Rappeler', 'play');
   if (e.kind === 'share' && age < 86_400_000) return b('saveget', '💾 Recevoir', 'play');
+  if (e.kind === 'heat') return b('help', '🆘 Demander de l’aide', 'play');
   if (e.file) return `${b('play', 'Ouvrir')}${b('folder', 'Dossier', 'ghost')}`;
   return '';
 }
@@ -1513,6 +1514,7 @@ $('ncList').addEventListener('click', async (e) => {
   if (b) {
     const entry = nc.list.find((x) => x.id === b.dataset.nid);
     b.disabled = true;
+    if (b.dataset.nact === 'help') { $('notifCenter').hidePopover(); return openHelp('Mon PC chauffe en jeu', entry?.body ?? ''); }
     if (b.dataset.nact === 'reply' && entry?.from) { $('notifCenter').hidePopover(); go('amis'); showFriendTab('history'); setTimeout(() => openChat(entry.from), 200); api.notifsRead?.(entry.id); return; }
     const r = await api.notifsAct?.(b.dataset.nid, b.dataset.nact);
     if (r?.call) { $('notifCenter').hidePopover(); startCall(r.call, state.hist?.amis?.find((a) => a.id === r.call)?.pseudo); }
@@ -1600,6 +1602,12 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.18': [
+    ['🆘', 'Aide en un clic', 'Ton PC chauffe en jeu ? La cloche propose de demander de l’aide au support, avec l’analyse de ton PC jointe. Tu peux aussi écrire au support depuis Discord avec /launcher aide.', ['#bellBtn', 'wait900']],
+    ['🆕', 'Mises à jour des jeux', 'Quand un de tes jeux est mis à jour, la cloche te prévient et le salon #maj-des-jeux du Discord donne le lien des patch notes.'],
+    ['📈', 'FPS avant / après l’opti', 'Après l’optimisation d’un jeu, ta première partie compare tes FPS à ceux d’avant. Les gains sont partagés anonymement sur Discord (si le partage d’activité est activé).'],
+    ['⚡', 'Bibliothèque plus fluide', 'Les logos des jeux se chargent seulement quand ils apparaissent à l’écran.'],
+  ],
   '0.53.17': [
     ['🗑️', 'Désinstaller partout', 'Les jeux installés directement sur un disque (comme D:\\Fortnite) se désinstallent enfin depuis le launcher, sans le message « dossier trop proche de la racine ».', ['#openSettings', 'wait600', '.setnav [data-pane=jeux]', 'wait900']],
   ],
@@ -2762,6 +2770,11 @@ function optiFindings(o) {
   if (part('materiel') != null && part('materiel') < 60) f.push(['bad', '🖥', 'Problèmes de matériel ou de sécurité', 'Températures, pilote ou protection : le détail est dans Mon PC.', 'pc', 'Voir dans Mon PC']);
   return f;
 }
+/** Ouvre une demande au support (Paramètres › Aide), déjà remplie ; l'analyse du PC est jointe. */
+function openHelp(title, description) {
+  $('openSettings').click(); document.querySelector('.setnav [data-pane=aide]')?.click(); $('newSupport').click();
+  $('supportTitle').value = title; $('supportForm').elements.description.value = description.slice(0, 4000);
+}
 function renderOptiDiag(o) {
   const f = optiFindings(o);
   const fixable = f.some(([, , , , k]) => ['junk', 'startup', 'tweaks'].includes(k));
@@ -2777,10 +2790,7 @@ $('optiDiag').addEventListener('click', async (e) => {
   if (k === 'games') return goSec('osecA');
   if (k === 'pc') return go('pc');
   if (k === 'help') { // demande au support Discord, déjà remplie avec ce que l'analyse a trouvé
-    $('openSettings').click(); document.querySelector('.setnav [data-pane=aide]')?.click(); $('newSupport').click();
-    $('supportTitle').value = 'Aide pour optimiser mon PC';
-    $('supportForm').elements.description.value = `Problèmes trouvés par l’analyse :\n${optiFindings(opti).map(([, , t, d]) => `- ${t} : ${d}`).join('\n')}`.slice(0, 4000);
-    return;
+    return openHelp('Aide pour optimiser mon PC', `Problèmes trouvés par l’analyse :\n${optiFindings(opti).map(([, , t, d]) => `- ${t} : ${d}`).join('\n')}`);
   }
   if (!(await premOk('opti'))) return openPremium('opti');
   if (k === 'repair') return $('optiRepair')?.click();
@@ -4452,7 +4462,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.17',
+    version: async () => '0.53.18',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

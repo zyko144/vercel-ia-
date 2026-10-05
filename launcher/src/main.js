@@ -322,6 +322,17 @@ async function scan() {
   raw = [...found.filter((i) => !(fivem.item && /^fivem$/i.test(i.name ?? '')) && notDup(i)), ...stores, ...xbox, ...(fivem.item ? [fivem.item] : []), ...Object.values(store.data.custom ?? {}).map(customItem)];
   if (process.env.LAUNCHER_DEMO) raw = demoItems();
   await fillSteamNames(raw).catch(() => {});
+  // Un jeu a changé de version depuis le dernier scan : badge dans la cloche + annonce dans #maj-des-jeux sur Discord
+  const vers = (store.data.gameVersions ??= {}); let verChanged = false;
+  for (const i of raw.filter((x) => x.version && x.installed)) {
+    if (vers[i.id] && vers[i.id] !== i.version && i.name) {
+      logNotif({ id: `maj-${i.id}-${i.version}`, kind: 'app', icon: '🆕', title: `${i.name} a été mis à jour`, body: i.steamId ? 'Les patch notes sont sur la page Steam du jeu.' : 'Nouvelle version installée.' });
+      const token = secret('account');
+      if (token) api('/api/compte/maj-jeu', { method: 'POST', token, body: { name: i.name, steamId: i.steamId ?? null, version: i.version } }).catch(() => {});
+    }
+    if (vers[i.id] !== i.version) { vers[i.id] = i.version; verChanged = true; }
+  }
+  if (verChanged) store.save();
   await remerge();
   enrichInBackground().catch(() => {});
   const lib = library();
@@ -1044,6 +1055,7 @@ async function optiApply(plan, progress = () => {}) {
         const item = items.find((x) => x.id === st.a.itemId);
         if (item && (activeItems([item], paths).size || (await runningGameExes(item).catch(() => [])).length)) throw new Error(`ferme ${item.name} d’abord`);
         const r = await applyAction(st.a);
+        (store.data.optiAt ??= {})[st.a.itemId] = Date.now(); // pour comparer les FPS avant / après l'opti
         journal.entries.push(...r.entries);
         got = r.freed;
       }
@@ -1296,7 +1308,11 @@ const lastHeat = {};
 setInterval(async () => {
   // Seulement pendant une partie ou avec l'écran d'infos : hors jeu, le launcher ne sollicite pas le PC pour rien
   if (store.data.settings.heatAlerts === false || !(currentSession() || overlay)) return;
-  for (const a of heatAlerts(await snapshot().catch(() => ({})), lastHeat)) notify('Ton PC chauffe', `${a.text}. Pense à aérer ou à baisser les graphismes.`);
+  for (const a of heatAlerts(await snapshot().catch(() => ({})), lastHeat)) {
+    notify('Ton PC chauffe', `${a.text}. Pense à aérer ou à baisser les graphismes.`);
+    // Dans la cloche (une fois par jour) : bouton pour demander de l'aide au support, analyse du PC jointe
+    logNotif({ id: `heat-${new Date().toDateString()}`, kind: 'heat', icon: '🔥', title: 'Ton PC a chauffé en jeu', body: `${a.text}. Le support peut regarder ça avec l’analyse de ton PC.` });
+  }
 }, 60_000);
 
 // ---------- Pilote graphique trop vieux : rappel au plus une fois par mois (clic = page officielle du pilote) ----------
@@ -3443,6 +3459,14 @@ async function sessionEnd() {
   const withAvg = store.data.perf[s.id].filter((r) => r.avg);
   const on = avgOf(withAvg.filter((r) => r.boost)), off = avgOf(withAvg.filter((r) => !r.boost));
   const gain = rec.boost && on && off ? Math.round(((on - off) / off) * 100) : null;
+  // Première partie mesurée après l'opti du jeu : FPS avant / après, dans la cloche et (anonyme) sur Discord
+  const optiAt = store.data.optiAt?.[s.id] ?? 0;
+  const before = withAvg.filter((r) => r.at < optiAt), after = withAvg.filter((r) => r.at > optiAt);
+  if (optiAt && rec.avg && before.length && after.length === 1) {
+    const avant = Math.round(avgOf(before)), optiGain = Math.round(((rec.avg - avant) / avant) * 100);
+    if (Math.abs(optiGain) >= 2) bell(`Opti de ${s.name} : ${optiGain > 0 ? '+' : ''}${optiGain} % de FPS`, `${avant} FPS en moyenne avant l’opti, ${rec.avg} maintenant.`);
+    if (optiGain >= 3 && store.data.settings.shareActivity !== false) social('/api/compte/gain-opti', { jeu: s.name, avant, apres: rec.avg }).catch(() => {});
+  }
   const B = { cpu: 'le processeur limite tes FPS', gpu: 'la carte graphique travaille à fond (normal pour un jeu exigeant)', mixte: 'processeur et carte graphique sont équilibrés' };
   if (rec.avg || rec.bound) bell(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s)${why ? ` : ${why}` : ' repérée(s)'}.` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
 }
