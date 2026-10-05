@@ -50,11 +50,17 @@ export function initMore(api, h) {
 
   function sellMode() {
     if (!pc) return;
-    modal(`<div class="mhead"><span class="micon">💶</span><h2>Mode vente</h2></div>
-      <p class="mtext">Valeur estimée de ton PC d’occasion : <b>${euros(pc.resale.low)} – ${euros(pc.resale.high)}</b>.</p>
-      <dl class="mvdl">${pc.resale.parts.map((p) => `<dt>${esc(p.type)}</dt><dd>${esc(p.name)} · ≈ ${euros(p.price)}</dd>`).join('')}</dl>
-      <ul class="mlist"><li>Sauvegarde tes jeux et ta bibliothèque avec ton compte History (Paramètres › Compte).</li><li>Déconnecte-toi de Steam, Epic, Discord et de ton navigateur.</li><li>Lance « Réinitialiser ce PC » en supprimant tout : l’acheteur reçoit un Windows propre.</li><li>Joins les captures de Mon PC (composants + benchmark) à ton annonce : ça rassure.</li></ul>
-      <div class="row"><button type="button" class="btn" data-pcfix="recovery">Ouvrir « Réinitialiser ce PC »</button></div>`, true);
+    const r = pc.resale, main = r.parts.filter((p) => p.type !== 'Le reste (estimé)');
+    const ad = `PC gamer · ${main.map((p) => p.name).join(' · ')}\n\nPrix : ${euros(Math.round(r.total / 10) * 10)} (à débattre)\nWindows réinstallé propre, testé et nettoyé. Captures des performances sur demande.`;
+    const steps = [['☁️', 'Sauvegarde ta bibliothèque', 'Paramètres › Compte : tes jeux, temps de jeu et réglages te suivent sur ton prochain PC.'], ['🔑', 'Déconnecte tes comptes', 'Steam, Epic, Discord, navigateur et mots de passe enregistrés.'], ['🧹', 'Réinitialise Windows', '« Supprimer tout » : l’acheteur reçoit un Windows propre, sans tes fichiers.'], ['📸', 'Montre les performances', 'Captures de Mon PC (composants + benchmark) dans l’annonce : ça rassure.']];
+    modal(`<div class="sell"><div class="sellhead"><div><small>Prix conseillé</small><b>${euros(r.total)}</b><span>fourchette ${euros(r.low)} – ${euros(r.high)} selon l’état</span></div><span class="sellico">💶</span></div>
+      <div class="sellgrid"><section><h3>Ton annonce, prête à coller</h3><pre id="sellAd">${esc(ad)}</pre><button type="button" class="btn" id="sellCopy">📋 Copier l’annonce</button>
+        <h3>Prix pièce par pièce</h3><div class="sellparts">${r.parts.map((p) => `<div><span>${esc(p.type)}</span><b>${esc(p.name)}</b><em>${euros(p.price)}</em></div>`).join('')}</div></section>
+      <section><h3>Avant de vendre</h3><ol class="sellsteps">${steps.map(([i, t, d]) => `<li><i>${i}</i><div><b>${t}</b><small>${d}</small></div></li>`).join('')}</ol>
+        <button type="button" class="btn play" data-pcfix="recovery">🧹 Ouvrir « Réinitialiser ce PC »</button></section></div>
+      <div class="row end"><button type="button" class="btn ghost" data-m="1">Fermer</button></div></div>`, true);
+    $('modalBox').classList.add('sellbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
+    $('sellCopy').onclick = () => navigator.clipboard.writeText(ad).then(() => toast('✓ Annonce copiée'), () => toast('Copie impossible'));
   }
 
   // Taux d'interrogation de la souris : nombre réel de positions reçues par seconde pendant que tu la bouges
@@ -157,13 +163,37 @@ export function initMore(api, h) {
     if (!bios.brand) toast('Marque de carte mère non reconnue : demande au technicien où cliquer.');
     return bios.brand;
   }
+  let rateAsked = 0;
   function proEnd(s) {
     if (!s?.done) return '';
-    if (!s.rating) api.more?.('proDone');
-    return `<div class="emb bot proend" style="--ec:#ffc439"><div class="emba"><img src="logo.png" alt="">⭐ Ton avis</div>
-      ${s.rating ? `<p>Merci pour ta note ${'⭐'.repeat(s.rating.stars)}</p>` : `<p>Note le technicien :</p><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" title="${n} étoile${n > 1 ? 's' : ''}">★</button>`).join('')}</div><input class="minput" id="proNote" maxlength="300" placeholder="Un mot sur ton ticket (facultatif)">`}
-      <div class="row"><button type="button" class="btn play" data-procard="${s.at ?? 0}">📸 Ma carte avant / après</button><button type="button" class="btn ghost" data-proupg="1">🛒 Plan d’upgrade</button></div>
+    if (!s.rating) { api.more?.('proDone'); if (rateAsked !== s.id) { rateAsked = s.id; setTimeout(() => rateDialog(s), 400); } }
+    return `<div class="proend"><div class="proendhead"><span>🚀</span><div><h3>Ton PC est prêt</h3><p>Opti Pro terminée${s.closedAt ? ` le ${new Date(s.closedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : ''}${s.rating ? ` · ta note ${'★'.repeat(s.rating.stars)}` : ''}</p></div></div>
+      <div class="proendacts">
+        <button type="button" data-procard="${s.at ?? 0}"><i>📸</i><b>Ma carte avant / après</b><small>À partager sur Discord</small></button>
+        <button type="button" data-proupg="1"><i>🛒</i><b>Plan d’upgrade</b><small>Ce qui ferait gagner le plus</small></button>
+        <button type="button" data-proredo="1"><i>🔁</i><b>Refaire l’Opti Pro</b><small>Sans refaire ce qui est déjà validé</small></button>
+        ${s.rating ? '' : '<button type="button" data-prorate="1"><i>⭐</i><b>Noter le technicien</b><small>30 secondes, ça nous aide</small></button>'}
+      </div>
       <small class="hint">🛠 Badge « PC optimisé par History » ajouté à ton profil · suivi automatique de ton PC chaque mois.</small></div>`;
+  }
+  function rateDialog(s) {
+    if ($('modal').open) return;
+    const LBL = ['Touche une étoile', 'Décevant', 'Peut mieux faire', 'Correct', 'Très bien', 'Excellent !'];
+    modal(`<div class="rate"><img src="logo.png" alt=""><h2>Ton PC est prêt 🚀</h2><p>Comment s’est passée ton Opti Pro ?</p>
+      <div class="ratestars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-rs="${n}" aria-label="${n} étoile${n > 1 ? 's' : ''}">★</button>`).join('')}</div><b class="ratelbl" id="rateLbl">${LBL[0]}</b>
+      <textarea class="minput" id="rateNote" maxlength="300" rows="3" placeholder="Un mot pour le technicien (facultatif)"></textarea>
+      <div class="row"><button type="button" class="btn ghost" data-m="1">Plus tard</button><button type="button" class="btn play" id="rateSend" disabled>Envoyer ma note</button></div></div>`);
+    $('modalBox').classList.add('ratebox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
+    let n = 0; const stars = [...$('modalBox').querySelectorAll('[data-rs]')];
+    const paint = (k) => stars.forEach((b, i) => b.classList.toggle('on', i < k));
+    stars.forEach((b) => { b.onmouseenter = () => paint(+b.dataset.rs); b.onclick = () => { n = +b.dataset.rs; $('rateLbl').textContent = LBL[n]; $('rateSend').disabled = false; paint(n); }; });
+    $('modalBox').querySelector('.ratestars').onmouseleave = () => paint(n);
+    $('rateSend').onclick = async () => {
+      $('rateSend').disabled = true;
+      const r = await api.proAct?.('rate', `${n}|${$('rateNote').value}`).catch(() => null);
+      if (!r?.session) { $('rateSend').disabled = false; return toast(r?.error ?? 'Envoi impossible, réessaie.'); }
+      $('modal').close(); toast('Merci pour ta note ⭐'); h.setPro(r.session);
+    };
   }
   async function proCard(at) {
     toast('Nouvelle mesure de ton PC…');
@@ -221,7 +251,14 @@ export function initMore(api, h) {
     $('pcCopy').onclick = () => c.toBlob((b) => navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]).then(() => toast('✓ Image copiée : colle-la sur Discord'), () => toast('Copie impossible : utilise Enregistrer')));
   }
   document.addEventListener('click', async (e) => {
-    const t = e.target.closest('[data-bsim], [data-btask], [data-star], [data-procard], [data-proupg]'); if (!t) return;
+    const t = e.target.closest('[data-bsim], [data-btask], [data-star], [data-procard], [data-proupg], [data-proredo], [data-prorate]'); if (!t) return;
+    if (t.dataset.prorate) return rateDialog(h.pro() ?? {});
+    if (t.dataset.proredo) {
+      if (!(await ui.confirm({ title: 'Refaire l’Opti Pro ?', text: 'Un nouveau ticket s’ouvre avec seulement ce qui reste à faire : ce que tu as déjà validé n’apparaît plus, et rien n’est remis à zéro sur ton PC. Pas de clé USB ni de formatage cette fois.', ok: '🔁 Refaire', icon: '🔁' }))) return;
+      t.disabled = true; const r = await api.proStart?.({ need: 'Refaire l’Opti Pro (suite de ma précédente)', cooling: '', redo: true }).catch(() => null); t.disabled = false;
+      if (!r?.session) return toast(r?.error === 'login' ? 'Connecte-toi à ton compte History.' : r?.error === 'premium' ? 'L’Opti Pro est réservée au Pack Premium.' : r?.error ?? 'Serveur injoignable.');
+      toast('🔁 Nouveau ticket ouvert'); return h.setPro(r.session);
+    }
     if (t.dataset.bsim) { if (bios?.brand) { bios.brand = null; } else if (!(await loadBios(h.pro() ?? {}))) return; return h.redraw(); }
     if (t.dataset.btask) { biosTask = t.dataset.btask; return h.redraw(); }
     if (t.dataset.star) { const r = await api.proAct?.('rate', `${t.dataset.star}|${$('proNote')?.value ?? ''}`).catch(() => null); if (r?.session) { toast('Merci pour ta note ⭐'); h.setPro(r.session); } return; }
@@ -467,9 +504,89 @@ export function initMore(api, h) {
     api[fn] = async (...a) => { const pw = key === 2 ? a[2] : a[0]?.[key]; const n = await more('pwned', pw).catch(() => 0); if (n > 0) toast(`⚠ Ce mot de passe apparaît dans ${Number(n).toLocaleString('fr-FR')} fuites de données : choisis-en un autre.`); return orig(...a); };
   }
 
+  // ---------- Mon PC › Stockage ----------
+  const ST_KINDS = { game: ['🎮', 'Jeux', '#ff8a2a'], app: ['🧩', 'Applis', '#8b5cf6'], protected: ['🧩', 'Applis', '#8b5cf6'], video: ['🎬', 'Vidéos', '#ef4444'], image: ['🖼', 'Images', '#22c55e'], music: ['🎵', 'Musique', '#ec4899'], archive: ['📦', 'Archives', '#eab308'], installer: ['💿', 'Installateurs', '#06b6d4'], doc: ['📄', 'Documents', '#60a5fa'], folder: ['📁', 'Dossiers', '#94a3b8'], file: ['🗂', 'Autres', '#64748b'] };
+  const go = (b) => (b >= 1e12 ? `${(b / 1e12).toFixed(2).replace('.', ',')} To` : b >= 1e9 ? `${(b / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.max(1, Math.round(b / 1e6))} Mo`);
+  const ago = (t) => { if (!t) return 'jamais ouvert'; const d = Math.floor((Date.now() - t) / 86_400_000); return d < 1 ? 'utilisé aujourd’hui' : d < 31 ? `utilisé il y a ${d} j` : d < 365 ? `pas utilisé depuis ${Math.floor(d / 30)} mois` : `pas utilisé depuis ${(d / 365).toFixed(1).replace('.', ',').replace(',0', '')} an${d >= 730 ? 's' : ''}`; };
+  let st = null, stKind = 'all', stShown = 120, stSel = new Set(), stMonths = 6;
+  const stIcon = (x) => `<span class="sticon" style="--k:${ST_KINDS[x.kind][2]}">${x.icon ? `<img src="${esc(x.icon)}" alt="" onerror="this.remove()">` : ''}<em>${ST_KINDS[x.kind][0]}</em></span>`;
+  async function storage(refresh = false) {
+    if (st && !refresh) return drawStorage();
+    $('stList').innerHTML = '<div class="stscan"><b id="stPct">0 %</b><span id="stCur">Mesure de tes disques…</span><i><u id="stBar"></u></i><small>Chaque dossier est mesuré pour de vrai : ça peut prendre quelques minutes la première fois.</small></div>';
+    const r = await more('storage', refresh);
+    if (r?.busy) return;
+    if (!r?.items) { $('stList').innerHTML = `<div class="empty">${esc(r?.error ?? 'Analyse impossible.')}</div>`; return; }
+    st = r; drawStorage();
+  }
+  api.onStorage?.((p) => { if ($('stPct')) { $('stPct').textContent = `${p.pct} %`; $('stCur').textContent = p.current; $('stBar').style.width = `${p.pct}%`; } });
+  function drawStorage() {
+    $('stDrives').innerHTML = st.volumes.map((v) => {
+      const L = `${v.letter}:`, mine = st.items.filter((x) => x.path.toUpperCase().startsWith(L)), used = v.size - v.free;
+      const by = {}; for (const x of mine) { const k = ST_KINDS[x.kind][1]; by[k] = (by[k] ?? 0) + x.size; }
+      const known = Object.values(by).reduce((n, b) => n + b, 0);
+      const segs = [...Object.entries(by).sort((a, b) => b[1] - a[1]), ['Windows et système', Math.max(0, used - known)]];
+      const col = (k) => Object.values(ST_KINDS).find((x) => x[1] === k)?.[2] ?? '#475569';
+      return `<div class="panel stdrive"><div class="stdhead"><span>🖴</span><div><b>${v.letter === 'C' ? 'Disque Windows' : 'Disque local'} (${L})</b><small>${go(v.free)} libres sur ${go(v.size)}</small></div><em class="${v.free / v.size < 0.1 ? 'bad' : ''}">${Math.round((used / v.size) * 100)} %</em></div>
+        <div class="stbar">${segs.map(([k, b]) => `<i style="width:${(b / v.size) * 100}%;background:${col(k)}" title="${esc(k)} · ${go(b)}"></i>`).join('')}</div>
+        <div class="stlegend">${segs.filter(([, b]) => b > v.size * 0.004).map(([k, b]) => `<span><i style="background:${col(k)}"></i>${esc(k)} <b>${go(b)}</b></span>`).join('')}</div></div>`;
+    }).join('');
+    const kinds = [...new Set(st.items.map((x) => ST_KINDS[x.kind][1]))];
+    $('stChips').innerHTML = [['all', 'Tout'], ...kinds.map((k) => [k, k])].map(([k, l]) => `<button type="button" class="${stKind === k ? 'on' : ''}" data-stk="${esc(k)}">${esc(l)}</button>`).join('');
+    const q = $('stSearch').value.trim().toLowerCase(), sort = $('stSort').value;
+    const list = st.items.filter((x) => (stKind === 'all' || ST_KINDS[x.kind][1] === stKind) && (!q || `${x.name} ${x.path}`.toLowerCase().includes(q)))
+      .sort(sort === 'old' ? (a, b) => (a.lastUsed ?? 0) - (b.lastUsed ?? 0) : sort === 'name' ? (a, b) => a.name.localeCompare(b.name) : (a, b) => b.size - a.size);
+    const top = st.items[0]?.size || 1;
+    $('stList').innerHTML = list.length ? `<div class="strows">${list.slice(0, stShown).map((x) => `<div class="strow">${stIcon(x)}<div class="stname"><b>${esc(x.name)}</b><small>${esc(x.where)} · ${esc(x.path)}</small></div><small class="stago ${(x.lastUsed ?? 0) < Date.now() - 180 * 86_400_000 ? 'old' : ''}">${ago(x.lastUsed)}</small><div class="stsize"><b>${go(x.size)}</b><i style="--w:${Math.max(2, (x.size / top) * 100)}%"></i></div><div class="stacts"><button type="button" class="btn ghost sm" data-stshow="${esc(x.path)}" title="Ouvrir l’emplacement">📂</button>${x.kind === 'protected' ? '<button type="button" class="btn ghost sm" data-pcfix="apps" title="Programme hors bibliothèque : désinstallation propre par Windows">Désinstaller…</button>' : `<button type="button" class="btn sm stdel" data-stdel="${esc(x.path)}">${x.kind === 'game' || x.kind === 'app' ? 'Désinstaller' : 'Supprimer'}</button>`}</div></div>`).join('')}</div>${list.length > stShown ? `<button type="button" class="btn ghost stmore" data-stmore="1">Afficher plus (${list.length - stShown})</button>` : ''}<p class="hint">Analyse du ${new Date(st.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · fichiers et dossiers vont dans la corbeille (récupérables), les jeux Steam / Epic se réinstallent depuis leur boutique.</p>` : '<div class="empty">Rien ne correspond.</div>';
+  }
+  async function stDelete(list) {
+    const total = list.reduce((n, x) => n + x.size, 0), games = list.filter((x) => x.kind === 'game' || x.kind === 'app');
+    if (!(await ui.confirm({ title: list.length > 1 ? `Supprimer ${list.length} éléments ?` : `${games.length ? 'Désinstaller' : 'Supprimer'} ${list[0].name} ?`, text: `${go(total)} libérés. ${games.length ? `${games.length} jeu${games.length > 1 ? 'x / applis' : ' / appli'} : désinstallé${games.length > 1 ? 's' : ''} (Steam / Epic : dossier supprimé, réinstallable). ` : ''}${list.length - games.length ? 'Fichiers et dossiers : envoyés à la corbeille, récupérables tant qu’elle n’est pas vidée.' : ''}`, list: list.slice(0, 8).map((x) => `${x.name} · ${go(x.size)}`), ok: '🗑 Supprimer', danger: true, icon: '🗑' }))) return false;
+    const r = await more('storageDel', list.map((x) => x.path));
+    const gone = new Set(list.map((x) => x.path)); for (const f of r?.failed ?? []) for (const x of list) if (x.name === f.name) gone.delete(x.path);
+    st.items = st.items.filter((x) => !gone.has(x.path));
+    toast(r?.ok ? `✓ ${r.ok} élément${r.ok > 1 ? 's' : ''} supprimé${r.ok > 1 ? 's' : ''}${r.freed ? ` · ${go(r.freed)} libérés` : ''}${r.failed?.length ? ` · ${r.failed.length} à finir` : ''}` : r?.failed?.[0]?.why ?? 'Suppression impossible');
+    drawStorage(); return true;
+  }
+  function oldDialog() {
+    if (!st) return toast('Lance d’abord l’analyse du stockage.');
+    const draw = () => {
+      const list = st.items.filter((x) => x.kind !== 'protected' && (x.lastUsed ?? 0) < Date.now() - stMonths * 30 * 86_400_000 && x.size > 0).sort((a, b) => b.size - a.size);
+      const sel = list.filter((x) => stSel.has(x.path)), tot = sel.reduce((n, x) => n + x.size, 0);
+      $('modalBox').querySelector('.stold').innerHTML = `<div class="stmonths">${[3, 6, 9, 12].map((m) => `<button type="button" class="${m === stMonths ? 'on' : ''}" data-stm="${m}">${m} mois</button>`).join('')}</div>
+        <div class="stwarn"><b>⚠ Vérifie avant de supprimer</b><span>Ces éléments n’ont pas été ouverts ni modifiés depuis plus de ${stMonths} mois. Ça peut être des jeux morts ou de vieux téléchargements… mais aussi des photos ou des sauvegardes que tu gardes exprès. Décoche ce que tu veux garder.</span></div>
+        ${list.length ? `<label class="stall"><input type="checkbox" data-stall="1" ${sel.length === list.length ? 'checked' : ''}> Tout sélectionner · ${list.length} élément${list.length > 1 ? 's' : ''}</label><div class="stoldlist">${list.map((x) => `<label class="strow">${`<input type="checkbox" data-stck="${esc(x.path)}" ${stSel.has(x.path) ? 'checked' : ''}>`}${stIcon(x)}<div class="stname"><b>${esc(x.name)}</b><small>${esc(x.where)} · ${ago(x.lastUsed)}</small></div><div class="stsize"><b>${go(x.size)}</b></div></label>`).join('')}</div>` : `<div class="empty">Rien d’inutilisé depuis ${stMonths} mois 👌</div>`}
+        <div class="row end"><button type="button" class="btn ghost" data-m="1">Annuler</button><button type="button" class="btn dangerbtn" data-stgo="1" ${sel.length ? '' : 'disabled'}>🗑 Supprimer la sélection${tot ? ` · ${go(tot)}` : ''}</button></div>`;
+    };
+    stSel = new Set(); modal('<div class="mhead"><span class="micon">🕰</span><h2>Fichiers anciens</h2></div><div class="stold"></div>', true);
+    $('modalBox').classList.add('procardbox'); $('modalBox').querySelector(':scope > .row.end')?.remove(); draw();
+    $('modalBox').querySelector('.stold').addEventListener('click', async (e) => {
+      const t = e.target.closest('[data-stm], [data-stgo]');
+      if (t?.dataset.stm) { stMonths = Number(t.dataset.stm); stSel = new Set(); return draw(); }
+      if (t?.dataset.stgo) { const list = st.items.filter((x) => stSel.has(x.path)); $('modal').close(); return stDelete(list); }
+    });
+    $('modalBox').querySelector('.stold').addEventListener('change', (e) => {
+      const t = e.target;
+      if (t.dataset.stall) { const all = [...$('modalBox').querySelectorAll('[data-stck]')].map((c) => c.dataset.stck); stSel = t.checked ? new Set(all) : new Set(); }
+      else if (t.dataset.stck) t.checked ? stSel.add(t.dataset.stck) : stSel.delete(t.dataset.stck);
+      draw();
+    });
+  }
+  $('stSearch')?.addEventListener('input', () => st && drawStorage());
+  $('stSort')?.addEventListener('change', () => st && drawStorage());
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-stk], [data-stshow], [data-stdel], [data-stmore], #stScan, #stOld'); if (!t) return;
+    if (t.id === 'stScan') return storage(true);
+    if (t.id === 'stOld') return oldDialog();
+    if (t.dataset.stk) { stKind = t.dataset.stk; stShown = 120; return drawStorage(); }
+    if (t.dataset.stmore) { stShown += 200; return drawStorage(); }
+    if (t.dataset.stshow) return more('storageShow', t.dataset.stshow);
+    if (t.dataset.stdel) { const x = st.items.find((i) => i.path === t.dataset.stdel); if (x) stDelete([x]); }
+  });
+
   return {
     heroTrailer, renderAdv, premExtras, proBar, proEnd, pc3d,
     verifs() { renderChecks(); renderPcExtra(); renderJournal(); },
+    storage: () => storage(),
     sheetMore, genreCols,
   };
 }

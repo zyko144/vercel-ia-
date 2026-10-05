@@ -301,4 +301,5 @@ contextBridge.exposeInMainWorld('launcher', {
   skipAccount: () => ipcRenderer.invoke('account:skip'),
   more: (name, ...args) => ipcRenderer.invoke(`more:${name}`, ...args),
   onMore: (fn) => ipcRenderer.on('more:stress', (_e, p) => fn(p)),
+  onStorage: (fn) => ipcRenderer.on('more:storage', (_e, p) => fn(p)),
 });

@@ -25,6 +25,10 @@ t = await m.act(t0.id, 'done'); assert.ok(t.closed && t.done); assert.match(t.lo
 assert.equal(await m.sessionOf('acc1'), null); assert.ok((await m.act(t0.id, 'next')).error);
 assert.equal((await m.recentDone('acc1')).id, t0.id); t = await m.act(t0.id, 'rate', '5|Top'); assert.deepEqual([t.rating.stars, t.rating.note], [5, 'Top']); assert.equal((await m.act(t0.id, 'rate', '1')).rating.stars, 5);
 m.setAsk(async () => { throw new Error('quota'); });
+// Refaire l'Opti Pro : nouveau ticket, ce qui est déjà validé sort du plan, pas de clé USB ni de formatage
+const r0 = await m.startSession({ id: 'acc1', pseudo: 'Alex' }, { cpu: 'AMD Ryzen 5 7600', board: 'MSI B650 TOMAHAWK', gpu: 'RTX 4070', ramText: '1x16 Go DDR5 6000', need: 'Fortnite' }, null, true);
+assert.ok(r0.redo && r0.id !== t0.id && r0.specs.doneIds.length > 0 && r0.specs.todo.every((x) => !r0.specs.doneIds.includes(x.id)), 'refaite : plan sans les points validés');
+assert.equal((await m.act(r0.id, 'next')).step, 4, 'refaite : saute clé USB et formatage');
 const t1 = await m.startSession({ id: 'acc2', pseudo: 'B' }, { cpu: 'x' }); assert.match(t1.log.at(-1).text, /humain/);
 assert.ok(Object.keys(m.AUTO).includes('optimiser'));
 // Plan propre à chaque demande + overclocking seulement après accord

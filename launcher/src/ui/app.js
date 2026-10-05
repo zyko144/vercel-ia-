@@ -267,7 +267,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx();
 
 // Fenêtres du launcher (confirmation, saisie) : même style partout, jamais les fenêtres grises de Windows
 // Taille de la fenêtre commune : chaque ouverture repart de la taille normale (sauf si elle demande « large »)
-function setModal(...cls) { $('modalBox').classList.remove('wide', 'fp', 'procardbox'); if (cls.length) $('modalBox').classList.add(...cls); }
+function setModal(...cls) { $('modalBox').classList.remove('wide', 'fp', 'procardbox', 'ratebox', 'sellbox'); if (cls.length) $('modalBox').classList.add(...cls); }
 const ui = {
   confirm({ title, text = '', ok = 'Confirmer', cancel = 'Annuler', danger = false, icon = '⚠️', list = [] }) {
     window.sfx?.play('pop');
@@ -694,7 +694,7 @@ function openFriendProfile(id) {
   $('modal').showModal();
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) setTimeout(() => $('modal').close(), 0); };
 }
-$('modal').addEventListener('close', () => $('modalBox').classList.remove('wide', 'fp', 'procardbox'));
+$('modal').addEventListener('close', () => $('modalBox').classList.remove('wide', 'fp', 'procardbox', 'ratebox', 'sellbox'));
 /** Recadrer une image (glisser pour déplacer, molette ou curseur pour zoomer) avant de l'envoyer. */
 function adjustImage(file, w, h, { round = false, maxKb = 140, title = 'Ajuste ton image' } = {}) {
   return new Promise((resolve) => {
@@ -1613,6 +1613,13 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.57.0': [
+    ['💾', 'Stockage', 'Mon PC › Stockage : la place de chaque disque comme dans Windows, et tout ce qui prend de la place trié par taille (jeux, applis, dossiers, fichiers) avec leur logo. Recherche, tri, ouvrir l’emplacement, supprimer ou désinstaller en un clic.', ['[data-view=pc]', 'wait600', '[data-pctab=stockage]', 'wait2500']],
+    ['🕰', 'Fichiers anciens', 'Un bouton liste tout ce que tu n’as pas ouvert depuis 3, 6, 9 ou 12 mois (jeux morts, vieux téléchargements…). Tu décoches ce que tu gardes : les fichiers vont dans la corbeille, les jeux se réinstallent depuis leur boutique.'],
+    ['🔁', 'Refaire l’Opti Pro', 'Un bouton à la fin du ticket : nouvelle Opti Pro avec seulement ce qui reste à faire. Ce que tu as déjà validé n’apparaît plus, rien n’est remis à zéro, pas de clé USB ni de formatage.'],
+    ['⭐', 'Note au centre de l’écran', 'Quand ton Opti Pro est finie, une fenêtre s’ouvre pour noter le technicien avec de grandes étoiles.'],
+    ['💶', 'Préparer la vente refait', 'Prix conseillé en grand, ton annonce prête à copier, le prix de chaque pièce et les étapes avant de vendre.'],
+  ],
   '0.56.0': [
     ['📱', 'Appli téléphone refaite', 'Scanne le QR code de Paramètres › Téléphone : ton téléphone se connecte direct à ton compte ET à ce PC, même en 4G. Lance un jeu, ferme-le, prends une capture, mets le PC en veille ou éteins-le à distance. Style du launcher, plus simple.', ['#openSettings', 'wait700', '.setnav [data-pane="telephone"]', 'wait1200']],
     ['🧪', 'Vérifs refaites', 'Mon PC › Vérifs : un résumé clair, les réglages à revoir en grandes cartes, et le vrai prix de revente de ton PC composant par composant (carte graphique, processeur, RAM, disques, carte mère).', ['[data-view=pc]', 'wait600', '[data-pctab=verifs]', 'wait2500']],
@@ -3166,6 +3173,7 @@ function pcTab(tab) {
   if (tab === 'upgrade') renderUpgrade();
   if (tab === 'entretien') renderCare();
   if (tab === 'verifs') moreUi?.verifs();
+  if (tab === 'stockage') moreUi?.storage();
   if (tab === 'composants') moreUi?.pc3d();
 }
 // 🛒 Upgrade : carte graphique (marque au choix), processeur + carte mère, RAM, stockage ; compatibilité et FPS par jeu
@@ -3274,7 +3282,7 @@ function proTicketDraw(jump) {
   const prev = $('proLog')?.scrollTop;
   const s = pro, last = s && s.step >= PRO_STEPS.length - 1, nx = s && PRO_STEPS[s.step + 1], opt = (i) => [2, 3, 4].includes(i);
   if (!s || s.closed) {
-    $('proTicket').innerHTML = `${s?.done ? `<div class="emb bot" style="--ec:#ffc439"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro</div><h3>Ton PC est prêt 🚀</h3></div>${moreUi?.proEnd(s) ?? ''}` : ''}<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
+    $('proTicket').innerHTML = s?.done && moreUi ? moreUi.proEnd(s) : `<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
     return;
   }
   const plan = s.todo?.length ? `<details class="emb proplan" ${proPlanOpen ? 'open' : ''}><summary><b>🎯 Ton plan Opti Pro</b><span class="hint">fait pour ton PC et ta demande · ${s.todo.length} points</span></summary><ul>${s.todo.map((x) => `<li><span>${x.icon}</span><div><b>${esc(x.label)}</b><small>${esc(x.why)}</small></div>${x.auto && PRO_DO[x.auto] ? `<button class="btn sm play" data-do="${x.auto}">⚡ Le faire pour moi</button>` : x.optin ? (s.ocOptIn ? '<em class="ok">✅ Accepté</em>' : '<button class="btn sm danger" data-pa="oc">🔥 Je veux overclocker</button>') : `<em>${x.buy ? 'Achat conseillé' : 'Guidé'}</em>`}</li>`).join('')}</ul></details>` : '';
@@ -4951,7 +4959,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.56.0',
+    version: async () => '0.57.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

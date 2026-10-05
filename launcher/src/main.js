@@ -38,6 +38,7 @@ import { epicActions, epicStoreSearch } from './core/epic.js';
 import { steamActions, steamDetails, steamReviews } from './core/steam.js';
 import { createStore } from './core/store.js';
 import { folderSize, safeGameDir, uninstallFiles } from './core/manage.js';
+import { measure, storagePlan } from './core/storage.js';
 import { applyAction, gameActions, graphicsPacks, revertEntries } from './core/gameopti.js';
 import { verifyGame } from './core/verify.js';
 import { epicFreeGames } from './core/freegames.js';
@@ -49,7 +50,7 @@ import { dnsTest, pingHosts, speedTest } from './core/net.js';
 import { CHECKS_PS, DNS_PAIRS, RESTORE_CLEAN_PS, addTempDay, dnsScript, dustDue, fpsAround, advancedStats, hwYear, logVersion, monthReport, wrapped, parseArgs, psuAdvice, resaleValue, screenAdvice, toReinstall, parseChecks } from './core/more.js';
 import { checkReq, parseReq } from './core/reqs.js';
 import { gogGames, ubisoftGames } from './core/stores.js';
-import { demoActivity, demoBench, demoEvents, demoFriends, demoGameActs, demoItems, demoPerf, demoScan, demoTemps, demoWu } from './core/demo.js';
+import { demoActivity, demoBench, demoEvents, demoFriends, demoGameActs, demoItems, demoPerf, demoScan, demoStorage, demoTemps, demoWu } from './core/demo.js';
 import { captureDir, captureName } from './core/capture.js';
 import { GMOD_APPID, installedAddons, workshopDetails, workshopId } from './core/gmod.js';
 import { analyze, defenderRemove, defenderUpdate, defenderScan, parseDiag, pcDiagnostic, processes } from './core/pcdiag.js';
@@ -724,6 +725,7 @@ ipcMain.handle('pc:fix', async (_e, id) => {
     case 'display': return open('ms-settings:display-advanced');
     case 'storage': return open('ms-settings:storagesense');
     case 'recovery': return open('ms-settings:recovery');
+    case 'apps': return open('ms-settings:appsfeatures');
     case 'devmgmt': return shell.openPath(path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'devmgmt.msc')).then((e) => ({ ok: !e, opened: !e }));
     case 'driver': return driverInfo?.link ? openLink(driverInfo.link).then(() => ({ ok: true, opened: true }), () => ({ ok: false })) : open('ms-settings:windowsupdate');
     case 'reboot':
@@ -1327,11 +1329,11 @@ const proDemo = () => ({ id: 'demo', step: 4, closed: false, thread: true, ocOpt
   { who: 'user', step: 4, text: '⏭ Je passe : 💾 Clé USB bootable, 🧹 Formatage propre.' },
   { who: 'bot', step: 4, text: '## 🔄 Mets à jour ton BIOS\n- Ton BIOS **7D75v1F** date de 2023 : télécharge la dernière version sur [la page officielle MSI](https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios) et lance **M-Flash**\n## 🧠 Processeur\n1. **OC › Precision Boost Overdrive** sur **Advanced**\n2. **Curve Optimizer** : All Core, Negative, **-20**\n## 🧩 Mémoire\n- **EXPO Profile 1** : **4800 → 6000 MHz**\n## ⚡ Je m’en occupe\n- Plan d’alimentation **Performances optimales** [[faire:alimentation]]\n- Anciens pilotes graphiques qui traînent (**4,2 Go**) [[faire:pilotes_anciens]]\nPetite question avant de commencer : as-tu une clé USB vide sous la main pour le BIOS ?' }] });
 const proPost = (path, body) => { const token = secret('account'); return token ? api(path, { method: 'POST', token, body, timeout: 90_000 }).catch(() => ({ error: 'Serveur injoignable. Réessaie.' })) : { error: 'Connecte-toi à ton compte History (Paramètres › Compte).' }; };
-ipcMain.handle('pro:session', async () => { if (process.env.LAUNCHER_DEMO) return { session: proDemo() }; const token = secret('account'); return token ? api('/api/compte/optipro', { token }).catch(() => ({ error: 'Serveur injoignable.' })) : { error: 'login' }; });
+ipcMain.handle('pro:session', async () => { if (process.env.LAUNCHER_DEMO) return { session: { ...proDemo(), ...(process.env.LAUNCHER_DEMO_PRODONE ? { done: true, closed: true, closedAt: Date.now() } : {}) } }; const token = secret('account'); return token ? api('/api/compte/optipro', { token }).catch(() => ({ error: 'Serveur injoignable.' })) : { error: 'login' }; });
 ipcMain.handle('pro:start', async (_e, f = {}) => {
   const p = await proPc(); const d = diagCache?.data;
   const temps = store.data.temps ?? []; const max = (k) => Math.max(0, ...temps.map((t) => t[k] ?? 0)) || null;
-  return proPost('/api/compte/optipro', { specs: { cpu: p.cpu, board: p.board, gpu: p.gpu, ram: d?.ram ?? [], ramGb: p.ramGb, ramText: `${p.ramGb} Go ${p.plan.ramType ?? ''} ${p.plan.ramNow ?? ''} MHz`.trim(), laptop: Boolean(d?.battery), biosVersion: d?.bios?.version, biosDate: d?.bios?.date, windows: d?.os?.name, cpuTempMax: max('cpuT'), gpuTempMax: max('gpuT'), cooling: String(f.cooling ?? '').slice(0, 160), need: String(f.need ?? '').slice(0, 800), games: raw.filter((i) => i.kind === 'game').slice(0, 15).map((i) => i.name).join(', ') } });
+  return proPost('/api/compte/optipro', { specs: { cpu: p.cpu, board: p.board, gpu: p.gpu, ram: d?.ram ?? [], ramGb: p.ramGb, ramText: `${p.ramGb} Go ${p.plan.ramType ?? ''} ${p.plan.ramNow ?? ''} MHz`.trim(), laptop: Boolean(d?.battery), biosVersion: d?.bios?.version, biosDate: d?.bios?.date, windows: d?.os?.name, cpuTempMax: max('cpuT'), gpuTempMax: max('gpuT'), cooling: String(f.cooling ?? '').slice(0, 160), need: String(f.need ?? '').slice(0, 800), games: raw.filter((i) => i.kind === 'game').slice(0, 15).map((i) => i.name).join(', ') }, redo: f.redo === true });
 });
 ipcMain.handle('pro:act', (_e, action, text = '', images = []) => (process.env.LAUNCHER_DEMO && action === 'detail' ? { detail: '1. Télécharge le dernier BIOS sur [la page officielle MSI](https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios) (onglet **BIOS**, la version tout en haut).\n2. Décompresse le fichier et copie-le sur une clé USB formatée en **FAT32**.\n3. Redémarre et appuie sur **Suppr** pour entrer dans le BIOS.\n4. Ouvre **M-Flash** (en bas à gauche), confirme, choisis le fichier sur la clé.\n5. N’éteins **jamais** le PC pendant la mise à jour (3 à 5 min, il redémarre seul).\n6. Vérifie : la version affichée en haut du BIOS doit être la nouvelle.' } : proPost('/api/compte/optipro/action', { action: String(action).slice(0, 10), text: String(text).slice(0, 1500), images: (Array.isArray(images) ? images : []).filter((u) => /^data:image\/(png|jpeg|webp);base64,/.test(String(u)) && String(u).length < 600_000).slice(0, 3) })));
 // Liens des étapes : calculés ici (jamais une adresse venant de l'interface)
@@ -3804,6 +3806,58 @@ ipcMain.handle('more:pc', async () => {
   const cpu = d.cpu?.name ?? '', gpu = d.gpus?.[0]?.name ?? '';
   const perf = Object.entries(store.data.perf ?? {}).map(([id, r]) => ({ name: items.find((i) => i.id === id)?.name, driver: fpsAround(r, 'driver'), os: fpsAround(r, 'os') })).filter((x) => x.name && (x.driver || x.os)).slice(0, 6);
   return { cpu, gpu, cpuYear: hwYear(cpu), gpuYear: hwYear(gpu), resale: resaleValue({ cpu, gpu, ram: d.ram ?? [], disks: d.disks ?? [], board: d.board ?? '', laptop: Boolean(d.laptop ?? d.battery) }), psu: psuAdvice(gpu, cpu), screen: screenAdvice(gpu), battery: store.data.batteryLog ?? [], tempDays: store.data.tempDays ?? {}, dust: dustDue(store.data.tempDays, store.data.dustAt), dustAt: store.data.dustAt ?? null, perf, laptop: Boolean(d.laptop ?? d.battery) };
+});
+// ---------- Mon PC › Stockage : tout ce qui prend de la place, trié par taille, et ce qui ne sert plus ----------
+let storageLast = null, storageBusy = false;
+const storageIcon = async (x) => {
+  const lib = x.id && items.find((i) => i.id === x.id);
+  if (lib?.art?.icon || lib?.art?.cover) return lib.art.icon ?? lib.art.cover;
+  const file = lib ? lib.exe ?? lib.icon : !['folder', 'protected'].includes(x.kind) ? x.path : null;
+  if (!file || !/\.(exe|msi|ico|lnk|pdf|docx?|xlsx?|zip|rar|7z|iso|mp4|mkv|mp3|png|jpe?g)$/i.test(file)) return null;
+  return app.getFileIcon(file, { size: 'normal' }).then((i) => (i.isEmpty() ? null : i.toDataURL()), () => null);
+};
+ipcMain.handle('more:storage', async (_e, refresh = false) => {
+  if (process.env.LAUNCHER_DEMO) return demoStorage(items);
+  if (storageLast && !refresh) return storageLast;
+  if (storageBusy) return { busy: true };
+  storageBusy = true;
+  try {
+    const d = diagCache?.data ?? await runDiag().catch(() => null);
+    const volumes = (d?.volumes ?? []).filter((v) => v.size > 0);
+    const list = (dir) => readdir(dir, { withFileTypes: true }).then((l) => l.map((e) => ({ name: e.name, dir: e.isDirectory() })), () => []);
+    const { plan, skip } = await storagePlan({ volumes, home: os.homedir(), systemDrive: process.env.SystemDrive ?? 'C:', library: items, list });
+    const used = volumes.reduce((n, v) => n + v.size - v.free, 0) || 1; let done = 0, tick = 0;
+    const out = [];
+    for (const x of plan) {
+      const m = await measure(x.path, { skip: ['game', 'app'].includes(x.kind) ? new Set() : skip, onFile: (b) => { done += b; if (Date.now() - tick > 400) { tick = Date.now(); send('more:storage', { pct: Math.min(99, Math.round((done * 100) / used)), current: x.name }); } } });
+      if (m.size) out.push({ path: x.path, name: x.name, kind: x.kind, where: x.where, id: x.id ?? null, size: m.size, files: m.files, lastUsed: x.lastPlayed || m.last });
+    }
+    out.sort((a, b) => b.size - a.size);
+    for (const x of out.slice(0, 150)) x.icon = await storageIcon(x);
+    storageLast = { at: Date.now(), volumes, items: out };
+    return storageLast;
+  } finally { storageBusy = false; }
+});
+ipcMain.handle('more:storageShow', (_e, p) => { if (storageLast?.items.some((x) => x.path === p) || process.env.LAUNCHER_DEMO) shell.showItemInFolder(String(p)); return true; });
+// Suppression confirmée dans l'interface : fichiers et dossiers à la corbeille (récupérables), jeux Steam / Epic désinstallés,
+// autres programmes par leur propre désinstalleur. Seuls des chemins de la dernière analyse sont acceptés.
+ipcMain.handle('more:storageDel', async (_e, paths = []) => {
+  if (process.env.LAUNCHER_DEMO) return { ok: paths.length, freed: 0, failed: [] };
+  const want = new Set((Array.isArray(paths) ? paths : []).map(String));
+  const list = (storageLast?.items ?? []).filter((x) => want.has(x.path) && x.kind !== 'protected');
+  let ok = 0, freed = 0; const failed = [], gone = new Set();
+  for (const x of list) {
+    const lib = x.id && items.find((i) => i.id === x.id);
+    try {
+      if (lib && ['steam', 'epic'].includes(lib.source)) { const c = safeGameDir(lib); if (!c.ok) throw new Error(c.why); await uninstallFiles(lib, { launcherInstalled: epicLauncherInstalled() }); }
+      else if (lib?.uninstallCmd) { spawn(lib.uninstallCmd, { shell: true, detached: true, windowsHide: false, stdio: 'ignore' }).unref(); failed.push({ name: x.name, why: 'désinstalleur ouvert : termine dans sa fenêtre' }); continue; }
+      else await shell.trashItem(x.path);
+      ok += 1; freed += x.size; gone.add(x.path);
+    } catch (err) { failed.push({ name: x.name, why: err.message }); }
+  }
+  if (storageLast) storageLast.items = storageLast.items.filter((x) => !gone.has(x.path));
+  if (list.some((x) => x.id)) scan().then((lib) => send('lib:update', lib)).catch(() => {});
+  return { ok, freed, failed };
 });
 ipcMain.handle('more:dustDone', () => { store.data.dustAt = Date.now(); store.save(); return true; });
 ipcMain.handle('more:speed', () => (process.env.LAUNCHER_DEMO ? { down: 412, up: 48 } : speedTest((u, o) => net.fetch(u, o)).catch((err) => ({ error: err.message }))));
