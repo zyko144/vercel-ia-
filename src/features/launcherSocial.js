@@ -83,13 +83,13 @@ function view(d, accs, id) {
     const a = accs[fid];
     const p = d.presence[fid] ?? {};
     const online = now - (p.seen ?? 0) < ONLINE_MS;
-    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), ...profileOf(a), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, dispo: online && p.playing ? p.dispo ?? null : null, week: p.week ?? 0, top: (a.profile?.hide ?? []).includes('top') ? null : p.top ?? null, bench: (a.profile?.hide ?? []).includes('bench') ? null : p.bench ?? null } : null;
+    return a ? { id: fid, pseudo: a.pseudo, code: friendCode(a), ...profileOf(a), gifts: (d.gifts?.[fid] ?? []).slice(-12).map((g) => g.item), online, status: p.status ?? null, dnd: online && Boolean(p.dnd), playing: online ? p.playing ?? null : null, join: online && p.playing ? p.join ?? null : null, since: online && p.playing ? p.since ?? null : null, dispo: online && p.playing ? p.dispo ?? null : null, week: p.week ?? 0, top: (a.profile?.hide ?? []).includes('top') ? null : p.top ?? null, bench: (a.profile?.hide ?? []).includes('bench') ? null : p.bench ?? null } : null;
   };
   return {
     code: friendCode(accs[id]),
     amis: listOf(d.friends, id).map(person).filter(Boolean).sort((a, b) => (b.online - a.online) || a.pseudo.localeCompare(b.pseudo, 'fr')),
     demandes: listOf(d.requests, id).map((fid) => accs[fid] && { id: fid, pseudo: accs[fid].pseudo, code: friendCode(accs[fid]), ...profileOf(accs[fid]) }).filter(Boolean),
-    moi: { week: d.presence[id]?.week ?? 0, top: d.presence[id]?.top ?? null, pseudo: accs[id]?.pseudo, ...profileOf(accs[id]) },
+    moi: { week: d.presence[id]?.week ?? 0, top: d.presence[id]?.top ?? null, pseudo: accs[id]?.pseudo, ...profileOf(accs[id]), gifts: (d.gifts?.[id] ?? []).slice(-12).map((g) => g.item) },
     groupes: Object.values(d.groups).filter((g) => g.members.includes(id)).map((g) => ({ id: g.id, name: g.name, owner: g.owner === id, members: g.members.filter((m) => accs[m]).map((m) => ({ id: m, pseudo: accs[m].pseudo, ...profileOf(accs[m]), online: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS, playing: now - (d.presence[m]?.seen ?? 0) < ONLINE_MS ? d.presence[m]?.playing ?? null : null })) })),
   };
 }
@@ -273,6 +273,15 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
   };
   const dropImg = (m) => { if (m?.img) dropImage('image', m.img); if (m?.file) delBlob(`fichier/${m.file}`).catch(() => {}); };
 
+  // 🎁 Cadeau virtuel à un ami : affiché sur sa carte de profil (12 derniers) + notification
+  if (route === 'POST /api/compte/cadeau-ami') {
+    const to = String(body.to ?? ''); const item = String(body.item ?? '');
+    if (!friendOf(to) || !['citrouille', 'couronne', 'flamme', 'coeur', 'trophee', 'fantome'].includes(item)) return send(res, 400, { error: 'Cadeau impossible.' });
+    if (!allowAttempt('launcher-gift', id, 10, 3_600_000)) return send(res, 429, { error: 'Dix cadeaux par heure maximum.' });
+    (d.gifts ??= {})[to] = [...listOf(d.gifts, to), { from: id, item, at: Date.now() }].slice(-50);
+    pushInbox(d, to, { type: 'gift', from: id, pseudo: accs[id]?.pseudo, item });
+    return done(200, { ok: true });
+  }
   if (route === 'POST /api/compte/messages') {
     const to = String(body.to ?? '');
     const msg = text(body.text, 500);

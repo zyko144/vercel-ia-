@@ -33,3 +33,12 @@ export async function findLyrics(track) {
     .catch(() => []);
   return results.find((r) => r.plainLyrics) ?? null;
 }
+
+/** « Le son qui dit… » : retrouve un son à partir d'un bout de ses paroles (recherche lrclib). */
+export async function songFromLyrics(words) {
+  const list = await fetch(`${API}/search?${new URLSearchParams({ q: words })}`, { headers: HEADERS, signal: AbortSignal.timeout(6_000) })
+    .then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  const norm = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
+  const hit = list.find((x) => norm(x.plainLyrics).includes(norm(words))) ?? list[0];
+  return hit ? `${hit.artistName} ${hit.trackName}` : null;
+}

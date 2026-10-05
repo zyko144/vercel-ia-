@@ -367,3 +367,39 @@ export function resetPlan(nowSys, nowGame, oldest = null) {
     game: nowGame.filter((t) => t.on !== target('game', t)).map((t) => ({ id: t.id, on: target('game', t) })),
   };
 }
+
+// ===================== Anciens pilotes graphiques (DriverStore) =====================
+// Chaque mise à jour NVIDIA / AMD / Intel laisse l'ancien paquet dans le DriverStore (souvent 1 à 3 Go chacun).
+// Aperçu sans droits : dossiers du FileRepository par fabricant, le plus récent est gardé.
+const GPU_PKG = /^(nv_dispi?g?|nvhdc|nvlt|nvmii|nvami|nvaci|nvdm|nvbli|u0\d+|iigd_dch|iigd|igdlh64)\.inf_/i;
+export async function oldGpuDrivers(root = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'DriverStore', 'FileRepository')) {
+  const groups = new Map();
+  for (const e of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+    const m = e.isDirectory() && e.name.match(GPU_PKG); if (!m) continue;
+    const st = await stat(path.join(root, e.name)).catch(() => null); if (!st) continue;
+    const key = m[1].toLowerCase(); (groups.get(key) ?? groups.set(key, []).get(key)).push({ name: e.name, at: st.mtimeMs });
+  }
+  const old = [...groups.values()].flatMap((g) => g.sort((a, b) => b.at - a.at).slice(1));
+  let bytes = 0;
+  for (const o of old) bytes += (await dirBytes(path.join(root, o.name))) ?? 0;
+  return { count: old.length, bytes };
+}
+async function dirBytes(dir) {
+  let n = 0;
+  for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const f = path.join(dir, e.name);
+    n += e.isDirectory() ? await dirBytes(f) : (await stat(f).catch(() => ({ size: 0 }))).size;
+  }
+  return n;
+}
+// Suppression : point de restauration, puis pnputil retire chaque pilote d'affichage QUI N'EST PAS UTILISÉ (sans /force : un pilote en service est refusé par Windows)
+export const OLD_DRIVERS_SCRIPT = String.raw`W @{ step='Point de restauration'; base=0; span=0 }
+Checkpoint-Computer -Description 'History - anciens pilotes graphiques' -RestorePointType MODIFY_SETTINGS
+$used = @(Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceClass -eq 'DISPLAY' } | ForEach-Object { $_.InfName })
+$old = @(Get-WindowsDriver -Online | Where-Object { $_.ClassName -eq 'Display' -and $used -notcontains $_.Driver })
+$i=0; foreach($d in $old){ W @{ step="Suppression de $($d.Driver) ($($d.ProviderName) $($d.Version))"; base=[int](100*$i/[Math]::Max(1,$old.Count)); span=0 }; pnputil /delete-driver $d.Driver | Out-Null; $i++ }
+W @{ step='Terminé'; base=100; span=0; done=$old.Count }`;
+export const cleanOldGpuDrivers = async (outFile, onProgress) => {
+  const r = await elevatedJob(`${jobHead(outFile)}\n${OLD_DRIVERS_SCRIPT}`, outFile, onProgress);
+  return { ok: r.ok, removed: r.s?.done ?? 0 };
+};

@@ -117,7 +117,7 @@
               <div id="hFriends"></div>
               <div id="friendsBody" hidden></div>
             </div>
-            <div class="fxme"><span class="pav sm" id="meAv">?</span><div><b id="meName">Toi</b><input id="myStatus" placeholder="Ton statut…" maxlength="60"></div><button class="btn ghost sm" type="button" id="saveStatus" title="Mettre ce statut">OK</button></div>
+            <div class="fxme"><span class="pav sm" id="meAv">?</span><div><b id="meName">Toi</b><input id="myStatus" placeholder="Ton statut…" maxlength="60"></div><button class="btn ghost sm" type="button" id="saveStatus" title="Mettre ce statut">OK</button></div><div class="stchips" id="stChips"><button type="button" data-st="🟢 Dispo pour jouer">🟢 Dispo</button><button type="button" data-st="⛔ Ne pas déranger">⛔ Ne pas déranger</button><button type="button" data-st="🎧 En vocal">🎧 En vocal</button><button type="button" data-st="💤 AFK">💤 AFK</button></div>
           </div>
           <div class="fxpane" data-fx="groupes" hidden>
             <div class="fxlhead"><b>Tes groupes</b><button type="button" class="btn sm" id="groupNew">＋ Nouveau</button></div>
@@ -164,7 +164,7 @@
   <section id="view-pc" class="view">
     <div class="list-head"><h2>Mon PC</h2>
       <div class="tabs pctabs" id="pcTabs">
-        <button data-pctab="apercu" class="on">Vue d’ensemble</button><button data-pctab="analyse">🔬 Analyse pro</button><button data-pctab="maj">⬆ Windows Update<em class="navcount warnc" id="wuBadge"></em></button><button data-pctab="composants">🧩 Composants</button><button data-pctab="securite">🛡 Sécurité</button><button data-pctab="perf">🏁 Performances</button><button data-pctab="reseau">🌐 Réseau</button>
+        <button data-pctab="apercu" class="on">Vue d’ensemble</button><button data-pctab="analyse">🔬 Analyse pro</button><button data-pctab="maj">⬆ Windows Update<em class="navcount warnc" id="wuBadge"></em></button><button data-pctab="composants">🧩 Composants</button><button data-pctab="securite">🛡 Sécurité</button><button data-pctab="perf">🏁 Performances</button><button data-pctab="reseau">🌐 Réseau</button><button data-pctab="upgrade">🛒 Upgrade</button><button data-pctab="entretien">🩺 Entretien</button>
       </div>
     </div>
 
@@ -248,6 +248,16 @@
       </div>
     </div>
 
+    <div class="pctab" data-pctab="upgrade" hidden>
+      <div class="panel"><h3>🛒 Que changer avec ton budget ?</h3><p class="hint">D’après ton PC (carte graphique, RAM, disque). Prix et gains indicatifs : ce sont des estimations, pas des mesures.</p>
+        <div class="row"><label for="upBudget">Budget</label><select id="upBudget"><option>150</option><option>250</option><option>400</option><option selected>600</option><option>900</option><option>1300</option></select> €</div><div id="upAdvice" class="upl"></div></div>
+      <div class="panel"><h3>🎮 Simulateur de carte graphique</h3><p class="hint" id="upCur">…</p>
+        <div class="row"><label for="upGpu">Avec la carte</label><select id="upGpu"></select></div><div id="upSim" class="upl"></div></div>
+    </div>
+    <div class="pctab" data-pctab="entretien" hidden>
+      <div class="panel"><h3>💽 Santé des disques</h3><p class="hint">L’état SMART que Windows lit dans chaque disque. Si un disque faiblit, tu es prévenu (une fois par semaine) pour sauvegarder tes fichiers à temps.</p><div id="careDisks" class="upl"></div></div>
+      <div class="panel"><h3>🧹 Anciens pilotes graphiques</h3><p class="hint">Chaque mise à jour NVIDIA / AMD / Intel laisse l’ancienne version sur le disque. Seuls les pilotes qui ne servent plus sont retirés, après un point de restauration.</p><div id="careDrv" class="upl"></div><button class="btn" type="button" id="careDrvGo">Nettoyer les anciens pilotes</button></div>
+    </div>
     <div class="pctab" data-pctab="reseau" hidden>
       <div class="panel"><h3>🚀 Test de connexion</h3><p class="hint">Ping, stabilité, paquets perdus, débit et type de connexion (Wi-Fi ou câble), avec un conseil clair. Environ 30 secondes.</p><div class="row"><button class="btn play" type="button" id="netTest">▶ Lancer le test</button></div><div id="netTestOut"></div></div>
       <div class="panel"><h3>🌐 Réseau</h3><p class="hint">Latence réelle vers les services de jeu et vitesse des serveurs DNS.</p><div class="row"><button class="btn" type="button" id="netPing">📶 Tester la latence</button><button class="btn" type="button" id="netDns">⚡ Trouver le DNS le plus rapide</button></div><div id="netOut"></div></div>
@@ -297,6 +307,11 @@
 <article class="premcard premium-offer opti" data-pack="opti"><div class="premium-art"><span class="premium-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4m-6-9 3-3 3 3 5-5"/></svg></span></div><div class="premium-copy"><span class="premium-eyebrow">PERFORMANCES PC</span><h3>Opti Pro</h3><p class="premium-desc">Un PC prêt pour ta prochaine partie.</p><div class="premium-price">2,49 €<small> / mois</small></div><p class="premium-period">31 jours d’accès par paiement</p><ul><li>Des corrections selon ton diagnostic</li><li>Boost automatique au lancement du jeu</li><li>Réglages adaptés à tes jeux</li><li>Nettoyage profond et démarrage plus rapide</li><li>Tout est réversible en un clic</li></ul><button type="button" class="btn premgo" data-buy="opti">Acheter avec PayPal</button></div></article>
 <article class="premcard premium-offer pack best" data-pack="pack"><div class="premium-art"><span class="premium-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></span><span class="premium-badge">Le duo · −20 %</span></div><div class="premium-copy"><span class="premium-eyebrow">LE DUO COMPLET</span><h3>Pack Premium</h3><p class="premium-desc">L’assistant et l’optimisation, réunis.</p><div class="premium-price">3,99 €<small> / mois</small></div><p class="premium-period">31 jours d’accès par paiement</p><ul><li>Tout History IA + tout Opti Pro</li><li>Avantages Premium sur le bot Discord</li><li>Un seul accès pour les deux outils</li><li>Réponse prioritaire du support</li><li>Rôle Premium doré sur le serveur History</li></ul><button type="button" class="btn premgo" data-buy="pack">Acheter avec PayPal</button></div></article>
     </div>
+    <section class="premgift" id="premGift"><h3>🎁 Cadeaux &amp; codes</h3><div class="pgrow">
+      <div class="pgcard"><b>Essai gratuit</b><small>3 jours de Pack Premium, une fois par compte.</small><button type="button" class="btn premgo" id="pgTrial">Essayer gratuitement</button></div>
+      <div class="pgcard"><b>Ton code ami</b><small>−20 % pour ton ami, et 7 jours offerts pour toi quand il paie.</small><div class="pgcode"><code id="pgCode">…</code><button type="button" class="btn sm" id="pgCopy">Copier</button></div></div>
+      <div class="pgcard"><b>Carte cadeau</b><small>Un code CADEAU reçu ? Active-le ici. Pour en offrir une : coche « cadeau » à l’achat.</small><form class="pgcode" id="pgRedeemF"><input id="pgRedeem" placeholder="CADEAU-XXXXXXXX" maxlength="30"><button class="btn sm">Utiliser</button></form></div>
+    </div></section>
     <p class="premnote">Paiement PayPal · activé dès que le paiement est vérifié</p>
   </section>
   <section id="view-classement" class="view">
@@ -324,6 +339,7 @@
       <li><i>1</i><div><b>Paie sur PayPal</b><small>Envoie <span id="pdAmount">3,99 €</span> à <u>paypal.me/zyko921</u></small>
         <div class="pdwarn"><b>⚠ Envoie en « Entre proches » (Amis et famille)</b><span>Pas « Biens et services ». Sinon le paiement est refusé.</span></div>
         <div class="pdnote"><span>Note obligatoire dans le paiement</span><b id="pdNote">…</b><button type="button" class="btn sm" id="pdCopyNote">Copier</button></div></div><button type="button" class="btn sm" id="pdPay">Ouvrir PayPal</button></li>
+      <li><i>+</i><div><b>Code ami et cadeau</b><div class="pdopts"><input id="pdCode" maxlength="20" placeholder="Code ami (−20 %)"><label><input type="checkbox" id="pdGift"> 🎁 C’est un cadeau (tu reçois un code à offrir)</label></div></div></li>
       <li><i>2</i><div><b>Ton compte PayPal</b><input id="premPaypal" maxlength="120" placeholder="Nom ou e-mail utilisé pour payer" required></div></li>
       <li><i>3</i><div><b>Capture du paiement (avec la note visible)</b><label class="pddrop" id="pdDrop" tabindex="0"><input type="file" id="premShot" accept="image/*" hidden><img id="pdPrev" alt="" hidden><span id="pdDropTxt">Glisse la capture ici, colle-la (Ctrl+V) ou clique</span></label></div></li>
     </ol>
@@ -487,12 +503,13 @@
 <div class="setrow"><label for="textScale">Taille du texte</label><select id="textScale"><option value="0.9">Petite</option><option value="1">Normale</option><option value="1.1">Grande</option><option value="1.25">Très grande</option></select></div>
 <label class="toggle"><input type="checkbox" id="compact"><span></span>Mode compact (plus de jeux à l’écran)</label>
 <div class="setrow"><label for="themeSel">Thème</label><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option><option value="perso">Ma couleur…</option></select><input type="color" aria-label="Couleur personnalisée" id="themeColor" value="#2f8bff" hidden></div>
-<div class="setrow"><label for="season">Ambiance de saison</label><select id="season"><option value="auto">Auto (Halloween en octobre 🎃)</option><option value="off">Désactivée (thème normal)</option></select></div>
+<div class="setrow"><label for="season">Ambiance de saison</label><select id="season"><option value="auto">Auto (Halloween 🎃 en octobre, Noël 🎄 en décembre)</option><option value="off">Désactivée (thème normal)</option></select></div>
 <div class="setrow"><label for="bgMode">Fond de l’appli</label><select id="bgMode"><option value="jeu">Jaquette floue du jeu sélectionné</option><option value="anime">Dégradé animé</option><option value="sobre">Sobre (noir)</option></select></div><div class="setrow"><label for="neonIntensity">Intensité des néons</label><input id="neonIntensity" type="range" min="0" max="100" value="90"><output id="neonValue" for="neonIntensity">90 %</output></div><div class="theme-preview"><span class="set-eyebrow">APERÇU EN DIRECT</span><h4>Ta prochaine session commence ici.</h4><p>Couleurs, ambiance et lumière : essaie avant de choisir.</p><span class="theme-swatch"></span><span class="theme-swatch secondary"></span></div><div class="row"><button type="button" id="themeApply" class="btn play" disabled>Appliquer</button><button type="button" id="themeCancel" class="btn" disabled>Annuler</button><small id="themeStatus" role="status">Ton thème est enregistré.</small></div>
 </div></section>
 <section class="setpane" id="set-jeux" data-pane="jeux" aria-labelledby="set-title-jeux" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / JEUX & PERFORMANCES</span><h3 id="set-title-jeux">Jeux & performances</h3><p>Prépare tes parties, puis profite du jeu.</p></header><div class="setcard"><h4>Lancement & performances</h4>
 <label class="toggle"><input type="checkbox" id="tournament"><span></span>🏆 Mode tournoi : boost sur chaque partie, aucune notification (sauf la bulle des messages et les appels)</label>
 <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
+<label class="toggle"><input type="checkbox" id="quietGames"><span></span>🔕 Couper les notifications Windows pendant toutes mes parties (rétablies à la fin)</label>
 <label class="toggle"><input type="checkbox" id="nightUpdates"><span></span>🌙 Mettre à jour les jeux Steam la nuit (entre 3 h et 6 h, si le PC est allumé et ne sert pas)</label>
 <label class="toggle"><input type="checkbox" id="preloadSteam"><span></span>⚡ Préparer Steam en fond au démarrage (les jeux Steam se lancent plus vite)</label>
 <p class="hint sethint">Les jeux avec anti-triche (Rocket League, Rainbow Six…) passent toujours par Steam / Epic.</p>

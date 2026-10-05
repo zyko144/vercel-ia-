@@ -1,7 +1,7 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "releaseNotes": "Nouvelle capture Windows Desktop Duplication avec encodeur matériel sur un écran, repli compatible automatique. Audio jeu 256 kb/s, micro sans gain automatique, mélange protégé contre la saturation et sauvegarde vidéo sans recompression.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",

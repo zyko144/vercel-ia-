@@ -407,7 +407,7 @@ function thumbOf(f) {
       const [a, b] = await Promise.all([stat(jpg).catch(() => null), stat(f).catch(() => null)]);
       if (a && b && a.mtimeMs >= b.mtimeMs) return jpg;
       await mkdir(path.dirname(jpg), { recursive: true });
-      await runFfmpeg(['-y', '-ss', '1', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]).catch(() => runFfmpeg(['-y', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]));
+      await runFfmpeg(['-y', '-ss', '1', '-t', '8', '-i', f, '-frames:v', '1', '-vf', 'thumbnail=240,scale=480:-2', '-q:v', '5', jpg]) /* meilleure image choisie automatiquement (la plus représentative, pas floue ni noire) */.catch(() => runFfmpeg(['-y', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]));
       return jpg;
     })).catch(() => null).finally(() => setTimeout(() => thumbJobs.delete(jpg), 60_000));
     thumbChain = job; thumbJobs.set(jpg, job);
