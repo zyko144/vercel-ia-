@@ -44,3 +44,31 @@ export function biosLink(board = '', cpu = '') {
   if (/asrock/i.test(board)) return `https://www.asrock.com/mb/${/ryzen|amd/i.test(cpu) ? 'AMD' : 'Intel'}/${b.replace(/\s+/g, ' ')}/index.asp#BIOS`.replace(/ /g, '%20');
   return b ? `https://www.google.com/search?q=${encodeURIComponent(`${b} BIOS download site officiel`)}` : null;
 }
+// Jeux où le processeur limite souvent les FPS (compétitif, monde ouvert peuplé) : là, pousser le CPU rapporte vraiment
+const CPU_BOUND = /fortnite|valorant|cs ?2|counter|fivem|gta|rust|warzone|call of duty|apex|minecraft|league|overwatch|rainbow|r6|rocket|tarkov|pubg|dota|wow|warcraft|cities|anno|total war|arma|dayz/i;
+/**
+ * Plan Opti Pro propre à CHAQUE demande, d'après le vrai PC, les jeux et le besoin.
+ * auto = le launcher le fait en 1 clic ; optin = seulement si le joueur le veut vraiment (avertissement avant).
+ */
+export function personalPlan(s = {}) {
+  const p = s.plan ?? ocPlan(s), a = s.advice ?? ocAdvice(p, s), txt = `${s.games ?? ''} ${s.need ?? ''}`;
+  const cpuBound = CPU_BOUND.test(txt) || /\b(1[4-9]\d|2[0-9]\d|3[0-6]\d)\s*hz|compétiti|fps (min|stable)|max(imum)? de fps/i.test(txt);
+  const hot = Number(s.cpuTempMax) >= 85 || Number(s.gpuTempMax) >= 83;
+  const out = [];
+  const add = (id, icon, label, why, extra = {}) => out.push({ id, icon, label, why, ...extra });
+  if (hot) add('refroidissement', '🌡', 'Refroidissement d’abord', `Ton PC chauffe déjà (${s.cpuTempMax ?? '?'} °C processeur, ${s.gpuTempMax ?? '?'} °C carte graphique) : dépoussiérage, courbe des ventilateurs, pâte thermique. Sinon il baisse sa fréquence tout seul.`, { prio: 1 });
+  if (/lent|bug|plant|crash|écran bleu|vieux|virus|ram(e|é)|freeze/i.test(txt)) add('format', '🧹', 'Formatage propre conseillé', 'Tu parles de lenteurs ou de plantages : repartir d’un Windows propre règle souvent plus que n’importe quel réglage.', { prio: 2 });
+  add('windows', '⚡', 'Windows optimisé pour le jeu', 'Mode Jeu, priorité aux jeux, debloat, confidentialité, nettoyage et réglages de tes jeux. Réversible, avec point de restauration.', { auto: 'optimiser', prio: 3 });
+  if (!s.laptop) add('alimentation', '🔋', 'Plan d’alimentation Performances optimales', 'Le processeur reste à sa fréquence max, sans temps de réveil.', { auto: 'alimentation', prio: 4 });
+  else add('portable', '💻', 'Mode performances du portable', 'Branché sur secteur + mode performances du fabricant (Armoury Crate, Vantage, Omen…) : souvent +20 % sur portable.', { prio: 4 });
+  if (p.ramSticks && !p.ramLimited) add('xmp', '🧩', `${/ryzen|amd/i.test(s.cpu) ? 'EXPO' : 'XMP'} : RAM à ${p.ramRated} MHz au lieu de ${p.ramNow}`, 'Un seul réglage dans le BIOS, souvent +5 à 15 % de FPS minimum.', { prio: 5 });
+  if (p.ramSticks === 1) add('dual', '🧩', 'Passer en double canal', 'Une seule barrette : en ajouter une 2e identique donne souvent +10 à 20 % de FPS min dans les jeux qui chargent le processeur.', { prio: 6, buy: true });
+  if (a.cpu === 'recommandé' && cpuBound) add('cpu_oc', '🔥', 'Overclocking du processeur', `${a.why} Tes jeux sont limités par le processeur : gain attendu 5 à 10 % de FPS. Risques : chaleur, stabilité, garantie. Seulement si tu le veux vraiment.`, { prio: 7, optin: true });
+  else if (p.cpuOc !== 'non' || /ryzen/i.test(s.cpu)) add('cpu_bios', '🧠', /ryzen/i.test(s.cpu) ? 'PBO + Curve Optimizer' : 'Boost du processeur via le BIOS', `${a.why}${a.cpu === 'recommandé' && !cpuBound ? ' Tes jeux sont surtout limités par la carte graphique : un overclocking ne rapporterait presque rien, on garde des réglages sûrs.' : ''}`, { prio: 7 });
+  else add('cpu_bios', '🧠', 'Boost du processeur tenu au maximum', a.why, { prio: 7 });
+  add('gpu', '🟩', 'Dernier pilote + réglages de la carte graphique', 'Pilote propre, mode faible latence, limite de FPS calée sur ton écran.', { auto: 'pilote_gpu', prio: 8 });
+  if (/ping|lag|latence|réseau|wifi|wi-fi|connexion/i.test(txt)) add('reseau', '🌐', 'Connexion et ping', 'Câble Ethernet plutôt que Wi-Fi, QoS de la box, serveurs les plus proches.', { prio: 9 });
+  if (/stream|obs|twitch|enregistr|clip/i.test(txt)) add('stream', '🎥', 'Réglages stream / enregistrement', 'Encodeur de la carte graphique (NVENC / AMF), débit adapté : le jeu garde ses FPS.', { prio: 9 });
+  add('mesure', '🏁', 'Mesure avant / après', 'On compare tes FPS et tes températures à la fin, pour valider chaque réglage.', { auto: 'mesure', prio: 10 });
+  return out.sort((x, y) => x.prio - y.prio);
+}

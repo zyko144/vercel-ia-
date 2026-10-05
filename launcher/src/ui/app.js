@@ -1607,6 +1607,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.38': [
+    ['🎯', 'Un plan pour chaque demande', 'Opti Pro : chaque ticket a son propre plan, calculé d’après ton PC, tes jeux et ce que tu veux (refroidissement d’abord si ça chauffe, formatage si ça rame, XMP / double canal, réseau, stream…). Les points faisables par le launcher ont leur bouton « ⚡ Le faire pour moi ».', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']],
+    ['🔥', 'Overclocking seulement si ça vaut le coup', 'L’overclocking du processeur est proposé seulement s’il est possible ET rentable (jeux limités par le processeur, bon refroidissement, pas sur portable). Il faut le demander soi-même, après un message d’avertissement.']
+  ],
   '0.53.37': [
     ['⚡', 'Le technicien le fait pour toi', 'Opti Pro : quand un réglage peut être fait par le launcher (optimisation Windows, alimentation, nettoyage, réparation, disques, anciens pilotes, dernier pilote graphique, clé USB, mesure), le technicien met un bouton « ⚡ Le faire pour moi ». Une validation, et c’est fait. Le BIOS et le panneau NVIDIA restent guidés.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']],
     ['🖱', 'La page ne remonte plus', 'Opti Pro : « Continuer », « Détail » et les autres boutons gardent ta position sur la page.']
@@ -3202,7 +3206,7 @@ const PRO_STEPS = [
   ['🏁', 'Test & validation', 'On remesure et on valide chaque réglage.', [['bench', '🏁 Mesurer mes performances']]]
 ];
 const PRO_COLORS = ['#619fff', '#36c995', '#9b8cff', '#f5a623', '#ff6b6b', '#2ee07a', '#ffc439'];
-let pro = null, proBusy = false, proPoll = 0, proHuman = false, proSeen = '';
+let pro = null, proBusy = false, proPoll = 0, proHuman = false, proSeen = '', proPlanOpen = true;
 const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt=""><b>Technicien History</b><span>Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][1]}</span>` : m.who === 'staff' ? '<b>Équipe History</b>' : '<b>Toi</b>'}</div><div class="reporttxt rich">${proLinks(richText(m.text)).replace(/\[\[faire:([a-z_]+)\]\]/g, (_, id) => (PRO_DO[id] ? `<button class="btn sm play pdo" data-do="${id}">⚡ Le faire pour moi</button>` : ''))}</div>${m.who === 'bot' ? `<div class="embbar"><i style="width:${Math.round(((m.step + 1) / 7) * 100)}%"></i></div>` : ''}</div>`;
 // Mode concentration : une tâche à la fois dans le dernier message du technicien, les autres floutées
 const proFocus = {}, proDetail = {};
@@ -3231,7 +3235,8 @@ function proTicketDraw(jump) {
     $('proTicket').innerHTML = `${s?.done ? '<div class="emb bot" style="--ec:#ffc439"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro</div><h3>Ton PC est prêt 🚀</h3></div>' : ''}<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
     return;
   }
-  $('proTicket').innerHTML = `<div class="embs" id="proLog">${s.log.map((m, k) => proEmbed(m, k)).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
+  const plan = s.todo?.length ? `<details class="emb proplan" ${proPlanOpen ? 'open' : ''}><summary><b>🎯 Ton plan Opti Pro</b><span class="hint">fait pour ton PC et ta demande · ${s.todo.length} points</span></summary><ul>${s.todo.map((x) => `<li><span>${x.icon}</span><div><b>${esc(x.label)}</b><small>${esc(x.why)}</small></div>${x.auto && PRO_DO[x.auto] ? `<button class="btn sm play" data-do="${x.auto}">⚡ Le faire pour moi</button>` : x.optin ? (s.ocOptIn ? '<em class="ok">✅ Accepté</em>' : '<button class="btn sm danger" data-pa="oc">🔥 Je veux overclocker</button>') : `<em>${x.buy ? 'Achat conseillé' : 'Guidé'}</em>`}</li>`).join('')}</ul></details>` : '';
+  $('proTicket').innerHTML = `${plan}<div class="embs" id="proLog">${s.log.map((m, k) => proEmbed(m, k)).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
     <div class="emb human" id="proHuman" style="--ec:#5865f2" ${proHuman ? '' : 'hidden'}><div class="emba"><img src="logo.png" alt="">👤 Parler à un humain</div><p>L’équipe Opti Pro répond <b>sur Discord</b>, pas dans le support de l’appli. Rejoins le serveur History, va dans le salon <b>#🚀・opti-pro</b> : ton ticket y est dans ton fil privé${s.thread ? '' : ' (lie ton compte Discord dans Paramètres › Compte, puis tape <b>/launcher opti</b>)'}. Clique sur <b>👤 Parler à un humain</b> dans le fil : un membre de l’équipe arrive.</p><div class="row"><button class="btn play" data-pa="discordgo">🎮 Ouvrir Discord</button></div></div>
     <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button><button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
     ${s.links?.length ? `<div class="row prolinks">${s.links.map(([l, u]) => `<button class="btn sm ghost" data-url="${esc(u)}">${esc(l)} ↗</button>`).join('')}</div>` : ''}
@@ -3279,7 +3284,7 @@ $('proTicket').addEventListener('click', async (e) => {
     const r = await api.proAct('detail', c.textContent.trim()).catch(() => null);
     proDetail[key] = r?.detail ?? r?.error ?? 'Détail indisponible, réessaie.'; return renderProTicket();
   }
-  const l = e.target.closest('[data-url]'); if (l) { e.preventDefault(); return api.proOpen?.(l.dataset.url); } const b = e.target.closest('[data-pa]'); if (!b) return; if (b.dataset.pa === 'discord') { proHuman = !proHuman; $('proHuman').hidden = !proHuman; return $('proHuman').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } if (b.dataset.pa === 'discordgo') return api.discordInvite?.(); if (b.dataset.pa === 'ask') return proAsk(); proAction(b.dataset.pa); });
+  const l = e.target.closest('[data-url]'); if (l) { e.preventDefault(); return api.proOpen?.(l.dataset.url); } const b = e.target.closest('[data-pa]'); if (!b) return; if (b.dataset.pa === 'discord') { proHuman = !proHuman; $('proHuman').hidden = !proHuman; return $('proHuman').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } if (b.dataset.pa === 'discordgo') return api.discordInvite?.(); if (b.dataset.pa === 'ask') return proAsk(); if (b.dataset.pa === 'oc') { if (!(await ui.confirm({ title: '⚠️ Overclocking du processeur', text: 'À lire avant de continuer. Tu restes libre : sans overclocking, on va quand même chercher des gains sûrs dans le BIOS.', list: String(pro?.ocWarning ?? '').split('\n').map((l) => l.replace(/^- /, '')), ok: '🔥 J’ai compris, je veux overclocker', icon: '🔥' }))) return; }  proAction(b.dataset.pa); });
 // Actions que le technicien IA propose de faire à ta place (toujours avec une validation avant)
 const PRO_DO = {
   optimiser: ['Optimisation complète de Windows et de tes jeux', () => optiFinal()],
@@ -3301,6 +3306,7 @@ async function proDo(id, b) {
   b.textContent = ok ? '✅ Fait' : '⚠️ Pas fait'; toast(ok ? `✅ ${label} : fait` : `${label} : ${r?.error ?? 'refusé ou interrompu'}`);
   if (ok && id !== 'optimiser') proAction('msg', `✅ Fait automatiquement par le launcher : ${label}${r?.total ? ` (${r.total} points)` : ''}.`);
 }
+$('proTicket').addEventListener('toggle', (e) => { if (e.target.classList?.contains('proplan')) proPlanOpen = e.target.open; }, true);
 // Question au technicien : dans une fenêtre à part pour garder la page concentrée sur l'étape
 const proShots = [];
 // Capture réduite en JPEG (1600 px max) : rapide à envoyer, assez nette pour lire un BIOS
@@ -4889,7 +4895,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.37',
+    version: async () => '0.53.38',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

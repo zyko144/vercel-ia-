@@ -26,4 +26,11 @@ assert.equal(await m.sessionOf('acc1'), null); assert.ok((await m.act(t0.id, 'ne
 m.setAsk(async () => { throw new Error('quota'); });
 const t1 = await m.startSession({ id: 'acc2', pseudo: 'B' }, { cpu: 'x' }); assert.match(t1.log.at(-1).text, /humain/);
 assert.ok(Object.keys(m.AUTO).includes('optimiser'));
+// Plan propre à chaque demande + overclocking seulement après accord
+m.setAsk(async (p) => { prompts.push(p); return 'ok'; });
+const oc = await m.startSession({ id: 'acc3', pseudo: 'C' }, { cpu: 'Intel Core i7-13700K', board: 'ASUS TUF Z790', cooling: 'AIO 360', games: 'Valorant', need: 'max de fps en 240 Hz' });
+assert.ok(oc.specs.todo.some((x) => x.id === 'cpu_oc' && x.optin)); assert.match(prompts.at(-1), /PAS ENCORE ACCEPTÉ/);
+const oc2 = await m.act(oc.id, 'oc'); assert.ok(oc2.ocOptIn); assert.match(prompts.at(-1), /A ACCEPTÉ/);
+const gpu = await m.startSession({ id: 'acc4', pseudo: 'D' }, { cpu: 'Intel Core i7-13700K', board: 'ASUS TUF Z790', cooling: 'AIO 360', games: 'Cyberpunk', need: 'beaux graphismes' });
+assert.ok(!gpu.specs.todo.some((x) => x.id === 'cpu_oc')); assert.notDeepEqual(gpu.specs.todo.map((x) => x.id), oc.specs.todo.map((x) => x.id));
 console.log('✅ Opti Pro : ticket guidé, verdict overclocking, passer des étapes, staff, fin, IA en panne');

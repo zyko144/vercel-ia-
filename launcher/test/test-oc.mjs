@@ -23,3 +23,13 @@ assert.equal(biosLink('ASUSTeK COMPUTER INC. TUF GAMING B550-PLUS'), 'https://ww
 assert.match(biosLink('ASRock B650M Pro RS', 'AMD Ryzen 5'), /asrock\.com\/mb\/AMD\/B650M%20Pro%20RS\/index\.asp#BIOS/);
 assert.match(biosLink('Gigabyte Technology Co., Ltd. B550 AORUS ELITE V2'), /gigabyte\.com\/fr\/Search\?kw=B550%20AORUS%20ELITE%20V2/);
 console.log('bios link ok');
+const { personalPlan } = await import('../src/core/oc.js');
+const ids = (s) => personalPlan(s).map((x) => x.id);
+const k2 = { cpu: 'Intel Core i7-13700K', board: 'ASUS TUF Z790', cooling: 'AIO 360' };
+assert.ok(ids({ ...k2, games: 'Valorant', need: 'max de fps en 240 Hz' }).includes('cpu_oc'), 'OC proposé si jeux CPU');
+assert.ok(!ids({ ...k2, games: 'Cyberpunk', need: 'beaux graphismes' }).includes('cpu_oc'), 'pas d’OC si jeux GPU');
+assert.ok(personalPlan({ ...k2, games: 'Valorant' }).find((x) => x.id === 'cpu_oc').optin);
+assert.ok(ids({ cpu: 'i5-12400F', laptop: true, need: 'mon pc rame' }).includes('portable') && ids({ cpu: 'i5', laptop: true, need: 'mon pc rame' }).includes('format'));
+assert.equal(ids({ cpu: 'x', cpuTempMax: 92 })[0], 'refroidissement');
+assert.notDeepEqual(ids({ cpu: 'AMD Ryzen 5 7600', ram: [{ speed: 6000, configured: 4800 }], need: 'ping' }), ids({ cpu: 'AMD Ryzen 5 7600', need: 'stream obs' }), 'plan différent selon la demande');
+console.log('personal plan ok');
