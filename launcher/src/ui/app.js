@@ -1608,7 +1608,7 @@ api.settings?.().then((s) => {
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
   '0.53.24': [
-    ['🎮', 'Fortnite a sa pochette', 'Fortnite a enfin sa vraie pochette et sa bannière dans la bibliothèque, comme Roblox.', ['.side nav button:nth-child(2)', 'wait900']],
+    ['🎮', 'Fortnite a sa pochette', 'Fortnite a enfin sa vraie pochette et sa bannière. Roblox : bannière qui remplit tout l’en-tête et logo bien centré sur la pochette.', ['.side nav button:nth-child(2)', 'wait900']],
   ],
   '0.53.23': [
     ['🛒', 'Upgrade complet', 'Carte graphique (NVIDIA, AMD ou Intel), processeur et carte mère, mémoire et stockage : seulement ce qui est compatible avec ton PC, l’alimentation à prévoir et le meilleur rapport qualité / prix. Choisis tes jeux (même pas installés) pour voir tes FPS avant / après.', ['[data-view=pc]', 'wait600', '[data-pctab=upgrade]', 'wait1200']],
