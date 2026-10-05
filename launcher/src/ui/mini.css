@@ -1,13 +1,13 @@
 * { box-sizing: border-box; }
 :root { --acc: #ff9f43; }
-body { margin: 0; padding: 14px; font: 13px "Segoe UI", system-ui, sans-serif; color: #f3e6d8; background: linear-gradient(180deg, #1d1410, #120c09); border: 1px solid color-mix(in srgb, var(--acc) 30%, transparent); height: 100vh; overflow: hidden; user-select: none; }
+body { margin: 0; padding: 14px; font: 13px "Segoe UI", system-ui, sans-serif; color: #f3e6d8; background: linear-gradient(180deg, #1d1410, #120c09); border: 1px solid color-mix(in srgb, var(--acc) 30%, transparent); overflow: hidden; user-select: none; }
 .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; } .hd img { width: 28px; height: 28px; } .hd b { font-size: 15px; } .hd span { margin-left: auto; font-size: 11px; color: #b9a796; }
 #q { width: 100%; background: #0a0705; border: 1px solid #3a2a20; border-radius: 10px; padding: 9px 11px; font: inherit; color: #f3e6d8; outline: none; margin-bottom: 10px; } #q:focus { border-color: var(--acc); }
 .lbl { font-size: 11px; letter-spacing: .08em; color: #b9a796; margin: 4px 2px 8px; text-transform: uppercase; }
 #list { min-height: 360px; }
 .g { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 7px; border-radius: 12px; }
 .g:hover { background: color-mix(in srgb, var(--acc) 10%, transparent); }
-.cv { width: 44px; height: 58px; border-radius: 8px; background: #2a1c14 center/cover; display: grid; place-items: center; font-weight: 800; font-size: 20px; color: var(--acc); border: 1px solid rgba(255,255,255,.06); }
+.cv { width: 44px; height: 58px; object-fit: cover; border-radius: 8px; background: #2a1c14 center/cover; display: grid; place-items: center; font-weight: 800; font-size: 20px; color: var(--acc); border: 1px solid rgba(255,255,255,.06); }
 .g > div { min-width: 0; }
 .g b { font-size: 14px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .g small { font-size: 11.5px; color: #b9a796; }
 .play { border: 0; border-radius: 9px; padding: 8px 14px; font-family: inherit; font-weight: 700; font-size: 13px; color: #1a0f08; background: linear-gradient(135deg, color-mix(in srgb, var(--acc) 80%, #fff), var(--acc)); cursor: pointer; white-space: nowrap; }

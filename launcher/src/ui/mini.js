@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = (t) => { if (!t) return 'Jamais lancé'; const h = (Date.now() - t) / 3.6e6; return h < 1 ? 'À l’instant' : h < 24 ? `Il y a ${Math.round(h)} h` : h < 48 ? 'Hier' : h < 168 ? `Il y a ${Math.round(h / 24)} j` : `Il y a ${Math.round(h / 168)} sem.`; };
 let data = null;
-const row = (g) => `<div class="g"><div class="cv"${g.cover ? ` style="background-image:url('${esc(g.cover)}')"` : ''}>${g.cover ? '' : esc(g.name[0] ?? '?')}</div><div><b>${esc(g.name)}</b><small>${g.last !== undefined ? `${ago(g.last)} · ${Math.round((g.minutes ?? 0) / 60)} h` : ''}</small></div><button class="play${g.update ? ' up' : ''}" data-id="${esc(g.id)}" data-a="${g.update ? 'update' : 'launch'}">${g.update ? '⬆ Mettre à jour' : '▶ Jouer'}</button></div>`;
+const row = (g) => `<div class="g">${g.cover ? `<img class="cv" src="${esc(g.cover)}" alt="">` : `<div class="cv">${esc(g.name[0] ?? '?')}</div>`}<div><b>${esc(g.name)}</b><small>${g.last !== undefined ? `${ago(g.last)} · ${Math.round((g.minutes ?? 0) / 60)} h` : ''}</small></div><button class="play${g.update ? ' up' : ''}" data-id="${esc(g.id)}" data-a="${g.update ? 'update' : 'launch'}">${g.update ? '⬆ Mettre à jour' : '▶ Jouer'}</button></div>`;
 function draw() {
   const q = $('q').value.trim().toLowerCase();
   const list = q ? data.all.filter((g) => g.name.toLowerCase().includes(q)).slice(0, 5) : data.recent;
@@ -19,6 +19,7 @@ async function load() {
   if (data.logo) $('logo').src = data.logo;
   document.documentElement.style.setProperty('--acc', data.accent);
   $('q').value = ''; draw(); $('q').focus();
+  window.mini.size(document.body.scrollHeight); // la fenêtre prend la hauteur de son contenu (rien de coupé)
 }
 $('q').addEventListener('input', draw);
 $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('list').querySelector('[data-id]')?.click(); if (e.key === 'Escape') window.mini.act(null, 'hide'); });

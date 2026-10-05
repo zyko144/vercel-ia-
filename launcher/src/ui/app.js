@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.40': [
+    ['🧭', 'Mini-launcher réparé', 'Les pochettes des jeux s’affichent dans le mini-launcher de la barre des tâches, et le bouton « Ouvrir History Launcher » n’est plus coupé : la fenêtre prend la hauteur qu’il faut.', ['.side nav button:nth-child(1)', 'wait900']]
+  ],
   '0.53.39': [
     ['🎮', 'Fortnite est de retour', 'Fortnite n’apparaissait plus dans la bibliothèque quand il n’était pas installé (Epic le range dans les « applications »). Il revient, avec le bouton pour l’installer.', ['.side nav button:nth-child(2)', 'wait900']],
     ['🧭', 'Mini-launcher dans la barre des tâches', 'Clique sur l’icône History à côté de l’horloge : tes 5 derniers jeux avec leur pochette et « ▶ Jouer », la recherche de tous tes jeux, la santé du PC, la température du processeur et tes amis en jeu. Clic droit sur l’icône pour ouvrir le launcher en grand.']
@@ -4899,7 +4902,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.39',
+    version: async () => '0.53.40',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
