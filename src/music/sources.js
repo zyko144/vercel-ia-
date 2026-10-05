@@ -230,6 +230,8 @@ async function findAudio(track) {
     for (const target of [
       `https://music.youtube.com/search?q=${encodeURIComponent(query)}#songs`,
       `ytsearch1:${query} audio`,
+      `ytsearch1:${query} paroles`, // version « lyrics » réuploadée : jamais protégée
+      `ytsearch1:${query} lyrics`,
     ]) {
       try {
         const result = await extractAudio(target, { firstResult: true });
@@ -285,8 +287,9 @@ export async function prepareTrack(track, { force = false } = {}) {
   if (track.playUrl) {
     try { result = await extractAudio(track.playUrl); }
     catch (err) {
-      if (!err.blocked || track.isLive || !track.title || track.source !== 'youtube') throw err;
-      youtubeBlockedUntil = Date.now() + YOUTUBE_BLOCK_PAUSE_MS;
+      // Son protégé (DRM), bloqué ou sans flux lisible : on force une autre version du même titre (YouTube, puis SoundCloud)
+      if (track.isLive || !track.title || /privée|âge/.test(err.message)) throw err;
+      if (err.blocked) youtubeBlockedUntil = Date.now() + YOUTUBE_BLOCK_PAUSE_MS;
       result = await findAudio(track);
       recovered = true;
     }
