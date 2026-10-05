@@ -2107,3 +2107,6 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .pfdetail { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--bg) 60%, transparent); }
 .emb.detailing > .reporttxt > :not(ul), .emb.detailing > .reporttxt > ul > li:not(.on) { display: none; }
 .proask { display: grid; gap: 12px; min-width: min(520px, 80vw); } .proask h2, .proask p { margin: 0; }
+.proshots { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.proshots span { position: relative; } .proshots img { width: 92px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
+.proshots span button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--bg); color: var(--text); cursor: pointer; font-size: 11px; }

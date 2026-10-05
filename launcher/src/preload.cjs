@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld('launcher', {
   proGet: () => ipcRenderer.invoke('pro:get'),
   proSession: () => ipcRenderer.invoke('pro:session'),
   proStart: (f) => ipcRenderer.invoke('pro:start', f),
-  proAct: (a, t) => ipcRenderer.invoke('pro:act', a, t),
+  proAct: (a, t, imgs) => ipcRenderer.invoke('pro:act', a, t, imgs),
   proUsb: () => ipcRenderer.invoke('pro:usb'),
   proLink: (w) => ipcRenderer.invoke('pro:link', w),
   proOpen: (u) => ipcRenderer.invoke('pro:open', u),
