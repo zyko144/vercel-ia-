@@ -3987,6 +3987,7 @@ ipcMain.handle('more:modscan', async (_e, id) => {
   }
   return { ok: true, scanned: dirs.length ? dirs.map((d) => path.basename(d)) : ['dossier du jeu'], threats: bad.map((d) => path.basename(d)) };
 });
+ipcMain.handle('more:appQr', () => import('qrcode').then((m) => m.default.toDataURL('https://zyko144.github.io/vercel-ia-/app/', { margin: 1, width: 160, color: { dark: '#0b0910', light: '#ffffff' } })).catch(() => null));
 ipcMain.handle('more:reinstall', () => toReinstall(store.data.installedList ?? [], items));
 // ---------- 25. Widget sur le bureau : températures, FPS, amis ----------
 let widget = null;

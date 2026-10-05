@@ -148,7 +148,8 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     // Surface d'attaque réduite : seulement GET, HEAD, POST et OPTIONS
     if (!['GET', 'HEAD', 'POST', 'OPTIONS'].includes(req.method)) return send(res, 405, 'méthode refusée');
     // The public support page uses the existing account authentication (including 2FA).
-    if (/^\/api\/compte\/(support|connexion(?:\/2fa)?|deconnexion)$/.test(url.pathname)) {
+    // Page support + appli mobile (PWA sur le site) : mêmes comptes, jeton Bearer (aucun cookie), origine du site seulement
+    if (/^\/api\/compte\/(support|connexion(?:\/2fa)?|deconnexion|moi|amis|messages|optipro(?:\/action)?|premium|lfg)$/.test(url.pathname)) {
       const origin = String(req.headers.origin ?? '');
       if ([...siteOrigins(), 'https://zyko144.github.io'].includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin');

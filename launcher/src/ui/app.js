@@ -1613,6 +1613,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.55.1': [
+    ['📱', 'Appli History sur téléphone', 'Gratuite et sans store : amis et messages, ticket Opti Pro et accès à ton PC. QR code dans Paramètres › Téléphone pour l’installer en 2 secondes.', ['#openSettings', 'wait700', '.setnav [data-pane="telephone"]', 'wait1200']],
+  ],
   '0.55.0': [
     ['🔐', 'Sécurité & compte', 'Appareils connectés (déconnecte-les à distance), code PIN du launcher, contrôle parental, export de toutes tes données, suppression du compte, alerte si ton mot de passe a fuité, analyse antivirus des mods et alerte si un outil peut te faire bannir.', ['#openSettings', 'wait700', '.setnav [data-pane="compte"]', 'wait1200']],
     ['🎨', 'Confort et design', 'Mode clair, couleurs pour daltoniens, animations réduites, packs de sons, mode focus (Ctrl+Maj+F), Ctrl+Z pour annuler, économiseur d’écran, bande-annonce en fond, menus en anglais, accueil guidé et astuce du jour.'],
@@ -4941,7 +4944,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.55.0',
+    version: async () => '0.55.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
