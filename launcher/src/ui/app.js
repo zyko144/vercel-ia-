@@ -1607,6 +1607,11 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.23': [
+    ['🛒', 'Upgrade complet', 'Carte graphique (NVIDIA, AMD ou Intel), processeur et carte mère, mémoire et stockage : seulement ce qui est compatible avec ton PC, l’alimentation à prévoir et le meilleur rapport qualité / prix. Choisis tes jeux (même pas installés) pour voir tes FPS avant / après.', ['[data-view=pc]', 'wait600', '[data-pctab=upgrade]', 'wait1200']],
+    ['🧱', 'Roblox a sa pochette', 'Roblox a enfin sa pochette et sa bannière dans la bibliothèque.'],
+    ['🤖', 'Avis de l’IA plus clair', 'Titres en couleur et en gras, sans bandeaux.'],
+  ],
   '0.53.22': [
     ['🛰️', 'Support plus rapide', 'Le launcher indique sa version à ton compte : en cas de souci, l’équipe sait tout de suite si tu as la dernière mise à jour.', ['#openSettings', 'wait600', '.setnav [data-pane=aide]', 'wait900']],
   ],
@@ -3061,32 +3066,70 @@ function pcTab(tab) {
   if (tab === 'upgrade') renderUpgrade();
   if (tab === 'entretien') renderCare();
 }
-// 🛒 Upgrade : grande carte « ta carte → carte conseillée », tes jeux avec leur vraie pochette et leurs vrais FPS, avis de l'IA (Premium)
-const up = { budget: 600, target: null, game: null, data: null };
-const coverOf = (id, name) => { const it = state.items.find((i) => i.id === id) ?? state.items.find((i) => i.name === name); return it?.art?.cover ?? it?.art?.header ?? it?.art?.hero ?? null; };
+// 🛒 Upgrade : carte graphique (marque au choix), processeur + carte mère, RAM, stockage ; compatibilité et FPS par jeu
+const up = { budget: 600, mode: 'gpu', brand: 'all', target: null, picked: (() => { try { return JSON.parse(localStorage.getItem('upPicked') ?? '[]'); } catch { return []; } })() };
+// Jeux populaires qu'on peut choisir même s'ils ne sont pas installés (pochette Steam quand elle existe)
+const POPULAR = [['Fortnite'], ['Valorant'], ['Counter-Strike 2', 730], ['Rocket League', 252950], ['Grand Theft Auto V', 271590], ['FiveM'], ['Apex Legends', 1172470], ['Call of Duty: Warzone'], ['Minecraft'], ['Roblox'], ['League of Legends'], ['Tom Clancy’s Rainbow Six Siege', 359550], ['Overwatch 2', 2357570], ['Marvel Rivals', 2767030], ['The Finals', 2073850], ['Cyberpunk 2077', 1091500], ['ELDEN RING', 1245620], ['Red Dead Redemption 2', 1174180], ['Baldur’s Gate 3', 1086940], ['Helldivers 2', 553850], ['Rust', 252490], ['DayZ', 221100], ['Palworld', 1623730], ['Garry’s Mod', 4000], ['Dead by Daylight', 381210], ['EA SPORTS FC 25', 2669320], ['Fall Guys', 1097150], ['Sea of Thieves', 1172620], ['Destiny 2', 1085660], ['Valheim', 892970]];
+const popCover = (name) => { const p = POPULAR.find(([n]) => n === name); return name === 'Roblox' ? 'art/roblox-cover.jpg' : p?.[1] ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${p[1]}/library_600x900.jpg` : null; };
+const coverOf = (id, name) => { const it = state.items.find((i) => i.id === id) ?? state.items.find((i) => i.name === name); return it?.art?.cover ?? it?.art?.header ?? it?.art?.hero ?? popCover(name); };
+const shortCpu = (n) => String(n ?? '').replace(/\(R\)|\(TM\)|CPU|Processor|\d+-Core|AMD |Intel /gi, '').replace(/\s+/g, ' ').trim();
 async function renderUpgrade() {
-  const r = await api.upgrade?.(up.budget, up.target); if (!r) return; up.data = r;
-  const cur = r.current, tgt = r.target, cap = r.advice.balance.cap;
-  const pct = (g) => Math.min(100, Math.round((g.score / 450) * 100));
-  const gain = cur && tgt ? Math.round((Math.min(tgt.score, cap) / cur.score - 1) * 100) : null;
-  $('upHero').innerHTML = `<div class="upcard cur"><small>TA CARTE ACTUELLE</small><b>${esc(cur?.name ?? (r.gpuName || 'Inconnue'))}</b><div class="upbar"><i style="width:${cur ? pct(cur) : 0}%"></i></div><em>${esc(r.cpuName ? r.cpuName.replace(/\(R\)|\(TM\)|CPU|Processor|\d+-Core/gi, '').replace(/\s+/g, ' ').trim() : '')}${r.ramGb ? ` · ${r.ramGb} Go` : ''}</em></div>
-    <div class="uparrow">➜</div>
-    <div class="upcard best"><small>${up.target ? 'CARTE CHOISIE' : `CONSEILLÉE POUR ${up.budget} €`}</small><b>${esc(tgt?.name ?? 'Rien d’utile à ce prix')}</b><div class="upbar"><i style="width:${tgt ? pct(tgt) : 0}%"></i></div><em>${tgt?.price ? `~${tgt.price} € neuve` : 'plus vendue neuve'}</em></div>
-    <div class="upgain ${gain > 0 ? '' : 'none'}"><b>${gain != null ? `${gain > 0 ? '+' : ''}${gain} %` : '—'}</b><small>de FPS dans les jeux<br>limités par la carte</small></div>`;
-  const b = r.advice.balance;
-  const notes = [b.cpuCap && `🧠 Ton processeur peut suivre une carte jusqu’au niveau <b>${esc(r.gpus.filter((g) => g.score <= b.cpuCap * 1.1).sort((x, y) => y.score - x.score)[0]?.name ?? '—')}</b>.`, b.screenCap && `🖥️ Ton écran (${r.width >= 3800 ? '4K' : r.width >= 2500 ? '1440p' : '1080p'} à ${r.hz ?? '?'} Hz) n’affichera pas plus qu’une <b>${esc(r.gpus.filter((g) => g.score <= b.screenCap * 1.1).sort((x, y) => y.score - x.score)[0]?.name ?? '—')}</b> : au-delà, tu paies pour rien.`, r.advice.cpuFirst && '⚠️ <b>C’est ton processeur qui bloque</b> : change-le en premier, sinon la nouvelle carte sera bridée.', r.advice.best?.gpu && tgt && tgt.score > cap * 1.1 && '⚠️ Cette carte est plus puissante que ce que ton PC peut exploiter.'].filter(Boolean);
+  const r = await api.upgrade?.({ budget: up.budget, mode: up.mode, brand: up.brand, target: up.target, picked: up.picked }); if (!r) return;
+  $('upBrands').hidden = r.mode !== 'gpu';
+  $('upGamesHead').hidden = $('upGames').hidden = !['gpu', 'cpu'].includes(r.mode);
+  const card = (cls, small, title, bar, em) => `<div class="upcard ${cls}"><small>${small}</small><b>${esc(title)}</b>${bar != null ? `<div class="upbar"><i style="width:${Math.min(100, bar)}%"></i></div>` : ''}<em>${em}</em></div>`;
+  const gainBox = (g, txt) => `<div class="upgain ${g > 0 ? '' : 'none'}"><b>${g != null ? `${g > 0 ? '+' : ''}${g} %` : '—'}</b><small>${txt}</small></div>`;
+  const opt = (o, { title, price, gain, tags = [], notes = [] }) => `<button type="button" class="upopt ${up.target === o || (!up.target && tags.includes('best')) ? 'on' : ''}" data-uptarget="${esc(o ?? '')}"><div class="uptags">${tags.includes('best') ? '<span class="t best">🚀 Le plus puissant utile</span>' : ''}${tags.includes('value') ? '<span class="t value">⭐ Meilleur rapport qualité / prix</span>' : ''}${tags.includes('waste') ? '<span class="t warn">⚠️ Bridée par ton processeur</span>' : ''}</div><b>${esc(title)}</b><span class="upprice">~${price} €</span>${gain != null ? `<span class="upg">${gain > 0 ? '+' : ''}${gain} %</span>` : ''}<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></button>`;
+  let notes = [];
+  if (r.mode === 'gpu') {
+    const g = r.gpuOpt, cur = g.current, t = r.target;
+    $('upHero').innerHTML = card('cur', 'TA CARTE ACTUELLE', cur?.name ?? (r.gpuName || 'Inconnue'), cur ? cur.score / 4.5 : 0, `${esc(shortCpu(r.cpuName))}${r.ramGb ? ` · ${r.ramGb} Go` : ''}`) + '<div class="uparrow">➜</div>'
+      + card('best', up.target ? 'CARTE CHOISIE' : `CONSEILLÉE POUR ${up.budget} €`, t?.name ?? 'Rien d’utile à ce prix', t ? t.score / 4.5 : 0, t ? `~${t.price} € · alimentation ≥ ${t.psu} W` : 'Augmente le budget ou change de marque') + gainBox(t?.gain ?? null, 'de FPS dans les jeux<br>limités par la carte');
+    const b = g.balance, nameAt = (cap) => GPU_NAMES_AT(r, cap);
+    notes = [b.cpuCap && `🧠 Ton processeur (${esc(shortCpu(r.cpuName))}) suit une carte jusqu’au niveau <b>${esc(nameAt(b.cpuCap * 1.1))}</b>.`, b.screenCap && `🖥️ Ton écran (${r.width >= 3800 ? '4K' : r.width >= 2500 ? '1440p' : '1080p'} à ${r.hz ?? '?'} Hz) n’affichera pas mieux qu’une <b>${esc(nameAt(b.screenCap * 1.1))}</b>.`, t && `⚡ Vérifie ton alimentation : <b>${t.psu} W minimum</b> pour cette carte avec ton processeur.`].filter(Boolean);
+    $('upOpts').innerHTML = g.options.map((o) => opt(o.name, { title: o.name, price: o.price, gain: o.gain, tags: [o === g.best || o.name === g.best?.name ? 'best' : '', o.name === g.value?.name ? 'value' : '', o.wasted ? 'waste' : ''], notes: [`Alimentation ≥ ${o.psu} W`, `${{ nvidia: 'NVIDIA', amd: 'AMD', intel: 'Intel' }[o.brand]} · port PCIe x16 standard`] })).join('') || '<p class="hint">Aucune carte de cette marque n’apporte au moins +15 % dans ce budget.</p>';
+  } else if (r.mode === 'cpu') {
+    const c = r.cpuOpt, t = r.target;
+    $('upHero').innerHTML = card('cur', 'TON PROCESSEUR', shortCpu(r.cpuName) || 'Inconnu', c.current ? c.current / 2 : 0, `Socket ${esc(c.platform.socket ?? '?')} · ${esc(c.platform.mem ?? '?')}`) + '<div class="uparrow">➜</div>'
+      + card('best', up.target ? 'CHOIX' : `CONSEILLÉ POUR ${up.budget} €`, t?.name ?? 'Rien d’utile à ce prix', t ? t.score / 2 : 0, t ? `~${t.total} € au total${t.same ? ' · même carte mère' : ` · ${t.board?.label ?? ''}`}` : 'Augmente le budget') + gainBox(t?.gain ?? null, 'dans les jeux<br>limités par le processeur');
+    notes = [t && !t.same && '🔁 Nouvelle plateforme : processeur, carte mère et parfois mémoire changent ensemble. Ta carte graphique et tes disques se gardent.', t?.same && '✅ Rien d’autre à changer : il se pose sur ta carte mère actuelle.'].filter(Boolean);
+    $('upOpts').innerHTML = c.options.map((o) => opt(o.name, { title: o.name, price: o.total, gain: o.gain, tags: [o.name === c.best?.name ? 'best' : '', o.name === c.value?.name ? 'value' : ''], notes: o.notes })).join('') || '<p class="hint">Rien de plus rapide dans ce budget pour ton PC.</p>';
+  } else {
+    const o = r.mode === 'ram' ? r.ramOpt : r.diskOpt;
+    $('upHero').innerHTML = card('cur', r.mode === 'ram' ? 'TA MÉMOIRE' : 'TON STOCKAGE', r.mode === 'ram' ? `${r.ramGb ?? '?'} Go ${o.type ?? ''}` : 'Disques actuels', null, r.mode === 'ram' ? `Compatible : ${esc(o.type)} uniquement` : 'Vois aussi Mon PC › Entretien');
+    $('upOpts').innerHTML = o.options.map((x) => opt(null, { title: x.title, price: x.price, gain: null, notes: [x.gain, ...(x.notes ?? [])] })).join('');
+  }
   $('upBal').innerHTML = notes.map((n) => `<div>${n}</div>`).join('');
-  $('upExtra').innerHTML = r.advice.items.filter((x) => x.kind !== 'gpu').map((x) => `<div class="upmini ${x.kind}"><b>${{ ram: '🧠', ssd: '💾', cpu: '⚙️' }[x.kind]} ${esc(x.title)}</b><span>~${x.price} €</span><small>${esc(x.gain)}</small></div>`).join('') + (r.advice.items.length ? `<div class="uptotal">Total conseillé : <b>~${r.advice.total} €</b></div>` : '');
-  if (!$('upGpu').options.length) $('upGpu').innerHTML = '<option value="">La carte conseillée</option>' + r.gpus.filter((g) => !cur || g.score > cur.score).map((g) => `<option value="${esc(g.name)}">${esc(g.name)}${g.price ? ` · ~${g.price} €` : ''}</option>`).join('');
-  $('upGames').innerHTML = r.sim.length ? r.sim.map((g) => { const c = coverOf(g.id, g.name); const p = Math.round((g.after / g.now - 1) * 100); return `<button type="button" class="upgame ${up.game === g.id ? 'on' : ''}" data-upgame="${esc(g.id)}"><span class="upcov"><em>${esc(g.name[0])}</em>${c ? `<i style="background-image:url('${esc(c)}')"></i>` : ''}</span><b>${esc(g.name)}</b><span class="upfps">${g.now} <i>➜</i> <strong>${g.after}</strong> FPS</span><small class="${g.cpuBound ? 'warn' : 'ok'}">${g.cpuBound ? 'Limité par le processeur : peu de gain' : `+${p} % · mesuré sur tes parties`}</small></button>`; }).join('') : '<p class="hint">Joue quelques parties avec la mesure des FPS activée : l’estimation se fera sur tes vrais FPS, jeu par jeu.</p>';
+  if (['gpu', 'cpu'].includes(r.mode)) $('upGames').innerHTML = (r.sim ?? []).length ? r.sim.map((g) => { const c = coverOf(g.id, g.name); const p = g.unknown ? null : Math.round((g.after / Math.max(1, g.now) - 1) * 100); return `<div class="upgame"><span class="upcov"><em>${esc(g.name[0])}</em>${c ? `<i style="background-image:url('${esc(c)}')"></i>` : ''}</span><b>${esc(g.name)}</b>${g.unknown ? '<small class="warn">Pas encore de mesure : joue une partie avec la mesure des FPS</small>' : `<span class="upfps">${g.now} <i>➜</i> <strong>${g.after}</strong> FPS</span><small class="${p > 3 ? 'ok' : 'warn'}">${p > 3 ? `+${p} %` : 'Peu de gain ici'} · ${g.measured ? 'tes FPS mesurés' : 'estimé (tests 1080p élevé)'}</small>`}</div>`; }).join('') : '<p class="hint">Clique sur « Choisir mes jeux » pour voir tes FPS avant / après.</p>';
 }
-$('upBudget').addEventListener('click', (e) => { const b = e.target.closest('[data-b]'); if (!b) return; document.querySelectorAll('#upBudget button').forEach((x) => x.classList.toggle('on', x === b)); up.budget = Number(b.dataset.b); up.target = null; $('upGpu').value = ''; $('upAiOut').hidden = true; renderUpgrade(); });
-$('upGpu').addEventListener('change', () => { up.target = $('upGpu').value || null; $('upAiOut').hidden = true; renderUpgrade(); });
-$('upGames').addEventListener('click', (e) => { const g = e.target.closest('[data-upgame]'); if (!g) return; up.game = up.game === g.dataset.upgame ? null : g.dataset.upgame; document.querySelectorAll('.upgame').forEach((x) => x.classList.toggle('on', x.dataset.upgame === up.game)); });
+const GPU_NAMES_AT = (_r, cap) => UP_GPUS.filter((g) => g.score <= cap).at(-1)?.name ?? '—';
+const UP_GPUS = [['GTX 1660 Super', 68], ['RTX 3060', 100], ['RTX 4060', 118], ['RTX 5060', 135], ['RTX 4060 Ti', 140], ['RTX 3070', 145], ['RX 7700 XT', 175], ['RTX 4070', 180], ['RX 7800 XT', 210], ['RTX 5070', 215], ['RX 9070', 245], ['RX 9070 XT', 270], ['RTX 5080', 310], ['RTX 5090', 450]].map(([name, score]) => ({ name, score }));
+$('upBudget').addEventListener('click', (e) => { const b = e.target.closest('[data-b]'); if (!b) return; document.querySelectorAll('#upBudget button').forEach((x) => x.classList.toggle('on', x === b)); up.budget = Number(b.dataset.b); up.target = null; $('upAiOut').hidden = true; renderUpgrade(); });
+$('upModes').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (!b) return; document.querySelectorAll('#upModes button').forEach((x) => x.classList.toggle('on', x === b)); up.mode = b.dataset.mode; up.target = null; $('upAiOut').hidden = true; renderUpgrade(); });
+$('upBrands').addEventListener('click', (e) => { const b = e.target.closest('[data-brand]'); if (!b) return; document.querySelectorAll('#upBrands button').forEach((x) => x.classList.toggle('on', x === b)); up.brand = b.dataset.brand; up.target = null; renderUpgrade(); });
+$('upOpts').addEventListener('click', (e) => { const b = e.target.closest('[data-uptarget]'); if (!b || !b.dataset.uptarget) return; up.target = b.dataset.uptarget; $('upAiOut').hidden = true; renderUpgrade(); });
+// Choisir ses jeux : toute la bibliothèque, avec la vraie pochette
+$('upPick').addEventListener('click', () => {
+  let d = document.getElementById('upPickDlg');
+  if (!d) { d = document.createElement('dialog'); d.id = 'upPickDlg'; d.innerHTML = '<div class="dlg upick"><h2>🎮 Choisis tes jeux</h2><input id="upPickQ" placeholder="Rechercher un jeu…"><div class="upickl" id="upPickL"></div><div class="row end"><button class="btn play" type="button" id="upPickOk">Voir les FPS</button></div></div>'; document.body.append(d); }
+  const sel = new Set(up.picked);
+  const tile = (id, name, c) => `<button type="button" class="upk ${sel.has(id) ? 'on' : ''}" data-pk="${esc(id)}"><span class="upcov"><em>${esc(name[0])}</em>${c ? `<i style="background-image:url('${esc(c)}')"></i>` : ''}</span><b>${esc(name)}</b></button>`;
+  const paint = () => {
+    const q = d.querySelector('#upPickQ').value.toLowerCase();
+    const mine = state.items.filter((i) => i.kind === 'game' && i.name && i.name.toLowerCase().includes(q)).sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 60);
+    const pop = POPULAR.filter(([n]) => n.toLowerCase().includes(q) && !state.items.some((i) => i.name === n));
+    d.querySelector('#upPickL').innerHTML = (mine.length ? '<p class="upickh">Ta bibliothèque</p>' : '') + mine.map((i) => tile(i.id, i.name, i.art?.cover ?? i.art?.header ?? popCover(i.name))).join('')
+      + (pop.length ? '<p class="upickh">Jeux populaires</p>' : '') + pop.map(([n]) => tile(`pop:${n}`, n, popCover(n))).join('');
+  };
+  d.querySelector('#upPickQ').oninput = paint;
+  d.querySelector('#upPickL').onclick = (e) => { const b = e.target.closest('[data-pk]'); if (!b) return; sel.has(b.dataset.pk) ? sel.delete(b.dataset.pk) : sel.add(b.dataset.pk); b.classList.toggle('on'); };
+  d.querySelector('#upPickOk').onclick = () => { up.picked = [...sel].slice(0, 12); try { localStorage.setItem('upPicked', JSON.stringify(up.picked)); } catch { /* pas grave */ } d.close(); renderUpgrade(); };
+  paint(); d.showModal();
+});
 $('upAiBtn').addEventListener('click', async () => {
   if (!(await premOk('ia'))) return openPremium('ia');
   $('upAiBtn').disabled = true; $('upAiBtn').textContent = '🤖 L’IA étudie ton PC…';
-  const r = await api.upgradeAi?.(up.budget, up.target).catch(() => null);
+  const r = await api.upgradeAi?.({ budget: up.budget, mode: up.mode, brand: up.brand, target: up.target, picked: up.picked }).catch(() => null);
   $('upAiBtn').disabled = false; $('upAiBtn').textContent = '🤖 Avis détaillé de l’IA';
   if (r?.error === 'premium') return openPremium('ia');
   $('upAiOut').hidden = false; $('upAiOut').innerHTML = r?.text ? richText(r.text) : esc(r?.error ?? 'IA indisponible');
@@ -4645,7 +4688,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.22',
+    version: async () => '0.53.23',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
