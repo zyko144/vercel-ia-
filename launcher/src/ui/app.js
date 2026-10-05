@@ -207,7 +207,7 @@ function menuFor(i) {
   m.push('<button data-cols="1">📚 Collections…</button>');
   m.push('<button data-sheet="1">≡ Fiche complète</button>');
   if (i.installed && i.installDir) m.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
-  if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button><button data-action="repair">🛠 Réparer avec ' + (i.source === 'steam' ? 'Steam' : 'Epic') + '</button>');
+  if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">🛠 Vérifier et réparer les fichiers</button>');
   if (i.installed && i.source === 'steam' && i.kind === 'game') m.push('<button data-action="cache">🧹 Vider le cache du jeu</button>');
   if (i.installed && i.installDir && i.kind === 'game') m.push('<button data-mods="1">🧩 Mods du jeu</button>');
   if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
@@ -1607,6 +1607,12 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.21': [
+    ['🛒', 'Upgrade refait', 'Une grande carte « ta carte → carte conseillée » avec le gain en %, tes jeux avec leur vraie pochette et tes vrais FPS avant / après, ce que ton processeur et ton écran peuvent suivre. Premium : avis détaillé de l’IA.', ['[data-view=pc]', 'wait600', '[data-pctab=upgrade]', 'wait1200']],
+    ['🛠', 'Réparation par History', 'Vérifier et réparer : History vérifie chaque fichier lui-même, retire ceux qui sont abîmés et les fait re-télécharger en arrière-plan, sans ouvrir la fenêtre de Steam.'],
+    ['🤖', 'L’assistant optimise vraiment', '« Optimise mon PC » : il analyse, te liste ce qu’il a trouvé, corrige tout en un clic et te dit ce qui a été fait.'],
+    ['🎨', 'Conseils de l’IA plus lisibles', 'Titres en couleur, réglages en gras, listes aérées. Et les vraies pochettes des jeux dans Optimisation.'],
+  ],
   '0.53.20': [
     ['🛒', 'Upgrade et Entretien', 'Mon PC › 🛒 Upgrade : quoi acheter avec ton budget et tes FPS estimés avec une autre carte graphique. 🩺 Entretien : santé des disques (alerte si l’un faiblit) et nettoyage des anciens pilotes graphiques.', ['[data-view=pc]', 'wait600', '[data-pctab=upgrade]', 'wait900']],
     ['🎁', 'Cadeaux & codes Premium', 'Essai gratuit de 3 jours, ton code ami (−20 % pour lui, 7 jours offerts pour toi) et les cartes cadeaux à offrir.'],
@@ -2634,8 +2640,24 @@ async function pcDiag(force) {
   renderDiag(d);
   return d;
 }
+/** Texte de l'IA (Markdown simple) → titres colorés, gras, listes aérées. Tout est échappé avant. */
+function richText(t) {
+  let html = '', list = false, sec = 0;
+  const inline = (x) => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(\d+(?:[.,]\d+)?\s?(?:FPS|%|Go|Mo|°C|ms|Hz))/g, '<span class="rnum">$1</span>');
+  for (const raw of String(t ?? '').split('\n')) {
+    const l = raw.trim();
+    const item = l.match(/^(?:[-*•]|\d+[.)])\s+(.*)/);
+    if (!item && list) { html += '</ul>'; list = false; }
+    if (!l) continue;
+    const h = l.match(/^#{1,4}\s*(.+)/) ?? l.match(/^«\s*(.+?)\s*»\s*:?$/);
+    if (h) html += `<h4 class="rh c${sec++ % 4}">${inline(h[1].replace(/\*\*/g, ''))}</h4>`;
+    else if (item) { if (!list) { html += '<ul class="rlist">'; list = true; } html += `<li>${inline(item[1])}</li>`; }
+    else html += `<p>${inline(l)}</p>`;
+  }
+  return html + (list ? '</ul>' : '');
+}
 function showReport(r, title = 'Rapport détaillé') {
-  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📄</span><h2>${esc(title)}</h2></div><div class="reporttxt">${esc(r?.text ?? r?.error ?? 'Rapport indisponible.')}</div>
+  setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📄</span><h2>${esc(title)}</h2></div><div class="reporttxt ${r?.text ? 'rich' : ''}">${r?.text ? richText(r.text) : esc(r?.error ?? 'Rapport indisponible.')}</div>
     <small class="hint">${r?.ai ? 'Rédigé par l’IA à partir des vraies mesures de ton PC.' : 'Rapport automatique (connecte-toi pour la version rédigée par l’IA).'}</small>
     <div class="row end"><button type="button" class="btn" id="repPdf">📄 PDF</button><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
@@ -2739,8 +2761,10 @@ function renderOpti() {
     // Logo officiel du jeu (sinon son icône, sinon un emoji)
     const it = game !== 'Autres jeux' && state.items.find((x) => x.id === list[0].itemId);
     // Vrais logos : FiveM et Fortnite (Simple Icons, officiels) ; sinon logo du magasin, jamais l'icône du .exe
+    // Vraie pochette du jeu (comme dans la bibliothèque) ; logo officiel seulement s'il n'y a pas de pochette
+    const cover = it && (it.art?.cover ?? it.art?.header ?? it.art?.hero);
     const logo = { FiveM: 'brands/fivem.svg', Fortnite: 'brands/fortnite.svg' }[game] ?? (it && (it.art?.logo ?? it.art?.icon));
-    S.A.push(catCard(`game${n}`, logo ? `<img class="oglogo" src="${esc(logo)}" alt="">` : GAME_ICONS[game] ?? '🎮', game, '', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
+    S.A.push(catCard(`game${n}`, cover ? `<span class="ogcover" style="background-image:url('${esc(cover)}')"></span>` : logo ? `<span class="ogcover logo"><img src="${esc(logo)}" alt=""></span>` : GAME_ICONS[game] ?? '🎮', game, '', bytes ? gb(bytes) : `${list.filter((a) => a.applied).length}/${list.length}`,
       `<div class="checks">${list.map(gameRow).join('')}</div>`, { count: `${list.length} action${list.length > 1 ? 's' : ''}` }));
   });
   // Place prise par chaque jeu installé (et ceux pas lancés depuis 6 mois)
@@ -2888,12 +2912,14 @@ async function runOpti(plan = planFromUi()) {
   $('optiRun').disabled = false; $('optiScan').disabled = false;
   if (!r?.ok) { showProgress(null); return ui.confirm({ title: 'L’optimisation s’est arrêtée', text: r?.error ? `Erreur : ${r.error}` : 'Réessaie dans un instant.', ok: 'OK', cancel: 'Fermer', icon: '⚠️' }); }
   if (r.scan) { opti = r.scan; renderOpti(); }
+  const summary = { done: true, freed: r.freed ?? 0, changes: (r.tweaks ?? 0) + (r.games ?? 0) };
   if (r.fixed?.fixed) toast(r.fixed.reboot ? '✅ Réglages qui faisaient bugger les jeux corrigés : redémarre le PC' : '✅ Réglages qui faisaient bugger les jeux corrigés');
   await refreshHealth(true);
   let benchAfter = null;
   if (gain && benchBefore && !benchBefore.error) { showProgress('<div class="oprog"><b>Mesure après optimisation (≈ 10 s)…</b><div class="gbar big indet"><i></i></div></div>'); benchAfter = await api.benchQuick().catch(() => null); }
   const delta = benchAfter?.total && benchBefore?.total ? Math.round((100 * (benchAfter.total - benchBefore.total)) / benchBefore.total) : null;
   showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks + (r.games ?? 0)}</b><small>changement${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''} appliqué${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div>${delta != null ? `<div><b>${benchBefore.total} → ${benchAfter.total}</b><small>mini-benchmark (${delta >= 0 ? '+' : ''}${delta} %${Math.abs(delta) <= 2 ? ', dans la marge de mesure' : ''})</small></div>` : ''}</div>${r.errors?.length ? `<div class="olog">${r.errors.map((x) => `<div class="err">✗ ${esc(x)}</div>`).join('')}</div>` : ''}<div class="row">${r.undo ? '<button class="btn" data-undo="1" type="button">↩ Annuler cette optimisation</button>' : ''}<button class="btn ghost" data-closeprog="1">Fermer</button></div></div>`);
+  return summary;
 }
 
 $('optiProgress').addEventListener('click', (e) => { if (e.target.closest('[data-closeprog]')) showProgress(null); });
@@ -3032,15 +3058,36 @@ function pcTab(tab) {
   if (tab === 'upgrade') renderUpgrade();
   if (tab === 'entretien') renderCare();
 }
-// 🛒 Upgrade : conseil selon le budget et simulateur de carte graphique (estimations)
+// 🛒 Upgrade : grande carte « ta carte → carte conseillée », tes jeux avec leur vraie pochette et leurs vrais FPS, avis de l'IA (Premium)
+const up = { budget: 600, target: null, game: null, data: null };
+const coverOf = (id, name) => { const it = state.items.find((i) => i.id === id) ?? state.items.find((i) => i.name === name); return it?.art?.cover ?? it?.art?.header ?? it?.art?.hero ?? null; };
 async function renderUpgrade() {
-  const r = await api.upgrade?.($('upBudget').value, $('upGpu').value || null); if (!r) return;
-  $('upCur').textContent = r.current ? `Ta carte : ${r.current.name}. Choisis-en une autre pour voir tes FPS estimés sur tes jeux.` : `Ta carte (${r.gpuName || 'inconnue'}) n’est pas dans la liste : simulation impossible.`;
-  if (!$('upGpu').options.length) $('upGpu').innerHTML = '<option value="">— Choisis une carte —</option>' + r.gpus.filter((g) => !r.current || g.score > r.current.score).map((g) => `<option value="${esc(g.name)}">${esc(g.name)}${g.price ? ` · ~${g.price} €` : ''}</option>`).join('');
-  $('upAdvice').innerHTML = r.advice.items.length ? r.advice.items.map((x) => `<div class="uprow"><b>${{ gpu: '🎮', ram: '🧠', ssd: '💾' }[x.kind]} ${esc(x.title)}</b><span>~${x.price} €</span><small>${esc(x.gain)}</small></div>`).join('') + `<p class="hint">Total : ~${r.advice.total} €</p>` : '<p class="hint">Rien de rentable avec ce budget : ton PC est déjà bien équipé pour ce prix.</p>';
-  $('upSim').innerHTML = !r.sim ? '' : r.sim.length ? r.sim.map((g) => `<div class="uprow"><b>${esc(g.name)}</b><span>${g.now} → <strong>${g.after} FPS</strong></span><small>${g.cpuBound ? 'Limité par ton processeur : la carte change peu de choses ici.' : `+${Math.round((g.after / g.now - 1) * 100)} %`}</small></div>`).join('') : '<p class="hint">Joue quelques parties avec la mesure des FPS activée : la simulation utilisera tes vrais FPS.</p>';
+  const r = await api.upgrade?.(up.budget, up.target); if (!r) return; up.data = r;
+  const cur = r.current, tgt = r.target, cap = r.advice.balance.cap;
+  const pct = (g) => Math.min(100, Math.round((g.score / 450) * 100));
+  const gain = cur && tgt ? Math.round((Math.min(tgt.score, cap) / cur.score - 1) * 100) : null;
+  $('upHero').innerHTML = `<div class="upcard cur"><small>TA CARTE ACTUELLE</small><b>${esc(cur?.name ?? (r.gpuName || 'Inconnue'))}</b><div class="upbar"><i style="width:${cur ? pct(cur) : 0}%"></i></div><em>${esc(r.cpuName ? r.cpuName.replace(/\(R\)|\(TM\)|CPU|Processor|\d+-Core/gi, '').replace(/\s+/g, ' ').trim() : '')}${r.ramGb ? ` · ${r.ramGb} Go` : ''}</em></div>
+    <div class="uparrow">➜</div>
+    <div class="upcard best"><small>${up.target ? 'CARTE CHOISIE' : `CONSEILLÉE POUR ${up.budget} €`}</small><b>${esc(tgt?.name ?? 'Rien d’utile à ce prix')}</b><div class="upbar"><i style="width:${tgt ? pct(tgt) : 0}%"></i></div><em>${tgt?.price ? `~${tgt.price} € neuve` : 'plus vendue neuve'}</em></div>
+    <div class="upgain ${gain > 0 ? '' : 'none'}"><b>${gain != null ? `${gain > 0 ? '+' : ''}${gain} %` : '—'}</b><small>de FPS dans les jeux<br>limités par la carte</small></div>`;
+  const b = r.advice.balance;
+  const notes = [b.cpuCap && `🧠 Ton processeur peut suivre une carte jusqu’au niveau <b>${esc(r.gpus.filter((g) => g.score <= b.cpuCap * 1.1).sort((x, y) => y.score - x.score)[0]?.name ?? '—')}</b>.`, b.screenCap && `🖥️ Ton écran (${r.width >= 3800 ? '4K' : r.width >= 2500 ? '1440p' : '1080p'} à ${r.hz ?? '?'} Hz) n’affichera pas plus qu’une <b>${esc(r.gpus.filter((g) => g.score <= b.screenCap * 1.1).sort((x, y) => y.score - x.score)[0]?.name ?? '—')}</b> : au-delà, tu paies pour rien.`, r.advice.cpuFirst && '⚠️ <b>C’est ton processeur qui bloque</b> : change-le en premier, sinon la nouvelle carte sera bridée.', r.advice.best?.gpu && tgt && tgt.score > cap * 1.1 && '⚠️ Cette carte est plus puissante que ce que ton PC peut exploiter.'].filter(Boolean);
+  $('upBal').innerHTML = notes.map((n) => `<div>${n}</div>`).join('');
+  $('upExtra').innerHTML = r.advice.items.filter((x) => x.kind !== 'gpu').map((x) => `<div class="upmini ${x.kind}"><b>${{ ram: '🧠', ssd: '💾', cpu: '⚙️' }[x.kind]} ${esc(x.title)}</b><span>~${x.price} €</span><small>${esc(x.gain)}</small></div>`).join('') + (r.advice.items.length ? `<div class="uptotal">Total conseillé : <b>~${r.advice.total} €</b></div>` : '');
+  if (!$('upGpu').options.length) $('upGpu').innerHTML = '<option value="">La carte conseillée</option>' + r.gpus.filter((g) => !cur || g.score > cur.score).map((g) => `<option value="${esc(g.name)}">${esc(g.name)}${g.price ? ` · ~${g.price} €` : ''}</option>`).join('');
+  $('upGames').innerHTML = r.sim.length ? r.sim.map((g) => { const c = coverOf(g.id, g.name); const p = Math.round((g.after / g.now - 1) * 100); return `<button type="button" class="upgame ${up.game === g.id ? 'on' : ''}" data-upgame="${esc(g.id)}"><span class="upcov"><em>${esc(g.name[0])}</em>${c ? `<i style="background-image:url('${esc(c)}')"></i>` : ''}</span><b>${esc(g.name)}</b><span class="upfps">${g.now} <i>➜</i> <strong>${g.after}</strong> FPS</span><small class="${g.cpuBound ? 'warn' : 'ok'}">${g.cpuBound ? 'Limité par le processeur : peu de gain' : `+${p} % · mesuré sur tes parties`}</small></button>`; }).join('') : '<p class="hint">Joue quelques parties avec la mesure des FPS activée : l’estimation se fera sur tes vrais FPS, jeu par jeu.</p>';
 }
-$('upBudget').addEventListener('change', renderUpgrade); $('upGpu').addEventListener('change', renderUpgrade);
+$('upBudget').addEventListener('click', (e) => { const b = e.target.closest('[data-b]'); if (!b) return; document.querySelectorAll('#upBudget button').forEach((x) => x.classList.toggle('on', x === b)); up.budget = Number(b.dataset.b); up.target = null; $('upGpu').value = ''; $('upAiOut').hidden = true; renderUpgrade(); });
+$('upGpu').addEventListener('change', () => { up.target = $('upGpu').value || null; $('upAiOut').hidden = true; renderUpgrade(); });
+$('upGames').addEventListener('click', (e) => { const g = e.target.closest('[data-upgame]'); if (!g) return; up.game = up.game === g.dataset.upgame ? null : g.dataset.upgame; document.querySelectorAll('.upgame').forEach((x) => x.classList.toggle('on', x.dataset.upgame === up.game)); });
+$('upAiBtn').addEventListener('click', async () => {
+  if (!(await premOk('ia'))) return openPremium('ia');
+  $('upAiBtn').disabled = true; $('upAiBtn').textContent = '🤖 L’IA étudie ton PC…';
+  const r = await api.upgradeAi?.(up.budget, up.target).catch(() => null);
+  $('upAiBtn').disabled = false; $('upAiBtn').textContent = '🤖 Avis détaillé de l’IA';
+  if (r?.error === 'premium') return openPremium('ia');
+  $('upAiOut').hidden = false; $('upAiOut').innerHTML = r?.text ? richText(r.text) : esc(r?.error ?? 'IA indisponible');
+});
 // 🩺 Entretien : état SMART des disques, anciens pilotes graphiques
 async function renderCare() {
   const r = await api.care?.(); if (!r) return;
@@ -3360,7 +3407,7 @@ function applyReply(r) {
   const views = { jeux: 'jeux', applis: 'applis', favoris: 'favoris', stats: 'stats', classement: 'classement', bibliotheque: 'bibliotheque', accueil: 'accueil', amis: 'amis', pc: 'pc', optimisation: 'optimisation' };
   if (r.action === 'show') { if (r.value === 'parametres') $('openSettings').click(); else go(views[r.value] ?? 'bibliotheque'); }
   if (r.action === 'premium') openPremium(r.value);
-  if (r.action === 'optimize') go('optimisation');
+  if (r.action === 'optimize') assistantOpti();
   if (r.action === 'deep_clean') go('optimisation');
   if (r.action === 'theme' && r.value) { savedTheme.theme = r.value; themeName = r.value; $('themeSel').value = r.value; if (r.value === 'auto') themeFor(state.sel); else applyTheme(THEMES[r.value]); }
   if (r.action === 'fullscreen') toggleBig(true);
@@ -3370,6 +3417,31 @@ function applyReply(r) {
   if (r.action === 'search') { $('q').value = r.value; $('q').dispatchEvent(new Event('input')); }
   if (r.itemId && !['uninstall'].includes(r.action)) { const it = state.items.find((i) => i.id === r.itemId); if (it) select(it); }
   if (['music', 'volume'].includes(r.action)) setTimeout(refreshMusic, 800);
+}
+// Assistant « optimise mon PC » : analyse, liste claire de ce qu'il a trouvé, bouton pour tout corriger, puis compte rendu
+function sayHtml(html) { const d = say(''); d.innerHTML = html; d.classList.add('rich'); $('chat').scrollTop = $('chat').scrollHeight; return d; }
+async function assistantOpti() {
+  const wait = say('🔍 Analyse en cours (disque, démarrage, réglages Windows, jeux)…', 'wait');
+  const o = await api.optiScan?.().catch(() => null);
+  wait.remove();
+  if (!o || o.error) return say(`Je n’ai pas pu analyser ton PC${o?.error ? ` : ${o.error}` : ''}.`);
+  opti = o; renderOpti?.();
+  const f = optiFindings(o);
+  if (!f.length) return sayHtml('<b>✅ Ton PC est déjà bien réglé.</b><br>Rien à nettoyer ni à corriger pour l’instant.');
+  const fixable = f.filter(([, , , , k]) => ['junk', 'startup', 'tweaks'].includes(k));
+  const box = sayHtml(`<b>J’ai trouvé ${f.length} chose${f.length > 1 ? 's' : ''} à améliorer :</b><ul class="aiopti">${f.map(([lvl, ico, t, d]) => `<li class="${lvl}"><i>${ico}</i><div><b>${esc(t)}</b><small>${esc(d)}</small></div></li>`).join('')}</ul>${fixable.length ? `Je peux corriger <b>${fixable.length}</b> point${fixable.length > 1 ? 's' : ''} tout de suite (réversible).<div class="aiacts"><button type="button" class="btn play sm" data-aifix="1">⚡ Oui, corrige tout</button><button type="button" class="btn sm" data-aisee="1">Voir le détail</button></div>` : '<div class="aiacts"><button type="button" class="btn sm" data-aisee="1">Voir le détail</button></div>'}`);
+  box.onclick = async (e) => {
+    if (e.target.closest('[data-aisee]')) return go('optimisation');
+    if (!e.target.closest('[data-aifix]')) return;
+    if (!(await premOk('opti'))) return openPremium('opti');
+    box.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    let startup = 0;
+    for (const x of o.startup.filter((y) => y.enabled && y.heavy)) { const r = await api.optiStartup(x.name, false).catch(() => null); if (r?.ok) { opti.startup = r.startup; startup++; } }
+    const plan = { games: [], orphans: [], junk: o.junk.filter((x) => !SHADERS.includes(x.id)).map((x) => x.id), recycle: o.recycle > 0, tweaks: o.tweaks.filter((t) => !t.on && !t.optional && !t.retired).map((t) => t.id) };
+    const r = (plan.junk.length || plan.tweaks.length || plan.recycle) ? await runOpti(plan) : { done: true, freed: 0, changes: 0 };
+    if (!r?.done) return say(startup ? `✅ ${startup} appli(s) lourde(s) retirée(s) du démarrage. Le reste n’a pas été appliqué.` : 'D’accord, je n’ai rien changé.');
+    sayHtml(`<b>✅ C’est fait !</b><ul class="aiopti">${r.freed ? `<li class="ok"><i>🗑</i><div><b>${gb(r.freed)} libérés</b><small>fichiers temporaires, caches et corbeille</small></div></li>` : ''}${startup ? `<li class="ok"><i>⏻</i><div><b>${startup} appli(s) retirée(s) du démarrage</b><small>le PC démarre plus vite</small></div></li>` : ''}${r.changes ? `<li class="ok"><i>🎯</i><div><b>${r.changes} réglage(s) Windows appliqué(s)</b><small>réglés pour le jeu</small></div></li>` : ''}</ul>Tout est <b>réversible</b> dans Optimisation › Annuler.`);
+  };
 }
 async function ask(text) {
   if (!text.trim()) return;
@@ -3555,9 +3627,13 @@ api.onVerify?.((p) => { state.verifyItem = p.id; showVerify(p); });
 $('vCancel').addEventListener('click', () => api.cancelVerify());
 $('vClose').addEventListener('click', () => $('verifyDlg').close());
 $('vRepair').addEventListener('click', async () => {
+  $('vRepair').disabled = true; $('vRepair').textContent = 'Réparation…';
   const r = await api.repair(state.verifyItem);
+  $('vRepair').disabled = false; $('vRepair').textContent = 'Réparer';
   $('verifyDlg').close();
-  toast(r.ok ? 'Réparation lancée en arrière-plan : seuls les fichiers abîmés sont re-téléchargés.' : `Impossible : ${r.error}`);
+  if (!r?.ok) return toast(`Impossible : ${r?.error ?? 'erreur'}`);
+  toast(`🛠 Réparation par History : ${(r.removed ?? 0) + (r.missing ?? 0)} fichier(s) à remettre, téléchargement en arrière-plan`);
+  if (r.track) startGameUpdate(state.items.find((i) => i.id === state.verifyItem)); // avancement suivi dans History, Steam reste caché
 });
 
 let gameUpdateGeneration=0,gameUpdateTimer=null;
@@ -3606,7 +3682,6 @@ async function act(action) {
   if (action === 'optiplay') return openOptiPlay(item);
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
   if (action === 'cache') { const r = await api.action(item.id, 'cache'); if (r?.ok) toast(r.freed ? `🧹 ${size(r.freed)} de cache vidés` : 'Cache déjà vide'); return; }
-  if (action === 'repair') { const r = await api.action(item.id, 'repair'); toast(r?.error ? `Impossible : ${r.error}` : `🛠 Réparation lancée dans ${item.source === 'steam' ? 'Steam' : 'Epic'}`); return; }
   const labels = { update: 'Mise à jour demandée dans History', launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
   // Mise à jour en attente : la faire d'abord plutôt que d'attendre devant l'écran de chargement
   if (action === 'launch' && item.updatePending && item.source === 'steam') {
@@ -4567,7 +4642,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.20',
+    version: async () => '0.53.21',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

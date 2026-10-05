@@ -17,22 +17,59 @@ export function matchGpu(name) {
   return [...GPUS].sort((a, b) => b.name.length - a.name.length).find((g) => n.includes(` ${norm(g.name)} `)) ?? null;
 }
 /** FPS estimés avec une autre carte : gain complet si le jeu est limité par la carte graphique, faible sinon (processeur). */
-export function simulate(current, target, games = []) {
-  const ratio = target.score / current.score;
+export function simulate(current, target, games = [], cap = Infinity) {
+  const ratio = Math.min(target.score, cap) / current.score;
   return games.filter((g) => g.avg).map((g) => {
     const gpuBound = g.bound === 'gpu' || (g.gpuAvg ?? 0) >= 90;
     const k = gpuBound ? ratio : Math.min(ratio, 1.12);
-    return { name: g.name, now: Math.round(g.avg), after: Math.round(g.avg * k), cpuBound: !gpuBound && ratio > 1.12 };
+    return { id: g.id, name: g.name, now: Math.round(g.avg), after: Math.round(g.avg * k), cpuBound: !gpuBound && ratio > 1.12, measured: true };
   });
 }
 /** Meilleur achat pour un budget : la carte la plus rapide qui rentre, si elle apporte au moins +20 %. Plus RAM / SSD si utile. */
-export function budgetAdvice({ gpuName, ramGb = null, systemHdd = false, budget }) {
+export function budgetAdvice({ gpuName, ramGb = null, systemHdd = false, budget, cpuName = '', width = null, hz = null, cpuBoundShare = 0 }) {
   const out = [];
   let left = budget;
   if (systemHdd && left >= 60) { out.push({ kind: 'ssd', title: 'SSD 1 To pour Windows et les jeux', price: 60, gain: 'chargements 3 à 5× plus rapides, plus de saccades au démarrage' }); left -= 60; }
   if (ramGb != null && ramGb < 16 && left >= 45) { out.push({ kind: 'ram', title: `Passer à 16 Go de RAM (tu as ${ramGb} Go)`, price: 45, gain: 'moins de saccades, plus d’applis ouvertes en jouant' }); left -= 45; }
   const cur = matchGpu(gpuName);
-  const best = GPUS.filter((g) => g.price && g.price <= left && (!cur || g.score >= cur.score * 1.2)).sort((a, b) => b.score - a.score || a.price - b.price)[0];
-  if (best) out.push({ kind: 'gpu', title: best.name, price: best.price, gain: cur ? `environ +${Math.round((best.score / cur.score - 1) * 100)} % de FPS dans les jeux limités par la carte graphique` : 'grosse hausse des FPS', gpu: best });
-  return { current: cur, items: out, total: out.reduce((a, x) => a + x.price, 0) };
+  const bal = balance({ cpuName, width, hz });
+  // Le processeur limite déjà la carte actuelle (ou la plupart de tes jeux) : on conseille d'abord le processeur
+  const cpuFirst = cur && bal.cpuCap && (bal.cpuCap < cur.score * 1.25 || cpuBoundShare >= 0.6);
+  if (cpuFirst) { const c = cpuAdvice(cpuName); if (c.price <= left) { out.push(c); left -= c.price; } }
+  const fits = (g) => g.price && g.price <= left && (!cur || g.score >= cur.score * 1.2);
+  const useful = GPUS.filter((g) => fits(g) && g.score <= bal.cap * 1.1); // pas de carte que le PC ou l'écran ne pourront pas exploiter
+  const best = (useful.length ? useful : GPUS.filter(fits)).sort((a, b) => b.score - a.score || a.price - b.price)[0];
+  if (best) out.push({ kind: 'gpu', title: best.name, price: best.price, gain: cur ? `environ +${Math.round((Math.min(best.score, bal.cap) / cur.score - 1) * 100)} % de FPS dans les jeux limités par la carte graphique` : 'grosse hausse des FPS', gpu: best, capped: !useful.length });
+  return { current: cur, balance: bal, cpuFirst: Boolean(cpuFirst), items: out, total: out.reduce((a, x) => a + x.price, 0), best: best ?? null };
+}
+
+/** Niveau du processeur d'après son nom (Ryzen / Core), 100 ≈ Ryzen 5 3600. null si inconnu. */
+export function cpuScore(name) {
+  const n = String(name ?? '').toLowerCase();
+  let m = n.match(/ryzen\s*([3579])\s*(\d)(\d)\d\d(x3d)?/);
+  if (m) {
+    const gen = { 1: 0.7, 2: 0.75, 3: 0.9, 4: 0.95, 5: 1.1, 7: 1.3, 8: 1.3, 9: 1.45 }[m[2]] ?? 1;
+    return Math.round(100 * gen * ({ 3: 0.8, 5: 1, 7: 1.1, 9: 1.15 }[m[1]]) * (m[4] ? 1.2 : 1));
+  }
+  m = n.match(/i([3579])[- ]?(\d{4,5})/);
+  if (m) {
+    const g = m[2].length === 5 ? Number(m[2].slice(0, 2)) : Number(m[2][0]);
+    const gen = g <= 4 ? 0.5 : g <= 7 ? 0.65 : g <= 9 ? 0.8 : g <= 11 ? 0.95 : g <= 12 ? 1.2 : 1.3;
+    return Math.round(100 * gen * ({ 3: 0.8, 5: 1, 7: 1.1, 9: 1.15 }[m[1]]));
+  }
+  if (/core\s*ultra/.test(n)) return 135;
+  return null;
+}
+/** Plafond utile de carte graphique : ce que le processeur peut suivre et ce que l'écran peut afficher. */
+export function balance({ cpuName, width = null, hz = null }) {
+  const cpu = cpuScore(cpuName);
+  const cpuCap = cpu ? Math.round(cpu * 1.9) : null;
+  const screenCap = !width ? null : width <= 1920 && (hz ?? 60) <= 75 ? 150 : width <= 1920 ? 230 : width <= 2560 ? 300 : null;
+  return { cpu, cpuCap, screenCap, cap: Math.min(cpuCap ?? Infinity, screenCap ?? Infinity) };
+}
+/** Processeur conseillé quand c'est lui qui limite (AM4 : un X3D se pose sans changer de carte mère). */
+export function cpuAdvice(cpuName) {
+  return /ryzen\s*[3579]\s*[1-5]\d{3}/i.test(cpuName ?? '')
+    ? { kind: 'cpu', title: 'Ryzen 7 5700X3D (même carte mère)', price: 190, gain: 'le processeur qui suit les cartes récentes, sans rien changer d’autre' }
+    : { kind: 'cpu', title: 'Ryzen 5 7600 + carte mère B650 + 16 Go DDR5', price: 420, gain: 'une base moderne qui suit les cartes graphiques actuelles' };
 }
