@@ -1607,6 +1607,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.31': [
+    ['🎯', 'Une tâche à la fois', 'Opti Pro : dans la réponse du technicien, seule la tâche en cours est nette, les autres sont floutées. « Continuer ▶ » passe à la suivante, « 📖 Détail pas à pas » explique tout (touches, menus de TA carte mère, valeurs, comment vérifier) et cache le reste pour rester concentré.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500', '[data-pfa=detail]', 'wait900']],
+    ['🧼', 'Messages plus sobres', 'Les messages du technicien sont plus simples, sans couleurs partout, avec une barre de progression des étapes. « 💬 Écrire au technicien » s’ouvre dans une fenêtre à part.']
+  ],
   '0.53.30': [
     ['🔒', 'Étapes dans l’ordre', 'Opti Pro : une étape s’ouvre seulement quand la précédente est terminée. Les suivantes sont grisées avec « Termine d’abord l’étape… », sauf si tu la passes avec « ⏭ Passer ».', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
   ],
@@ -3179,7 +3183,18 @@ const PRO_STEPS = [
 ];
 const PRO_COLORS = ['#619fff', '#36c995', '#9b8cff', '#f5a623', '#ff6b6b', '#2ee07a', '#ffc439'];
 let pro = null, proBusy = false, proPoll = 0, proHuman = false;
-const proEmbed = (m) => `<div class="emb ${m.who}" style="--ec:${m.who === 'bot' ? PRO_COLORS[m.step] : '#4e5058'}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt="">🚀 Opti Pro · Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][0]} ${PRO_STEPS[m.step][1]}` : m.who === 'staff' ? '🛠 Staff History' : '💬 Toi'}</div><div class="reporttxt rich">${proLinks(richText(m.text))}</div>${m.who === 'bot' ? `<small class="embf">${PRO_STEPS.map((_, i) => (i <= m.step ? '🟩' : '⬛')).join('')} · Technicien History</small>` : ''}</div>`;
+const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt=""><b>Technicien History</b><span>Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][1]}</span>` : m.who === 'staff' ? '<b>Équipe History</b>' : '<b>Toi</b>'}</div><div class="reporttxt rich">${proLinks(richText(m.text))}</div>${m.who === 'bot' ? `<div class="embbar"><i style="width:${Math.round(((m.step + 1) / 7) * 100)}%"></i></div>` : ''}</div>`;
+// Mode concentration : une tâche à la fois dans le dernier message du technicien, les autres floutées
+const proFocus = {}, proDetail = {};
+function proFocusUi() {
+  const m = [...$('proLog').querySelectorAll('.emb.bot[data-k]')].pop(), items = m ? [...m.querySelectorAll(':scope > .reporttxt > ul > li')] : [];
+  if (!m || items.length < 2 || pro.closed) return;
+  const k = m.dataset.k, i = Math.min(proFocus[k] ?? 0, items.length - 1), d = proDetail[`${k}:${i}`];
+  m.classList.add('focus'); m.classList.toggle('detailing', Boolean(d));
+  items.forEach((li, j) => { li.classList.toggle('on', j === i); li.classList.toggle('past', j < i); li.dataset.pf = j; });
+  items[i].insertAdjacentHTML('beforeend', `<div class="pfbtns"><button class="btn sm" data-pfa="detail" ${d === 0 ? 'disabled' : ''}>${d === 0 ? '⏳ Le technicien détaille…' : d ? '✕ Fermer le détail' : '📖 Détail pas à pas'}</button>${i < items.length - 1 ? '<button class="btn sm play" data-pfa="next">Continuer ▶</button>' : '<small class="hint">Dernière tâche : clique sur « Fait » en bas quand c’est bon.</small>'}</div>${d ? `<div class="pfdetail reporttxt rich">${proLinks(richText(d))}</div>` : ''}`);
+}
+
 const proLinks = (html) => html.replace(/\[([^\]]+)\]\((https:\/\/[^\s)<]+)\)|(https:\/\/[^\s<)]+)/g, (_, t, u, bare) => `<a href="#" class="plink" data-url="${u ?? bare}">${t ?? bare}</a>`);
 function renderProTicket() {
   const s = pro, last = s && s.step >= PRO_STEPS.length - 1, nx = s && PRO_STEPS[s.step + 1], opt = (i) => [2, 3, 4].includes(i);
@@ -3187,12 +3202,12 @@ function renderProTicket() {
     $('proTicket').innerHTML = `${s?.done ? '<div class="emb bot" style="--ec:#ffc439"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro</div><h3>Ton PC est prêt 🚀</h3></div>' : ''}<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
     return;
   }
-  $('proTicket').innerHTML = `<div class="embs" id="proLog">${s.log.map(proEmbed).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
+  $('proTicket').innerHTML = `<div class="embs" id="proLog">${s.log.map((m, k) => proEmbed(m, k)).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
     <div class="emb human" id="proHuman" style="--ec:#5865f2" ${proHuman ? '' : 'hidden'}><div class="emba"><img src="logo.png" alt="">👤 Parler à un humain</div><p>L’équipe Opti Pro répond <b>sur Discord</b>, pas dans le support de l’appli. Rejoins le serveur History, va dans le salon <b>#🚀・opti-pro</b> : ton ticket y est dans ton fil privé${s.thread ? '' : ' (lie ton compte Discord dans Paramètres › Compte, puis tape <b>/launcher opti</b>)'}. Clique sur <b>👤 Parler à un humain</b> dans le fil : un membre de l’équipe arrive.</p><div class="row"><button class="btn play" data-pa="discordgo">🎮 Ouvrir Discord</button></div></div>
-    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${nx && opt(s.step + 1) ? `<button class="btn" data-pa="skip" ${proBusy ? 'disabled' : ''}>⏭ Passer ${nx[1]}</button>` : ''}${nx && opt(s.step + 1) && opt(s.step + 2) ? `<button class="btn" data-pa="skip2" ${proBusy ? 'disabled' : ''}>⏭ Passer jusqu’à ${PRO_STEPS[s.step + 3][1]}</button>` : ''}<button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
+    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${nx && opt(s.step + 1) ? `<button class="btn" data-pa="skip" ${proBusy ? 'disabled' : ''}>⏭ Passer ${nx[1]}</button>` : ''}${nx && opt(s.step + 1) && opt(s.step + 2) ? `<button class="btn" data-pa="skip2" ${proBusy ? 'disabled' : ''}>⏭ Passer jusqu’à ${PRO_STEPS[s.step + 3][1]}</button>` : ''}<button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
     ${s.links?.length ? `<div class="row prolinks">${s.links.map(([l, u]) => `<button class="btn sm ghost" data-url="${esc(u)}">${esc(l)} ↗</button>`).join('')}</div>` : ''}
-    <form class="row prosend" id="proSend"><input id="proMsg" maxlength="1500" placeholder="Écris au technicien : une question, un souci, une valeur à vérifier…" ${proBusy ? 'disabled' : ''}><button class="btn play" ${proBusy ? 'disabled' : ''}>Envoyer</button></form>${s.thread ? '<small class="hint">💬 Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
-  const log = $('proLog'); log.scrollTop = log.scrollHeight;
+    ${s.thread ? '<small class="hint">💬 Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
+  proFocusUi(); const log = $('proLog'), on = log.querySelector('.emb.focus li.on'); if (on) on.scrollIntoView({ block: 'nearest' }); else log.scrollTop = log.scrollHeight;
 }
 async function renderPro(refresh = true) {
   if (refresh) { const r = await api.proSession?.().catch(() => null); if (r && !r.error) pro = r.session; }
@@ -3204,7 +3219,7 @@ async function renderPro(refresh = true) {
   $('proSteps').innerHTML = PRO_STEPS.map(([ic, t, d, tools], i) => `<li class="${i < step ? 'done' : i === step && open ? 'now' : lock(i) ? 'locked' : ''}"><span class="pron">${i < step ? '✓' : lock(i) ? '🔒' : i + 1}</span><div><b>${ic} ${t}</b><small>${lock(i) ? `🔒 Termine d’abord l’étape ${i} (${PRO_STEPS[i - 1][1]})${[2, 3, 4].includes(i) ? ' ou passe-la avec « ⏭ Passer »' : ''}.` : d}</small>${tools ? `<div class="row">${tools.map(([k, l]) => `<button class="btn sm${k === 'final' ? ' play' : ''}" data-pt="${k}" ${lock(i) ? 'disabled' : ''}>${l}</button>`).join('')}</div>` : ''}</div></li>`).join('');
   renderProTicket();
   clearInterval(proPoll);
-  if (pro && !pro.closed) proPoll = setInterval(() => { if ($('view-optimisation').offsetParent && !proBusy && document.activeElement?.id !== 'proMsg') renderPro(); }, 10000);
+  if (pro && !pro.closed) proPoll = setInterval(() => { if ($('view-optimisation').offsetParent && !proBusy && !document.getElementById('proAskDlg')?.open) renderPro(); }, 10000);
   if ($('proPc').dataset.done) return;
   const p = await api.proGet?.().catch(() => null); if (!p) return;
   $('proPc').dataset.done = '1';
@@ -3220,8 +3235,26 @@ async function proAction(action, text = '') {
   if (!r || r.error) { toast(r?.error === 'login' ? 'Connecte-toi à ton compte History (Paramètres › Compte).' : r?.error ?? 'Serveur injoignable. Réessaie.'); return renderPro(); }
   pro = r.session; renderPro(false);
 }
-$('proTicket').addEventListener('click', (e) => { const l = e.target.closest('[data-url]'); if (l) { e.preventDefault(); return api.proOpen?.(l.dataset.url); } const b = e.target.closest('[data-pa]'); if (!b) return; if (b.dataset.pa === 'discord') { proHuman = !proHuman; $('proHuman').hidden = !proHuman; return $('proHuman').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } if (b.dataset.pa === 'discordgo') return api.discordInvite?.(); proAction(b.dataset.pa); });
-$('proTicket').addEventListener('submit', (e) => { e.preventDefault(); const v = $('proMsg').value.trim(); if (v) proAction('msg', v); });
+$('proTicket').addEventListener('click', async (e) => {
+  const f = e.target.closest('[data-pfa]'), li = e.target.closest('.emb.focus li[data-pf]:not(.on)');
+  const m = (f ?? li)?.closest('.emb'), k = m?.dataset.k, i = proFocus[k] ?? 0;
+  if (li) { proFocus[k] = Number(li.dataset.pf); return renderProTicket(); }
+  if (f?.dataset.pfa === 'next') { proFocus[k] = i + 1; return renderProTicket(); }
+  if (f?.dataset.pfa === 'detail') {
+    const key = `${k}:${i}`; if (proDetail[key]) { delete proDetail[key]; return renderProTicket(); }
+    proDetail[key] = 0; renderProTicket();
+    const c = m.querySelectorAll(':scope > .reporttxt > ul > li')[i].cloneNode(true); c.querySelectorAll('.pfbtns, .pfdetail').forEach((x) => x.remove());
+    const r = await api.proAct('detail', c.textContent.trim()).catch(() => null);
+    proDetail[key] = r?.detail ?? r?.error ?? 'Détail indisponible, réessaie.'; return renderProTicket();
+  }
+  const l = e.target.closest('[data-url]'); if (l) { e.preventDefault(); return api.proOpen?.(l.dataset.url); } const b = e.target.closest('[data-pa]'); if (!b) return; if (b.dataset.pa === 'discord') { proHuman = !proHuman; $('proHuman').hidden = !proHuman; return $('proHuman').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } if (b.dataset.pa === 'discordgo') return api.discordInvite?.(); if (b.dataset.pa === 'ask') return proAsk(); proAction(b.dataset.pa); });
+// Question au technicien : dans une fenêtre à part pour garder la page concentrée sur l'étape
+function proAsk() {
+  let d = document.getElementById('proAskDlg');
+  if (!d) { d = document.createElement('dialog'); d.id = 'proAskDlg'; d.innerHTML = '<form class="dlg proask" method="dialog"><h2>💬 Écrire au technicien</h2><p class="hint">Une question, un souci, une valeur à vérifier : il répond dans ton ticket, à l’étape en cours.</p><textarea id="proMsg" rows="5" maxlength="1500" placeholder="Ex : je ne trouve pas PBO dans mon BIOS…"></textarea><div class="row end"><button class="btn ghost" value="no">Annuler</button><button class="btn play" value="ok">Envoyer</button></div></form>'; document.body.append(d);
+    d.addEventListener('close', () => { const v = $('proMsg').value.trim(); if (d.returnValue === 'ok' && v) { $('proMsg').value = ''; proAction('msg', v); } }); }
+  d.showModal(); $('proMsg').focus();
+}
 $('proSteps').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-pt]'); if (!b) return; const k = b.dataset.pt;
   if (['bios', 'occt', 'nvidia', 'amd'].includes(k)) return api.proLink?.(k);
@@ -4788,7 +4821,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.30',
+    version: async () => '0.53.31',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

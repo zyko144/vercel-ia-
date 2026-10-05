@@ -61,7 +61,7 @@ export function promptFor(t, kind, text = '') {
   const log = t.log.slice(-10).map((m) => `${m.who === 'bot' ? 'Technicien' : m.who === 'staff' ? 'Staff' : 'Client'} : ${m.text.slice(0, 600)}`).join('\n');
   const step = STEPS[t.step];
   const links = linksFor(t).map(([l, u]) => `${l.replace(/^\S+\s/, '')} : ${u}`).join('\n');
-  return `MATÉRIEL DU CLIENT\n${facts(t.specs)}${['bios', 'valider'].includes(step[0]) || /bios|xmp|expo|pbo|overclock|ram|menu/i.test(text) ? `\n\n${BIOS_MAP}` : ''}\n\nÉTAPE EN COURS : ${t.step + 1}/7 ${step[1]}\n${links ? `\nLIENS OFFICIELS DE L'ÉTAPE (à donner en Markdown [texte](lien) quand c'est utile, tels quels)\n${links}\n` : ''}\nCONVERSATION RÉCENTE\n${log || '—'}\n\nCONSIGNE\n${kind === 'msg' ? `Le client écrit : « ${text.slice(0, 1500)} ». Réponds-lui précisément pour l'étape en cours (dépannage, valeur exacte, quoi cliquer). Court.` : GUIDE[step[0]]}`;
+  return `MATÉRIEL DU CLIENT\n${facts(t.specs)}${['bios', 'valider'].includes(step[0]) || /bios|xmp|expo|pbo|overclock|ram|menu/i.test(text) ? `\n\n${BIOS_MAP}` : ''}\n\nÉTAPE EN COURS : ${t.step + 1}/7 ${step[1]}\n${links ? `\nLIENS OFFICIELS DE L'ÉTAPE (à donner en Markdown [texte](lien) quand c'est utile, tels quels)\n${links}\n` : ''}\nCONVERSATION RÉCENTE\n${log || '—'}\n\nCONSIGNE\n${kind === 'detail' ? `Le client veut le DÉTAIL complet, pas à pas, de cette tâche : « ${text.slice(0, 600)} ». Uniquement cette tâche. Étapes numérotées dans l'ordre exact : où aller (touche à presser, chemin complet des menus pour SA carte mère / SON Windows), quoi cliquer, quelle valeur mettre pour SON matériel, ce qu'il doit voir à l'écran, puis comment vérifier que c'est bon et quoi faire si ça ne marche pas. Lien officiel si utile.` : kind === 'msg' ? `Le client écrit : « ${text.slice(0, 1500)} ». Réponds-lui précisément pour l'étape en cours (dépannage, valeur exacte, quoi cliquer). Court.` : GUIDE[step[0]]}`;
 }
 
 // Liens officiels utiles à chaque étape (boutons sur Discord et dans le launcher, donnés aussi à l'IA)
@@ -110,6 +110,7 @@ export async function startSession(account, raw, discordId = null) {
 /** next | skip | done | human | close | msg */
 export async function act(id, action, text = '', who = 'user') {
   const t = (await all())[id]; if (!t || t.closed) return { error: 'Ticket fermé. Ouvre une nouvelle demande Opti Pro.' };
+  if (action === 'detail') return { detail: (await askImpl(promptFor(t, 'detail', text), true).catch(() => null)) || 'Je n’arrive pas à joindre l’IA pour le moment. Réessaie dans une minute.' };
   if (action === 'msg') { if (!String(text).trim()) return t; await push(id, { who, text: String(text).slice(0, 1500) }); return who === 'staff' ? (await all())[id] : botSay(id, 'msg', text); }
   if (action === 'human') { await callHuman(t); return push(id, { who: 'bot', text: '👤 Un membre de l’équipe est prévenu et va te répondre ici. En attendant, je reste là pour tes questions.' }); }
   if (action === 'close' || (action === 'done' && t.step === STEPS.length - 1)) {
@@ -251,7 +252,7 @@ export async function handleOptiProApi(req, res, url, account, { readJson, send 
     const cur = await sessionOf(account.id); if (!cur) return send(res, 404, { error: 'Aucun ticket ouvert.' });
     if (!allowAttempt('opti-pro-act', account.id, 40, 3_600_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
     if (b.action === 'msg') { await mutate((a) => { a[cur.id].log.push({ who: 'user', text: String(b.text ?? '').slice(0, 1500), step: a[cur.id].step, at: Date.now(), fromApp: true }); }); const fresh = (await all())[cur.id]; await postThread(fresh, fresh.log.at(-1)).catch(() => {}); const r = await botSay(cur.id, 'msg', String(b.text ?? '')); return send(res, 200, { session: view(r) }); }
-    const r = await act(cur.id, String(b.action ?? '')); return send(res, r?.error ? 400 : 200, r?.error ? r : { session: view(r) });
+    const r = await act(cur.id, String(b.action ?? ''), String(b.text ?? '').slice(0, 600)); return send(res, r?.error ? 400 : 200, r?.error || r?.detail ? r : { session: view(r) });
   }
   if (!allowAttempt('opti-pro-open', account.id, 3, 3_600_000)) return send(res, 429, { error: 'Trois tickets par heure maximum.' });
   await mutateSpecs(account.id, b.specs ?? {});
