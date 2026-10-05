@@ -17,7 +17,7 @@ import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } f
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
 import { cleanOldGpuDrivers, oldGpuDrivers } from './core/optimize.js';
 import { CPUS, cpuOptions, cpuScore, diskOptions, gpuOptions, matchGpu, platformOf, ramOptions, simulate } from './core/upgrade.js';
-import { ocPlan } from './core/oc.js';
+import { biosLink, ocPlan } from './core/oc.js';
 import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
 import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from './core/deepscan.js';
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
@@ -1303,25 +1303,40 @@ ipcMain.handle('upgrade:ai', async (_e, o = {}) => {
 const proPc = async () => {
   const d = process.env.LAUNCHER_DEMO ? { cpu: { name: 'AMD Ryzen 5 7600 6-Core Processor' }, board: 'MSI MAG B650 TOMAHAWK WIFI', ram: [{ size: 17179869184, speed: 6000, configured: 4800, type: 'DDR5' }], gpus: [{ name: 'NVIDIA GeForce RTX 4070' }] } : diagCache?.data ?? await runDiag().catch(() => null);
   const gpu = d?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? d?.gpus?.[0];
-  return { cpu: d?.cpu?.name ?? '', board: d?.board ?? '', gpu: gpu?.name ?? '', ramGb: Math.round(os.totalmem() / 1073741824), plan: ocPlan({ cpu: d?.cpu?.name, board: d?.board, ram: d?.ram ?? [] }) };
+  return { laptop: Boolean(d?.battery), cpu: d?.cpu?.name ?? '', board: d?.board ?? '', gpu: gpu?.name ?? '', ramGb: Math.round(os.totalmem() / 1073741824), plan: ocPlan({ cpu: d?.cpu?.name, board: d?.board, ram: d?.ram ?? [] }) };
 };
 ipcMain.handle('pro:get', () => proPc());
-const PRO_AI = {
-  valider: 'Valide la demande d’accompagnement Opti Pro. Sections « ## » : « ## ✅ Ma décision » (validé ou pas, en 1 phrase), « ## 🧭 Ton parcours » (quelles étapes faire parmi clé USB, formatage, overclocking, optimisation finale, et pourquoi), « ## 🎯 Gains réalistes » (fourchette honnête de FPS en plus, jamais garantie).',
-  format: 'Guide de formatage propre de Windows 11. Sections « ## » : « ## 💾 Avant de formater » (sauvegardes : saves de jeux, clés, mots de passe, pilote réseau), « ## 🔑 Clé USB » (Media Creation Tool, 8 Go mini, menu de démarrage selon la marque de la carte mère), « ## 🧹 Installation propre » (supprimer les partitions du disque système seulement, compte local possible), « ## 🚚 Après l’installation » (pilotes chipset puis carte graphique depuis le site du fabricant, mises à jour Windows, tes jeux).',
-  bios: 'Guide BIOS et overclocking pour CE matériel. Sections « ## » : « ## 🧠 Processeur » (selon le plan fourni : overclocking réel ou, s’il n’est pas débloqué, réglages BIOS pour tenir le boost ; noms exacts des menus pour la marque de la carte mère), « ## 🧩 Mémoire RAM » (XMP/EXPO, fréquence, timings, double canal), « ## 🧪 Tester la stabilité » (OCCT ou Cinebench 30 min, TestMem5, températures max : processeur 90 °C, à revenir en arrière si écran bleu), « ## ⚠️ Sécurité » (mise à jour du BIOS d’abord, « Load Optimized Defaults » pour tout annuler, garantie). Jamais de tension dangereuse.',
-  final: 'Réglages finaux pour jouer comme les pros. Sections « ## » : « ## 🟩 Panneau de la carte graphique » (pour NVIDIA : mode faible latence, gestion de l’alimentation performances max, filtrage de texture qualité haute performance, G-SYNC + limite FPS à écran − 3 ; pour AMD : Anti-Lag, FreeSync, Radeon Chill coupé), « ## ⚡ Énergie » (plan Performances élevées, ou Équilibré sur portable), « ## 🎮 En jeu » (plein écran, NVIDIA Reflex activé, limite FPS stable).'
-};
-ipcMain.handle('pro:ai', async (_e, step, need = '') => {
-  if (!PRO_AI[step]) return { error: 'Étape inconnue.' };
-  if (process.env.LAUNCHER_DEMO) return { text: '## 🧠 Processeur\n1. BIOS MSI : **OC › Precision Boost Overdrive** sur **Advanced**\n2. **Curve Optimizer** : All Core, Negative, **-20**\n3. Limites PPT/TDC/EDC sur **Motherboard**\n## 🧩 Mémoire RAM\n- **EXPO Profile 1** : ta RAM passe de **4800** à **6000 MHz**\n- **FCLK 2000 MHz** (rapport 1:1)\n- Ajoute une 2e barrette pour le double canal\n## 🧪 Tester la stabilité\n- OCCT 30 min, TestMem5 1 passe, processeur sous **90 °C**\n## ⚠️ Sécurité\n- Mets le BIOS à jour avant ; **Load Optimized Defaults** remet tout comme avant' };
-  if (!(await premium()).opti) return { error: 'premium' };
-  const brain = await getAi().catch(() => null);
-  if (!brain) return { error: 'Connecte-toi à ton compte History.' };
-  const p = await proPc();
-  const facts = `Processeur : ${p.cpu || '?'}\nCarte mère : ${p.board || '?'} (chipset ${p.plan.chip ?? '?'})\nCarte graphique : ${p.gpu || '?'}\nRAM : ${p.ramGb} Go, ${p.plan.ramSticks} barrette(s) ${p.plan.ramType ?? ''}, ${p.plan.ramNow ?? '?'} MHz (prévue ${p.plan.ramRated ?? '?'} MHz)\nOverclocking processeur possible : ${p.plan.cpuOc} → ${p.plan.cpuHow.join(' ; ')}\nPistes RAM : ${p.plan.ramHow.join(' ; ') || 'déjà au maximum'}\nBesoin du joueur : ${String(need).slice(0, 1500) || '—'}`;
-  const text = await brain.ask({ system: `Tu es le technicien Opti Pro de History qui accompagne un joueur. Français, tutoiement, Markdown aéré, étapes numérotées courtes, valeurs en **gras**. ${PRO_AI[step]} N’invente aucun chiffre mesuré ; ne propose jamais de couper Windows Defender ou les mises à jour.`, text: facts }).catch((err) => ({ error: err.message }));
-  return typeof text === 'string' ? { text } : { error: text?.error ?? 'IA indisponible' };
+// Ticket guidé : même conversation que le fil Discord, l'IA du serveur répond à chaque étape
+const proDemo = () => ({ id: 'demo', step: 4, closed: false, thread: true, links: [['🔄 Dernier BIOS de ta carte mère', 'https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios'], ['🧪 OCCT (stabilité)', 'https://www.ocbase.com/download'], ['🧠 TestMem5 (RAM)', 'https://github.com/CoolCmd/TestMem5'], ['🌡 HWiNFO (températures)', 'https://www.hwinfo.com/download/']], advice: { cpu: 'recommandé', why: 'Processeur débloqué, carte mère et refroidissement compatibles.' }, log: [
+  { who: 'user', step: 1, text: 'Mon setup : AMD Ryzen 5 7600 · RTX 4070 · 16 Go\nFortnite en 1080p 240 Hz, je veux des FPS stables.' },
+  { who: 'bot', step: 1, text: '## ✅ Demande validée\nTon PC a un vrai potentiel, on y va.\n## 🧭 Ton parcours\n- 💾 Clé USB et 🧹 formatage : **tu peux passer**, Windows est récent\n- 🧠 BIOS : **à faire**, ta RAM tourne à **4800** au lieu de **6000 MHz**' },
+  { who: 'user', step: 4, text: '⏭ Je passe : 💾 Clé USB bootable, 🧹 Formatage propre.' },
+  { who: 'bot', step: 4, text: '## 🔄 Mets à jour ton BIOS\nTon BIOS **7D75v1F** date de 2023 ; la dernière version stable est plus récente. Télécharge-la sur [la page officielle MSI](https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios), copie-la sur une clé **FAT32** et lance **M-Flash**.\n## 🧠 Processeur\n1. **OC › Precision Boost Overdrive** sur **Advanced**\n2. **Curve Optimizer** : All Core, Negative, **-20**\n## 🧩 Mémoire\n- **EXPO Profile 1** : **4800 → 6000 MHz**' }] });
+const proPost = (path, body) => { const token = secret('account'); return token ? api(path, { method: 'POST', token, body, timeout: 90_000 }).catch(() => ({ error: 'Serveur injoignable. Réessaie.' })) : { error: 'Connecte-toi à ton compte History (Paramètres › Compte).' }; };
+ipcMain.handle('pro:session', async () => { if (process.env.LAUNCHER_DEMO) return { session: proDemo() }; const token = secret('account'); return token ? api('/api/compte/optipro', { token }).catch(() => ({ error: 'Serveur injoignable.' })) : { error: 'login' }; });
+ipcMain.handle('pro:start', async (_e, f = {}) => {
+  const p = await proPc(); const d = diagCache?.data;
+  const temps = store.data.temps ?? []; const max = (k) => Math.max(0, ...temps.map((t) => t[k] ?? 0)) || null;
+  return proPost('/api/compte/optipro', { specs: { cpu: p.cpu, board: p.board, gpu: p.gpu, ram: d?.ram ?? [], ramGb: p.ramGb, ramText: `${p.ramGb} Go ${p.plan.ramType ?? ''} ${p.plan.ramNow ?? ''} MHz`.trim(), laptop: Boolean(d?.battery), biosVersion: d?.bios?.version, biosDate: d?.bios?.date, windows: d?.os?.name, cpuTempMax: max('cpuT'), gpuTempMax: max('gpuT'), cooling: String(f.cooling ?? '').slice(0, 160), need: String(f.need ?? '').slice(0, 800), games: raw.filter((i) => i.kind === 'game').slice(0, 15).map((i) => i.name).join(', ') } });
+});
+ipcMain.handle('pro:act', (_e, action, text = '') => proPost('/api/compte/optipro/action', { action: String(action).slice(0, 10), text: String(text).slice(0, 1500) }));
+// Liens des étapes : calculés ici (jamais une adresse venant de l'interface)
+ipcMain.handle('pro:link', async (_e, which) => { const p = await proPc(); const u = { bios: biosLink(p.board, p.cpu), occt: 'https://www.ocbase.com/download', nvidia: 'https://www.nvidia.com/fr-fr/drivers/', amd: 'https://www.amd.com/fr/support/download/drivers.html' }[which]; return u ? shell.openExternal(u).then(() => true, () => false) : false; });
+// Liens du ticket (boutons et réponses de l'IA) : seulement des sites officiels connus, en https
+const PRO_HOSTS = /^(?:[\w-]+\.)*(?:microsoft\.com|nvidia\.com|amd\.com|intel\.(?:com|fr)|msi\.com|asus\.com|gigabyte\.com|asrock\.com|ocbase\.com|hwinfo\.com|cpuid\.com|wagnardsoft\.com|capframex\.com|maxon\.net|testufo\.com|github\.com|discord\.com)$/i;
+ipcMain.handle('pro:open', (_e, url) => { try { const u = new URL(String(url)); return u.protocol === 'https:' && PRO_HOSTS.test(u.hostname) ? shell.openExternal(u.href).then(() => true, () => false) : false; } catch { return false; } });
+// Outil Microsoft de création de clé USB : téléchargé en 1 clic, signature Microsoft vérifiée, puis lancé
+ipcMain.handle('pro:usb', async () => {
+  if (process.platform !== 'win32') return { error: 'Disponible sur Windows.' };
+  const file = path.join(app.getPath('downloads'), 'MediaCreationTool_Windows11.exe');
+  try {
+    const res = await net.fetch('https://go.microsoft.com/fwlink/?linkid=2156295');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await writeFile(file, Buffer.from(await res.arrayBuffer()));
+    const stdout = await new Promise((ok) => execFile('powershell.exe', ['-NoProfile', '-Command', `$s=Get-AuthenticodeSignature -LiteralPath '${file.replace(/'/g, "''")}'; "$($s.Status)|$($s.SignerCertificate.Subject)"`], { windowsHide: true }, (_e, out) => ok(String(out ?? ''))));
+    if (!/^Valid\|.*Microsoft/i.test(stdout.trim())) { await rm(file, { force: true }); return { error: 'Signature Microsoft invalide : fichier supprimé.' }; }
+    const err = await shell.openPath(file); return err ? { error: err } : { ok: true, file };
+  } catch (e) { return { error: `Téléchargement impossible (${e.message}).` }; }
 });
 // 🩺 Entretien : santé des disques (SMART) et anciens pilotes graphiques
 ipcMain.handle('care:get', async () => ({ disks: (diagCache?.data ?? (process.env.LAUNCHER_DEMO ? null : await runDiag().catch(() => null)))?.disks?.map((x) => ({ name: x.name, media: x.media, health: x.health, size: x.size })) ?? (process.env.LAUNCHER_DEMO ? [{ name: 'Samsung SSD 980 1TB', media: 'SSD', health: 'Healthy', size: 1e12 }, { name: 'ST2000DM008', media: 'HDD', health: 'Warning', size: 2e12 }] : []), drivers: process.env.LAUNCHER_DEMO ? { count: 3, bytes: 4.2e9 } : process.platform === 'win32' ? await oldGpuDrivers() : { count: 0, bytes: 0 } }));
@@ -3197,7 +3212,7 @@ ipcMain.handle('account:logout', async () => {
 });
 ipcMain.handle('account:skip', () => { store.data.settings.skipAccount = true; store.save(); return { ok: true }; });
 
-ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api', site: 'https://zyko144.github.io/vercel-ia-/', usb: 'https://www.microsoft.com/fr-fr/software-download/windows11', bios: 'https://www.ocbase.com/' }[which] ?? ''));
+ipcMain.handle('open:link', (_e, which) => openLink({ steam: 'https://steamcommunity.com/dev/apikey', grid: 'https://www.steamgriddb.com/profile/preferences/api', site: 'https://zyko144.github.io/vercel-ia-/' }[which] ?? ''));
 app.on('will-quit', () => globalShortcut.unregisterAll());
 // Raccourcis globaux (même en jeu), modifiables dans Paramètres › Général
 const HOTKEYS = {

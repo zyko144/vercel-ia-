@@ -157,6 +157,7 @@ client.once(Events.ClientReady, async (c) => {
   setLiveClient(c);
   }
   startSupportDiscord(c);
+  import('./features/optiPro.js').then((m) => m.startOptiPro(c)).catch((err) => console.warn('[opti-pro]', err.message));
   // Reprise de la musique interrompue par un redémarrage
   setTimeout(() => restoreSessions(c).catch((err) => console.warn('[musique] reprise :', err.message)), 8_000);
 });
@@ -177,6 +178,7 @@ if (FULL) client.on(Events.MessageCreate, (message) => {
 });
 
 client.on(Events.InteractionCreate, (interaction) => {
+  if (String(interaction.customId ?? '').startsWith('opro:')) return void import('./features/optiPro.js').then((m) => m.onOptiProInteraction(interaction)).catch((err) => console.warn('[opti-pro]', err.message));
   if (String(interaction.customId ?? '').startsWith('support:')) return void onSupportInteraction(interaction).catch(err => console.warn('[support]', err.message));
   // Notes ⭐ des vidéos de présentation (MP)
   if (String(interaction.customId ?? '').startsWith('prem:')) return void import('./features/launcherPremium.js').then((m) => m.onPremiumInteraction(interaction)).catch((err) => console.error('[premium]', err));

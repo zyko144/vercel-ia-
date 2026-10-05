@@ -9,3 +9,17 @@ const r = ocPlan({ cpu: 'AMD Ryzen 5 7600', ram: [{ speed: 6000, configured: 480
 assert.equal(r.ramNow, 4800); assert.equal(r.ramSticks, 1); assert.match(r.ramHow[0], /EXPO.*4800.*6000/); assert.equal(r.ramLimited, false);
 assert.equal(ocPlan({ cpu: 'x', ram: [{ speed: 3200, configured: 3200 }, { speed: 3200, configured: 3200 }] }).ramLimited, true);
 console.log('oc ok');
+const { parseRam, ocAdvice } = await import('../src/core/oc.js');
+assert.deepEqual(parseRam('2x8 Go DDR4 3200').length, 2); assert.equal(parseRam('16 Go DDR5 6000 une barrette').length, 1); assert.equal(parseRam('16 Go')[0], undefined);
+const k = ocPlan({ cpu: 'Intel Core i7-13700K', board: 'ASUS TUF Z790' });
+assert.equal(ocAdvice(k, { cooling: 'AIO 360 mm' }).cpu, 'recommandé');
+assert.equal(ocAdvice(k, { cooling: 'ventirad d’origine' }).cpu, 'BIOS seulement');
+assert.equal(ocAdvice(k, { laptop: true }).cpu, 'déconseillé');
+assert.equal(ocAdvice(k, { cooling: 'AIO', cpuTempMax: 92 }).cpu, 'déconseillé');
+console.log('oc advice ok');
+const { biosLink } = await import('../src/core/oc.js');
+assert.equal(biosLink('Micro-Star International Co., Ltd. MAG B650 TOMAHAWK WIFI (MS-7D75)'), 'https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios');
+assert.equal(biosLink('ASUSTeK COMPUTER INC. TUF GAMING B550-PLUS'), 'https://www.asus.com/supportonly/TUF%20GAMING%20B550-PLUS/helpdesk_bios/');
+assert.match(biosLink('ASRock B650M Pro RS', 'AMD Ryzen 5'), /asrock\.com\/mb\/AMD\/B650M%20Pro%20RS\/index\.asp#BIOS/);
+assert.match(biosLink('Gigabyte Technology Co., Ltd. B550 AORUS ELITE V2'), /gigabyte\.com\/fr\/Search\?kw=B550%20AORUS%20ELITE%20V2/);
+console.log('bios link ok');

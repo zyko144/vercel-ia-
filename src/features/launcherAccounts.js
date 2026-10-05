@@ -502,6 +502,11 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const { handleBackupApi } = await import('./launcherBackup.js');
       return await handleBackupApi(req, res, { readJson, send });
     }
+    if (url.pathname === '/api/compte/optipro' || url.pathname === '/api/compte/optipro/action') {
+      const compte = await me(token);
+      if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History.' });
+      return await (await import('./optiPro.js')).handleOptiProApi(req, res, url, compte, { readJson, send });
+    }
     if (url.pathname === '/api/compte/support') {
       const { handleSupportApi } = await import('./launcherSupport.js');
       return await handleSupportApi(req, res, url, { readJson, send });

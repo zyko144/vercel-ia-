@@ -1,0 +1,23 @@
+// Ticket Opti Pro : parcours complet avec une IA simulée (pas de Discord, stockage temporaire)
+import assert from 'node:assert/strict';
+import os from 'node:os'; import path from 'node:path'; import fs from 'node:fs';
+process.env.DISCORD_TOKEN = ['T'.repeat(26), 'E'.repeat(6), 'S'.repeat(30)].join('.');
+process.env.GEMINI_API_KEY ||= 'essai'; process.env.SUPABASE_URL = ''; process.env.SUPABASE_SERVICE_KEY = '';
+process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'optipro-'));
+const m = await import('../src/features/optiPro.js');
+const prompts = []; m.setAsk(async (p) => { prompts.push(p); return `Réponse ${prompts.length}`; });
+const s = m.specsOf({ cpu: 'Intel Core i5-12400F', board: 'MSI PRO B660M', ramText: '2x8 Go DDR4 3200', cooling: 'ventirad d’origine' });
+assert.equal(s.plan.cpuOc, 'non'); assert.equal(s.advice.cpu, 'BIOS seulement'); assert.equal(s.ram.length, 2);
+assert.equal(m.specsOf({ cpu: 'i7-13700K', board: 'Z790', cooling: 'PC portable' }).advice.cpu, 'déconseillé');
+const t0 = await m.startSession({ id: 'acc1', pseudo: 'Alex' }, { cpu: 'AMD Ryzen 5 7600', board: 'MSI B650 TOMAHAWK', gpu: 'RTX 4070', ramText: '1x16 Go DDR5 6000', cooling: 'AIO 240', need: 'Fortnite' });
+assert.equal(t0.step, 1); assert.match(prompts[0], /VERDICT CALCULÉ overclocking : recommandé/); assert.match(prompts[0], /Valide la demande/);
+assert.equal((await m.startSession({ id: 'acc1' }, {})).id, t0.id, 'un seul ticket ouvert par compte');
+let t = await m.act(t0.id, 'skip2'); assert.equal(t.step, 4); assert.match(prompts.at(-1), /Guide BIOS/);
+t = await m.act(t0.id, 'msg', 'Je trouve pas PBO'); assert.match(prompts.at(-1), /Je trouve pas PBO/); assert.equal(t.log.at(-1).who, 'bot');
+t = await m.act(t0.id, 'msg', 'Staff ici', 'staff'); assert.equal(t.log.at(-1).who, 'staff'); const n = prompts.length;
+t = await m.act(t0.id, 'next'); t = await m.act(t0.id, 'next'); assert.equal(t.step, 6); assert.equal(prompts.length, n + 2);
+t = await m.act(t0.id, 'done'); assert.ok(t.closed && t.done); assert.match(t.log.at(-1).text, /Ton PC est prêt/);
+assert.equal(await m.sessionOf('acc1'), null); assert.ok((await m.act(t0.id, 'next')).error);
+m.setAsk(async () => { throw new Error('quota'); });
+const t1 = await m.startSession({ id: 'acc2', pseudo: 'B' }, { cpu: 'x' }); assert.match(t1.log.at(-1).text, /humain/);
+console.log('✅ Opti Pro : ticket guidé, verdict overclocking, passer des étapes, staff, fin, IA en panne');

@@ -14,6 +14,7 @@ $o.gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM
 $o.vram = @(Get-ItemProperty 'HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' | Select-Object DriverDesc,'HardwareInformation.qwMemorySize')
 $o.ram = @(Get-CimInstance Win32_PhysicalMemory | Select-Object Capacity,Speed,ConfiguredClockSpeed,Manufacturer,PartNumber,SMBIOSMemoryType)
 $o.board = @(Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product)
+$o.bios = Get-CimInstance Win32_BIOS | Select-Object SMBIOSBIOSVersion,@{n='Date';e={$_.ReleaseDate.ToString('yyyy-MM-dd')}}
 $o.os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,LastBootUpTime
 $o.disks = @(Get-PhysicalDisk | Select-Object DeviceId,FriendlyName,MediaType,BusType,Size,HealthStatus)
 $o.rel = @(Get-PhysicalDisk | Get-StorageReliabilityCounter | Select-Object DeviceId,Wear,Temperature,TemperatureMax,PowerOnHours,ReadErrorsTotal,WriteErrorsTotal)
@@ -65,6 +66,7 @@ export function parseDiag(raw, now = Date.now()) {
       width: num(g.CurrentHorizontalResolution), height: num(g.CurrentVerticalResolution), hz: num(g.CurrentRefreshRate), maxHz: num(g.MaxRefreshRate),
     })),
     ram: arr(j.ram).map((m) => ({ size: num(m.Capacity), speed: num(m.Speed), configured: num(m.ConfiguredClockSpeed), maker: String(m.Manufacturer ?? '').trim(), part: String(m.PartNumber ?? '').trim(), type: { 26: 'DDR4', 34: 'DDR5', 24: 'DDR3' }[m.SMBIOSMemoryType] ?? null })),
+    bios: j.bios?.SMBIOSBIOSVersion ? { version: String(j.bios.SMBIOSBIOSVersion).trim(), date: String(j.bios.Date ?? '') } : null,
     board: arr(j.board)[0] ? `${arr(j.board)[0].Manufacturer ?? ''} ${arr(j.board)[0].Product ?? ''}`.trim() : null,
     os: { name: String(j.os?.Caption ?? '').trim(), build: String(j.os?.BuildNumber ?? ''), uptimeDays: boot ? Math.floor((now - boot) / 86_400_000) : null },
     disks,
