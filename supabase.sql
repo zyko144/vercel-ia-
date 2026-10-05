@@ -28,6 +28,14 @@ create table if not exists public.launcher_comptes (
   derniere_activite timestamptz,
   joue_a text
 );
+-- Version de History Launcher / History Clips de chaque compte (mise à jour quand l'appli contacte le serveur)
+alter table public.launcher_comptes add column if not exists version_launcher text;
+alter table public.launcher_comptes add column if not exists version_clips text;
+alter table public.launcher_comptes add column if not exists version_vue_le timestamptz;
+-- Vue pratique : Table Editor › versions_utilisateurs (dernières versions en premier)
+create or replace view public.versions_utilisateurs with (security_invoker = true) as
+  select pseudo, email, version_launcher, version_clips, version_vue_le, derniere_activite
+  from public.launcher_comptes order by version_vue_le desc nulls last;
 alter table public.launcher_comptes enable row level security;
 
 -- Photos de profil, bannières et images des discussions : bucket privé « launcher »

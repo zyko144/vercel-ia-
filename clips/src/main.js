@@ -586,7 +586,7 @@ ipcMain.handle('games:art', async (_e, names) => {
 // ---------- Compte History (le même que le launcher) ----------
 async function api(p, { method = 'GET', body = null, raw = null, token = tokenGet() } = {}) {
   try {
-    const res = await fetch(`${API}${p}`, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(raw ? { 'Content-Type': 'application/octet-stream' } : body ? { 'Content-Type': 'application/json' } : {}) }, body: raw ?? (body ? JSON.stringify(body) : undefined), signal: AbortSignal.timeout(raw ? 300_000 : 20_000) });
+    const res = await fetch(`${API}${p}`, { method, headers: { 'X-History-Clips-Version': app.getVersion(), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(raw ? { 'Content-Type': 'application/octet-stream' } : body ? { 'Content-Type': 'application/json' } : {}) }, body: raw ?? (body ? JSON.stringify(body) : undefined), signal: AbortSignal.timeout(raw ? 300_000 : 20_000) });
     return { status: res.status, ...(await res.json().catch(() => ({}))) };
   } catch { return { status: 0, error: 'Serveur injoignable, vérifie ta connexion.' }; }
 }
