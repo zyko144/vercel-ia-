@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.30': [
+    ['🔒', 'Étapes dans l’ordre', 'Opti Pro : une étape s’ouvre seulement quand la précédente est terminée. Les suivantes sont grisées avec « Termine d’abord l’étape… », sauf si tu la passes avec « ⏭ Passer ».', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
+  ],
   '0.53.29': [
     ['🔔', 'Cloche des notifications réparée', 'Quand une notification arrive, la cloche sonne sans se tourner ni grossir : elle reste visible et cliquable.', ['#bellBtn', 'wait900']],
     ['📊', 'Score plus logique', 'Les nouveaux réglages de confort et de confidentialité ne font plus baisser la note de santé de ton PC. Seuls les réglages qui jouent sur les performances comptent.'],
@@ -3196,7 +3199,9 @@ async function renderPro(refresh = true) {
   const step = pro && !pro.closed ? pro.step : pro?.done ? 7 : 0;
   $('proBar').style.width = `${Math.round((100 * step) / PRO_STEPS.length)}%`;
   $('proProg').textContent = pro?.done ? 'Ton PC est prêt 🚀' : pro && !pro.closed ? `Étape ${step + 1} / 7 · ${PRO_STEPS[step][1]}` : 'Ouvre ton ticket pour commencer';
-  $('proSteps').innerHTML = PRO_STEPS.map(([ic, t, d, tools], i) => `<li class="${i < step ? 'done' : i === step && pro && !pro.closed ? 'now' : ''}"><span class="pron">${i < step ? '✓' : i + 1}</span><div><b>${ic} ${t}</b><small>${d}</small>${tools ? `<div class="row">${tools.map(([k, l]) => `<button class="btn sm${k === 'final' ? ' play' : ''}" data-pt="${k}">${l}</button>`).join('')}</div>` : ''}</div></li>`).join('');
+  // Une étape s'ouvre seulement quand la précédente est terminée (ou passée avec le bouton « Passer »)
+  const open = pro && !pro.closed, lock = (i) => (pro?.done ? false : i > step || (!open && i > 0));
+  $('proSteps').innerHTML = PRO_STEPS.map(([ic, t, d, tools], i) => `<li class="${i < step ? 'done' : i === step && open ? 'now' : lock(i) ? 'locked' : ''}"><span class="pron">${i < step ? '✓' : lock(i) ? '🔒' : i + 1}</span><div><b>${ic} ${t}</b><small>${lock(i) ? `🔒 Termine d’abord l’étape ${i} (${PRO_STEPS[i - 1][1]})${[2, 3, 4].includes(i) ? ' ou passe-la avec « ⏭ Passer »' : ''}.` : d}</small>${tools ? `<div class="row">${tools.map(([k, l]) => `<button class="btn sm${k === 'final' ? ' play' : ''}" data-pt="${k}" ${lock(i) ? 'disabled' : ''}>${l}</button>`).join('')}</div>` : ''}</div></li>`).join('');
   renderProTicket();
   clearInterval(proPoll);
   if (pro && !pro.closed) proPoll = setInterval(() => { if ($('view-optimisation').offsetParent && !proBusy && document.activeElement?.id !== 'proMsg') renderPro(); }, 10000);
@@ -4783,7 +4788,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.29',
+    version: async () => '0.53.30',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
