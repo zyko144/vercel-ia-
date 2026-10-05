@@ -1776,7 +1776,15 @@ ipcMain.handle('notebook:set', (_e, id, value) => {
     store.data.notebooks[id] = note; store.save(); return { ok: true, note };
   } catch (error) { return { error: error.message }; }
 });
-ipcMain.handle('support:diagnostic', () => ({ version: app.getVersion(), platform: process.platform, release: os.release(), arch: process.arch, memoryGB: Math.round(os.totalmem() / 1073741824), games: raw.filter((i) => i.kind === 'game').length, apps: raw.filter((i) => i.kind === 'app').length }));
+ipcMain.handle('support:diagnostic', async () => {
+  // Analyse du PC jointe à la demande : le support voit tout de suite le matériel, la santé et les températures
+  const d = diagCache?.data ?? await Promise.race([runDiag().catch(() => null), new Promise((r) => setTimeout(() => r(null), 4000))]);
+  const gpu = d?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? d?.gpus?.[0];
+  const temps = store.data.temps ?? []; const max = (k) => Math.max(0, ...temps.map((t) => t[k] ?? 0)) || null;
+  const sys = d?.volumes?.find((v) => v.letter === 'C');
+  const pc = { cpu: d?.cpu?.name, gpu: gpu?.name, driver: gpu?.driver, windows: d?.os?.name && `${d.os.name} (${d.os.build})`, uptimeDays: d?.os?.uptimeDays, health: store.data.healthLast?.score, cpuTempMax: max('cpuT'), gpuTempMax: max('gpuT'), diskFreeGB: sys ? Math.round(sys.free / 1073741824) : null };
+  return { version: app.getVersion(), platform: process.platform, release: os.release(), arch: process.arch, memoryGB: Math.round(os.totalmem() / 1073741824), games: raw.filter((i) => i.kind === 'game').length, apps: raw.filter((i) => i.kind === 'app').length, ...Object.fromEntries(Object.entries(pc).filter(([, v]) => v != null && v !== '')) };
+});
 ipcMain.handle('support:list', async () => {
   const token = secret('account');
   if (!token) return { error: 'Connecte-toi dans Compte & sauvegarde pour voir tes demandes.' };

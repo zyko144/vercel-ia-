@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.16': [
+    ['🆘', 'Support avec l’analyse du PC', 'Ta demande d’aide envoie aussi ton matériel, ta santé PC et tes températures (si tu le veux) : l’équipe sur Discord t’aide sans te poser 10 questions.', ['#openSettings', 'wait600', '.setnav [data-pane=aide]', 'wait600', '#newSupport', 'wait900']],
+  ],
   '0.53.15': [
     ['💳', 'Paiement plus sûr', 'Chaque achat a une note unique à copier dans le paiement PayPal « Entre proches » : elle est vérifiée sur ta capture pour activer ton Premium plus vite.', ['#premiumBtn', 'wait900']],
   ],
@@ -2759,7 +2762,7 @@ function optiFindings(o) {
 function renderOptiDiag(o) {
   const f = optiFindings(o);
   const fixable = f.some(([, , , , k]) => ['junk', 'startup', 'tweaks'].includes(k));
-  $('optiDiag').innerHTML = `<div class="odiag"><div class="odhead"><b>🩺 Ce que l’analyse a trouvé</b>${fixable ? '<button class="btn play" type="button" data-fix="all">⚡ Tout corriger</button>' : ''}</div>${f.length
+  $('optiDiag').innerHTML = `<div class="odiag"><div class="odhead"><b>🩺 Ce que l’analyse a trouvé</b>${f.length ? '<button class="btn" type="button" data-fix="help" style="margin-left:auto">🆘 Demander de l’aide</button>' : ''}${fixable ? '<button class="btn play" type="button" data-fix="all">⚡ Tout corriger</button>' : ''}</div>${f.length
     ? f.map(([lvl, ico, t, d, k, b]) => `<div class="odrow ${lvl}"><i>${ico}</i><div><b>${esc(t)}</b><small>${esc(d)}</small></div><button class="btn" type="button" data-fix="${k}">${b}</button></div>`).join('')
     : '<p class="hint">✅ Rien à corriger : ton PC est bien réglé.</p>'}</div>`;
 }
@@ -2770,6 +2773,12 @@ $('optiDiag').addEventListener('click', async (e) => {
   if (k === 'space') return goSec('osecB');
   if (k === 'games') return goSec('osecA');
   if (k === 'pc') return go('pc');
+  if (k === 'help') { // demande au support Discord, déjà remplie avec ce que l'analyse a trouvé
+    $('openSettings').click(); document.querySelector('.setnav [data-pane=aide]')?.click(); $('newSupport').click();
+    $('supportTitle').value = 'Aide pour optimiser mon PC';
+    $('supportForm').elements.description.value = `Problèmes trouvés par l’analyse :\n${optiFindings(opti).map(([, , t, d]) => `- ${t} : ${d}`).join('\n')}`.slice(0, 4000);
+    return;
+  }
   if (!(await premOk('opti'))) return openPremium('opti');
   if (k === 'repair') return $('optiRepair')?.click();
   const none = { games: [], junk: [], orphans: [], recycle: false, tweaks: [] };
@@ -4440,13 +4449,13 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.15',
+    version: async () => '0.53.16',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
     scan: async () => ({ items, sources: { steam: { label: 'Steam', color: '#66c0f4', logo: 'brands/steam.svg', bg: '#1b2838' }, epic: { label: 'Epic Games', color: '#e6e6e6', logo: 'brands/epicgames.svg', bg: '#2a2a2a' }, riot: { label: 'Riot', color: '#ff4655', logo: 'brands/riotgames.svg', bg: '#eb0029' }, roblox: { label: 'Roblox', color: '#e2231a', logo: 'brands/roblox.svg', bg: '#e2231a' }, pc: { label: 'PC', color: '#9aa0aa', logo: 'brands/windows.svg', bg: '#0078d4' } } }),
     gameUpdateProgress: async () => ({phase:'download',percent:42,bytes:420000000,total:1000000000,label:'Téléchargement · démonstration'}), gameUpdateDownloads: async () => true,
-    action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => demoSettings, setSettings: async (s) => (demoSettings = { ...demoSettings, ...s }), notebook: async (id) => demoNotes[id] ?? {}, saveNotebook: async (id,note) => { demoNotes[id] = note; return { ok: true }; }, supportDiagnostic: async () => ({ version: '0.50.0', platform: 'Aperçu navigateur' }), supportList: async () => ({ tickets: demoTickets }), supportSend: async (body) => { demoTickets.unshift({ ...body, at: Date.now(), status: 'received', reply: 'Demande de démonstration : aucun envoi réel.' }); return { ok: true }; }, win: () => {},
+    action: async () => ({ ok: true }), setItem: async () => ({}), settings: async () => demoSettings, setSettings: async (s) => (demoSettings = { ...demoSettings, ...s }), notebook: async (id) => demoNotes[id] ?? {}, saveNotebook: async (id,note) => { demoNotes[id] = note; return { ok: true }; }, supportDiagnostic: async () => ({ version: '0.53.16', cpu: 'AMD Ryzen 7 7800X3D', gpu: 'NVIDIA GeForce RTX 4070', memoryGB: 32, health: 86, cpuTempMax: 71, gpuTempMax: 68 }), supportList: async () => ({ tickets: demoTickets }), supportSend: async (body) => { demoTickets.unshift({ ...body, at: Date.now(), status: 'received', reply: 'Demande de démonstration : aucun envoi réel.' }); return { ok: true }; }, win: () => {},
     details: async () => ({ developers: ['Rockstar North'], screenshots: [img('h1.jpg'), img('c2.jpg'), img('h2.jpg')], achievements: { done: 45, total: 77 } }),
     reco: async () => [1, 2, 3, 4, 5].map((n) => ({ name: `Jeu recommandé ${n}`, why: 'Même style que GTA V', steamId: String(n), art: { header: img(n % 2 ? 'h1.jpg' : 'h2.jpg') } })),
     stats: async () => ({ split: { jeux: 1814, applis: 454, musique: 151, autres: 101 }, top: items.map((i) => ({ name: i.name, minutes: i.minutes })), recent: { 'reg:valorant': 300, 'steam:271590': 240, 'epic:Fortnite': 120, 'epic:rl': 60 }, profile: 'Alex' }),

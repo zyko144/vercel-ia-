@@ -12,7 +12,7 @@ export function cleanReport(body) {
   if (title.length < 4 || description.length < 10) throw new Error('Ajoute un titre de 4 caractères et une description de 10 caractères minimum.');
   const diagnostic = {};
   // Explicit allowlist: no paths, account identifiers, logs or credentials.
-  for (const key of ['version', 'platform', 'release', 'arch', 'memoryGB', 'games', 'apps']) if (body?.diagnostic?.[key] != null) diagnostic[key] = clean(body.diagnostic[key], 80);
+  for (const key of ['version', 'platform', 'release', 'arch', 'memoryGB', 'games', 'apps', 'cpu', 'gpu', 'driver', 'windows', 'uptimeDays', 'health', 'cpuTempMax', 'gpuTempMax', 'diskFreeGB']) if (body?.diagnostic?.[key] != null) diagnostic[key] = clean(body.diagnostic[key], 80);
   return { title, description, diagnostic, app: body?.app === 'clips' ? 'clips' : 'launcher' };
 }
 let queue = Promise.resolve();
