@@ -10,13 +10,23 @@ export async function supportIdentity(account, app = 'launcher') {
   const user = linked && client ? await client.users.fetch(linked).catch(() => null) : null;
   return { avatar: user?.displayAvatarURL({ extension:'png', size:128 }) ?? account.profile?.avatar ?? `https://zyko144.github.io/vercel-ia-/${app === 'clips' ? 'clips/logo.png' : 'assets/logo.png'}`, discordId: linked ?? null, displayName: user?.globalName ?? user?.username ?? account.pseudo };
 }
+// Message de support aéré : la demande en citation, qui l'envoie, puis statut / version / santé, le PC et la réponse
 export function supportEmbed(t) {
-  const labels={received:'Reçue',investigating:'En cours',resolved:'Résolue'};
-  const embed=new EmbedBuilder().setColor(t.status==='resolved'?0x36c995:0x619fff).setTitle(`${t.app==='clips'?'History Clips':'History Launcher'} · ${t.title}`.slice(0,256)).setDescription(t.description).setAuthor({name:t.displayName||t.name,...(t.avatar?{iconURL:t.avatar}:{})}).addFields({name:'Statut',value:labels[t.status]??t.status,inline:true},{name:'Compte',value:t.discordId?`Discord lié · ${t.discordId}`:'Compte History',inline:true}).setFooter({text:`Support privé · ${t.id}`});
+  const st={received:['🟠','Nouvelle',0xf5a623],investigating:['🔵','En cours',0x619fff],resolved:['🟢','Résolue',0x36c995]}[t.status]??['⚪',t.status,0x99aab5];
+  const d=t.diagnostic??{};
+  const quote=(x)=>String(x||'').split('\n').map((l)=>`> ${l}`).join('\n');
+  const who=`👤 **${t.displayName||t.name}**${t.discordId?` · <@${t.discordId}>`:' · compte History'}${t.at?` · <t:${Math.floor(t.at/1000)}:R>`:''}`;
+  const embed=new EmbedBuilder().setColor(st[2])
+    .setAuthor({name:`🎫 Support ${t.app==='clips'?'History Clips':'History Launcher'}`,...(t.avatar?{iconURL:t.avatar}:{})})
+    .setTitle(t.title.slice(0,256))
+    .setDescription(`${quote(t.description).slice(0,3500)}\n\n${who}`)
+    .addFields({name:'Statut',value:`${st[0]} ${st[1]}`,inline:true},{name:'Version',value:d.version?`📦 ${d.version}`:'—',inline:true},{name:'Santé du PC',value:d.health?`${d.health>=70?'💚':d.health>=45?'💛':'❤️'} ${d.health}/100`:'—',inline:true})
+    .setFooter({text:`Demande ${t.id.slice(0,8)} · réponds dans le fil`});
+  if(t.at)embed.setTimestamp(t.at);
   if(t.avatar)embed.setThumbnail(t.avatar);
-  const d=t.diagnostic??{};const pc=[d.cpu&&`🧠 ${d.cpu}`,d.gpu&&`🎮 ${d.gpu}${d.driver?` · pilote ${d.driver}`:''}`,d.memoryGB&&`💾 ${d.memoryGB} Go de RAM${d.diskFreeGB!=null?` · ${d.diskFreeGB} Go libres sur C:`:''}`,d.windows&&`🪟 ${d.windows}${d.uptimeDays!=null?` · allumé depuis ${d.uptimeDays} j`:''}`,(d.cpuTempMax||d.gpuTempMax)&&`🌡️ Max 24 h : CPU ${d.cpuTempMax??'?'}°C · GPU ${d.gpuTempMax??'?'}°C`,d.health&&`❤️ Santé ${d.health}/100`,d.version&&`📦 Launcher ${d.version}`].filter(Boolean);
-  if(pc.length)embed.addFields({name:'🖥️ Analyse du PC',value:pc.join('\n').slice(0,1024)});
-  if(t.reply)embed.addFields({name:'Réponse de l’équipe',value:t.reply.slice(0,1024)});
+  const pc=[d.cpu&&`🧠 ${d.cpu}`,d.gpu&&`🎮 ${d.gpu}${d.driver?` (pilote ${d.driver})`:''}`,d.memoryGB&&`💾 ${d.memoryGB} Go de RAM${d.diskFreeGB!=null?` · ${d.diskFreeGB} Go libres sur C:`:''}`,d.windows&&`🪟 ${d.windows}${d.uptimeDays!=null?` · allumé depuis ${d.uptimeDays} j`:''}`,(d.cpuTempMax||d.gpuTempMax)&&`🌡️ Max 24 h : CPU ${d.cpuTempMax??'?'} °C · GPU ${d.gpuTempMax??'?'} °C`].filter(Boolean);
+  if(pc.length)embed.addFields({name:'🖥️ Son PC',value:pc.join('\n').slice(0,1024)});
+  if(t.reply)embed.addFields({name:'💬 Réponse de l’équipe',value:quote(t.reply).slice(0,1024)});
   return embed;
 }
 async function deliver(id) {
