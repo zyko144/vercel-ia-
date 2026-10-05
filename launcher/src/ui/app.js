@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.35': [
+    ['📷', 'Envoie des captures au technicien', 'Opti Pro : dans « 💬 Écrire au technicien », ajoute jusqu’à 3 captures ou photos (écran du BIOS, message d’erreur, réglages…) ou colle-les avec Ctrl+V. Le technicien IA les regarde pour t’aider plus précisément. Sur Discord, envoie simplement l’image dans ton fil.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1200', '[data-pa=ask]', 'wait700']]
+  ],
   '0.53.34': [
     ['🖱', 'Plus de saut de page', 'Opti Pro : la page ne remonte plus toute seule. Le ticket se met à jour seulement quand il y a du nouveau.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']],
     ['📏', 'Plus de place', 'Les messages du technicien et le détail pas à pas prennent toute la hauteur de la fenêtre. Les boutons « Passer » sont retirés : chaque étape se valide avec « Fait ».']
@@ -3240,10 +3243,10 @@ async function renderPro(refresh = true) {
   const oc = { oui: ['ok', 'Overclockable'], limité: ['warn', 'Overclocking limité'], non: ['bad', 'Non débloqué : gains via le BIOS'] }[p.plan.cpuOc];
   $('proPc').innerHTML = `<div><b>🧠 ${esc(p.cpu || 'Processeur')}</b><em class="${oc[0]}">${oc[1]}</em><ul>${p.plan.cpuHow.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div><div><b>🧩 RAM ${p.ramGb} Go${p.plan.ramType ? ` ${p.plan.ramType}` : ''}${p.plan.ramNow ? ` · ${p.plan.ramNow} MHz` : ''}</b><em class="${p.plan.ramLimited ? 'warn' : 'ok'}">${p.plan.ramLimited ? 'Optimisée via le BIOS' : 'Gain possible'}</em><ul>${p.plan.ramHow.map((x) => `<li>${esc(x)}</li>`).join('') || '<li>Déjà à sa vitesse maximale : on resserre les timings</li>'}</ul></div><small class="hint">Carte mère : ${esc(p.board || 'inconnue')} · le BIOS n’est jamais modifié par l’appli : le technicien te guide.</small>`;
 }
-async function proAction(action, text = '') {
+async function proAction(action, text = '', imgs = []) {
   if (proBusy) return;
-  if (action !== 'open' && pro) { proBusy = true; if (action === 'msg') pro.log.push({ who: 'user', text, step: pro.step }); renderProTicket(); }
-  const r = action === 'open' ? (proBusy = true, $('proTicket').querySelector('[data-pa=open]').textContent = '⏳ Le technicien lit ton PC…', await api.proStart({ need: $('proNeed').value, cooling: $('proCool').value }).catch(() => null)) : await api.proAct(action, text).catch(() => null);
+  if (action !== 'open' && pro) { proBusy = true; if (action === 'msg') pro.log.push({ who: 'user', text: `${text}${imgs.length ? ` 📷 ${imgs.length} capture(s) jointe(s)` : ''}`, step: pro.step }); renderProTicket(); }
+  const r = action === 'open' ? (proBusy = true, $('proTicket').querySelector('[data-pa=open]').textContent = '⏳ Le technicien lit ton PC…', await api.proStart({ need: $('proNeed').value, cooling: $('proCool').value }).catch(() => null)) : await api.proAct(action, text, imgs).catch(() => null);
   proBusy = false;
   if (r?.error === 'premium') { renderProTicket(); return openPremium('opti'); }
   if (!r || r.error) { toast(r?.error === 'login' ? 'Connecte-toi à ton compte History (Paramètres › Compte).' : r?.error ?? 'Serveur injoignable. Réessaie.'); return renderPro(); }
@@ -3263,11 +3266,26 @@ $('proTicket').addEventListener('click', async (e) => {
   }
   const l = e.target.closest('[data-url]'); if (l) { e.preventDefault(); return api.proOpen?.(l.dataset.url); } const b = e.target.closest('[data-pa]'); if (!b) return; if (b.dataset.pa === 'discord') { proHuman = !proHuman; $('proHuman').hidden = !proHuman; return $('proHuman').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } if (b.dataset.pa === 'discordgo') return api.discordInvite?.(); if (b.dataset.pa === 'ask') return proAsk(); proAction(b.dataset.pa); });
 // Question au technicien : dans une fenêtre à part pour garder la page concentrée sur l'étape
+const proShots = [];
+// Capture réduite en JPEG (1600 px max) : rapide à envoyer, assez nette pour lire un BIOS
+const proShrink = (file) => new Promise((ok) => { const img = new Image(); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.82)); }; img.onerror = () => ok(null); const r = new FileReader(); r.onload = () => { img.src = r.result; }; r.onerror = () => ok(null); r.readAsDataURL(file); });
+async function proAddShots(files) {
+  for (const f of [...files].filter((x) => /^image\//.test(x.type)).slice(0, 3 - proShots.length)) { const u = await proShrink(f); if (u) proShots.push(u); }
+  $('proShots').innerHTML = proShots.map((u, i) => `<span><img src="${u}" alt=""><button type="button" data-rm="${i}" title="Retirer">✕</button></span>`).join('') + (proShots.length < 3 ? '<label class="btn sm ghost">📷 Ajouter une capture<input type="file" accept="image/*" multiple hidden></label>' : '');
+}
+// Question au technicien : dans une fenêtre à part pour garder la page concentrée sur l'étape
 function proAsk() {
   let d = document.getElementById('proAskDlg');
-  if (!d) { d = document.createElement('dialog'); d.id = 'proAskDlg'; d.innerHTML = '<form class="dlg proask" method="dialog"><h2>💬 Écrire au technicien</h2><p class="hint">Une question, un souci, une valeur à vérifier : il répond dans ton ticket, à l’étape en cours.</p><textarea id="proMsg" rows="5" maxlength="1500" placeholder="Ex : je ne trouve pas PBO dans mon BIOS…"></textarea><div class="row end"><button class="btn ghost" value="no">Annuler</button><button class="btn play" value="ok">Envoyer</button></div></form>'; document.body.append(d);
-    d.addEventListener('close', () => { const v = $('proMsg').value.trim(); if (d.returnValue === 'ok' && v) { $('proMsg').value = ''; proAction('msg', v); } }); }
-  d.showModal(); $('proMsg').focus();
+  if (!d) {
+    d = document.createElement('dialog'); d.id = 'proAskDlg';
+    d.innerHTML = '<form class="dlg proask" method="dialog"><h2>💬 Écrire au technicien</h2><p class="hint">Une question, un souci, une valeur à vérifier. Ajoute des captures ou des photos (écran du BIOS, message d’erreur…) : le technicien les regarde pour mieux t’aider. Tu peux aussi coller une image avec Ctrl+V.</p><textarea id="proMsg" rows="5" maxlength="1500" placeholder="Ex : je ne trouve pas PBO dans mon BIOS, voilà l’écran…"></textarea><div class="proshots" id="proShots"></div><div class="row end"><button class="btn ghost" value="no">Annuler</button><button class="btn play" value="ok">Envoyer</button></div></form>';
+    document.body.append(d);
+    d.addEventListener('change', (e) => { if (e.target.type === 'file') proAddShots(e.target.files); });
+    d.addEventListener('click', (e) => { const r = e.target.closest('[data-rm]'); if (r) { proShots.splice(Number(r.dataset.rm), 1); proAddShots([]); } });
+    d.addEventListener('paste', (e) => { const f = [...(e.clipboardData?.files ?? [])]; if (f.length) { e.preventDefault(); proAddShots(f); } });
+    d.addEventListener('close', () => { const v = $('proMsg').value.trim(), imgs = proShots.splice(0); if (d.returnValue === 'ok' && (v || imgs.length)) { $('proMsg').value = ''; proAction('msg', v, imgs); } });
+  }
+  proAddShots([]); d.showModal(); $('proMsg').focus();
 }
 $('proSteps').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-pt]'); if (!b) return; const k = b.dataset.pt;
@@ -4835,7 +4853,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.34',
+    version: async () => '0.53.35',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

@@ -85,11 +85,11 @@ export async function sessionOf(accountId) { return Object.values(await all()).f
 const byThread = async (threadId) => Object.values(await all()).find((t) => t.thread === threadId) ?? null;
 
 // ---------- IA ----------
-let askImpl = async (content, web = false) => (await (await import('../ai/gemini.js')).chat({ system: SYSTEM, content, web, thinking: 'low', tag: 'opti-pro' })).text;
+let askImpl = async (content, web = false, images = []) => (await (await import('../ai/gemini.js')).chat({ system: SYSTEM, content: images.length ? [{ type: 'text', text: content }, ...images] : content, web, thinking: 'low', tag: 'opti-pro' })).text;
 export function setAsk(fn) { askImpl = fn; } // tests
-async function botSay(id, kind, text) {
+async function botSay(id, kind, text, images = []) {
   const t = (await all())[id]; if (!t) return null;
-  const reply = await askImpl(promptFor(t, kind, text), ['bios', 'format'].includes(STEPS[t.step][0]) || /bios|pilote|driver|version|lien|menu|xmp|expo|pbo|trouve pas|introuvable/i.test(text)).catch(() => null) || 'Je n’arrive pas à joindre l’IA pour le moment. Réessaie dans une minute, ou clique sur « 👤 Parler à un humain ».';
+  const reply = await askImpl(promptFor(t, kind, images.length ? `${text}\n[${images.length} capture(s) d’écran / photo(s) jointe(s) : regarde-les attentivement (menus du BIOS, messages d’erreur, réglages, températures) et réponds en t’appuyant dessus]` : text), ['bios', 'format'].includes(STEPS[t.step][0]) || /bios|pilote|driver|version|lien|menu|xmp|expo|pbo|trouve pas|introuvable/i.test(text), images).catch(() => null) || 'Je n’arrive pas à joindre l’IA pour le moment. Réessaie dans une minute, ou clique sur « 👤 Parler à un humain ».';
   return push(id, { who: 'bot', text: reply.slice(0, 3900) });
 }
 async function push(id, msg) {
@@ -108,10 +108,10 @@ export async function startSession(account, raw, discordId = null) {
   return botSay(id, 'step');
 }
 /** next | skip | done | human | close | msg */
-export async function act(id, action, text = '', who = 'user') {
+export async function act(id, action, text = '', who = 'user', images = []) {
   const t = (await all())[id]; if (!t || t.closed) return { error: 'Ticket fermé. Ouvre une nouvelle demande Opti Pro.' };
   if (action === 'detail') return { detail: (await askImpl(promptFor(t, 'detail', text), true).catch(() => null)) || 'Je n’arrive pas à joindre l’IA pour le moment. Réessaie dans une minute.' };
-  if (action === 'msg') { if (!String(text).trim()) return t; await push(id, { who, text: String(text).slice(0, 1500) }); return who === 'staff' ? (await all())[id] : botSay(id, 'msg', text); }
+  if (action === 'msg') { if (!String(text).trim() && !images.length) return t; await push(id, { who, text: `${String(text).slice(0, 1500)}${images.length ? ` 📷 ${images.length} capture(s) jointe(s)` : ''}` }); return who === 'staff' ? (await all())[id] : botSay(id, 'msg', text, images); }
   if (action === 'human') { await callHuman(t); return push(id, { who: 'bot', text: '👤 Un membre de l’équipe est prévenu et va te répondre ici. En attendant, je reste là pour tes questions.' }); }
   if (action === 'close' || (action === 'done' && t.step === STEPS.length - 1)) {
     await push(id, { who: 'bot', text: action === 'done' ? '# Ton PC est prêt 🚀\nMerci pour ta confiance ! Toutes les étapes sont validées. Si un souci revient, rouvre un ticket Opti Pro.' : '🔒 Ticket fermé. Tu peux en rouvrir un quand tu veux.' });
@@ -175,7 +175,7 @@ async function openThread(id) {
   const th = await c.threads.create({ name: `🚀 ${t.name || member.user.username} · Opti Pro`.slice(0, 100), type: ChannelType.PrivateThread, invitable: false, autoArchiveDuration: 10080 });
   await th.members.add(t.discordId).catch(() => {});
   await mutate((a) => { a[id].thread = th.id; });
-  await th.send({ content: `<@${t.discordId}> ton ticket Opti Pro est ouvert. Écris ici quand tu veux : je réponds tout de suite. Les mêmes messages sont dans History Launcher › Optimisation.`, allowedMentions: { users: [t.discordId] } });
+  await th.send({ content: `<@${t.discordId}> ton ticket Opti Pro est ouvert. Écris ici quand tu veux (tu peux aussi envoyer des captures ou des photos de ton écran / BIOS) : je réponds tout de suite. Les mêmes messages sont dans History Launcher › Optimisation.`, allowedMentions: { users: [t.discordId] } });
   for (const m of t.log) await postThread({ ...t, thread: th.id }, m).catch(() => {});
 }
 async function closeThread(t) { const th = t?.thread && client ? await client.channels.fetch(t.thread).catch(() => null) : null; await th?.setLocked(true).catch(() => {}); await th?.setArchived(true).catch(() => {}); }
@@ -228,13 +228,15 @@ export async function onOptiProInteraction(interaction) {
   return true;
 }
 async function onMessage(m) {
-  if (m.author.bot || !m.channel?.isThread?.() || m.channel.parentId !== chan?.id || !m.content.trim()) return;
+  if (m.author.bot || !m.channel?.isThread?.() || m.channel.parentId !== chan?.id || (!m.content.trim() && !m.attachments.size)) return;
   const t = await byThread(m.channel.id); if (!t || t.closed) return;
   const who = m.author.id === t.discordId ? 'user' : isStaff(m.author.id) ? 'staff' : null; if (!who) return;
   if (who === 'user' && !allowAttempt('opti-pro-act', t.owner, 40, 3_600_000)) return void m.react('⏳').catch(() => {});
   await m.channel.sendTyping().catch(() => {});
-  await mutate((a) => { a[t.id].log.push({ who, text: m.content.slice(0, 1500), step: a[t.id].step, at: Date.now(), fromDiscord: true }); a[t.id].updatedAt = Date.now(); });
-  if (who === 'user') await botSay(t.id, 'msg', m.content);
+  const images = m.attachments.size ? (await (await import('../utils/discord.js')).attachmentsToContent(m.attachments, { maxImages: 3 }).catch(() => ({ content: [] }))).content.filter((c) => c.type === 'image') : [];
+  const text = `${m.content.slice(0, 1500)}${images.length ? `${m.content ? '\n' : ''}📷 ${images.length} capture(s) jointe(s)` : ''}`;
+  await mutate((a) => { a[t.id].log.push({ who, text, step: a[t.id].step, at: Date.now(), fromDiscord: true }); a[t.id].updatedAt = Date.now(); });
+  if (who === 'user') await botSay(t.id, 'msg', m.content, images);
 }
 export function startOptiPro(c) { if (client) return; client = c; c.on('messageCreate', (m) => { onMessage(m).catch(() => {}); }); setTimeout(() => salon().catch(() => {}), 15_000).unref?.(); }
 
@@ -249,7 +251,13 @@ export async function handleOptiProApi(req, res, url, account, { readJson, send 
   if (url.pathname.endsWith('/action')) {
     const cur = await sessionOf(account.id); if (!cur) return send(res, 404, { error: 'Aucun ticket ouvert.' });
     if (!allowAttempt('opti-pro-act', account.id, 40, 3_600_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
-    if (b.action === 'msg') { await mutate((a) => { a[cur.id].log.push({ who: 'user', text: String(b.text ?? '').slice(0, 1500), step: a[cur.id].step, at: Date.now(), fromApp: true }); }); const fresh = (await all())[cur.id]; await postThread(fresh, fresh.log.at(-1)).catch(() => {}); const r = await botSay(cur.id, 'msg', String(b.text ?? '')); return send(res, 200, { session: view(r) }); }
+    if (b.action === 'msg') {
+      const images = (Array.isArray(b.images) ? b.images : []).slice(0, 3).map((u) => String(u).match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]{100,})$/)).filter(Boolean).map(([, mime, data]) => ({ type: 'image', mime_type: mime, data }));
+      const text = `${String(b.text ?? '').slice(0, 1500)}${images.length ? `${b.text ? '\n' : ''}📷 ${images.length} capture(s) jointe(s)` : ''}`;
+      if (!text.trim()) return send(res, 400, { error: 'Message vide.' });
+      await mutate((a) => { a[cur.id].log.push({ who: 'user', text, step: a[cur.id].step, at: Date.now(), fromApp: true }); }); const fresh = (await all())[cur.id]; await postThread(fresh, fresh.log.at(-1)).catch(() => {});
+      return send(res, 200, { session: view(await botSay(cur.id, 'msg', String(b.text ?? ''), images)) });
+    }
     const r = await act(cur.id, String(b.action ?? ''), String(b.text ?? '').slice(0, 600)); return send(res, r?.error ? 400 : 200, r?.error || r?.detail ? r : { session: view(r) });
   }
   if (!allowAttempt('opti-pro-open', account.id, 3, 3_600_000)) return send(res, 429, { error: 'Trois tickets par heure maximum.' });

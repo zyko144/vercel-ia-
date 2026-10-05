@@ -15,6 +15,10 @@ assert.equal((await m.startSession({ id: 'acc1' }, {})).id, t0.id, 'un seul tick
 let t = await m.act(t0.id, 'skip2'); assert.equal(t.step, 4); assert.match(prompts.at(-1), /Guide BIOS/);
 t = await m.act(t0.id, 'msg', 'Je trouve pas PBO'); assert.match(prompts.at(-1), /Je trouve pas PBO/); assert.equal(t.log.at(-1).who, 'bot');
 const det = await m.act(t0.id, 'detail', 'Activer EXPO'); assert.match(det.detail, /Réponse/); assert.match(prompts.at(-1), /DÉTAIL complet.*Activer EXPO/s);
+let seen = null; const old = prompts.length; m.setAsk(async (p, web, imgs) => { prompts.push(p); seen = imgs; return 'Vu'; });
+t = await m.act(t0.id, 'msg', 'Voilà mon BIOS', 'user', [{ type: 'image', mime_type: 'image/png', data: 'AAAA' }]);
+assert.equal(seen.length, 1); assert.match(prompts.at(-1), /capture\(s\) d’écran/); assert.match(t.log.at(-2).text, /📷 1 capture/); assert.equal(prompts.length, old + 1);
+m.setAsk(async (p) => { prompts.push(p); return `Réponse ${prompts.length}`; });
 t = await m.act(t0.id, 'msg', 'Staff ici', 'staff'); assert.equal(t.log.at(-1).who, 'staff'); const n = prompts.length;
 t = await m.act(t0.id, 'next'); t = await m.act(t0.id, 'next'); assert.equal(t.step, 6); assert.equal(prompts.length, n + 2);
 t = await m.act(t0.id, 'done'); assert.ok(t.closed && t.done); assert.match(t.log.at(-1).text, /Ton PC est prêt/);
