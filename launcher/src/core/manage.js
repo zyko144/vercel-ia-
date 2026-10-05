@@ -17,7 +17,8 @@ export function safeGameDir(item) {
   const dir = item?.installDir ? path.resolve(item.installDir) : '';
   if (!dir) return { ok: false, why: 'dossier inconnu' };
   const parts = dir.split(/[\\/]+/).filter(Boolean);
-  if (parts.length < 3) return { ok: false, why: 'dossier trop proche de la racine du disque' };
+  // D:\Fortnite est permis (fiche Epic / dossier common vérifiés plus bas), pas la racine ni un dossier qui regroupe des jeux
+  if (parts.length < 2 || (parts.length === 2 && /^(games|jeux|epic games|steam|steamlibrary|xboxgames|program files( \(x86\))?|users|windows)$/i.test(parts[1]))) return { ok: false, why: 'dossier trop proche de la racine du disque' };
   if (/\\(windows|program files( \(x86\))?|users|programdata|system32)\\?$/i.test(dir)) return { ok: false, why: 'dossier système' };
   if (item.source === 'steam') {
     const common = path.join(item.steamLibrary ?? '', 'common');
