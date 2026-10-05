@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.36': [
+    ['💬', 'Tout le message du technicien', 'Opti Pro : les phrases et les questions du technicien (pas seulement les listes) font partie du parcours. « Continuer » passe dessus aussi, et un clic sur n’importe quelle partie floutée l’affiche.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
+  ],
   '0.53.35': [
     ['📷', 'Envoie des captures au technicien', 'Opti Pro : dans « 💬 Écrire au technicien », ajoute jusqu’à 3 captures ou photos (écran du BIOS, message d’erreur, réglages…) ou colle-les avec Ctrl+V. Le technicien IA les regarde pour t’aider plus précisément. Sur Discord, envoie simplement l’image dans ton fil.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1200', '[data-pa=ask]', 'wait700']]
   ],
@@ -3200,13 +3203,13 @@ const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="
 // Mode concentration : une tâche à la fois dans le dernier message du technicien, les autres floutées
 const proFocus = {}, proDetail = {};
 function proFocusUi() {
-  const m = [...$('proLog').querySelectorAll('.emb.bot[data-k]')].pop(), items = m ? [...m.querySelectorAll(':scope > .reporttxt > ul > li')] : [];
+  const m = [...$('proLog').querySelectorAll('.emb.bot[data-k]')].pop(), items = m ? [...m.querySelectorAll(':scope > .reporttxt > ul > li, :scope > .reporttxt > p')] : [];
   if (!m || items.length < 2 || pro.closed) return;
   const k = m.dataset.k, i = Math.min(proFocus[k] ?? 0, items.length - 1), d = proDetail[`${k}:${i}`];
   m.classList.add('focus'); m.classList.toggle('detailing', Boolean(d));
   items.forEach((li, j) => { li.classList.toggle('on', j === i); li.classList.toggle('past', j < i); li.dataset.pf = j; });
-  let h = items[i].parentElement.previousElementSibling; while (h && h.tagName !== 'H4') h = h.previousElementSibling; h?.classList.add('on');
-  items[i].insertAdjacentHTML('beforeend', `<div class="pfbtns"><button class="btn sm" data-pfa="detail" ${d === 0 ? 'disabled' : ''}>${d === 0 ? '⏳ Le technicien détaille…' : d ? '✕ Fermer le détail' : '📖 Détail pas à pas'}</button>${i < items.length - 1 ? '<button class="btn sm play" data-pfa="next">Continuer ▶</button>' : '<small class="hint">Dernière tâche : clique sur « Fait » en bas quand c’est bon.</small>'}</div>${d ? `<div class="pfdetail reporttxt rich">${proLinks(richText(d))}</div>` : ''}`);
+  let h = (items[i].tagName === 'LI' ? items[i].parentElement : items[i]).previousElementSibling; while (h && h.tagName !== 'H4') h = h.previousElementSibling; h?.classList.add('on');
+  items[i].insertAdjacentHTML('beforeend', `<div class="pfbtns">${items[i].tagName === 'P' && /\?\s*$/.test(items[i].textContent) ? '<button class="btn sm play" data-pa="ask">💬 Répondre</button>' : ''}<button class="btn sm" data-pfa="detail" ${d === 0 ? 'disabled' : ''}>${d === 0 ? '⏳ Le technicien détaille…' : d ? '✕ Fermer le détail' : '📖 Détail pas à pas'}</button>${i < items.length - 1 ? '<button class="btn sm play" data-pfa="next">Continuer ▶</button>' : '<small class="hint">Dernière tâche : clique sur « Fait » en bas quand c’est bon.</small>'}</div>${d ? `<div class="pfdetail reporttxt rich">${proLinks(richText(d))}</div>` : ''}`);
 }
 
 const proLinks = (html) => html.replace(/\[([^\]]+)\]\((https:\/\/[^\s)<]+)\)|(https:\/\/[^\s<)]+)/g, (_, t, u, bare) => `<a href="#" class="plink" data-url="${u ?? bare}">${t ?? bare}</a>`);
@@ -3253,14 +3256,14 @@ async function proAction(action, text = '', imgs = []) {
   pro = r.session; renderPro(false);
 }
 $('proTicket').addEventListener('click', async (e) => {
-  const f = e.target.closest('[data-pfa]'), li = e.target.closest('.emb.focus li[data-pf]:not(.on)');
+  const f = e.target.closest('[data-pfa]'), li = e.target.closest('.emb.focus [data-pf]:not(.on)');
   const m = (f ?? li)?.closest('.emb'), k = m?.dataset.k, i = proFocus[k] ?? 0;
   if (li) { proFocus[k] = Number(li.dataset.pf); return renderProTicket(); }
   if (f?.dataset.pfa === 'next') { proFocus[k] = i + 1; return renderProTicket(); }
   if (f?.dataset.pfa === 'detail') {
     const key = `${k}:${i}`; if (proDetail[key]) { delete proDetail[key]; return renderProTicket(); }
     proDetail[key] = 0; renderProTicket();
-    const c = m.querySelectorAll(':scope > .reporttxt > ul > li')[i].cloneNode(true); c.querySelectorAll('.pfbtns, .pfdetail').forEach((x) => x.remove());
+    const c = m.querySelectorAll(':scope > .reporttxt > ul > li, :scope > .reporttxt > p')[i].cloneNode(true); c.querySelectorAll('.pfbtns, .pfdetail').forEach((x) => x.remove());
     const r = await api.proAct('detail', c.textContent.trim()).catch(() => null);
     proDetail[key] = r?.detail ?? r?.error ?? 'Détail indisponible, réessaie.'; return renderProTicket();
   }
@@ -4853,7 +4856,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.35',
+    version: async () => '0.53.36',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
