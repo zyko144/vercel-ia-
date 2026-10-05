@@ -1607,6 +1607,11 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.26': [
+    ['🚀', 'Opti Pro accompagnée', 'Optimisation › 🚀 Opti Pro : un vrai parcours en 7 étapes comme chez un technicien — ticket, validation (staff ou IA), clé USB, formatage, BIOS & overclocking, réglages finaux Windows / NVIDIA / énergie, puis test avant / après. Ton PC est prêt 🚀', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']],
+    ['🧠', 'BIOS selon ton matériel', 'L’appli lit ton processeur, ta carte mère et ta RAM : overclocking possible ou non, PBO / Curve Optimizer, XMP / EXPO pas activé, double canal. Premium : guide BIOS pas à pas par l’IA.'],
+    ['🗂', 'Optimisation mieux rangée', 'Deux onglets : ⚡ Optimisation rapide (analyse et un clic) et 🚀 Opti Pro accompagnée.']
+  ],
   '0.53.25': [
     ['🖼️', 'Bannières en grand', 'Les bannières de Fortnite et Roblox remplissent tout l’en-tête du jeu, et le logo Fortnite de la pochette est mieux cadré.', ['.side nav button:nth-child(2)', 'wait900']],
   ],
@@ -3139,6 +3144,56 @@ $('upAiBtn').addEventListener('click', async () => {
   $('upAiBtn').disabled = false; $('upAiBtn').textContent = '🤖 Avis détaillé de l’IA';
   if (r?.error === 'premium') return openPremium('ia');
   $('upAiOut').hidden = false; $('upAiOut').innerHTML = r?.text ? richText(r.text) : esc(r?.error ?? 'IA indisponible');
+});
+// ⚡ / 🚀 Optimisation : onglets « rapide » et « Opti Pro accompagnée » (7 étapes guidées)
+$('optTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-ot]'); if (!b) return; document.querySelectorAll('#optTabs [data-ot]').forEach((x) => x.classList.toggle('on', x === b)); document.querySelectorAll('#view-optimisation .optitab').forEach((el) => { el.hidden = el.dataset.ot !== b.dataset.ot; }); if (b.dataset.ot === 'pro') renderPro(); });
+const ls = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch { return null; } };
+const PRO_STEPS = [
+  ['ticket', '🎫 Ticket', 'Décris ton setup et ton besoin : la demande part au support (aussi possible sur Discord avec /launcher aide). Une mesure de départ est faite.', '<textarea id="proNeed" rows="3" placeholder="Ex : je joue à Fortnite en 1080p, j’ai 140 FPS avec des chutes, je veux plus de FPS stables…"></textarea><button class="btn play" data-pro="ticket">Envoyer ma demande</button>'],
+  ['valider', '✅ Validation', 'Le staff répond dans Paramètres › Aide, ou l’IA valide tout de suite et te dit quelles étapes faire.', '<button class="btn" data-pro="ai:valider">🤖 Validation par l’IA</button><button class="btn ghost" data-pro="aide">Voir la réponse du staff</button>'],
+  ['usb', '💾 Clé USB bootable', 'Facultatif. Une clé de 8 Go, l’outil officiel de Microsoft, et c’est prêt.', '<button class="btn" data-pro="usb">Télécharger l’outil Microsoft</button><button class="btn ghost" data-pro="ai:format">Guide pas à pas</button>'],
+  ['format', '🧹 Formatage', 'Sauvegardes, installation propre, pilotes dans le bon ordre : avec le support en live ou l’IA.', '<button class="btn" data-pro="ai:format">🤖 Me guider</button><button class="btn ghost" data-pro="aide">Support en live</button>'],
+  ['bios', '🧠 BIOS & overclocking', 'Processeur et RAM selon TON matériel. Processeur bloqué ou RAM limitée ? Le BIOS est réglé pour gagner quand même.', '<button class="btn" data-pro="ai:bios">🤖 Mon guide BIOS</button><button class="btn ghost" data-pro="occt">Test de stabilité (OCCT)</button>'],
+  ['final', '⚙️ Optimisation finale', 'Windows (services, latence, confidentialité), panneau NVIDIA / AMD et énergie, pour t’aligner sur les pros.', '<button class="btn" data-pro="rapide">Optimiser Windows</button><button class="btn ghost" data-pro="ai:final">🤖 Réglages NVIDIA & énergie</button>'],
+  ['test', '🏁 Test & validation', 'On remesure et on compare avec le départ. Chaque réglage validé : ton PC est prêt 🚀', '<button class="btn play" data-pro="bench">Mesurer maintenant</button>']
+];
+async function renderPro() {
+  const done = ls('proDone') ?? [], b0 = ls('proBench0'), b1 = ls('proBench1');
+  $('proBar').style.width = `${Math.round((100 * done.length) / PRO_STEPS.length)}%`;
+  $('proProg').textContent = done.length === PRO_STEPS.length ? 'Ton PC est prêt 🚀' : `${done.length} / ${PRO_STEPS.length} étapes validées`;
+  $('proSteps').innerHTML = PRO_STEPS.map(([id, t, d, btn], i) => `<li class="${done.includes(id) ? 'done' : ''}"><span class="pron">${done.includes(id) ? '✓' : i + 1}</span><div><b>${t}</b><small>${d}</small>${id === 'test' && b0 ? `<p class="probench">Départ <b>${b0}</b>${b1 ? ` → maintenant <b>${b1}</b> <em>(${b1 >= b0 ? '+' : ''}${Math.round((100 * (b1 - b0)) / b0)} %)</em>` : ''}</p>` : ''}<div class="row">${btn}<label class="toggle"><input type="checkbox" data-prodone="${id}" ${done.includes(id) ? 'checked' : ''}><span></span>Validé</label></div></div></li>`).join('');
+  const need = $('proNeed'); need.value = ls('proNeed') ?? ''; need.oninput = () => ls('proNeed', need.value);
+  if ($('proPc').dataset.done) return;
+  const p = await api.proGet?.().catch(() => null); if (!p) return;
+  $('proPc').dataset.done = '1';
+  const oc = { oui: ['ok', 'Overclockable'], limité: ['warn', 'Overclocking limité'], non: ['bad', 'Non débloqué : gains via le BIOS'] }[p.plan.cpuOc];
+  $('proPc').innerHTML = `<div><b>🧠 ${esc(p.cpu || 'Processeur')}</b><em class="${oc[0]}">${oc[1]}</em><ul>${p.plan.cpuHow.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div><div><b>🧩 RAM ${p.ramGb} Go${p.plan.ramType ? ` ${p.plan.ramType}` : ''}${p.plan.ramNow ? ` · ${p.plan.ramNow} MHz` : ''}</b><em class="${p.plan.ramLimited ? 'warn' : 'ok'}">${p.plan.ramLimited ? 'Optimisée via le BIOS' : 'Gain possible'}</em><ul>${p.plan.ramHow.map((x) => `<li>${esc(x)}</li>`).join('') || '<li>Déjà à sa vitesse maximale : on resserre les timings</li>'}</ul></div><small class="hint">Carte mère : ${esc(p.board || 'inconnue')} · rien n’est modifié dans le BIOS par l’appli, tout se fait avec toi.</small>`;
+}
+$('proSteps').addEventListener('change', (e) => { const id = e.target.dataset.prodone; if (!id) return; const done = new Set(ls('proDone') ?? []); e.target.checked ? done.add(id) : done.delete(id); ls('proDone', [...done]); renderPro(); });
+$('proSteps').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-pro]'); if (!b) return; const k = b.dataset.pro, out = $('proOut');
+  const mark = (id) => { const done = new Set(ls('proDone') ?? []); done.add(id); ls('proDone', [...done]); };
+  if (k === 'aide') return openHelp('🚀 Opti Pro : accompagnement', ls('proNeed') ?? '');
+  if (k === 'usb' || k === 'occt') return api.openLink?.(k === 'usb' ? 'usb' : 'bios');
+  if (k === 'rapide') { document.querySelector('#optTabs [data-ot=rapide]').click(); return $('optiScan').click(); }
+  b.disabled = true; const label = b.textContent;
+  if (k === 'ticket') {
+    b.textContent = 'Mesure de départ et envoi…';
+    const t = await api.benchQuick?.().catch(() => null); if (t?.total && !ls('proBench0')) ls('proBench0', t.total);
+    const r = await api.supportSend({ title: '🚀 Opti Pro : demande d’accompagnement', description: `${(ls('proNeed') ?? '').trim() || 'Je veux l’accompagnement Opti Pro complet.'}\n\nMesure de départ : ${ls('proBench0') ?? '?'} points.`, diagnostic: await api.supportDiagnostic().catch(() => ({})) }).catch(() => null);
+    if (r && !r.error) mark('ticket'); toast(r?.error ?? '✅ Demande envoyée : le staff te répond dans Paramètres › Aide et sur Discord');
+  } else if (k === 'bench') {
+    b.textContent = 'Mesure (≈ 10 s)…';
+    const t = await api.benchQuick?.().catch(() => null);
+    if (t?.total) { ls(ls('proBench0') ? 'proBench1' : 'proBench0', t.total); if (ls('proBench1')) mark('test'); }
+  } else {
+    b.textContent = '🤖 L’IA étudie ton PC…';
+    const r = await api.proAi?.(k.slice(3), ls('proNeed') ?? '').catch(() => null);
+    if (r?.error === 'premium') { b.disabled = false; b.textContent = label; return openPremium('opti'); }
+    out.hidden = false; out.innerHTML = r?.text ? richText(r.text) : esc(r?.error ?? 'IA indisponible'); out.scrollIntoView({ behavior: 'smooth' });
+    if (r?.text && k === 'ai:valider') mark('valider');
+  }
+  b.disabled = false; b.textContent = label; renderPro();
 });
 // 🩺 Entretien : état SMART des disques, anciens pilotes graphiques
 async function renderCare() {
@@ -4694,7 +4749,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.25',
+    version: async () => '0.53.26',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

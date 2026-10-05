@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('launcher', {
   friendGift: (to, item) => ipcRenderer.invoke('friend:gift', to, item),
   upgrade: (o) => ipcRenderer.invoke('upgrade:get', o),
   upgradeAi: (o) => ipcRenderer.invoke('upgrade:ai', o),
+  proGet: () => ipcRenderer.invoke('pro:get'),
+  proAi: (step, need) => ipcRenderer.invoke('pro:ai', step, need),
   care: () => ipcRenderer.invoke('care:get'),
   careDrivers: () => ipcRenderer.invoke('care:drivers'),
   modsToggle: (id, dir, name, on) => ipcRenderer.invoke('mods:toggle', id, dir, name, on),

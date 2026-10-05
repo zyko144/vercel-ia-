@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { ocPlan } from '../src/core/oc.js';
+assert.equal(ocPlan({ cpu: 'Intel Core i5-13600K', board: 'ASUS ROG STRIX Z790-F' }).cpuOc, 'oui');
+assert.equal(ocPlan({ cpu: 'Intel Core i5-13600KF', board: 'MSI PRO B760M-A' }).cpuOc, 'limité');
+assert.equal(ocPlan({ cpu: 'Intel Core i5-12400F', board: 'MSI PRO B660M' }).cpuOc, 'non');
+assert.equal(ocPlan({ cpu: 'AMD Ryzen 7 7800X3D 8-Core Processor' }).cpuOc, 'limité');
+assert.equal(ocPlan({ cpu: 'AMD Ryzen 5 5600X', board: 'Gigabyte B550 AORUS' }).cpuOc, 'oui');
+const r = ocPlan({ cpu: 'AMD Ryzen 5 7600', ram: [{ speed: 6000, configured: 4800, type: 'DDR5' }] });
+assert.equal(r.ramNow, 4800); assert.equal(r.ramSticks, 1); assert.match(r.ramHow[0], /EXPO.*4800.*6000/); assert.equal(r.ramLimited, false);
+assert.equal(ocPlan({ cpu: 'x', ram: [{ speed: 3200, configured: 3200 }, { speed: 3200, configured: 3200 }] }).ramLimited, true);
+console.log('oc ok');

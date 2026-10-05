@@ -294,6 +294,8 @@
       <button class="btn" type="button" id="maintReset">↩ Remettre Windows comme avant</button>
       <div class="mainttape b"></div>
     </div>
+    <div class="list-head"><h2>Optimisation</h2><div class="tabs pctabs" id="optTabs"><button data-ot="rapide" class="on">⚡ Optimisation rapide</button><button data-ot="pro">🚀 Opti Pro accompagnée</button></div></div>
+    <div class="optitab" data-ot="rapide">
     <div class="optihero">
       <div class="ring" id="optiRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="val" id="ringVal"/></svg><div><b id="ringNum">–</b><small id="ringLabel">Pas encore analysé</small></div></div>
       <div class="optiinfo">
@@ -306,6 +308,23 @@
     <div id="optiDiag"></div>
     <div id="optiProgress" hidden></div>
     <div class="opticats" id="optiBody"><div class="empty">Lance l’analyse pour voir ce qui peut être optimisé.</div></div>
+    </div>
+    <div class="optitab" data-ot="pro" hidden>
+      <div class="optihero prohero"><div class="proicon">🚀</div><div class="optiinfo"><h2>Opti Pro : ton PC réglé comme un pro</h2><p class="hint">Un vrai accompagnement, du formatage au BIOS : un technicien History ou l’IA te guide pas à pas. Tout se mesure avant / après, rien n’est forcé et tout se remet comme avant.</p><div class="probar"><i id="proBar"></i></div><small class="hint" id="proProg"></small></div></div>
+      <div class="prosvc">
+        <div><b>🧹 Formatage complet</b><small>Remise à zéro propre de Windows</small></div>
+        <div><b>⚙️ Windows complet</b><small>Services, confidentialité, latence, debloat</small></div>
+        <div><b>🟩 Panneau NVIDIA</b><small>Réglages avancés de la carte graphique</small></div>
+        <div><b>🌡 Intégrité & performances</b><small>Températures et stabilité vérifiées</small></div>
+        <div><b>✅ Compatibilité</b><small>Toutes tes applis et tes jeux testés</small></div>
+        <div><b>🧠 BIOS + overclocking</b><small>Processeur poussé si ton matériel le permet</small></div>
+        <div><b>🔒 CPU non débloqué ?</b><small>BIOS réglé pour aller chercher des gains quand même</small></div>
+        <div><b>🧩 RAM : timings & fréquence</b><small>Overclocking de la mémoire, ou optimisée au mieux</small></div>
+      </div>
+      <div class="propc" id="proPc"></div>
+      <ol class="prosteps" id="proSteps"></ol>
+      <div class="reporttxt rich prout" id="proOut" hidden></div>
+    </div>
   </section>
 
   <section id="view-premium" class="view prempane premium-refresh">
