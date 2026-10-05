@@ -80,3 +80,22 @@ console.log('more 0.54 ok');
   assert.deepEqual([w.hours, w.days, w.top[0].name, w.best.day], [3, 2, 'RL', '2026-03-01']);
   console.log('récap de l’année ok');
 }
+
+// Stockage : taille et dernière utilisation réelles, jeux de la bibliothèque à part, Program Files protégé, Windows jamais listé
+{
+  const { measure, storagePlan, typeOf } = await import('../src/core/storage.js');
+  const { mkdtemp, mkdir, writeFile, utimes } = await import('node:fs/promises');
+  const os = await import('node:os'); const path = await import('node:path');
+  const d = await mkdtemp(path.join(os.tmpdir(), 'st-')); await mkdir(path.join(d, 'a', 'jeu'), { recursive: true });
+  await writeFile(path.join(d, 'a', 'x.bin'), Buffer.alloc(3000)); await writeFile(path.join(d, 'a', 'jeu', 'g.pak'), Buffer.alloc(5000));
+  const old = new Date(Date.now() - 400 * 86_400_000); await utimes(path.join(d, 'a', 'x.bin'), old, old);
+  const all = await measure(path.join(d, 'a')); assert.equal(all.size, 8000); assert.equal(all.files, 2);
+
+  assert.equal(typeOf('film.MKV', false), 'video'); assert.equal(typeOf('x', true), 'folder'); assert.equal(typeOf('setup.exe', false), 'installer');
+  const fake = { 'C:\\Users\\A\\downloads': [{ name: 'Win.iso', dir: false }], 'C:\\Users\\A': [{ name: 'AppData', dir: true }, { name: 'Sauvegardes', dir: true }], 'C:\\Program Files': [{ name: 'Adobe', dir: true }], 'C:\\': [{ name: 'Windows', dir: true }, { name: 'Jeux', dir: true }, { name: 'pagefile.sys', dir: false }], 'D:\\': [{ name: 'SteamLibrary', dir: true }] };
+  const { plan, skip } = await storagePlan({ volumes: [{ letter: 'C' }, { letter: 'D' }], home: 'C:\\Users\\A', library: [{ id: 'g', name: 'Jeu', kind: 'game', installed: true, installDir: 'D:\\SteamLibrary\\common\\Jeu', lastPlayed: 5 }], list: async (dir) => fake[dir] ?? [] });
+  const by = Object.fromEntries(plan.map((x) => [x.name, x]));
+  assert.equal(by.Jeu.kind, 'game'); assert.equal(by['Win.iso'].kind, 'archive'); assert.equal(by.Adobe.kind, 'protected'); assert.equal(by.Sauvegardes.kind, 'folder');
+  assert.ok(!by.Windows && !by.AppData && !by['pagefile.sys'] && by.Jeux && by.SteamLibrary && skip.has('d:\\steamlibrary\\common\\jeu'));
+  console.log('stockage ok');
+}

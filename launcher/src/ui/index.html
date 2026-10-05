@@ -164,7 +164,7 @@
   <section id="view-pc" class="view">
     <div class="list-head"><h2>Mon PC</h2>
       <div class="tabs pctabs" id="pcTabs">
-        <button data-pctab="apercu" class="on">Vue d’ensemble</button><button data-pctab="analyse">🔬 Analyse pro</button><button data-pctab="maj">⬆ Windows Update<em class="navcount warnc" id="wuBadge"></em></button><button data-pctab="composants">🧩 Composants</button><button data-pctab="securite">🛡 Sécurité</button><button data-pctab="perf">🏁 Performances</button><button data-pctab="reseau">🌐 Réseau</button><button data-pctab="upgrade">🛒 Upgrade</button><button data-pctab="entretien">🩺 Entretien</button><button data-pctab="verifs">🧪 Vérifs</button>
+        <button data-pctab="apercu" class="on">Vue d’ensemble</button><button data-pctab="analyse">🔬 Analyse pro</button><button data-pctab="maj">⬆ Windows Update<em class="navcount warnc" id="wuBadge"></em></button><button data-pctab="composants">🧩 Composants</button><button data-pctab="securite">🛡 Sécurité</button><button data-pctab="perf">🏁 Performances</button><button data-pctab="reseau">🌐 Réseau</button><button data-pctab="upgrade">🛒 Upgrade</button><button data-pctab="entretien">🩺 Entretien</button><button data-pctab="stockage">💾 Stockage</button><button data-pctab="verifs">🧪 Vérifs</button>
       </div>
     </div>
 
@@ -267,6 +267,14 @@
     <div class="pctab" data-pctab="entretien" hidden>
       <div class="panel"><h3>💽 Santé des disques</h3><p class="hint">L’état SMART que Windows lit dans chaque disque. Si un disque faiblit, tu es prévenu (une fois par semaine) pour sauvegarder tes fichiers à temps.</p><div id="careDisks" class="upl"></div></div>
       <div class="panel"><h3>🧹 Anciens pilotes graphiques</h3><p class="hint">Chaque mise à jour NVIDIA / AMD / Intel laisse l’ancienne version sur le disque. Seuls les pilotes qui ne servent plus sont retirés, après un point de restauration.</p><div id="careDrv" class="upl"></div><button class="btn" type="button" id="careDrvGo">Nettoyer les anciens pilotes</button></div>
+    </div>
+    <div class="pctab" data-pctab="stockage" hidden>
+      <div class="stdrives" id="stDrives"></div>
+      <div class="panel stpanel">
+        <div class="sttools"><input id="stSearch" class="minput" type="search" placeholder="Rechercher un jeu, une appli, un fichier…"><select id="stSort" class="minput"><option value="size">Plus gros d’abord</option><option value="old">Moins utilisés d’abord</option><option value="name">Nom</option></select><button class="btn" type="button" id="stOld">🕰 Fichiers anciens</button><button class="btn ghost" type="button" id="stScan">↻ Analyser</button></div>
+        <div class="stchips" id="stChips"></div>
+        <div id="stList"><div class="empty">Ouvre cet onglet pour mesurer ce qui prend de la place sur tes disques.</div></div>
+      </div>
     </div>
     <div class="pctab" data-pctab="verifs" hidden>
       <div class="panel vfhero"><div class="vfsum" id="vfSum"><b>…</b></div><div class="vfhead"><h3 id="vfTitle">Vérification de ton PC…</h3><p class="hint">Écran, mémoire, BIOS, pilotes, disques : on regarde tout, on ne touche à rien sans toi.</p></div><button class="btn ghost" type="button" id="mvRecheck">↻ Revérifier</button></div>

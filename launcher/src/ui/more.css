@@ -184,3 +184,68 @@
 #view-optimisation .propc { gap: 22px; margin: 0; }
 #view-optimisation .prolay { gap: 30px; }
 #view-pc .advice { gap: 12px; } #view-pc .advice.compact .adv { padding: 14px 16px; }
+/* Opti Pro terminée + note au centre de l'écran */
+.proend { display: grid; gap: 20px; padding: 26px; border-radius: 20px; background: radial-gradient(500px 180px at 0 0, #ffc43922, transparent), var(--panel); border: 1px solid #ffc43940; }
+.proendhead { display: flex; align-items: center; gap: 16px; } .proendhead > span { font-size: 40px; }
+.proendhead h3 { margin: 0; font-size: 22px; } .proendhead p { margin: 4px 0 0; color: var(--muted); }
+.proendacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.proendacts button { display: grid; gap: 4px; justify-items: start; text-align: left; padding: 18px; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line, #ffffff14); color: inherit; font: inherit; cursor: pointer; transition: transform .15s, border-color .15s; }
+.proendacts button:hover { transform: translateY(-2px); border-color: #ffc439; } .proendacts button:disabled { opacity: .6; cursor: progress; }
+.proendacts i { font-style: normal; font-size: 24px; } .proendacts b { color: var(--text, #fff); } .proendacts small { color: var(--muted); font-size: 12px; }
+#modalBox.ratebox { max-width: 460px; padding: 34px 32px 28px; text-align: center; }
+.rate { display: grid; justify-items: center; gap: 8px; }
+.rate > img { width: 64px; height: 64px; filter: drop-shadow(0 8px 24px #ffc43966); }
+.rate h2 { margin: 8px 0 0; font-size: 24px; } .rate > p { margin: 0 0 8px; color: var(--muted); }
+.ratestars { display: flex; gap: 6px; }
+.ratestars button { font-size: 44px; line-height: 1; background: none; border: 0; padding: 2px; color: #ffffff26; cursor: pointer; transition: color .12s, transform .12s; }
+.ratestars button.on { color: #ffc439; text-shadow: 0 0 18px #ffc43980; } .ratestars button:hover { transform: scale(1.15); }
+.ratelbl { min-height: 22px; color: #ffc439; }
+.rate textarea { width: 100%; margin: 10px 0 6px; resize: none; }
+.rate .row { width: 100%; justify-content: center; gap: 10px; }
+/* Préparer la vente */
+#modalBox.sellbox { padding: 0 !important; overflow: hidden; }
+.sellhead { display: flex; align-items: center; justify-content: space-between; padding: 30px 34px; background: radial-gradient(500px 200px at 0 0, #22c55e26, transparent), linear-gradient(160deg, #ffffff08, transparent); border-bottom: 1px solid var(--line, #ffffff14); }
+.sellhead small { color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; font-size: 12px; }
+.sellhead b { display: block; font-size: 44px; font-weight: 800; line-height: 1.1; margin: 4px 0; } .sellhead span { color: var(--muted); } .sellhead .sellico { font-size: 54px; }
+.sellgrid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 34px; padding: 28px 34px; }
+.sellgrid section { display: grid; gap: 14px; align-content: start; } .sellgrid h3 { margin: 6px 0 0; font-size: 15px; }
+.sellgrid pre { margin: 0; white-space: pre-wrap; font: 13px/1.6 inherit; font-family: inherit; padding: 16px 18px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line, #ffffff14); }
+.sellgrid .btn { justify-self: start; }
+.sellparts { display: grid; gap: 2px; border-radius: 14px; overflow: hidden; }
+.sellparts div { display: grid; grid-template-columns: 130px 1fr auto; gap: 12px; align-items: center; padding: 11px 16px; background: var(--panel-2); }
+.sellparts span { color: var(--muted); font-size: 12px; } .sellparts b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .sellparts em { font-style: normal; font-weight: 700; }
+.sellsteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.sellsteps li { display: flex; gap: 14px; padding: 16px; border-radius: 14px; background: var(--panel-2); }
+.sellsteps i { font-style: normal; font-size: 22px; } .sellsteps b { display: block; } .sellsteps small { color: var(--muted); line-height: 1.45; }
+.sell > .row.end { padding: 0 34px 26px; }
+@media (max-width: 900px) { .sellgrid { grid-template-columns: 1fr; } }
+/* Mon PC › Stockage */
+.stdrives { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 30px; }
+.stdhead { display: flex; align-items: center; gap: 14px; } .stdhead > span { font-size: 30px; } .stdhead div { flex: 1; } .stdhead b { display: block; font-size: 16px; } .stdhead small { color: var(--muted); }
+.stdhead em { font-style: normal; font-size: 22px; font-weight: 800; } .stdhead em.bad { color: #f87171; }
+.stbar { display: flex; height: 14px; border-radius: 8px; overflow: hidden; background: #ffffff10; } .stbar i { height: 100%; min-width: 2px; }
+.stlegend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--muted); } .stlegend span { display: flex; align-items: center; gap: 6px; } .stlegend i { width: 10px; height: 10px; border-radius: 3px; } .stlegend b { color: var(--text, #fff); font-weight: 600; }
+.sttools { display: flex; gap: 10px; flex-wrap: wrap; } .sttools #stSearch { flex: 1; min-width: 220px; } .sttools select { width: auto; }
+.stchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.stchips button, .stmonths button { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line, #ffffff1a); background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px; }
+.stchips button.on, .stmonths button.on { background: var(--accent, #ff8a2a); border-color: transparent; color: #fff; font-weight: 700; }
+.strows { display: grid; gap: 4px; }
+.strow { display: grid; grid-template-columns: 44px minmax(0, 1fr) 170px 140px 170px; gap: 16px; align-items: center; padding: 10px 12px; border-radius: 12px; transition: background .15s; }
+.strow:hover { background: var(--panel-2); }
+.sticon { position: relative; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--k) 18%, transparent); overflow: hidden; }
+.sticon em { font-style: normal; font-size: 20px; } .sticon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: var(--panel-2); }
+.sticon img[src^="data:"] { inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); object-fit: contain; background: none; }
+.stname { min-width: 0; } .stname b, .stname small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .stname small { color: var(--muted); font-size: 12px; }
+.stago { color: var(--muted); font-size: 12px; } .stago.old { color: #fbbf24; }
+.stsize { display: grid; gap: 5px; text-align: right; } .stsize i { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--accent, #ff8a2a) var(--w), #ffffff10 var(--w)); }
+.stacts { display: flex; justify-content: flex-end; gap: 6px; opacity: .55; transition: opacity .15s; } .strow:hover .stacts { opacity: 1; }
+.stdel:hover { background: #ef4444; border-color: #ef4444; color: #fff; }
+.stmore { justify-self: center; margin-top: 8px; }
+.stscan { display: grid; gap: 8px; justify-items: center; padding: 50px 20px; text-align: center; } .stscan b { font-size: 34px; } .stscan span { color: var(--muted); }
+.stscan i { width: min(420px, 100%); height: 8px; border-radius: 8px; background: #ffffff10; overflow: hidden; } .stscan u { display: block; height: 100%; width: 0; background: var(--accent, #ff8a2a); transition: width .4s; } .stscan small { color: var(--muted); }
+.stold { display: grid; gap: 16px; } .stmonths { display: flex; gap: 8px; }
+.stwarn { display: grid; gap: 4px; padding: 14px 16px; border-radius: 14px; background: #f59e0b14; border: 1px solid #f59e0b40; } .stwarn b { color: #fbbf24; } .stwarn span { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.stall { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+.stoldlist { display: grid; gap: 2px; max-height: 46vh; overflow: auto; }
+.stoldlist .strow { grid-template-columns: 20px 40px minmax(0, 1fr) auto; cursor: pointer; }
+.rate #rateSend:disabled { opacity: .45; cursor: default; } .ratestars button:focus { outline: none; }

@@ -107,11 +107,14 @@ async function push(id, msg) {
 }
 
 // ---------- actions (communes Discord / appli) ----------
-export async function startSession(account, raw, discordId = null) {
+export async function startSession(account, raw, discordId = null, redo = false) {
   const old = await sessionOf(account.id); if (old) return old;
   const id = randomUUID(); const specs = specsOf(raw);
-  await mutate((a) => { a[id] = { id, owner: account.id, name: String(account.pseudo ?? '').slice(0, 40), discordId: discordId ?? account.discordId ?? null, thread: null, step: 1, specs, log: [], at: Date.now(), updatedAt: Date.now() }; });
-  await push(id, { who: 'user', text: `Mon setup : ${specs.cpu} · ${specs.gpu} · ${specs.ramText || `${specs.ramGb ?? '?'} Go`}\n${specs.need}` });
+  // Refaire l'Opti Pro : rien n'est remis à zéro, on retire seulement du plan ce qui a déjà été validé
+  const prev = redo ? Object.values(await all()).filter((t) => t.owner === account.id && t.done).sort((a, b) => b.at - a.at)[0] : null;
+  if (prev) { const done = new Set([...(prev.specs?.doneIds ?? []), ...(prev.specs?.todo ?? []).map((x) => x.id)]); done.delete('mesure'); specs.doneIds = [...done]; specs.todo = specs.todo.filter((x) => !done.has(x.id)); }
+  await mutate((a) => { a[id] = { id, owner: account.id, name: String(account.pseudo ?? '').slice(0, 40), discordId: discordId ?? account.discordId ?? null, thread: null, step: 1, specs, log: [], at: Date.now(), updatedAt: Date.now(), redo: Boolean(prev) }; });
+  await push(id, { who: 'user', text: `${prev ? `🔁 Je refais l’Opti Pro : ${specs.doneIds.length} point${specs.doneIds.length > 1 ? 's' : ''} déjà validé${specs.doneIds.length > 1 ? 's' : ''} retiré${specs.doneIds.length > 1 ? 's' : ''} du plan.\n` : ''}Mon setup : ${specs.cpu} · ${specs.gpu} · ${specs.ramText || `${specs.ramGb ?? '?'} Go`}\n${specs.need}` });
   await openThread(id).catch(() => {});
   return botSay(id, 'step');
 }
@@ -141,7 +144,7 @@ export async function act(id, action, text = '', who = 'user', images = []) {
   }
   if (['next', 'skip', 'skip2', 'done'].includes(action)) {
     if (t.step >= STEPS.length - 1) return t;
-    const n = action === 'skip2' && STEPS[t.step + 2]?.[3] ? 2 : action === 'skip' && STEPS[t.step + 1]?.[3] ? 1 : 0;
+    const n = t.redo && t.step === 1 ? 2 : action === 'skip2' && STEPS[t.step + 2]?.[3] ? 2 : action === 'skip' && STEPS[t.step + 1]?.[3] ? 1 : 0; // refaite : pas de clé USB ni de formatage
     await mutate((a) => { a[id].step = Math.min(STEPS.length - 1, a[id].step + n + 1); });
     if (n) await push(id, { who: 'user', text: `⏭ Je passe : ${STEPS.slice(t.step + 1, t.step + 1 + n).map((x) => x[1]).join(', ')}.` });
     return botSay(id, 'step');
@@ -280,7 +283,7 @@ async function postGains() {
 export function startOptiPro(c) { if (client) return; client = c; setInterval(() => { if (new Date().getUTCDate() <= 3) postGains().catch(() => {}); }, 6 * 3_600_000).unref?.(); c.on('messageCreate', (m) => { onMessage(m).catch(() => {}); }); setTimeout(() => salon().catch(() => {}), 15_000).unref?.(); }
 
 // ---------- API du launcher ----------
-const view = (t) => t && { id: t.id, at: t.at, board: t.specs?.board ?? '', cpu: t.specs?.cpu ?? '', stepAt: t.log.find((m) => m.step === t.step)?.at ?? t.at, rating: t.rating ?? null, closedAt: t.closedAt ?? null, todo: t.specs?.todo ?? personalPlan(t.specs ?? {}), ocOptIn: Boolean(t.ocOptIn), ocWarning: OC_WARNING, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
+const view = (t) => t && { id: t.id, at: t.at, board: t.specs?.board ?? '', cpu: t.specs?.cpu ?? '', stepAt: t.log.find((m) => m.step === t.step)?.at ?? t.at, rating: t.rating ?? null, closedAt: t.closedAt ?? null, todo: t.specs?.todo ?? personalPlan(t.specs ?? {}), redo: Boolean(t.redo), doneIds: t.specs?.doneIds ?? [], ocOptIn: Boolean(t.ocOptIn), ocWarning: OC_WARNING, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
 export async function handleOptiProApi(req, res, url, account, { readJson, send }) {
   res.setHeader('Cache-Control', 'no-store');
   account = { ...account, discordId: (await (await import('./launcherAccounts.js')).findAccount(account.id))?.discordId ?? null };
@@ -308,5 +311,5 @@ export async function handleOptiProApi(req, res, url, account, { readJson, send 
   }
   if (!allowAttempt('opti-pro-open', account.id, 3, 3_600_000)) return send(res, 429, { error: 'Trois tickets par heure maximum.' });
   await mutateSpecs(account.id, b.specs ?? {});
-  return send(res, 200, { session: view(await startSession(account, b.specs ?? {})) });
+  return send(res, 200, { session: view(await startSession(account, b.specs ?? {}, null, b.redo === true)) });
 }
