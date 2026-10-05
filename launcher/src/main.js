@@ -203,7 +203,7 @@ function createTray() {
     { type: 'separator' },
     { label: 'Quitter', click: () => { quitting = true; app.quit(); } },
   ]));
-  tray.on('click', showWindow);
+  tray.on('click', () => toggleMini()); // clic gauche : mini-launcher ; « Ouvrir » reste dans le menu du clic droit
 }
 
 function applyAutostart() {
@@ -3709,6 +3709,44 @@ app.whenReady().then(() => {
   powerMonitor.on('on-ac', () => batteryMode(false).catch(() => {}));
 });
 
+// ---------- Mini-launcher : clic sur l'icône History de la barre des tâches ----------
+let mini = null;
+async function miniData() {
+  const games = items.filter((i) => i.kind === 'game' && i.installed);
+  const pick = (i) => ({ id: i.id, name: i.name, cover: i.art?.cover ?? i.art?.header ?? null, minutes: i.minutes ?? 0, last: i.lastPlayed ?? 0, update: Boolean(i.updatePending) });
+  const pc = await Promise.race([snapshot().catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  const friends = friendsCache.data?.friends ?? [], hist = socialLive?.amis ?? [];
+  const halloween = new Date().getMonth() === 9 && store.data.settings.season !== 'off';
+  return {
+    recent: games.slice().sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0) || (b.minutes || 0) - (a.minutes || 0)).slice(0, 5).map(pick),
+    all: games.map(pick), health: store.data.healthLast?.score ?? null, cpuT: pc?.cpu?.temp ?? null,
+    playing: hist.filter((a) => a.playing).length + friends.filter((f) => f.game).length, online: hist.filter((a) => a.online).length + friends.filter((f) => f.online).length,
+    accent: halloween ? '#ff9f43' : store.data.settings.themeColor ?? '#619fff', logo: halloween ? 'halloween/logo.png' : 'logo.png',
+  };
+}
+function toggleMini() {
+  if (mini && !mini.isDestroyed() && mini.isVisible()) return mini.hide();
+  if (!mini || mini.isDestroyed()) {
+    mini = new BrowserWindow({ width: 360, height: 600, frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true, show: false, backgroundColor: '#140d09', icon: icon(),
+      webPreferences: { preload: path.join(here, 'mini.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false } });
+    mini.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    mini.webContents.on('will-navigate', (e) => e.preventDefault());
+    mini.on('blur', () => { if (!mini.webContents.isDevToolsOpened()) mini.hide(); }); // se ferme quand on clique ailleurs
+    mini.loadFile(path.join(here, 'ui', 'mini.html'));
+  }
+  // Collé à l'icône, au-dessus de la barre des tâches (ou en dessous si la barre est en haut)
+  const b = tray?.getBounds?.() ?? { x: 0, y: 0, width: 0, height: 0 }, area = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).workArea;
+  const x = Math.min(Math.max(area.x + 8, Math.round(b.x + b.width / 2 - 180)), area.x + area.width - 368);
+  const y = b.y && b.y < area.y + area.height / 2 ? area.y + 8 : area.y + area.height - 608;
+  mini.setPosition(x, y);
+  mini.show(); mini.focus(); mini.webContents.send('mini:shown');
+}
+ipcMain.handle('mini:data', () => miniData());
+ipcMain.on('mini:action', (_e, id, action) => {
+  mini?.hide();
+  if (action === 'open') return showWindow();
+  if (['launch', 'update'].includes(action) && items.some((i) => i.id === id)) doAction(String(id), action).catch(() => {});
+});
 // ---------- 25. Widget sur le bureau : températures, FPS, amis ----------
 let widget = null;
 let widgetTimer = null;

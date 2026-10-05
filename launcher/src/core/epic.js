@@ -43,7 +43,8 @@ export async function readEpicCatalog(catalogDir) {
   try { list = JSON.parse(Buffer.from(raw.trim(), 'base64').toString('utf8')); } catch { return []; }
   return (Array.isArray(list) ? list : []).filter((c) => c.title && !c.mainGameItem).map((c) => ({
     // game : vrai jeu (sinon l'entrée sert seulement à retrouver les images d'un jeu installé, ex. Fortnite)
-    game: ((cats) => cats.includes('games') && !cats.some((x) => /addons|digitalextras|engines|plugins/.test(x)))((c.categories ?? []).map((x) => x.path)),
+    // Fortnite est rangé en « applications » par Epic : sans ça il disparaît dès qu'il n'est plus installé
+    game: /^fortnite$/i.test(c.title) || ((cats) => cats.includes('games') && !cats.some((x) => /addons|digitalextras|engines|plugins/.test(x)))((c.categories ?? []).map((x) => x.path)),
     appName: c.releaseInfo?.[0]?.appId ?? null, appIds: (c.releaseInfo ?? []).map((r) => r.appId).filter(Boolean), namespace: c.namespace, catalogId: c.id, title: c.title,
     art: epicArt(c.keyImages),
     details: { description: String(c.description ?? '').slice(0, 600), developers: c.developer ? [c.developer] : [], genres: [], released: null, screenshots: [] },
