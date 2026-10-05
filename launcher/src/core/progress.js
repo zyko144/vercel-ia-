@@ -40,7 +40,7 @@ export function rediscover(items, now = Date.now()) {
 
 /** Badges : { id, icon, title, desc, got, progress (0-100) }. */
 export function badges(ctx) {
-  const { items = [], days = {}, sessions = [], friends = 0, bench = null, health = null, collections = 0, now = Date.now() } = ctx;
+  const { items = [], days = {}, sessions = [], friends = 0, bench = null, health = null, collections = 0, optiPro = false, now = Date.now() } = ctx;
   const games = items.filter((i) => i.kind === 'game');
   const total = games.reduce((n, i) => n + (i.minutes || 0), 0);
   const played = games.filter((i) => i.minutes >= 30).length;
@@ -65,6 +65,7 @@ export function badges(ctx) {
     b('bench1500', '🚀', 'Machine de guerre', 'Score de benchmark de 1 500', bench?.scores?.total ?? 0, 1500),
     b('health90', '💚', 'PC en pleine forme', 'Score de santé du PC de 90', health ?? 0, 90),
     b('cols3', '🗂', 'Bien rangé', '3 collections', collections, 3),
+    b('optipro', '🛠', 'PC optimisé par History', 'Terminer un ticket Opti Pro', optiPro ? 1 : 0, 1),
     b('fivem50', '🌆', 'Citoyen de Los Santos', '50 h sur FiveM', fivem / 60, 50),
   ];
 }

@@ -11,6 +11,9 @@ const MODEL = config.models?.chat || 'gemini-3.5-flash-lite';
 const MAX_TEXT = 60_000;
 const MAX_AUDIO = 1_900_000; // la requête entière est limitée à 2 Mo
 
+/** Capture d'écran jointe (lire un message d'erreur) : PNG / JPEG / WebP en base64, 1,9 Mo max. */
+const image = (i) => (i && /^image\/(png|jpeg|webp)$/.test(String(i.mime)) && /^[A-Za-z0-9+/=]{100,1900000}$/.test(String(i.data)) ? { type: 'image', mime_type: i.mime, data: i.data } : null);
+
 export async function handleLauncherAi(req, res, { readJson, send }) {
   const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
   const compte = await me(token);
@@ -39,7 +42,7 @@ export async function handleLauncherAi(req, res, { readJson, send }) {
     if (!text) return send(res, 400, { error: 'Demande vide.' });
     const r = await gen().interactions.create({
       model: MODEL, store: false, generation_config: { thinking_level: 'minimal' },
-      system_instruction: String(b.system ?? '').slice(0, 12_000) || undefined, input: text,
+      system_instruction: String(b.system ?? '').slice(0, 12_000) || undefined, input: image(b.image) ? [{ type: 'text', text }, image(b.image)] : text,
       ...(b.web ? { tools: [{ type: 'google_search' }, { type: 'url_context' }] } : {}),
       ...(b.schema && typeof b.schema === 'object' ? { response_format: { type: 'text', mime_type: 'application/json', schema: b.schema } } : {}),
     });

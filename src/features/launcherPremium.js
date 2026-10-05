@@ -17,6 +17,45 @@ export const PACKS = {
   pack: { label: 'Pack Premium', emoji: '⭐', price: '3.99', gives: ['ia', 'opti'] },
 };
 export const DAYS = 31;
+/** Promo de saison automatique (seulement pendant ces périodes) : Halloween, Black Friday, Noël, Nouvel an, soldes d'été. */
+export function promoOf(now = new Date()) {
+  const y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
+  const thanksgiving = 22 + ((11 - new Date(y, 10, 1).getDay()) % 7); // 4e jeudi de novembre
+  const bf = new Date(y, 10, thanksgiving + 1), cyber = new Date(y, 10, thanksgiving + 4, 23, 59);
+  if (now >= bf && now <= cyber) return { pct: 30, label: 'Black Friday', until: cyber.getTime() };
+  if (m === 10 && d >= 25) return { pct: 20, label: 'Halloween 🎃', until: new Date(y, 9, 31, 23, 59).getTime() };
+  if (m === 12 && d >= 18) return { pct: 20, label: 'Noël 🎄', until: new Date(y, 11, 31, 23, 59).getTime() };
+  if (m === 1 && d <= 3) return { pct: 20, label: 'Nouvel an 🎆', until: new Date(y, 0, 3, 23, 59).getTime() };
+  if ((m === 6 && d >= 24) || (m === 7 && d <= 7)) return { pct: 15, label: 'Soldes d’été ☀️', until: new Date(y, 6, 7, 23, 59).getTime() };
+  return null;
+}
+/** Prix final : formule annuelle (12 mois pour le prix de 10), puis la meilleure réduction entre code ami (−20 %) et promo de saison. */
+export function priceOf(pack, { annual = false, friend = false, now = new Date() } = {}) {
+  const base = Number(PACKS[pack].price) * (annual ? 10 : 1);
+  const pct = Math.max(friend ? 20 : 0, promoOf(now)?.pct ?? 0);
+  return (Math.round(base * (100 - pct)) / 100).toFixed(2);
+}
+// Paliers de parrainage : 7 jours par filleul, puis +1 mois au 3e et +3 mois au 10e (badge Ambassadeur)
+export const TIERS = [[3, 31, '1 mois offert'], [10, 92, '3 mois offerts + badge Ambassadeur']];
+export async function sponsorStats(id) {
+  const n = ((await load('premium-parrains', {})) ?? {})[id] ?? 0;
+  const next = TIERS.find(([k]) => n < k);
+  return { filleuls: n, ambassadeur: n >= 10, prochain: next ? { a: next[0], gain: next[2] } : null };
+}
+async function sponsorCount(id, pack) {
+  const all = (await load('premium-parrains', {})) ?? {};
+  all[id] = (all[id] ?? 0) + 1; await save('premium-parrains', all);
+  const tier = TIERS.find(([k]) => k === all[id]);
+  if (tier) await grantPack(id, pack, `palier-${id}-${tier[0]}`, tier[1]).catch(() => {});
+}
+/** Merci pour un avis : 3 jours de Pack Premium, une seule fois par compte. */
+export async function reviewReward(id) {
+  const all = (await load('premium-avis', {})) ?? {};
+  if (all[id]) return null;
+  all[id] = Date.now(); await save('premium-avis', all);
+  await grantPack(id, 'pack', `avis-${id}`, 3);
+  return { days: 3 };
+}
 const KEY = 'launcher-premium'; // secours sans Supabase
 const SB = config.supabase?.url && config.supabase?.key ? { url: `${config.supabase.url}/rest/v1/premium`, headers: { apikey: config.supabase.key, 'Content-Type': 'application/json', ...(config.supabase.key.startsWith('eyJ') ? { Authorization: `Bearer ${config.supabase.key}` } : {}) } } : null;
 const base = () => (config.publicUrl || 'https://vercel-ia.onrender.com').replace(/\/+$/, '');
@@ -160,7 +199,7 @@ async function postRequest(compte, pack, pp, img) {
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
   await ch.send({
     content: `<@${config.ownerId}> nouveau paiement à vérifier`,
-    embeds: [{ color: allGood ? 0x2ee07a : 0xffc439, title: `${n.gift ? '🎁 Carte cadeau · ' : ''}${PACKS[pack].emoji} ${PACKS[pack].label} · ${price.replace('.', ',')} €${n.by ? ' (code ami −20 %)' : ''}`, description: 'Vérifie dans PayPal qu’un paiement de ce montant est bien arrivé avec ce nom, puis valide.',
+    embeds: [{ color: allGood ? 0x2ee07a : 0xffc439, title: `${n.gift ? '🎁 Carte cadeau · ' : ''}${PACKS[pack].emoji} ${PACKS[pack].label}${n.annual ? ' · 1 AN' : ''} · ${price.replace('.', ',')} €${n.by ? ' (code ami)' : ''}${promoOf() ? ` (promo ${promoOf().label})` : ''}`, description: 'Vérifie dans PayPal qu’un paiement de ce montant est bien arrivé avec ce nom, puis valide.',
       fields: [
         { name: allGood ? '🤖 Vérification IA : tout correspond' : '🤖 Vérification IA : à regarder', value: verdict.slice(0, 1024), inline: false },
         { name: 'Nom / e-mail PayPal déclaré', value: pp, inline: false },
@@ -173,7 +212,7 @@ async function postRequest(compte, pack, pp, img) {
     components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`prem:ok:${id}`).setLabel('Paiement reçu : activer').setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`prem:no:${id}`).setLabel('Refuser').setStyle(ButtonStyle.Danger))],
     allowedMentions: { users: [config.ownerId] },
   });
-  all[id] = { account: a.id, pack, paypal: pp, at: Date.now(), status: 'attente', gift: Boolean(n.gift), by: n.by ?? null };
+  all[id] = { account: a.id, pack, paypal: pp, at: Date.now(), status: 'attente', gift: Boolean(n.gift), by: n.by ?? null, annual: Boolean(n.annual) };
   await save('premium-demandes', all);
   return { status: 200, ok: true };
 }
@@ -195,8 +234,8 @@ export async function onPremiumInteraction(interaction) {
   d.status = act === 'ok' ? 'validé' : 'refusé';
   // Carte cadeau : pas d'activation, un code à offrir ; code ami : le parrain gagne 7 jours du même pack
   if (act === 'ok' && d.gift) d.giftCode = await makeGift(d.pack, d.account);
-  const row = act === 'ok' && !d.gift ? await grantPack(d.account, d.pack, `manuel-${id}`) : null;
-  if (act === 'ok' && d.by) await grantPack(d.by, d.pack, `parrain-${id}`, 7).catch(() => {});
+  const row = act === 'ok' && !d.gift ? await grantPack(d.account, d.pack, `manuel-${id}`, d.annual ? 365 : DAYS) : null;
+  if (act === 'ok' && d.by) { await grantPack(d.by, d.pack, `parrain-${id}`, 7).catch(() => {}); await sponsorCount(d.by, d.pack).catch(() => {}); }
   if (act === 'ok') { const notes = (await load('premium-notes', {})) ?? {}; delete notes[d.account]; await save('premium-notes', notes); } // note à usage unique
   await save('premium-demandes', all);
   await interaction.update({ content: act === 'ok' ? (d.gift ? `🎁 Carte cadeau créée : ${d.giftCode}` : `✅ Activé jusqu’au ${new Date(row.jusqua).toLocaleDateString('fr-FR')}`) : '❌ Refusé', components: [] });
@@ -208,19 +247,19 @@ export async function onPremiumInteraction(interaction) {
 // Chaque achat reçoit une note unique (ex. HIST-7K2Q9P) à mettre dans le paiement PayPal « Entre proches ».
 // L'IA lit la capture : note, montant, destinataire et type d'envoi. Le chef garde le dernier mot (bouton Activer).
 const NOTE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-export async function paymentNote(compte, pack, { code = '', gift = false } = {}) {
+export async function paymentNote(compte, pack, { code = '', gift = false, annual = false } = {}) {
   if (!PACKS[pack]) return { status: 400, error: 'Pack inconnu.' };
   // Code ami (−20 %) : celui d'un autre compte seulement
   const by = code ? await codeOwner(code) : null;
   if (code && (!by || by === compte.id)) return { status: 400, error: 'Code ami invalide.' };
-  const price = by ? (Math.round(Number(PACKS[pack].price) * 80) / 100).toFixed(2) : PACKS[pack].price;
+  const price = priceOf(pack, { annual, friend: Boolean(by) });
   const all = (await load('premium-notes', {})) ?? {};
   const cur = all[compte.id];
   const { randomInt } = await import('node:crypto');
   const note = cur && Date.now() - cur.at < 86_400_000 ? cur.note : `HIST-${Array.from({ length: 6 }, () => NOTE_ABC[randomInt(NOTE_ABC.length)]).join('')}`;
-  all[compte.id] = { note, pack, at: cur?.note === note ? cur.at : Date.now(), price, by, gift: Boolean(gift) };
+  all[compte.id] = { note, pack, at: cur?.note === note ? cur.at : Date.now(), price, by, gift: Boolean(gift), annual: Boolean(annual) };
   await save('premium-notes', all);
-  return { status: 200, note, price };
+  return { status: 200, note, price, promo: promoOf() };
 }
 
 // ===================== Essai gratuit, code ami (−20 %), carte cadeau =====================

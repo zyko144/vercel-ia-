@@ -318,7 +318,7 @@ async function elevatedJob(script, outFile, onProgress = () => {}, logs = []) {
   for (const f of [outFile, ...logs.map((l) => `${outFile}.${l}.log`)]) await rm(f, { force: true }).catch(() => {});
   return { ok, s };
 }
-function runElevated(script) {
+export function runElevated(script) {
   if (!win) return Promise.resolve(false);
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   const outer = `Start-Process powershell.exe -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'`;

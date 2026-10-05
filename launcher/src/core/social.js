@@ -44,20 +44,22 @@ export async function wishlistDeals(id64, fetchImpl = fetch) {
   if (!ID64.test(String(id64))) return [];
   const wl = await get(`${API}/IWishlistService/GetWishlist/v1/?steamid=${id64}`, fetchImpl);
   const appids = (wl?.response?.items ?? []).map((i) => Number(i.appid)).filter((n) => n > 0);
-  const deals = [];
+  const deals = []; deals.released = [];
   for (let n = 0; n < appids.length; n += 50) {
-    const input = { ids: appids.slice(n, n + 50).map((appid) => ({ appid })), context: { language: 'french', country_code: 'FR' }, data_request: { include_assets: true, include_all_purchase_options: true } };
+    const input = { ids: appids.slice(n, n + 50).map((appid) => ({ appid })), context: { language: 'french', country_code: 'FR' }, data_request: { include_assets: true, include_all_purchase_options: true, include_release: true } };
     const data = await get(`${API}/IStoreBrowseService/GetItems/v1/?input_json=${encodeURIComponent(JSON.stringify(input))}`, fetchImpl);
     for (const it of data?.response?.store_items ?? []) {
       const opt = it.best_purchase_option ?? it.purchase_options?.[0];
       const pct = Number(opt?.discount_pct ?? 0);
+      const rel = Number(it.release?.steam_release_date ?? 0) * 1000; // sortie récente d'un jeu attendu (alerte de sortie)
+      if (rel && !it.release?.is_coming_soon && Date.now() - rel < 3 * 86_400_000 && Date.now() >= rel) deals.released.push({ appid: String(it.appid ?? it.id), name: it.name });
       if (!pct) continue;
       const a = it.assets;
       const img = a?.asset_url_format && (a.header || a.main_capsule) ? `https://shared.akamai.steamstatic.com/store_item_assets/${a.asset_url_format.replace('${FILENAME}', a.header ?? a.main_capsule)}` : null;
       deals.push({ appid: String(it.appid ?? it.id), name: it.name, pct, price: opt.formatted_final_price ?? null, before: opt.formatted_original_price ?? null, image: img, until: (opt.active_discounts?.[0]?.discount_end_date ?? 0) * 1000 });
     }
   }
-  return deals.sort((a, b) => b.pct - a.pct);
+  return Object.assign(deals.sort((a, b) => b.pct - a.pct), { released: deals.released });
 }
 
 /** Promos pas encore annoncées (même jeu avec une réduction plus forte = nouvelle alerte). */

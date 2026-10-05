@@ -6,8 +6,8 @@ ipcRenderer.on('ui:trim', () => { try { webFrame.clearCache(); } catch { /* rien
 contextBridge.exposeInMainWorld('launcher', {
   platform: process.env.LAUNCHER_DEMO && process.env.LAUNCHER_PLATFORM ? process.env.LAUNCHER_PLATFORM : process.platform, // bancs d'essai : voir l'interface Windows sous Linux
   premiumGet: (fresh) => ipcRenderer.invoke('premium:get', fresh),
-  premiumBuy: (pack) => ipcRenderer.invoke('premium:buy', pack),
-  premiumNote: (pack, code, gift) => ipcRenderer.invoke('premium:note', pack, code, gift),
+  premiumBuy: (pack, price) => ipcRenderer.invoke('premium:buy', pack, price),
+  premiumNote: (pack, code, gift, annual) => ipcRenderer.invoke('premium:note', pack, code, gift, annual),
   premiumTrial: () => ipcRenderer.invoke('premium:trial'),
   modsList: (id) => ipcRenderer.invoke('mods:list', id),
   friendGift: (to, item) => ipcRenderer.invoke('friend:gift', to, item),
@@ -146,7 +146,7 @@ contextBridge.exposeInMainWorld('launcher', {
   groupDelete: (gid, id) => ipcRenderer.invoke('group:delete', gid, id),
   onSocialSent: (fn) => ipcRenderer.on('social:sent', (_e, d) => fn(d)),
   onGroupOpen: (fn) => ipcRenderer.on('group:open', (_e, d) => fn(d)),
-  friendInvite: (fid, type) => ipcRenderer.invoke('friend:invite', fid, type),
+  friendInvite: (fid, type, game) => ipcRenderer.invoke('friend:invite', fid, type, game),
   friendJoin: (fid) => ipcRenderer.invoke('friend:join', fid),
   onSocial: (fn) => ipcRenderer.on('social:live', (_e, d) => fn(d)),
   onChatOpen: (fn) => ipcRenderer.on('chat:open', (_e, d) => fn(d)),
@@ -299,4 +299,6 @@ contextBridge.exposeInMainWorld('launcher', {
   twoFaOff: (pw, code) => ipcRenderer.invoke('account:2faOff', pw, code),
   logout: () => ipcRenderer.invoke('account:logout'),
   skipAccount: () => ipcRenderer.invoke('account:skip'),
+  more: (name, ...args) => ipcRenderer.invoke(`more:${name}`, ...args),
+  onMore: (fn) => ipcRenderer.on('more:stress', (_e, p) => fn(p)),
 });
