@@ -1600,6 +1600,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.17': [
+    ['🗑️', 'Désinstaller partout', 'Les jeux installés directement sur un disque (comme D:\\Fortnite) se désinstallent enfin depuis le launcher, sans le message « dossier trop proche de la racine ».', ['#openSettings', 'wait600', '.setnav [data-pane=jeux]', 'wait900']],
+  ],
   '0.53.16': [
     ['🆘', 'Support avec l’analyse du PC', 'Ta demande d’aide envoie aussi ton matériel, ta santé PC et tes températures (si tu le veux) : l’équipe sur Discord t’aide sans te poser 10 questions.', ['#openSettings', 'wait600', '.setnav [data-pane=aide]', 'wait600', '#newSupport', 'wait900']],
   ],
@@ -4449,7 +4452,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.16',
+    version: async () => '0.53.17',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

@@ -320,6 +320,8 @@ await check('désinstallation : refusée hors de la bibliothèque, sur une racin
   assert.equal(safeGameDir({ source: 'steam', installDir: path.join(libDir, 'common', 'A', '..', '..'), steamLibrary: libDir }).ok, false, 'remonter avec ..');
   assert.equal(safeGameDir({ source: 'steam', installDir: path.join(T, 'ailleurs', 'Jeu'), steamLibrary: libDir }).ok, false, 'hors bibliothèque');
   assert.equal(safeGameDir({ source: 'epic', installDir: '/' }).ok, false, 'racine');
+  assert.equal(safeGameDir({ source: 'epic', installDir: '/D:/Fortnite' }).ok, true, 'jeu Epic à la racine d’un disque (D:\\Fortnite)');
+  assert.equal(safeGameDir({ source: 'epic', installDir: '/D:/Epic Games' }).ok, false, 'dossier qui regroupe les jeux');
   assert.equal(safeGameDir({ source: 'epic', installDir: '' }).ok, false);
 });
 

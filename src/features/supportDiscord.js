@@ -21,6 +21,7 @@ export function supportEmbed(t) {
 }
 async function deliver(id) {
   const t=await supportDetail(id);if(!t||!client)return;
+  if(t.status==='resolved'){if(t.discordThread&&t.discordThread!=='fermé')await closeTicket(t);return;}
   if (!t.avatar) {
     const account=(await load('launcher-comptes', {}))?.accounts?.[t.owner];
     const identity=await supportIdentity({id:t.owner,pseudo:t.name,profile:account?profileOf(account):{}},t.app);
@@ -42,6 +43,21 @@ async function deliver(id) {
   const main=await post(home,t.discordThread&&t.discordMessage,`h${nonce}`);
   const mirror=ddv?await post(ddv,t.discordMirror?.message,`d${nonce}`).catch(()=>null):null;
   await mutateSupport(all=>{if(all[id]){if(main){all[id].discordMessage=main.message;all[id].discordThread=main.thread;}if(mirror)all[id].discordMirror=mirror;all[id].discordSyncedAt=t.updatedAt;}});
+}
+// Demande résolue : le fil et le message disparaissent des 2 serveurs, la conversation part en MP au chef
+async function closeTicket(t){
+  const chans=await supportChannels();
+  const lines=[`Demande ${t.id} · ${t.displayName||t.name} · ${t.title}`,'',t.description,'',`Réponse : ${t.reply||'—'}`,''];
+  for(const [i,ref] of [[0,{message:t.discordMessage,thread:t.discordThread}],[1,t.discordMirror]]){
+    const thread=ref?.thread&&ref.thread!=='aucun'?await client.channels.fetch(ref.thread).catch(()=>null):null;
+    const msgs=thread?[...(await thread.messages.fetch({limit:100}).catch(()=>new Map())).values()].reverse():[];
+    if(msgs.length)lines.push(`--- Fil ${thread.guild?.name??''} ---`,...msgs.filter((m)=>m.content).map((m)=>`[${new Date(m.createdTimestamp).toLocaleString('fr-FR',{timeZone:'Europe/Paris'})}] ${m.author.username} : ${m.content}`),'');
+    await thread?.delete('Demande résolue').catch(()=>{});
+    if(ref?.message)await chans[i]?.messages.delete(ref.message).catch(()=>{});
+  }
+  const owner=await client.users.fetch(config.ownerId).catch(()=>null);
+  await owner?.send({content:`✅ Demande résolue : **${t.title}** (${t.displayName||t.name}). La conversation est jointe.`,files:[{attachment:Buffer.from(lines.join('\n')),name:`support-${t.id.slice(0,8)}.txt`}]}).catch(()=>{});
+  await mutateSupport(all=>{if(all[t.id]){all[t.id].discordThread='fermé';all[t.id].discordMessage=null;all[t.id].discordMirror=null;all[t.id].discordSyncedAt=t.updatedAt;}});
 }
 async function flush(){if(running||!client)return;running=true;try{for(const id of [...pending].slice(0,10)){try{await deliver(id);pending.delete(id);}catch{ /* The saved report remains accessible; retry on next tick. */ }}}finally{running=false;}}
 export function queueSupport(id){pending.add(id);void flush();}
