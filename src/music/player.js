@@ -149,6 +149,7 @@ export class GuildPlayer {
       // Sert au blind test : le chrono ne démarre qu'une fois le son vraiment lancé
       if (newTrack) this.onStarted?.(track);
       this.startLyrics(track, newTrack);
+      this.startFade(track, newTrack);
     } catch (err) {
       if (token !== this.playToken) return;
 
@@ -470,6 +471,22 @@ export class GuildPlayer {
     }, config.music.panelRefreshMs);
     clearInterval(this.timers.session);
     this.timers.session = setInterval(() => saveSession(this).catch(() => {}), 15_000);
+  }
+
+  // Transition façon Spotify : le son baisse doucement sur ses 8 dernières secondes, le suivant arrive en montant (3 s).
+  // Volume changé en direct (Lavalink) ; le lecteur local ne peut pas le faire sans couper le son, il garde l'enchaînement net.
+  startFade(track, newTrack) {
+    clearInterval(this.timers.fade);
+    if (!this.backend?.liveControls || track.isLive || !track.duration) return;
+    const started = Date.now();
+    this.timers.fade = setInterval(() => {
+      if (this.current !== track || !this.backend?.liveControls) return clearInterval(this.timers.fade);
+      const left = track.duration - this.position();
+      let f = newTrack ? Math.min(1, (Date.now() - started) / 3000) : 1;
+      if (left < 8 && (this.queue.length || this.autoplay)) f = Math.min(f, Math.max(0, left / 8));
+      const v = Math.round(this.volume * f);
+      if (v !== this.fadeVol) { this.fadeVol = v; this.backend.applyVolume(v); }
+    }, 250);
   }
 
   // Paroles en direct dans le panneau (tout le monde les voit) : le panneau est modifié pile à l'heure de chaque ligne
