@@ -1613,6 +1613,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.57.1': [
+    ['💶', 'Préparer la vente corrigé', 'La fenêtre se ferme (✕ en haut ou Échap), défile pour voir le prix de toutes les pièces, et « Copier l’annonce » marche. « Copier l’image » de la carte avant / après aussi.', ['[data-view=pc]', 'wait600', '[data-pctab=verifs]', 'wait2500', '#mvSell', 'wait800']],
+    ['🧰', 'Outils IA rangés', 'Les outils de l’IA sont classés : Dépannage, Tes jeux, Achat et sécurité.'],
+  ],
   '0.57.0': [
     ['💾', 'Stockage', 'Mon PC › Stockage : la place de chaque disque comme dans Windows, et tout ce qui prend de la place trié par taille (jeux, applis, dossiers, fichiers) avec leur logo. Recherche, tri, ouvrir l’emplacement, supprimer ou désinstaller en un clic.', ['[data-view=pc]', 'wait600', '[data-pctab=stockage]', 'wait2500']],
     ['🕰', 'Fichiers anciens', 'Un bouton liste tout ce que tu n’as pas ouvert depuis 3, 6, 9 ou 12 mois (jeux morts, vieux téléchargements…). Tu décoches ce que tu gardes : les fichiers vont dans la corbeille, les jeux se réinstallent depuis leur boutique.'],
@@ -4959,7 +4963,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.57.0',
+    version: async () => '0.57.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

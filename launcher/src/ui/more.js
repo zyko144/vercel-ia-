@@ -53,14 +53,14 @@ export function initMore(api, h) {
     const r = pc.resale, main = r.parts.filter((p) => p.type !== 'Le reste (estimé)');
     const ad = `PC gamer · ${main.map((p) => p.name).join(' · ')}\n\nPrix : ${euros(Math.round(r.total / 10) * 10)} (à débattre)\nWindows réinstallé propre, testé et nettoyé. Captures des performances sur demande.`;
     const steps = [['☁️', 'Sauvegarde ta bibliothèque', 'Paramètres › Compte : tes jeux, temps de jeu et réglages te suivent sur ton prochain PC.'], ['🔑', 'Déconnecte tes comptes', 'Steam, Epic, Discord, navigateur et mots de passe enregistrés.'], ['🧹', 'Réinitialise Windows', '« Supprimer tout » : l’acheteur reçoit un Windows propre, sans tes fichiers.'], ['📸', 'Montre les performances', 'Captures de Mon PC (composants + benchmark) dans l’annonce : ça rassure.']];
-    modal(`<div class="sell"><div class="sellhead"><div><small>Prix conseillé</small><b>${euros(r.total)}</b><span>fourchette ${euros(r.low)} – ${euros(r.high)} selon l’état</span></div><span class="sellico">💶</span></div>
+    modal(`<div class="sell"><div class="sellhead"><div><small>Prix conseillé</small><b>${euros(r.total)}</b><span>fourchette ${euros(r.low)} – ${euros(r.high)} selon l’état</span></div><span class="sellico">💶</span><button type="button" class="sellx" data-m="1" aria-label="Fermer">✕</button></div>
       <div class="sellgrid"><section><h3>Ton annonce, prête à coller</h3><pre id="sellAd">${esc(ad)}</pre><button type="button" class="btn" id="sellCopy">📋 Copier l’annonce</button>
         <h3>Prix pièce par pièce</h3><div class="sellparts">${r.parts.map((p) => `<div><span>${esc(p.type)}</span><b>${esc(p.name)}</b><em>${euros(p.price)}</em></div>`).join('')}</div></section>
       <section><h3>Avant de vendre</h3><ol class="sellsteps">${steps.map(([i, t, d]) => `<li><i>${i}</i><div><b>${t}</b><small>${d}</small></div></li>`).join('')}</ol>
         <button type="button" class="btn play" data-pcfix="recovery">🧹 Ouvrir « Réinitialiser ce PC »</button></section></div>
       <div class="row end"><button type="button" class="btn ghost" data-m="1">Fermer</button></div></div>`, true);
     $('modalBox').classList.add('sellbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
-    $('sellCopy').onclick = () => navigator.clipboard.writeText(ad).then(() => toast('✓ Annonce copiée'), () => toast('Copie impossible'));
+    $('sellCopy').onclick = () => (api.copy ? api.copy(ad) : navigator.clipboard.writeText(ad)).then(() => toast('✓ Annonce copiée'), () => toast('Copie impossible'));
   }
 
   // Taux d'interrogation de la souris : nombre réel de positions reçues par seconde pendant que tu la bouges
@@ -248,7 +248,7 @@ export function initMore(api, h) {
     modal(`<div class="mhead"><span class="micon">📸</span><h2>Ta carte avant / après</h2></div><img class="procardimg" src="${png}" alt="Carte avant / après de ton optimisation"><div class="procardbar"><small class="hint">Partage-la sur Discord : copie puis colle dans un salon.</small><button type="button" class="btn ghost" data-m="1">Fermer</button><button type="button" class="btn ghost" id="pcSave">💾 Enregistrer</button><button type="button" class="btn play" id="pcCopy">📋 Copier l’image</button></div>`, true);
     $('modalBox').classList.add('procardbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
     $('pcSave').onclick = () => Object.assign(document.createElement('a'), { href: png, download: 'history-opti-pro.png' }).click();
-    $('pcCopy').onclick = () => c.toBlob((b) => navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]).then(() => toast('✓ Image copiée : colle-la sur Discord'), () => toast('Copie impossible : utilise Enregistrer')));
+    $('pcCopy').onclick = () => (api.copyImage ? api.copyImage(png) : new Promise((ok, ko) => c.toBlob((b) => navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]).then(ok, ko)))).then(() => toast('✓ Image copiée : colle-la sur Discord'), () => toast('Copie impossible : utilise Enregistrer'));
   }
   document.addEventListener('click', async (e) => {
     const t = e.target.closest('[data-bsim], [data-btask], [data-star], [data-procard], [data-proupg], [data-proredo], [data-prorate]'); if (!t) return;
@@ -302,7 +302,12 @@ export function initMore(api, h) {
   // Un seul bouton « Outils » dans l'assistant : il ouvre une grille simple (plus de barre qui défile)
   $('aipop')?.querySelector('.panel-head .fold')?.insertAdjacentHTML('beforebegin', '<button type="button" class="aitoolsbtn" data-aitools="1" title="Outils IA">🧰 Outils</button>');
   const TOOL_DESC = { erreur: 'Colle un message d’erreur', capture: 'Une capture d’écran à lire', reglages: 'Les meilleurs réglages pour ton PC', guide: 'Une question sur un jeu', crash: 'Trouver la cause d’un plantage', patch: 'Les nouveautés résumées', comparer: 'Deux composants face à face', panne: 'L’état de santé de ton PC', arnaque: 'Vérifier un message louche' };
-  function toolsGrid() { modal(`<div class="mhead"><span class="micon">🧰</span><h2>Outils IA</h2></div><div class="aigrid">${TOOLS.map(([k, ic, l]) => `<button type="button" data-aitool="${k}"><span>${ic}</span><b>${esc(l)}</b><small>${esc(TOOL_DESC[k])}</small></button>`).join('')}</div>`, true); }
+  const TOOL_GROUPS = [['🛠', 'Dépannage', ['erreur', 'crash', 'capture', 'panne']], ['🎮', 'Tes jeux', ['reglages', 'guide', 'patch']], ['🛡', 'Achat et sécurité', ['comparer', 'arnaque']]];
+  function toolsGrid() {
+    modal(`<div class="aitools2"><div class="aithead"><span>🧰</span><div><h2>Outils IA</h2><p>Choisis ce dont tu as besoin : l’IA répond pour ton PC et tes jeux.</p></div><button type="button" class="sellx" data-m="1" aria-label="Fermer">✕</button></div>
+      ${TOOL_GROUPS.map(([gi, gl, ks]) => `<section><h3>${gi} ${gl}</h3><div class="aigrid">${ks.map((k) => TOOLS.find((t) => t[0] === k)).filter(Boolean).map(([k, ic, l]) => `<button type="button" data-aitool="${k}"><span>${ic}</span><div><b>${esc(l)}</b><small>${esc(TOOL_DESC[k])}</small></div><i>›</i></button>`).join('')}</div></section>`).join('')}</div>`, true);
+    $('modalBox').classList.add('procardbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
+  }
   document.addEventListener('click', (e) => { if (e.target.closest('[data-aitools]')) toolsGrid(); });
   const shrink = (file) => new Promise((ok) => { const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, 1600 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = im.width * k; c.height = im.height * k; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.85)); }; im.src = r.result; }; r.readAsDataURL(file); });
   async function aiTool(k) {

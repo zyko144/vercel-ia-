@@ -173,6 +173,7 @@ contextBridge.exposeInMainWorld('launcher', {
   scanStart: (letters) => ipcRenderer.invoke('scan:start', letters),
   scanDrives: () => ipcRenderer.invoke('scan:drives'),
   copy: (text) => ipcRenderer.invoke('clip:write', text),
+  copyImage: (url) => ipcRenderer.invoke('clip:image', url),
   saveProfile: (p) => ipcRenderer.invoke('account:profile', p),
   scanStop: () => ipcRenderer.invoke('scan:stop'),
   demo: () => ipcRenderer.invoke('demo:get'),
