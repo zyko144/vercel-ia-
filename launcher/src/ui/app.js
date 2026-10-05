@@ -1613,6 +1613,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.57.3': [
+    ['🌍', 'Ton PC de n’importe où', 'Plus besoin d’être chez toi : connecte-toi sur l’appli téléphone avec ton compte (le QR ne sert qu’une fois), choisis ton PC et contrôle-le en 4G. Nouveau : « Veille + réveil » met le PC en veille et le rallume tout seul à l’heure choisie. Les ordres arrivent plus vite.', ['#openSettings', 'wait700', '.setnav [data-pane="telephone"]', 'wait1200']],
+  ],
   '0.57.2': [
     ['📱', 'Appli téléphone : jeux et Opti Pro', 'Les pochettes de tes jeux s’affichent sur le téléphone (images Steam en secours). L’Opti Pro y repart de zéro quand la dernière est finie, et tu peux écrire au technicien ou la refaire depuis le téléphone.', ['#openSettings', 'wait700', '.setnav [data-pane="telephone"]', 'wait1200']],
   ],
@@ -4966,7 +4969,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.57.2',
+    version: async () => '0.57.3',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
