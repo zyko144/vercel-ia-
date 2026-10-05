@@ -1602,6 +1602,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.19': [
+    ['🎃', 'Ambiance Halloween', 'Pour octobre, l’appli passe en mode Halloween : logo citrouille, fond plus sombre, citrouilles réalistes, toiles et araignées qui bougent. Tu peux revenir au thème normal dans Paramètres › Apparence › Ambiance de saison.', ['#openSettings', 'wait600', '.setnav [data-pane=apparence]', 'wait900']],
+  ],
   '0.53.18': [
     ['🆘', 'Aide en un clic', 'Ton PC chauffe en jeu ? La cloche propose de demander de l’aide au support, avec l’analyse de ton PC jointe. Tu peux aussi écrire au support depuis Discord avec /launcher aide.', ['#bellBtn', 'wait900']],
     ['🆕', 'Mises à jour des jeux', 'Quand un de tes jeux est mis à jour, la cloche te prévient et le salon #maj-des-jeux du Discord donne le lien des patch notes.'],
@@ -4485,7 +4488,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.18',
+    version: async () => '0.53.19',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

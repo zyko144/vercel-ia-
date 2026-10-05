@@ -76,6 +76,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // Sons des notifications (fenêtre en bas à gauche) : jouables sans clic préalable
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const ICON = path.join(here, 'ui', 'icon.png');
+// Octobre : icône citrouille partout dans Windows (fenêtre, barre des tâches, zone de notification, notifications), sauf si la saison est coupée
+const icon = () => (new Date().getMonth() === 9 && store?.data?.settings?.season !== 'off' ? path.join(here, 'ui', 'halloween', 'icon.png') : ICON);
 let win = null;
 let tray = null;
 let items = [];
@@ -160,7 +162,7 @@ function showWindow() {
 function createWindow() {
   win = new BrowserWindow({
     width: 1380, height: 860, minWidth: 980, minHeight: 620, frame: false, backgroundColor: '#0b0b0e', show: false,
-    icon: ICON, title: 'History Launcher',
+    icon: icon(), title: 'History Launcher',
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
   });
   win.loadFile(path.join(here, 'ui', 'index.html'));
@@ -191,7 +193,7 @@ function createWindow() {
 }
 
 function createTray() {
-  tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
+  tray = new Tray(nativeImage.createFromPath(icon()).resize({ width: 16, height: 16 }));
   tray.setToolTip('History Launcher');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Ouvrir', click: showWindow },
@@ -493,7 +495,7 @@ class Notif extends Notification {
   }
 }
 function notify(title, body) {
-  if (Notification.isSupported()) new Notif({ title, body, icon: ICON, silent: true }).show();
+  if (Notification.isSupported()) new Notif({ title, body, icon: icon(), silent: true }).show();
 }
 // Infos de chaque partie (boost, FPS) : seulement dans la cloche du launcher, pas en notification Windows
 const bell = (title, body) => logNotif({ kind: 'app', icon: '🔔', title, body });
@@ -759,7 +761,7 @@ async function runBench() {
 }
 function gpuBench() {
   return new Promise((resolve) => {
-    const w = new BrowserWindow({ width: 1280, height: 720, title: 'Benchmark · History Launcher', backgroundColor: '#07060a', autoHideMenuBar: true, icon: ICON,
+    const w = new BrowserWindow({ width: 1280, height: 720, title: 'Benchmark · History Launcher', backgroundColor: '#07060a', autoHideMenuBar: true, icon: icon(),
       webPreferences: { preload: path.join(here, 'bench.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     w.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -1328,7 +1330,7 @@ async function checkDriver() {
     driverInfo = { name: nv.name, vendor: 'nvidia', version: mine, latest: latest.version, notes: latest.notes, download: latest.download, date: latest.date, link: latest.notes ?? DRIVER_LINKS[0] };
     if (store.data.driverLatestNotified !== latest.version && Notification.isSupported()) {
       store.data.driverLatestNotified = latest.version; store.save();
-      const n = new Notif({ title: `Nouveau pilote NVIDIA ${latest.version}`, body: `Tu as la ${mine}. Clique pour voir les nouveautés (jeux optimisés, corrections) et le télécharger.`, icon: ICON });
+      const n = new Notif({ title: `Nouveau pilote NVIDIA ${latest.version}`, body: `Tu as la ${mine}. Clique pour voir les nouveautés (jeux optimisés, corrections) et le télécharger.`, icon: icon() });
       n.on('click', () => openLink(driverInfo.link).catch(() => {}));
       n.show();
     }
@@ -1340,7 +1342,7 @@ async function checkDriver() {
   store.data.driverAlertAt = Date.now();
   store.save();
   const months = Math.round(driverInfo.age / 30);
-  const n = new Notif({ title: 'Pilote graphique à mettre à jour', body: `Ton pilote ${driverInfo.name} a ${months} mois : les jeux récents tournent souvent mieux avec le dernier. Clique pour le télécharger.`, icon: ICON });
+  const n = new Notif({ title: 'Pilote graphique à mettre à jour', body: `Ton pilote ${driverInfo.name} a ${months} mois : les jeux récents tournent souvent mieux avec le dernier. Clique pour le télécharger.`, icon: icon() });
   n.on('click', () => openLink(driverInfo.link).catch(() => {}));
   n.show();
 }
@@ -1836,6 +1838,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('themeColor' in patch && /^#[0-9a-f]{6}$/i.test(patch.themeColor)) store.data.settings.themeColor = patch.themeColor;
   if ('bgMode' in patch && ['jeu', 'anime', 'sobre'].includes(patch.bgMode)) store.data.settings.bgMode = patch.bgMode;
   if ('season' in patch) store.data.settings.season = patch.season === 'off' ? 'off' : 'auto';
+  if ('season' in patch) { win?.setIcon(icon()); tray?.setImage(nativeImage.createFromPath(icon()).resize({ width: 16, height: 16 })); }
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);
@@ -1951,7 +1954,7 @@ async function checkFree() {
   for (const g of list) {
     if (seen.has(g.slug ?? g.name)) continue;
     seen.add(g.slug ?? g.name);
-    const n = new Notif({ title: '🎁 Jeu gratuit sur Epic', body: `${g.name} est offert${g.until ? ` jusqu’au ${new Date(g.until).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : ''} : il reste à toi pour toujours.`, icon: ICON });
+    const n = new Notif({ title: '🎁 Jeu gratuit sur Epic', body: `${g.name} est offert${g.until ? ` jusqu’au ${new Date(g.until).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : ''} : il reste à toi pour toujours.`, icon: icon() });
     if (g.slug && /^[\w-]{1,120}$/.test(g.slug)) n.on('click', () => openLink(`https://store.epicgames.com/fr/p/${g.slug}`).catch(() => {}));
     n.show();
   }
@@ -1983,7 +1986,7 @@ async function checkDeals(notify = true) {
   const fresh = newDeals(deals, seen);
   if (notify && store.data.settings.dealAlerts !== false && Notification.isSupported()) {
     for (const d of fresh.slice(0, 3)) {
-      const n = new Notif({ title: `${d.name} : -${d.pct} %`, body: `En promo sur Steam${d.price ? ` à ${d.price}` : ''} (dans ta liste de souhaits)`, icon: ICON });
+      const n = new Notif({ title: `${d.name} : -${d.pct} %`, body: `En promo sur Steam${d.price ? ` à ${d.price}` : ''} (dans ta liste de souhaits)`, icon: icon() });
       n.on('click', () => openLink(`https://store.steampowered.com/app/${d.appid}`).catch(() => {}));
       n.show();
     }
@@ -2425,7 +2428,7 @@ async function checkEvents() {
     if (e.ma === 'oui' && soon > 0 && soon <= 11 * 60_000 && !seen[`go:${e.id}`]) {
       seen[`go:${e.id}`] = Date.now();
       const game = items.find((i) => i.installed && norm(i.name) === norm(e.game));
-      const n = new Notif({ title: `${e.game} dans ${Math.max(1, Math.round(soon / 60_000))} min`, body: game ? 'Clique pour lancer le jeu.' : `Soirée organisée par ${e.organisateur}.`, icon: ICON });
+      const n = new Notif({ title: `${e.game} dans ${Math.max(1, Math.round(soon / 60_000))} min`, body: game ? 'Clique pour lancer le jeu.' : `Soirée organisée par ${e.organisateur}.`, icon: icon() });
       if (game) n.on('click', () => doAction(game.id, 'launch').catch(() => {}));
       n.show();
     }
@@ -3165,7 +3168,7 @@ async function startUpdater() {
     updateState({ state: 'available', version: info.version, error: null });
     // Fenêtre fermée ou rangée : une notification Windows (clic = ouvrir le launcher sur la question)
     if (fresh && (!win || win.isDestroyed() || !win.isVisible()) && Notification.isSupported()) {
-      const n = new Notif({ title: `History Launcher v${info.version} disponible`, body: 'Clique pour mettre à jour maintenant (moins d’une minute).', icon: ICON });
+      const n = new Notif({ title: `History Launcher v${info.version} disponible`, body: 'Clique pour mettre à jour maintenant (moins d’une minute).', icon: icon() });
       n.on('click', () => showWindow());
       n.show();
     }
@@ -3353,7 +3356,7 @@ async function checkPrices() {
     a.last = now; a.lastCheck = Date.now(); a.best = await bestDeal(a.name).catch(() => a.best);
     if (priceAlert(a, now)) {
       a.lastNotified = now.price;
-      const n = new Notif({ title: `💸 ${a.name} à ${now.price.toFixed(2).replace('.', ',')} €`, body: `Sous ton prix de ${a.target} €${now.discount ? ` (-${now.discount} %)` : ''}. Clique pour ouvrir la page Steam.`, icon: ICON });
+      const n = new Notif({ title: `💸 ${a.name} à ${now.price.toFixed(2).replace('.', ',')} €`, body: `Sous ton prix de ${a.target} €${now.discount ? ` (-${now.discount} %)` : ''}. Clique pour ouvrir la page Steam.`, icon: icon() });
       n.on('click', () => openLink(`https://store.steampowered.com/app/${a.appId}`).catch(() => {}));
       n.show();
     }
@@ -3814,7 +3817,7 @@ async function diskWatch() {
     if (free >= 15 && pct >= 5) continue;
     if ((store.data.diskWarned ??= {})[root] === today) continue;
     store.data.diskWarned[root] = today; store.save();
-    const n = new Notif({ title: `Disque ${root.replace('\\', '')} presque plein`, body: `Plus que ${Math.round(free)} Go libres : les mises à jour de jeux risquent d’échouer. Clique pour voir quoi nettoyer ou déplacer.`, icon: ICON });
+    const n = new Notif({ title: `Disque ${root.replace('\\', '')} presque plein`, body: `Plus que ${Math.round(free)} Go libres : les mises à jour de jeux risquent d’échouer. Clique pour voir quoi nettoyer ou déplacer.`, icon: icon() });
     n.on('click', () => showWindow()); n.show();
   }
 }
