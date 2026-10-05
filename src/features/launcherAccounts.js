@@ -109,11 +109,12 @@ export function passwordProblem(motDePasse) {
 
 const hashPassword = async (password, salt) => (await scrypt(String(password), salt, 64, { N: 16384, r: 8, p: 1 })).toString('hex');
 
+let sessionApp = 'History Launcher'; // appli qui ouvre la session (historique des connexions)
 async function newSession(d, id) {
   const token = randomBytes(32).toString('base64url');
   const now = Date.now();
   for (const [h, s] of Object.entries(d.sessions)) if (now - (s.seen ?? s.at) > SESSION_MS) delete d.sessions[h];
-  d.sessions[sha(token)] = { id, at: now, seen: now };
+  d.sessions[sha(token)] = { id, at: now, seen: now, app: sessionApp };
   return token;
 }
 // Profil personnalisé : photo (servie à part, en cache), couleur, bio. Visible par les amis.
@@ -412,6 +413,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
   const ip = clientIp(req);
   res.setHeader('Cache-Control', 'no-store');
   noteVersion(token, req.headers['x-history-version'], req.headers['x-history-clips-version']).catch(() => {});
+  sessionApp = req.headers['x-history-clips-version'] ? 'History Clips' : req.headers['x-history-version'] ? 'History Launcher' : 'Navigateur';
   try {
     if (route === 'POST /api/compte/inscription') { const r = await register(await readJson(req), ip); return send(res, r.status, r); }
     if (route === 'POST /api/compte/connexion') { const r = await login(await readJson(req), ip); return send(res, r.status, r); }
@@ -496,6 +498,34 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       if (err) return send(res, 400, { error: err });
       store(d);
       return send(res, 200, { ok: true, compte: publicAccount(a) });
+    }
+    // Appareils connectés (historique des sessions) : voir et déconnecter un appareil, ou tous les autres
+    if (route === 'GET /api/compte/sessions' || route === 'POST /api/compte/sessions/fin') {
+      const c = await me(token); if (!c) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      const d = await data(), mine = sha(token);
+      if (req.method === 'POST') { const b = await readJson(req); for (const [h, x] of Object.entries(d.sessions)) if (x.id === c.id && h !== mine && (b.tout || h.slice(0, 12) === String(b.k))) delete d.sessions[h]; store(d); }
+      return send(res, 200, { sessions: Object.entries(d.sessions).filter(([, x]) => x.id === c.id).map(([h, x]) => ({ k: h.slice(0, 12), app: x.app ?? 'History Launcher', at: x.at, seen: x.seen ?? x.at, actuelle: h === mine })).sort((a, b) => b.seen - a.seen) });
+    }
+    // RGPD : export de toutes mes données (JSON) et suppression du compte (mot de passe demandé)
+    if (route === 'GET /api/compte/export') {
+      const c = await me(token); if (!c) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      const { load } = await import('../storage.js');
+      const [soc, saves, specs] = await Promise.all(['launcher-social', 'cloud-saves', 'opti-pro-specs'].map((k) => load(k, {}).catch(() => ({}))));
+      const prem = await (await import('./launcherPremium.js')).premiumOf(c).catch(() => null);
+      const pick = (o) => Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [k, v?.[c.id]]).filter(([, v]) => v !== undefined));
+      return send(res, 200, { exporte_le: new Date().toISOString(), compte: c, social: pick(soc), sauvegardes_cloud: Object.values(saves?.[c.id] ?? {}), premium: prem, opti_pro: specs?.[c.id] ?? null });
+    }
+    if (route === 'POST /api/compte/supprimer') {
+      const c = await me(token); if (!c) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      if (!allowAttempt('compte-suppr', c.id, 5, 3_600_000)) return send(res, 429, { error: 'Trop d’essais.' });
+      const b = await readJson(req), d = await data(), a = d.accounts[c.id];
+      const pw = Buffer.from(await hashPassword(b.motDePasse ?? '', a.salt), 'hex'), good = Buffer.from(a.hash, 'hex');
+      if (pw.length !== good.length || !timingSafeEqual(pw, good)) return send(res, 401, { error: 'Mot de passe incorrect.' });
+      for (const [h, x] of Object.entries(d.sessions)) if (x.id === c.id) delete d.sessions[h];
+      delete d.accounts[c.id]; store(d);
+      const { load, save } = await import('../storage.js');
+      const saves = (await load('cloud-saves', {})) ?? {}; if (saves[c.id]) { delete saves[c.id]; save('cloud-saves', saves); }
+      return send(res, 200, { ok: true });
     }
     if (route === 'GET /api/compte/moi') { const c = await me(token); return c ? send(res, 200, { compte: c }) : send(res, 401, { error: 'Session expirée, reconnecte-toi.' }); }
     if (url.pathname === '/api/compte/sauvegarde' && ['GET', 'POST'].includes(req.method)) {

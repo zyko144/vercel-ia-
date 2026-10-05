@@ -3,7 +3,7 @@ name: Site du launcher (GitHub Pages)
 on:
   push:
     branches: [main]
-    paths: ['launcher-site/**', '.github/workflows/launcher-site-pages.yml']
+    paths: ['launcher-site/**', 'launcher/src/ui/**', 'launcher/src/core/**', '.github/workflows/launcher-site-pages.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,6 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Démo jouable dans le navigateur : l'interface du launcher avec ses données d'exemple (aucune donnée réelle)
+      - run: mkdir -p launcher-site/demo && cp -r launcher/src/ui launcher/src/core launcher-site/demo/
       - uses: actions/upload-pages-artifact@v3
         with: { path: launcher-site }
       - id: d

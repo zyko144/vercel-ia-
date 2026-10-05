@@ -101,6 +101,7 @@ export async function onInteraction(client, interaction) {
     if (interaction.isModalSubmit()) {
       if (interaction.customId === 'copy-modal') return await handleCopyModal(interaction);
       if (interaction.customId === 'hlaide') return await (await import('../features/launcherDiscord.js')).handleHelpModal(interaction);
+      if (interaction.customId === 'hlbug') return await (await import('../features/launcherDiscord.js')).handleHelpModal(interaction, true);
       return;
     }
     if (!interaction.isChatInputCommand() && !interaction.isMessageContextMenuCommand()) return;

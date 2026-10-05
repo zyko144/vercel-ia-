@@ -107,7 +107,7 @@ addActions('serveur', 'Niveaux et boutique', [
       const r = await claimDaily(interaction.guildId, interaction.user.id, interaction.member);
       if (r.ok) await questProgress(interaction.guildId, interaction.user.id, 'daily');
       const embed = new EmbedBuilder().setColor(r.ok ? 0x3dff9a : 0xffb020).setDescription(r.ok
-        ? `🎁 **+🪙 ${r.amount.toLocaleString('fr-FR')} pièces d’or** · série de **${r.streak} jour(s)** 🔥${r.booster ? ' · 💎 bonus booster +50 %' : ''}
+        ? `🎁 **+🪙 ${r.amount.toLocaleString('fr-FR')} pièces d’or** · série de **${r.streak} jour(s)** 🔥${r.booster ? ' · 💎 bonus booster +50 %' : ''}${r.event ? ` · ${r.event.emoji} événement ${r.event.name} : ×2` : ''}
 Bourse : 🪙 ${r.balance.toLocaleString('fr-FR')}`
         : '⏳ Déjà prise aujourd’hui : reviens après minuit pour garder ta série.');
       return interaction.reply({ embeds: [embed], ...PRIVATE });

@@ -46,7 +46,7 @@ import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, fortniteNews, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { badges, hourly, levelOf, rediscover, streakOf } from './core/progress.js';
 import { dnsTest, pingHosts, speedTest } from './core/net.js';
-import { CHECKS_PS, DNS_PAIRS, RESTORE_CLEAN_PS, addTempDay, dnsScript, dustDue, fpsAround, hwYear, logVersion, monthReport, parseArgs, psuAdvice, resaleValue, screenAdvice, toReinstall, parseChecks } from './core/more.js';
+import { CHECKS_PS, DNS_PAIRS, RESTORE_CLEAN_PS, addTempDay, dnsScript, dustDue, fpsAround, advancedStats, hwYear, logVersion, monthReport, wrapped, parseArgs, psuAdvice, resaleValue, screenAdvice, toReinstall, parseChecks } from './core/more.js';
 import { checkReq, parseReq } from './core/reqs.js';
 import { gogGames, ubisoftGames } from './core/stores.js';
 import { demoActivity, demoBench, demoEvents, demoFriends, demoGameActs, demoItems, demoPerf, demoScan, demoTemps, demoWu } from './core/demo.js';
@@ -1091,6 +1091,7 @@ async function optiApply(plan, progress = () => {}) {
   }
   if (journal.entries.length || journal.tweaks.length) { store.data.optiJournal = [journal, ...(store.data.optiJournal ?? [])].slice(0, 20); store.save(); }
   const after = await freeSpace();
+  const g = (store.data.gains ??= {}); g.optis = (g.optis ?? 0) + 1; g.freed = (g.freed ?? 0) + Math.max(0, before != null && after != null ? Math.max(freed, after - before) : freed); // « ce que Premium t’a apporté »
   return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: GAME_TWEAKS.filter((t) => tweaks.includes(t.id) && journal.done.includes(t.label)).length, games: games.length, errors: journal.errors, undo: Boolean(journal.entries.length || journal.tweaks.length) };
 }
 ipcMain.handle('opti:run', async (_e, plan) => {
@@ -1750,6 +1751,7 @@ ipcMain.handle('mods:toggle', async (_e, id, dir, name, on) => {
 });
 ipcMain.handle('gameUpdate:downloads', () => runSilentSteam(['steam://downloads']));
 
+const RISKY_TOOLS = /cheat ?engine|artmoney|wemod|x64dbg|x32dbg|ollydbg|processhacker|systeminformer|ida64|extreme ?injector|dnspy|autohotkey|scylla/i;
 async function doAction(id, action) {
   const item = items.find((i) => i.id === id); // jamais une commande venue de l'interface : seulement nos éléments
   if (!item) throw new Error('élément inconnu');
@@ -1778,6 +1780,11 @@ async function doAction(id, action) {
     const memo = store.data.items[item.id]?.launch ?? null;
     const { readdir } = await import('node:fs/promises');
     const antiCheat = ['steam', 'epic'].includes(item.source) && await hasAntiCheat(item.installDir, readdir);
+    // Contrôle parental : limite du jour atteinte → code PIN demandé (déverrouillé 1 h)
+    const set = store.data.settings;
+    if (set.parental && set.pin && set.dailyLimit > 0 && item.kind === 'game' && todayGameMinutes(store.data.days) >= set.dailyLimit && Date.now() > (store.data.parentalUntil ?? 0)) throw new Error('limite du jour atteinte (contrôle parental) : code PIN demandé');
+    // Anti-triche : un outil connu pour faire bannir tourne en même temps → on prévient avant de jouer
+    if (antiCheat) { const risky = (await runningPaths().catch(() => [])).map((p) => path.basename(p)).filter((n) => RISKY_TOOLS.test(n)); if (risky.length) notify('⚠ Risque de ban', `${[...new Set(risky)].join(', ')} tourne : ferme-le avant de jouer à ${item.name}, l’anti-triche peut te bannir.`); }
     for (const way of launchPlan(item, { direct: store.data.settings.directLaunch !== false, memo, antiCheat })) {
       if (way === 'exe') {
         const exe = item.exe ?? await findExe(item.installDir);
@@ -2962,7 +2969,7 @@ async function runCommand(text, { voice = false } = {}) {
   if (voice) speak(out.reply);
   return out;
 }
-ipcMain.handle('ai:ask', (_e, message) => runCommand(message));
+ipcMain.handle('ai:ask', (_e, message) => { (store.data.gains ??= {}).ia = (store.data.gains.ia ?? 0) + 1; return runCommand(message); });
 
 // ---------- Voix : « Hey History … » (écoute Windows) et bouton micro (transcription Gemini) ----------
 let stopListening = null;
@@ -3159,7 +3166,12 @@ ipcMain.handle('account:2faStart', async () => {
   const qr = await QR.toDataURL(r.url, { margin: 1, width: 240, color: { dark: '#0b0910', light: '#ffffff' } });
   return { ok: true, qr, secret: r.secret };
 });
-ipcMain.handle('account:discordCode', () => secu('/api/compte/discord/code', {}));
+ipcMain.handle('account:discordCode', async () => {
+  const r = await secu('/api/compte/discord/code', {});
+  // QR à scanner avec le téléphone : ouvre directement le salon #lier-son-compte dans Discord
+  if (r?.ok) r.qr = await (await import('qrcode')).default.toDataURL('https://discord.com/channels/1554084922665205780/1556408553982402671', { margin: 1, width: 180, color: { dark: '#0b0910', light: '#ffffff' } }).catch(() => null);
+  return r;
+});
 ipcMain.handle('account:discordUnlink', () => secu('/api/compte/discord/delier', {}));
 ipcMain.handle('groups:create', (_e, nom, membres) => social('/api/compte/groupes', { nom: String(nom ?? '').slice(0, 40), membres: (Array.isArray(membres) ? membres : []).map(String).slice(0, 30) }));
 ipcMain.handle('groups:notify', (_e, id, text) => social('/api/compte/groupes/prevenir', { id: String(id ?? ''), text: String(text ?? '').slice(0, 200) }));
@@ -3862,7 +3874,9 @@ ipcMain.handle('more:proCard', (_e, at) => {
     const b = recs.filter((r) => r.avg && r.at < t), a = recs.filter((r) => r.avg && r.at > t);
     if (b.length && a.length && (!fps || b.length + a.length > fps.n)) fps = { name: items.find((i) => i.id === id)?.name ?? 'Jeu', before: avg(b), after: avg(a), n: b.length + a.length };
   }
-  return { before: [...hist].reverse().find((x) => x.at < t)?.score ?? null, after: diagCache?.data?.score ?? hist.at(-1)?.score ?? null, fps };
+  const card = { before: [...hist].reverse().find((x) => x.at < t)?.score ?? null, after: diagCache?.data?.score ?? hist.at(-1)?.score ?? null, fps };
+  proPost('/api/compte/optipro/gain', card).catch(() => {}); // classement du mois sur Discord
+  return card;
 });
 // Ticket Opti Pro réussi : badge du profil + suivi automatique chaque mois
 ipcMain.handle('more:proDone', () => { if (!store.data.optiProDoneAt) { store.data.optiProDoneAt = Date.now(); store.data.optiProScore = diagCache?.data?.score ?? null; store.save(); } return true; });
@@ -3914,6 +3928,7 @@ ipcMain.handle('more:ai', async (_e, kind, x = {}) => {
     const reply = await ai.ask({ web: tool[0], image: image ? { mime: image[1], data: image[2] } : null,
       system: `Tu es l'IA de History Launcher, experte en jeux PC et en matériel. Français, tutoiement, réponses claires en Markdown (titres courts, listes), sans blabla. N'invente rien : si tu n'es pas sûr, dis-le.${beginner}\n\n${aiMemory()}`,
       text: tool[1](x, g, ctx) });
+    (store.data.gains ??= {}).ia = (store.data.gains.ia ?? 0) + 1;
     store.data.aiMemory = [...(store.data.aiMemory ?? []), `${kind}${g ? ` (${g.name})` : ''} : ${String(x.text ?? x.a ?? '').slice(0, 80)}`].slice(-20); store.save();
     return { reply: kind === 'arnaque' && ctx ? `> 🔎 Vérification locale : ${ctx}\n\n${reply}` : reply };
   } catch (err) { return { error: `IA injoignable (${err.message}).` }; }
@@ -3921,6 +3936,57 @@ ipcMain.handle('more:ai', async (_e, kind, x = {}) => {
 ipcMain.handle('more:aiBeginner', (_e, on) => { if (on !== undefined) { store.data.settings.aiBeginner = Boolean(on); store.save(); } return store.data.settings.aiBeginner === true; });
 ipcMain.handle('more:aiForget', () => { store.data.aiMemory = []; store.save(); return true; });
 ipcMain.handle('more:lfg', (_e, q = '', post = null) => (post ? social('/api/compte/lfg', { jeu: String(post.jeu ?? ''), rang: String(post.rang ?? ''), texte: String(post.texte ?? ''), stop: Boolean(post.stop) }) : social(`/api/compte/lfg?jeu=${encodeURIComponent(String(q).slice(0, 60))}`)).catch((err) => ({ error: err.message })));
+ipcMain.handle('more:stats', () => { const act = process.env.LAUNCHER_DEMO ? demoActivity() : { days: store.data.days, sessions: store.data.sessions ?? [] }; return { adv: advancedStats(act.sessions, act.days, items), gains: { ...(store.data.gains ?? {}), pro: Boolean(store.data.optiProDoneAt), recheck: store.data.optiRecheckAt ?? null } }; });
+ipcMain.handle('more:wrapped', () => wrapped(process.env.LAUNCHER_DEMO ? demoActivity().days : store.data.days, items, new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear()));
+// ---------- Sécurité & compte ----------
+ipcMain.handle('more:sessions', (_e, k = null, tout = false) => { const token = secret('account'); if (!token) return { error: 'Connecte-toi à ton compte History.' }; return (k || tout ? api('/api/compte/sessions/fin', { method: 'POST', token, body: { k: String(k ?? ''), tout: Boolean(tout) } }) : api('/api/compte/sessions', { token })).catch(() => ({ error: 'Serveur injoignable.' })); });
+ipcMain.handle('more:export', async () => {
+  const token = secret('account'); if (!token) return { error: 'Connecte-toi à ton compte History.' };
+  const r = await api('/api/compte/export', { token }).catch(() => ({ error: 'Serveur injoignable.' })); if (r.error) return r;
+  const local = { parametres: { ...store.data.settings }, collections: store.data.collections ?? {}, temps_de_jeu: store.data.days ?? {}, journal_optimisation: (store.data.optiJournal ?? []).map((j) => ({ at: j.at, fait: j.done })) };
+  const { filePath } = await dialog.showSaveDialog(win, { defaultPath: 'mes-donnees-history.json', filters: [{ name: 'JSON', extensions: ['json'] }] }); if (!filePath) return { cancelled: true };
+  const { writeFile } = await import('node:fs/promises'); delete local.parametres.pin;
+  await writeFile(filePath, JSON.stringify({ serveur: r, ce_pc: local }, null, 2)); shell.showItemInFolder(filePath); return { ok: true };
+});
+ipcMain.handle('more:deleteAccount', async (_e, pw) => {
+  const token = secret('account'); if (!token) return { error: 'Connecte-toi à ton compte History.' };
+  if (!(await confirm('Supprimer ton compte History ?', 'Définitif : profil, amis, sauvegardes en ligne et Premium sont effacés. Tes jeux et ce PC ne sont pas touchés.', { danger: true }))) return { cancelled: true };
+  const r = await api('/api/compte/supprimer', { method: 'POST', token, body: { motDePasse: String(pw ?? '').slice(0, 128) } }).catch(() => ({ error: 'Serveur injoignable.' }));
+  if (r.ok) { setSecret('account', ''); store.data.settings.lastAccount = null; store.save(); }
+  return r;
+});
+// Mot de passe déjà fuité ? (Have I Been Pwned, k-anonymat : seuls les 5 premiers caractères de l'empreinte SHA-1 partent)
+async function pwned(pw) {
+  const h = createHash('sha1').update(String(pw)).digest('hex').toUpperCase();
+  const t = await net.fetch(`https://api.pwnedpasswords.com/range/${h.slice(0, 5)}`).then((r) => r.text()).catch(() => '');
+  return Number(t.split('\n').find((l) => l.startsWith(h.slice(5)))?.split(':')[1] ?? 0);
+}
+ipcMain.handle('more:pwned', (_e, pw) => (String(pw ?? '').length >= 6 ? pwned(pw) : 0));
+// Code PIN du launcher (verrou à l'ouverture) + contrôle parental (la limite du jour devient bloquante)
+const pinHash = (pin, salt) => createHash('sha256').update(`${salt}:${pin}`).digest('hex');
+ipcMain.handle('more:pin', (_e, action, pin = '', extra) => {
+  const set = store.data.settings, ok = () => Boolean(set.pin) && pinHash(String(pin), set.pin.salt) === set.pin.hash;
+  if (action === 'status') return { on: Boolean(set.pin), parental: Boolean(set.parental), limit: set.dailyLimit ?? 0 };
+  if (action === 'set') { if (set.pin && !ok()) return { error: 'Code actuel incorrect.' }; if (!/^\d{4,8}$/.test(String(extra ?? ''))) return { error: 'Le code fait 4 à 8 chiffres.' }; const salt = randomUUID(); set.pin = { salt, hash: pinHash(String(extra), salt) }; store.save(); return { ok: true }; }
+  if (!ok()) return { error: 'Code incorrect.' };
+  if (action === 'clear') { delete set.pin; set.parental = false; }
+  if (action === 'parental') set.parental = Boolean(extra);
+  if (action === 'unlock') store.data.parentalUntil = Date.now() + 3_600_000;
+  store.save(); return { ok: true };
+});
+// Mods suspects : analyse antivirus Windows Defender des dossiers de mods du jeu (ou du jeu entier)
+ipcMain.handle('more:modscan', async (_e, id) => {
+  const it = items.find((i) => i.id === String(id)); if (!it?.installDir || process.platform !== 'win32') return { error: 'Analyse disponible sur Windows pour un jeu installé.' };
+  const { stat } = await import('node:fs/promises');
+  const dirs = (await Promise.all(['mods', 'Mods', 'BepInEx', 'plugins', 'addons', 'scripts', 'cleo', 'modloader', 'resources'].map(async (d) => ((await stat(path.join(it.installDir, d)).catch(() => null))?.isDirectory() ? path.join(it.installDir, d) : null)))).filter(Boolean);
+  const mp = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Windows Defender', 'MpCmdRun.exe');
+  const bad = [];
+  for (const d of dirs.length ? dirs : [it.installDir]) {
+    const code = await new Promise((r) => execFile(mp, ['-Scan', '-ScanType', '3', '-File', d, '-DisableRemediation'], { windowsHide: true, timeout: 600_000 }, (err) => r(err?.code ?? 0)));
+    if (code === 2) bad.push(d);
+  }
+  return { ok: true, scanned: dirs.length ? dirs.map((d) => path.basename(d)) : ['dossier du jeu'], threats: bad.map((d) => path.basename(d)) };
+});
 ipcMain.handle('more:reinstall', () => toReinstall(store.data.installedList ?? [], items));
 // ---------- 25. Widget sur le bureau : températures, FPS, amis ----------
 let widget = null;
@@ -3965,6 +4031,12 @@ setInterval(async () => {
 }, 10 * 60_000).unref?.();
 // Contrôle depuis le téléphone (option) : voir le PC et lancer un jeu depuis le même Wi-Fi
 let remoteSrv = null;
+// Ticket Opti Pro vu du téléphone (relu au plus une fois par minute)
+let ticketCache = { at: 0, v: null };
+async function remoteTicket() {
+  if (Date.now() - ticketCache.at > 60_000 && secret('account')) { ticketCache.at = Date.now(); const r = await api('/api/compte/optipro', { token: secret('account') }).catch(() => null); const t = r?.session; ticketCache.v = t && !t.closed ? { step: t.step + 1, last: t.log?.filter((m) => m.who !== 'user').at(-1)?.text ?? '' } : null; }
+  return ticketCache.v;
+}
 function setRemote() {
   remoteSrv?.close(); remoteSrv = null;
   if (!store.data.settings.remote) return;
@@ -3972,8 +4044,25 @@ function setRemote() {
   const recent = () => { const ids = [...new Set((store.data.sessions ?? []).slice().reverse().map((x) => x.id))]; const games = items.filter((i) => i.kind === 'game' && i.installed); return [...ids.map((id) => games.find((g) => g.id === id)).filter(Boolean), ...games].filter((g, k, a) => a.indexOf(g) === k).slice(0, 12); };
   remoteSrv = startRemote({
     pin: store.data.settings.remotePin,
-    state: async () => { const s = await snapshot().catch(() => null); const deg = (t) => (t == null ? null : `${Math.round(t)} °C`); return { cpu: deg(s?.cpu?.temp) ?? (s ? `${Math.round(s.cpu.usage)} %` : null), gpu: deg(s?.gpu?.temp), ram: s ? `${Math.round((s.ram.used / s.ram.total) * 100)} %` : null, jeu: playSession?.name ?? null, jeux: recent().map((g) => ({ id: g.id, name: g.name })) }; },
+    state: async () => { const s = await snapshot().catch(() => null); const deg = (t) => (t == null ? null : `${Math.round(t)} °C`); return { cpu: deg(s?.cpu?.temp) ?? (s ? `${Math.round(s.cpu.usage)} %` : null), gpu: deg(s?.gpu?.temp), ram: s ? `${Math.round((s.ram.used / s.ram.total) * 100)} %` : null, jeu: playSession?.name ?? null, jeux: recent().map((g) => ({ id: g.id, name: g.name })), installer: items.filter((i) => i.kind === 'game' && !i.installed && ['steam', 'epic'].includes(i.source)).sort((a, b) => b.minutes - a.minutes).slice(0, 6).map((g) => ({ id: g.id, name: g.name })), notifs: (store.data.notifLog ?? []).slice(-5).reverse().map(({ id, icon, title, body }) => ({ id, icon, title, body })), ticket: await remoteTicket() }; },
     launch: async (id) => (items.some((i) => i.id === id && i.installed) ? doAction(id, 'launch') : { ok: false }),
+    // Téléphone : installer, veille / extinction (60 s pour annuler), clips et captures du dossier Vidéos
+    act: async (what, id) => {
+      if (what === 'install') return items.some((i) => i.id === id && !i.installed) ? doAction(id, 'install').then(() => ({ ok: true, msg: '⬇ Installation lancée sur le PC' }), (e) => ({ ok: false, msg: e.message })) : { ok: false };
+      const sys = (exe, args) => spawn(exe, args, { windowsHide: true, detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+      if (process.platform !== 'win32') return { ok: false, msg: 'Windows seulement' };
+      if (what === 'sleep') { setTimeout(() => sys('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']), 1500); return { ok: true, msg: '🌙 Le PC se met en veille' }; }
+      if (what === 'shutdown') { sys('shutdown', ['/s', '/t', '60', '/c', 'Extinction demandée depuis ton téléphone (History). Annule avec shutdown /a ou depuis le téléphone.']); notify('Extinction dans 60 s', 'Demandée depuis ton téléphone.'); return { ok: true, msg: '⏻ Extinction dans 60 secondes' }; }
+      if (what === 'cancel') { sys('shutdown', ['/a']); return { ok: true, msg: 'Extinction annulée' }; }
+      return { ok: false };
+    },
+    clips: async () => {
+      const { readdir, stat } = await import('node:fs/promises'); const root = path.join(os.homedir(), 'Videos'); const out = [];
+      for (const d of (await readdir(root, { withFileTypes: true }).catch(() => [])).filter((x) => x.isDirectory()).slice(0, 40))
+        for (const f of (await readdir(path.join(root, d.name)).catch(() => [])).filter((n) => /\.(png|mp4)$/i.test(n))) out.push({ n: `${d.name}/${f}`, img: /\.png$/i.test(f), t: (await stat(path.join(root, d.name, f)).catch(() => ({ mtimeMs: 0 }))).mtimeMs });
+      return out.sort((a, b) => b.t - a.t).slice(0, 8);
+    },
+    file: async (n) => { const root = path.join(os.homedir(), 'Videos'), f = path.resolve(root, n); return f.startsWith(root + path.sep) && /\.(png|mp4)$/i.test(f) ? f : null; },
   });
 }
 app.whenReady().then(setRemote);
@@ -4159,7 +4248,8 @@ async function cloudSaveUp(item) {
   const dirs = await saveDirsOf(item);
   if (!dirs.length) return { ok: false, error: 'Dossier de sauvegarde inconnu.' };
   const buf = await packSaves(item.name, dirs).catch(() => null);
-  if (!buf || buf.length > 50 * 1024 * 1024) return { ok: false, error: 'Sauvegarde trop grosse pour le cloud (50 Mo).' };
+  const pr = await premium().catch(() => ({})), maxMb = pr.ia || pr.opti ? 200 : 50; // ⭐ Premium : 200 Mo par jeu
+  if (!buf || buf.length > maxMb * 1024 * 1024) return { ok: false, error: `Sauvegarde trop grosse pour le cloud (${maxMb} Mo${maxMb === 50 ? ', 200 Mo avec ⭐ Premium' : ''}).` };
   const r = await apiRaw(`/api/compte/saves?jeu=${encodeURIComponent(item.name.slice(0, 80))}`, buf, { timeout: 120_000 });
   if (r.ok) { (store.data.cloudSavesAt ??= {})[item.id] = r.at; store.save(); }
   return r.ok ? { ok: true, at: r.at, bytes: buf.length } : { ok: false, error: r.error ?? 'Envoi impossible.' };

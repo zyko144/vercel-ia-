@@ -67,3 +67,16 @@ console.log('more 0.54 ok');
   assert.equal(pcParts({ cpu: { name: 'Intel(R) Core(TM) i5-12400F' }, gpus: [{ name: 'NVIDIA GeForce GTX 1660 SUPER' }] })[1].art, 'gpu-gtx');
   console.log('composants un par un ok');
 }
+{
+  const { advancedStats } = await import('../src/core/more.js');
+  const h = 3600000, t0 = Date.UTC(2026, 9, 5, 18);
+  const a = advancedStats([{ id: 'g', start: t0, end: t0 + 2 * h }, { id: 'g', start: t0 + 86400000, end: t0 + 86400000 + h }, { id: 'app', start: t0, end: t0 + 5 * h }], { '2026-10-04': { jeux: 120 }, '2026-09-01': { jeux: 60 } }, [{ id: 'g', name: 'RL', kind: 'game' }, { id: 'app', kind: 'app' }], Date.UTC(2026, 9, 6));
+  assert.equal(a.avg, 90); assert.equal(a.longest.name, 'RL'); assert.equal(a.trend, 100);
+  console.log('stats avancées ok');
+}
+{
+  const { wrapped } = await import('../src/core/more.js');
+  const w = wrapped({ '2026-03-01': { jeux: 120, items: { a: 120 } }, '2026-05-02': { jeux: 60, items: { b: 60 } }, '2025-12-31': { jeux: 999 } }, [{ id: 'a', name: 'RL', kind: 'game' }, { id: 'b', name: 'GTA', kind: 'game' }], 2026);
+  assert.deepEqual([w.hours, w.days, w.top[0].name, w.best.day], [3, 2, 'RL', '2026-03-01']);
+  console.log('récap de l’année ok');
+}

@@ -637,8 +637,10 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
     if (!jeu) return send(res, 400, { error: 'Jeu manquant.' });
     if (req.method === 'POST') {
       if (!allowAttempt('cloud-saves', id, 60, 86_400_000)) return send(res, 429, { error: 'Trop de sauvegardes aujourd’hui.' });
-      const buf = await readBinary(req, 50 * 1024 * 1024).catch(() => null);
-      if (!buf?.length) return send(res, 413, { error: 'Sauvegarde trop grosse (50 Mo maximum).' });
+      const prem = await (await import('./launcherPremium.js')).premiumOf((await accounts())[id] ?? { id }).catch(() => ({})); // Premium : 200 Mo par jeu au lieu de 50
+      const max = prem.ia || prem.opti ? 200 : 50;
+      const buf = await readBinary(req, max * 1024 * 1024).catch(() => null);
+      if (!buf?.length) return send(res, 413, { error: `Sauvegarde trop grosse (${max} Mo maximum${max === 50 ? ', 200 Mo avec ⭐ Premium' : ''}).` });
       await putBlob(`saves/${id}/${key(jeu)}`, buf, 'application/octet-stream');
       mine[key(jeu)] = { jeu, at: Date.now(), size: buf.length };
       save('cloud-saves', all);

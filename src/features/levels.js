@@ -335,6 +335,17 @@ export async function leaderboardEmbed(guild, { month = false } = {}) {
 
 const dayOf = (at) => new Intl.DateTimeFormat('fr-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
 
+/** Événement de saison sur Discord (seulement pendant ces jours-là) : récompense du jour doublée. */
+export function seasonEvent(d = new Date()) {
+  const m = d.getMonth() + 1, j = d.getDate();
+  if (m === 10 && j >= 24) return { name: 'Halloween', emoji: '🎃' };
+  if (m === 12 && j >= 18) return { name: 'Noël', emoji: '🎄' };
+  if (m === 1 && j <= 3) return { name: 'Nouvel an', emoji: '🎆' };
+  if (m === 2 && j >= 12 && j <= 14) return { name: 'Saint-Valentin', emoji: '💘' };
+  if (m === 7 && j <= 14) return { name: 'Été', emoji: '☀️' };
+  return null;
+}
+
 export async function claimDaily(guildId, userId, member = null) {
   await data();
   const m = me(guildId, userId);
@@ -346,10 +357,11 @@ export async function claimDaily(guildId, userId, member = null) {
   const booster = !!member?.premiumSince;
   const base = (cfg(guildId, 'daily.amount') + Math.min(7, m.streak) * cfg(guildId, 'daily.streak')) * dailyMultiplier(guildId, userId);
   // Boosters +50 %, serveur premium ×2
-  const amount = Math.round(base * (booster ? 1.5 : 1) * (isPremium(guildId) ? 2 : 1));
+  const event = seasonEvent();
+  const amount = Math.round(base * (booster ? 1.5 : 1) * (isPremium(guildId) ? 2 : 1) * (event ? 2 : 1));
   const total = await addGold(guildId, userId, amount, 'Récompense du jour');
   dirty = true;
-  return { ok: true, amount, streak: m.streak, balance: total, booster };
+  return { ok: true, amount, streak: m.streak, balance: total, booster, event };
 }
 
 // ===================== Membre de la semaine =====================
