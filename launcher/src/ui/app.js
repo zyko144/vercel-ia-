@@ -1607,6 +1607,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.37': [
+    ['⚡', 'Le technicien le fait pour toi', 'Opti Pro : quand un réglage peut être fait par le launcher (optimisation Windows, alimentation, nettoyage, réparation, disques, anciens pilotes, dernier pilote graphique, clé USB, mesure), le technicien met un bouton « ⚡ Le faire pour moi ». Une validation, et c’est fait. Le BIOS et le panneau NVIDIA restent guidés.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']],
+    ['🖱', 'La page ne remonte plus', 'Opti Pro : « Continuer », « Détail » et les autres boutons gardent ta position sur la page.']
+  ],
   '0.53.36': [
     ['💬', 'Tout le message du technicien', 'Opti Pro : les phrases et les questions du technicien (pas seulement les listes) font partie du parcours. « Continuer » passe dessus aussi, et un clic sur n’importe quelle partie floutée l’affiche.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
   ],
@@ -3199,7 +3203,7 @@ const PRO_STEPS = [
 ];
 const PRO_COLORS = ['#619fff', '#36c995', '#9b8cff', '#f5a623', '#ff6b6b', '#2ee07a', '#ffc439'];
 let pro = null, proBusy = false, proPoll = 0, proHuman = false, proSeen = '';
-const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt=""><b>Technicien History</b><span>Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][1]}</span>` : m.who === 'staff' ? '<b>Équipe History</b>' : '<b>Toi</b>'}</div><div class="reporttxt rich">${proLinks(richText(m.text))}</div>${m.who === 'bot' ? `<div class="embbar"><i style="width:${Math.round(((m.step + 1) / 7) * 100)}%"></i></div>` : ''}</div>`;
+const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt=""><b>Technicien History</b><span>Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][1]}</span>` : m.who === 'staff' ? '<b>Équipe History</b>' : '<b>Toi</b>'}</div><div class="reporttxt rich">${proLinks(richText(m.text)).replace(/\[\[faire:([a-z_]+)\]\]/g, (_, id) => (PRO_DO[id] ? `<button class="btn sm play pdo" data-do="${id}">⚡ Le faire pour moi</button>` : ''))}</div>${m.who === 'bot' ? `<div class="embbar"><i style="width:${Math.round(((m.step + 1) / 7) * 100)}%"></i></div>` : ''}</div>`;
 // Mode concentration : une tâche à la fois dans le dernier message du technicien, les autres floutées
 const proFocus = {}, proDetail = {};
 function proFocusUi() {
@@ -3213,7 +3217,14 @@ function proFocusUi() {
 }
 
 const proLinks = (html) => html.replace(/\[([^\]]+)\]\((https:\/\/[^\s)<]+)\)|(https:\/\/[^\s<)]+)/g, (_, t, u, bare) => `<a href="#" class="plink" data-url="${u ?? bare}">${t ?? bare}</a>`);
+// Re-dessin du ticket sans faire bouger la page (on garde la position de chaque zone qui défile)
 function renderProTicket(jump = true) {
+  const keep = []; for (let p = $('proTicket').parentElement; p; p = p.parentElement) if (p.scrollTop) keep.push([p, p.scrollTop]);
+  const h = $('proTicket').offsetHeight; $('proTicket').style.minHeight = `${h}px`;
+  proTicketDraw(jump);
+  $('proTicket').style.minHeight = ''; keep.forEach(([p, t]) => { p.scrollTop = t; });
+}
+function proTicketDraw(jump) {
   const prev = $('proLog')?.scrollTop;
   const s = pro, last = s && s.step >= PRO_STEPS.length - 1, nx = s && PRO_STEPS[s.step + 1], opt = (i) => [2, 3, 4].includes(i);
   if (!s || s.closed) {
@@ -3256,6 +3267,7 @@ async function proAction(action, text = '', imgs = []) {
   pro = r.session; renderPro(false);
 }
 $('proTicket').addEventListener('click', async (e) => {
+  const dob = e.target.closest('[data-do]'); if (dob) return PRO_DO[dob.dataset.do] && proDo(dob.dataset.do, dob);
   const f = e.target.closest('[data-pfa]'), li = e.target.closest('.emb.focus [data-pf]:not(.on)');
   const m = (f ?? li)?.closest('.emb'), k = m?.dataset.k, i = proFocus[k] ?? 0;
   if (li) { proFocus[k] = Number(li.dataset.pf); return renderProTicket(); }
@@ -3268,6 +3280,27 @@ $('proTicket').addEventListener('click', async (e) => {
     proDetail[key] = r?.detail ?? r?.error ?? 'Détail indisponible, réessaie.'; return renderProTicket();
   }
   const l = e.target.closest('[data-url]'); if (l) { e.preventDefault(); return api.proOpen?.(l.dataset.url); } const b = e.target.closest('[data-pa]'); if (!b) return; if (b.dataset.pa === 'discord') { proHuman = !proHuman; $('proHuman').hidden = !proHuman; return $('proHuman').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } if (b.dataset.pa === 'discordgo') return api.discordInvite?.(); if (b.dataset.pa === 'ask') return proAsk(); proAction(b.dataset.pa); });
+// Actions que le technicien IA propose de faire à ta place (toujours avec une validation avant)
+const PRO_DO = {
+  optimiser: ['Optimisation complète de Windows et de tes jeux', () => optiFinal()],
+  alimentation: ['Plan d’alimentation Performances optimales', () => api.optiSysApply([{ id: 'power', on: true }])],
+  nettoyage: ['Nettoyage profond de Windows', () => api.optiDeep()],
+  reparer: ['Réparation de Windows (DISM + SFC)', () => api.optiRepair()],
+  disques: ['TRIM des SSD et défragmentation des disques durs', () => api.optiStorage()],
+  pilotes_anciens: ['Suppression des anciens pilotes graphiques', () => api.careDrivers()],
+  pilote_gpu: ['Téléchargement du dernier pilote de ta carte graphique', () => api.driverOpen('download')],
+  usb: ['Téléchargement de l’outil Microsoft pour la clé USB', () => api.proUsb()],
+  mesure: ['Mini-benchmark (≈ 10 s)', () => api.benchQuick()]
+};
+async function proDo(id, b) {
+  const [label, run] = PRO_DO[id];
+  if (id !== 'optimiser' && !(await ui.confirm({ title: 'Le technicien s’en occupe ?', text: `${label}. Windows peut demander l’autorisation administrateur ; un point de restauration est créé avant les réglages système.`, ok: '⚡ Le faire', icon: '⚡' }))) return;
+  b.disabled = true; b.textContent = '⏳ En cours…';
+  const r = await Promise.resolve(run()).catch((err) => ({ error: err.message }));
+  const ok = r !== false && !r?.error && r?.ok !== false;
+  b.textContent = ok ? '✅ Fait' : '⚠️ Pas fait'; toast(ok ? `✅ ${label} : fait` : `${label} : ${r?.error ?? 'refusé ou interrompu'}`);
+  if (ok && id !== 'optimiser') proAction('msg', `✅ Fait automatiquement par le launcher : ${label}${r?.total ? ` (${r.total} points)` : ''}.`);
+}
 // Question au technicien : dans une fenêtre à part pour garder la page concentrée sur l'étape
 const proShots = [];
 // Capture réduite en JPEG (1600 px max) : rapide à envoyer, assez nette pour lire un BIOS
@@ -4856,7 +4889,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.36',
+    version: async () => '0.53.37',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

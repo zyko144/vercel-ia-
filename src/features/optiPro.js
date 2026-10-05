@@ -35,6 +35,9 @@ const BIOS_MAP = `REPÈRES BIOS PAR MARQUE (à vérifier pour le modèle exact)
 - Gigabyte / AORUS : entrer = Suppr ; mode avancé = F2 ; mise à jour = Q-Flash (F8) ; XMP/EXPO = Tweaker › Extreme Memory Profile (X.M.P.) ; PBO = Tweaker › Advanced CPU Settings › Precision Boost Overdrive (ou Settings › AMD Overclocking) ; Resizable BAR = Settings › IO Ports › Re-Size BAR Support ; sauver = F10.
 - ASRock : entrer = Suppr/F2 ; mode avancé = F6 ; mise à jour = Tool › Instant Flash ; XMP/EXPO = OC Tweaker › DRAM Configuration › Load XMP/EXPO Setting ; PBO = Advanced › AMD Overclocking › Precision Boost Overdrive (ou OC Tweaker) ; Resizable BAR = Advanced › Chipset Configuration › Re-Size BAR Support ; sauver = F10.
 - PC de marque / portable (HP, Dell, Lenovo, Acer…) : BIOS souvent verrouillé (pas d'XMP ni d'overclocking) : le dire clairement et proposer ce qui reste (mise à jour du BIOS, mode performances du fabricant).`;
+// Ce que le launcher sait faire tout seul : l'IA ajoute [[faire:id]] et le client lance l'action en 1 clic (avec validation)
+export const AUTO = { optimiser: 'tous les réglages Windows pour le jeu + nettoyage + réglages des jeux (point de restauration avant)', alimentation: 'plan d’alimentation Performances optimales (PC fixe)', nettoyage: 'nettoyage profond de Windows (fichiers temporaires, anciennes mises à jour)', reparer: 'réparation de Windows (DISM + SFC)', disques: 'TRIM des SSD et défragmentation des disques durs', pilotes_anciens: 'suppression des anciens pilotes graphiques inutiles', pilote_gpu: 'téléchargement du dernier pilote de la carte graphique', usb: 'téléchargement de l’outil Microsoft pour la clé USB', mesure: 'mini-benchmark avant / après' };
+const AUTO_TXT = `ACTIONS AUTOMATIQUES : quand une chose peut être faite par History Launcher à la place du client, ne lui explique pas comment la faire à la main ; écris une ligne courte et termine-la par le marqueur exact [[faire:id]] (il devient un bouton « ⚡ Le faire pour moi »). Ids : ${Object.entries(AUTO).map(([k, v]) => `${k} = ${v}`).join(' ; ')}. Le BIOS, l’overclocking et le panneau NVIDIA restent manuels.`;
 const SYSTEM = 'Tu es le technicien Opti Pro de History : tu accompagnes un joueur pour optimiser son PC, comme un vrai technicien en ticket. Français, tutoiement, chaleureux et précis. Markdown pour Discord : titres « ## », listes numérotées courtes, valeurs en **gras**. 2200 caractères maximum. Chaque action dit OÙ aller (chemin complet des menus ou des paramètres Windows, avec la touche à presser) et QUOI choisir (valeur exacte). Utilise seulement le matériel fourni ; s’il manque une info importante, pose UNE question à la fin. N’invente jamais un chiffre mesuré ni un lien : donne seulement des liens de sites officiels. Ne propose jamais de couper Windows Defender, les mises à jour, ni de « nettoyeur de registre ». Sécurité d’abord pour le BIOS.';
 
 export function specsOf(raw = {}) {
@@ -85,7 +88,7 @@ export async function sessionOf(accountId) { return Object.values(await all()).f
 const byThread = async (threadId) => Object.values(await all()).find((t) => t.thread === threadId) ?? null;
 
 // ---------- IA ----------
-let askImpl = async (content, web = false, images = []) => (await (await import('../ai/gemini.js')).chat({ system: SYSTEM, content: images.length ? [{ type: 'text', text: content }, ...images] : content, web, thinking: 'low', tag: 'opti-pro' })).text;
+let askImpl = async (content, web = false, images = []) => (await (await import('../ai/gemini.js')).chat({ system: `${SYSTEM} ${AUTO_TXT}`, content: images.length ? [{ type: 'text', text: content }, ...images] : content, web, thinking: 'low', tag: 'opti-pro' })).text;
 export function setAsk(fn) { askImpl = fn; } // tests
 async function botSay(id, kind, text, images = []) {
   const t = (await all())[id]; if (!t) return null;
@@ -133,7 +136,7 @@ let client = null; let chan = null;
 const isStaff = (id) => id === config.ownerId;
 function embedFor(t, m) {
   const step = STEPS[m.step ?? t.step];
-  const e = new EmbedBuilder().setColor(m.who === 'bot' ? step[2] : 0x2b2d31).setDescription(m.text.slice(0, 4000));
+  const e = new EmbedBuilder().setColor(m.who === 'bot' ? step[2] : 0x2b2d31).setDescription(m.text.replace(/\[\[faire:\w+\]\]/g, '⚡ *en 1 clic dans History Launcher › Optimisation*').slice(0, 4000));
   if (m.who === 'bot') e.setAuthor({ name: `🚀 Opti Pro · Étape ${(m.step ?? t.step) + 1}/7 · ${step[1]}`, iconURL: LOGO }).setFooter({ text: `${STEPS.map((_, i) => (i <= (m.step ?? t.step) ? '🟩' : '⬛')).join('')}  ·  Technicien History` });
   else e.setAuthor({ name: `${m.who === 'staff' ? '🛠 Staff History' : `💬 ${t.name}`}${m.fromApp ? ' · depuis le launcher' : ''}` });
   return e;

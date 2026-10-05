@@ -25,4 +25,5 @@ t = await m.act(t0.id, 'done'); assert.ok(t.closed && t.done); assert.match(t.lo
 assert.equal(await m.sessionOf('acc1'), null); assert.ok((await m.act(t0.id, 'next')).error);
 m.setAsk(async () => { throw new Error('quota'); });
 const t1 = await m.startSession({ id: 'acc2', pseudo: 'B' }, { cpu: 'x' }); assert.match(t1.log.at(-1).text, /humain/);
+assert.ok(Object.keys(m.AUTO).includes('optimiser'));
 console.log('✅ Opti Pro : ticket guidé, verdict overclocking, passer des étapes, staff, fin, IA en panne');
