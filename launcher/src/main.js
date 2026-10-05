@@ -4493,6 +4493,7 @@ ipcMain.handle('notifs:act', async (_e, id, action) => {
 
 // Copier du texte (code ami, lien d'invitation, rapport…) : par l'appli, le presse-papiers du navigateur étant bloqué
 ipcMain.handle('clip:write', (_e, text) => { clipboard.writeText(String(text ?? '').slice(0, 20_000)); return true; });
+ipcMain.handle('clip:image', (_e, url) => { const img = /^data:image\/png;base64,/.test(String(url)) ? nativeImage.createFromDataURL(url) : null; if (!img || img.isEmpty()) throw new Error('image'); clipboard.writeImage(img); return true; });
 
 
 // =====================================================================================================
