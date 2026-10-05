@@ -1,0 +1,46 @@
+/* Ambiance de saison : Halloween (octobre). Palette marron sombre, accent citrouille, décor animé qui ne bloque jamais un clic. */
+body[data-season="halloween"] {
+  --bg: #0e0906; --panel: #1a110b; --panel-2: #22160e; --line: rgba(255, 150, 70, .07); --line-2: rgba(255, 150, 70, .12);
+  --text: #f6ece2; --muted: #a8917f; --blue: #ff7a1a; --blue-2: #b4470c; --cyan: #ffb067; --accent: #ff7a1a; --accent-2: #b4470c;
+  background: radial-gradient(900px 500px at 75% 110%, rgba(255, 110, 20, .13), transparent 60%), radial-gradient(800px 500px at 10% -10%, rgba(120, 40, 160, .12), transparent 60%), var(--bg);
+}
+body[data-season="halloween"] .side { background: linear-gradient(170deg, rgba(60, 30, 12, .55), rgba(14, 9, 6, .85)); border-right-color: rgba(255, 140, 60, .12); }
+body[data-season="halloween"] .brandmark img { filter: drop-shadow(0 0 14px rgba(255, 122, 26, .55)); }
+body[data-season="halloween"] .side .grow { background: url("halloween/pumpkins.png") center bottom / min(190px, 100%) auto no-repeat; min-height: 120px; opacity: .95; }
+#halloween { position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
+#halloween > * { position: absolute; }
+#halloween .web { width: var(--s); height: var(--s); opacity: .32; animation: hweb 7s ease-in-out infinite alternate; }
+#halloween .web line, #halloween .web path { stroke: #f3e6d8; stroke-width: 1; fill: none; }
+#halloween .web.tr { top: 64px; right: 0; transform-origin: top right; }
+#halloween .web.bl { bottom: 0; left: 0; transform-origin: bottom left; animation-delay: -3s; }
+#halloween .web.br { bottom: 0; right: 0; transform-origin: bottom right; animation-delay: -5s; }
+@keyframes hweb { from { transform: rotate(-1.4deg) scale(1); } to { transform: rotate(1.4deg) scale(1.02); } }
+#halloween .spider { top: 58px; width: 44px; display: flex; flex-direction: column; align-items: center; animation: hdrop var(--d, 6s) ease-in-out infinite alternate; transform-origin: top center; }
+#halloween .spider i { width: 1px; height: var(--h, 110px); background: linear-gradient(rgba(243, 230, 216, .1), rgba(243, 230, 216, .55)); }
+#halloween .spider img { width: 40px; margin-top: -4px; animation: hwiggle 1.6s ease-in-out infinite alternate; }
+@keyframes hdrop { 0% { transform: translateY(calc(var(--h, 110px) * -.35)) rotate(-2deg); } 100% { transform: translateY(0) rotate(2deg); } }
+@keyframes hwiggle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+#halloween .lantern { left: 152px; top: 22px; width: 50px; filter: drop-shadow(0 0 22px rgba(255, 120, 20, .55)); animation: hglow 2.8s ease-in-out infinite alternate; }
+@keyframes hglow { from { filter: drop-shadow(0 0 14px rgba(255, 120, 20, .35)); } to { filter: drop-shadow(0 0 28px rgba(255, 130, 30, .7)); } }
+#halloween .bat { top: 70px; left: -60px; width: 46px; opacity: .8; animation: hbat 26s linear infinite; }
+#halloween .bat.b2 { top: 140px; width: 30px; animation-duration: 34s; animation-delay: -14s; opacity: .55; }
+#halloween .bat path { fill: #120b07; stroke: rgba(255, 140, 60, .35); stroke-width: .8; animation: hflap .22s ease-in-out infinite alternate; transform-origin: center; }
+@keyframes hbat { 0% { transform: translate(0, 0); } 25% { transform: translate(30vw, 30px); } 50% { transform: translate(60vw, -10px); } 75% { transform: translate(90vw, 25px); } 100% { transform: translate(115vw, 0); } }
+@keyframes hflap { from { transform: scaleY(1); } to { transform: scaleY(.45); } }
+body[data-season="halloween"] .card:hover { box-shadow: 0 0 0 1px rgba(255, 122, 26, .5), 0 12px 40px rgba(255, 100, 20, .25); }
+@media (prefers-reduced-motion: reduce) { #halloween * { animation: none !important; } }
+body.ui-paused #halloween * { animation-play-state: paused; }
+/* Fenêtres et paramètres aussi en marron sombre */
+body[data-season="halloween"] .dlg, body[data-season="halloween"] .sheet { background: linear-gradient(180deg, rgba(40, 26, 16, .97), rgba(20, 12, 8, .98)) padding-box, linear-gradient(140deg, rgba(255, 122, 26, .7), rgba(255, 255, 255, .06) 40%, rgba(255, 176, 103, .4)) border-box; }
+body[data-season="halloween"] .setdlg, body[data-season="halloween"] .review-dialog { --set-surface: #1a110b; --set-muted: #b39c88; }
+body[data-season="halloween"] .setdlg .setbox { background: #120b07; border-color: rgba(255, 140, 60, .18); }
+body[data-season="halloween"] .setbody { background: radial-gradient(ellipse at 90% 0%, rgba(255, 110, 20, .12), transparent 60%); }
+body[data-season="halloween"] .setcard { background: linear-gradient(130deg, #24170e, #1a110b 80%); border-color: rgba(255, 140, 60, .12); }
+body[data-season="halloween"] .setnav button[data-pane].on { background: linear-gradient(100deg, color-mix(in srgb, var(--pc) 24%, #24170e), #24170e); }
+body[data-season="halloween"] .setnav button[data-pane].on .setnav-icon { color: #120b07; }
+body[data-season="halloween"] dialog::backdrop { background: rgba(14, 6, 2, .66); }
+body[data-season="halloween"] .settop { background: linear-gradient(110deg, rgba(60, 32, 14, .6), #140c07); }
+body[data-season="halloween"] .setnav { background: linear-gradient(170deg, #1f140c, #120b07 60%); }
+body[data-season="halloween"] .setsearch { background: rgba(10, 6, 3, .6); border-color: rgba(255, 140, 60, .2); }
+body[data-season="halloween"] .setpane .setrow select, body[data-season="halloween"] select { background-color: #140c07; border-color: rgba(255, 140, 60, .2); }
+body[data-season="halloween"] .setfooter { background: #120b07; }

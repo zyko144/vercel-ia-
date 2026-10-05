@@ -1835,6 +1835,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('neon' in patch) store.data.settings.neon = Math.max(0, Math.min(100, Number(patch.neon) || 0));
   if ('themeColor' in patch && /^#[0-9a-f]{6}$/i.test(patch.themeColor)) store.data.settings.themeColor = patch.themeColor;
   if ('bgMode' in patch && ['jeu', 'anime', 'sobre'].includes(patch.bgMode)) store.data.settings.bgMode = patch.bgMode;
+  if ('season' in patch) store.data.settings.season = patch.season === 'off' ? 'off' : 'auto';
   if ('autostart' in patch) store.data.settings.autostart = Boolean(patch.autostart);
   if ('discordStatus' in patch) store.data.settings.discordStatus = Boolean(patch.discordStatus);
   if ('shareActivity' in patch) store.data.settings.shareActivity = Boolean(patch.shareActivity);

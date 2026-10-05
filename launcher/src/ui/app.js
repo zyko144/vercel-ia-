@@ -3976,6 +3976,28 @@ const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxN
 $('sfxVol').addEventListener('change', () => { sfxSave(); window.sfx?.play('success'); });
 document.querySelectorAll('[data-sfxtry]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const was = window.sfx.get(); window.sfx.set({ on: true, notif: true }); window.sfx.play(b.dataset.sfxtry); window.sfx.set(was); }));
 $('textScale').addEventListener('change', (e) => api.setSettings({ textScale: Number(e.target.value) }));
+// ---------- Ambiance de saison : Halloween en octobre (toiles qui bougent, araignées, citrouilles Blender, chauves-souris) ----------
+function applySeason(mode) {
+  const on = mode !== 'off' && (new Date().getMonth() === 9 || mode === 'halloween');
+  document.body.dataset.season = on ? 'halloween' : '';
+  document.getElementById('halloween')?.remove();
+  if (!on) return;
+  const web = (cls, s, rot) => { // toile en coin : rayons + fils en arc
+    const rays = 7, rings = 6, R = 100; let d = '';
+    for (let k = 1; k <= rings; k++) {
+      const r = (R * k) / rings;
+      const pts = Array.from({ length: rays }, (_, j) => { const a = (j / (rays - 1)) * Math.PI / 2; return [r * Math.cos(a), r * Math.sin(a)]; });
+      d += `M${pts[0]}` + pts.slice(1).map((p, j) => { const q = pts[j]; const m = [(p[0] + q[0]) / 2 * .9, (p[1] + q[1]) / 2 * .9]; return ` Q${m} ${p}`; }).join('');
+    }
+    const lines = Array.from({ length: rays }, (_, j) => { const a = (j / (rays - 1)) * Math.PI / 2; return `<line x1="0" y1="0" x2="${R * Math.cos(a)}" y2="${R * Math.sin(a)}"/>`; }).join('');
+    return `<svg class="web ${cls}" style="--s:${s}px" viewBox="0 0 100 100"><g transform="${rot}">${lines}<path d="${d}"/></g></svg>`;
+  };
+  const bat = (cls) => `<svg class="bat ${cls}" viewBox="0 0 64 28"><path d="M32 8c2-4 4-4 5 0 4-6 14-8 27-2-7 1-10 5-9 11-4-3-8-3-10 1-2-3-5-4-8-2-1 3-3 4-5 4s-4-1-5-4c-3-2-6-1-8 2-2-4-6-4-10-1 1-6-2-10-9-11 13-6 23-4 27 2 1-4 3-4 5 0z"/></svg>`;
+  const spider = (x, h, d) => `<div class="spider" style="left:${x};--h:${h}px;--d:${d}s"><i></i><img src="halloween/spider.png" alt=""></div>`;
+  document.body.insertAdjacentHTML('beforeend', `<div id="halloween" aria-hidden="true">${web('tr', 170, 'translate(100 0) scale(-1 1)')}${web('bl', 130, 'translate(0 100) scale(1 -1)')}${web('br', 170, 'translate(100 100) scale(-1 -1)')}${spider('calc(232px + 44%)', 60, 5.5)}${spider('calc(100% - 70px)', 150, 7)}${bat('b1')}${bat('b2')}<img class="lantern" src="halloween/pumpkin-lantern.png" alt=""></div>`);
+}
+$('season').addEventListener('change', (e) => { applySeason(e.target.value); api.setSettings({ season: e.target.value }); });
+api.settings?.().then((s) => { $('season').value = s?.season === 'off' ? 'off' : 'auto'; applySeason($('season').value); }).catch(() => applySeason('auto'));
 $('compact').addEventListener('change', (e) => { document.body.classList.toggle('compact', e.target.checked); api.setSettings({ compact: e.target.checked }); });
 $('dnd').addEventListener('change', (e) => api.setSettings({ dnd: e.target.checked }).then(() => { window.sfx?.set({ notif: !e.target.checked && $('sfxNotif').checked }); toast(e.target.checked ? '⛔ Ne pas déranger activé' : 'Notifications réactivées'); }));
 $('tournament').addEventListener('change', (e) => api.setSettings({ tournament: e.target.checked }).then(() => toast(e.target.checked ? '🏆 Mode tournoi : boost sur chaque partie, zéro notification' : 'Mode tournoi désactivé')));
