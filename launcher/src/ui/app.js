@@ -201,13 +201,15 @@ function menuFor(i) {
   const m = [];
   if (!state.active.has(i.id)) m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (isApp ? '▶ Ouvrir' : '▶ Jouer') : '⬇ Installer'}</button>`);
   if (state.active.has(i.id)) m.push('<button data-action="close">■ Fermer</button>');
-  if (i.updatePending) m.push('<button data-action="update">⟳ Mettre à jour</button>');
+  if (i.updatePending) m.push(`<button data-action="update">⟳ Mettre à jour${i.updateBytes ? ` (${size(i.updateBytes)})` : ''}</button>`);
   m.push('<hr>');
   m.push(`<button data-set="favorite">${i.favorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}</button>`);
   m.push('<button data-cols="1">📚 Collections…</button>');
   m.push('<button data-sheet="1">≡ Fiche complète</button>');
   if (i.installed && i.installDir) m.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
-  if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button>');
+  if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">✓ Vérifier les fichiers</button><button data-action="repair">🛠 Réparer avec ' + (i.source === 'steam' ? 'Steam' : 'Epic') + '</button>');
+  if (i.installed && i.source === 'steam' && i.kind === 'game') m.push('<button data-action="cache">🧹 Vider le cache du jeu</button>');
+  if (i.installed && i.installDir && i.kind === 'game') m.push('<button data-mods="1">🧩 Mods du jeu</button>');
   if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
   if (i.kind === 'game') {
     const fin = Object.values(state.cols).find((c) => c.name === 'À finir');
@@ -649,6 +651,7 @@ function linkUrl(kind, h) {
 const linkShown = (kind, h) => (kind === 'discord' && h.startsWith('gg/') ? `discord.gg/${h.slice(3)}` : kind === 'discord' || kind === 'steam' ? h : `@${h}`);
 const safeBanner = (u) => (/^https:\/\/[\w.-]+\/api\/compte\/banniere\/[\w-]+\?v=\d+$/.test(String(u ?? '')) ? u : null);
 /** Carte de profil complète (aperçu de l'éditeur et profil d'un ami). */
+const GIFTS = { citrouille: ['🎃', 'Citrouille'], couronne: ['👑', 'Couronne'], flamme: ['🔥', 'Flamme'], coeur: ['💛', 'Cœur'], trophee: ['🏆', 'Trophée'], fantome: ['👻', 'Fantôme'] };
 function profileCard(p, { live = null } = {}) {
   const col = /^#[0-9a-f]{6}$/i.test(p.color ?? '') ? p.color : '#3b82f6';
   const ban = p.bannerData ?? safeBanner(p.bannerImg);
@@ -666,6 +669,7 @@ function profileCard(p, { live = null } = {}) {
       <small class="pc2sub">${p.code ? esc(p.code) : ''}${since ? `${p.code ? ' · ' : ''}membre depuis ${esc(since)}` : ''}</small>
       ${p.bio ? `<p class="pc2bio">${esc(p.bio)}</p>` : ''}
       ${(p.badges ?? []).length ? `<div class="pc2badges">${p.badges.filter((b) => BADGES[b]).map((b) => `<span class="pbadge"><i>${BADGES[b][0]}</i>${esc(BADGES[b][1])}</span>`).join('')}</div>` : ''}
+      ${(p.gifts ?? []).length ? `<div class="pc2gifts" title="Cadeaux reçus de ses amis">🎁 ${p.gifts.map((g) => GIFTS[g]?.[0] ?? '').join(' ')}</div>` : ''}
       <div class="pc2grid">
         ${p.favGame ? `<div class="pc2box fav">${game?.art?.cover ? `<img src="${esc(game.art.cover)}" alt="">` : '<span class="pc2ico">🎮</span>'}<div><small>Jeu préféré</small><b>${esc(p.favGame)}</b></div></div>` : ''}
         ${p.week && !hide.has('semaine') ? `<div class="pc2box"><span class="pc2ico">⏱</span><div><small>Cette semaine</small><b>${hours(p.week)}</b></div></div>` : ''}
@@ -680,7 +684,7 @@ function openFriendProfile(id) {
   const f = (state.hist?.amis ?? []).find((a) => a.id === id);
   if (!f) return;
   const live = f.playing ? { cls: 'g', text: `Joue à ${f.playing}` } : f.online ? { cls: 'on', text: 'En ligne' } : { cls: 'off', text: 'Hors ligne' };
-  setModal('wide', 'fp'), $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn play" data-m="1" autofocus>Fermer</button></div>`;
+  setModal('wide', 'fp'), $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn" data-giftfor="${esc(f.id)}">🎁 Offrir</button><button type="button" class="btn play" data-m="1" autofocus>Fermer</button></div><div class="giftpick" id="giftPick" hidden>${Object.entries(GIFTS).map(([k, [e, n]]) => `<button type="button" class="btn sm" data-gift="${k}" data-to="${esc(f.id)}">${e} ${n}</button>`).join('')}</div>`;
   $('modal').showModal();
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) setTimeout(() => $('modal').close(), 0); };
 }
@@ -1419,6 +1423,7 @@ function showFriendTab(tab) {
   if (fx.sel?.type === (tab === 'history' ? 'steam' : 'ami')) fxShow(null);
   if (tab === 'history') loadHistory(); else { renderFriends(); loadFriends(); }
 }
+$('stChips').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (!b) return; $('myStatus').value = b.dataset.st; $('saveStatus').click(); if (b.dataset.st.startsWith('⛔')) api.setSettings({ dnd: true }); });
 $('saveStatus').addEventListener('click', async () => { await api.setSettings({ status: $('myStatus').value }); toast($('myStatus').value.trim() ? 'Statut mis à jour' : 'Statut retiré'); });
 $('copyInvite').addEventListener('click', async () => { const code = $('myCode').textContent; if (!code || code === '—') return toast('Connecte-toi d’abord'); await copyText(`history://ami/${encodeURIComponent(code)}`); toast('Lien copié : envoie-le à tes potes (ils cliquent → demande d’ami)'); });
 api.onInvite?.(async (d) => {
@@ -1602,6 +1607,15 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.20': [
+    ['🛒', 'Upgrade et Entretien', 'Mon PC › 🛒 Upgrade : quoi acheter avec ton budget et tes FPS estimés avec une autre carte graphique. 🩺 Entretien : santé des disques (alerte si l’un faiblit) et nettoyage des anciens pilotes graphiques.', ['[data-view=pc]', 'wait600', '[data-pctab=upgrade]', 'wait900']],
+    ['🎁', 'Cadeaux & codes Premium', 'Essai gratuit de 3 jours, ton code ami (−20 % pour lui, 7 jours offerts pour toi) et les cartes cadeaux à offrir.'],
+    ['🛠', 'Outils de jeu', 'Clic droit sur un jeu : réparer avec Steam / Epic, vider son cache, gérer ses mods, taille de la mise à jour en attente.'],
+    ['🌡️', 'Après chaque partie', 'Températures max de la partie dans l’historique du jeu, et les programmes qui prenaient trop de mémoire.'],
+    ['🔕', 'Zéro notification en jeu', 'Paramètres › Jeux : coupe les bulles Windows pendant toutes tes parties, rétablies à la fin.'],
+    ['💬', 'Amis', 'Statuts rapides (Dispo, Ne pas déranger, En vocal, AFK) et cadeaux à offrir, affichés sur la carte de profil.'],
+    ['🎄', 'Saisons', 'Noël en décembre (neige qui tombe). Halloween : toiles plus discrètes, et les araignées descendent à des endroits différents puis remontent.'],
+  ],
   '0.53.19': [
     ['🎃', 'Ambiance Halloween', 'Pour octobre, l’appli passe en mode Halloween : logo citrouille, fond plus sombre, citrouilles réalistes, toiles et araignées qui bougent. Tu peux revenir au thème normal dans Paramètres › Apparence › Ambiance de saison.', ['#openSettings', 'wait600', '.setnav [data-pane=apparence]', 'wait900']],
   ],
@@ -2172,7 +2186,7 @@ async function openTools(item, tab = 'profil') {
     move: d.canMove ? `<p class="hint">Actuellement dans <b>${esc(d.from)}</b>${d.size ? ` · ${gb(d.size)}` : ''}. Ferme Steam complètement avant de lancer le déplacement.</p>
       <div class="flist">${d.targets.length ? d.targets.map((t) => `<div><div><b>${esc(t.lib)}</b><small>${t.free != null ? `${gb(t.free)} libres` : ''}${d.size && t.free != null && t.free < d.size ? ' · pas assez de place' : ''}</small></div><button class="btn play sm" data-move="${esc(t.lib)}" ${d.size && t.free != null && t.free < d.size ? 'disabled' : ''}>Déplacer ici</button></div>`).join('') : '<p class="hint">Aucune autre bibliothèque Steam : crées-en une dans Steam › Paramètres › Stockage.</p>'}</div><div id="moveProg"></div>` : '',
     perf: `${perf.length ? `<div class="scansum">${recent ? `<div><b>${recent}</b><small>FPS moyens (7 jours)</small></div>` : ''}${older && recent ? `<div class="${recent < older * 0.9 ? 'bad' : ''}"><b>${recent >= older ? '+' : ''}${Math.round((100 * (recent - older)) / older)} %</b><small>vs le mois d’avant (${older} FPS)</small></div>` : ''}<div><b>${perf.length}</b><small>parties suivies</small></div></div>
-      <div class="flist">${perf.slice(0, 20).map((x) => `<div><div><b>${new Date(x.at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} · ${x.minutes} min</b><small>${x.avg ? `${x.avg} FPS moy. · 1 % low ${x.low1}${x.stutters ? ` · ${x.stutters} saccades` : ''}` : 'FPS non mesurés'}${x.bound ? ` · ${B[x.bound]}` : ''}${x.gpuAvg != null ? ` · carte graphique ${x.gpuAvg} %` : ''}${x.coreMax != null ? ` · cœur le plus chargé ${x.coreMax} %` : ''}</small></div></div>`).join('')}</div>`
+      <div class="flist">${perf.slice(0, 20).map((x) => `<div><div><b>${new Date(x.at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} · ${x.minutes} min</b><small>${x.avg ? `${x.avg} FPS moy. · 1 % low ${x.low1}${x.stutters ? ` · ${x.stutters} saccades` : ''}` : 'FPS non mesurés'}${x.bound ? ` · ${B[x.bound]}` : ''}${x.gpuAvg != null ? ` · carte graphique ${x.gpuAvg} %` : ''}${x.coreMax != null ? ` · cœur le plus chargé ${x.coreMax} %` : ''}${x.gpuTmax ? ` · 🌡️ GPU ${x.gpuTmax} °C` : ''}${x.cpuTmax ? ` · CPU ${x.cpuTmax} °C` : ''}</small></div></div>`).join('')}</div>`
       : `<p class="hint">Joue une partie de plus de 3 minutes : tes FPS (si la mesure est activée), la charge du processeur et de la carte graphique et le composant qui limite s’afficheront ici.</p>`}
       ${d.fps ? '' : '<div class="row"><button class="btn" data-tact="fps">📈 Activer la mesure des vrais FPS</button></div>'}`,
   };
@@ -3015,7 +3029,31 @@ function pcTab(tab) {
   state.pcTab = tab;
   if (tab === 'securite' && !$('pcProcs').dataset.done) { $('pcProcs').dataset.done = '1'; renderProcs(); }
   if (tab === 'analyse' && !$('scanDrives').children.length) renderScanDrives();
+  if (tab === 'upgrade') renderUpgrade();
+  if (tab === 'entretien') renderCare();
 }
+// 🛒 Upgrade : conseil selon le budget et simulateur de carte graphique (estimations)
+async function renderUpgrade() {
+  const r = await api.upgrade?.($('upBudget').value, $('upGpu').value || null); if (!r) return;
+  $('upCur').textContent = r.current ? `Ta carte : ${r.current.name}. Choisis-en une autre pour voir tes FPS estimés sur tes jeux.` : `Ta carte (${r.gpuName || 'inconnue'}) n’est pas dans la liste : simulation impossible.`;
+  if (!$('upGpu').options.length) $('upGpu').innerHTML = '<option value="">— Choisis une carte —</option>' + r.gpus.filter((g) => !r.current || g.score > r.current.score).map((g) => `<option value="${esc(g.name)}">${esc(g.name)}${g.price ? ` · ~${g.price} €` : ''}</option>`).join('');
+  $('upAdvice').innerHTML = r.advice.items.length ? r.advice.items.map((x) => `<div class="uprow"><b>${{ gpu: '🎮', ram: '🧠', ssd: '💾' }[x.kind]} ${esc(x.title)}</b><span>~${x.price} €</span><small>${esc(x.gain)}</small></div>`).join('') + `<p class="hint">Total : ~${r.advice.total} €</p>` : '<p class="hint">Rien de rentable avec ce budget : ton PC est déjà bien équipé pour ce prix.</p>';
+  $('upSim').innerHTML = !r.sim ? '' : r.sim.length ? r.sim.map((g) => `<div class="uprow"><b>${esc(g.name)}</b><span>${g.now} → <strong>${g.after} FPS</strong></span><small>${g.cpuBound ? 'Limité par ton processeur : la carte change peu de choses ici.' : `+${Math.round((g.after / g.now - 1) * 100)} %`}</small></div>`).join('') : '<p class="hint">Joue quelques parties avec la mesure des FPS activée : la simulation utilisera tes vrais FPS.</p>';
+}
+$('upBudget').addEventListener('change', renderUpgrade); $('upGpu').addEventListener('change', renderUpgrade);
+// 🩺 Entretien : état SMART des disques, anciens pilotes graphiques
+async function renderCare() {
+  const r = await api.care?.(); if (!r) return;
+  const H = { Healthy: ['💚', 'En bonne santé'], Warning: ['🟠', 'Commence à faiblir : sauvegarde tes fichiers'], Unhealthy: ['🔴', 'En mauvais état : sauvegarde tout et remplace-le'] };
+  $('careDisks').innerHTML = r.disks.map((d) => { const h = H[d.health] ?? ['⚪', 'État inconnu']; return `<div class="uprow"><b>${h[0]} ${esc(d.name ?? 'Disque')}</b><span>${esc(d.media ?? '')} · ${size(d.size)}</span><small>${h[1]}</small></div>`; }).join('') || '<p class="hint">Lance l’analyse de Mon PC pour lire l’état des disques.</p>';
+  $('careDrv').innerHTML = r.drivers.count ? `<p><b>${r.drivers.count} ancien(s) pilote(s)</b> · ${size(r.drivers.bytes)} récupérables</p>` : '<p class="hint">✅ Aucun ancien pilote graphique en trop.</p>';
+  $('careDrvGo').hidden = !r.drivers.count;
+}
+$('careDrvGo').addEventListener('click', async () => {
+  if (!(await ui.confirm({ title: 'Nettoyer les anciens pilotes ?', text: 'Windows va demander l’autorisation administrateur. Un point de restauration est créé avant, et le pilote utilisé n’est jamais touché.', ok: 'Nettoyer' }))) return;
+  const r = await api.careDrivers?.(); if (r?.error) { toast(r.error); return openPremium('opti'); }
+  toast(r?.ok ? `🧹 ${r.removed} ancien(s) pilote(s) retiré(s)` : 'Nettoyage arrêté'); renderCare();
+});
 $('pcDriver').addEventListener('click', (e) => { const b = e.target.closest('[data-drv]'); if (b) api.driverOpen(b.dataset.drv); });
 $('pcTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-pctab]'); if (b) { window.sfx?.play('nav'); pcTab(b.dataset.pctab); } });
 document.querySelector('#view-pc').addEventListener('click', (e) => { const b = e.target.closest('[data-gotab]'); if (b) pcTab(b.dataset.gotab); });
@@ -3552,12 +3590,23 @@ $('guClose').onclick=()=>$('gameUpdateDialog').close();
 $('guDownloads').onclick=async()=>{try{if(!await api.gameUpdateDownloads())$('guStatus').textContent='Impossible d’ouvrir les téléchargements.';}catch{$('guStatus').textContent='Impossible d’ouvrir les téléchargements.';}};
 $('gameUpdateDialog').addEventListener('close',()=>{gameUpdateGeneration++;clearTimeout(gameUpdateTimer);});
 
+// 🧩 Mods : liste des dossiers mods / plugins du jeu, activer ou couper chacun (réversible)
+async function openMods(item) {
+  let d = document.getElementById('modsDlg');
+  if (!d) { d = document.createElement('dialog'); d.id = 'modsDlg'; d.innerHTML = '<div class="dlg"><h2 id="modsT"></h2><div id="modsL" class="modsl"></div><p class="hint">Couper un mod le renomme en « .disabled » : rien n’est supprimé.</p><button class="btn" type="button" id="modsX">Fermer</button></div>'; document.body.append(d); d.querySelector('#modsX').onclick = () => d.close(); }
+  const paint = (mods) => { d.querySelector('#modsL').innerHTML = mods.length ? mods.map((m) => `<label class="toggle"><input type="checkbox" data-mdir="${esc(m.dir)}" data-mname="${esc(m.name)}" ${m.on ? 'checked' : ''}><span></span>${esc(m.name)} <small class="hint">${esc(m.dir)}</small></label>`).join('') : '<p class="hint">Aucun mod trouvé (dossiers mods, plugins, BepInEx…).</p>'; };
+  d.querySelector('#modsT').textContent = `🧩 Mods de ${item.name}`; paint(await api.modsList?.(item.id) ?? []);
+  d.querySelector('#modsL').onchange = async (e) => { const c = e.target; const r = await api.modsToggle?.(item.id, c.dataset.mdir, c.dataset.mname, c.checked); if (r?.ok) { paint(r.mods); toast(c.checked ? 'Mod activé' : 'Mod coupé'); } else toast('Impossible : ferme le jeu d’abord'); };
+  d.showModal();
+}
 async function act(action) {
   const item = state.sel;
   if (!item) return;
   if (action === 'update') return startGameUpdate(item);
   if (action === 'optiplay') return openOptiPlay(item);
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
+  if (action === 'cache') { const r = await api.action(item.id, 'cache'); if (r?.ok) toast(r.freed ? `🧹 ${size(r.freed)} de cache vidés` : 'Cache déjà vide'); return; }
+  if (action === 'repair') { const r = await api.action(item.id, 'repair'); toast(r?.error ? `Impossible : ${r.error}` : `🛠 Réparation lancée dans ${item.source === 'steam' ? 'Steam' : 'Epic'}`); return; }
   const labels = { update: 'Mise à jour demandée dans History', launch: `Lancement de ${item.name}…`, install: `Installation de ${item.name}…`, verify: 'Vérification des fichiers lancée', uninstall: 'Désinstallation…', folder: 'Dossier ouvert', store: 'Page du magasin ouverte' };
   // Mise à jour en attente : la faire d'abord plutôt que d'attendre devant l'écran de chargement
   if (action === 'launch' && item.updatePending && item.source === 'steam') {
@@ -3615,7 +3664,10 @@ document.addEventListener('click', async (e) => {
     boostGames = r?.games ?? {};
     return toast(t.dataset.boostgame === 'on' ? `⚡ ${state.sel.name} sera toujours optimisé au lancement` : t.dataset.boostgame === 'off' ? `${state.sel.name} ne sera jamais optimisé` : 'Réglage par défaut remis');
   }
+  if (t.dataset.giftfor) { $('giftPick').hidden = !$('giftPick').hidden; return; }
+  if (t.dataset.gift) { const r = await api.friendGift?.(t.dataset.to, t.dataset.gift); toast(r?.ok ? `🎁 ${GIFTS[t.dataset.gift].join(' ')} offert !` : r?.error ?? 'Cadeau impossible'); $('giftPick').hidden = true; return; }
   if (t.dataset.gmod) return openGmod();
+  if (t.dataset.mods && state.sel) return openMods(state.sel);
   if (t.dataset.tofinish && state.sel) {
     let id = Object.keys(state.cols).find((k) => state.cols[k].name === 'À finir');
     if (!id) { id = newColId(); state.cols[id] = { name: 'À finir', items: [] }; }
@@ -3779,6 +3831,8 @@ $('autostart').addEventListener('change', (e) => api.setSettings({ autostart: e.
 $('directLaunch').addEventListener('change', (e) => api.setSettings({ directLaunch: e.target.checked }));
 $('preloadSteam').addEventListener('change', (e) => api.setSettings({ preloadSteam: e.target.checked }));
 $('nightUpdates').addEventListener('change', (e) => api.setSettings({ nightUpdates: e.target.checked }));
+$('quietGames').addEventListener('change', (e) => api.setSettings({ quietGames: e.target.checked }));
+api.settings?.().then((x) => { $('quietGames').checked = Boolean(x?.quietGames); }).catch(() => {});
 $('clipsLink').addEventListener('click', () => api.clipsSite?.());
 $('discordBtn').addEventListener('click', () => { toast('🎮 Ouverture du serveur Discord…'); api.discordInvite?.(); });
 
@@ -3795,6 +3849,7 @@ async function loadPremium(fresh = false) {
   const on = ['ia', 'opti'].filter((k) => prem[k]);
   $('premState').innerHTML = !prem.logged && !prem.dev ? 'Connecte-toi à ton compte History (Compte & sauvegarde) : ton Premium te suit sur tous tes PC.'
     : on.length ? `Actif : ${on.map((k) => `<b>${PREM_NAMES[k]}</b>${prem.until?.[k] ? ` jusqu’au ${new Date(prem.until[k]).toLocaleDateString('fr-FR')}` : ''}`).join(' · ')}` : 'Pas encore de Premium : choisis ton pack.';
+  $('pgCode').textContent = prem.code ?? 'Connecte-toi'; $('pgTrial').disabled = Boolean(prem.trialUsed || (prem.ia && prem.opti)); if (prem.trialUsed) $('pgTrial').textContent = 'Essai déjà utilisé';
   document.querySelectorAll('[data-buy]').forEach((b) => { const have = b.dataset.buy === 'pack' ? prem.ia && prem.opti : prem[b.dataset.buy]; b.textContent = have ? '✓ Actif' : 'Acheter avec PayPal'; b.disabled = Boolean(have); });
   return prem;
 }
@@ -3824,8 +3879,21 @@ document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click
   $('pdDone').hidden = true; $('premClaim').classList.remove('sent'); $('pdLink').hidden = false;
   $('premDlg').showModal(); $('premPaypal').focus();
   $('pdNote').textContent = '…';
-  api.premiumNote?.(b.dataset.buy).then((r) => { $('pdNote').textContent = r?.note ?? 'indisponible'; if (r?.error) toast(r.error); }).catch(() => {});
+  $('pdCode').value = ''; $('pdGift').checked = false; refreshNote();
 }));
+// Note (et prix) recalculés quand on met un code ami ou qu'on coche « cadeau »
+function refreshNote() {
+  const pack = $('premClaim').dataset.pack; $('pdNote').textContent = '…';
+  api.premiumNote?.(pack, $('pdCode').value.trim(), $('pdGift').checked).then((r) => {
+    $('pdNote').textContent = r?.note ?? 'indisponible'; if (r?.error) toast(r.error);
+    const price = r?.price ? `${r.price.replace('.', ',')} €` : PACK_INFO[pack][1]; $('pdPrice').textContent = price; $('pdAmount').textContent = price;
+  }).catch(() => {});
+}
+$('pdCode').addEventListener('change', refreshNote); $('pdGift').addEventListener('change', refreshNote);
+// 🎁 Cadeaux & codes : essai gratuit, code ami à partager, carte cadeau
+$('pgTrial').addEventListener('click', async () => { const r = await api.premiumTrial?.(); if (r?.ok) { toast('⭐ Essai activé : 3 jours de Pack Premium'); loadPremium(true); } else toast(r?.error ?? 'Essai indisponible'); });
+$('pgCopy').addEventListener('click', () => { if (/^AMI-/.test($('pgCode').textContent)) { copyText($('pgCode').textContent); toast('Code ami copié'); } });
+$('pgRedeemF').addEventListener('submit', async (e) => { e.preventDefault(); const r = await api.premiumRedeem?.($('pgRedeem').value.trim()); if (r?.ok) { toast(`🎁 ${PACK_INFO[r.pack]?.[0] ?? 'Premium'} activé`); $('pgRedeem').value = ''; loadPremium(true); } else toast(r?.error ?? 'Code invalide'); });
 $('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack));
 $('pdCopyNote').addEventListener('click', () => { if (/^HIST-/.test($('pdNote').textContent)) { copyText($('pdNote').textContent); toast('Note copiée : colle-la dans le message du paiement'); } });
 $('pdClose').addEventListener('click', () => $('premDlg').close());
@@ -3851,6 +3919,7 @@ $('pdJoin').addEventListener('click', () => api.discordInvite?.());
 function premNews(n) {
   const name = PACK_INFO[n.pack]?.[0] ?? 'Premium';
   $('pdDoneT').textContent = n.ok ? `${name} est actif` : 'Paiement non validé';
+  if (n.ok && n.gift) { $('pdDoneT').textContent = '🎁 Ta carte cadeau est prête'; $('pdDoneS').textContent = `Code à offrir : ${n.gift} (à entrer dans ⭐ Premium › Carte cadeau).`; copyText(n.gift); } else
   $('pdDoneS').textContent = n.ok ? 'Ton paiement a été vérifié : profite de ton Premium, sans redémarrer.' : 'Le paiement n’a pas pu être vérifié. Si tu as bien payé, écris au support (bouton Support en haut).';
   $('pdDoneIco').classList.toggle('no', !n.ok); $('pdDoneIco').classList.remove('wait');
   const t = $('pdTrack').children; t[1].className = n.ok ? 'ok' : 'bad'; t[2].className = n.ok ? 'ok' : ''; $('pdStep2').textContent = n.ok ? 'Vérifié' : 'Refusé';
@@ -3981,8 +4050,12 @@ document.querySelectorAll('[data-sfxtry]').forEach((b) => b.addEventListener('cl
 $('textScale').addEventListener('change', (e) => api.setSettings({ textScale: Number(e.target.value) }));
 // ---------- Ambiance de saison : Halloween en octobre (toiles qui bougent, araignées, citrouilles Blender, chauves-souris) ----------
 function applySeason(mode) {
-  const on = mode !== 'off' && (new Date().getMonth() === 9 || mode === 'halloween');
-  document.body.dataset.season = on ? 'halloween' : '';
+  const month = new Date().getMonth();
+  const noel = mode !== 'off' && (month === 11 || mode === 'noel'); // Noël en décembre : rouge et vert sapin, neige qui tombe
+  document.getElementById('noel')?.remove();
+  if (noel) { document.body.dataset.season = 'noel'; document.body.insertAdjacentHTML('beforeend', `<div id="noel" aria-hidden="true">${Array.from({ length: 40 }, () => `<i style="left:${Math.random() * 100}%;--d:${8 + Math.random() * 10}s;--w:${-Math.random() * 18}s;--s:${2 + Math.random() * 4}px;--x:${-30 + Math.random() * 60}px"></i>`).join('')}</div>`); }
+  const on = mode !== 'off' && !noel && (month === 9 || mode === 'halloween');
+  if (!noel) document.body.dataset.season = on ? 'halloween' : '';
   document.getElementById('halloween')?.remove();
   for (const img of document.querySelectorAll('img[src="logo.png"], img[data-logo]')) { img.dataset.logo = '1'; img.src = on ? 'halloween/logo.png' : 'logo.png'; } // logo d'Halloween
   if (!on) return;
@@ -3997,9 +4070,15 @@ function applySeason(mode) {
     return `<svg class="web ${cls}" style="--s:${s}px" viewBox="0 0 100 100"><g transform="${rot}">${lines}<path d="${d}"/></g></svg>`;
   };
   const bat = (cls) => `<svg class="bat ${cls}" viewBox="0 0 64 28"><path d="M32 8c2-4 4-4 5 0 4-6 14-8 27-2-7 1-10 5-9 11-4-3-8-3-10 1-2-3-5-4-8-2-1 3-3 4-5 4s-4-1-5-4c-3-2-6-1-8 2-2-4-6-4-10-1 1-6-2-10-9-11 13-6 23-4 27 2 1-4 3-4 5 0z"/></svg>`;
-  const spider = (x, h, d) => `<div class="spider" style="left:${x};--h:${h}px;--d:${d}s"><i></i><img src="halloween/spider.png" alt=""></div>`;
-  document.body.insertAdjacentHTML('beforeend', `<div id="halloween" aria-hidden="true">${web('tr', 170, 'translate(100 0) scale(-1 1)')}${web('bl', 130, 'translate(0 100) scale(1 -1)')}${web('br', 170, 'translate(100 100) scale(-1 -1)')}${spider('calc(232px + 44%)', 60, 5.5)}${spider('calc(100% - 70px)', 150, 7)}${bat('b1')}${bat('b2')}</div>`);
+  const spider = (x, h, d, w = 0) => `<div class="spider" style="left:${x};--h:${h}px;--d:${d}s;--w:${w}s"><i></i><img src="halloween/spider.png" alt=""></div>`;
+  document.body.insertAdjacentHTML('beforeend', `<div id="halloween" aria-hidden="true">${web('tr', 92, '')}${web('bl', 84, 'translate(0 100) scale(1 -1)')}${spider(`${260 + Math.random() * Math.max(100, innerWidth - 340)}px`, 90, 15, 2)}${spider(`${260 + Math.random() * Math.max(100, innerWidth - 340)}px`, 150, 19, 9)}${bat('b1')}${bat('b2')}</div>`);
 }
+// Les araignées descendent, bougent un peu, remontent hors de l'écran puis reviennent ailleurs (jamais sur le menu de gauche)
+document.addEventListener('animationiteration', (e) => {
+  const sp = e.target.closest?.('#halloween .spider'); if (!sp || e.target !== sp) return;
+  sp.style.left = `${260 + Math.random() * Math.max(100, innerWidth - 340)}px`;
+  sp.style.setProperty('--h', `${50 + Math.round(Math.random() * 220)}px`);
+});
 $('season').addEventListener('change', (e) => { applySeason(e.target.value); api.setSettings({ season: e.target.value }); });
 api.settings?.().then((s) => { $('season').value = s?.season === 'off' ? 'off' : 'auto'; applySeason($('season').value); }).catch(() => applySeason('auto'));
 $('compact').addEventListener('change', (e) => { document.body.classList.toggle('compact', e.target.checked); api.setSettings({ compact: e.target.checked }); });
@@ -4487,8 +4566,8 @@ function demoApi() {
     cleanScan: async () => [{ id: 'temp', label: 'Fichiers temporaires de Windows', bytes: 3.4e9 }, { id: 'nvdx', label: 'Cache NVIDIA (DirectX)', bytes: 1.1e9, note: 'Recréé au prochain lancement des jeux' }, { id: 'discord', label: 'Cache de Discord', bytes: 420e6, note: 'Ferme Discord pour tout vider' }],
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
-    premiumGet: async () => ({ ia: false, opti: false, logged: true }), premiumBuy: async () => ({ ok: true }),
-    version: async () => '0.53.19',
+    premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
+    version: async () => '0.53.20',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

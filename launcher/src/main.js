@@ -15,6 +15,8 @@ import { activeItems, gameExes, itemHistory, periodItems, periodStats, runningPa
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme, tuneScript, untuneScript, CPU_SCRIPT, parseCpu, cpuHogs } from './core/boost.js';
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
+import { cleanOldGpuDrivers, oldGpuDrivers } from './core/optimize.js';
+import { GPUS, budgetAdvice, matchGpu, simulate } from './core/upgrade.js';
 import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
 import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from './core/deepscan.js';
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
@@ -66,7 +68,7 @@ import { enrich } from './core/art.js';
 import { startTracker } from './core/tracker.js';
 import { crashesFor, diskAlerts, diskHealth, loadVerdict, netAdvice, parsePing, readCrashes, windowScript } from './core/gamecare.js';
 import nodeNet from 'node:net';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, readdir, rename, rm } from 'node:fs/promises';
 import { ps } from './core/pshost.js';
 import { collectConfigs, mergeConfigs, restoreConfigs } from './core/gameconfigs.js';
 import { setAppVolume } from './core/appvolume.js';
@@ -1259,6 +1261,24 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 // Tâches longues : vrai pourcentage envoyé à l'interface, et notification Windows à la fin (même fenêtre fermée)
 const jobFile = (id) => path.join(os.tmpdir(), `history-${id}-${Date.now()}.json`);
 const jobSend = (id) => (p) => send('job:progress', { id, ...p });
+// 🛒 Upgrade : carte graphique actuelle, simulation avec une autre et conseil d'achat selon le budget (estimations)
+ipcMain.handle('upgrade:get', async (_e, budget = 400, target = null) => {
+  const d = process.env.LAUNCHER_DEMO ? { gpus: [{ name: 'NVIDIA GeForce GTX 1660 SUPER' }], ram: [{ size: 8 * 1024 ** 3 }], disks: [{ system: true, media: 'HDD' }] } : diagCache?.data ?? await runDiag().catch(() => null);
+  const gpuName = (d?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? d?.gpus?.[0])?.name ?? '';
+  const ramGb = d?.ram?.length ? Math.round(d.ram.reduce((a, m) => a + (m.size ?? 0), 0) / 1024 ** 3) : null;
+  const games = Object.entries(store.data.perf ?? {}).map(([id, l]) => { const w = l.filter((r) => r.avg).slice(-5); const it = items.find((i) => i.id === id); return w.length && it ? { name: it.name, avg: w.reduce((a, r) => a + r.avg, 0) / w.length, bound: w.at(-1).bound, gpuAvg: w.at(-1).gpuAvg, minutes: it.minutes ?? 0 } : null; }).filter(Boolean).sort((a, b) => b.minutes - a.minutes).slice(0, 6);
+  if (process.env.LAUNCHER_DEMO && !games.length) games.push({ name: 'Fortnite', avg: 92, bound: 'gpu' }, { name: 'Rocket League', avg: 160, bound: 'cpu' }, { name: 'GTA V', avg: 74, bound: 'gpu' });
+  const cur = matchGpu(gpuName); const tgt = GPUS.find((g) => g.name === target);
+  return { gpuName, current: cur, gpus: GPUS, advice: budgetAdvice({ gpuName, ramGb, systemHdd: d?.disks?.some((x) => x.system && x.media === 'HDD'), budget: Number(budget) || 400 }), sim: cur && tgt ? simulate(cur, tgt, games) : null };
+});
+// 🩺 Entretien : santé des disques (SMART) et anciens pilotes graphiques
+ipcMain.handle('care:get', async () => ({ disks: (diagCache?.data ?? (process.env.LAUNCHER_DEMO ? null : await runDiag().catch(() => null)))?.disks?.map((x) => ({ name: x.name, media: x.media, health: x.health, size: x.size })) ?? (process.env.LAUNCHER_DEMO ? [{ name: 'Samsung SSD 980 1TB', media: 'SSD', health: 'Healthy', size: 1e12 }, { name: 'ST2000DM008', media: 'HDD', health: 'Warning', size: 2e12 }] : []), drivers: process.env.LAUNCHER_DEMO ? { count: 3, bytes: 4.2e9 } : process.platform === 'win32' ? await oldGpuDrivers() : { count: 0, bytes: 0 } }));
+ipcMain.handle('care:drivers', async () => {
+  if (!(await premium()).opti) return { ok: false, error: 'réservé à ⭐ Opti Pro' };
+  const r = await cleanOldGpuDrivers(jobFile('drivers'), jobSend('drivers'));
+  notify(r.ok ? '✅ Anciens pilotes supprimés' : 'Nettoyage des pilotes arrêté', r.ok ? `${r.removed} ancien(s) pilote(s) graphique(s) retiré(s). Un point de restauration a été créé avant.` : 'Autorisation refusée ou tâche interrompue.');
+  return r;
+});
 ipcMain.handle('opti:storage', async () => { const r = await optimizeStorage(jobFile('storage'), jobSend('storage')); notify(r.ok ? '✅ Disques optimisés' : 'Optimisation des disques arrêtée', r.ok ? 'TRIM des SSD et défragmentation des disques durs terminés.' : 'Autorisation refusée ou tâche interrompue.'); return r; });
 ipcMain.handle('opti:repair', async () => { const r = await repairWindows(jobFile('repair'), jobSend('repair')); notify(r.ok ? '✅ Vérification de Windows terminée' : 'Réparation de Windows arrêtée', r.ok ? 'Ouvre History Launcher › Optimisation pour voir le résultat.' : r.error); return r; });
 ipcMain.handle('opti:auto', (_e, on) => { if (on !== undefined) { store.data.settings.optiAuto = Boolean(on); store.save(); } return { on: store.data.settings.optiAuto === true, last: store.data.optiAutoLast ?? null }; });
@@ -1621,6 +1641,29 @@ ipcMain.handle('gameUpdate:progress', async (_e, id) => {
   try { const result=await readUpdateProgress(item);if(result.phase==='done'&&item.updatePending){item.updatePending=false;send('lib:update',library());}return result; }
   catch(e){return {error:e.message};}
 });
+// Mods d'un jeu : fichiers des dossiers mods / plugins ; désactiver = renommer en .disabled (réversible)
+const MOD_DIRS = ['mods', 'Mods', 'plugins', 'BepInEx/plugins', 'addons', 'MelonLoader/Mods'];
+async function modsOf(item) {
+  const out = [];
+  for (const d of MOD_DIRS) {
+    const dir = path.join(item.installDir, d);
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (e.name.startsWith('.')) continue;
+      out.push({ dir: d, name: e.name.replace(/\.disabled$/, ''), on: !e.name.endsWith('.disabled') });
+    }
+  }
+  return out.slice(0, 300);
+}
+const GIFT_NAMES = { citrouille: '🎃 Citrouille', couronne: '👑 Couronne', flamme: '🔥 Flamme', coeur: '💛 Cœur', trophee: '🏆 Trophée', fantome: '👻 Fantôme' };
+ipcMain.handle('friend:gift', (_e, to, item) => social('/api/compte/cadeau-ami', { to: String(to), item: String(item) }));
+ipcMain.handle('mods:list', async (_e, id) => { const item = items.find((i) => i.id === id); return item?.installDir ? modsOf(item) : []; });
+ipcMain.handle('mods:toggle', async (_e, id, dir, name, on) => {
+  const item = items.find((i) => i.id === id);
+  if (!item?.installDir || !MOD_DIRS.includes(dir) || /[\\/]|\.\./.test(String(name))) return { ok: false };
+  const base = path.join(item.installDir, dir, String(name));
+  await rename(on ? `${base}.disabled` : base, on ? base : `${base}.disabled`);
+  return { ok: true, mods: await modsOf(item) };
+});
 ipcMain.handle('gameUpdate:downloads', () => runSilentSteam(['steam://downloads']));
 
 async function doAction(id, action) {
@@ -1628,6 +1671,21 @@ async function doAction(id, action) {
   if (!item) throw new Error('élément inconnu');
   if (action === 'folder' && item.installDir) return shell.openPath(item.installDir).then(() => ({ ok: true }));
   if (action === 'store' && item.source === 'steam') return openLink(steamActions(item.steamId).store).then(() => ({ ok: true }));
+  // Réparer avec la plateforme : Steam / Epic revérifient chaque fichier et retéléchargent ce qui est abîmé
+  if (action === 'repair') {
+    if (item.source === 'steam' && await runSilentSteam([`steam://validate/${item.steamId}`])) return { ok: true };
+    if (item.source === 'epic') return openLink(epicActions(item.epicKey).verify).then(() => ({ ok: true }));
+    throw new Error('réparation possible seulement pour Steam et Epic');
+  }
+  // Vider le cache de shaders de ce jeu seulement (Steam) : il se recrée, les premières minutes peuvent saccader
+  if (action === 'cache' && item.source === 'steam' && item.steamLibrary) {
+    const dir = path.join(item.steamLibrary, 'shadercache', String(item.steamId));
+    const { bytes } = await folderSize(dir);
+    if (!bytes) return { ok: true, freed: 0 };
+    if (!(await confirm(`Vider le cache de ${item.name} ?`, `${(bytes / 1e6).toFixed(0)} Mo de cache de shaders seront supprimés. Il se recrée tout seul : les premières minutes de jeu peuvent saccader.`))) return { ok: false };
+    await rm(dir, { recursive: true, force: true });
+    return { ok: true, freed: bytes };
+  }
 
   if (action === 'launch' && item.source === 'xbox') {
     // Jeux Xbox / Game Pass : lancés par Windows (ils ne s'ouvrent pas directement par leur .exe)
@@ -1867,6 +1925,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('directLaunch' in patch) store.data.settings.directLaunch = Boolean(patch.directLaunch);
   if ('preloadSteam' in patch) store.data.settings.preloadSteam = Boolean(patch.preloadSteam);
   if ('nightUpdates' in patch) store.data.settings.nightUpdates = Boolean(patch.nightUpdates);
+  if ('quietGames' in patch) store.data.settings.quietGames = Boolean(patch.quietGames);
   if ('voiceReply' in patch) store.data.settings.voiceReply = Boolean(patch.voiceReply);
   if ('voiceName' in patch) store.data.settings.voiceName = String(patch.voiceName ?? '').slice(0, 80);
   if ('remote' in patch) { store.data.settings.remote = Boolean(patch.remote); setRemote(); }
@@ -2323,6 +2382,7 @@ async function socialTick(wait = 0) {
   socialLive = r;
   for (const x of r.items ?? []) {
     if (['msgdel', 'gmsgdel', 'react'].includes(x.type)) continue;
+    if (x.type === 'gift') { logNotif({ id: `gift-${x.id}`, kind: 'app', icon: '🎁', title: `${x.pseudo ?? 'Un ami'} t’a offert un cadeau`, body: `${GIFT_NAMES[x.item] ?? 'Un cadeau'} : il s’affiche maintenant sur ta carte de profil.` }); continue; }
     if (x.type === 'share') { store.data.sharesIn = [...(store.data.sharesIn ?? []).filter((y) => Date.now() - y.at < 86_400_000), { id: x.share, from: x.pseudo, game: x.game, name: x.text, size: x.size, at: x.at }].slice(-20); store.save(); pushCard(cardFor(x), true); continue; }
     if (x.type === 'call') { if (Date.now() - x.at < 60_000) { pushCard(cardFor(x), true); send('call:ringing', { callId: x.callId, from: x.from, pseudo: x.pseudo }); } else logNotif({ ...cardFor(x), kind: 'missed', icon: '📵', title: `Appel manqué de ${x.pseudo ?? 'un ami'}`, body: 'Clique pour le rappeler.', at: x.at }); continue; }
     if ((x.type === 'msg' || x.type === 'gmsg') && bubbleMsg(x)) { logNotif({ ...cardFor(x), read: true }); continue; }
@@ -2859,11 +2919,11 @@ if (!process.env.HL_API) {
 // donc un premium ajouté à la main marche tout de suite, sans mise à jour. Version développeur et démo : tout est ouvert.
 let premCache = { at: 0, v: { ia: false, opti: false } };
 async function premium() {
-  if (process.env.LAUNCHER_DEMO) return { ia: true, opti: true, dev: true };
+  if (process.env.LAUNCHER_DEMO) return { ia: true, opti: true, dev: true, code: 'AMI-7KQ2PX', trialUsed: true };
   if (Date.now() - premCache.at < 60_000) return premCache.v;
   const token = secret('account');
   const r = token ? await api('/api/compte/premium', { token }).catch(() => null) : { status: 401 };
-  if (r) premCache = { at: Date.now(), v: r.status === 200 ? { ia: Boolean(r.ia), opti: Boolean(r.opti), until: r.until, news: r.news } : { ia: false, opti: false } };
+  if (r) premCache = { at: Date.now(), v: r.status === 200 ? { ia: Boolean(r.ia), opti: Boolean(r.opti), until: r.until, news: r.news, code: r.code, trialUsed: r.trialUsed } : { ia: false, opti: false } };
   return premCache.v;
 }
 ipcMain.handle('premium:get', async (_e, fresh) => {
@@ -2877,11 +2937,14 @@ ipcMain.handle('premium:buy', (_e, pack) => {
   return shell.openExternal(`https://paypal.me/zyko921/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));
 });
 // « J'ai payé » : le serveur poste la demande dans #paiement-verif ; le Premium arrive quand le chef valide
-ipcMain.handle('premium:note', (_e, pack) => {
+ipcMain.handle('premium:note', (_e, pack, code = '', gift = false) => {
   const token = secret('account');
   if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour acheter.' };
-  return api('/api/compte/premium/note', { method: 'POST', token, body: { pack: String(pack) } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
+  return api('/api/compte/premium/note', { method: 'POST', token, body: { pack: String(pack), code: String(code).slice(0, 20), gift: Boolean(gift) } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
 });
+// Essai gratuit 3 jours et carte cadeau : le serveur active, l'appli relit le Premium
+ipcMain.handle('premium:trial', async () => { const token = secret('account'); if (!token) return { error: 'Connecte-toi à ton compte History.' }; const r = await api('/api/compte/premium/essai', { method: 'POST', token, body: {} }).catch(() => ({ error: 'Serveur injoignable.' })); premCache.at = 0; return r; });
+ipcMain.handle('premium:redeem', async (_e, code) => { const token = secret('account'); if (!token) return { error: 'Connecte-toi à ton compte History.' }; const r = await api('/api/compte/premium/cadeau', { method: 'POST', token, body: { code: String(code ?? '').slice(0, 30) } }).catch(() => ({ error: 'Serveur injoignable.' })); premCache.at = 0; return r; });
 ipcMain.handle('premium:claim', async (_e, pack, paypal, shot) => {
   const token = secret('account');
   if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour acheter.' };
@@ -3381,12 +3444,20 @@ async function sessionTick(s) {
   if (!sess) return;
   const snap = await snapshot().catch(() => null);
   const c = coreLoad();
-  sess.samples.push({ gpu: snap?.gpu?.usage ?? null, core: c.max, cpu: c.avg, ram: snap?.ram ? Math.round((100 * snap.ram.used) / snap.ram.total) : null });
+  sess.samples.push({ gpu: snap?.gpu?.usage ?? null, core: c.max, cpu: c.avg, ram: snap?.ram ? Math.round((100 * snap.ram.used) / snap.ram.total) : null, gpuT: snap?.gpu?.temp ?? null, cpuT: snap?.cpu?.temp ?? null });
+  // Mémoire presque pleine en jeu : on note une fois les programmes qui en prennent le plus (hors jeu)
+  if (process.platform === 'win32' && !sess.ramHogs && sess.samples.at(-1).ram >= 85) {
+    sess.ramHogs = [];
+    ps("Get-Process | Sort-Object WS -Descending | Select-Object -First 8 ProcessName,@{n='MB';e={[int]($_.WS/1MB)}} | ConvertTo-Json -Compress", 8000)
+      .then((o) => { const game = String(sess?.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, ''); sess && (sess.ramHogs = [JSON.parse(o)].flat().filter((p) => p.MB >= 500 && !/^(system|memory compression|dwm|explorer|electron|history.?launcher)$/i.test(p.ProcessName) && !game.includes(p.ProcessName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6))).slice(0, 3)); }).catch(() => {});
+  }
   sess.cpuT = snap?.cpu?.temp ?? sess.cpuT ?? null;
   perfbarPush();
   heatCheck(sess, snap);
 }
 async function sessionStart(s) {
+  // Réglage gratuit : plus aucune bulle Windows pendant les parties (rétablies à la fin)
+  if (store.data.settings.quietGames && process.platform === 'win32') windowsToasts(false).then((ok) => { if (sess) sess.quietOwn = ok; }).catch(() => {});
   if (/rocket league/i.test(s.name ?? '')) { toggleRlOverlay(true).catch(() => {}); rlEnableStats(false).catch(() => {}); } // dernière game en petit au lancement
   const item = items.find((i) => i.id === s.id);
   coreLoad();
@@ -3436,6 +3507,7 @@ function verdict(stats, samples) {
 async function sessionEnd() {
   const s = sess; sess = null;
   if (!s) return;
+  if (s.quietOwn) windowsToasts(true).catch(() => {});
   setQuiet(false);
   setPerfbar(false);
   send('ui:gaming', false);
@@ -3452,7 +3524,8 @@ async function sessionEnd() {
   if (played && played.source !== 'steam' && minutes >= 5) setTimeout(() => cloudSaveUp(played).catch(() => {}), 20_000);
   const v = verdict(stats?.error ? null : stats, s.samples);
   const why = stutterCause(s.samples, stats?.stutters);
-  const rec = { at: Date.now(), minutes: Math.round(minutes), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), ...(why ? { stutterWhy: why } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
+  const tMax = (k) => { const v = s.samples.map((x) => x[k]).filter((x) => x > 0); return v.length ? Math.max(...v) : null; };
+  const rec = { at: Date.now(), minutes: Math.round(minutes), gpuTmax: tMax('gpuT'), cpuTmax: tMax('cpuT'), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), ...(why ? { stutterWhy: why } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
   ((store.data.perf ??= {})[s.id] ??= []).push(rec);
   store.data.perf[s.id] = store.data.perf[s.id].slice(-60);
   store.save();
@@ -3472,6 +3545,8 @@ async function sessionEnd() {
     if (optiGain >= 3 && store.data.settings.shareActivity !== false) social('/api/compte/gain-opti', { jeu: s.name, avant, apres: rec.avg }).catch(() => {});
   }
   const B = { cpu: 'le processeur limite tes FPS', gpu: 'la carte graphique travaille à fond (normal pour un jeu exigeant)', mixte: 'processeur et carte graphique sont équilibrés' };
+  if (s.ramHogs?.length) bell(`${s.name} : mémoire presque pleine`, `Pendant la partie, ${s.ramHogs.map((p) => `${p.ProcessName} (${(p.MB / 1024).toFixed(1).replace('.', ',')} Go)`).join(', ')} prenaient le plus de mémoire. Ferme-les avant de jouer pour gagner en fluidité.`);
+  if (rec.gpuTmax || rec.cpuTmax) { const hot = (rec.gpuTmax ?? 0) >= 85 || (rec.cpuTmax ?? 0) >= 90; if (hot) bell(`${s.name} : ça a chauffé`, `Max pendant la partie : ${rec.gpuTmax ? `carte graphique ${rec.gpuTmax} °C` : ''}${rec.gpuTmax && rec.cpuTmax ? ', ' : ''}${rec.cpuTmax ? `processeur ${rec.cpuTmax} °C` : ''}. Historique : clic droit › Outils du jeu.`); }
   if (rec.avg || rec.bound) bell(`${s.name} : ${rec.avg ? `${rec.avg} FPS en moyenne, 1 % low ${rec.low1}` : 'partie terminée'}`, `${rec.bound ? `${B[rec.bound]}.` : ''}${rec.stutters ? ` ${rec.stutters} saccade(s)${why ? ` : ${why}` : ' repérée(s)'}.` : ''}${gain != null && Math.abs(gain) >= 2 ? ` Avec le boost : ${gain > 0 ? '+' : ''}${gain} % de FPS par rapport à sans.` : ''} Détails : clic droit sur le jeu › Outils du jeu.`);
 }
 ipcMain.handle('fps:enable', () => enableFps());
@@ -3807,6 +3882,15 @@ ipcMain.handle('saves:cloudDown', async (_e, id) => {
 // ---------- Disque presque plein : prévenu avant qu'une mise à jour de jeu échoue (une fois par jour et par disque) ----------
 async function diskWatch() {
   if (process.platform !== 'win32') return;
+  // Disque qui faiblit (état SMART de Windows) : alerte une fois par semaine, avant de perdre des fichiers
+  const sick = (diagCache?.data?.disks ?? []).filter((d) => ['Warning', 'Unhealthy'].includes(d.health));
+  const week = Math.floor(Date.now() / (7 * 86_400_000));
+  if (sick.length && store.data.diskSickWeek !== week) {
+    store.data.diskSickWeek = week; store.save();
+    const t = `${sick.map((d) => d.name).join(', ')} : ${sick.some((d) => d.health === 'Unhealthy') ? 'en mauvais état' : 'commence à faiblir'}`;
+    notify('⚠️ Un disque faiblit', `${t}. Sauvegarde tes fichiers importants. Détails : Mon PC › Entretien.`);
+    logNotif({ id: `disk-${week}`, kind: 'heat', icon: '💽', title: 'Un disque faiblit', body: `${t}. Sauvegarde tes fichiers importants.` });
+  }
   const { statfs } = await import('node:fs/promises');
   const roots = [...new Set(items.filter((i) => i.installed && i.installDir).map((i) => path.win32.parse(String(i.installDir)).root.toUpperCase()).filter(Boolean))];
   const today = new Date().toDateString();

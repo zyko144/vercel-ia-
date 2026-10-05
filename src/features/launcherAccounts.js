@@ -487,13 +487,22 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
     if (route === 'GET /api/compte/premium') {
       const compte = await me(token);
       if (!compte) return send(res, 401, { error: 'Non connecté.' });
-      const { premiumOf, PACKS, payLink, takeNews } = await import('./launcherPremium.js');
-      return send(res, 200, { ...(await premiumOf(compte)), news: await takeNews(compte.id), packs: PACKS, pay: Object.fromEntries(Object.keys(PACKS).map((k) => [k, payLink(k, compte.id)])) });
+      const { premiumOf, PACKS, payLink, takeNews, friendCode, trialUsed } = await import('./launcherPremium.js');
+      return send(res, 200, { ...(await premiumOf(compte)), news: await takeNews(compte.id), packs: PACKS, code: friendCode(compte.id), trialUsed: await trialUsed(compte.id), pay: Object.fromEntries(Object.keys(PACKS).map((k) => [k, payLink(k, compte.id)])) });
     }
     if (route === 'POST /api/compte/premium/note') {
       const compte = await me(token);
       if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History.' });
-      const r = await (await import('./launcherPremium.js')).paymentNote(compte, String((await readJson(req)).pack ?? ''));
+      const b = await readJson(req);
+      const r = await (await import('./launcherPremium.js')).paymentNote(compte, String(b.pack ?? ''), { code: String(b.code ?? '').slice(0, 20), gift: Boolean(b.gift) });
+      return send(res, r.status, r);
+    }
+    if (route === 'POST /api/compte/premium/essai' || route === 'POST /api/compte/premium/cadeau') {
+      const compte = await me(token);
+      if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History.' });
+      if (!allowAttempt('premium-code', compte.id, 10, 3_600_000)) return send(res, 429, { error: 'Trop d’essais, réessaie plus tard.' });
+      const m = await import('./launcherPremium.js');
+      const r = route.endsWith('essai') ? await m.startTrial(compte) : await m.redeemGift(compte, (await readJson(req)).code);
       return send(res, r.status, r);
     }
     if (route === 'POST /api/compte/premium/demande') {

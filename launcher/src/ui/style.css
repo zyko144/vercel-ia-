@@ -1950,3 +1950,15 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .pdnote span { flex: 1; font-size: 12px; color: #c9bfa0; } .pdnote b { font: 800 16px ui-monospace, monospace; color: var(--gold); letter-spacing: .06em; }
 .pdsteps li:first-child { grid-template-columns: 30px 1fr; } #pdPay { grid-column: 2; justify-self: start; }
 .pdnote b { white-space: nowrap; } .pdnote span { min-width: 0; }
+
+/* Upgrade / Entretien */
+.upl { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.uprow { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.uprow small { grid-column: 1 / -1; color: var(--muted); }
+.uprow strong { color: var(--accent); }
+.modsl { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; margin: 10px 0; }
+.stchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; width: 100%; }
+.stchips button { border: 1px solid var(--line-2); background: rgba(255, 255, 255, .04); color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+.stchips button:hover { border-color: var(--accent); }
+.pc2gifts { font-size: 18px; letter-spacing: 2px; margin: 6px 0; }
+.giftpick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; justify-content: flex-end; }

@@ -355,6 +355,16 @@ $('montageGo').addEventListener('click', async () => {
   const r = await clipAction({token: 'montage'}, () => api.montage(list)); toast(r?.ok ? '🎞 Montage prêt : dossier « Montages »' : r?.error ?? 'Montage impossible'); if (r?.ok) load();
 });
 
+// Best-of de la semaine : favoris des 7 derniers jours (sinon les 6 derniers clips), assemblés en une vidéo
+$('bestOfBtn').addEventListener('click', async () => {
+  const week = clips.filter((c) => !c.image && Date.now() - c.at < 7 * 86_400_000).sort((a, b) => a.at - b.at);
+  const favs = week.filter((c) => c.fav);
+  const list = (favs.length >= 2 ? favs : week.slice(-6)).slice(-12).map((c) => c.token);
+  if (list.length < 2) return toast('Il faut au moins 2 clips cette semaine.');
+  toast(`⭐ Best-of de ${list.length} clips en cours…`);
+  const r = await clipAction({ token: 'montage' }, () => api.montage(list)); toast(r?.ok ? '⭐ Best-of prêt : dossier « Montages »' : r?.error ?? 'Best-of impossible'); if (r?.ok) load();
+});
+
 // ---------- Discord et History Launcher ----------
 $('discordBtn').addEventListener('click', async () => { toast('🎮 Ouverture du serveur Discord…'); await api.discordInvite(); });
 $('launcherLink').addEventListener('click', async () => { const has = await api.launcher(); toast(has ? '🚀 Ouverture de History Launcher…' : '⬇ Page de téléchargement de History Launcher'); });

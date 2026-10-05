@@ -154,6 +154,9 @@ export async function resolveQuery(input, { requestedBy, playlistMode = false, f
 }
 
 async function resolveRaw(query, playlistMode, fast = false) {
+  // « paroles: je suis dans le … » : on retrouve le son grâce à ses paroles
+  const byLyrics = query.match(/^(?:paroles?|lyrics?)\s*[:：]\s*(.{4,})$/i);
+  if (byLyrics) query = (await (await import('./lyrics.js')).songFromLyrics(byLyrics[1]).catch(() => null)) ?? byLyrics[1];
   // Choix venant des suggestions
   if (/^dz:\d+$/.test(query)) return { tracks: [trackFromDeezer(await deezer.track(query.slice(3)))] };
 
