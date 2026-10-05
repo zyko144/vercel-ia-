@@ -83,7 +83,7 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
 
   const player = getOrCreatePlayer(client, interaction.guild);
   player.textChannelId = interaction.channelId;
-  await player.connect(channel);
+  if (!player.current || !player.backend) await player.connect(channel); // déjà en lecture : ne pas recréer le moteur (ça coupait le son et la file)
 
   const tracks = shuffle ? shuffled(result.tracks) : result.tracks;
   const wasPlaying = Boolean(player.current);
