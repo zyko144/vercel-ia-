@@ -25,6 +25,8 @@ export async function scanRoblox(dirs = robloxDirs()) {
   return [{
     id: 'roblox:player', source: 'roblox', kind: 'game', category: 'jeu', name: 'Roblox', installed: true,
     // Le dossier « Versions » entier : le temps de jeu reste compté après une mise à jour (nouveau sous-dossier)
-    installDir: best.dir, exe: best.exe, size: best.size, minutes: 0, lastPlayed: 0, art: {}, known: true,
+    installDir: best.dir, exe: best.exe, size: best.size, minutes: 0, lastPlayed: 0, known: true,
+    // Images officielles de Roblox (pas de fiche magasin) : pochette, bannière et en-tête
+    art: { cover: 'art/roblox-cover.jpg', hero: 'art/roblox-hero.jpg', header: 'art/roblox-header.jpg' },
   }];
 }

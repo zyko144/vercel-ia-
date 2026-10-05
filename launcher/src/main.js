@@ -16,7 +16,7 @@ import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setSc
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
 import { cleanOldGpuDrivers, oldGpuDrivers } from './core/optimize.js';
-import { GPUS, budgetAdvice, matchGpu, simulate } from './core/upgrade.js';
+import { CPUS, cpuOptions, cpuScore, diskOptions, gpuOptions, matchGpu, platformOf, ramOptions, simulate } from './core/upgrade.js';
 import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
 import { CATEGORIES, JUNK_LABELS, SUSPECT_LABELS, deepScan, storageScore } from './core/deepscan.js';
 import { KINDS as WU_KINDS, installUpdates, searchUpdates } from './core/winupdate.js';
@@ -1262,27 +1262,38 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 const jobFile = (id) => path.join(os.tmpdir(), `history-${id}-${Date.now()}.json`);
 const jobSend = (id) => (p) => send('job:progress', { id, ...p });
 // 🛒 Upgrade : carte graphique actuelle, simulation avec une autre et conseil d'achat selon le budget (estimations)
-async function upgradeData(budget = 600, target = null) {
-  const d = process.env.LAUNCHER_DEMO ? { cpu: { name: 'AMD Ryzen 5 3600 6-Core Processor' }, gpus: [{ name: 'NVIDIA GeForce GTX 1660 SUPER', width: 1920, hz: 144 }], ram: [{ size: 8 * 1024 ** 3 }, { size: 8 * 1024 ** 3 }], disks: [{ system: true, media: 'SSD' }] } : diagCache?.data ?? await runDiag().catch(() => null);
+async function upgradeData({ budget = 600, mode = 'gpu', brand = 'all', target = null, picked = [] } = {}) {
+  const d = process.env.LAUNCHER_DEMO ? { cpu: { name: 'AMD Ryzen 5 3600 6-Core Processor' }, gpus: [{ name: 'NVIDIA GeForce GTX 1660 SUPER', width: 1920, hz: 144 }], ram: [{ size: 8 * 1024 ** 3, speed: 2666 }, { size: 8 * 1024 ** 3, speed: 2666 }], disks: [{ system: true, media: 'SSD' }], volumes: [{ letter: 'C', free: 80e9, size: 500e9 }] } : diagCache?.data ?? await runDiag().catch(() => null);
   const gpu = d?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? d?.gpus?.[0];
+  const cpuName = d?.cpu?.name ?? '';
   const ramGb = d?.ram?.length ? Math.round(d.ram.reduce((a, m) => a + (m.size ?? 0), 0) / 1024 ** 3) : null;
-  // Tes vrais FPS : moyenne des 5 dernières parties mesurées de chaque jeu
-  const games = Object.entries(store.data.perf ?? {}).map(([id, l]) => { const w = l.filter((r) => r.avg).slice(-5); const it = items.find((i) => i.id === id); return w.length && it ? { id, name: it.name, avg: w.reduce((a, r) => a + r.avg, 0) / w.length, bound: w.at(-1).bound, gpuAvg: w.at(-1).gpuAvg, minutes: it.minutes ?? 0, parts: w.length } : null; }).filter(Boolean).sort((a, b) => b.minutes - a.minutes).slice(0, 8);
-  if (process.env.LAUNCHER_DEMO && !games.length) for (const [n, avg, bound] of [['Fortnite', 92, 'gpu'], ['Rocket League', 160, 'cpu'], ['Grand Theft Auto V', 74, 'gpu'], ['Counter-Strike 2', 180, 'cpu']]) { const it = items.find((i) => i.name === n); games.push({ id: it?.id ?? n, name: n, avg, bound, parts: 5 }); }
-  const cpuBoundShare = games.length ? games.filter((g) => g.bound === 'cpu').length / games.length : 0;
-  const advice = budgetAdvice({ gpuName: gpu?.name ?? '', ramGb, systemHdd: d?.disks?.some((x) => x.system && x.media === 'HDD'), budget: Number(budget) || 600, cpuName: d?.cpu?.name ?? '', width: gpu?.width, hz: gpu?.hz, cpuBoundShare });
-  const cur = matchGpu(gpu?.name ?? ''); const tgt = GPUS.find((g) => g.name === target) ?? advice.best;
-  return { gpuName: gpu?.name ?? '', cpuName: d?.cpu?.name ?? '', ramGb, width: gpu?.width ?? null, hz: gpu?.hz ?? null, current: cur, target: tgt ?? null, gpus: GPUS, advice, games, sim: cur && tgt ? simulate(cur, tgt, games, advice.balance.cap) : [] };
+  // Jeux : ceux avec de vrais FPS mesurés (5 dernières parties) + ceux que tu as choisis dans la liste
+  const measured = Object.fromEntries(Object.entries(store.data.perf ?? {}).map(([id, l]) => { const w = l.filter((r) => r.avg).slice(-5); return [id, w.length ? { avg: w.reduce((a, r) => a + r.avg, 0) / w.length, bound: w.at(-1).bound, gpuAvg: w.at(-1).gpuAvg } : null]; }).filter(([, v]) => v));
+  if (process.env.LAUNCHER_DEMO && !Object.keys(measured).length) for (const [n, avg, bound] of [['Rocket League', 160, 'cpu'], ['Grand Theft Auto V', 74, 'gpu']]) { const it = items.find((i) => i.name === n); if (it) measured[it.id] = { avg, bound }; }
+  const ids = [...new Set([...(picked.length ? picked : Object.keys(measured)), ...Object.keys(measured)])].slice(0, 12);
+  const games = ids.map((id) => { if (String(id).startsWith('pop:')) return { id, name: String(id).slice(4, 80) }; const it = items.find((i) => i.id === id); return it ? { id, name: it.name, ...(measured[id] ?? {}) } : null; }).filter(Boolean);
+  const base = { gpuName: gpu?.name ?? '', cpuName, ramGb, width: gpu?.width ?? null, hz: gpu?.hz ?? null, platform: platformOf(cpuName), cpu: cpuScore(cpuName), picked: ids };
+  const g = gpuOptions({ gpuName: base.gpuName, cpuName, width: base.width, hz: base.hz, budget: Number(budget) || 600, brand });
+  const curGpu = g.current ?? { score: 100, name: base.gpuName };
+  if (mode === 'cpu') {
+    const c = cpuOptions({ cpuName, ramGb: ramGb ?? 16, budget: Number(budget) || 600 });
+    const tgt = c.options.find((x) => x.name === target) ?? c.best;
+    return { ...base, mode, cpuOpt: c, target: tgt, sim: tgt ? simulate({ games, gpu: curGpu, cpu: base.cpu, newCpu: tgt.score }) : [] };
+  }
+  if (mode === 'ram') return { ...base, mode, ramOpt: ramOptions({ cpuName, ramGb, ramSpeed: d?.ram?.[0]?.configured ?? d?.ram?.[0]?.speed ?? null }) };
+  if (mode === 'disk') return { ...base, mode, diskOpt: diskOptions({ systemHdd: d?.disks?.some((x) => x.system && x.media === 'HDD'), freeGb: (() => { const v = d?.volumes?.find((x) => x.letter === 'C'); return v ? Math.round(v.free / 1e9) : null; })() }) };
+  const tgt = g.options.find((x) => x.name === target) ?? g.best;
+  return { ...base, mode: 'gpu', brand, gpuOpt: g, target: tgt, sim: tgt ? simulate({ games, gpu: curGpu, newGpu: tgt, cpu: base.cpu, cap: g.balance.cap }) : [] };
 }
-ipcMain.handle('upgrade:get', (_e, budget, target) => upgradeData(budget, target));
+ipcMain.handle('upgrade:get', (_e, o) => upgradeData(o && typeof o === 'object' ? o : {}));
 // Premium History IA : avis détaillé et rédigé sur l'upgrade, à partir des vraies mesures
-ipcMain.handle('upgrade:ai', async (_e, budget, target) => {
+ipcMain.handle('upgrade:ai', async (_e, o = {}) => {
   if (!(await premium()).ia) return { error: 'premium' };
-  const u = await upgradeData(budget, target);
+  const u = await upgradeData(o); const budget = o.budget;
   const brain = await getAi().catch(() => null);
   if (!brain) return { error: 'Connecte-toi à ton compte History.' };
-  const facts = `Budget : ${budget} €\nProcesseur : ${u.cpuName}\nCarte graphique : ${u.gpuName}\nRAM : ${u.ramGb ?? '?'} Go\nÉcran : ${u.width ?? '?'} px à ${u.hz ?? '?'} Hz\nCarte envisagée : ${u.target?.name ?? 'aucune'} (~${u.target?.price ?? '?'} €)\nConseil calculé : ${u.advice.items.map((x) => `${x.title} ~${x.price} €`).join(' + ') || 'rien'}\nJeux (FPS moyens mesurés, limité par) : ${u.games.map((g) => `${g.name} ${Math.round(g.avg)} FPS (${g.bound === 'cpu' ? 'processeur' : g.bound === 'gpu' ? 'carte graphique' : 'mixte'})`).join(' ; ') || 'aucune mesure'}\nEstimation après achat : ${u.sim.map((g) => `${g.name} ${g.now}→${g.after} FPS`).join(' ; ') || '—'}`;
-  const text = await brain.ask({ system: 'Tu es un expert hardware gaming qui conseille un joueur. Français, tutoiement, ton clair et honnête. Réponds en Markdown aéré avec ces sections « ## » : « ## 🎯 Mon verdict » (2 phrases nettes : quoi acheter ou ne pas acheter), « ## 🎮 Ce que ça change dans tes jeux » (une puce par jeu avec FPS avant → après, en **gras**), « ## ⚖️ Équilibre avec ton PC » (processeur, écran, RAM : ce qui suivra ou bloquera), « ## 💡 Alternatives » (2 options : moins chère / plus puissante, avec prix), « ## ⚠️ À vérifier avant d’acheter » (alimentation, place dans le boîtier, connecteurs). Utilise seulement les chiffres fournis, dis clairement que ce sont des estimations.', text: facts }).catch((err) => ({ error: err.message }));
+  const facts = `Budget : ${budget} €\nPièce étudiée : ${{ gpu: 'carte graphique', cpu: 'processeur', ram: 'mémoire', disk: 'stockage' }[u.mode]}\nProcesseur : ${u.cpuName} (socket ${u.platform.socket ?? '?'}, ${u.platform.mem ?? '?'})\nCarte graphique : ${u.gpuName}\nRAM : ${u.ramGb ?? '?'} Go\nÉcran : ${u.width ?? '?'} px à ${u.hz ?? '?'} Hz\nAchat envisagé : ${u.target ? `${u.target.name} (~${u.target.total ?? u.target.price} €${u.target.psu ? `, alimentation conseillée ${u.target.psu} W` : ''}${u.target.notes ? `, ${u.target.notes.join(', ')}` : ''})` : 'aucun'}\nAutres options : ${(u.gpuOpt?.options ?? u.cpuOpt?.options ?? u.ramOpt?.options ?? u.diskOpt?.options ?? []).map((x) => `${x.name ?? x.title} ~${x.total ?? x.price} €`).join(' ; ')}\nJeux (FPS actuels → après, mesuré ou estimé) : ${(u.sim ?? []).filter((g) => !g.unknown).map((g) => `${g.name} ${g.now}→${g.after} (${g.measured ? 'mesuré' : 'estimé'}, limité par ${g.limit === 'cpu' ? 'le processeur' : 'la carte graphique'})`).join(' ; ') || '—'}`;
+  const text = await brain.ask({ system: 'Tu es un expert hardware gaming qui conseille un joueur. Français, tutoiement, ton clair et honnête. Réponds en Markdown aéré avec ces sections « ## » : « ## 🎯 Mon verdict » (2 phrases nettes : quoi acheter ou ne pas acheter), « ## 🎮 Ce que ça change dans tes jeux » (une puce par jeu avec FPS avant → après, en **gras**), « ## 🔌 Compatibilité » (socket, type de mémoire, BIOS, alimentation : ce qui se pose tel quel et ce qu’il faut changer avec), « ## ⚖️ Équilibre avec ton PC » (processeur, carte graphique, écran, RAM : ce qui suivra ou bloquera), « ## 💡 Meilleur rapport qualité / prix » (2 options : moins chère / plus puissante, avec prix), « ## ⚠️ À vérifier avant d’acheter » (alimentation, place dans le boîtier, connecteurs). Utilise seulement les chiffres fournis, dis clairement que ce sont des estimations.', text: facts }).catch((err) => ({ error: err.message }));
   return typeof text === 'string' ? { text } : { error: text?.error ?? 'IA indisponible' };
 });
 // 🩺 Entretien : santé des disques (SMART) et anciens pilotes graphiques

@@ -250,14 +250,17 @@
 
     <div class="pctab" data-pctab="upgrade" hidden>
       <div class="upwrap">
-        <div class="uphead"><div><h3>🛒 Ton prochain upgrade</h3><small>Calculé sur tes vrais FPS, ton processeur et ton écran. Prix et gains : estimations.</small></div>
+        <div class="uphead"><div><h3>🛒 Ton prochain upgrade</h3><small>Calculé sur ton PC, ce qui est compatible et tes jeux. Prix et gains : estimations ; tes FPS mesurés sont réels.</small></div>
           <div class="upchips" id="upBudget"><button data-b="150">150 €</button><button data-b="300">300 €</button><button data-b="450">450 €</button><button data-b="600" class="on">600 €</button><button data-b="900">900 €</button><button data-b="1300">1 300 €</button></div></div>
+        <div class="upmodes" id="upModes"><button data-mode="gpu" class="on">🎮 Carte graphique</button><button data-mode="cpu">🧠 Processeur &amp; carte mère</button><button data-mode="ram">💾 Mémoire (RAM)</button><button data-mode="disk">💽 Stockage</button></div>
+        <div class="upchips sm" id="upBrands"><button data-brand="all" class="on">Toutes les marques</button><button data-brand="nvidia">NVIDIA</button><button data-brand="amd">AMD</button><button data-brand="intel">Intel</button></div>
         <div class="uphero" id="upHero"></div>
         <div class="upbal" id="upBal"></div>
-        <div class="upextra" id="upExtra"></div>
-        <div class="uprowh"><h4>🎮 Tes jeux avec cette carte</h4><label class="upcmp">Comparer avec <select id="upGpu"></select></label></div>
+        <h4 class="upsub">Ce que tu peux acheter <small>(compatible avec ton PC)</small></h4>
+        <div class="upopts" id="upOpts"></div>
+        <div class="uprowh" id="upGamesHead"><h4>🎮 Tes jeux avant / après</h4><button class="btn sm" type="button" id="upPick">＋ Choisir mes jeux</button></div>
         <div class="upgames" id="upGames"></div>
-        <div class="upai"><button class="btn premgo" type="button" id="upAiBtn">🤖 Avis détaillé de l’IA</button><small>Premium History IA : verdict, jeu par jeu, équilibre du PC et points à vérifier avant d’acheter.</small><div class="reporttxt rich" id="upAiOut" hidden></div></div>
+        <div class="upai"><button class="btn premgo" type="button" id="upAiBtn">🤖 Avis détaillé de l’IA</button><small>Premium History IA : verdict, jeu par jeu, compatibilité et points à vérifier avant d’acheter.</small><div class="reporttxt rich" id="upAiOut" hidden></div></div>
       </div>
     </div>
     <div class="pctab" data-pctab="entretien" hidden>

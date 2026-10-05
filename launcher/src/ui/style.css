@@ -1965,7 +1965,7 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 
 /* Texte de l'IA mis en forme (conseils, rapports) */
 .reporttxt.rich { white-space: normal; line-height: 1.6; }
-.reporttxt.rich h4 { margin: 18px 0 8px; padding: 8px 12px; border-radius: 10px; font-size: 15px; border-left: 3px solid var(--rc); background: color-mix(in srgb, var(--rc) 12%, transparent); color: #fff; }
+.reporttxt.rich h4 { margin: 20px 0 8px; font-size: 17px; font-weight: 800; color: var(--rc); }
 .reporttxt.rich h4:first-child { margin-top: 0; }
 .reporttxt.rich .c0 { --rc: #ff9f43; } .reporttxt.rich .c1 { --rc: #2ee07a; } .reporttxt.rich .c2 { --rc: #6ea8ff; } .reporttxt.rich .c3 { --rc: #c084fc; }
 .reporttxt.rich p { margin: 6px 2px; }
@@ -2023,3 +2023,26 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .oicon:has(.oglogo) { overflow: hidden; }
 .ogcover.logo { display: grid; place-items: center; padding: 8px; background: linear-gradient(160deg, #23262e, #0d0f14); }
 .ogcover.logo img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)); }
+
+/* Upgrade v3 : modes, marques, options compatibles, choix des jeux */
+.upmodes { display: flex; gap: 6px; flex-wrap: wrap; padding: 5px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); width: fit-content; }
+.upmodes button { padding: 9px 16px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-weight: 700; cursor: pointer; }
+.upmodes button.on { background: linear-gradient(120deg, var(--accent), var(--accent-2)); color: #fff; }
+.upchips.sm button { padding: 6px 12px; font-size: 12px; }
+.upsub { margin: 4px 0 0; } .upsub small { color: var(--muted); font-weight: 500; }
+.upopts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.upopt { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 6px 10px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--text); text-align: left; cursor: pointer; transition: border-color .15s, transform .15s; }
+.upopt:hover { transform: translateY(-2px); } .upopt.on { border-color: var(--accent); box-shadow: 0 0 24px -12px var(--accent); }
+.upopt b { font-size: 16px; } .upprice { color: var(--accent); font-weight: 800; }
+.upopt .upg { grid-column: 1 / -1; color: #2ee07a; font-weight: 800; font-size: 13px; }
+.upopt ul { grid-column: 1 / -1; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 12px; }
+.uptags { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; } .uptags:empty { display: none; }
+.uptags .t { font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 999px; }
+.uptags .best { background: color-mix(in srgb, var(--accent) 22%, transparent); color: #fff; } .uptags .value { background: rgba(255, 196, 57, .2); color: #ffd36b; } .uptags .warn { background: rgba(245, 158, 11, .18); color: #fbbf24; }
+.upick { width: min(760px, 94vw); } .upick input { width: 100%; padding: 10px 12px; border-radius: 10px; margin: 6px 0 12px; }
+.upickl { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; max-height: 55vh; overflow-y: auto; }
+.upk { display: flex; flex-direction: column; gap: 6px; padding: 0 0 8px; border-radius: 12px; overflow: hidden; border: 2px solid transparent; background: rgba(255, 255, 255, .04); color: var(--text); cursor: pointer; text-align: center; }
+.upk .upcov { position: relative; height: 150px; display: grid; place-items: center; font-size: 30px; font-weight: 900; color: var(--accent); background: #120c08; } .upk b { font-size: 12px; padding: 0 6px; }
+.upk.on { border-color: var(--accent); box-shadow: 0 0 18px -8px var(--accent); }
+.upwrap [hidden] { display: none !important; }
+.upickh { grid-column: 1 / -1; margin: 8px 0 0; color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
