@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.32': [
+    ['🎯', 'Concentration totale', 'Opti Pro : les titres des autres parties (Mémoire, Mets à jour ton BIOS…) sont floutés aussi. Seuls la tâche en cours et son titre restent nets.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
+  ],
   '0.53.31': [
     ['🎯', 'Une tâche à la fois', 'Opti Pro : dans la réponse du technicien, seule la tâche en cours est nette, les autres sont floutées. « Continuer ▶ » passe à la suivante, « 📖 Détail pas à pas » explique tout (touches, menus de TA carte mère, valeurs, comment vérifier) et cache le reste pour rester concentré.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500', '[data-pfa=detail]', 'wait900']],
     ['🧼', 'Messages plus sobres', 'Les messages du technicien sont plus simples, sans couleurs partout, avec une barre de progression des étapes. « 💬 Écrire au technicien » s’ouvre dans une fenêtre à part.']
@@ -3192,6 +3195,7 @@ function proFocusUi() {
   const k = m.dataset.k, i = Math.min(proFocus[k] ?? 0, items.length - 1), d = proDetail[`${k}:${i}`];
   m.classList.add('focus'); m.classList.toggle('detailing', Boolean(d));
   items.forEach((li, j) => { li.classList.toggle('on', j === i); li.classList.toggle('past', j < i); li.dataset.pf = j; });
+  let h = items[i].parentElement.previousElementSibling; while (h && h.tagName !== 'H4') h = h.previousElementSibling; h?.classList.add('on');
   items[i].insertAdjacentHTML('beforeend', `<div class="pfbtns"><button class="btn sm" data-pfa="detail" ${d === 0 ? 'disabled' : ''}>${d === 0 ? '⏳ Le technicien détaille…' : d ? '✕ Fermer le détail' : '📖 Détail pas à pas'}</button>${i < items.length - 1 ? '<button class="btn sm play" data-pfa="next">Continuer ▶</button>' : '<small class="hint">Dernière tâche : clique sur « Fait » en bas quand c’est bon.</small>'}</div>${d ? `<div class="pfdetail reporttxt rich">${proLinks(richText(d))}</div>` : ''}`);
 }
 
@@ -4821,7 +4825,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.31',
+    version: async () => '0.53.32',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

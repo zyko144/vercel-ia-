@@ -2098,7 +2098,7 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .embbar { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .embbar i { display: block; height: 100%; background: var(--blue); }
 /* concentration : une tâche à la fois */
-.emb.focus > .reporttxt > :not(ul):not(h4) { opacity: .45; }
+.emb.focus > .reporttxt > :not(ul):not(.on) { opacity: .3; filter: blur(1.6px); transition: opacity .25s, filter .25s; }
 .emb.focus > .reporttxt > ul > li:not(.on) { opacity: .3; filter: blur(1.6px); cursor: pointer; }
 .emb.focus > .reporttxt > ul > li.past:not(.on) { filter: blur(1px); }
 .emb.focus > .reporttxt > ul > li:not(.on):hover { opacity: .6; filter: none; }
