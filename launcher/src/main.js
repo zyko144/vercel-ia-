@@ -325,6 +325,8 @@ async function scan() {
   const notDup = (i) => !(i.installDir && storeDirs.has(String(i.installDir).toLowerCase().replace(/[\\/]+$/, '')));
   raw = [...found.filter((i) => !(fivem.item && /^fivem$/i.test(i.name ?? '')) && notDup(i)), ...stores, ...xbox, ...(fivem.item ? [fivem.item] : []), ...Object.values(store.data.custom ?? {}).map(customItem)];
   if (process.env.LAUNCHER_DEMO) raw = demoItems();
+  // Images officielles fournies avec l'appli pour les jeux sans fiche correcte (pochette, bannière, en-tête)
+  for (const i of raw) { const k = { fortnite: 'fortnite', roblox: 'roblox' }[String(i.name ?? '').toLowerCase()]; if (k) i.art = { ...i.art, cover: `art/${k}-cover.jpg`, hero: `art/${k}-hero.jpg`, header: `art/${k}-header.jpg` }; }
   await fillSteamNames(raw).catch(() => {});
   // Un jeu a changé de version depuis le dernier scan : badge dans la cloche + annonce dans #maj-des-jeux sur Discord
   const vers = (store.data.gameVersions ??= {}); let verChanged = false;
