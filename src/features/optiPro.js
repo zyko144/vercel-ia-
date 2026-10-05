@@ -141,8 +141,6 @@ function embedFor(t, m) {
 function buttons(t) {
   const last = t.step >= STEPS.length - 1, next = STEPS[t.step + 1];
   const row = [new ButtonBuilder().setCustomId(`opro:${last ? 'done' : 'next'}:${t.id}`).setLabel(last ? '🚀 Terminé' : `✅ Fait · ${next[1]}`.slice(0, 80)).setStyle(ButtonStyle.Success)];
-  if (next?.[3]) row.push(new ButtonBuilder().setCustomId(`opro:skip:${t.id}`).setLabel(`⏭ Passer ${next[1].slice(2).trim()}`.slice(0, 80)).setStyle(ButtonStyle.Secondary));
-  if (next?.[3] && STEPS[t.step + 2]?.[3]) row.push(new ButtonBuilder().setCustomId(`opro:skip2:${t.id}`).setLabel(`⏭ Passer jusqu’à ${STEPS[t.step + 3][1].slice(2).trim()}`.slice(0, 80)).setStyle(ButtonStyle.Secondary));
   row.push(new ButtonBuilder().setCustomId(`opro:human:${t.id}`).setLabel('👤 Parler à un humain').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId(`opro:close:${t.id}`).setLabel('🔒 Fermer').setStyle(ButtonStyle.Danger));
   const links = linksFor(t);
   return [new ActionRowBuilder().addComponents(row), ...(links.length ? [new ActionRowBuilder().addComponents(links.slice(0, 5).map(([l, u]) => new ButtonBuilder().setLabel(l).setURL(u).setStyle(ButtonStyle.Link)))] : [])];
