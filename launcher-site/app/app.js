@@ -87,11 +87,16 @@
   // ---------- Opti Pro ----------
   async function ticket() {
     const s = (await call('optipro')).session;
-    if (!s) { tab('ticket').innerHTML = '<div class="glass empty"><div class="big">🚀</div><h2>Pas de ticket Opti Pro</h2><p class="muted">Ouvre-le dans History Launcher › Optimisation › Opti Pro : le technicien te répondra aussi ici.</p></div>'; return; }
-    tab('ticket').innerHTML = `<div class="glass section"><h2>🚀 ${s.done ? 'Ton PC est prêt' : esc(s.steps?.[s.step] ?? 'Opti Pro')}</h2><div class="steps">${Array.from({ length: 7 }, (_, i) => `<i class="${i <= s.step || s.done ? 'on' : ''}"></i>`).join('')}</div>
-      ${s.log.slice(-8).map((m) => `<div class="msg ${m.who === 'user' ? 'me' : ''}"><small>${m.who === 'user' ? 'Toi' : m.who === 'staff' ? 'Équipe History' : 'Technicien'}</small>${esc(m.text).replace(/\[\[faire:\w+\]\]/g, '⚡').replace(/\n/g, '<br>').slice(0, 1600)}</div>`).join('')}</div>
-      ${s.closed ? '' : '<form id="tkForm" class="glass section"><input id="tkIn" maxlength="1500" placeholder="Écrire au technicien…"><button class="main">Envoyer</button><button type="button" id="tkNext">✅ J’ai fini cette étape</button></form>'}`;
-    if (s.closed) return;
+    // Ticket terminé ou aucun : on repart de zéro (l'ancien fil n'est plus affiché)
+    if (!s || s.closed) {
+      tab('ticket').innerHTML = `<div class="glass empty"><div class="big">🚀</div><h2>${s?.done ? 'Nouvelle Opti Pro' : 'Opti Pro'}</h2><p class="muted">${s?.done ? 'Ta dernière Opti Pro est terminée. Relance-la : ce que tu as déjà validé ne revient pas.' : 'Le technicien te guide pas à pas, ici ou sur ton PC.'}</p></div>
+        <form id="tkNew" class="glass section"><textarea id="tkNeed" rows="3" maxlength="800" placeholder="Ce que tu veux : jeux, FPS, souci…"></textarea><button class="main">${s?.done ? '🔁 Refaire l’Opti Pro' : '🚀 Ouvrir mon ticket'}</button></form>`;
+      $('tkNew').onsubmit = async (e) => { e.preventDefault(); toast('Le technicien lit ton PC…'); await call('optipro', { specs: { need: $('tkNeed').value.trim() || 'Refaire l’Opti Pro' }, redo: Boolean(s?.done) }).then(() => ticket(), (err) => toast(err.message)); };
+      return;
+    }
+    tab('ticket').innerHTML = `<div class="glass section"><h2>🚀 ${esc(s.steps?.[s.step] ?? 'Opti Pro')}</h2><div class="steps">${Array.from({ length: 7 }, (_, i) => `<i class="${i <= s.step ? 'on' : ''}"></i>`).join('')}</div>
+      ${s.log.slice(-20).map((m) => `<div class="msg ${m.who === 'user' ? 'me' : ''}"><small>${m.who === 'user' ? 'Toi' : m.who === 'staff' ? 'Équipe History' : 'Technicien'}</small>${esc(m.text).replace(/\[\[faire:\w+\]\]/g, '⚡').replace(/\n/g, '<br>').slice(0, 1600)}</div>`).join('')}</div>
+      <form id="tkForm" class="glass section"><textarea id="tkIn" rows="2" maxlength="1500" placeholder="Écrire au technicien…"></textarea><button class="main">Envoyer</button><button type="button" id="tkNext">✅ J’ai fini cette étape</button></form>`;
     $('tkForm').onsubmit = async (e) => { e.preventDefault(); const t = $('tkIn').value.trim(); if (!t) return; $('tkIn').value = ''; toast('Le technicien écrit…'); await call('optipro/action', { action: 'msg', text: t }).catch((err) => toast(err.message)); ticket(); };
     $('tkNext').onclick = () => sheet('<h2>Étape terminée ?</h2><button class="main" id="tkYes">Oui, étape suivante</button><button data-close>Pas encore</button>');
   }

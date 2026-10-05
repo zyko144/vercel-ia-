@@ -310,6 +310,9 @@ export async function handleOptiProApi(req, res, url, account, { readJson, send 
     const r = await act(cur.id, String(b.action ?? ''), String(b.text ?? '').slice(0, 600)); return send(res, r?.error ? 400 : 200, r?.error || r?.detail ? r : { session: view(r) });
   }
   if (!allowAttempt('opti-pro-open', account.id, 3, 3_600_000)) return send(res, 429, { error: 'Trois tickets par heure maximum.' });
-  await mutateSpecs(account.id, b.specs ?? {});
-  return send(res, 200, { session: view(await startSession(account, b.specs ?? {}, null, b.redo === true)) });
+  // Depuis le téléphone : pas de lecture du PC, on reprend le matériel envoyé par le launcher la dernière fois
+  const specs = b.specs?.cpu ? b.specs : { ...((await readFresh('opti-pro-specs')) ?? {})[account.id], ...(b.specs ?? {}) };
+  if (!specs.cpu) return send(res, 400, { error: 'Ouvre ta première Opti Pro depuis History Launcher sur ton PC (il lit ton matériel).' });
+  await mutateSpecs(account.id, specs);
+  return send(res, 200, { session: view(await startSession(account, specs, null, b.redo === true)) });
 }
