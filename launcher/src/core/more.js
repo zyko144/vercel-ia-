@@ -24,20 +24,27 @@ export function hwYear(name) {
   return null;
 }
 
-/** Valeur de revente estimée (occasion, €) : carte graphique + processeur + RAM + stockage + le reste. Toujours une fourchette. */
-export function resaleValue({ cpu = '', gpu = '', ramGb = 16, diskGb = 512, now = new Date().getFullYear() } = {}) {
-  const age = (y) => (y ? Math.max(0, now - y) : 4);
-  const dep = (y) => Math.max(0.25, 1 - 0.12 * age(y));
+// Prix d'occasion moyens constatés en France (€, 2026), carte graphique par carte graphique
+const USED_GPU = { 'GTX 1050 Ti': 50, 'GTX 1650': 70, 'GTX 1060': 60, 'RX 580': 50, 'GTX 1660': 90, 'GTX 1660 Super': 100, 'RTX 3050': 130, 'RTX 2060': 120, 'RX 6600': 140, 'RTX 2070': 150, 'RTX 2070 Super': 170, 'RTX 3060': 180,
+  'RX 7600': 180, 'RTX 4060': 220, 'Arc B580': 200, 'RX 6650 XT': 170, 'RTX 3060 Ti': 210, 'RTX 5060': 250, 'RTX 4060 Ti': 280, 'RTX 3070': 240, 'RX 6700 XT': 230, 'RTX 3080': 330, 'RX 7700 XT': 300, 'RTX 4070': 430,
+  'RX 7800 XT': 380, 'RTX 4070 Super': 480, 'RTX 5070': 470, 'RX 9070': 520, 'RTX 4070 Ti Super': 600, 'RX 9070 XT': 580, 'RTX 5070 Ti': 680, 'RTX 4080 Super': 800, 'RX 7900 XTX': 700, 'RTX 5080': 950, 'RTX 4090': 1400, 'RTX 5090': 2100 };
+const USED_CPU = [[/9800x3d/, 400], [/7800x3d/, 290], [/9950x3d|9950x/, 450], [/7950x3d|7950x/, 380], [/9900x|7900x3d/, 300], [/7900x|7900\b/, 230], [/9700x/, 230], [/7700x|7700\b/, 190], [/9600x/, 170], [/7600x|7600\b/, 140], [/5800x3d/, 220], [/5700x3d/, 160], [/5950x/, 220], [/5900x/, 170], [/5800x/, 130], [/5700x/, 110], [/5600x|5600\b/, 80], [/5500/, 60], [/3600/, 50],
+  [/ultra 9 285k/, 480], [/ultra 7 265k/, 280], [/ultra 5 245k/, 200], [/i9-14900k/, 400], [/i9-13900k/, 330], [/i7-14700k/, 300], [/i7-13700k/, 250], [/i5-14600k/, 200], [/i5-13600k/, 170], [/i5-14400/, 140], [/i5-13400/, 120], [/i5-12600k/, 130], [/i5-12400/, 90], [/i7-12700k/, 180], [/i9-12900k/, 230], [/i3-1[234]100/, 60], [/i7-10700|i7-9700|i9-9900/, 120], [/i5-10400|i5-9400|i5-11400/, 60]];
+const USED_BOARD = [[/x870|x670/, 170], [/b850|b650/, 100], [/a620/, 60], [/z890|z790/, 140], [/b860|b760/, 85], [/z690/, 110], [/h610|h770|h670/, 55], [/x570/, 90], [/b550/, 65], [/a520|b450|b350/, 40], [/z590|z490/, 70], [/b560|b460|h510|h410/, 40]];
+/** Valeur de revente d'occasion, composant par composant (le vrai modèle de TON PC) : fourchette ±12 %. */
+export function resaleValue({ cpu = '', gpu = '', ram = [], disks = [], board = '', laptop = false } = {}) {
+  const GB = 1073741824, parts = [];
   const g = matchGpu(gpu);
-  const parts = [
-    ['Carte graphique', g ? Math.round(g.score * 2.1 * dep(hwYear(gpu))) : 40],
-    ['Processeur', Math.round((cpuScore(cpu) ?? 80) * 0.8 * dep(hwYear(cpu)))],
-    ['Mémoire', Math.round((Number(ramGb) || 16) * 1.6)],
-    ['Stockage', Math.round((Number(diskGb) || 512) / 1024 * 35)],
-    ['Carte mère, alimentation, boîtier', 110],
-  ];
+  if (gpu) parts.push([gpu.replace(/^(NVIDIA|AMD|Intel\(R\))\s*/i, ''), g ? USED_GPU[g.name] ?? Math.round(g.score * 2.2) : 40, 'Carte graphique']);
+  const c = String(cpu).toLowerCase();
+  if (cpu) parts.push([cpu.replace(/\s*\d+-Core Processor|\(R\)|\(TM\)|\s+CPU\s*@.*$/gi, '').replace(/\s+/g, ' ').trim(), USED_CPU.find(([re]) => re.test(c))?.[1] ?? Math.round((cpuScore(cpu) ?? 70) * 0.9), 'Processeur']);
+  const gb = Math.round(ram.reduce((n, m) => n + (m.size ?? 0), 0) / GB), type = ram[0]?.type ?? 'DDR4';
+  if (gb) parts.push([`${gb} Go ${type}`, Math.round(gb * ({ DDR5: 3, DDR4: 1.6, DDR3: 0.6 }[type] ?? 1.6)), 'Mémoire vive']);
+  for (const d of disks.filter((x) => x.size && x.bus !== 'USB')) { const tb = d.size / 1e12; parts.push([d.name, Math.max(15, Math.round(tb * (d.media === 'HDD' ? 12 : d.bus === 'NVMe' ? 45 : 35))), d.media === 'HDD' ? 'Disque dur' : 'SSD']); }
+  if (laptop) parts.push(['Écran, clavier, batterie et châssis du portable', 150, 'Portable']);
+  else { if (board) parts.push([board, USED_BOARD.find(([re]) => re.test(board.toLowerCase()))?.[1] ?? 70, 'Carte mère']); parts.push(['Alimentation, boîtier et ventirad', 120, 'Le reste (estimé)']); }
   const total = parts.reduce((n, [, v]) => n + v, 0);
-  return { parts, low: Math.round(total * 0.8 / 10) * 10, high: Math.round(total * 1.15 / 10) * 10 };
+  return { parts: parts.map(([name, price, type]) => ({ name, price, type })), total, low: Math.round((total * 0.88) / 10) * 10, high: Math.round((total * 1.12) / 10) * 10 };
 }
 
 /** Écran conseillé pour une carte graphique (résolution et fréquence qu'elle tient vraiment en jeu). */

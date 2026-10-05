@@ -267,7 +267,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtx();
 
 // Fenêtres du launcher (confirmation, saisie) : même style partout, jamais les fenêtres grises de Windows
 // Taille de la fenêtre commune : chaque ouverture repart de la taille normale (sauf si elle demande « large »)
-function setModal(...cls) { $('modalBox').classList.remove('wide', 'fp'); if (cls.length) $('modalBox').classList.add(...cls); }
+function setModal(...cls) { $('modalBox').classList.remove('wide', 'fp', 'procardbox'); if (cls.length) $('modalBox').classList.add(...cls); }
 const ui = {
   confirm({ title, text = '', ok = 'Confirmer', cancel = 'Annuler', danger = false, icon = '⚠️', list = [] }) {
     window.sfx?.play('pop');
@@ -694,7 +694,7 @@ function openFriendProfile(id) {
   $('modal').showModal();
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) setTimeout(() => $('modal').close(), 0); };
 }
-$('modal').addEventListener('close', () => $('modalBox').classList.remove('wide', 'fp'));
+$('modal').addEventListener('close', () => $('modalBox').classList.remove('wide', 'fp', 'procardbox'));
 /** Recadrer une image (glisser pour déplacer, molette ou curseur pour zoomer) avant de l'envoyer. */
 function adjustImage(file, w, h, { round = false, maxKb = 140, title = 'Ajuste ton image' } = {}) {
   return new Promise((resolve) => {
@@ -1613,6 +1613,13 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.56.0': [
+    ['📱', 'Appli téléphone refaite', 'Scanne le QR code de Paramètres › Téléphone : ton téléphone se connecte direct à ton compte ET à ce PC, même en 4G. Lance un jeu, ferme-le, prends une capture, mets le PC en veille ou éteins-le à distance. Style du launcher, plus simple.', ['#openSettings', 'wait700', '.setnav [data-pane="telephone"]', 'wait1200']],
+    ['🧪', 'Vérifs refaites', 'Mon PC › Vérifs : un résumé clair, les réglages à revoir en grandes cartes, et le vrai prix de revente de ton PC composant par composant (carte graphique, processeur, RAM, disques, carte mère).', ['[data-view=pc]', 'wait600', '[data-pctab=verifs]', 'wait2500']],
+    ['📸', 'Carte avant / après refaite', 'Nouvelle carte à partager sur Discord, et le score « après » est maintenant mesuré à nouveau pour de vrai (réglages compris) au lieu de reprendre l’ancien.'],
+    ['🧰', 'Outils de l’IA', 'La barre d’outils de l’IA est remplacée par un simple bouton « 🧰 Outils ».'],
+    ['🌬', 'Mon PC et Optimisation aérés', 'Plus d’espace partout, onglets mieux rangés : les mêmes fonctions, en plus lisible.'],
+  ],
   '0.55.1': [
     ['📱', 'Appli History sur téléphone', 'Gratuite et sans store : amis et messages, ticket Opti Pro et accès à ton PC. QR code dans Paramètres › Téléphone pour l’installer en 2 secondes.', ['#openSettings', 'wait700', '.setnav [data-pane="telephone"]', 'wait1200']],
   ],
@@ -4944,7 +4951,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.55.1',
+    version: async () => '0.56.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

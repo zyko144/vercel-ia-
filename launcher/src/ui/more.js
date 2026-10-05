@@ -9,24 +9,27 @@ export function initMore(api, h) {
   async function renderChecks(force) {
     const box = $('mvChecks');
     if (!box || (box.dataset.done && !force)) return;
-    box.dataset.done = '1'; box.innerHTML = '<div class="empty">Lecture de l’écran, de la RAM, du BIOS, des pilotes et des disques…</div>';
+    box.dataset.done = '1'; box.innerHTML = '<div class="empty">On lit ton écran, ta RAM, ton BIOS, tes pilotes et tes disques…</div>';
+    $('vfSum').innerHTML = '<b>…</b>'; $('vfTitle').textContent = 'Vérification de ton PC…';
     const r = await more('checks');
-    if (!r?.list) { box.innerHTML = `<div class="empty">${esc(r?.error ?? 'Lecture impossible.')}</div>`; return; }
-    const warn = r.list.filter((c) => c.level === 'warn');
-    box.innerHTML = `<p class="hint">${warn.length ? `${warn.length} point${warn.length > 1 ? 's' : ''} à regarder` : '✓ Tout est bon'} · ${r.list.length} vérifications</p>`
-      + r.list.sort((a, b) => (a.level === 'warn' ? 0 : 1) - (b.level === 'warn' ? 0 : 1)).map((c) => `<div class="mvck ${c.level}"><span>${c.level === 'ok' ? '✓' : c.level === 'warn' ? '!' : 'i'}</span><div><b>${esc(c.title)}</b><small>${esc(c.detail)}</small></div>${c.fix === 'clean' ? '<button type="button" class="btn sm" data-view="optimisation">Nettoyer</button>' : c.fix ? `<button type="button" class="btn sm" data-pcfix="${esc(c.fix)}">Corriger</button>` : ''}</div>`).join('');
+    if (!r?.list) { box.innerHTML = `<div class="empty">${esc(r?.error ?? 'Lecture impossible.')}</div>`; $('vfTitle').textContent = 'Vérifications indisponibles'; return; }
+    const warn = r.list.filter((c) => c.level === 'warn'), good = r.list.filter((c) => c.level !== 'warn');
+    $('vfSum').innerHTML = `<svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/><circle cx="18" cy="18" r="15" pathLength="100" style="stroke-dasharray:${Math.round((good.length / r.list.length) * 100)} 100"/></svg><b>${good.length}<small>/${r.list.length}</small></b>`;
+    $('vfTitle').textContent = warn.length ? `${warn.length} réglage${warn.length > 1 ? 's' : ''} à revoir` : 'Tout est bon sur ton PC 👌';
+    box.innerHTML = (warn.length ? `<div class="vfcards">${warn.map((c) => `<div class="vfcard"><i>!</i><div><b>${esc(c.title)}</b><p>${esc(c.detail)}</p>${c.fix === 'clean' ? '<button type="button" class="btn sm" data-view="optimisation">Faire de la place</button>' : c.fix ? `<button type="button" class="btn sm" data-pcfix="${esc(c.fix)}">Régler maintenant</button>` : ''}</div></div>`).join('')}</div>` : '')
+      + `<div class="vfok"><small>Déjà en ordre</small>${good.map((c) => `<span class="vfchip ${c.level}" title="${esc(c.detail)}">${c.level === 'ok' ? '✓' : 'i'} ${esc(c.title)}</span>`).join('')}</div>`;
   }
 
   async function renderPcExtra() {
     pc = await more('pc');
     if (!pc || pc.error) return;
     const age = [pc.cpuYear && `processeur de ${pc.cpuYear}`, pc.gpuYear && `carte graphique de ${pc.gpuYear}`].filter(Boolean).join(', ');
-    $('mvNumbers').innerHTML = `<dl class="mvdl">
-      ${age ? `<dt>Âge</dt><dd>${esc(age)}</dd>` : ''}
-      <dt>Valeur de revente</dt><dd><b>${euros(pc.resale.low)} – ${euros(pc.resale.high)}</b> <small class="hint">estimation d’occasion</small></dd>
-      <dt>Alimentation conseillée</dt><dd>${pc.psu.watts} W minimum${pc.psu.gpuW ? ` <small class="hint">(carte graphique ≈ ${pc.psu.gpuW} W)</small>` : ''}</dd>
-      ${pc.screen ? `<dt>Écran idéal</dt><dd>${esc(pc.screen.res)} · ${esc(pc.screen.hz)}<small class="hint">${esc(pc.screen.why)}</small></dd>` : ''}
-    </dl><div class="row"><button type="button" class="btn sm" id="mvSell">💶 Mode vente</button></div>`;
+    const top = Math.max(1, ...pc.resale.parts.map((p) => p.price));
+    $('mvNumbers').innerHTML = `<div class="vfval"><small>Prix de revente estimé</small><b>${euros(pc.resale.total)}</b><span>entre ${euros(pc.resale.low)} et ${euros(pc.resale.high)} selon l’état</span></div>
+      <div class="vfparts">${pc.resale.parts.map((p) => `<div class="vfpart"><em>${esc(p.type)}</em><b>${esc(p.name)}</b><strong>${euros(p.price)}</strong><i style="--w:${Math.round((p.price / top) * 100)}%"></i></div>`).join('')}</div>
+      <p class="hint">Prix moyens de l’occasion, pièce par pièce. Boîte d’origine et garantie font monter le prix.</p>
+      <div class="vftiles">${age ? `<div><small>Âge</small><b>${esc(age)}</b></div>` : ''}<div><small>Alimentation conseillée</small><b>${pc.psu.watts} W minimum</b>${pc.psu.gpuW ? `<span>dont ≈ ${pc.psu.gpuW} W pour la carte graphique</span>` : ''}</div>${pc.screen ? `<div><small>Écran idéal</small><b>${esc(pc.screen.res)} · ${esc(pc.screen.hz)}</b><span>${esc(pc.screen.why)}</span></div>` : ''}</div>
+      <div class="row"><button type="button" class="btn" id="mvSell">💶 Préparer la vente</button></div>`;
     const days = Object.entries(pc.tempDays ?? {});
     const max = Math.max(90, ...days.map(([, d]) => Math.max(d.cpu ?? 0, d.gpu ?? 0)));
     $('mvTemps').innerHTML = days.length ? `<div class="mvbars">${days.map(([k, d]) => `<i title="${esc(k)} · processeur ${d.cpu ?? '–'} °C · carte graphique ${d.gpu ?? '–'} °C"><b style="height:${((d.cpu ?? 0) / max) * 100}%"></b><em style="height:${((d.gpu ?? 0) / max) * 100}%"></em></i>`).join('')}</div><p class="hint"><b class="dotc">■</b> processeur <b class="dotg">■</b> carte graphique · maximum de chaque jour</p>` : '<div class="empty">Le maximum de chaque jour s’enregistre ici pendant 30 jours.</div>';
@@ -49,7 +52,7 @@ export function initMore(api, h) {
     if (!pc) return;
     modal(`<div class="mhead"><span class="micon">💶</span><h2>Mode vente</h2></div>
       <p class="mtext">Valeur estimée de ton PC d’occasion : <b>${euros(pc.resale.low)} – ${euros(pc.resale.high)}</b>.</p>
-      <dl class="mvdl">${pc.resale.parts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>≈ ${euros(v)}</dd>`).join('')}</dl>
+      <dl class="mvdl">${pc.resale.parts.map((p) => `<dt>${esc(p.type)}</dt><dd>${esc(p.name)} · ≈ ${euros(p.price)}</dd>`).join('')}</dl>
       <ul class="mlist"><li>Sauvegarde tes jeux et ta bibliothèque avec ton compte History (Paramètres › Compte).</li><li>Déconnecte-toi de Steam, Epic, Discord et de ton navigateur.</li><li>Lance « Réinitialiser ce PC » en supprimant tout : l’acheteur reçoit un Windows propre.</li><li>Joins les captures de Mon PC (composants + benchmark) à ton annonce : ça rassure.</li></ul>
       <div class="row"><button type="button" class="btn" data-pcfix="recovery">Ouvrir « Réinitialiser ce PC »</button></div>`, true);
   }
@@ -73,11 +76,11 @@ export function initMore(api, h) {
     if (!(await ui.confirm({ title: 'Test de stabilité (10 min)', text: 'Le processeur tourne à 100 % pendant 10 minutes pendant qu’on surveille sa température et ses performances. Idéal après un overclock, un undervolt ou un changement de pâte thermique.', ok: 'Lancer', icon: '🔥' }))) return;
     btn.disabled = true;
     const r = await more('stress', 10);
-    btn.disabled = false; btn.textContent = '🔥 Test de stabilité 10 min';
+    btn.disabled = false; btn.querySelector('b').textContent = 'Stabilité';
     if (!r || r.error) return toast(r?.error ?? 'Test impossible');
     modal(`<div class="mhead"><span class="micon">${r.ok ? '✅' : '⚠️'}</span><h2>${r.ok ? 'PC stable' : 'À surveiller'}</h2></div><p class="mtext">Performances tenues : ${r.stability ?? '–'} % · température max du processeur : ${r.max ?? '–'} °C.</p><p class="hint">${r.ok ? 'Aucune chute de performances ni surchauffe.' : r.max >= 95 ? 'Le processeur chauffe trop : dépoussiérage, pâte thermique ou ventirad à revoir.' : 'Les performances chutent sous charge : chauffe ou overclock trop poussé.'}</p>`);
   }
-  api.onMore?.((p) => { const b = $('mvStress'); if (b?.disabled) b.textContent = `🔥 ${p.pct} %${p.temp ? ` · ${p.temp} °C` : ''}`; });
+  api.onMore?.((p) => { const b = $('mvStress'); if (b?.disabled) b.querySelector('b').textContent = `${p.pct} %${p.temp ? ` · ${p.temp} °C` : ''}`; });
 
   async function speed(btn) {
     btn.disabled = true; btn.textContent = 'Mesure (≈ 15 s)…';
@@ -163,26 +166,58 @@ export function initMore(api, h) {
       <small class="hint">🛠 Badge « PC optimisé par History » ajouté à ton profil · suivi automatique de ton PC chaque mois.</small></div>`;
   }
   async function proCard(at) {
+    toast('Nouvelle mesure de ton PC…');
     const r = await more('proCard', at);
-    const c = document.createElement('canvas'); c.width = 1200; c.height = 630; const g = c.getContext('2d');
-    const bg = g.createLinearGradient(0, 0, 1200, 630); bg.addColorStop(0, '#0d1424'); bg.addColorStop(1, '#2a1240'); g.fillStyle = bg; g.fillRect(0, 0, 1200, 630);
+    const W = 1200, H = 630, c = Object.assign(document.createElement('canvas'), { width: W, height: H }), g = c.getContext('2d');
+    const F = (w, px) => { g.font = `${w} ${px}px "Segoe UI", system-ui, sans-serif`; };
+    const txt = (t, x, y, col, w, px, al = 'left') => { F(w, px); g.fillStyle = col; g.textAlign = al; g.fillText(t, x, y); };
+    const box = (x, y, w, hh, rad, fill) => { g.beginPath(); g.roundRect(x, y, w, hh, rad); g.fillStyle = fill; g.fill(); };
+    g.fillStyle = '#0a0b10'; g.fillRect(0, 0, W, H);
+    for (const [x, y, rr, col] of [[120, 0, 520, '#ff7a1a40'], [1150, 640, 560, '#7b3cff33']]) { const rg = g.createRadialGradient(x, y, 0, x, y, rr); rg.addColorStop(0, col); rg.addColorStop(1, '#0000'); g.fillStyle = rg; g.fillRect(0, 0, W, H); }
+    g.strokeStyle = '#ffffff14'; g.lineWidth = 2; g.beginPath(); g.roundRect(1, 1, W - 2, H - 2, 28); g.stroke();
     const logo = new Image(); logo.src = 'logo.png'; await logo.decode().catch(() => {});
-    if (logo.naturalWidth) g.drawImage(logo, 60, 50, 72, 72);
-    g.fillStyle = '#fff'; g.font = '800 46px system-ui, sans-serif'; g.fillText('Mon PC optimisé par History', 150, 102);
-    g.fillStyle = '#9fb3d9'; g.font = '500 26px system-ui, sans-serif'; g.fillText(`Opti Pro · ${new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`, 150, 142);
-    const block = (x, title, a, b, unit) => {
-      g.fillStyle = '#ffffff12'; g.beginPath(); g.roundRect(x, 210, 500, 300, 28); g.fill();
-      g.fillStyle = '#9fb3d9'; g.font = '600 28px system-ui, sans-serif'; g.fillText(title, x + 36, 262);
-      g.fillStyle = '#ffffff80'; g.font = '700 70px system-ui, sans-serif'; g.fillText(a ?? '–', x + 36, 380);
-      g.fillStyle = '#ffc439'; g.font = '800 96px system-ui, sans-serif'; g.fillText(`→ ${b ?? '–'}`, x + 170, 390);
-      g.fillStyle = '#9fb3d9'; g.font = '500 26px system-ui, sans-serif'; g.fillText(unit, x + 36, 460);
-      if (a && b) { const d = Math.round(((b - a) / a) * 100); g.fillStyle = d >= 0 ? '#4ade80' : '#f87171'; g.font = '800 34px system-ui, sans-serif'; g.fillText(`${d >= 0 ? '+' : ''}${d} %`, x + 340, 460); }
+    if (logo.naturalWidth) g.drawImage(logo, 56, 48, 64, 64);
+    txt('PC optimisé par History', 138, 92, '#fff', 800, 40);
+    txt(`Opti Pro · ${new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`, 140, 122, '#ffffff8c', 500, 22);
+    box(W - 236, 58, 180, 46, 23, '#ff7a1a26'); txt('✓ OPTIMISÉ', W - 146, 89, '#ff9a3d', 800, 20, 'center');
+    const delta = (a, b, pts) => {
+      if (a == null || b == null) return ['', '#ffffff8c'];
+      const d = pts ? b - a : Math.round(((b - a) / a) * 100);
+      return d > 0 ? [`+${d}${pts ? ' points' : ' %'}`, '#4ade80'] : d < 0 ? [`${d}${pts ? ' points' : ' %'}`, '#f87171'] : ['Stable', '#ffffff8c'];
     };
-    block(60, 'Santé du PC', r?.before, r?.after, 'score sur 100');
-    block(640, r?.fps ? `FPS · ${r.fps.name}`.slice(0, 30) : 'FPS', r?.fps?.before, r?.fps?.after, r?.fps ? 'FPS moyens mesurés' : 'Joue une partie pour mesurer');
-    g.fillStyle = '#ffffff70'; g.font = '500 22px system-ui, sans-serif'; g.fillText('History Launcher · mesures réelles sur ce PC', 60, 585);
+    const pill = (x, [t, col]) => { if (!t) return; F(800, 20); const w = g.measureText(t).width + 32; box(x - w, 180, w, 38, 19, `${col}22`); txt(t, x - w / 2, 206, col, 800, 20, 'center'); };
+    // Bloc santé : deux anneaux avant → après
+    box(56, 160, 520, 360, 26, '#ffffff0b');
+    txt('SANTÉ DU PC', 88, 206, '#ffffff8c', 700, 18);
+    const ring = (cx, cy, rad, v, col, lw, label, big) => {
+      g.lineCap = 'round'; g.lineWidth = lw; g.strokeStyle = '#ffffff14'; g.beginPath(); g.arc(cx, cy, rad, 0, Math.PI * 2); g.stroke();
+      if (v != null) { g.strokeStyle = col; g.beginPath(); g.arc(cx, cy, rad, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * v) / 100); g.stroke(); }
+      txt(v ?? '–', cx, cy + big * 0.35, big > 50 ? '#fff' : '#ffffffb0', 800, big, 'center');
+      txt(label, cx, cy + rad + 40, '#ffffff8c', 600, 18, 'center');
+    };
+    ring(170, 350, 62, r?.before, '#ffffff55', 12, 'AVANT', 40);
+    txt('→', 300, 366, '#ff9a3d', 700, 44, 'center');
+    ring(440, 340, 92, r?.after, '#ff8a2a', 16, 'APRÈS', 64);
+    pill(544, delta(r?.before, r?.after, true));
+    // Bloc FPS : deux barres
+    box(624, 160, 520, 360, 26, '#ffffff0b');
+    txt(r?.fps ? `FPS · ${r.fps.name}`.slice(0, 28).toUpperCase() : 'FPS EN JEU', 656, 206, '#ffffff8c', 700, 18);
+    if (r?.fps) {
+      const max = Math.max(r.fps.before, r.fps.after) || 1;
+      const bar = (y, label, v, fill) => {
+        txt(label, 656, y - 14, '#ffffff8c', 600, 18);
+        box(656, y, 456, 54, 14, '#ffffff10'); box(656, y, Math.max(60, (456 * v) / max), 54, 14, fill);
+        txt(`${v} FPS`, 674, y + 37, '#fff', 800, 26);
+      };
+      const og = g.createLinearGradient(656, 0, 1112, 0); og.addColorStop(0, '#ff6a00'); og.addColorStop(1, '#ffb347');
+      bar(300, 'AVANT', r.fps.before, '#ffffff30'); bar(420, 'APRÈS', r.fps.after, og);
+      pill(1112, delta(r.fps.before, r.fps.after));
+    } else txt('Joue une partie pour mesurer tes FPS', 656, 350, '#ffffff8c', 500, 22);
+    txt('Mesures réelles sur ce PC · History Launcher', 56, 584, '#ffffff66', 500, 20);
     const png = c.toDataURL('image/png');
-    modal(`<div class="mhead"><span class="micon">📸</span><h2>Ta carte avant / après</h2></div><img class="procardimg" src="${png}" alt=""><div class="row"><button type="button" class="btn play" id="pcCopy">📋 Copier l’image</button><a class="btn ghost" download="history-opti-pro.png" href="${png}">💾 Enregistrer</a></div>`, true);
+    modal(`<div class="mhead"><span class="micon">📸</span><h2>Ta carte avant / après</h2></div><img class="procardimg" src="${png}" alt="Carte avant / après de ton optimisation"><div class="procardbar"><small class="hint">Partage-la sur Discord : copie puis colle dans un salon.</small><button type="button" class="btn ghost" data-m="1">Fermer</button><button type="button" class="btn ghost" id="pcSave">💾 Enregistrer</button><button type="button" class="btn play" id="pcCopy">📋 Copier l’image</button></div>`, true);
+    $('modalBox').classList.add('procardbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
+    $('pcSave').onclick = () => Object.assign(document.createElement('a'), { href: png, download: 'history-opti-pro.png' }).click();
     $('pcCopy').onclick = () => c.toBlob((b) => navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]).then(() => toast('✓ Image copiée : colle-la sur Discord'), () => toast('Copie impossible : utilise Enregistrer')));
   }
   document.addEventListener('click', async (e) => {
@@ -227,7 +262,11 @@ export function initMore(api, h) {
   // ---------- Outils IA (assistant) : chaque outil ouvre une fenêtre, la réponse s'affiche en dessous ----------
   const TOOLS = [['erreur', '🧯', 'Expliquer une erreur', 'text'], ['capture', '📷', 'Lire une capture', 'image'], ['reglages', '🎛', 'Réglages graphiques', 'game'], ['guide', '📖', 'Question sur un jeu', 'game text'],
     ['crash', '💥', 'Pourquoi mon jeu plante', 'game'], ['patch', '📰', 'Patch notes en 3 lignes', 'game'], ['comparer', '⚖', 'Comparer 2 composants', 'ab'], ['panne', '🩺', 'Risque de panne', ''], ['arnaque', '🛡', 'Est-ce une arnaque ?', 'text']];
-  $('aipop')?.querySelector('.chips')?.insertAdjacentHTML('beforebegin', `<div class="aitools">${TOOLS.map(([k, ic, l]) => `<button type="button" data-aitool="${k}" title="${esc(l)}">${ic} ${esc(l)}</button>`).join('')}</div>`);
+  // Un seul bouton « Outils » dans l'assistant : il ouvre une grille simple (plus de barre qui défile)
+  $('aipop')?.querySelector('.panel-head .fold')?.insertAdjacentHTML('beforebegin', '<button type="button" class="aitoolsbtn" data-aitools="1" title="Outils IA">🧰 Outils</button>');
+  const TOOL_DESC = { erreur: 'Colle un message d’erreur', capture: 'Une capture d’écran à lire', reglages: 'Les meilleurs réglages pour ton PC', guide: 'Une question sur un jeu', crash: 'Trouver la cause d’un plantage', patch: 'Les nouveautés résumées', comparer: 'Deux composants face à face', panne: 'L’état de santé de ton PC', arnaque: 'Vérifier un message louche' };
+  function toolsGrid() { modal(`<div class="mhead"><span class="micon">🧰</span><h2>Outils IA</h2></div><div class="aigrid">${TOOLS.map(([k, ic, l]) => `<button type="button" data-aitool="${k}"><span>${ic}</span><b>${esc(l)}</b><small>${esc(TOOL_DESC[k])}</small></button>`).join('')}</div>`, true); }
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-aitools]')) toolsGrid(); });
   const shrink = (file) => new Promise((ok) => { const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, 1600 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = im.width * k; c.height = im.height * k; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.85)); }; im.src = r.result; }; r.readAsDataURL(file); });
   async function aiTool(k) {
     const [, ic, label, need] = TOOLS.find((t) => t[0] === k);
@@ -408,7 +447,12 @@ export function initMore(api, h) {
   });
   $('parental')?.addEventListener('change', async (e) => { const pin = await askPin('Contrôle parental'); const r = pin ? await more('pin', 'parental', pin, e.target.checked) : null; if (!r?.ok) { e.target.checked = !e.target.checked; if (pin) toast(r?.error ?? 'Code incorrect'); } else toast(e.target.checked ? '👪 Contrôle parental activé' : 'Contrôle parental désactivé'); });
   document.addEventListener('click', (e) => { if (e.target.closest('[data-pane="compte"]')) { sessions(); pinState(); } });
-  document.addEventListener('click', (e) => { if (e.target.closest('[data-pane="telephone"]') && $('appQr')?.hidden) more('appQr').then((q) => { if (q) { $('appQr').src = q; $('appQr').hidden = false; } }); });
+  // QR de connexion directe (compte + ce PC), renouvelé toutes les 100 s tant que la page Téléphone est ouverte
+  let qrTimer = 0;
+  const phoneQr = async () => { if (!$('appQr') || $('set-telephone')?.hidden || !$('settings')?.open) return clearInterval(qrTimer); const r = await more('phoneQr'); if (r?.qr) { $('appQr').src = r.qr; $('appQr').hidden = false; $('appQrTxt').textContent = 'Valable 2 minutes, il se renouvelle tout seul.'; } else { $('appQr').hidden = true; $('appQrTxt').textContent = r?.error ?? 'QR indisponible.'; } };
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-pane="telephone"]')) { setTimeout(phoneQr, 100); clearInterval(qrTimer); qrTimer = setInterval(phoneQr, 100_000); } });
+  api.settings?.().then((x) => { if ($('phoneOn')) $('phoneOn').checked = x?.phone !== false; }).catch(() => {});
+  $('phoneOn')?.addEventListener('change', (e) => api.setSettings?.({ phone: e.target.checked }));
   // Verrou à l'ouverture si un code PIN existe
   pinState().then(async (p) => {
     if (!p?.on) return;

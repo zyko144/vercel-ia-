@@ -5,8 +5,8 @@ import { addTempDay, dustDue, fpsAround, hwYear, logVersion, parseArgs, parseChe
 assert.deepEqual(parseArgs('-novid -high "C:\\Jeux\\a b"\n-x'), ['-novid', '-high', 'C:\\Jeux\\a b', '-x']);
 assert.equal(hwYear('Intel(R) Core(TM) i5-12400F'), 2021); assert.equal(hwYear('AMD Ryzen 7 7800X3D 8-Core Processor'), 2022);
 assert.equal(hwYear('NVIDIA GeForce RTX 3060'), 2020); assert.equal(hwYear('AMD Radeon RX 6600'), 2020); assert.equal(hwYear('GTX 1060'), 2016);
-const v = resaleValue({ cpu: 'Ryzen 5 5600', gpu: 'RTX 3060', ramGb: 16, diskGb: 1000, now: 2026 });
-assert.ok(v.low > 150 && v.high < 900 && v.low < v.high, JSON.stringify(v));
+const G = 1024 ** 3, v = resaleValue({ cpu: 'AMD Ryzen 7 7800X3D 8-Core Processor', gpu: 'NVIDIA GeForce RTX 4070', ram: [{ size: 16 * G, type: 'DDR5' }, { size: 16 * G, type: 'DDR5' }], disks: [{ name: 'Samsung 980 PRO', size: 1e12, bus: 'NVMe', media: 'SSD' }], board: 'MSI MAG B650 TOMAHAWK' });
+assert.ok(v.total > 900 && v.total < 1500 && v.low < v.high && v.parts.length === 6, JSON.stringify(v));
 assert.equal(screenAdvice('NVIDIA GeForce RTX 4070').res, '1440p'); assert.equal(screenAdvice('GTX 1650').res, '1080p');
 assert.ok(psuAdvice('RTX 4070', 'Ryzen 7 7800X3D').watts >= 500);
 const c = parseChecks({

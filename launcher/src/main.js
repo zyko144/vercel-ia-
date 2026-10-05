@@ -1129,7 +1129,7 @@ async function healthNow(refresh = false) {
   if (!lastScan || refresh || Date.now() - lastScan.at > 10 * 60_000) await optiScan().catch(() => null);
   if (!eventsCache || refresh || Date.now() - eventsCache.at > 30 * 60_000) eventsCache = { at: Date.now(), data: process.env.LAUNCHER_DEMO ? demoEvents() : await windowsEvents().catch(() => null) };
   const h = unifiedHealth({ diag: diag && !diag.error ? diag.score : null, opti: lastScan?.score ?? null, storage: process.env.LAUNCHER_DEMO ? demoScan().score : store.data.deepScan?.score ?? null, events: eventsCache.data?.score ?? null });
-  if (h.score != null) { store.data.healthLast = { score: h.score, at: Date.now() }; store.save(); }
+  if (h.score != null) { store.data.healthLast = { score: h.score, at: Date.now() }; store.data.healthLog = [...(store.data.healthLog ?? []), store.data.healthLast].slice(-60); store.save(); }
   return { ...h, events: eventsCache.data, deepAt: process.env.LAUNCHER_DEMO ? Date.now() : store.data.deepScan?.at ?? null };
 }
 ipcMain.handle('health:get', (_e, refresh) => healthNow(Boolean(refresh)).catch((err) => ({ error: err.message })));
@@ -2044,6 +2044,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('quietGames' in patch) store.data.settings.quietGames = Boolean(patch.quietGames);
   if ('voiceReply' in patch) store.data.settings.voiceReply = Boolean(patch.voiceReply);
   if ('voiceName' in patch) store.data.settings.voiceName = String(patch.voiceName ?? '').slice(0, 80);
+  if ('phone' in patch) store.data.settings.phone = Boolean(patch.phone);
   if ('remote' in patch) { store.data.settings.remote = Boolean(patch.remote); setRemote(); }
   try {
     if ('steamKey' in patch) setSecret('steam', patch.steamKey);
@@ -3800,9 +3801,9 @@ ipcMain.handle('more:checks', async () => {
 });
 ipcMain.handle('more:pc', async () => {
   const d = (await runDiag().catch(() => null)) ?? {};
-  const cpu = d.cpu?.name ?? '', gpu = d.gpus?.[0]?.name ?? '', ramGb = d.ramGb ?? null, diskGb = Math.round((d.disks ?? []).reduce((n, x) => n + (x.size ?? 0), 0) / 1e9) || 512;
+  const cpu = d.cpu?.name ?? '', gpu = d.gpus?.[0]?.name ?? '';
   const perf = Object.entries(store.data.perf ?? {}).map(([id, r]) => ({ name: items.find((i) => i.id === id)?.name, driver: fpsAround(r, 'driver'), os: fpsAround(r, 'os') })).filter((x) => x.name && (x.driver || x.os)).slice(0, 6);
-  return { cpu, gpu, cpuYear: hwYear(cpu), gpuYear: hwYear(gpu), resale: resaleValue({ cpu, gpu, ramGb, diskGb }), psu: psuAdvice(gpu, cpu), screen: screenAdvice(gpu), battery: store.data.batteryLog ?? [], tempDays: store.data.tempDays ?? {}, dust: dustDue(store.data.tempDays, store.data.dustAt), dustAt: store.data.dustAt ?? null, perf, laptop: Boolean(d.laptop ?? d.battery) };
+  return { cpu, gpu, cpuYear: hwYear(cpu), gpuYear: hwYear(gpu), resale: resaleValue({ cpu, gpu, ram: d.ram ?? [], disks: d.disks ?? [], board: d.board ?? '', laptop: Boolean(d.laptop ?? d.battery) }), psu: psuAdvice(gpu, cpu), screen: screenAdvice(gpu), battery: store.data.batteryLog ?? [], tempDays: store.data.tempDays ?? {}, dust: dustDue(store.data.tempDays, store.data.dustAt), dustAt: store.data.dustAt ?? null, perf, laptop: Boolean(d.laptop ?? d.battery) };
 });
 ipcMain.handle('more:dustDone', () => { store.data.dustAt = Date.now(); store.save(); return true; });
 ipcMain.handle('more:speed', () => (process.env.LAUNCHER_DEMO ? { down: 412, up: 48 } : speedTest((u, o) => net.fetch(u, o)).catch((err) => ({ error: err.message }))));
@@ -3865,16 +3866,17 @@ setInterval(() => {
   const label = new Date(`${r.month}-15`).toLocaleDateString('fr-FR', { month: 'long' });
   logNotif({ id: `mois-${r.month}`, kind: 'app', icon: '📅', title: `Ton mois de ${label}`, body: [`${r.hours} h de jeu`, r.top && `surtout ${r.top.name} (${r.top.hours} h)`, r.score != null && `santé du PC ${r.score}/100`, r.cpuMax && `processeur au max ${r.cpuMax} °C`].filter(Boolean).join(' · ') });
 }, 3 * 3_600_000);
-ipcMain.handle('more:proCard', (_e, at) => {
+ipcMain.handle('more:proCard', async (_e, at) => {
   if (process.env.LAUNCHER_DEMO) return { before: 61, after: 92, fps: { name: 'Fortnite', before: 144, after: 212 } };
-  const t = Number(at) || 0, hist = store.data.diagHistory ?? [];
+  const t = Number(at) || 0, hist = [...(store.data.diagHistory ?? []), ...(store.data.healthLog ?? [])].sort((x, y) => x.at - y.at);
   const avg = (l) => Math.round(l.slice(-5).reduce((n, r) => n + r.avg, 0) / Math.min(5, l.length));
   let fps = null;
   for (const [id, recs] of Object.entries(store.data.perf ?? {})) {
     const b = recs.filter((r) => r.avg && r.at < t), a = recs.filter((r) => r.avg && r.at > t);
     if (b.length && a.length && (!fps || b.length + a.length > fps.n)) fps = { name: items.find((i) => i.id === id)?.name ?? 'Jeu', before: avg(b), after: avg(a), n: b.length + a.length };
   }
-  const card = { before: [...hist].reverse().find((x) => x.at < t)?.score ?? null, after: diagCache?.data?.score ?? hist.at(-1)?.score ?? null, fps };
+  // « Après » = nouvelle mesure complète (matériel + réglages + stockage + stabilité), pas l’ancien diagnostic en cache
+  const card = { before: [...hist].reverse().find((x) => x.at < t)?.score ?? null, after: (await healthNow(true).catch(() => null))?.score ?? hist.at(-1)?.score ?? null, fps };
   proPost('/api/compte/optipro/gain', card).catch(() => {}); // classement du mois sur Discord
   return card;
 });
@@ -3987,7 +3989,6 @@ ipcMain.handle('more:modscan', async (_e, id) => {
   }
   return { ok: true, scanned: dirs.length ? dirs.map((d) => path.basename(d)) : ['dossier du jeu'], threats: bad.map((d) => path.basename(d)) };
 });
-ipcMain.handle('more:appQr', () => import('qrcode').then((m) => m.default.toDataURL('https://zyko144.github.io/vercel-ia-/app/', { margin: 1, width: 160, color: { dark: '#0b0910', light: '#ffffff' } })).catch(() => null));
 ipcMain.handle('more:reinstall', () => toReinstall(store.data.installedList ?? [], items));
 // ---------- 25. Widget sur le bureau : températures, FPS, amis ----------
 let widget = null;
@@ -4032,6 +4033,51 @@ setInterval(async () => {
 }, 10 * 60_000).unref?.();
 // Contrôle depuis le téléphone (option) : voir le PC et lancer un jeu depuis le même Wi-Fi
 let remoteSrv = null;
+// Actions demandées par le téléphone (page Wi-Fi ou appli via le serveur) : liste fermée, rien d'autre
+async function phoneAct(what, id) {
+  if (what === 'launch') return items.some((i) => i.id === id && i.installed) ? doAction(id, 'launch').then(() => ({ ok: true, msg: '▶ Lancé sur le PC' }), (e) => ({ ok: false, msg: e.message })) : { ok: false };
+  if (what === 'install') return items.some((i) => i.id === id && !i.installed) ? doAction(id, 'install').then(() => ({ ok: true, msg: '⬇ Installation lancée sur le PC' }), (e) => ({ ok: false, msg: e.message })) : { ok: false };
+  if (what === 'close') { const cur = currentSession(); return cur ? doAction(cur.id, 'close').then(() => ({ ok: true, msg: `■ ${cur.name} fermé` }), (e) => ({ ok: false, msg: e.message })) : { ok: false, msg: 'Aucun jeu en cours' }; }
+  if (what === 'shot') { const f = await takeScreenshot().catch(() => null); return { ok: Boolean(f), msg: f ? '📸 Capture enregistrée sur le PC' : 'Capture impossible' }; }
+  const sys = (exe, args) => spawn(exe, args, { windowsHide: true, detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  if (process.platform !== 'win32') return { ok: false, msg: 'Windows seulement' };
+  if (what === 'sleep') { setTimeout(() => sys('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']), 1500); return { ok: true, msg: '🌙 Le PC se met en veille' }; }
+  if (what === 'shutdown') { sys('shutdown', ['/s', '/t', '60', '/c', 'Extinction demandée depuis ton téléphone (History). Annule avec shutdown /a ou depuis le téléphone.']); notify('Extinction dans 60 s', 'Demandée depuis ton téléphone.'); return { ok: true, msg: '⏻ Extinction dans 60 secondes' }; }
+  if (what === 'cancel') { sys('shutdown', ['/a']); return { ok: true, msg: 'Extinction annulée' }; }
+  return { ok: false };
+}
+// Appli téléphone : le PC envoie son état au serveur et exécute les ordres reçus (20 s, 3 s quand le téléphone regarde)
+let phoneMsg = '';
+async function phoneSync() {
+  const token = secret('account');
+  if (!token || store.data.settings.phone === false || process.env.LAUNCHER_DEMO) return setTimeout(phoneSync, 60_000);
+  store.data.deviceId ??= randomUUID();
+  const s = await snapshot().catch(() => null), deg = (t) => (t == null ? null : Math.round(t));
+  const art = (i) => [i.art?.cover, i.art?.header, i.art?.hero].find((u) => /^https:\/\//.test(u ?? '')) ?? null;
+  const games = items.filter((i) => i.kind === 'game');
+  const recent = [...new Set((store.data.sessions ?? []).slice().reverse().map((x) => x.id))].map((id) => games.find((g) => g.id === id && g.installed)).filter(Boolean);
+  const etat = {
+    cpu: s ? Math.round(s.cpu?.usage ?? 0) : null, cpuT: deg(s?.cpu?.temp), gpu: s?.gpu?.usage != null ? Math.round(s.gpu.usage) : null, gpuT: deg(s?.gpu?.temp), ram: s?.ram ? Math.round((100 * s.ram.used) / s.ram.total) : null,
+    jeu: currentSession()?.name ?? null, msg: phoneMsg,
+    jeux: [...recent, ...games.filter((g) => g.installed).sort((a, b) => b.minutes - a.minutes)].filter((g, k, a) => a.indexOf(g) === k).slice(0, 18).map((g) => ({ id: g.id, name: g.name, art: art(g), h: Math.round(g.minutes / 60) })),
+    installer: games.filter((i) => !i.installed && ['steam', 'epic'].includes(i.source)).sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((g) => ({ id: g.id, name: g.name, art: art(g) })),
+    notifs: (store.data.notifLog ?? []).slice(-6).reverse().map(({ id, icon, title, body, at }) => ({ id, icon, title, body, at })),
+    sante: diagCache?.data?.score ?? store.data.diagHistory?.at(-1)?.score ?? null,
+  };
+  const r = await api('/api/compte/pc/etat', { method: 'POST', token, body: { pc: store.data.deviceId, nom: os.hostname(), etat } }).catch(() => null);
+  for (const o of r?.ordres ?? []) phoneMsg = (await phoneAct(o.do, o.id).catch((e) => ({ msg: e.message })))?.msg ?? '';
+  if (r?.ordres?.length) setTimeout(phoneSync, 800); else setTimeout(phoneSync, r?.rapide ? 3000 : 20_000);
+}
+app.whenReady().then(() => setTimeout(phoneSync, 8000));
+// QR de connexion : scanné, il connecte l'appli au compte ET à ce PC (code à usage unique, 2 min)
+ipcMain.handle('more:phoneQr', async () => {
+  const token = secret('account'); if (!token) return { error: 'Connecte-toi à ton compte History pour connecter ton téléphone.' };
+  store.data.deviceId ??= randomUUID();
+  const r = await api('/api/compte/lien/qr', { method: 'POST', token, body: { pc: store.data.deviceId } }).catch(() => ({ error: 'Serveur injoignable.' }));
+  if (!r.code) return { error: r.error ?? 'QR indisponible.' };
+  const link = `https://zyko144.github.io/vercel-ia-/app/#qr=${r.code}`;
+  return { ok: true, link, qr: await (await import('qrcode')).default.toDataURL(link, { margin: 1, width: 220, color: { dark: '#0b0910', light: '#ffffff' } }) };
+});
 // Ticket Opti Pro vu du téléphone (relu au plus une fois par minute)
 let ticketCache = { at: 0, v: null };
 async function remoteTicket() {
@@ -4048,15 +4094,7 @@ function setRemote() {
     state: async () => { const s = await snapshot().catch(() => null); const deg = (t) => (t == null ? null : `${Math.round(t)} °C`); return { cpu: deg(s?.cpu?.temp) ?? (s ? `${Math.round(s.cpu.usage)} %` : null), gpu: deg(s?.gpu?.temp), ram: s ? `${Math.round((s.ram.used / s.ram.total) * 100)} %` : null, jeu: playSession?.name ?? null, jeux: recent().map((g) => ({ id: g.id, name: g.name })), installer: items.filter((i) => i.kind === 'game' && !i.installed && ['steam', 'epic'].includes(i.source)).sort((a, b) => b.minutes - a.minutes).slice(0, 6).map((g) => ({ id: g.id, name: g.name })), notifs: (store.data.notifLog ?? []).slice(-5).reverse().map(({ id, icon, title, body }) => ({ id, icon, title, body })), ticket: await remoteTicket() }; },
     launch: async (id) => (items.some((i) => i.id === id && i.installed) ? doAction(id, 'launch') : { ok: false }),
     // Téléphone : installer, veille / extinction (60 s pour annuler), clips et captures du dossier Vidéos
-    act: async (what, id) => {
-      if (what === 'install') return items.some((i) => i.id === id && !i.installed) ? doAction(id, 'install').then(() => ({ ok: true, msg: '⬇ Installation lancée sur le PC' }), (e) => ({ ok: false, msg: e.message })) : { ok: false };
-      const sys = (exe, args) => spawn(exe, args, { windowsHide: true, detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
-      if (process.platform !== 'win32') return { ok: false, msg: 'Windows seulement' };
-      if (what === 'sleep') { setTimeout(() => sys('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']), 1500); return { ok: true, msg: '🌙 Le PC se met en veille' }; }
-      if (what === 'shutdown') { sys('shutdown', ['/s', '/t', '60', '/c', 'Extinction demandée depuis ton téléphone (History). Annule avec shutdown /a ou depuis le téléphone.']); notify('Extinction dans 60 s', 'Demandée depuis ton téléphone.'); return { ok: true, msg: '⏻ Extinction dans 60 secondes' }; }
-      if (what === 'cancel') { sys('shutdown', ['/a']); return { ok: true, msg: 'Extinction annulée' }; }
-      return { ok: false };
-    },
+    act: phoneAct,
     clips: async () => {
       const { readdir, stat } = await import('node:fs/promises'); const root = path.join(os.homedir(), 'Videos'); const out = [];
       for (const d of (await readdir(root, { withFileTypes: true }).catch(() => [])).filter((x) => x.isDirectory()).slice(0, 40))

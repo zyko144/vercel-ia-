@@ -452,6 +452,31 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       store(d);
       return send(res, 200, { ok: true, token: tok, compte: publicAccount(a) });
     }
+    // QR du launcher : un code à usage unique (2 min) qui connecte le téléphone au compte ET à ce PC, en un scan
+    if (route === 'POST /api/compte/lien/qr') {
+      const d = await data(); const a = await accountOf(d, token);
+      if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      if (!allowAttempt('compte-lien-qr', a.id, 20, 10 * 60_000)) return send(res, 429, { error: 'Trop de QR, réessaie dans quelques minutes.' });
+      const b = await readJson(req); d.qr ??= {};
+      for (const [k, x] of Object.entries(d.qr)) if (Date.now() > x.exp) delete d.qr[k];
+      const code = randomBytes(18).toString('base64url');
+      d.qr[sha(code)] = { id: a.id, pc: String(b.pc ?? '').replace(/[^\w-]/g, '').slice(0, 40), exp: Date.now() + 2 * 60_000 };
+      store(d); return send(res, 200, { ok: true, code });
+    }
+    if (route === 'POST /api/compte/lien/qr/utiliser') {
+      if (!allowAttempt('compte-lien-qr-use', ip, 20, 10 * 60_000)) return send(res, 429, { error: 'Trop d’essais.' });
+      const d = await data(); d.qr ??= {}; const k = sha(String((await readJson(req)).code ?? ''));
+      const x = d.qr[k]; delete d.qr[k];
+      if (!x || Date.now() > x.exp || !d.accounts[x.id]) { store(d); return send(res, 410, { error: 'QR expiré : affiche-le à nouveau dans le launcher.' }); }
+      sessionApp = 'Téléphone'; const tok = await newSession(d, x.id); store(d);
+      return send(res, 200, { ok: true, token: tok, pc: x.pc, compte: publicAccount(d.accounts[x.id]) });
+    }
+    // Contrôle du PC depuis le téléphone, par le serveur (marche en 4G) : le launcher envoie son état et récupère les ordres
+    if (url.pathname.startsWith('/api/compte/pc')) {
+      const c = await me(token); if (!c) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      const { pcRoute } = await import('./launcherPhone.js');
+      return pcRoute(req, res, url, c, { readJson, send });
+    }
     if (route === 'POST /api/compte/lien/valider') {
       const d = await data();
       const a = await accountOf(d, token);
