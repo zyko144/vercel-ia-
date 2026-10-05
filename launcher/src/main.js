@@ -3742,6 +3742,12 @@ function toggleMini() {
   mini.show(); mini.focus(); mini.webContents.send('mini:shown');
 }
 ipcMain.handle('mini:data', () => miniData());
+ipcMain.on('mini:size', (_e, h) => {
+  if (!mini || mini.isDestroyed()) return;
+  const [x, y] = mini.getPosition(), [, oh] = mini.getContentSize(), nh = Math.max(300, Math.min(900, Math.round(Number(h) || 600) + 2));
+  const area = screen.getDisplayNearestPoint({ x, y }).workArea, bottom = y + oh > area.y + area.height / 2;
+  mini.setContentSize(360, nh); if (bottom) mini.setPosition(x, Math.max(area.y + 8, y + oh - nh)); // reste collé à la barre des tâches
+});
 ipcMain.on('mini:action', (_e, id, action) => {
   mini?.hide();
   if (action === 'open') return showWindow();
