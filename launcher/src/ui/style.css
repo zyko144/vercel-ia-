@@ -2046,3 +2046,24 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .upk.on { border-color: var(--accent); box-shadow: 0 0 18px -8px var(--accent); }
 .upwrap [hidden] { display: none !important; }
 .upickh { grid-column: 1 / -1; margin: 8px 0 0; color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+/* 🚀 Opti Pro accompagnée */
+.prohero { grid-template-columns: 90px 1fr; }
+.proicon { font-size: 56px; text-align: center; }
+.probar { height: 8px; border-radius: 8px; background: var(--line); overflow: hidden; margin: 10px 0 4px; }
+.probar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), #2ee07a); transition: width .4s; }
+.prosvc { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.prosvc div, .propc > div { padding: 12px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); display: grid; gap: 4px; }
+.propc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.propc em { align-self: start; font-style: normal; font-size: 12px; font-weight: 700; justify-self: start; padding: 2px 8px; border-radius: 8px; background: color-mix(in srgb, var(--c, #2ee07a) 18%, transparent); color: var(--c, #2ee07a); }
+.propc em.warn { --c: #ff9f43; } .propc em.bad { --c: #ff6b6b; }
+.propc ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; opacity: .85; }
+.propc > small { grid-column: 1 / -1; }
+.prosteps { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 10px; }
+.prosteps li { display: grid; grid-template-columns: 40px 1fr; gap: 14px; padding: 14px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+.prosteps li.done { border-color: color-mix(in srgb, #2ee07a 45%, transparent); }
+.prosteps li > div { display: grid; gap: 6px; }
+.prosteps .row { flex-wrap: wrap; align-items: center; gap: 8px; }
+.prosteps textarea { width: 100%; resize: vertical; }
+.pron { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--line); }
+.done .pron { background: #2ee07a; color: #062; }
+.probench em { font-style: normal; color: #2ee07a; font-weight: 700; }
