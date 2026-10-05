@@ -169,6 +169,9 @@ console.log(`✅ Outils de jeu (FPS, sauvegardes, shaders, déplacement, prix, p
   const items = await scanEpic(man, cat);
   assert.equal(items.length, 1, 'pas de doublon « possédé non installé »');
   assert.ok(items[0].art.logo && items[0].art.cover, 'Fortnite installé : images du catalogue Epic du PC');
+  await fs.rm(p.join(man, 'fn.item'));
+  const gone = await scanEpic(man, cat);
+  assert.ok(gone.length === 1 && gone[0].name === 'Fortnite' && !gone[0].installed, 'Fortnite désinstallé reste dans la bibliothèque (à installer)');
   console.log('✅ Fortnite : images officielles depuis le catalogue Epic du PC');
 }
 
