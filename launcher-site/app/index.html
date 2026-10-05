@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>History</title>
+<meta name="theme-color" content="#07060b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header><img src="icon-192.png" alt=""><b>History</b><button id="install" hidden>⬇ Installer l’appli</button></header>
+<section id="login" class="card" hidden>
+  <h1>Connexion</h1><p class="muted">Ton compte History Launcher.</p>
+  <form id="loginForm"><div id="cred"><input name="email" type="email" placeholder="E-mail" required autocomplete="email"><input name="password" type="password" placeholder="Mot de passe" required autocomplete="current-password"></div>
+  <input name="code" id="code2fa" inputmode="numeric" maxlength="10" placeholder="Code de double authentification" hidden><button>Se connecter</button></form><p id="loginMsg" class="muted"></p>
+</section>
+<main id="app" hidden>
+  <section data-tab="amis"></section>
+  <section data-tab="ticket" hidden></section>
+  <section data-tab="pc" hidden></section>
+  <section data-tab="compte" hidden></section>
+</main>
+<nav id="tabs" hidden><button data-go="amis" class="on">👥<small>Amis</small></button><button data-go="ticket">🚀<small>Opti Pro</small></button><button data-go="pc">🖥<small>Mon PC</small></button><button data-go="compte">👤<small>Compte</small></button></nav>
+<dialog id="chat"><header><button id="chatBack">‹</button><b id="chatName"></b></header><div id="chatLog"></div><form id="chatForm"><input id="chatIn" maxlength="500" placeholder="Message…" autocomplete="off"><button>➤</button></form></dialog>
+<script src="app.js" defer></script>
+</body>
+</html>

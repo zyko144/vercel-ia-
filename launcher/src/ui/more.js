@@ -408,6 +408,7 @@ export function initMore(api, h) {
   });
   $('parental')?.addEventListener('change', async (e) => { const pin = await askPin('Contrôle parental'); const r = pin ? await more('pin', 'parental', pin, e.target.checked) : null; if (!r?.ok) { e.target.checked = !e.target.checked; if (pin) toast(r?.error ?? 'Code incorrect'); } else toast(e.target.checked ? '👪 Contrôle parental activé' : 'Contrôle parental désactivé'); });
   document.addEventListener('click', (e) => { if (e.target.closest('[data-pane="compte"]')) { sessions(); pinState(); } });
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-pane="telephone"]') && $('appQr')?.hidden) more('appQr').then((q) => { if (q) { $('appQr').src = q; $('appQr').hidden = false; } }); });
   // Verrou à l'ouverture si un code PIN existe
   pinState().then(async (p) => {
     if (!p?.on) return;
