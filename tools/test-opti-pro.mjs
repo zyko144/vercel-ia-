@@ -14,6 +14,7 @@ assert.equal(t0.step, 1); assert.match(prompts[0], /VERDICT CALCULÉ overclockin
 assert.equal((await m.startSession({ id: 'acc1' }, {})).id, t0.id, 'un seul ticket ouvert par compte');
 let t = await m.act(t0.id, 'skip2'); assert.equal(t.step, 4); assert.match(prompts.at(-1), /Guide BIOS/);
 t = await m.act(t0.id, 'msg', 'Je trouve pas PBO'); assert.match(prompts.at(-1), /Je trouve pas PBO/); assert.equal(t.log.at(-1).who, 'bot');
+const det = await m.act(t0.id, 'detail', 'Activer EXPO'); assert.match(det.detail, /Réponse/); assert.match(prompts.at(-1), /DÉTAIL complet.*Activer EXPO/s);
 t = await m.act(t0.id, 'msg', 'Staff ici', 'staff'); assert.equal(t.log.at(-1).who, 'staff'); const n = prompts.length;
 t = await m.act(t0.id, 'next'); t = await m.act(t0.id, 'next'); assert.equal(t.step, 6); assert.equal(prompts.length, n + 2);
 t = await m.act(t0.id, 'done'); assert.ok(t.closed && t.done); assert.match(t.log.at(-1).text, /Ton PC est prêt/);

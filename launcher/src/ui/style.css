@@ -2071,24 +2071,39 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .prosteps li.now { border-color: color-mix(in srgb, var(--blue) 60%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 30%, transparent); }
 .proticket { display: grid; gap: 10px; }
 .embs { display: grid; gap: 10px; max-height: 620px; overflow: auto; padding-right: 4px; }
-.emb { position: relative; padding: 12px 16px 12px 18px; border-radius: 10px; background: #2b2d31; border-left: 4px solid var(--ec); color: #dbdee1; display: grid; gap: 8px; }
-.emb.user, .emb.staff { background: #232428; }
-.emba { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #f2f3f5; }
-.emba img { width: 22px; height: 22px; border-radius: 50%; }
-.emb h3, .emb h4 { margin: 0; color: #f2f3f5; }
+.emb h3, .emb h4 { margin: 0; color: var(--text); }
 .emb .reporttxt { margin: 0; padding: 0; background: none; border: 0; }
-.embf { font-size: 11px; color: #949ba4; }
 .embl { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: #b5bac1; }
-.emb textarea, .emb input, .prosend input { width: 100%; box-sizing: border-box; background: #1e1f22; color: #f2f3f5; border: 1px solid #3f4147; border-radius: 8px; padding: 10px 12px; font: inherit; resize: vertical; }
-.emb textarea:focus, .emb input:focus, .prosend input:focus { outline: none; border-color: var(--ec, #619fff); }
+.emb textarea, .emb input, .proask textarea { width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; resize: vertical; }
+.emb textarea:focus, .emb input:focus, .proask textarea:focus { outline: none; border-color: var(--ec, #619fff); }
 .prosend { gap: 8px; flex-wrap: nowrap; } .prosend input { flex: 1; }
 .probtns { flex-wrap: wrap; gap: 8px; }
 .emb.typing .gbar { height: 4px; }
 @media (max-width: 1100px) { .prolay { grid-template-columns: 1fr; } }
 .prolinks { flex-wrap: wrap; gap: 6px; }
-.emb a.plink { color: #00a8fc; text-decoration: none; font-weight: 600; } .emb a.plink:hover { text-decoration: underline; }
+.emb a.plink { color: var(--blue); text-decoration: none; font-weight: 600; } .emb a.plink:hover { text-decoration: underline; }
 .emb.human p { margin: 0; line-height: 1.5; }
 .prosteps li.locked { opacity: .5; filter: grayscale(.7); }
 .prosteps li.locked .pron { font-size: 15px; }
 .prosteps li.locked .btn { cursor: not-allowed; }
 .emb[hidden] { display: none; }
+.emb { position: relative; padding: 16px 18px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); color: var(--text); display: grid; gap: 10px; }
+.emb.user, .emb.staff { background: color-mix(in srgb, var(--panel) 70%, transparent); justify-self: end; max-width: 80%; padding: 10px 14px; }
+.emba { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.emba b { color: var(--text); } .emba span { margin-left: auto; font-size: 12px; }
+.emba img { width: 22px; height: 22px; border-radius: 50%; }
+.emb .reporttxt.rich .rh { --rc: var(--text); font-size: 15px !important; }
+.emb .rnum { color: inherit; font-weight: 700; }
+.emb .rlist li { background: none; border: 0; border-left: 2px solid var(--line); border-radius: 0; padding: 6px 12px; transition: opacity .25s, filter .25s; }
+.embbar { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.embbar i { display: block; height: 100%; background: var(--blue); }
+/* concentration : une tâche à la fois */
+.emb.focus > .reporttxt > :not(ul):not(h4) { opacity: .45; }
+.emb.focus > .reporttxt > ul > li:not(.on) { opacity: .3; filter: blur(1.6px); cursor: pointer; }
+.emb.focus > .reporttxt > ul > li.past:not(.on) { filter: blur(1px); }
+.emb.focus > .reporttxt > ul > li:not(.on):hover { opacity: .6; filter: none; }
+.emb.focus > .reporttxt > ul > li.on { border-left-color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, transparent); border-radius: 0 10px 10px 0; padding: 12px 14px; }
+.pfbtns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.pfdetail { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--bg) 60%, transparent); }
+.emb.detailing > .reporttxt > :not(ul), .emb.detailing > .reporttxt > ul > li:not(.on) { display: none; }
+.proask { display: grid; gap: 12px; min-width: min(520px, 80vw); } .proask h2, .proask p { margin: 0; }
