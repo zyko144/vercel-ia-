@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.29': [
+    ['🎃', 'Halloween plus calme', 'Plus d’araignées qui descendent ni de chauves-souris qui traversent l’écran : il reste les toiles et les citrouilles.', ['.side nav button:nth-child(1)', 'wait900']]
+  ],
   '0.53.28': [
     ['👤', 'Un humain sur Discord', 'Opti Pro : « Parler à un humain » t’explique où aller : le serveur Discord History, salon #🚀・opti-pro, dans ton fil privé. L’équipe Opti Pro répond là-bas, pas dans le support de l’appli.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500', '[data-pa=discord]', 'wait900']]
   ],
@@ -4287,16 +4290,8 @@ function applySeason(mode) {
     const lines = Array.from({ length: rays }, (_, j) => { const a = (j / (rays - 1)) * Math.PI / 2; return `<line x1="0" y1="0" x2="${R * Math.cos(a)}" y2="${R * Math.sin(a)}"/>`; }).join('');
     return `<svg class="web ${cls}" style="--s:${s}px" viewBox="0 0 100 100"><g transform="${rot}">${lines}<path d="${d}"/></g></svg>`;
   };
-  const bat = (cls) => `<svg class="bat ${cls}" viewBox="0 0 64 28"><path d="M32 8c2-4 4-4 5 0 4-6 14-8 27-2-7 1-10 5-9 11-4-3-8-3-10 1-2-3-5-4-8-2-1 3-3 4-5 4s-4-1-5-4c-3-2-6-1-8 2-2-4-6-4-10-1 1-6-2-10-9-11 13-6 23-4 27 2 1-4 3-4 5 0z"/></svg>`;
-  const spider = (x, h, d, w = 0) => `<div class="spider" style="left:${x};--h:${h}px;--d:${d}s;--w:${w}s"><i></i><img src="halloween/spider.png" alt=""></div>`;
-  document.body.insertAdjacentHTML('beforeend', `<div id="halloween" aria-hidden="true">${web('tr', 92, '')}${web('bl', 84, 'translate(0 100) scale(1 -1)')}${spider(`${260 + Math.random() * Math.max(100, innerWidth - 340)}px`, 90, 15, 2)}${spider(`${260 + Math.random() * Math.max(100, innerWidth - 340)}px`, 150, 19, 9)}${bat('b1')}${bat('b2')}</div>`);
+  document.body.insertAdjacentHTML('beforeend', `<div id="halloween" aria-hidden="true">${web('tr', 92, '')}${web('bl', 84, 'translate(0 100) scale(1 -1)')}</div>`);
 }
-// Les araignées descendent, bougent un peu, remontent hors de l'écran puis reviennent ailleurs (jamais sur le menu de gauche)
-document.addEventListener('animationiteration', (e) => {
-  const sp = e.target.closest?.('#halloween .spider'); if (!sp || e.target !== sp) return;
-  sp.style.left = `${260 + Math.random() * Math.max(100, innerWidth - 340)}px`;
-  sp.style.setProperty('--h', `${50 + Math.round(Math.random() * 220)}px`);
-});
 $('season').addEventListener('change', (e) => { applySeason(e.target.value); api.setSettings({ season: e.target.value }); });
 api.settings?.().then((s) => { $('season').value = s?.season === 'off' ? 'off' : 'auto'; applySeason($('season').value); }).catch(() => applySeason('auto'));
 $('compact').addEventListener('change', (e) => { document.body.classList.toggle('compact', e.target.checked); api.setSettings({ compact: e.target.checked }); });
@@ -4785,7 +4780,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.28',
+    version: async () => '0.53.29',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
