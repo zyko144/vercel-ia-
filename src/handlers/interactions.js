@@ -100,6 +100,7 @@ export async function onInteraction(client, interaction) {
     }
     if (interaction.isModalSubmit()) {
       if (interaction.customId === 'copy-modal') return await handleCopyModal(interaction);
+      if (interaction.customId === 'hlaide') return await (await import('../features/launcherDiscord.js')).handleHelpModal(interaction);
       return;
     }
     if (!interaction.isChatInputCommand() && !interaction.isMessageContextMenuCommand()) return;

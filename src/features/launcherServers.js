@@ -9,6 +9,8 @@ export const SALONS = [
   ['infos', 'ℹ・infos', 'History Launcher : c’est quoi, le télécharger, lier ton compte.'],
   ['news', '📢・nouveautés', 'Chaque nouvelle version de History Launcher, avec ses nouveautés en image.'],
   ['deals', '🎁・jeux-gratuits', 'Jeux gratuits Epic Games et grosses promos Steam.'],
+  ['gains', '📈・gains-opti', 'FPS gagnés par les joueurs History après une optimisation (anonyme).'],
+  ['maj', '🆕・maj-des-jeux', 'Les jeux des joueurs History viennent d’être mis à jour : patch notes.'],
 ];
 // Le lien en clair (sans < >) : Discord affiche sous le message l'aperçu du site avec sa bannière
 export const INFO_MESSAGE = `# 🚀 History Launcher
@@ -39,7 +41,7 @@ export async function installHere(guild, { create = true } = {}) {
   let newNews = false;
   for (const [key, name, topic] of SALONS) {
     let c = find(name, ChannelType.GuildText);
-    if (!c && !create) continue;
+    if (!c && !create && !['maj', 'gains'].includes(key)) continue; // salon ajouté après coup : créé même sur un serveur déjà installé
     if (!c) { c = await guild.channels.create({ name, type: ChannelType.GuildText, parent: cat?.id, topic, permissionOverwrites: readOnly, reason: 'History Launcher' }); if (key === 'news') newNews = true; }
     entry[key] = c.id;
     if (key === 'infos') { // message mis à jour s'il a changé

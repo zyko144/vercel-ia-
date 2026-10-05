@@ -48,6 +48,7 @@ export const launcherCommand = new SlashCommandBuilder().setName('launcher').set
     .addUserOption((o) => o.setName('avec').setDescription('Comparer deux autres membres (sinon : toi)')))
   .addSubcommand((s) => s.setName('fps').setDescription('FPS mesurés par les joueurs History sur un jeu, avec leur PC')
     .addStringOption((o) => o.setName('jeu').setDescription('Le jeu').setRequired(true).setAutocomplete(true).setMaxLength(80)))
+  .addSubcommand((s) => s.setName('aide').setDescription('Un souci avec History Launcher ? Écris au support (réponse dans l’appli)'))
   .addSubcommand((s) => s.setName('telecharger').setDescription('Lien de la dernière version de History Launcher'))
   .addSubcommand((s) => s.setName('installer').setDescription('Admin : crée les salons infos, nouveautés et jeux gratuits ici'));
 
@@ -77,6 +78,12 @@ export async function handleLauncherCommand(client, interaction) {
     const rel = await latestRelease().catch(() => null);
     const setup = (rel?.assets ?? []).find((a) => /\.exe$/i.test(a.name));
     return interaction.reply({ content: `# 🚀 History Launcher${rel?.tag_name ? ` ${rel.tag_name}` : ''}\n${setup ? `**[📥 Télécharger l’installateur](${setup.browser_download_url})** · ` : ''}[Site](${SITE})`, ...PRIVATE });
+  }
+  if (sub === 'aide') {
+    if (!(await accountByDiscord(interaction.user.id))) return interaction.reply({ content: `🔗 Lie d’abord ton compte History dans <#${LINK_CHANNEL}> : la réponse du support arrive dans ton launcher.`, ...PRIVATE });
+    const { ModalBuilder, TextInputBuilder, TextInputStyle } = await import('discord.js');
+    const field = (id, label, style, min, max) => new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setMinLength(min).setMaxLength(max).setRequired(true));
+    return interaction.showModal(new ModalBuilder().setCustomId('hlaide').setTitle('🆘 Support History Launcher').addComponents(field('title', 'Le souci en quelques mots', TextInputStyle.Short, 4, 100), field('description', 'Explique ce qui se passe', TextInputStyle.Paragraph, 10, 4000)));
   }
   if (sub === 'installer') {
     if (!interaction.inGuild() || !interaction.memberPermissions?.has('ManageGuild')) return interaction.reply({ content: '❌ Réservé aux admins du serveur (permission « Gérer le serveur »).', ...PRIVATE });
@@ -424,3 +431,37 @@ export function startLauncherDiscord(client) {
   setInterval(safe(syncAll), 30 * 60_000).unref();
 }
 export const _test = { announceFree, announceDeals, syncMember, checkWatch, fitForDiscord, setClient: (c) => { clientRef = c; } };
+
+/** Fenêtre de /launcher aide envoyée : même demande que depuis l'appli (réponse visible dans le launcher). */
+export async function handleHelpModal(interaction) {
+  const account = await accountByDiscord(interaction.user.id);
+  if (!account) return interaction.reply({ content: '🔗 Lie d’abord ton compte History.', ...PRIVATE });
+  if (!allowAttempt('support-create', account.id, 5, 3600000)) return interaction.reply({ content: '⏳ Cinq demandes par heure maximum.', ...PRIVATE });
+  const { cleanReport, createTicket } = await import('./launcherSupport.js');
+  try {
+    await createTicket(account, cleanReport({ title: interaction.fields.getTextInputValue('title'), description: `${interaction.fields.getTextInputValue('description')}\n\n(Envoyé depuis Discord)` }));
+    return interaction.reply({ content: '✅ **Demande envoyée !** La réponse arrive dans ton launcher (Paramètres › Aide).', ...PRIVATE });
+  } catch (err) { return interaction.reply({ content: `❌ ${err.message}`, ...PRIVATE }); }
+}
+
+// Un jeu d'un joueur History vient d'être mis à jour : annonce dans #maj-des-jeux (une fois par jeu et par version)
+const updSeen = new Map();
+export async function announceGameUpdate({ name, steamId, version }) {
+  const key = `${name}|${version}`.toLowerCase();
+  if (!clientRef || updSeen.has(key) || Date.now() - (updSeen.get(name.toLowerCase()) ?? 0) < 6 * 3_600_000) return false;
+  updSeen.set(key, Date.now()); updSeen.set(name.toLowerCase(), Date.now());
+  const notes = steamId ? `https://store.steampowered.com/news/app/${steamId}` : null;
+  const embed = new EmbedBuilder().setColor(0x619fff).setTitle(`🆕 ${name} a été mis à jour`).setDescription(`${notes ? `[📰 Lire les patch notes](${notes})\n` : ''}-# Repéré par History Launcher`);
+  if (steamId) embed.setThumbnail(`https://cdn.cloudflare.steamstatic.com/steam/apps/${steamId}/header.jpg`);
+  return (await broadcast(clientRef, 'maj', { embeds: [embed] })) > 0;
+}
+
+// FPS gagnés après une opti du launcher : annonce anonyme dans #gains-opti (au plus une par jeu toutes les 6 h)
+export async function announceOptiGain({ jeu, avant, apres }) {
+  const key = `gain|${jeu.toLowerCase()}`;
+  if (!clientRef || Date.now() - (updSeen.get(key) ?? 0) < 6 * 3_600_000) return false;
+  updSeen.set(key, Date.now());
+  const gain = Math.round(((apres - avant) / avant) * 100);
+  const embed = new EmbedBuilder().setColor(0x36c995).setTitle(`📈 +${gain} % de FPS sur ${jeu}`).setDescription(`Un joueur History est passé de **${avant}** à **${apres} FPS** en moyenne après l’optimisation du launcher.\n-# Mesuré en vrai pendant ses parties · anonyme`);
+  return (await broadcast(clientRef, 'gains', { embeds: [embed] })) > 0;
+}

@@ -50,6 +50,18 @@ export async function supportUpdate(body) {
   import('./supportDiscord.js').then(m => m.queueSupport(result.ticket.id)).catch(() => {});
   return result;
 }
+/** Nouvelle demande (appli, site ou /launcher aide sur Discord) : enregistrée puis envoyée dans les salons support. */
+export async function createTicket(account, report, image = null, id = randomUUID()) {
+  const { supportIdentity } = await import('./supportDiscord.js');
+  const identity = await supportIdentity(account, report.app);
+  const ticket = await mutateSupport(async (all) => {
+    if (Object.keys(all).length >= 2000 || Object.values(all).filter((t) => t.owner === account.id && t.status !== 'resolved').length >= 20) throw new Error('Trop de signalements ouverts. Attends la réponse à tes demandes.');
+    if (image) await putBlob(`support/${id}`, Buffer.from(image.data, 'base64'), image.mime);
+    return all[id] = { id, owner: account.id, name: clean(account.pseudo, 40), ...identity, ...report, image: !!image, status: 'received', reply: '', at: Date.now(), updatedAt: Date.now() };
+  });
+  import('./supportDiscord.js').then(m => m.queueSupport(ticket.id)).catch(() => {});
+  return ticket;
+}
 export async function handleSupportApi(req, res, url, { readJson, send }) {
   const account = await me(String(req.headers.authorization ?? '').replace(/^Bearer /, ''));
   if (!account) return send(res, 401, { error: 'Connecte-toi à ton compte History pour contacter l’aide.' });
@@ -68,14 +80,7 @@ export async function handleSupportApi(req, res, url, { readJson, send }) {
     let image = null;
     if (body.img) { image = checkImage(body.img, 1400000); if (!image || typeof image === 'string') throw new Error('Capture invalide : PNG, JPG ou WebP, 1,4 Mo maximum.'); }
     id = randomUUID();
-    const { supportIdentity } = await import('./supportDiscord.js');
-    const identity = await supportIdentity(account, report.app);
-    const ticket = await mutateSupport(async (all) => {
-      if (Object.keys(all).length >= 2000 || Object.values(all).filter((t) => t.owner === account.id && t.status !== 'resolved').length >= 20) throw new Error('Trop de signalements ouverts. Attends la réponse à tes demandes.');
-      if (image) await putBlob(`support/${id}`, Buffer.from(image.data, 'base64'), image.mime);
-      return all[id] = { id, owner: account.id, name: clean(account.pseudo, 40), ...identity, ...report, image: !!image, status: 'received', reply: '', at: Date.now(), updatedAt: Date.now() };
-    });
-    import('./supportDiscord.js').then(m => m.queueSupport(ticket.id)).catch(() => {});
+    const ticket = await createTicket(account, report, image, id);
     return send(res, 200, { ok: true, ticket: summary(ticket) });
   } catch (error) {
     if (id) await delBlob(`support/${id}`).catch(() => {});
