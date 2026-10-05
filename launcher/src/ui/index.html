@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="settings.css">
 <link rel="stylesheet" href="personal.css"><link rel="stylesheet" href="quick-support.css">
-<link rel="stylesheet" href="premium.css"></head>
+<link rel="stylesheet" href="premium.css"><link rel="stylesheet" href="halloween.css"></head>
 <body data-theme="jeu">
 <div class="neon" aria-hidden="true"></div>
 
@@ -487,6 +487,7 @@
 <div class="setrow"><label for="textScale">Taille du texte</label><select id="textScale"><option value="0.9">Petite</option><option value="1">Normale</option><option value="1.1">Grande</option><option value="1.25">Très grande</option></select></div>
 <label class="toggle"><input type="checkbox" id="compact"><span></span>Mode compact (plus de jeux à l’écran)</label>
 <div class="setrow"><label for="themeSel">Thème</label><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option><option value="perso">Ma couleur…</option></select><input type="color" aria-label="Couleur personnalisée" id="themeColor" value="#2f8bff" hidden></div>
+<div class="setrow"><label for="season">Ambiance de saison</label><select id="season"><option value="auto">Auto (Halloween en octobre 🎃)</option><option value="off">Désactivée (thème normal)</option></select></div>
 <div class="setrow"><label for="bgMode">Fond de l’appli</label><select id="bgMode"><option value="jeu">Jaquette floue du jeu sélectionné</option><option value="anime">Dégradé animé</option><option value="sobre">Sobre (noir)</option></select></div><div class="setrow"><label for="neonIntensity">Intensité des néons</label><input id="neonIntensity" type="range" min="0" max="100" value="90"><output id="neonValue" for="neonIntensity">90 %</output></div><div class="theme-preview"><span class="set-eyebrow">APERÇU EN DIRECT</span><h4>Ta prochaine session commence ici.</h4><p>Couleurs, ambiance et lumière : essaie avant de choisir.</p><span class="theme-swatch"></span><span class="theme-swatch secondary"></span></div><div class="row"><button type="button" id="themeApply" class="btn play" disabled>Appliquer</button><button type="button" id="themeCancel" class="btn" disabled>Annuler</button><small id="themeStatus" role="status">Ton thème est enregistré.</small></div>
 </div></section>
 <section class="setpane" id="set-jeux" data-pane="jeux" aria-labelledby="set-title-jeux" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / JEUX & PERFORMANCES</span><h3 id="set-title-jeux">Jeux & performances</h3><p>Prépare tes parties, puis profite du jeu.</p></header><div class="setcard"><h4>Lancement & performances</h4>
