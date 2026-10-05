@@ -486,7 +486,9 @@ export class GuildPlayer {
     const tick = () => {
       if (this.current !== track || !this.lyrics) return;
       const speed = speedOf(this.filters) || 1;
-      const pos = this.position() * 1000;
+      // Avance calée sur le vrai délai d'affichage : la modif Discord met editMs à arriver, le son ~250 ms à sortir du vocal
+      const lead = Math.min(600, Math.max(0, (this.editMs ?? 400) - 250));
+      const pos = this.position() * 1000 + lead * speed;
       const i = currentLineIndex(this.lyrics, pos);
       if (i !== this.lyricIndex && !this.paused) { this.lyricIndex = i; this.refreshPanel(true); }
       const next = this.lyrics[i + 1];
@@ -500,7 +502,8 @@ export class GuildPlayer {
     if (!this.panel || !this.current || this.blind) return;
     if (!force && Date.now() - this.lastPanelEdit < 1_000) return;
     this.lastPanelEdit = Date.now();
-    this.panel.edit(nowPlayingPayload(this)).catch((err) => {
+    const t0 = Date.now();
+    this.panel.edit(nowPlayingPayload(this)).then(() => { const ms = Date.now() - t0; this.editMs = this.editMs ? this.editMs * 0.7 + ms * 0.3 : ms; }).catch((err) => {
       if (err.code === 10008) this.panel = null; // message supprimé
     });
   }
