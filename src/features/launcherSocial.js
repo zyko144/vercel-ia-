@@ -282,6 +282,21 @@ export async function handleSocialApi(req, res, url, { readJson, readBinary, sen
     pushInbox(d, to, { type: 'gift', from: id, pseudo: accs[id]?.pseudo, item });
     return done(200, { ok: true });
   }
+  // Recherche de coéquipiers : une annonce par joueur (jeu, rang, message), visible 3 h par tous les joueurs History
+  if (url.pathname === '/api/compte/lfg') {
+    const all = Object.fromEntries(Object.entries((await load('lfg', {})) ?? {}).filter(([, x]) => Date.now() < x.exp));
+    if (req.method === 'POST') {
+      if (body.stop) delete all[id];
+      else {
+        if (!allowAttempt('lfg', id, 20, 86_400_000)) return send(res, 429, { error: 'Trop d’annonces aujourd’hui.' });
+        const jeu = text(body.jeu, 60); if (!jeu) return send(res, 400, { error: 'Choisis un jeu.' });
+        all[id] = { jeu, rang: text(body.rang, 30), texte: text(body.texte, 140), pseudo: accs[id]?.pseudo ?? 'Joueur', code: accs[id] ? friendCode(accs[id]) : null, at: Date.now(), exp: Date.now() + 3 * 3_600_000 };
+      }
+      save('lfg', all);
+    }
+    const q = String(url.searchParams.get('jeu') ?? '').toLowerCase();
+    return send(res, 200, { moi: all[id] ?? null, annonces: Object.entries(all).filter(([k, x]) => k !== id && (!q || x.jeu.toLowerCase().includes(q))).map(([k, x]) => ({ id: k, ...x, ami: Boolean(friendOf(k)) })).sort((a, b) => b.at - a.at).slice(0, 50) });
+  }
   if (route === 'POST /api/compte/messages') {
     const to = String(body.to ?? '');
     const msg = text(body.text, 500);
@@ -648,9 +663,14 @@ async function fileRoutes(req, res, url, route, id, { readBinary, send: rawSend 
     const links = (await load('clip-liens', {})) ?? {};
     for (const [k, x] of Object.entries(links)) if (Date.now() > x.exp) { delete links[k]; delBlob(`lien/${k}`).catch(() => {}); }
     const acc = (await accounts())[id];
-    links[lid] = { ext: file.ext, pseudo: acc?.pseudo ?? 'Un joueur', jeu: text(url.searchParams.get('jeu'), 80) || null, nom: text(url.searchParams.get('nom'), 80) || null, exp: Date.now() + 7 * 86_400_000 };
+    links[lid] = { owner: id, vues: 0, at: Date.now(), ext: file.ext, pseudo: acc?.pseudo ?? 'Un joueur', jeu: text(url.searchParams.get('jeu'), 80) || null, nom: text(url.searchParams.get('nom'), 80) || null, exp: Date.now() + 7 * 86_400_000 };
     save('clip-liens', links);
     return send(res, 200, { ok: true, url: `${PUBLIC_BASE}/c/${lid}` });
+  }
+  // Statistiques des liens de clips partagés (vues de la page, 7 jours)
+  if (route === 'GET /api/compte/clip/vues') {
+    const links = (await load('clip-liens', {})) ?? {};
+    return send(res, 200, { liens: Object.entries(links).filter(([, x]) => x.owner === id && Date.now() < x.exp).map(([k, x]) => ({ url: `${PUBLIC_BASE}/c/${k}`, nom: x.nom, jeu: x.jeu, vues: x.vues ?? 0, at: x.at ?? null, exp: x.exp })).sort((a, b) => (b.at ?? 0) - (a.at ?? 0)) });
   }
   if (route === 'POST /api/compte/fichier') {
     if (!allowAttempt('launcher-fichier', id, 30, 86_400_000)) return send(res, 429, { error: 'Trop de fichiers aujourd’hui.' });
@@ -724,10 +744,11 @@ export async function clipLinkRoute(req, res, url, { send }) {
     res.end(blob.buf.subarray(start, end + 1)); return true;
   }
   const title = `${x.pseudo}${x.jeu ? ` · ${x.jeu}` : ''}`;
+  if (!/bot|crawl|spider|preview|discord|embed|whatsapp|telegram/i.test(req.headers['user-agent'] ?? '')) { const all = (await load('clip-liens', {})) ?? {}; if (all[lid]) { all[lid].vues = (all[lid].vues ?? 0) + 1; save('clip-liens', all); } } // vues réelles (pas les robots d'aperçu)
   const media = x.ext === 'png' ? `<img src="/c/${lid}/f" alt="">` : `<video src="/c/${lid}/f" controls autoplay playsinline></video>`;
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)} · History Clips</title>
-<meta property="og:title" content="🎬 ${escHtml(title)}"><meta property="og:description" content="Un clip partagé avec History Clips"><meta property="og:image" content="https://zyko144.github.io/vercel-ia-/clips/logo.png">
+<meta property="og:type" content="${x.ext === 'png' ? 'website' : 'video.other'}"><meta name="twitter:card" content="${x.ext === 'png' ? 'summary_large_image' : 'player'}"><meta property="og:title" content="🎬 ${escHtml(title)}"><meta property="og:description" content="Un clip partagé avec History Clips"><meta property="og:image" content="https://zyko144.github.io/vercel-ia-/clips/logo.png">
 ${x.ext === 'png' ? `<meta property="og:image" content="${PUBLIC_BASE}/c/${lid}/f">` : `<meta property="og:video" content="${PUBLIC_BASE}/c/${lid}/f"><meta property="og:video:type" content="video/mp4">`}
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(900px 500px at 50% 0%,rgba(255,194,51,.18),transparent 60%),#0b090e;color:#f6f3ee;font:15px/1.5 system-ui,sans-serif}main{width:min(1100px,94vw);text-align:center}video,img{width:100%;max-height:78vh;border-radius:16px;background:#000;box-shadow:0 30px 80px -20px #000,0 0 50px -20px #ffc233}h1{font-size:20px;margin:0 0 14px}a{display:inline-block;margin-top:16px;padding:10px 18px;border-radius:12px;background:linear-gradient(135deg,#ffc233,#ff8a00);color:#1a1206;font-weight:700;text-decoration:none}small{display:block;margin-top:10px;color:#9a9389}</style></head>
 <body><main><h1>🎬 ${escHtml(title)}</h1>${media}<a href="https://zyko144.github.io/vercel-ia-/clips/">Garder tes clips avec History Clips</a><small>Lien valable jusqu’au ${new Date(x.exp).toLocaleDateString('fr-FR')}</small></main></body></html>`);

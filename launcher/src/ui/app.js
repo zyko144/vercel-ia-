@@ -2,6 +2,7 @@ import { initQuickSupport } from './quick-support.js';
 import { initPersonal } from './personal.js';
 import { cachedTask } from '../core/personal.js';
 import { initSettings } from './settings.js';
+import { initMore } from './more.js';
 import { scamCheck } from '../core/friendsync.js';
 // Interface du launcher : accueil (bannière, plus joués, applis, recommandations), bibliothèque, statistiques,
 // assistant IA et lecteur de musique. Toutes les images sont les images officielles trouvées par le launcher.
@@ -14,6 +15,7 @@ const CROS = api.platform === 'linux'; // Chromebook : pas d'outils Windows (Mon
 if (CROS) document.documentElement.classList.add('cros');
 const state = { items: [], sources: {}, sel: null, active: new Set(), view: 'accueil', list: { sort: 'joues', kind: 'tout', source: 'tout', installed: 'tout', q: '' }, period: 'semaine', rank: 'tout', profile: 'Joueur', music: null, recos: [], free: [], deals: [], cols: {}, friends: null, hist: null, events: [], ftab: 'history', song: null, account: null };
 let personal = null;
+let moreUi = null; // 0.54 : vérifications, fiche enrichie, collections par genre (ui/more.js)
 const readProgress = cachedTask(() => api.progress?.(), 30000);
 const readPc = cachedTask(() => api.pc?.(), 1500);
 const sidebar = { hiddenPlatforms: [], hiddenNav: [] }; // menu de gauche personnalisé (sur ce compte)
@@ -217,6 +219,8 @@ function menuFor(i) {
     m.push('<button data-tools="1">🎛 Outils du jeu (profil, sauvegardes, FPS…)</button>');
     if (i.steamId) m.push('<button data-reqs="1">✅ Mon PC peut-il le faire tourner ?</button>');
     m.push('<button data-tips="1">🤖 Conseils de l’IA pour ce jeu</button>');
+    m.push('<button data-invgame="1">📨 Inviter un ami à y jouer</button>');
+    if (i.source === 'steam' && i.steamId) m.push('<button data-gift="1">🎁 Offrir ce jeu à un ami</button>');
     const g = boostGames[i.id];
     m.push(`<button data-boostgame="${g === true ? 'off' : g === false ? 'auto' : 'on'}">${g === true ? '⚡ Opti auto : toujours (changer → jamais)' : g === false ? '⚡ Opti auto : jamais (changer → par défaut)' : '⚡ Toujours optimiser ce jeu'}</button>`);
   }
@@ -1607,6 +1611,14 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.54.0': [
+    ['🧩', 'Tes composants, un par un', 'Mon PC › Composants montre chaque pièce de TON PC en 3D réaliste (rendue dans Blender) : Ryzen AM4/AM5 ou Intel Core, RTX / GTX / Radeon / Arc, DDR4 / DDR5 / SO-DIMM, SSD NVMe / SATA ou disque dur, avec la marque, le modèle exact et ses détails.', ['[data-view="pc"]', 'wait700', '#pcTabs [data-pctab="composants"]', 'wait1800']],
+    ['🧪', 'Onglet Vérifs', 'Écran bridé en Hz, câble branché sur la carte mère, PCIe, double canal, XMP, Secure Boot, TPM, pilotes, BIOS, disques presque pleins, écrans bleus expliqués, batterie. Plus : revente estimée, alim et écran conseillés, températures sur 30 jours, rappel de poussière, test de stabilité, test RAM, test souris, journal avec annulation une par une, jeux à réinstaller.'],
+    ['🎬', 'BIOS animé dans Opti Pro', 'Où cliquer dans TON BIOS (MSI, ASUS, Gigabyte, ASRock) en animation, sur l’appli et sur Discord. Et aussi : chrono d’étape, mode express, note du technicien, carte avant / après à partager, badge « PC optimisé », suivi chaque mois, nouveau PC détecté.'],
+    ['🤖', 'Outils IA', 'Expliquer une erreur, lire une capture, réglages graphiques pour ton PC, guide d’un jeu, pourquoi ton jeu plante, patch notes en 3 lignes, comparer 2 composants, risque de panne, détecteur d’arnaque. Mode débutant et mémoire de ton PC.'],
+    ['🎮', 'Bibliothèque', 'Filtre « Jamais lancés », options de lancement par jeu, fusionner deux fiches, collections par genre, bande-annonce et avis Steam, historique des versions, alerte de sortie des jeux de ta liste de souhaits, inviter un ami sur un jeu, offrir un jeu Steam, coéquipiers par jeu et rang.'],
+    ['⭐', 'Premium', 'Formule 1 an (12 mois pour le prix de 10), promos de saison automatiques, paliers de parrainage, 3 jours offerts pour un avis, page de remerciement.'],
+  ],
   '0.53.40': [
     ['🧭', 'Mini-launcher réparé', 'Les pochettes des jeux s’affichent dans le mini-launcher de la barre des tâches, et le bouton « Ouvrir History Launcher » n’est plus coupé : la fenêtre prend la hauteur qu’il faut.', ['.side nav button:nth-child(1)', 'wait900']]
   ],
@@ -2536,8 +2548,8 @@ async function toggleBig(on) {
 
 // ---------- Collections ----------
 function renderCollections() {
-  const entries = Object.entries(state.cols);
-  $('collections').innerHTML = entries.map(([id, c]) => `<button data-col="${esc(id)}" class="${state.view === 'liste' && state.list.collection === id ? 'on' : ''}"><span class="pdot" style="background:#2f8bff">📚</span>${esc(c.name)}<em>${c.items.filter((x) => state.items.some((i) => i.id === x)).length}</em></button>`).join('') || '<small class="hint colempty">Range tes jeux : « Avec les potes », « À finir »…</small>';
+  const entries = [...Object.entries(state.cols), ...Object.entries(moreUi?.genreCols() ?? {})];
+  $('collections').innerHTML = entries.map(([id, c]) => `<button data-col="${esc(id)}" class="${state.view === 'liste' && state.list.collection === id ? 'on' : ''}"><span class="pdot" style="background:${c.auto ? '#8a5cff' : '#2f8bff'}">${c.auto ? '🏷' : '📚'}</span>${esc(c.name)}<em>${c.items.filter((x) => state.items.some((i) => i.id === x)).length}</em></button>`).join('') || '<small class="hint colempty">Range tes jeux : « Avec les potes », « À finir »…</small>';
 }
 async function saveCols() { state.cols = await api.saveCollections(state.cols); renderCollections(); }
 function newColId() { return `c${Date.now().toString(36)}`; }
@@ -2610,6 +2622,7 @@ function renderDiag(d) {
   state.pcDiagDone = true;
   state.diag = d;
   renderTop();
+  moreUi?.pc3d();
   $('pcComps').innerHTML = d.components.map((c) => `<div class="comp st-${c.status} ck-${esc(c.key ?? 'x')}">
     <div class="ch"><span>${c.icon}</span><div><small>${esc(c.title)}</small><b>${esc(c.name)}</b></div><em class="chip">${STATUS[c.status]}</em></div>
     <ul>${c.specs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -2682,7 +2695,8 @@ $('rankBtn').addEventListener('click', async () => {
     ${r?.top ? `<p class="hint">${r.rang ? `Tu es ${r.rang}${r.rang === 1 ? 'er' : 'e'} sur ${r.total}.` : 'Fais un benchmark pour entrer dans le classement.'}</p><div class="ranklist2">${r.top.map((x, n) => `<div class="${x.moi ? 'me' : x.ami ? 'friend' : ''}"><span>${n + 1}</span><b>${esc(x.pseudo)}${x.ami ? ' 👥' : ''}</b><small>${esc([x.cpu, x.gpuName].filter(Boolean).join(' · '))}</small><em>${x.total}</em></div>`).join('')}</div>` : `<p class="hint">${esc(r?.error ?? 'Connecte-toi pour voir le classement.')}</p>`}
     <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
-  $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); };
+  $('modalBox').querySelector('.ranklist2')?.insertAdjacentHTML('beforebegin', '<button type="button" class="btn ghost sm" data-rkf="1">👥 Moi et mes amis seulement</button>');
+  $('modalBox').onclick = (e) => { if (e.target.closest('[data-rkf]')) return $('modalBox').querySelector('.ranklist2')?.classList.toggle('amis'); if (e.target.closest('[data-m]')) $('modal').close(); };
 });
 async function renderProcs() {
   $('pcProcs').innerHTML = '<div class="empty">Mesure pendant 2 secondes…</div>';
@@ -3132,6 +3146,8 @@ function pcTab(tab) {
   if (tab === 'analyse' && !$('scanDrives').children.length) renderScanDrives();
   if (tab === 'upgrade') renderUpgrade();
   if (tab === 'entretien') renderCare();
+  if (tab === 'verifs') moreUi?.verifs();
+  if (tab === 'composants') moreUi?.pc3d();
 }
 // 🛒 Upgrade : carte graphique (marque au choix), processeur + carte mère, RAM, stockage ; compatibilité et FPS par jeu
 const up = { budget: 600, mode: 'gpu', brand: 'all', target: null, picked: (() => { try { return JSON.parse(localStorage.getItem('upPicked') ?? '[]'); } catch { return []; } })() };
@@ -3239,13 +3255,13 @@ function proTicketDraw(jump) {
   const prev = $('proLog')?.scrollTop;
   const s = pro, last = s && s.step >= PRO_STEPS.length - 1, nx = s && PRO_STEPS[s.step + 1], opt = (i) => [2, 3, 4].includes(i);
   if (!s || s.closed) {
-    $('proTicket').innerHTML = `${s?.done ? '<div class="emb bot" style="--ec:#ffc439"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro</div><h3>Ton PC est prêt 🚀</h3></div>' : ''}<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
+    $('proTicket').innerHTML = `${s?.done ? `<div class="emb bot" style="--ec:#ffc439"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro</div><h3>Ton PC est prêt 🚀</h3></div>${moreUi?.proEnd(s) ?? ''}` : ''}<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
     return;
   }
   const plan = s.todo?.length ? `<details class="emb proplan" ${proPlanOpen ? 'open' : ''}><summary><b>🎯 Ton plan Opti Pro</b><span class="hint">fait pour ton PC et ta demande · ${s.todo.length} points</span></summary><ul>${s.todo.map((x) => `<li><span>${x.icon}</span><div><b>${esc(x.label)}</b><small>${esc(x.why)}</small></div>${x.auto && PRO_DO[x.auto] ? `<button class="btn sm play" data-do="${x.auto}">⚡ Le faire pour moi</button>` : x.optin ? (s.ocOptIn ? '<em class="ok">✅ Accepté</em>' : '<button class="btn sm danger" data-pa="oc">🔥 Je veux overclocker</button>') : `<em>${x.buy ? 'Achat conseillé' : 'Guidé'}</em>`}</li>`).join('')}</ul></details>` : '';
-  $('proTicket').innerHTML = `${plan}<div class="embs" id="proLog">${s.log.map((m, k) => proEmbed(m, k)).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
+  $('proTicket').innerHTML = `${moreUi?.proBar(s) ?? ''}${plan}<div class="embs" id="proLog">${s.log.map((m, k) => proEmbed(m, k)).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
     <div class="emb human" id="proHuman" style="--ec:#5865f2" ${proHuman ? '' : 'hidden'}><div class="emba"><img src="logo.png" alt="">👤 Parler à un humain</div><p>L’équipe Opti Pro répond <b>sur Discord</b>, pas dans le support de l’appli. Rejoins le serveur History, va dans le salon <b>#🚀・opti-pro</b> : ton ticket y est dans ton fil privé${s.thread ? '' : ' (lie ton compte Discord dans Paramètres › Compte, puis tape <b>/launcher opti</b>)'}. Clique sur <b>👤 Parler à un humain</b> dans le fil : un membre de l’équipe arrive.</p><div class="row"><button class="btn play" data-pa="discordgo">🎮 Ouvrir Discord</button></div></div>
-    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button><button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
+    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${s.todo?.some((x) => PRO_DO[x.auto]) ? '<button class="btn ghost" data-pexp="1" title="Seulement ce que le launcher fait tout seul">⚡ Express</button>' : ''}<button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
     ${s.links?.length ? `<div class="row prolinks">${s.links.map(([l, u]) => `<button class="btn sm ghost" data-url="${esc(u)}">${esc(l)} ↗</button>`).join('')}</div>` : ''}
     ${s.thread ? '<small class="hint">💬 Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
   proFocusUi(); const log = $('proLog'), on = log.querySelector('.emb.focus li.on'); // défile seulement dans le ticket, jamais toute la page
@@ -3280,6 +3296,7 @@ async function proAction(action, text = '', imgs = []) {
 }
 $('proTicket').addEventListener('click', async (e) => {
   const dob = e.target.closest('[data-do]'); if (dob) return PRO_DO[dob.dataset.do] && proDo(dob.dataset.do, dob);
+  const exp = e.target.closest('[data-pexp]'); if (exp) return proExpress(exp);
   const f = e.target.closest('[data-pfa]'), li = e.target.closest('.emb.focus [data-pf]:not(.on)');
   const m = (f ?? li)?.closest('.emb'), k = m?.dataset.k, i = proFocus[k] ?? 0;
   if (li) { proFocus[k] = Number(li.dataset.pf); return renderProTicket(); }
@@ -3312,6 +3329,16 @@ async function proDo(id, b) {
   const ok = r !== false && !r?.error && r?.ok !== false;
   b.textContent = ok ? '✅ Fait' : '⚠️ Pas fait'; toast(ok ? `✅ ${label} : fait` : `${label} : ${r?.error ?? 'refusé ou interrompu'}`);
   if (ok && id !== 'optimiser') proAction('msg', `✅ Fait automatiquement par le launcher : ${label}${r?.total ? ` (${r.total} points)` : ''}.`);
+}
+// Opti Pro express (≈ 15 min) : toutes les actions automatiques du plan, une seule validation
+async function proExpress(b) {
+  const ids = [...new Set((pro?.todo ?? []).map((x) => x.auto).filter((id) => PRO_DO[id] && !['usb', 'pilote_gpu', 'mesure'].includes(id)))];
+  if (!ids.length || !(await ui.confirm({ title: '⚡ Opti Pro express', text: 'Le launcher fait tout seul ce qui est automatique dans ton plan. Un point de restauration est créé avant les réglages système ; Windows peut demander l’autorisation administrateur.', list: ids.map((id) => PRO_DO[id][0]), ok: '⚡ Tout faire', icon: '⚡' }))) return;
+  b.disabled = true; const done = [];
+  for (const id of ids) { b.textContent = `⏳ ${PRO_DO[id][0]}…`; const r = await Promise.resolve(PRO_DO[id][1]()).catch((err) => ({ error: err.message })); if (r !== false && !r?.error && r?.ok !== false) done.push(PRO_DO[id][0]); }
+  b.disabled = false; b.textContent = '⚡ Express';
+  toast(`⚡ Express : ${done.length} / ${ids.length} fait${done.length > 1 ? 's' : ''}`);
+  if (done.length) proAction('msg', `⚡ Opti Pro express fait automatiquement par le launcher : ${done.join(', ')}.`);
 }
 $('proTicket').addEventListener('toggle', (e) => { if (e.target.classList?.contains('proplan')) proPlanOpen = e.target.open; }, true);
 // Question au technicien : dans une fenêtre à part pour garder la page concentrée sur l'étape
@@ -3538,7 +3565,7 @@ function renderRecos() {
 // ---------- Bibliothèque ----------
 const TITLES = { bibliotheque: 'Bibliothèque', jeux: 'Jeux', applis: 'Applications', favoris: 'Favoris', caches: '👁 Éléments masqués (clic droit › Afficher)' };
 function renderList() {
-  const col = state.list.collection && state.cols[state.list.collection];
+  const col = state.list.collection && (state.cols[state.list.collection] ?? moreUi?.genreCols()[state.list.collection]);
   // Une collection montre tous ses jeux (même non installés), sauf filtre choisi
   const list = col ? filterSort(state.items.filter((i) => col.items.includes(i.id)), { ...state.list, kind: 'tout', source: 'tout', installed: state.list.installed === 'tout' ? 'tous' : state.list.installed }) : filterSort(state.items, state.list);
   $('listTitle').textContent = col ? `📚 ${col.name}` : state.list.q ? `Résultats pour « ${state.list.q} »` : state.list.source !== 'tout' ? state.sources[state.list.source]?.label ?? 'Plateforme' : TITLES[state.list.kind === 'tout' ? 'bibliotheque' : state.list.kind] ?? 'Bibliothèque';
@@ -3801,10 +3828,11 @@ function openSheet(i) {
     ${d.description ? `<p>${esc(d.description)}</p>` : '<p class="fine">Pas de description disponible.</p>'}
     <p class="fine">${[d.developers?.[0] && `Studio : ${esc(d.developers[0])}`, d.released && `Sortie : ${esc(d.released)}`, d.score && `Metacritic : ${esc(d.score)}`, `Temps : ${hours(i.minutes)}`, `Taille : ${size(i.size)}`].filter(Boolean).join(' · ')}</p>
     ${d.screenshots?.length ? `<div class="shots">${d.screenshots.map((s) => `<img src="${esc(s)}" alt="">`).join('')}</div>` : ''}
-    <button type="button" class="btn" data-notebook="${esc(i.id)}">Ouvrir mon carnet ↗</button><div id="sxHist"></div><div id="sxTime"></div><div id="sxPatch"></div><div id="sxAch"></div><div id="sxCaps"></div>
+    <button type="button" class="btn" data-notebook="${esc(i.id)}">Ouvrir mon carnet ↗</button><div id="sxMore"></div><div id="sxHist"></div><div id="sxTime"></div><div id="sxPatch"></div><div id="sxAch"></div><div id="sxCaps"></div>
     <div class="acts"><button class="btn" data-close="1">Fermer</button></div>`;
   $('sheet').showModal();
   loadSheetExtras(i);
+  moreUi?.sheetMore(i);
 }
 
 // Fiche : durée pour finir, succès (les plus faciles d'abord), captures d'écran
@@ -4185,6 +4213,7 @@ const PREM_NAMES = { ia: 'History IA', opti: 'Opti Pro' };
 async function loadPremium(fresh = false) {
   prem = (await api.premiumGet?.(fresh).catch(() => null)) ?? prem ?? { ia: false, opti: false };
   if (prem.news?.length) premNews(prem.news[prem.news.length - 1]);
+  moreUi?.premExtras(prem);
   document.documentElement.classList.toggle('isprem', Boolean(prem.ia || prem.opti));
   document.documentElement.classList.toggle('noia', !prem.ia);
   $('aiState').textContent = prem.ia ? 'History IA · en ligne' : 'Réservé à History IA';
@@ -4222,22 +4251,22 @@ document.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click
   $('pdDone').hidden = true; $('premClaim').classList.remove('sent'); $('pdLink').hidden = false;
   $('premDlg').showModal(); $('premPaypal').focus();
   $('pdNote').textContent = '…';
-  $('pdCode').value = ''; $('pdGift').checked = false; refreshNote();
+  $('pdCode').value = ''; $('pdGift').checked = false; $('pdYear').checked = false; refreshNote();
 }));
 // Note (et prix) recalculés quand on met un code ami ou qu'on coche « cadeau »
 function refreshNote() {
   const pack = $('premClaim').dataset.pack; $('pdNote').textContent = '…';
-  api.premiumNote?.(pack, $('pdCode').value.trim(), $('pdGift').checked).then((r) => {
+  api.premiumNote?.(pack, $('pdCode').value.trim(), $('pdGift').checked, $('pdYear').checked).then((r) => {
     $('pdNote').textContent = r?.note ?? 'indisponible'; if (r?.error) toast(r.error);
     const price = r?.price ? `${r.price.replace('.', ',')} €` : PACK_INFO[pack][1]; $('pdPrice').textContent = price; $('pdAmount').textContent = price;
   }).catch(() => {});
 }
-$('pdCode').addEventListener('change', refreshNote); $('pdGift').addEventListener('change', refreshNote);
+$('pdCode').addEventListener('change', refreshNote); $('pdGift').addEventListener('change', refreshNote); $('pdYear').addEventListener('change', refreshNote);
 // 🎁 Cadeaux & codes : essai gratuit, code ami à partager, carte cadeau
 $('pgTrial').addEventListener('click', async () => { const r = await api.premiumTrial?.(); if (r?.ok) { toast('⭐ Essai activé : 3 jours de Pack Premium'); loadPremium(true); } else toast(r?.error ?? 'Essai indisponible'); });
 $('pgCopy').addEventListener('click', () => { if (/^AMI-/.test($('pgCode').textContent)) { copyText($('pgCode').textContent); toast('Code ami copié'); } });
 $('pgRedeemF').addEventListener('submit', async (e) => { e.preventDefault(); const r = await api.premiumRedeem?.($('pgRedeem').value.trim()); if (r?.ok) { toast(`🎁 ${PACK_INFO[r.pack]?.[0] ?? 'Premium'} activé`); $('pgRedeem').value = ''; loadPremium(true); } else toast(r?.error ?? 'Code invalide'); });
-$('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack));
+$('pdPay').addEventListener('click', () => api.premiumBuy?.($('premClaim').dataset.pack, $('pdPrice').textContent));
 $('pdCopyNote').addEventListener('click', () => { if (/^HIST-/.test($('pdNote').textContent)) { copyText($('pdNote').textContent); toast('Note copiée : colle-la dans le message du paiement'); } });
 $('pdClose').addEventListener('click', () => $('premDlg').close());
 $('pdOk').addEventListener('click', () => $('premDlg').close());
@@ -4263,7 +4292,7 @@ function premNews(n) {
   const name = PACK_INFO[n.pack]?.[0] ?? 'Premium';
   $('pdDoneT').textContent = n.ok ? `${name} est actif` : 'Paiement non validé';
   if (n.ok && n.gift) { $('pdDoneT').textContent = '🎁 Ta carte cadeau est prête'; $('pdDoneS').textContent = `Code à offrir : ${n.gift} (à entrer dans ⭐ Premium › Carte cadeau).`; copyText(n.gift); } else
-  $('pdDoneS').textContent = n.ok ? 'Ton paiement a été vérifié : profite de ton Premium, sans redémarrer.' : 'Le paiement n’a pas pu être vérifié. Si tu as bien payé, écris au support (bouton Support en haut).';
+  $('pdDoneS').textContent = n.ok ? `Merci 💛 Ton paiement est vérifié. Débloqué tout de suite : ${{ ia: 'assistant IA, outils IA, voix « Hey History »', opti: 'optimisation complète, ticket Opti Pro, suivi mensuel', pack: 'assistant et outils IA, optimisation complète, ticket Opti Pro' }[n.pack] ?? 'ton Premium'}.` : 'Le paiement n’a pas pu être vérifié. Si tu as bien payé, écris au support (bouton Support en haut).';
   $('pdDoneIco').classList.toggle('no', !n.ok); $('pdDoneIco').classList.remove('wait');
   const t = $('pdTrack').children; t[1].className = n.ok ? 'ok' : 'bad'; t[2].className = n.ok ? 'ok' : ''; $('pdStep2').textContent = n.ok ? 'Vérifié' : 'Refusé';
   $('premClaim').classList.add('sent'); $('pdDone').hidden = false;
@@ -4384,6 +4413,7 @@ $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActi
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
 personal = initPersonal(api, { items: () => state.items, card, go, toast });
 initSettings(api);
+moreUi = initMore(api, { $, esc, toast, ui, setModal, state, rich: richText, pro: () => pro, redraw: () => renderProTicket(false), setPro: (s) => { pro = s; renderPro(false); } });
 initQuickSupport(api, 'launcher');
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('ui-paused', document.hidden));
 const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxNotif').checked, sfxVol: Number($('sfxVol').value) }; window.sfx?.set({ on: c.sfxOn, notif: c.sfxNotif, vol: c.sfxVol / 100 }); api.setSettings(c); };
@@ -4902,7 +4932,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.40',
+    version: async () => '0.54.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

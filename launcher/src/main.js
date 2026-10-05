@@ -15,7 +15,7 @@ import { activeItems, gameExes, itemHistory, periodItems, periodStats, runningPa
 import { BOOST_APPS, HIGH_PERFORMANCE, activeScheme, boostPlan, closeApps, setScheme, tuneScript, untuneScript, CPU_SCRIPT, parseCpu, cpuHogs } from './core/boost.js';
 import { DRIVER_LINKS, gpuDrivers, heatAlerts, oldDriver, setQuiet, snapshot } from './core/monitor.js';
 import { cleanTarget, cleanTargets, measureTargets } from './core/cleanup.js';
-import { cleanOldGpuDrivers, oldGpuDrivers } from './core/optimize.js';
+import { cleanOldGpuDrivers, oldGpuDrivers, runElevated } from './core/optimize.js';
 import { CPUS, cpuOptions, cpuScore, diskOptions, gpuOptions, matchGpu, platformOf, ramOptions, simulate } from './core/upgrade.js';
 import { biosLink, ocPlan, personalPlan } from './core/oc.js';
 import { GAME_TWEAKS, applySystemTweaks, deepClean, diskSize, emptyRecycleBin, extraTargets, freeSpace, groupOf, healthScore, optimizeStorage, orphanGameFolders, recycleBinSize, removeOrphan, repairWindows, resetPlan, riskyLeft, scoreLabel, setStartup, setTweak, startupApps, steamJunk, systemTweakStates, tweakStates } from './core/optimize.js';
@@ -35,7 +35,7 @@ import { steamMatch } from './core/art.js';
 import { norm } from './core/sort.js';
 import { steamPath } from './core/library.js';
 import { epicActions, epicStoreSearch } from './core/epic.js';
-import { steamActions, steamDetails } from './core/steam.js';
+import { steamActions, steamDetails, steamReviews } from './core/steam.js';
 import { createStore } from './core/store.js';
 import { folderSize, safeGameDir, uninstallFiles } from './core/manage.js';
 import { applyAction, gameActions, graphicsPacks, revertEntries } from './core/gameopti.js';
@@ -45,7 +45,8 @@ import { friendLink, newDeals, steamFriends, wishlistDeals } from './core/social
 import { DiscordPresence, activityFor } from './core/discordRpc.js';
 import { translateNews, dominantColor, fortniteNews, playReminders, steamNews, todayGameMinutes, weeklyRecap } from './core/daily.js';
 import { badges, hourly, levelOf, rediscover, streakOf } from './core/progress.js';
-import { dnsTest, pingHosts } from './core/net.js';
+import { dnsTest, pingHosts, speedTest } from './core/net.js';
+import { CHECKS_PS, DNS_PAIRS, RESTORE_CLEAN_PS, addTempDay, dnsScript, dustDue, fpsAround, hwYear, logVersion, monthReport, parseArgs, psuAdvice, resaleValue, screenAdvice, toReinstall, parseChecks } from './core/more.js';
 import { checkReq, parseReq } from './core/reqs.js';
 import { gogGames, ubisoftGames } from './core/stores.js';
 import { demoActivity, demoBench, demoEvents, demoFriends, demoGameActs, demoItems, demoPerf, demoScan, demoTemps, demoWu } from './core/demo.js';
@@ -55,7 +56,7 @@ import { analyze, defenderRemove, defenderUpdate, defenderScan, parseDiag, pcDia
 import { VERSION as BENCH_VERSION, cpuBench, diskBench, ramBench, scores, tier } from './core/bench.js';
 import { isFresh, mergeBackup, pickBackup } from './core/backup.js';
 import { graphicsAdvice } from './core/graphics.js';
-import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap } from './core/friendsync.js';
+import { cardFor, canJoin, joinFor, lastFivemServer, newlyPlaying, playingCard, playingMap, scamCheck } from './core/friendsync.js';
 import { fivemDir, fivemServerInfo, fivemServerLogs, joinLink, scanFivem, serverCode, serverMinutes } from './core/fivem.js';
 import { achievementsOf, capturesOf, customItem, nameFromExe, scanXbox, timeToBeat, validAumid } from './core/extras.js';
 import { readRegistry } from './core/registry.js';
@@ -338,7 +339,10 @@ async function scan() {
       if (token) api('/api/compte/maj-jeu', { method: 'POST', token, body: { name: i.name, steamId: i.steamId ?? null, version: i.version } }).catch(() => {});
     }
     if (vers[i.id] !== i.version) { vers[i.id] = i.version; verChanged = true; }
+    (store.data.versionLog ??= {})[i.id] = logVersion(store.data.versionLog[i.id], i.version);
   }
+  // Jeux installés gardés (sauvegarde en ligne) : après un formatage, la liste « À réinstaller » les retrouve
+  if (!process.env.LAUNCHER_DEMO) { const keep = new Map((store.data.installedList ?? []).map((x) => [x.id, x])); for (const i of raw.filter((x) => x.installed && x.kind === 'game' && x.name)) keep.set(i.id, { id: i.id, name: i.name, source: i.source ?? null, steamId: i.steamId ?? null }); store.data.installedList = [...keep.values()].slice(-500); verChanged = true; }
   if (verChanged) store.save();
   await remerge();
   enrichInBackground().catch(() => {});
@@ -689,6 +693,9 @@ async function runDiag(force = false) {
   if (!raw) return { error: 'Diagnostic disponible sur Windows seulement.' };
   const data = { ...raw, ...analyze(raw, { snap }), snap, at: Date.now() };
   diagCache = { at: Date.now(), data };
+  // Nouveau PC (processeur ou carte graphique changés) : ticket Opti Pro proposé pour le régler
+  const sig = `${data.cpu?.name ?? ''}|${data.gpus?.[0]?.name ?? ''}`;
+  if (!demo && sig.length > 1 && sig !== store.data.hwSig) { if (store.data.hwSig) logNotif({ id: `newpc-${sig}`, kind: 'app', icon: '🆕', title: 'Nouveau matériel détecté', body: `${data.cpu?.name ?? ''} · ${data.gpus?.[0]?.name ?? ''} : ouvre Optimisation › Opti Pro, le technicien règle le BIOS, la RAM et Windows pour ce PC.` }); store.data.hwSig = sig; store.save(); }
   return data;
 }
 ipcMain.handle('pc:diag', (_e, force) => runDiag(Boolean(force)).catch((err) => ({ error: err.message })));
@@ -716,6 +723,8 @@ ipcMain.handle('pc:fix', async (_e, id) => {
     case 'av': return open('windowsdefender://threatsettings');
     case 'display': return open('ms-settings:display-advanced');
     case 'storage': return open('ms-settings:storagesense');
+    case 'recovery': return open('ms-settings:recovery');
+    case 'devmgmt': return shell.openPath(path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'devmgmt.msc')).then((e) => ({ ok: !e, opened: !e }));
     case 'driver': return driverInfo?.link ? openLink(driverInfo.link).then(() => ({ ok: true, opened: true }), () => ({ ok: false })) : open('ms-settings:windowsupdate');
     case 'reboot':
       if (!(await confirm('Redémarrer le PC ?', 'Enregistre ton travail : le PC redémarre dans 1 minute (annulable avec « shutdown /a »).'))) return { ok: false, cancelled: true };
@@ -843,7 +852,7 @@ ipcMain.handle('progress:get', async () => {
   }));
   return {
     level: levelOf(total), totalMinutes: total, streak: streakOf(act.days),
-    badges: badges({ items, days: act.days, sessions: act.sessions, friends, bench: (process.env.LAUNCHER_DEMO ? demoBench() : store.data.bench ?? [])[0] ?? null, health: diagCache?.data?.score ?? store.data.diagHistory?.at(-1)?.score ?? null, collections: Object.keys(store.data.collections ?? {}).length }),
+    badges: badges({ items, days: act.days, sessions: act.sessions, friends, bench: (process.env.LAUNCHER_DEMO ? demoBench() : store.data.bench ?? [])[0] ?? null, health: diagCache?.data?.score ?? store.data.diagHistory?.at(-1)?.score ?? null, collections: Object.keys(store.data.collections ?? {}).length, optiPro: Boolean(store.data.optiProDoneAt) }),
     hourly: hourly(act.days, 30), sessions: sess, rediscover: rediscover(items).map((i) => i.id),
   };
 });
@@ -949,6 +958,9 @@ setInterval(async () => {
   const list = store.data.temps ?? [];
   list.push({ t: Date.now(), cpu: snap.cpu?.usage ?? null, cpuT: snap.cpu?.temp ?? null, gpuT: snap.gpu?.temp ?? null, gpu: snap.gpu?.usage ?? null, ram: snap.ram ? Math.round((100 * snap.ram.used) / snap.ram.total) : null });
   store.data.temps = list.filter((x) => Date.now() - x.t < 24 * 3_600_000).slice(-1440);
+  store.data.tempDays = addTempDay(store.data.tempDays, { cpuT: snap.cpu?.temp, gpuT: snap.gpu?.temp });
+  const dust = dustDue(store.data.tempDays, store.data.dustAt ??= Date.now());
+  if (dust) logNotif({ id: `dust-${new Date().toISOString().slice(0, 7)}`, kind: 'heat', icon: '🧹', title: dust === 'hot' ? 'Ton processeur chauffe plus qu’avant' : 'Pense à dépoussiérer ton PC', body: dust === 'hot' ? '+8 °C en moyenne par rapport au début du mois : un coup de bombe à air dans les ventilateurs et filtres.' : 'Ça fait 6 mois : bombe à air dans les ventilateurs, filtres et radiateurs (PC éteint).' });
 }, 60_000);
 ipcMain.handle('pc:temps', () => (process.env.LAUNCHER_DEMO ? demoTemps() : store.data.temps ?? []));
 async function weeklyDiag() {
@@ -1324,7 +1336,7 @@ ipcMain.handle('pro:act', (_e, action, text = '', images = []) => (process.env.L
 // Liens des étapes : calculés ici (jamais une adresse venant de l'interface)
 ipcMain.handle('pro:link', async (_e, which) => { const p = await proPc(); const u = { bios: biosLink(p.board, p.cpu), occt: 'https://www.ocbase.com/download', nvidia: 'https://www.nvidia.com/fr-fr/drivers/', amd: 'https://www.amd.com/fr/support/download/drivers.html' }[which]; return u ? shell.openExternal(u).then(() => true, () => false) : false; });
 // Liens du ticket (boutons et réponses de l'IA) : seulement des sites officiels connus, en https
-const PRO_HOSTS = /^(?:[\w-]+\.)*(?:microsoft\.com|nvidia\.com|amd\.com|intel\.(?:com|fr)|msi\.com|asus\.com|gigabyte\.com|asrock\.com|ocbase\.com|hwinfo\.com|cpuid\.com|wagnardsoft\.com|capframex\.com|maxon\.net|testufo\.com|github\.com|discord\.com)$/i;
+const PRO_HOSTS = /^(?:[\w-]+\.)*(?:microsoft\.com|nvidia\.com|amd\.com|intel\.(?:com|fr)|msi\.com|asus\.com|gigabyte\.com|asrock\.com|ocbase\.com|hwinfo\.com|cpuid\.com|wagnardsoft\.com|capframex\.com|maxon\.net|testufo\.com|github\.com|zyko144\.github\.io|discord\.com)$/i;
 ipcMain.handle('pro:open', (_e, url) => { try { const u = new URL(String(url)); return u.protocol === 'https:' && PRO_HOSTS.test(u.hostname) ? shell.openExternal(u.href).then(() => true, () => false) : false; } catch { return false; } });
 // Outil Microsoft de création de clé USB : téléchargé en 1 clic, signature Microsoft vérifiée, puis lancé
 ipcMain.handle('pro:usb', async () => {
@@ -1383,6 +1395,7 @@ const SHADER_CACHES = ['d3d', 'nvdx', 'nvgl', 'amddx', 'amdvk', 'amd-dxc'];
 // launchers). Jamais les navigateurs, les caches de shaders, les jeux ni les fichiers perso. Petit rapport à la fin.
 setInterval(async () => {
   if (store.data.settings.optiAuto !== true || Date.now() - (store.data.optiAutoLast ?? 0) < 7 * 86_400_000 || currentSession()) return;
+  if (store.data.settings.optiNight && (new Date().getHours() < 2 || new Date().getHours() > 7 || powerMonitor.getSystemIdleTime() < 600)) return; // la nuit, PC inutilisé
   const scan = await optiScan().catch(() => null);
   if (!scan) return;
   const got = [];
@@ -1410,6 +1423,9 @@ let driverInfo = null;
 async function checkDriver() {
   const drivers = await gpuDrivers().catch(() => []);
   driverInfo = oldDriver(drivers);
+  const ver = (drivers.find((d) => d.vendor !== 'intel') ?? drivers[0])?.version ?? null;
+  if (ver && store.data.gpuDriverVer && ver !== store.data.gpuDriverVer) logNotif({ id: `drv-${ver}`, kind: 'app', icon: '🧩', title: 'Nouveau pilote graphique installé', body: 'Les premières parties peuvent saccader quelques minutes : les jeux recompilent leurs shaders. C’est normal, ça ne revient pas.' });
+  if (ver && ver !== store.data.gpuDriverVer) { store.data.gpuDriverVer = ver; store.save(); }
   // NVIDIA : comparaison avec le dernier pilote Game Ready publié (notes de version + lien direct)
   const nv = drivers.find((d) => d.vendor === 'nvidia');
   const latest = nv ? await nvidiaLatest(nv.name).catch(() => null) : null;
@@ -1689,7 +1705,7 @@ function startDirect(item, exe) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(exe, [], { cwd: path.dirname(exe), env: directEnv(item), detached: true, stdio: 'ignore' });
+      child = spawn(exe, parseArgs(store.data.items[item.id]?.args), { cwd: path.dirname(exe), env: directEnv(item), detached: true, stdio: 'ignore' });
     } catch { resolve(false); return; }
     child.unref();
     const timer = setTimeout(() => resolve(true), 8000);
@@ -1767,6 +1783,7 @@ async function doAction(id, action) {
         const exe = item.exe ?? await findExe(item.installDir);
         if (!exe) continue;
         if (!item.source || !['steam', 'epic'].includes(item.source)) {
+          if (store.data.items[item.id]?.args) { spawn(exe, parseArgs(store.data.items[item.id].args), { cwd: path.dirname(exe), detached: true, stdio: 'ignore' }).on('error', () => {}).unref(); gameMode(item); return { ok: true }; }
           const err = await shell.openPath(exe);
           if (err) throw new Error(err);
           gameMode(item);
@@ -1776,7 +1793,7 @@ async function doAction(id, action) {
         remember(item.id, 'client'); // ce jeu a besoin de sa plateforme : on ne réessaiera plus en direct
         continue;
       }
-      if (item.source === 'steam' && await runSilentSteam(['-applaunch', item.steamId])) { gameMode(item); return { ok: true }; }
+      if (item.source === 'steam' && await runSilentSteam(['-applaunch', item.steamId, ...parseArgs(store.data.items[item.id]?.args)])) { gameMode(item); return { ok: true }; }
       if (item.source === 'epic') return openLink(epicActions(item.epicKey).launch).then(() => { gameMode(item); return { ok: true }; });
     }
     throw new Error('exécutable introuvable');
@@ -1930,6 +1947,8 @@ ipcMain.handle('item:set', (_e, id, patch) => {
   const entry = (store.data.items[String(id)] ??= {});
   if ('favorite' in patch) entry.favorite = Boolean(patch.favorite);
   if ('hidden' in patch) entry.hidden = Boolean(patch.hidden);
+  if ('args' in patch) entry.args = parseArgs(patch.args).length ? String(patch.args).replace(/[\r\n]/g, ' ').slice(0, 300) : undefined;
+  if ('mergeWith' in patch) { entry.mergeWith = patch.mergeWith ? String(patch.mergeWith).slice(0, 120) : undefined; remerge().then(() => send('lib:update', library())).catch(() => {}); }
   store.save();
   return entry;
 });
@@ -2140,6 +2159,7 @@ async function checkDeals(notify = true) {
       n.show();
     }
   }
+  for (const g of deals.released ?? []) logNotif({ id: `sortie-${g.appid}`, kind: 'app', icon: '🚀', title: `${g.name} est sorti !`, body: 'Un jeu de ta liste de souhaits Steam vient de sortir.' });
   for (const d of deals) seen[d.appid] = d.pct;
   for (const id of Object.keys(seen)) if (!deals.some((d) => d.appid === id)) delete seen[id]; // promo finie : la prochaine sera annoncée
   store.data.deals = { at: Date.now(), list: deals };
@@ -2542,7 +2562,7 @@ ipcMain.handle('chat:delete', (_e, fid, id) => social('/api/compte/messages/supp
 ipcMain.handle('group:thread', (_e, gid) => social(`/api/compte/groupes/messages?id=${encodeURIComponent(CIDM(gid))}`));
 ipcMain.handle('group:send', (_e, gid, text, cid, extra) => sendReliable('/api/compte/groupes/messages', { id: CIDM(gid), text: String(text ?? '').slice(0, 500), cid: CIDM(cid) || undefined, ...extraOf(extra) }));
 ipcMain.handle('group:delete', (_e, gid, id) => social('/api/compte/groupes/messages/supprimer', { id: CIDM(gid), msg: CIDM(id) }));
-ipcMain.handle('friend:invite', (_e, fid, type) => social('/api/compte/inviter', { to: FID(fid), type: type === 'invite' ? 'invite' : 'ask', ...(type === 'invite' ? { game: currentSession()?.name ?? undefined } : {}) }));
+ipcMain.handle('friend:invite', (_e, fid, type, game) => social('/api/compte/inviter', { to: FID(fid), type: type === 'invite' ? 'invite' : 'ask', ...(type === 'invite' ? { game: (items.find((i) => i.name === game)?.name ?? currentSession()?.name) || undefined } : {}) }));
 ipcMain.handle('friend:join', async (_e, fid) => {
   const f = (socialLive?.amis ?? (await social('/api/compte/amis')).amis ?? []).find((a) => a.id === FID(fid));
   if (!f?.playing) return { ok: false, error: 'Cet ami ne joue pas en ce moment.' };
@@ -3022,15 +3042,16 @@ ipcMain.handle('premium:get', async (_e, fresh) => {
   delete premCache.v.news; // réponse du chef montrée une seule fois
   return p;
 });
-ipcMain.handle('premium:buy', (_e, pack) => {
+ipcMain.handle('premium:buy', (_e, pack, price) => {
   if (!['ia', 'opti', 'pack'].includes(pack)) return { ok: false };
-  return shell.openExternal(`https://paypal.me/zyko921/${{ ia: '2.49', opti: '2.49', pack: '3.99' }[pack]}EUR`).then(() => ({ ok: true }));
+  const p = String(price ?? '').replace(',', '.').match(/^\d{1,3}\.\d{2}/)?.[0] ?? { ia: '2.49', opti: '2.49', pack: '3.99' }[pack]; // prix calculé par le serveur (promo, code ami, 1 an)
+  return shell.openExternal(`https://paypal.me/zyko921/${p}EUR`).then(() => ({ ok: true }));
 });
 // « J'ai payé » : le serveur poste la demande dans #paiement-verif ; le Premium arrive quand le chef valide
-ipcMain.handle('premium:note', (_e, pack, code = '', gift = false) => {
+ipcMain.handle('premium:note', (_e, pack, code = '', gift = false, annual = false) => {
   const token = secret('account');
   if (!token) return { error: 'Connecte-toi à ton compte History (Paramètres › Compte) pour acheter.' };
-  return api('/api/compte/premium/note', { method: 'POST', token, body: { pack: String(pack), code: String(code).slice(0, 20), gift: Boolean(gift) } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
+  return api('/api/compte/premium/note', { method: 'POST', token, body: { pack: String(pack), code: String(code).slice(0, 20), gift: Boolean(gift), annual: Boolean(annual) } }).catch(() => ({ error: 'Serveur injoignable, réessaie dans une minute.' }));
 });
 // Essai gratuit 3 jours et carte cadeau : le serveur active, l'appli relit le Premium
 ipcMain.handle('premium:trial', async () => { const token = secret('account'); if (!token) return { error: 'Connecte-toi à ton compte History.' }; const r = await api('/api/compte/premium/essai', { method: 'POST', token, body: {} }).catch(() => ({ error: 'Serveur injoignable.' })); premCache.at = 0; return r; });
@@ -3615,7 +3636,7 @@ async function sessionEnd() {
   const v = verdict(stats?.error ? null : stats, s.samples);
   const why = stutterCause(s.samples, stats?.stutters);
   const tMax = (k) => { const v = s.samples.map((x) => x[k]).filter((x) => x > 0); return v.length ? Math.max(...v) : null; };
-  const rec = { at: Date.now(), minutes: Math.round(minutes), gpuTmax: tMax('gpuT'), cpuTmax: tMax('cpuT'), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), ...(why ? { stutterWhy: why } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound };
+  const rec = { at: Date.now(), minutes: Math.round(minutes), gpuTmax: tMax('gpuT'), cpuTmax: tMax('cpuT'), boost: (store.data.boostedAt?.[s.id] ?? 0) >= s.start - 180_000, ...(stats && !stats.error ? { avg: stats.avg, low1: stats.low1, stutters: stats.stutters, cpuBound: stats.cpuBound } : {}), ...(why ? { stutterWhy: why } : {}), gpuAvg: v.gpuAvg, coreMax: v.coreMax, bound: v.bound, driver: store.data.gpuDriverVer ?? null, os: os.release() };
   ((store.data.perf ??= {})[s.id] ??= []).push(rec);
   store.data.perf[s.id] = store.data.perf[s.id].slice(-60);
   store.save();
@@ -3753,6 +3774,154 @@ ipcMain.on('mini:action', (_e, id, action) => {
   if (action === 'open') return showWindow();
   if (['launch', 'update'].includes(action) && items.some((i) => i.id === id)) doAction(String(id), action).catch(() => {});
 });
+// ---------- 0.54 : vérifications du PC, revente, réseau, tests, journal, réinstallation ----------
+const DEMO_CHECKS = { video: [{ Name: 'NVIDIA GeForce RTX 4070', CurrentRefreshRate: 60, MaxRefreshRate: 165 }], pnp: [], secure: 0, tpm: 'TPM 2.0', mem: [{ DeviceLocator: 'DIMM_A2' }, { DeviceLocator: 'DIMM_B2' }], bios: '20230412000000.000000+000', pcie: '16, 16', vols: [{ DriveLetter: 'C', SizeRemaining: 22e9, Size: 1000e9 }], bsod: ['0x00000116'] };
+ipcMain.handle('more:checks', async () => {
+  const j = process.env.LAUNCHER_DEMO ? DEMO_CHECKS : process.platform === 'win32'
+    ? await new Promise((r) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', CHECKS_PS], { windowsHide: true, timeout: 60_000, maxBuffer: 4e6 }, (_e, out) => { try { r(JSON.parse(out)); } catch { r(null); } }))
+    : null;
+  if (!j) return { error: 'Vérifications disponibles sur Windows.' };
+  const diag = (await runDiag().catch(() => null)) ?? {};
+  j.batFull = diag.battery?.full; j.batDesign = diag.battery?.design;
+  if (j.batFull) { const d = new Date().toISOString().slice(0, 10); const log = (store.data.batteryLog ??= []); if (log.at(-1)?.d !== d) { log.push({ d, full: j.batFull, design: j.batDesign }); store.data.batteryLog = log.slice(-120); store.save(); } }
+  return { list: parseChecks(j, diag), at: Date.now() };
+});
+ipcMain.handle('more:pc', async () => {
+  const d = (await runDiag().catch(() => null)) ?? {};
+  const cpu = d.cpu?.name ?? '', gpu = d.gpus?.[0]?.name ?? '', ramGb = d.ramGb ?? null, diskGb = Math.round((d.disks ?? []).reduce((n, x) => n + (x.size ?? 0), 0) / 1e9) || 512;
+  const perf = Object.entries(store.data.perf ?? {}).map(([id, r]) => ({ name: items.find((i) => i.id === id)?.name, driver: fpsAround(r, 'driver'), os: fpsAround(r, 'os') })).filter((x) => x.name && (x.driver || x.os)).slice(0, 6);
+  return { cpu, gpu, cpuYear: hwYear(cpu), gpuYear: hwYear(gpu), resale: resaleValue({ cpu, gpu, ramGb, diskGb }), psu: psuAdvice(gpu, cpu), screen: screenAdvice(gpu), battery: store.data.batteryLog ?? [], tempDays: store.data.tempDays ?? {}, dust: dustDue(store.data.tempDays, store.data.dustAt), dustAt: store.data.dustAt ?? null, perf, laptop: Boolean(d.laptop ?? d.battery) };
+});
+ipcMain.handle('more:dustDone', () => { store.data.dustAt = Date.now(); store.save(); return true; });
+ipcMain.handle('more:speed', () => (process.env.LAUNCHER_DEMO ? { down: 412, up: 48 } : speedTest((u, o) => net.fetch(u, o)).catch((err) => ({ error: err.message }))));
+ipcMain.handle('more:dns', async (_e, name) => {
+  const n = Object.hasOwn(DNS_PAIRS, name) ? name : 'auto';
+  if (!(await confirm(n === 'auto' ? 'Remettre le DNS automatique ?' : `Utiliser le DNS ${n} ?`, n === 'auto' ? 'Ta carte réseau reprend le DNS donné par ta box.' : `Ta carte réseau utilisera ${DNS_PAIRS[n].join(' et ')}. Tu peux revenir au DNS automatique à tout moment ici.`))) return { ok: false, cancelled: true };
+  return { ok: await runElevated(dnsScript(n)) };
+});
+ipcMain.handle('more:restoreClean', async () => {
+  if (!(await confirm('Supprimer les anciens points de restauration ?', 'Le plus récent est gardé. Les anciens prennent souvent plusieurs Go.'))) return { ok: false, cancelled: true };
+  return { ok: await runElevated(RESTORE_CLEAN_PS) };
+});
+ipcMain.handle('more:memtest', async () => {
+  if (!(await confirm('Tester la mémoire (RAM) ?', 'Outil officiel de Windows : il te demande de redémarrer, le test dure 10 à 20 minutes avant Windows, et le résultat s’affiche à la reconnexion.'))) return { ok: false, cancelled: true };
+  spawn(path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'mdsched.exe'), [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  return { ok: true };
+});
+let stressing = false;
+ipcMain.handle('more:stress', async (_e, minutes) => {
+  if (stressing) return { error: 'Test déjà en cours.' };
+  const ms = Math.min(10, Math.max(1, Number(minutes) || 10)) * 60_000; stressing = true;
+  const temps = []; const t = setInterval(() => snapshot().then((x) => { temps.push(x?.cpu?.temp ?? null); send('more:stress', { pct: Math.min(99, Math.round((temps.length * 5000 * 100) / ms)), temp: x?.cpu?.temp ?? null }); }).catch(() => {}), 5000);
+  try {
+    const r = await cpuBench({ ms: 300, sustainMs: ms });
+    const v = temps.filter((x) => x > 0), max = v.length ? Math.max(...v) : null;
+    return { stability: r.sustain?.stability ?? null, max, ok: (r.sustain?.stability ?? 100) >= 90 && (max == null || max < 95) };
+  } finally { clearInterval(t); stressing = false; }
+});
+ipcMain.handle('more:journal', () => (store.data.optiJournal ?? []).map((j, i) => ({ i, at: j.at ?? null, label: (j.done ?? []).slice(0, 3).map((x) => x.label ?? x).join(', ') || 'Optimisation', n: (j.entries?.length ?? 0) + (j.tweaks?.length ?? 0) })));
+ipcMain.handle('more:undoOne', async (_e, i) => {
+  const list = store.data.optiJournal ?? [], j = list[Number(i)];
+  if (!j || !(await confirm('Annuler cette optimisation ?', 'Seulement celle-ci : les fichiers et réglages qu’elle a modifiés reviennent comme avant.'))) return { ok: false };
+  await revertEntries(j.entries ?? []).catch((err) => fatalLog(err));
+  for (const t of j.tweaks ?? []) await setTweak(t.id, t.was).catch(() => {});
+  store.data.optiJournal = list.filter((_, n) => n !== Number(i)); store.save();
+  return { ok: true };
+});
+ipcMain.handle('more:item', async (_e, id) => {
+  const it = items.find((i) => i.id === String(id));
+  if (!it) return null;
+  const appid = it.steamId ?? it.matchSteamId;
+  return { args: store.data.items[it.id]?.args ?? '', mergeWith: store.data.items[it.id]?.mergeWith ?? '', versions: store.data.versionLog?.[it.id] ?? [], reviews: appid ? await steamReviews(appid).catch(() => null) : null, trailer: it.details?.trailer ?? null, fps: { driver: fpsAround(store.data.perf?.[it.id], 'driver'), os: fpsAround(store.data.perf?.[it.id], 'os') } };
+});
+// Genres des jeux installés (collections automatiques) : fiche Steam lue doucement en arrière-plan, 1 jeu toutes les 3 s
+async function detailsInBackground() {
+  const todo = items.filter((x) => x.kind === 'game' && x.installed && (x.steamId ?? x.matchSteamId) && !store.data.art?.[x.id]?.details).slice(0, 40);
+  for (const i of todo) {
+    const d = await steamDetails(i.steamId ?? i.matchSteamId).catch(() => null);
+    if (d) (store.data.art ??= {})[i.id] = { ...(store.data.art[i.id] ?? {}), details: d };
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  if (todo.length) { store.save(); await remerge(); send('lib:update', library()); }
+}
+setTimeout(() => detailsInBackground().catch(() => {}), process.env.LAUNCHER_DEMO ? 1e9 : 5 * 60_000);
+// Rapport du mois (le 1er) : heures de jeu, jeu préféré, santé, chauffe
+setInterval(() => {
+  const r = monthReport({ days: store.data.days, items, diagHistory: store.data.diagHistory, tempDays: store.data.tempDays });
+  if (!r.hours || store.data.monthReported === r.month) return;
+  store.data.monthReported = r.month; store.save();
+  const label = new Date(`${r.month}-15`).toLocaleDateString('fr-FR', { month: 'long' });
+  logNotif({ id: `mois-${r.month}`, kind: 'app', icon: '📅', title: `Ton mois de ${label}`, body: [`${r.hours} h de jeu`, r.top && `surtout ${r.top.name} (${r.top.hours} h)`, r.score != null && `santé du PC ${r.score}/100`, r.cpuMax && `processeur au max ${r.cpuMax} °C`].filter(Boolean).join(' · ') });
+}, 3 * 3_600_000);
+ipcMain.handle('more:proCard', (_e, at) => {
+  if (process.env.LAUNCHER_DEMO) return { before: 61, after: 92, fps: { name: 'Fortnite', before: 144, after: 212 } };
+  const t = Number(at) || 0, hist = store.data.diagHistory ?? [];
+  const avg = (l) => Math.round(l.slice(-5).reduce((n, r) => n + r.avg, 0) / Math.min(5, l.length));
+  let fps = null;
+  for (const [id, recs] of Object.entries(store.data.perf ?? {})) {
+    const b = recs.filter((r) => r.avg && r.at < t), a = recs.filter((r) => r.avg && r.at > t);
+    if (b.length && a.length && (!fps || b.length + a.length > fps.n)) fps = { name: items.find((i) => i.id === id)?.name ?? 'Jeu', before: avg(b), after: avg(a), n: b.length + a.length };
+  }
+  return { before: [...hist].reverse().find((x) => x.at < t)?.score ?? null, after: diagCache?.data?.score ?? hist.at(-1)?.score ?? null, fps };
+});
+// Ticket Opti Pro réussi : badge du profil + suivi automatique chaque mois
+ipcMain.handle('more:proDone', () => { if (!store.data.optiProDoneAt) { store.data.optiProDoneAt = Date.now(); store.data.optiProScore = diagCache?.data?.score ?? null; store.save(); } return true; });
+setInterval(async () => {
+  const done = store.data.optiProDoneAt; if (!done || Date.now() - (store.data.optiRecheckAt ?? done) < 30 * 86_400_000 || currentSession()) return;
+  store.data.optiRecheckAt = Date.now(); store.save();
+  const d = await runDiag(true).catch(() => null); if (!d?.score) return;
+  const was = store.data.optiProScore, drop = was != null && d.score < was - 10;
+  logNotif({ id: `recheck-${new Date().toISOString().slice(0, 7)}`, kind: 'app', icon: drop ? '⚠️' : '✅', title: 'Suivi Opti Pro du mois', body: `Santé du PC : ${d.score}/100${was != null ? ` (fin du ticket : ${was})` : ''}. ${drop ? 'Ça a baissé : rouvre un ticket Opti Pro ou lance Optimisation.' : 'Ton PC garde ses réglages.'}` });
+}, 6 * 3_600_000);
+// ---------- Outils IA : erreur, capture, réglages, guide, panne, plantage, patch notes, comparateur, arnaque ----------
+// Mémoire de l'IA : ton PC, tes jeux et tes dernières questions (gardées sur ce PC), ajoutés à chaque demande
+function aiMemory() {
+  const d = diagCache?.data ?? {};
+  const pc = [d.cpu?.name, d.gpus?.map((g) => g.name).join(' + '), d.ramGb && `${d.ramGb} Go RAM ${d.ram?.[0]?.type ?? ''}`, d.board && `carte mère ${d.board}`, d.os?.name].filter(Boolean).join(' · ');
+  const games = [...items].filter((i) => i.kind === 'game').sort((a, b) => b.minutes - a.minutes).slice(0, 12).map((i) => `${i.name} (${Math.round(i.minutes / 60)} h)`).join(', ');
+  const notes = (store.data.aiMemory ?? []).slice(-8).map((n) => `- ${n}`).join('\n');
+  return `MÉMOIRE (ce que tu sais déjà de ce joueur)\nPC : ${pc || store.data.aiPc || 'inconnu'}\nJeux les plus joués : ${games || 'inconnus'}${notes ? `\nQuestions précédentes :\n${notes}` : ''}`;
+}
+const AI_TOOLS = {
+  erreur: [true, (x) => `Message d'erreur (jeu, launcher ou Windows) :\n${x.text}\n\nExplique ce qu'il veut dire puis donne la solution pas à pas, de la plus simple à la plus poussée.`],
+  capture: [false, (x) => `Lis la capture d'écran jointe (message d'erreur, réglage ou écran de jeu)${x.text ? `. Question : ${x.text}` : ''}. Recopie le message important, explique-le, puis donne la solution pas à pas.`],
+  reglages: [true, (x, g) => `Meilleurs réglages graphiques de ${g?.name ?? x.text} pour CE PC (FPS stables et lisibilité en priorité) : liste « réglage → valeur », puis le FPS moyen attendu et ce qu'il faut baisser en premier si ça rame.`],
+  guide: [true, (x, g) => `Question sur ${g?.name ?? 'un jeu'} : ${x.text}\nRéponds comme un guide de jeu fiable et à jour (étapes, emplacements, astuces).`],
+  panne: [false, (x, g, ctx) => `Voici l'état de santé mesuré de ce PC :\n${ctx}\n\nY a-t-il une panne probable bientôt ? Classe les risques (élevé / moyen / faible), explique chaque signe simplement et dis quoi faire avant que ça casse. Si tout va bien, dis-le.`],
+  crash: [true, (x, g, ctx) => `Le jeu ${g?.name ?? ''} plante. Plantages enregistrés par Windows :\n${ctx || 'aucun détail enregistré'}\n${x.text ? `Ce que dit le joueur : ${x.text}\n` : ''}Diagnostique la cause la plus probable et donne la solution pas à pas.`],
+  patch: [true, (x, g, ctx) => `Résume en 3 lignes maximum, simples et concrètes, les dernières notes de mise à jour de ${g?.name ?? 'ce jeu'} :\n${ctx || '(cherche-les sur le web)'}`],
+  comparer: [true, (x) => `Compare pour un joueur : « ${x.a} » contre « ${x.b} ». Performances en jeu, prix actuel, consommation, compatibilité avec CE PC (carte mère, alimentation, goulot), puis un verdict clair.`],
+  arnaque: [false, (x) => `Message reçu (Discord, Steam, mail…) :\n${x.text}\n\nEst-ce une arnaque ? Commence par « 🚨 Arnaque », « ⚠️ Suspect » ou « ✅ Rien d'anormal », puis explique pourquoi en 2-3 points.`],
+};
+ipcMain.handle('more:ai', async (_e, kind, x = {}) => {
+  const tool = AI_TOOLS[kind]; if (!tool) return { error: 'Outil inconnu.' };
+  const ai = await getAi(); if (!ai) return { error: (await premium()).ia ? 'IA injoignable : connecte-toi à ton compte History.' : 'Les outils IA font partie de ⭐ History IA.', premium: !(await premium()).ia };
+  const g = x.game ? items.find((i) => i.id === String(x.game)) : null;
+  let ctx = '';
+  if (kind === 'panne') {
+    const d = await runDiag().catch(() => ({}));
+    ctx = [...(d.disks ?? []).map((k) => `Disque ${k.name} : santé ${k.health ?? '?'}, usure ${k.wear ?? '?'} %, ${k.temp ?? '?'} °C, erreurs lecture ${k.readErrors ?? 0} / écriture ${k.writeErrors ?? 0}, ${k.hours ?? '?'} h allumé`),
+      `Températures max par jour (30 j) : ${Object.entries(store.data.tempDays ?? {}).map(([k, v]) => `${k.slice(5)} CPU ${v.cpu ?? '?'} GPU ${v.gpu ?? '?'}`).join(' ; ') || 'pas encore'}`,
+      d.battery && `Batterie : ${Math.round((100 * d.battery.full) / d.battery.design)} % de la capacité d'origine`, ...(d.advice ?? []).slice(0, 6).map((a) => `Point relevé : ${a.title}`)].filter(Boolean).join('\n');
+  }
+  if (kind === 'crash' && g) ctx = (store.data.crashes?.[g.id] ?? []).slice(-5).map((c) => `${new Date(c.at).toLocaleString('fr-FR')} : ${c.cause}${c.module ? ` (module ${c.module})` : ''}${c.code ? ` code ${c.code}` : ''}`).join('\n');
+  if (kind === 'patch' && g?.steamId) ctx = (await steamNews(g.steamId, 2).catch(() => [])).map((n) => `${n.title}\n${String(n.contents ?? n.text ?? '').slice(0, 3000)}`).join('\n\n');
+  if (kind === 'arnaque') { const local = scamCheck(x.text); if (local) ctx = local; }
+  const image = kind === 'capture' ? String(x.image ?? '').match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/) : null;
+  if (kind === 'capture' && !image) return { error: 'Choisis une capture d’écran (PNG ou JPEG).' };
+  const beginner = store.data.settings.aiBeginner ? '\nMODE DÉBUTANT : explique comme à quelqu’un qui n’y connaît rien, mots simples, chaque terme technique expliqué entre parenthèses, étapes numérotées très courtes.' : '';
+  try {
+    const reply = await ai.ask({ web: tool[0], image: image ? { mime: image[1], data: image[2] } : null,
+      system: `Tu es l'IA de History Launcher, experte en jeux PC et en matériel. Français, tutoiement, réponses claires en Markdown (titres courts, listes), sans blabla. N'invente rien : si tu n'es pas sûr, dis-le.${beginner}\n\n${aiMemory()}`,
+      text: tool[1](x, g, ctx) });
+    store.data.aiMemory = [...(store.data.aiMemory ?? []), `${kind}${g ? ` (${g.name})` : ''} : ${String(x.text ?? x.a ?? '').slice(0, 80)}`].slice(-20); store.save();
+    return { reply: kind === 'arnaque' && ctx ? `> 🔎 Vérification locale : ${ctx}\n\n${reply}` : reply };
+  } catch (err) { return { error: `IA injoignable (${err.message}).` }; }
+});
+ipcMain.handle('more:aiBeginner', (_e, on) => { if (on !== undefined) { store.data.settings.aiBeginner = Boolean(on); store.save(); } return store.data.settings.aiBeginner === true; });
+ipcMain.handle('more:aiForget', () => { store.data.aiMemory = []; store.save(); return true; });
+ipcMain.handle('more:lfg', (_e, q = '', post = null) => (post ? social('/api/compte/lfg', { jeu: String(post.jeu ?? ''), rang: String(post.rang ?? ''), texte: String(post.texte ?? ''), stop: Boolean(post.stop) }) : social(`/api/compte/lfg?jeu=${encodeURIComponent(String(q).slice(0, 60))}`)).catch((err) => ({ error: err.message })));
+ipcMain.handle('more:reinstall', () => toReinstall(store.data.installedList ?? [], items));
 // ---------- 25. Widget sur le bureau : températures, FPS, amis ----------
 let widget = null;
 let widgetTimer = null;

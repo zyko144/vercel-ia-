@@ -514,14 +514,14 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
     if (route === 'GET /api/compte/premium') {
       const compte = await me(token);
       if (!compte) return send(res, 401, { error: 'Non connecté.' });
-      const { premiumOf, PACKS, payLink, takeNews, friendCode, trialUsed } = await import('./launcherPremium.js');
-      return send(res, 200, { ...(await premiumOf(compte)), news: await takeNews(compte.id), packs: PACKS, code: friendCode(compte.id), trialUsed: await trialUsed(compte.id), pay: Object.fromEntries(Object.keys(PACKS).map((k) => [k, payLink(k, compte.id)])) });
+      const { premiumOf, PACKS, payLink, takeNews, friendCode, trialUsed, promoOf, sponsorStats } = await import('./launcherPremium.js');
+      return send(res, 200, { ...(await premiumOf(compte)), news: await takeNews(compte.id), packs: PACKS, promo: promoOf(), parrain: await sponsorStats(compte.id), code: friendCode(compte.id), trialUsed: await trialUsed(compte.id), pay: Object.fromEntries(Object.keys(PACKS).map((k) => [k, payLink(k, compte.id)])) });
     }
     if (route === 'POST /api/compte/premium/note') {
       const compte = await me(token);
       if (!compte) return send(res, 401, { error: 'Connecte-toi à ton compte History.' });
       const b = await readJson(req);
-      const r = await (await import('./launcherPremium.js')).paymentNote(compte, String(b.pack ?? ''), { code: String(b.code ?? '').slice(0, 20), gift: Boolean(b.gift) });
+      const r = await (await import('./launcherPremium.js')).paymentNote(compte, String(b.pack ?? ''), { code: String(b.code ?? '').slice(0, 20), gift: Boolean(b.gift), annual: Boolean(b.annual) });
       return send(res, r.status, r);
     }
     if (route === 'POST /api/compte/premium/essai' || route === 'POST /api/compte/premium/cadeau') {
@@ -543,7 +543,7 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const { handleLauncherAi } = await import('./launcherAi.js');
       return await handleLauncherAi(req, res, { readJson, send });
     }
-    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel|benchmark|groupes|fps|alertes|partage|fichier|discord\/clip)(\/|$)/.test(url.pathname)) {
+    if (/^\/api\/compte\/(amis|presence|soirees|boite|messages|inviter|appel|benchmark|groupes|fps|alertes|partage|fichier|discord\/clip|clip|lfg)(\/|$)/.test(url.pathname)) {
       const { handleSocialApi } = await import('./launcherSocial.js');
       return await handleSocialApi(req, res, url, { readJson, readBinary, send });
     }

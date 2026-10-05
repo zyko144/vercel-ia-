@@ -143,7 +143,7 @@ export function merge(items, store, localUrls = null, timeOptions = {}) {
       ...i, name: i.name ?? extra.name ?? realName(store.names?.[i.steamId]),
       art, details: found.details ?? i.details ?? null, matchSteamId: found.steamId ?? i.steamId ?? null,
       minutes: t.minutes, lastPlayed: t.lastPlayed, recent2w: t.recent ?? null,
-      favorite: Boolean(extra.favorite), hidden: Boolean(extra.hidden),
+      favorite: Boolean(extra.favorite), hidden: Boolean(extra.hidden), ...(extra.mergeWith ? { mergeWith: extra.mergeWith } : {}),
     };
   }));
 }
@@ -157,7 +157,7 @@ function dedupe(list) {
   const out = [];
   for (const i of list) {
     if (i.kind !== 'game') { out.push(i); continue; }
-    const key = norm(i.name);
+    const key = norm(i.mergeWith ?? i.name); // « Fusionner avec… » : deux fiches du même jeu aux noms différents
     if (!groups.has(key)) { groups.set(key, [i]); out.push(key); } else groups.get(key).push(i);
   }
   return out.map((x) => {

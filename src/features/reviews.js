@@ -102,5 +102,7 @@ export async function handleReviewsApi(req, res, url, { readJson, send, clientIp
     entry = { id: randomUUID(), name: clean(body.name, 32) || 'Anonyme', stars, comment, img: null, at: Date.now(), app: 'site' };
   }
   await saveReview(app, entry);
-  return send(res, 200, { ok: true });
+  // Merci pour l'avis : 3 jours de Pack Premium, une fois par compte, quelle que soit la note (un avis récompensé seulement s'il est positif serait trompeur)
+  const thanks = compte ? await (await import('./launcherPremium.js')).reviewReward(compte.id).catch(() => null) : null;
+  return send(res, 200, { ok: true, reward: thanks });
 }

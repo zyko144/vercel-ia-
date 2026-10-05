@@ -38,7 +38,7 @@
 <div id="ambient" aria-hidden="true"></div>
 <main id="main">
   <section class="view on" id="v-home"></section>
-  <section class="view" id="v-list"><div class="list-head"><h1 id="listTitle">Mes clips</h1><button type="button" class="btn sm" id="bestOfBtn" title="Assemble tes meilleurs clips des 7 derniers jours (favoris d’abord)">⭐ Best-of de la semaine</button><button type="button" class="btn sm" id="montageBtn" title="Choisis plusieurs clips et assemble-les en un seul">🎞 Montage</button><div class="seg" id="sort"><button data-s="new" class="on">Récents</button><button data-s="old">Anciens</button><button data-s="big">Plus lourds</button></div></div><div class="grid" id="grid"></div></section>
+  <section class="view" id="v-list"><div class="list-head"><h1 id="listTitle">Mes clips</h1><button type="button" class="btn sm" id="bestOfBtn" title="Assemble tes meilleurs clips des 7 derniers jours (favoris d’abord)">⭐ Best-of de la semaine</button><button type="button" class="btn sm" id="statsBtn" title="Combien de fois tes liens ont été vus">📊 Vues</button><button type="button" class="btn sm" id="montageBtn" title="Choisis plusieurs clips et assemble-les en un seul">🎞 Montage</button><div class="seg" id="sort"><button data-s="new" class="on">Récents</button><button data-s="old">Anciens</button><button data-s="big">Plus lourds</button></div></div><div class="grid" id="grid"></div></section>
   <section class="view" id="v-jeux"><div class="list-head"><h1>Jeux</h1><small class="hint">Tes clips rangés par jeu</small></div><div class="gamegrid" id="gamegrid"></div></section>
   <section class="view" id="v-game"><div class="ghero" id="ghero"></div><div class="grid" id="ggrid"></div></section>
   <section class="view" id="v-reglages">
@@ -72,6 +72,7 @@
           <h3>⌨ Raccourcis <small>(clique puis appuie sur la touche ou la combinaison voulue)</small></h3>
           <div class="row"><span>🎬 Garder un clip</span><button type="button" class="btn ghost sm" data-hk="hotClip"></button></div>
           <div class="row"><span>📸 Capture d’écran</span><button type="button" class="btn ghost sm" data-hk="hotShot"></button></div>
+          <div class="row"><span>📍 Marqueur (kill, victoire…) dans le clip</span><button type="button" class="btn ghost sm" data-hk="hotMark"></button></div>
         </div>
         <div class="pane glass" data-p="disk">
           <h3>📁 Stockage</h3>
@@ -164,7 +165,7 @@
 
 <dialog id="modal" class="modal"><div id="modalBox"></div></dialog>
 <div id="updScreen" class="updscreen" hidden><div class="updcard"><img src="icon.png" alt=""><h2 id="updTitle">Mise à jour</h2><p id="updText">Téléchargement…</p><div class="updbar"><i id="updFill"></i></div></div></div>
-<div class="montagebar glass" id="montageBar" hidden><b id="montageCount">0 clip choisi</b><span class="hint">Clique sur les clips dans l’ordre voulu</span><button type="button" class="btn ghost sm" id="montageCancel">Annuler</button><button type="button" class="btn play sm" id="montageGo">🎞 Assembler</button></div>
+<div class="montagebar glass" id="montageBar" hidden><b id="montageCount">0 clip choisi</b><span class="hint">Clique sur les clips dans l’ordre voulu</span><button type="button" class="btn ghost sm" id="montageCancel">Annuler</button><button type="button" class="btn play sm" id="montageGo">🎞 Assembler</button><button type="button" class="btn sm" id="duoGo" title="2 clips côte à côte : ton point de vue et celui de ton pote">🆚 Côte à côte</button></div>
 <dialog id="updDlg" class="modal upddlg"><img src="icon.png" alt=""><h2 id="updDlgTitle">Nouvelle version</h2><p class="fine" id="updDlgNotes"></p><div class="choice"><button type="button" class="btn play" id="updYes">⬆ Mettre à jour maintenant<small>progression en direct</small></button><button type="button" class="btn" id="updLater">Plus tard<small>installée à la fermeture</small></button></div></dialog>
 <div id="toast" hidden></div>
 <script type="module" src="app.js"></script>

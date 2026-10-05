@@ -23,6 +23,7 @@ t = await m.act(t0.id, 'msg', 'Staff ici', 'staff'); assert.equal(t.log.at(-1).w
 t = await m.act(t0.id, 'next'); t = await m.act(t0.id, 'next'); assert.equal(t.step, 6); assert.equal(prompts.length, n + 2);
 t = await m.act(t0.id, 'done'); assert.ok(t.closed && t.done); assert.match(t.log.at(-1).text, /Ton PC est prêt/);
 assert.equal(await m.sessionOf('acc1'), null); assert.ok((await m.act(t0.id, 'next')).error);
+assert.equal((await m.recentDone('acc1')).id, t0.id); t = await m.act(t0.id, 'rate', '5|Top'); assert.deepEqual([t.rating.stars, t.rating.note], [5, 'Top']); assert.equal((await m.act(t0.id, 'rate', '1')).rating.stars, 5);
 m.setAsk(async () => { throw new Error('quota'); });
 const t1 = await m.startSession({ id: 'acc2', pseudo: 'B' }, { cpu: 'x' }); assert.match(t1.log.at(-1).text, /humain/);
 assert.ok(Object.keys(m.AUTO).includes('optimiser'));

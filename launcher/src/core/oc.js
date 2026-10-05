@@ -72,3 +72,24 @@ export function personalPlan(s = {}) {
   add('mesure', '🏁', 'Mesure avant / après', 'On compare tes FPS et tes températures à la fin, pour valider chaque réglage.', { auto: 'mesure', prio: 10 });
   return out.sort((x, y) => x.prio - y.prio);
 }
+
+/** Simulateur « où cliquer » : chemin des menus du BIOS par marque (repères à vérifier pour le modèle exact). */
+export const BIOS_PATHS = {
+  msi: { name: 'MSI Click BIOS', enter: 'Suppr', adv: 'F7', tabs: ['Settings', 'OC', 'M-Flash', 'OC Profile', 'Hardware Monitor'], tasks: {
+    xmp: ['OC', 'DRAM Setting', 'A-XMP / EXPO', 'Profil 1'], update: ['M-Flash', 'Oui (redémarrer)', 'Fichier sur la clé USB'], pbo: ['OC', 'Advanced CPU Configuration', 'AMD Overclocking', 'Precision Boost Overdrive'],
+    tpm: ['Settings', 'Security', 'Trusted Computing', 'AMD fTPM / Intel PTT'], secure: ['Settings', 'Security', 'Secure Boot', 'Enabled'] } },
+  asus: { name: 'ASUS UEFI', enter: 'Suppr ou F2', adv: 'F7', tabs: ['Main', 'Ai Tweaker', 'Advanced', 'Boot', 'Tool'], tasks: {
+    xmp: ['Ai Tweaker', 'Ai Overclock Tuner', 'XMP I / EXPO I'], update: ['Tool', 'ASUS EZ Flash 3 Utility', 'Fichier sur la clé USB'], pbo: ['Ai Tweaker', 'Precision Boost Overdrive', 'Enabled'],
+    tpm: ['Advanced', 'AMD fTPM / PCH-FW Configuration', 'Firmware TPM / PTT'], secure: ['Boot', 'Secure Boot', 'OS Type : Windows UEFI'] } },
+  gigabyte: { name: 'GIGABYTE / AORUS', enter: 'Suppr', adv: 'F2', tabs: ['Tweaker', 'Settings', 'System Info', 'Boot', 'Save & Exit'], tasks: {
+    xmp: ['Tweaker', 'Extreme Memory Profile (X.M.P.)', 'Profile 1'], update: ['Q-Flash (F8)', 'Update BIOS', 'Fichier sur la clé USB'], pbo: ['Tweaker', 'Advanced CPU Settings', 'Precision Boost Overdrive'],
+    tpm: ['Settings', 'Miscellaneous', 'AMD CPU fTPM / Intel PTT'], secure: ['Boot', 'Secure Boot', 'Enabled'] } },
+  asrock: { name: 'ASRock UEFI', enter: 'Suppr ou F2', adv: 'F6', tabs: ['Main', 'OC Tweaker', 'Advanced', 'Tool', 'Security', 'Boot'], tasks: {
+    xmp: ['OC Tweaker', 'DRAM Configuration', 'Load XMP / EXPO Setting'], update: ['Tool', 'Instant Flash', 'Fichier sur la clé USB'], pbo: ['OC Tweaker', 'CPU Configuration', 'Precision Boost Overdrive'],
+    tpm: ['Security', 'AMD fTPM switch / Intel PTT'], secure: ['Security', 'Secure Boot', 'Enabled'] } },
+};
+export const BIOS_TASKS = { xmp: 'Activer XMP / EXPO', update: 'Mettre à jour le BIOS', pbo: 'PBO (AMD)', tpm: 'TPM (Windows 11)', secure: 'Secure Boot' };
+export function biosBrand(board = '') {
+  const b = String(board).toLowerCase();
+  return /\bmsi\b|mag |mpg |meg |pro [abhxz]\d/.test(b) ? 'msi' : /asus|rog|tuf|prime|strix/.test(b) ? 'asus' : /gigabyte|aorus|gaming x\b/.test(b) ? 'gigabyte' : /asrock|steel legend|phantom|taichi/.test(b) ? 'asrock' : null;
+}

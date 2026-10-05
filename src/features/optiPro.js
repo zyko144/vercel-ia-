@@ -5,12 +5,14 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder
 import { readFresh, writeNow } from '../storage.js';
 import { allowAttempt } from '../dashboard/auth.js';
 import { config } from '../config.js';
-import { biosLink, ocAdvice, ocPlan, parseRam, personalPlan } from '../../launcher/src/core/oc.js';
+import { biosBrand, biosLink, ocAdvice, ocPlan, parseRam, personalPlan } from '../../launcher/src/core/oc.js';
 
 const KEY = 'opti-pro';
 const SALON = '🚀・opti-pro';
 export const MCT = 'https://go.microsoft.com/fwlink/?linkid=2156295'; // outil de création de média Windows 11 (lien officiel Microsoft)
 const LOGO = 'https://zyko144.github.io/vercel-ia-/assets/logo.png';
+/** Animation « où cliquer » de la marque de la carte mère (launcher-site/assets/bios, générée par tools/bios-gifs.py). */
+export const biosGif = (board, task = 'xmp') => (biosBrand(board) ? `https://zyko144.github.io/vercel-ia-/assets/bios/${biosBrand(board)}-${task}.gif` : null);
 export const STEPS = [
   ['setup', '🎫 Ton setup', 0x619fff],
   ['valider', '✅ Validation', 0x36c995],
@@ -77,7 +79,7 @@ export function linksFor(t) {
   return ({
     usb: [['💾 Outil Microsoft (clé USB)', MCT], ['🪟 Page Windows 11', 'https://www.microsoft.com/fr-fr/software-download/windows11']],
     format: [/msi\.com/.test(s.biosUrl) && ['🧩 Pilotes de ta carte mère', s.biosUrl.replace(/#bios$/i, '#driver')], ryzen ? ['🔴 Pilotes chipset AMD', 'https://www.amd.com/fr/support/download/drivers.html'] : ['🔵 Pilotes chipset Intel', 'https://www.intel.fr/content/www/fr/fr/support/detect.html'], ...gpu, ['🧽 DDU (nettoyage pilote)', 'https://www.wagnardsoft.com/display-driver-uninstaller-ddu-']],
-    bios: [s.biosUrl && ['🔄 Dernier BIOS de ta carte mère', s.biosUrl], ['🧪 OCCT (stabilité)', 'https://www.ocbase.com/download'], ['🧠 TestMem5 (RAM)', 'https://github.com/CoolCmd/TestMem5'], ['🌡 HWiNFO (températures)', 'https://www.hwinfo.com/download/'], ['🔍 CPU-Z', 'https://www.cpuid.com/softwares/cpu-z.html']],
+    bios: [s.biosUrl && ['🔄 Dernier BIOS de ta carte mère', s.biosUrl], biosGif(s.board) && ['🎬 Où cliquer (animation)', biosGif(s.board, 'update')], ['🧪 OCCT (stabilité)', 'https://www.ocbase.com/download'], ['🧠 TestMem5 (RAM)', 'https://github.com/CoolCmd/TestMem5'], ['🌡 HWiNFO (températures)', 'https://www.hwinfo.com/download/'], ['🔍 CPU-Z', 'https://www.cpuid.com/softwares/cpu-z.html']],
     final: [...gpu, ['🖥 Test d’écran (Hz)', 'https://www.testufo.com/'], ['🌡 HWiNFO', 'https://www.hwinfo.com/download/']],
     test: [['📊 CapFrameX (FPS, 1 % low)', 'https://www.capframex.com/'], ['🧪 Cinebench', 'https://www.maxon.net/fr/downloads/cinebench-2024-downloads'], ['🌡 HWiNFO', 'https://www.hwinfo.com/download/'], ['🧪 OCCT', 'https://www.ocbase.com/download']],
   }[STEPS[t.step][0]] ?? []).filter(Boolean);
@@ -87,6 +89,7 @@ let queue = Promise.resolve();
 function mutate(fn) { const r = queue.then(async () => { const all = structuredClone((await readFresh(KEY)) ?? {}); const v = await fn(all); await writeNow(KEY, all); return v; }); queue = r.catch(() => {}); return r; }
 const all = async () => (await readFresh(KEY)) ?? {};
 export async function sessionOf(accountId) { return Object.values(await all()).filter((t) => t.id && t.owner === accountId && !t.closed).sort((a, b) => b.at - a.at)[0] ?? null; }
+export async function recentDone(accountId) { return Object.values(await all()).filter((t) => t.owner === accountId && t.done && Date.now() - (t.closedAt ?? t.updatedAt ?? 0) < 7 * 86_400_000).sort((a, b) => b.at - a.at)[0] ?? null; }
 const byThread = async (threadId) => Object.values(await all()).find((t) => t.thread === threadId) ?? null;
 
 // ---------- IA ----------
@@ -114,15 +117,27 @@ export async function startSession(account, raw, discordId = null) {
 }
 /** next | skip | done | human | close | msg */
 export async function act(id, action, text = '', who = 'user', images = []) {
-  const t = (await all())[id]; if (!t || t.closed) return { error: 'Ticket fermé. Ouvre une nouvelle demande Opti Pro.' };
+  const t = (await all())[id];
+  if (t && action === 'rate') { // note du technicien (1 à 5 étoiles), une fois, même ticket fermé
+    const stars = Math.max(1, Math.min(5, Math.round(Number(String(text).split('|')[0]) || 0))); if (t.rating || !Number(String(text).split('|')[0])) return t;
+    const note = String(text).split('|').slice(1).join('|').trim().slice(0, 300);
+    const r = await mutate((a) => { a[id].rating = { stars, note, at: Date.now() }; return a[id]; });
+    const owner = client ? await client.users.fetch(config.ownerId).catch(() => null) : null;
+    await owner?.send({ content: `${'⭐'.repeat(stars)} Opti Pro de **${t.name}**${note ? ` : « ${note} »` : ''}`, allowedMentions: { parse: [] } }).catch(() => {});
+    if (r.closed) await closeThread(r).catch(() => {});
+    return r;
+  }
+  if (!t || t.closed) return { error: 'Ticket fermé. Ouvre une nouvelle demande Opti Pro.' };
   if (action === 'detail') return { detail: (await askImpl(promptFor(t, 'detail', text), true).catch(() => null)) || 'Je n’arrive pas à joindre l’IA pour le moment. Réessaie dans une minute.' };
   if (action === 'msg') { if (!String(text).trim() && !images.length) return t; await push(id, { who, text: `${String(text).slice(0, 1500)}${images.length ? ` 📷 ${images.length} capture(s) jointe(s)` : ''}` }); return who === 'staff' ? (await all())[id] : botSay(id, 'msg', text, images); }
   if (action === 'oc') { if (t.ocOptIn) return t; await mutate((a) => { a[id].ocOptIn = Date.now(); }); await push(id, { who: 'user', text: '🔥 Je veux overclocker mon processeur. J’ai lu l’avertissement (chaleur, stabilité, garantie).' }); return botSay(id, 'msg', 'Le client accepte l’overclocking du processeur : explique ce qu’on va faire, à quelle étape, et les précautions.'); }
   if (action === 'human') { await callHuman(t); return push(id, { who: 'bot', text: '👤 Un membre de l’équipe est prévenu et va te répondre ici. En attendant, je reste là pour tes questions.' }); }
   if (action === 'close' || (action === 'done' && t.step === STEPS.length - 1)) {
     await push(id, { who: 'bot', text: action === 'done' ? '# Ton PC est prêt 🚀\nMerci pour ta confiance ! Toutes les étapes sont validées. Si un souci revient, rouvre un ticket Opti Pro.' : '🔒 Ticket fermé. Tu peux en rouvrir un quand tu veux.' });
-    const r = await mutate((a) => { a[id].closed = true; a[id].done = action === 'done'; return a[id]; });
-    await closeThread(r).catch(() => {}); return r;
+    const r = await mutate((a) => { a[id].closed = true; a[id].done = action === 'done'; a[id].closedAt = Date.now(); return a[id]; });
+    if (r.done && r.thread && client) { const th = await client.channels.fetch(r.thread).catch(() => null); await th?.send({ content: '⭐ Note le technicien (ça nous aide vraiment) :', components: [new ActionRowBuilder().addComponents([1, 2, 3, 4, 5].map((n) => new ButtonBuilder().setCustomId(`opro:rate${n}:${id}`).setLabel('⭐'.repeat(n)).setStyle(n >= 4 ? ButtonStyle.Success : ButtonStyle.Secondary)))] }).catch(() => {}); }
+    if (!(r.done && r.thread)) await closeThread(r).catch(() => {}); // ticket réussi : le fil reste ouvert jusqu'à la note
+    return r;
   }
   if (['next', 'skip', 'skip2', 'done'].includes(action)) {
     if (t.step >= STEPS.length - 1) return t;
@@ -143,6 +158,7 @@ function embedFor(t, m) {
   const e = new EmbedBuilder().setColor(m.who === 'bot' ? step[2] : 0x2b2d31).setDescription(m.text.replace(/\[\[faire:\w+\]\]/g, '⚡ *en 1 clic dans History Launcher › Optimisation*').slice(0, 4000));
   if (m.who === 'bot') e.setAuthor({ name: `🚀 Opti Pro · Étape ${(m.step ?? t.step) + 1}/7 · ${step[1]}`, iconURL: LOGO }).setFooter({ text: `${STEPS.map((_, i) => (i <= (m.step ?? t.step) ? '🟩' : '⬛')).join('')}  ·  Technicien History` });
   else e.setAuthor({ name: `${m.who === 'staff' ? '🛠 Staff History' : `💬 ${t.name}`}${m.fromApp ? ' · depuis le launcher' : ''}` });
+  if (m.who === 'bot' && STEPS[m.step ?? t.step][0] === 'bios' && biosGif(t.specs?.board)) e.setImage(biosGif(t.specs.board, /mise à jour|m-flash|ez flash|q-flash|instant flash/i.test(m.text) && !/xmp|expo/i.test(m.text) ? 'update' : 'xmp'));
   return e;
 }
 function buttons(t) {
@@ -231,6 +247,7 @@ export async function onOptiProInteraction(interaction) {
   if (interaction.user.id !== t.discordId && !isStaff(interaction.user.id)) return interaction.reply({ content: 'Ce ticket n’est pas le tien.', ...eph }), true;
   if (!allowAttempt('opti-pro-act', t.owner, 40, 3_600_000)) return interaction.reply({ content: '⏳ Doucement : réessaie dans quelques minutes.', ...eph }), true;
   if (action === 'ocask') return interaction.reply({ ...eph, content: `## ⚠️ Overclocking du processeur\n${OC_WARNING}`, components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`opro:ocyes:${id}`).setLabel('J’ai compris, je veux overclocker').setStyle(ButtonStyle.Danger))] }), true;
+  if (/^rate[1-5]$/.test(action)) { await act(id, 'rate', action.slice(4)); return interaction.update({ content: `Merci pour ta note ${'⭐'.repeat(Number(action.slice(4)))} !`, components: [] }).catch(() => {}), true; }
   if (action === 'ocyes') { await interaction.update({ content: '🔥 C’est noté : le technicien va te guider pas à pas.', components: [] }).catch(() => {}); await act(id, 'oc'); return true; }
   await interaction.deferUpdate().catch(() => {});
   await interaction.message?.edit({ components: [] }).catch(() => {}); // un seul clic par étape
@@ -251,15 +268,15 @@ async function onMessage(m) {
 export function startOptiPro(c) { if (client) return; client = c; c.on('messageCreate', (m) => { onMessage(m).catch(() => {}); }); setTimeout(() => salon().catch(() => {}), 15_000).unref?.(); }
 
 // ---------- API du launcher ----------
-const view = (t) => t && { id: t.id, todo: t.specs?.todo ?? personalPlan(t.specs ?? {}), ocOptIn: Boolean(t.ocOptIn), ocWarning: OC_WARNING, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
+const view = (t) => t && { id: t.id, at: t.at, board: t.specs?.board ?? '', cpu: t.specs?.cpu ?? '', stepAt: t.log.find((m) => m.step === t.step)?.at ?? t.at, rating: t.rating ?? null, closedAt: t.closedAt ?? null, todo: t.specs?.todo ?? personalPlan(t.specs ?? {}), ocOptIn: Boolean(t.ocOptIn), ocWarning: OC_WARNING, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
 export async function handleOptiProApi(req, res, url, account, { readJson, send }) {
   res.setHeader('Cache-Control', 'no-store');
   account = { ...account, discordId: (await (await import('./launcherAccounts.js')).findAccount(account.id))?.discordId ?? null };
-  if (req.method === 'GET') return send(res, 200, { session: view(await sessionOf(account.id)) });
+  if (req.method === 'GET') return send(res, 200, { session: view(await sessionOf(account.id) ?? await recentDone(account.id)) });
   if (!(await allowed(account, account.discordId))) return send(res, 403, { error: 'premium' });
   const b = await readJson(req);
   if (url.pathname.endsWith('/action')) {
-    const cur = await sessionOf(account.id); if (!cur) return send(res, 404, { error: 'Aucun ticket ouvert.' });
+    const cur = b.action === 'rate' ? await recentDone(account.id) ?? await sessionOf(account.id) : await sessionOf(account.id); if (!cur) return send(res, 404, { error: 'Aucun ticket ouvert.' });
     if (!allowAttempt('opti-pro-act', account.id, 40, 3_600_000)) return send(res, 429, { error: 'Doucement : réessaie dans quelques minutes.' });
     if (b.action === 'msg') {
       const images = (Array.isArray(b.images) ? b.images : []).slice(0, 3).map((u) => String(u).match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]{100,})$/)).filter(Boolean).map(([, mime, data]) => ({ type: 'image', mime_type: mime, data }));

@@ -10,7 +10,7 @@ const STEAM = (id, f) => `https://cdn.akamai.steamstatic.com/steam/apps/${id}/${
 const DEMO = {
   list: async () => [['Rocket League', 3], ['FiveM', 2], ['Fortnite', 1]].flatMap(([g, n], i) => Array.from({ length: n }, (_, k) => ({ token: `${i}${k}`, game: g, name: `${g} ${k + 1}`, at: Date.now() - (i * 3 + k) * 3_600_000, size: 42e6, image: false, fav: k === 0, url: '' }))),
   art: async () => ({ 'Rocket League': { img: STEAM(252950, 'header.jpg'), logo: STEAM(252950, 'logo.png'), hero: STEAM(252950, 'library_hero.jpg') }, FiveM: { img: STEAM(271590, 'header.jpg'), logo: STEAM(271590, 'logo.png'), hero: STEAM(271590, 'library_hero.jpg') }, Fortnite: {} }),
-  settings: async () => ({ replay: true, rec: 'on', inGame: 'Rocket League', seconds: 30, height: 1080, fps: 60, audio: true, sound: true, source: 'screen', onlyGame: true, gamePriority: true, maxGB: 0, theme: 'jaune', hotClip: 'F8', hotShot: 'F9', autostart: true, dir: 'C:\\Users\\toi\\Videos\\History Clips', version: 'démo' }),
+  settings: async () => ({ hotMark: 'F7', replay: true, rec: 'on', inGame: 'Rocket League', seconds: 30, height: 1080, fps: 60, audio: true, sound: true, source: 'screen', onlyGame: true, gamePriority: true, maxGB: 0, theme: 'jaune', hotClip: 'F8', hotShot: 'F9', autostart: true, dir: 'C:\\Users\\toi\\Videos\\History Clips', version: 'démo' }),
   account: async () => ({ compte: { pseudo: 'Alex' } }), setSettings: async () => ({ ok: true }), updGet: async () => ({ state: 'idle' }),
 };
 const api = new Proxy(window.hc ?? DEMO, { get: (t, k) => t[k] ?? (typeof k === 'string' && k.startsWith('on') ? () => {} : async () => null) });
@@ -80,7 +80,8 @@ function show(v, g = null) {
 }
 function render() {
   const q = $('search').value.trim().toLowerCase();
-  const match = (c) => !q || `${c.name} ${c.game}`.toLowerCase().includes(q);
+  const day = (t) => { const d = new Date(t); return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`; };
+  const match = (c) => !q || `${c.name} ${c.game} ${day(c.at)}`.toLowerCase().includes(q); // nom, jeu ou date (« 12/10 », « octobre », « samedi »)
   const sorted = (l) => [...l].sort((a, b) => (sortBy === 'old' ? a.at - b.at : sortBy === 'big' ? b.size - a.size : b.at - a.at));
   if (q && !['tout', 'favs', 'captures', 'game'].includes(view)) { show('tout'); return; }
   if (view === 'home') return renderHome();
@@ -203,7 +204,10 @@ V.addEventListener('error', async () => {
   await load(); const fixed = clips.find(x => x.token === r.token);
   if (fixed && cur === c && $('viewer').open) { repaired.add(fixed.token); openViewer(fixed); toast('✅ Copie réparée créée'); }
 });
-V.addEventListener('loadedmetadata', () => { dur = Number.isFinite(V.duration) ? V.duration : 0; tA = 0; tB = dur; paintTrim(); filmstrip(cur); });
+V.addEventListener('loadedmetadata', () => { dur = Number.isFinite(V.duration) ? V.duration : 0; tA = 0; tB = dur; paintTrim(); filmstrip(cur); paintMarks(); });
+// Marqueurs posés en jeu (touche F7) : repères sur la timeline, clic = on y va
+function paintMarks() { $('tl').querySelectorAll('.mk').forEach((x) => x.remove()); for (const b of cur?.marks ?? []) { const t = dur - b; if (t >= 0 && t <= dur) $('tl').insertAdjacentHTML('beforeend', `<button type="button" class="mk" style="left:${pct(t)}" data-mk="${t}" title="Marqueur à ${sec(t)}"></button>`); } }
+$('tl').addEventListener('pointerdown', (e) => { const m = e.target.closest('[data-mk]'); if (m) { e.stopPropagation(); V.currentTime = Number(m.dataset.mk); } }, true);
 V.addEventListener('timeupdate', () => {
   $('tlPh').style.left = pct(V.currentTime);
   if (selPlay && V.currentTime >= tB) { V.pause(); V.currentTime = tA; selPlay = false; $('playSel').textContent = '▶ Lire la sélection'; }
@@ -315,10 +319,10 @@ async function shareDiscord(c) {
   if (!compte) { toast('Connecte ton compte History pour envoyer sur Discord'); return openAuth(); }
   const [amis, servs] = await Promise.all([api.friends().catch(() => []), api.servers().catch(() => [])]);
   const sv = (servs ?? []).map((g) => `<button type="button" class="btn ${g.home ? 'play' : ''}" data-to="g:${esc(g.id)}">${g.icon ? `<img src="${esc(g.icon)}" alt="" class="gicon">` : '📢'} ${g.home ? 'Serveur History Clips' : `${esc(g.name)} <small>· salon clips-history</small>`}</button>`).join('');
-  ask('📤 Envoyer sur Discord', `<div class="pick">${sv || '<button type="button" class="btn play" data-to="">📢 Serveur History Clips</button>'}${(amis ?? []).map((a) => `<button type="button" class="btn ghost" data-to="${esc(a.id)}">💬 En privé à ${esc(a.pseudo)}</button>`).join('')}</div><p class="fine">Pour partager sur un autre serveur, ajoute le bot History Clips dessus : il crée tout seul le salon <b>clips-history</b>. Ton compte Discord doit être lié dans History Launcher.</p>`, null, async (to) => {
+  ask('📤 Envoyer sur Discord', `<div class="pick">${sv || '<button type="button" class="btn play" data-to="">📢 Serveur History Clips</button>'}${(amis ?? []).map((a) => `<button type="button" class="btn ghost" data-to="${esc(a.id)}">💬 En privé à ${esc(a.pseudo)}</button><button type="button" class="btn ghost" data-to="h:${esc(a.id)}">📨 Message History à ${esc(a.pseudo)}</button>`).join('')}</div><p class="fine">Pour partager sur un autre serveur, ajoute le bot History Clips dessus : il crée tout seul le salon <b>clips-history</b>. Ton compte Discord doit être lié dans History Launcher.</p>`, null, async (to) => {
     toast('📤 Envoi du clip…');
-    const r = await clipAction(c, () => to.startsWith('g:') ? api.discord(c.token, '', to.slice(2)) : api.discord(c.token, to));
-    toast(r?.ok ? '✅ Clip envoyé sur Discord' : r?.error ?? 'Envoi impossible');
+    const r = await clipAction(c, () => to.startsWith('h:') ? api.toFriend(c.token, to.slice(2)) : to.startsWith('g:') ? api.discord(c.token, '', to.slice(2)) : api.discord(c.token, to));
+    toast(r?.ok ? (to.startsWith('h:') ? '✅ Clip envoyé à ton ami dans History' : '✅ Clip envoyé sur Discord') : r?.error ?? 'Envoi impossible');
   });
 }
 
@@ -349,6 +353,15 @@ function paintPicks() {
 }
 $('montageBtn').addEventListener('click', () => { picks = picks ? null : []; paintPicks(); if (picks) toast('🎞 Clique sur les clips à assembler, dans l’ordre'); });
 $('montageCancel').addEventListener('click', () => { picks = null; paintPicks(); });
+$('duoGo').addEventListener('click', async () => {
+  if (picks?.length !== 2) return toast('Choisis exactement 2 clips (ton point de vue et celui de ton pote).');
+  const [a, b] = picks; picks = null; paintPicks(); toast('🆚 Fusion côte à côte en cours…');
+  const r = await clipAction({ token: 'montage' }, () => api.duo(a, b)); toast(r?.ok ? '🆚 Clip côte à côte prêt : dossier « Montages »' : r?.error ?? 'Fusion impossible'); if (r?.ok) load();
+});
+$('statsBtn').addEventListener('click', async () => {
+  const r = await api.stats();
+  ask('📊 Vues de tes liens', r?.liens?.length ? `<div class="pick">${r.liens.map((l) => `<div class="statrow"><b>${esc(l.nom ?? l.jeu ?? 'Clip')}</b><span>${esc(l.jeu ?? '')}</span><em>👁 ${l.vues}</em><small>jusqu’au ${new Date(l.exp).toLocaleDateString('fr-FR')}</small></div>`).join('')}</div>` : `<p class="fine">${esc(r?.error ?? 'Aucun lien actif : « 🔗 Lien » sur un clip crée une page à partager (7 jours).')}</p>`);
+});
 $('montageGo').addEventListener('click', async () => {
   if ((picks?.length ?? 0) < 2) return toast('Choisis au moins 2 clips.');
   const list = picks; picks = null; paintPicks(); toast(`🎞 Montage de ${list.length} clips en cours…`);

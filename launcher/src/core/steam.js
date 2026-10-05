@@ -151,7 +151,14 @@ export async function steamDetails(appid, fetchImpl = fetch) {
     score: d.metacritic?.score ?? null, screenshots: (d.screenshots ?? []).slice(0, 8).map((s) => s.path_thumbnail),
     background: d.background_raw ?? d.background ?? null, website: d.website ?? null,
     requirements: d.pc_requirements && !Array.isArray(d.pc_requirements) ? { min: d.pc_requirements.minimum ?? null, rec: d.pc_requirements.recommended ?? null } : null,
+    trailer: d.movies?.[0]?.mp4?.max ?? d.movies?.[0]?.webm?.max ?? d.movies?.[0]?.mp4?.['480'] ?? null,
   };
+}
+/** Avis des joueurs Steam : « Très positives » + pourcentage (tous les avis, toutes langues). */
+export async function steamReviews(appid, fetchImpl = fetch) {
+  const q = await fetchImpl(`https://store.steampowered.com/appreviews/${Number(appid)}?json=1&language=all&purchase_type=all&num_per_page=0`, { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const s = q?.query_summary;
+  return s?.total_reviews ? { label: s.review_score_desc, pct: Math.round((100 * s.total_positive) / s.total_reviews), total: s.total_reviews } : null;
 }
 const stripHtml = (t) => String(t).replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
 

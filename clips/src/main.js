@@ -53,7 +53,7 @@ app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256');
 protocol.registerSchemesAsPrivileged([{ scheme: 'clip', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 // ---------- Réglages (fichier JSON dans le dossier de l'appli) ----------
-const DEFAULTS = { replay: true, seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', autostart: true, favs: [], names: {},
+const DEFAULTS = { replay: true, seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', hotMark: 'F7', markers: [], autostart: true, favs: [], names: {},
   source: 'screen', mic: false, micVol: 100, onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art2: {}, exes: {} };
 const SET_FILE = () => path.join(app.getPath('userData'), 'reglages.json');
 let st = { ...DEFAULTS };
@@ -359,7 +359,7 @@ async function screenshot() {
 function registerHotkeys() {
   globalShortcut.unregisterAll();
   const bad = [];
-  for (const [key, fn] of [['hotClip', () => saveClip()], ['hotShot', () => screenshot().catch(() => {})]]) { try { if (!globalShortcut.register(st[key], fn)) bad.push(key); } catch { bad.push(key); } }
+  for (const [key, fn] of [['hotClip', () => saveClip()], ['hotShot', () => screenshot().catch(() => {})], ['hotMark', () => { st.markers = [...(st.markers ?? []), Date.now()].slice(-500); saveSt(); }]]) { try { if (!globalShortcut.register(st[key], fn)) bad.push(key); } catch { bad.push(key); } }
   return bad;
 }
 
@@ -381,7 +381,9 @@ async function listFiles() {
 }
 ipcMain.handle('clips:list', async () => (await listFiles()).map(({ file, dir, f, s }) => {
   const t = tokenOf(file);
-  return { token: t, game: dir, name: st.names[file] ?? f.replace(/\.(mp4|webm|png)$/i, ''), file: f, at: s.mtimeMs, size: s.size, image: /\.png$/i.test(f), fav: st.favs.includes(file), url: `clip://f/${t}${path.extname(f)}`, thumb: /\.png$/i.test(f) ? null : `clip://t/${t}.jpg?v=${Math.round(s.mtimeMs)}` };
+  // Marqueurs (touche F7 en jeu : kill, victoire…) tombés dans ce clip : secondes avant la fin du clip
+  const marks = (st.markers ?? []).filter((m) => m <= s.mtimeMs && m >= s.mtimeMs - ((st.seconds ?? 30) + 3) * 1000).map((m) => Math.round((s.mtimeMs - m) / 100) / 10);
+  return { marks, token: t, game: dir, name: st.names[file] ?? f.replace(/\.(mp4|webm|png)$/i, ''), file: f, at: s.mtimeMs, size: s.size, image: /\.png$/i.test(f), fav: st.favs.includes(file), url: `clip://f/${t}${path.extname(f)}`, thumb: /\.png$/i.test(f) ? null : `clip://t/${t}.jpg?v=${Math.round(s.mtimeMs)}` };
 }).sort((a, b) => b.at - a.at));
 // Espace maximum : les plus vieux clips (hors favoris) partent à la corbeille
 async function prune() {
@@ -482,15 +484,31 @@ mediaHandle('clips:vertical', async (_e, t, mode) => {
   finally { await rm(out, { force: true }).catch(() => {}); }
 });
 // Lien de partage web : le clip (allégé) est mis en ligne 7 jours, lien copié
-mediaHandle('clips:link', async (_e, t) => {
-  const f = fileOf(t); if (!f) return { ok: false };
+async function makeLink(f) {
   if (!tokenGet()) return { ok: false, error: 'Connecte ton compte History pour créer un lien.' };
   const ext = /\.png$/i.test(f) ? 'png' : 'mp4';
   const q = new URLSearchParams({ type: ext, nom: path.basename(f).slice(0, 80), jeu: path.basename(path.dirname(f)).slice(0, 80) });
   const r = await api(`/api/compte/clip/lien?${q}`, { method: 'POST', raw: await readFile(f) });
-  if (!r.url) return { ok: false, error: r.error ?? 'Lien impossible.' };
-  clipboard.writeText(r.url);
-  return { ok: true, url: r.url };
+  return r.url ? { ok: true, url: r.url } : { ok: false, error: r.error ?? 'Lien impossible.' };
+}
+mediaHandle('clips:link', async (_e, t) => { const f = fileOf(t); if (!f) return { ok: false }; const r = await makeLink(f); if (r.ok) clipboard.writeText(r.url); return r; });
+// Partage direct à un ami History (message avec le lien et son aperçu)
+mediaHandle('clips:toFriend', async (_e, t, to) => {
+  const f = fileOf(t); if (!f) return { ok: false };
+  const l = await makeLink(f); if (!l.ok) return l;
+  const r = await api('/api/compte/messages', { method: 'POST', body: { to: String(to ?? '').slice(0, 64), text: `🎬 ${path.basename(path.dirname(f))} : ${l.url}` } });
+  return r?.error ? { ok: false, error: r.error } : { ok: true };
+});
+ipcMain.handle('clips:stats', async () => (tokenGet() ? api('/api/compte/clip/vues') : { error: 'Connecte ton compte History.' }));
+// Clip à deux points de vue : deux clips côte à côte (même durée que le plus court), son du premier
+mediaHandle('clips:duo', async (_e, a, b) => {
+  const files = [fileOf(a), fileOf(b)];
+  if (files.some((f) => !f || /\.png$/i.test(f))) return { ok: false, error: 'Choisis 2 clips vidéo.' };
+  const dir = path.join(ROOT(), 'Montages'); await mkdir(dir, { recursive: true });
+  const dest = path.join(dir, clipName('Côte à côte', 'mp4').replace('.mp4', ` ${randomUUID().slice(0, 6)}.mp4`));
+  const graph = '[0:v]scale=-2:720,setsar=1,fps=60[a];[1:v]scale=-2:720,setsar=1,fps=60[b];[a][b]hstack=inputs=2:shortest=1[v]';
+  try { await runFfmpeg(['-y', '-i', files[0], '-i', files[1], '-filter_complex', graph, '-map', '[v]', '-map', '0:a?', '-shortest', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', dest]); changed(); return { ok: true }; }
+  catch (err) { await rm(dest, { force: true }).catch(() => {}); return { ok: false, error: `Fusion impossible (${err.message}).` }; }
 });
 mediaHandle('clips:export', async (_e, t) => {
   const f = fileOf(t);
@@ -691,7 +709,7 @@ ipcMain.handle('settings:set', (_e, p) => {
   for (const k of ['audio', 'mic', 'onlyGame', 'gamePriority', 'sound']) if (k in p) { st[k] = Boolean(p[k]); if (k !== 'sound') restart = true; }
   if ('micVol' in p) st.micVol = Math.max(0, Math.min(200, Math.round(Number(p.micVol) || 0)));
   if ('autostart' in p) { st.autostart = Boolean(p.autostart); if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: st.autostart, args: ['--demarrage'] }); }
-  for (const k of ['hotClip', 'hotShot']) {
+  for (const k of ['hotClip', 'hotShot', 'hotMark']) {
     if (!(k in p)) continue;
     if (!validAccel(p[k])) return { ok: false, error: 'Combinaison non valable (une lettre seule bloquerait ton clavier : ajoute Ctrl, Alt ou Maj).' };
     const old = st[k]; st[k] = p[k];

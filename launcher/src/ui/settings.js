@@ -165,6 +165,7 @@ function initReview(api) {
       if (!result?.ok) throw new Error(result?.error || 'Impossible de publier pour le moment. Ton avis est conservé ici, réessaie.');
       $('reviewFields').hidden = true; $('reviewSuccess').hidden = false;
       const title = $('reviewSuccess').querySelector('h2'); title.id = 'reviewSuccessTitle';
+      if (result.reward) title.insertAdjacentHTML('afterend', `<p>🎁 Merci : ${result.reward.days} jours de Pack Premium offerts sur ton compte.</p>`);
       dialog.setAttribute('aria-labelledby', title.id);
     } catch (cause) {
       if (current === session && dialog.open) error(cause.message || 'Connexion interrompue. Ton avis est conservé ici, réessaie.');

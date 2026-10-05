@@ -48,3 +48,15 @@ export async function dnsTest(servers = DNS_SERVERS) {
   const best = out.slice(1).filter((x) => x.ms != null).sort((a, b) => a.ms - b.ms)[0] ?? null;
   return { list: out, best, gain: current.ms != null && best ? current.ms - best.ms : null };
 }
+
+/** Débit internet réel : téléchargement puis envoi vers Cloudflare (serveur le plus proche), en mégabits par seconde. */
+export async function speedTest(fetchImpl = fetch) {
+  const t0 = performance.now();
+  const down = await fetchImpl('https://speed.cloudflare.com/__down?bytes=25000000', { signal: AbortSignal.timeout(25_000) }).then((r) => r.arrayBuffer()).catch(() => null);
+  const t1 = performance.now();
+  const body = new Uint8Array(8_000_000);
+  const up = await fetchImpl('https://speed.cloudflare.com/__up', { method: 'POST', body, signal: AbortSignal.timeout(25_000) }).then((r) => r.ok).catch(() => false);
+  const t2 = performance.now();
+  const mbps = (bytes, ms) => Math.round((bytes * 8) / (ms / 1000) / 1e6);
+  return { down: down ? mbps(down.byteLength, t1 - t0) : null, up: up ? mbps(body.length, t2 - t1) : null };
+}

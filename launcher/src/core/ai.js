@@ -27,9 +27,9 @@ export async function createAi(key) {
   const { GoogleGenAI } = await import('@google/genai').catch(() => ({}));
   if (!GoogleGenAI) return null;
   const ai = new GoogleGenAI({ apiKey: key });
-  const ask = async ({ system, text, schema, web = false, model = MODELS.chat }) => {
+  const ask = async ({ system, text, schema, web = false, model = MODELS.chat, image = null }) => {
     const r = await ai.interactions.create({
-      model, system_instruction: system, input: text, store: false,
+      model, system_instruction: system, input: image ? [{ type: 'text', text }, { type: 'image', mime_type: image.mime, data: image.data }] : text, store: false,
       generation_config: { thinking_level: 'minimal' },
       ...(web ? { tools: [{ type: 'google_search' }, { type: 'url_context' }] } : {}),
       ...(schema ? { response_format: { type: 'text', mime_type: 'application/json', schema } } : {}),
@@ -56,8 +56,8 @@ export function createRemoteAi(call) {
     if (r?.status !== 200) throw new Error(r?.error ?? 'IA injoignable');
     return String(r.text ?? '');
   };
-  const ask = async ({ system, text, schema, web = false }) => {
-    const out = (await req({ system, text, schema, web })).trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+  const ask = async ({ system, text, schema, web = false, image = null }) => {
+    const out = (await req({ system, text, schema, web, image })).trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
     return schema ? JSON.parse(out) : out;
   };
   const transcribe = async (base64, mime) => (await req({ audio: { data: base64, mime } })).trim();

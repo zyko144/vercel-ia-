@@ -33,3 +33,9 @@ assert.ok(ids({ cpu: 'i5-12400F', laptop: true, need: 'mon pc rame' }).includes(
 assert.equal(ids({ cpu: 'x', cpuTempMax: 92 })[0], 'refroidissement');
 assert.notDeepEqual(ids({ cpu: 'AMD Ryzen 5 7600', ram: [{ speed: 6000, configured: 4800 }], need: 'ping' }), ids({ cpu: 'AMD Ryzen 5 7600', need: 'stream obs' }), 'plan différent selon la demande');
 console.log('personal plan ok');
+{
+  const { biosBrand, BIOS_PATHS } = await import('../src/core/oc.js');
+  assert.equal(biosBrand('MSI MAG B650 TOMAHAWK WIFI'), 'msi'); assert.equal(biosBrand('ROG STRIX B550-F'), 'asus'); assert.equal(biosBrand('B650 AORUS ELITE'), 'gigabyte'); assert.equal(biosBrand('B760M Steel Legend'), 'asrock'); assert.equal(biosBrand('HP 8A0F'), null);
+  for (const b of Object.values(BIOS_PATHS)) for (const p of Object.values(b.tasks)) assert.ok(p.length >= 2);
+  console.log('simulateur BIOS ok');
+}

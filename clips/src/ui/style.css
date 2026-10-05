@@ -291,3 +291,7 @@ body.picking .card { outline: 2px dashed rgba(var(--rgb), .35); outline-offset: 
 
 .gart .game-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .4; }
 .gart::after { z-index: 2; pointer-events: none; }
+/* Marqueurs dans la timeline, vues des liens */
+.tl .mk { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; border: 0; padding: 0; border-radius: 2px; background: #ff4d6d; box-shadow: 0 0 8px #ff4d6d; z-index: 4; cursor: pointer; }
+.statrow { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 12px; padding: 8px 10px; border-radius: 10px; background: #ffffff0d; }
+.statrow small { grid-column: 1 / -1; opacity: .6; }

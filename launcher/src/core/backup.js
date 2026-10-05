@@ -3,7 +3,7 @@ import { mergeNotebooks } from './personal.js';
 // historique, serveurs FiveM) et comment on le fusionne au retour sans rien perdre.
 import { mergeConfigs } from './gameconfigs.js';
 
-export const BACKUP_KEYS = ['settings', 'collections', 'items', 'names', 'time', 'timeBy', 'offSteam', 'days', 'fivemFavs', 'fivemSessions', 'fivemLogs', 'fivemNames', 'priceAlerts', 'sessions', 'crashes', 'loadTimes', 'gameConfigs', 'notebooks'];
+export const BACKUP_KEYS = ['settings', 'collections', 'items', 'names', 'time', 'timeBy', 'offSteam', 'days', 'fivemFavs', 'fivemSessions', 'fivemLogs', 'fivemNames', 'priceAlerts', 'sessions', 'crashes', 'loadTimes', 'gameConfigs', 'notebooks', 'installedList'];
 // Réglages propres à ce PC : jamais copiés d'un PC à l'autre
 const LOCAL_SETTINGS = ['autostart', 'lastAccount', 'skipAccount', 'steamAccount', 'epicAccount'];
 
@@ -58,6 +58,8 @@ export function mergeBackup(local, remote) {
     out[k] = { ...(local[k] ?? {}) };
     for (const [id, list] of Object.entries(remote[k])) { if (!Array.isArray(list)) continue; const seen = new Set((out[k][id] ?? []).map((x) => x.at)); out[k][id] = [...(out[k][id] ?? []), ...list.filter((x) => x && !seen.has(x.at))].sort((a, b) => a.at - b.at).slice(-20); }
   }
+  // Jeux installés sur chaque PC (liste « à réinstaller » après un formatage) : réunis sans doublon
+  if (Array.isArray(remote.installedList)) out.installedList = [...new Map([...remote.installedList, ...(local.installedList ?? [])].filter((x) => x?.id).map((x) => [x.id, x])).values()].slice(0, 500);
   return out;
 }
 
