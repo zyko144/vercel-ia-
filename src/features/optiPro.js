@@ -28,7 +28,7 @@ const GUIDE = {
   final: 'Réglages finaux pour jouer comme les pros. « ## ⚡ En 1 clic » (dans History Launcher › Optimisation › Opti Pro, étape 6, « ⚡ Tout optimiser » fait tout seul et réversible, avec un point de restauration : Mode Jeu, priorité aux jeux, alimentation performances, bridage d’énergie coupé, debloat — widgets, Copilot, applis sponsorisées, Bing —, confidentialité, touches rémanentes, nettoyage, réglages de ses jeux), « ## 🪟 À vérifier à la main » (écran réglé sur sa fréquence max dans Paramètres › Affichage › Affichage avancé, carte graphique « Hautes performances » pour chaque jeu dans Paramètres › Affichage › Graphiques, overlays Discord / Steam / NVIDIA coupés si inutiles, applis au démarrage), « ## 🟩 Carte graphique » (NVIDIA : mode faible latence activé, gestion de l’alimentation performances maximales, filtrage de texture haute performance, G-SYNC + limite FPS à écran − 3 ; AMD : Anti-Lag, FreeSync, Radeon Chill coupé), « ## 🎮 En jeu » (plein écran, NVIDIA Reflex activé, réglages qui coûtent le plus de FPS). Ne propose jamais de couper Windows Defender, les mises à jour ou des services système.',
   test: 'Dernière étape : tester ensemble. « ## 🏁 Mesurer » (même partie / même endroit qu’avant, compteur FPS du launcher Ctrl+Alt+P, noter FPS moyen et 1 % low, températures max processeur / carte graphique), « ## ✅ Checklist » (chaque réglage fait pendant le ticket, à cocher), « ## 📩 Envoie-moi » (demande-lui ses FPS avant / après et ses températures pour valider). Termine par « Clique sur 🚀 Terminé quand tout est bon ».',
 };
-const SYSTEM = 'Tu es le technicien Opti Pro de History : tu accompagnes un joueur pour optimiser son PC, comme un vrai technicien en ticket. Français, tutoiement, chaleureux et précis. Markdown pour Discord : titres « ## », listes numérotées courtes, valeurs en **gras**. 1700 caractères maximum. Utilise seulement le matériel fourni ; s’il manque une info importante, pose UNE question à la fin. N’invente jamais un chiffre mesuré. Ne propose jamais de couper Windows Defender, les mises à jour, ni de « nettoyeur de registre ». Sécurité d’abord pour le BIOS.';
+const SYSTEM = 'Tu es le technicien Opti Pro de History : tu accompagnes un joueur pour optimiser son PC, comme un vrai technicien en ticket. Français, tutoiement, chaleureux et précis. Markdown pour Discord : titres « ## », listes numérotées courtes, valeurs en **gras**. 1700 caractères maximum. Utilise seulement le matériel fourni ; s’il manque une info importante, pose UNE question à la fin. N’invente jamais un chiffre mesuré ni un lien : donne seulement des liens de sites officiels. Ne propose jamais de couper Windows Defender, les mises à jour, ni de « nettoyeur de registre ». Sécurité d’abord pour le BIOS.';
 
 export function specsOf(raw = {}) {
   const s = Object.fromEntries(['cpu', 'board', 'gpu', 'ramText', 'cooling', 'games', 'need', 'windows', 'biosVersion', 'biosDate'].map((k) => [k, String(raw[k] ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, k === 'need' || k === 'games' ? 800 : 160)]));
@@ -53,9 +53,23 @@ export function facts(s) {
 export function promptFor(t, kind, text = '') {
   const log = t.log.slice(-10).map((m) => `${m.who === 'bot' ? 'Technicien' : m.who === 'staff' ? 'Staff' : 'Client'} : ${m.text.slice(0, 600)}`).join('\n');
   const step = STEPS[t.step];
-  return `MATÉRIEL DU CLIENT\n${facts(t.specs)}\n\nÉTAPE EN COURS : ${t.step + 1}/7 ${step[1]}\n\nCONVERSATION RÉCENTE\n${log || '—'}\n\nCONSIGNE\n${kind === 'msg' ? `Le client écrit : « ${text.slice(0, 1500)} ». Réponds-lui précisément pour l'étape en cours (dépannage, valeur exacte, quoi cliquer). Court.` : GUIDE[step[0]]}`;
+  const links = linksFor(t).map(([l, u]) => `${l.replace(/^\S+\s/, '')} : ${u}`).join('\n');
+  return `MATÉRIEL DU CLIENT\n${facts(t.specs)}\n\nÉTAPE EN COURS : ${t.step + 1}/7 ${step[1]}\n${links ? `\nLIENS OFFICIELS DE L'ÉTAPE (à donner en Markdown [texte](lien) quand c'est utile, tels quels)\n${links}\n` : ''}\nCONVERSATION RÉCENTE\n${log || '—'}\n\nCONSIGNE\n${kind === 'msg' ? `Le client écrit : « ${text.slice(0, 1500)} ». Réponds-lui précisément pour l'étape en cours (dépannage, valeur exacte, quoi cliquer). Court.` : GUIDE[step[0]]}`;
 }
 
+// Liens officiels utiles à chaque étape (boutons sur Discord et dans le launcher, donnés aussi à l'IA)
+const NVIDIA = /nvidia|geforce|rtx|gtx/i, AMD = /radeon|\brx\s?\d/i;
+export function linksFor(t) {
+  const s = t.specs ?? {}, gpuNv = NVIDIA.test(s.gpu), gpuAmd = AMD.test(s.gpu), ryzen = /ryzen|amd/i.test(s.cpu);
+  const gpu = [!gpuAmd && ['🟩 Pilote NVIDIA', 'https://www.nvidia.com/fr-fr/drivers/'], !gpuNv && ['🟥 Pilote AMD', 'https://www.amd.com/fr/support/download/drivers.html']];
+  return ({
+    usb: [['💾 Outil Microsoft (clé USB)', MCT], ['🪟 Page Windows 11', 'https://www.microsoft.com/fr-fr/software-download/windows11']],
+    format: [/msi\.com/.test(s.biosUrl) && ['🧩 Pilotes de ta carte mère', s.biosUrl.replace(/#bios$/i, '#driver')], ryzen ? ['🔴 Pilotes chipset AMD', 'https://www.amd.com/fr/support/download/drivers.html'] : ['🔵 Pilotes chipset Intel', 'https://www.intel.fr/content/www/fr/fr/support/detect.html'], ...gpu, ['🧽 DDU (nettoyage pilote)', 'https://www.wagnardsoft.com/display-driver-uninstaller-ddu-']],
+    bios: [s.biosUrl && ['🔄 Dernier BIOS de ta carte mère', s.biosUrl], ['🧪 OCCT (stabilité)', 'https://www.ocbase.com/download'], ['🧠 TestMem5 (RAM)', 'https://github.com/CoolCmd/TestMem5'], ['🌡 HWiNFO (températures)', 'https://www.hwinfo.com/download/'], ['🔍 CPU-Z', 'https://www.cpuid.com/softwares/cpu-z.html']],
+    final: [...gpu, ['🖥 Test d’écran (Hz)', 'https://www.testufo.com/'], ['🌡 HWiNFO', 'https://www.hwinfo.com/download/']],
+    test: [['📊 CapFrameX (FPS, 1 % low)', 'https://www.capframex.com/'], ['🧪 Cinebench', 'https://www.maxon.net/fr/downloads/cinebench-2024-downloads'], ['🌡 HWiNFO', 'https://www.hwinfo.com/download/'], ['🧪 OCCT', 'https://www.ocbase.com/download']],
+  }[STEPS[t.step][0]] ?? []).filter(Boolean);
+}
 // ---------- stockage ----------
 let queue = Promise.resolve();
 function mutate(fn) { const r = queue.then(async () => { const all = structuredClone((await readFresh(KEY)) ?? {}); const v = await fn(all); await writeNow(KEY, all); return v; }); queue = r.catch(() => {}); return r; }
@@ -122,8 +136,8 @@ function buttons(t) {
   if (next?.[3]) row.push(new ButtonBuilder().setCustomId(`opro:skip:${t.id}`).setLabel(`⏭ Passer ${next[1].slice(2).trim()}`.slice(0, 80)).setStyle(ButtonStyle.Secondary));
   if (next?.[3] && STEPS[t.step + 2]?.[3]) row.push(new ButtonBuilder().setCustomId(`opro:skip2:${t.id}`).setLabel(`⏭ Passer jusqu’à ${STEPS[t.step + 3][1].slice(2).trim()}`.slice(0, 80)).setStyle(ButtonStyle.Secondary));
   row.push(new ButtonBuilder().setCustomId(`opro:human:${t.id}`).setLabel('👤 Parler à un humain').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId(`opro:close:${t.id}`).setLabel('🔒 Fermer').setStyle(ButtonStyle.Danger));
-  const links = { usb: [['💾 Télécharger l’outil Microsoft', MCT]], bios: [t.specs?.biosUrl && ['🔄 Dernier BIOS de ta carte mère', t.specs.biosUrl], ['🧪 OCCT (test de stabilité)', 'https://www.ocbase.com/download']], final: [['🟩 Pilote NVIDIA', 'https://www.nvidia.com/fr-fr/drivers/'], ['🟥 Pilote AMD', 'https://www.amd.com/fr/support/download/drivers.html']] }[STEPS[t.step][0]]?.filter(Boolean) ?? [];
-  return [new ActionRowBuilder().addComponents(row), ...(links.length ? [new ActionRowBuilder().addComponents(links.map(([l, u]) => new ButtonBuilder().setLabel(l).setURL(u).setStyle(ButtonStyle.Link)))] : [])];
+  const links = linksFor(t);
+  return [new ActionRowBuilder().addComponents(row), ...(links.length ? [new ActionRowBuilder().addComponents(links.slice(0, 5).map(([l, u]) => new ButtonBuilder().setLabel(l).setURL(u).setStyle(ButtonStyle.Link)))] : [])];
 }
 async function postThread(t, m) {
   if (!client || !t.thread || m.fromDiscord) return;
@@ -219,7 +233,7 @@ async function onMessage(m) {
 export function startOptiPro(c) { if (client) return; client = c; c.on('messageCreate', (m) => { onMessage(m).catch(() => {}); }); setTimeout(() => salon().catch(() => {}), 15_000).unref?.(); }
 
 // ---------- API du launcher ----------
-const view = (t) => t && { id: t.id, biosUrl: t.specs?.biosUrl ?? null, step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
+const view = (t) => t && { id: t.id, links: t.closed ? [] : linksFor(t), step: t.step, closed: Boolean(t.closed), done: Boolean(t.done), thread: Boolean(t.thread), advice: t.specs?.advice, steps: STEPS.map((s) => s[1]), log: t.log.map(({ who, text, step, at }) => ({ who, text, step, at })) };
 export async function handleOptiProApi(req, res, url, account, { readJson, send }) {
   res.setHeader('Cache-Control', 'no-store');
   account = { ...account, discordId: (await (await import('./launcherAccounts.js')).findAccount(account.id))?.discordId ?? null };

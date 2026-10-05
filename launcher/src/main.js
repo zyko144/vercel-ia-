@@ -1307,11 +1307,11 @@ const proPc = async () => {
 };
 ipcMain.handle('pro:get', () => proPc());
 // Ticket guidé : même conversation que le fil Discord, l'IA du serveur répond à chaque étape
-const proDemo = () => ({ id: 'demo', step: 4, closed: false, thread: true, biosUrl: 'https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios', advice: { cpu: 'recommandé', why: 'Processeur débloqué, carte mère et refroidissement compatibles.' }, log: [
+const proDemo = () => ({ id: 'demo', step: 4, closed: false, thread: true, links: [['🔄 Dernier BIOS de ta carte mère', 'https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios'], ['🧪 OCCT (stabilité)', 'https://www.ocbase.com/download'], ['🧠 TestMem5 (RAM)', 'https://github.com/CoolCmd/TestMem5'], ['🌡 HWiNFO (températures)', 'https://www.hwinfo.com/download/']], advice: { cpu: 'recommandé', why: 'Processeur débloqué, carte mère et refroidissement compatibles.' }, log: [
   { who: 'user', step: 1, text: 'Mon setup : AMD Ryzen 5 7600 · RTX 4070 · 16 Go\nFortnite en 1080p 240 Hz, je veux des FPS stables.' },
   { who: 'bot', step: 1, text: '## ✅ Demande validée\nTon PC a un vrai potentiel, on y va.\n## 🧭 Ton parcours\n- 💾 Clé USB et 🧹 formatage : **tu peux passer**, Windows est récent\n- 🧠 BIOS : **à faire**, ta RAM tourne à **4800** au lieu de **6000 MHz**' },
   { who: 'user', step: 4, text: '⏭ Je passe : 💾 Clé USB bootable, 🧹 Formatage propre.' },
-  { who: 'bot', step: 4, text: '## 🔄 Mets à jour ton BIOS\nTon BIOS **7D75v1F** date de 2023 ; la dernière version stable est plus récente. Télécharge-la avec le bouton ci-dessous, copie-la sur une clé **FAT32** et lance **M-Flash**.\n## 🧠 Processeur\n1. **OC › Precision Boost Overdrive** sur **Advanced**\n2. **Curve Optimizer** : All Core, Negative, **-20**\n## 🧩 Mémoire\n- **EXPO Profile 1** : **4800 → 6000 MHz**' }] });
+  { who: 'bot', step: 4, text: '## 🔄 Mets à jour ton BIOS\nTon BIOS **7D75v1F** date de 2023 ; la dernière version stable est plus récente. Télécharge-la sur [la page officielle MSI](https://www.msi.com/Motherboard/MAG-B650-TOMAHAWK-WIFI/support#bios), copie-la sur une clé **FAT32** et lance **M-Flash**.\n## 🧠 Processeur\n1. **OC › Precision Boost Overdrive** sur **Advanced**\n2. **Curve Optimizer** : All Core, Negative, **-20**\n## 🧩 Mémoire\n- **EXPO Profile 1** : **4800 → 6000 MHz**' }] });
 const proPost = (path, body) => { const token = secret('account'); return token ? api(path, { method: 'POST', token, body, timeout: 90_000 }).catch(() => ({ error: 'Serveur injoignable. Réessaie.' })) : { error: 'Connecte-toi à ton compte History (Paramètres › Compte).' }; };
 ipcMain.handle('pro:session', async () => { if (process.env.LAUNCHER_DEMO) return { session: proDemo() }; const token = secret('account'); return token ? api('/api/compte/optipro', { token }).catch(() => ({ error: 'Serveur injoignable.' })) : { error: 'login' }; });
 ipcMain.handle('pro:start', async (_e, f = {}) => {
@@ -1322,6 +1322,9 @@ ipcMain.handle('pro:start', async (_e, f = {}) => {
 ipcMain.handle('pro:act', (_e, action, text = '') => proPost('/api/compte/optipro/action', { action: String(action).slice(0, 10), text: String(text).slice(0, 1500) }));
 // Liens des étapes : calculés ici (jamais une adresse venant de l'interface)
 ipcMain.handle('pro:link', async (_e, which) => { const p = await proPc(); const u = { bios: biosLink(p.board, p.cpu), occt: 'https://www.ocbase.com/download', nvidia: 'https://www.nvidia.com/fr-fr/drivers/', amd: 'https://www.amd.com/fr/support/download/drivers.html' }[which]; return u ? shell.openExternal(u).then(() => true, () => false) : false; });
+// Liens du ticket (boutons et réponses de l'IA) : seulement des sites officiels connus, en https
+const PRO_HOSTS = /^(?:[\w-]+\.)*(?:microsoft\.com|nvidia\.com|amd\.com|intel\.(?:com|fr)|msi\.com|asus\.com|gigabyte\.com|asrock\.com|ocbase\.com|hwinfo\.com|cpuid\.com|wagnardsoft\.com|capframex\.com|maxon\.net|testufo\.com|github\.com|discord\.com)$/i;
+ipcMain.handle('pro:open', (_e, url) => { try { const u = new URL(String(url)); return u.protocol === 'https:' && PRO_HOSTS.test(u.hostname) ? shell.openExternal(u.href).then(() => true, () => false) : false; } catch { return false; } });
 // Outil Microsoft de création de clé USB : téléchargé en 1 clic, signature Microsoft vérifiée, puis lancé
 ipcMain.handle('pro:usb', async () => {
   if (process.platform !== 'win32') return { error: 'Disponible sur Windows.' };

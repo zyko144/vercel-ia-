@@ -3167,7 +3167,8 @@ const PRO_STEPS = [
 ];
 const PRO_COLORS = ['#619fff', '#36c995', '#9b8cff', '#f5a623', '#ff6b6b', '#2ee07a', '#ffc439'];
 let pro = null, proBusy = false, proPoll = 0;
-const proEmbed = (m) => `<div class="emb ${m.who}" style="--ec:${m.who === 'bot' ? PRO_COLORS[m.step] : '#4e5058'}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt="">🚀 Opti Pro · Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][0]} ${PRO_STEPS[m.step][1]}` : m.who === 'staff' ? '🛠 Staff History' : '💬 Toi'}</div><div class="reporttxt rich">${richText(m.text)}</div>${m.who === 'bot' ? `<small class="embf">${PRO_STEPS.map((_, i) => (i <= m.step ? '🟩' : '⬛')).join('')} · Technicien History</small>` : ''}</div>`;
+const proEmbed = (m) => `<div class="emb ${m.who}" style="--ec:${m.who === 'bot' ? PRO_COLORS[m.step] : '#4e5058'}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt="">🚀 Opti Pro · Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][0]} ${PRO_STEPS[m.step][1]}` : m.who === 'staff' ? '🛠 Staff History' : '💬 Toi'}</div><div class="reporttxt rich">${proLinks(richText(m.text))}</div>${m.who === 'bot' ? `<small class="embf">${PRO_STEPS.map((_, i) => (i <= m.step ? '🟩' : '⬛')).join('')} · Technicien History</small>` : ''}</div>`;
+const proLinks = (html) => html.replace(/\[([^\]]+)\]\((https:\/\/[^\s)<]+)\)|(https:\/\/[^\s<)]+)/g, (_, t, u, bare) => `<a href="#" class="plink" data-url="${u ?? bare}">${t ?? bare}</a>`);
 function renderProTicket() {
   const s = pro, last = s && s.step >= PRO_STEPS.length - 1, nx = s && PRO_STEPS[s.step + 1], opt = (i) => [2, 3, 4].includes(i);
   if (!s || s.closed) {
@@ -3176,6 +3177,7 @@ function renderProTicket() {
   }
   $('proTicket').innerHTML = `<div class="embs" id="proLog">${s.log.map(proEmbed).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
     <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${nx && opt(s.step + 1) ? `<button class="btn" data-pa="skip" ${proBusy ? 'disabled' : ''}>⏭ Passer ${nx[1]}</button>` : ''}${nx && opt(s.step + 1) && opt(s.step + 2) ? `<button class="btn" data-pa="skip2" ${proBusy ? 'disabled' : ''}>⏭ Passer jusqu’à ${PRO_STEPS[s.step + 3][1]}</button>` : ''}<button class="btn ghost" data-pa="human">👤 Humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
+    ${s.links?.length ? `<div class="row prolinks">${s.links.map(([l, u]) => `<button class="btn sm ghost" data-url="${esc(u)}">${esc(l)} ↗</button>`).join('')}</div>` : ''}
     <form class="row prosend" id="proSend"><input id="proMsg" maxlength="1500" placeholder="Écris au technicien : une question, un souci, une valeur à vérifier…" ${proBusy ? 'disabled' : ''}><button class="btn play" ${proBusy ? 'disabled' : ''}>Envoyer</button></form>${s.thread ? '<small class="hint">💬 Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
   const log = $('proLog'); log.scrollTop = log.scrollHeight;
 }
@@ -3203,7 +3205,7 @@ async function proAction(action, text = '') {
   if (!r || r.error) { toast(r?.error === 'login' ? 'Connecte-toi à ton compte History (Paramètres › Compte).' : r?.error ?? 'Serveur injoignable. Réessaie.'); return renderPro(); }
   pro = r.session; renderPro(false);
 }
-$('proTicket').addEventListener('click', (e) => { const b = e.target.closest('[data-pa]'); if (b) proAction(b.dataset.pa); });
+$('proTicket').addEventListener('click', (e) => { const l = e.target.closest('[data-url]'); if (l) { e.preventDefault(); return api.proOpen?.(l.dataset.url); } const b = e.target.closest('[data-pa]'); if (b) proAction(b.dataset.pa); });
 $('proTicket').addEventListener('submit', (e) => { e.preventDefault(); const v = $('proMsg').value.trim(); if (v) proAction('msg', v); });
 $('proSteps').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-pt]'); if (!b) return; const k = b.dataset.pt;

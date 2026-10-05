@@ -2085,3 +2085,5 @@ body.idle .premcard.best::before { animation-play-state: paused; }
 .probtns { flex-wrap: wrap; gap: 8px; }
 .emb.typing .gbar { height: 4px; }
 @media (max-width: 1100px) { .prolay { grid-template-columns: 1fr; } }
+.prolinks { flex-wrap: wrap; gap: 6px; }
+.emb a.plink { color: #00a8fc; text-decoration: none; font-weight: 600; } .emb a.plink:hover { text-decoration: underline; }

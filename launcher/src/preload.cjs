@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('launcher', {
   proAct: (a, t) => ipcRenderer.invoke('pro:act', a, t),
   proUsb: () => ipcRenderer.invoke('pro:usb'),
   proLink: (w) => ipcRenderer.invoke('pro:link', w),
+  proOpen: (u) => ipcRenderer.invoke('pro:open', u),
   care: () => ipcRenderer.invoke('care:get'),
   careDrivers: () => ipcRenderer.invoke('care:drivers'),
   modsToggle: (id, dir, name, on) => ipcRenderer.invoke('mods:toggle', id, dir, name, on),
