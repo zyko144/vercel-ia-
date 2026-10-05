@@ -178,12 +178,12 @@ async function readKey(key) {
   return parseRegQuery(r?.stdout ?? '')[0]?.values ?? {};
 }
 export async function tweakStates() {
-  if (!win) return GAME_TWEAKS.filter((t) => !t.retired).map((t) => ({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on: false }));
+  if (!win) return GAME_TWEAKS.filter((t) => !t.retired).map((t) => ({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), comfort: Boolean(t.comfort), on: false }));
   const out = [];
   for (const t of GAME_TWEAKS) {
     const on = tweakApplied(t, await readKey(t.key));
     if (t.retired && !on) continue;
-    out.push({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), on, ...(t.retired ? { retired: t.retired } : {}) });
+    out.push({ id: t.id, label: t.label, help: t.help, optional: Boolean(t.optional), comfort: Boolean(t.comfort), on, ...(t.retired ? { retired: t.retired } : {}) });
   }
   return out;
 }
@@ -248,12 +248,11 @@ export const SYSTEM_TWEAKS = [
 // Réglages utilisateur en plus (sans droits administrateur)
 GAME_TWEAKS.push(
   { id: 'startdelay', label: 'Démarrage des applis sans délai', help: 'Windows attend quelques secondes avant de lancer les applis du démarrage : on supprime cette attente.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize', values: { StartupDelayInMSec: 0 }, off: { StartupDelayInMSec: 10000 } },
-  { id: 'sticky', label: 'Touches rémanentes désactivées en jeu', help: 'Fini la fenêtre qui sort le jeu quand tu appuies 5 fois sur Maj (touches rémanentes et touches filtres).', key: 'HKCU\\Control Panel\\Accessibility\\StickyKeys', values: { Flags: '506' }, off: { Flags: '510' }, extra: { key: 'HKCU\\Control Panel\\Accessibility\\Keyboard Response', values: { Flags: '122' }, off: { Flags: '126' } } },
-  { id: 'adid', label: 'Identifiant de publicité coupé', help: 'Les applis ne te suivent plus pour la pub (confidentialité).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo', values: { Enabled: 0 }, off: { Enabled: 1 } },
-  { id: 'tailored', label: 'Expériences personnalisées coupées', help: 'Windows n’utilise plus tes données de diagnostic pour des conseils et des pubs.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Privacy', values: { TailoredExperiencesWithDiagnosticDataEnabled: 0 }, off: { TailoredExperiencesWithDiagnosticDataEnabled: 1 } },
-  { id: 'bing', label: 'Recherche Bing du menu Démarrer coupée', help: 'La recherche de Windows reste sur ton PC : plus rapide, moins d’Internet en fond.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search', values: { BingSearchEnabled: 0 }, off: { BingSearchEnabled: 1 } },
-  { id: 'copilot', label: 'Copilot de Windows désactivé', help: 'Un programme en moins qui tourne en fond (debloat).', key: 'HKCU\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot', values: { TurnOffWindowsCopilot: 1 }, off: { TurnOffWindowsCopilot: 0 } },
-  { id: 'gamebartips', label: 'Astuces de la Game Bar au lancement coupées', help: 'Plus de petite fenêtre Xbox au début des parties.', key: 'HKCU\\Software\\Microsoft\\GameBar', values: { ShowStartupPanel: 0 }, off: { ShowStartupPanel: 1 } },
+  { id: 'sticky', comfort: true, label: 'Touches rémanentes désactivées en jeu', help: 'Fini la fenêtre qui sort le jeu quand tu appuies 5 fois sur Maj (touches rémanentes et touches filtres).', key: 'HKCU\\Control Panel\\Accessibility\\StickyKeys', values: { Flags: '506' }, off: { Flags: '510' }, extra: { key: 'HKCU\\Control Panel\\Accessibility\\Keyboard Response', values: { Flags: '122' }, off: { Flags: '126' } } },
+  { id: 'adid', comfort: true, label: 'Identifiant de publicité coupé', help: 'Les applis ne te suivent plus pour la pub (confidentialité).', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo', values: { Enabled: 0 }, off: { Enabled: 1 } },
+  { id: 'tailored', comfort: true, label: 'Expériences personnalisées coupées', help: 'Windows n’utilise plus tes données de diagnostic pour des conseils et des pubs.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Privacy', values: { TailoredExperiencesWithDiagnosticDataEnabled: 0 }, off: { TailoredExperiencesWithDiagnosticDataEnabled: 1 } },
+  { id: 'bing', comfort: true, label: 'Recherche Bing du menu Démarrer coupée', help: 'La recherche de Windows reste sur ton PC : plus rapide, moins d’Internet en fond.', key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search', values: { BingSearchEnabled: 0 }, off: { BingSearchEnabled: 1 } },
+  { id: 'gamebartips', comfort: true, label: 'Astuces de la Game Bar au lancement coupées', help: 'Plus de petite fenêtre Xbox au début des parties.', key: 'HKCU\\Software\\Microsoft\\GameBar', values: { ShowStartupPanel: 0 }, off: { ShowStartupPanel: 1 } },
   { id: 'menudelay', label: 'Menus instantanés', help: 'Les menus s’ouvrent sans attendre (400 ms → 50 ms).', optional: true, key: 'HKCU\\Control Panel\\Desktop', values: { MenuShowDelay: '50' }, off: { MenuShowDelay: '400' } },
 );
 

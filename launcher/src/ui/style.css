@@ -1085,7 +1085,7 @@ ul.tips { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; line-hei
 .bell:hover, .bell.has { color: var(--text); background: rgba(255, 255, 255, .06); }
 .bell em { position: absolute; top: 2px; right: 2px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #ef4444; color: #fff; font-style: normal; font-size: 10.5px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
 .bell em:empty { display: none; }
-.bell.ring svg { animation: bellring .8s ease; transform-origin: 50% 10%; }
+.bell.ding svg { animation: bellring .8s ease; transform-origin: 50% 10%; }
 @keyframes bellring { 20% { transform: rotate(14deg); } 40% { transform: rotate(-12deg); } 60% { transform: rotate(8deg); } 80% { transform: rotate(-4deg); } }
 .bell + .winbtns { margin-left: 4px; }
 .ncenter { position: fixed; inset: auto; top: 52px; right: 12px; margin: 0; width: min(420px, calc(100vw - 24px)); max-height: min(640px, calc(100vh - 70px)); padding: 0; border-radius: 18px; color: var(--text);

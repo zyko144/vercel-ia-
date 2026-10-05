@@ -20,16 +20,6 @@ body[data-season="halloween"] .brandmark img { width: 82px; height: 82px; filter
 #halloween .web.bl { bottom: 0; left: 0; transform-origin: bottom left; animation-delay: -3s; }
 #halloween .web.br { bottom: 0; right: 0; transform-origin: bottom right; animation-delay: -5s; }
 @keyframes hweb { from { transform: rotate(-1.4deg) scale(1); } to { transform: rotate(1.4deg) scale(1.02); } }
-#halloween .spider { top: 56px; width: 44px; display: flex; flex-direction: column; align-items: center; transform: translateY(calc(-1 * var(--h, 110px) - 140px)); animation: hcycle var(--d, 16s) ease-in-out infinite; animation-delay: var(--w, 0s); }
-#halloween .spider i { width: 1px; height: var(--h, 110px); background: linear-gradient(rgba(243, 230, 216, .1), rgba(243, 230, 216, .55)); }
-#halloween .spider img { width: 40px; margin-top: -4px; animation: hwiggle 1.6s ease-in-out infinite alternate; }
-@keyframes hcycle { 0%, 12% { transform: translateY(calc(-1 * var(--h) - 140px)); } 32% { transform: translateY(0); } 42% { transform: translateY(-16px) rotate(-3deg); } 52% { transform: translateY(0) rotate(3deg); } 64% { transform: translateY(-8px); } 74% { transform: translateY(0); } 92%, 100% { transform: translateY(calc(-1 * var(--h) - 140px)); } }
-@keyframes hwiggle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
-#halloween .bat { top: 70px; left: -60px; width: 46px; opacity: .8; animation: hbat 26s linear infinite; }
-#halloween .bat.b2 { top: 140px; width: 30px; animation-duration: 34s; animation-delay: -14s; opacity: .55; }
-#halloween .bat path { fill: #120b07; stroke: rgba(255, 140, 60, .35); stroke-width: .8; animation: hflap .22s ease-in-out infinite alternate; transform-origin: center; }
-@keyframes hbat { 0% { transform: translate(0, 0); } 25% { transform: translate(30vw, 30px); } 50% { transform: translate(60vw, -10px); } 75% { transform: translate(90vw, 25px); } 100% { transform: translate(115vw, 0); } }
-@keyframes hflap { from { transform: scaleY(1); } to { transform: scaleY(.45); } }
 body[data-season="halloween"] .card:hover { box-shadow: 0 0 0 1px rgba(255, 122, 26, .5), 0 12px 40px rgba(255, 100, 20, .25); }
 @media (prefers-reduced-motion: reduce) { #halloween * { animation: none !important; } }
 body.ui-paused #halloween * { animation-play-state: paused; }
