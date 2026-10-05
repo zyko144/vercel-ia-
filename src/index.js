@@ -99,8 +99,14 @@ client.once(Events.ClientReady, async (c) => {
   // /launcher sur le serveur du launcher, /play (musique) sur les autres
   const payloadFor = (guild) => (old ? guildCommandDefinitions.map((cmd) => cmd.toJSON()) : [...pick('play'), ...(guild.id === HOME_GUILD ? pick('launcher') : [])]);
   const registerOn = (guild) => guild.commands.set(payloadFor(guild)).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
-  await Promise.all([...c.guilds.cache.values()].map(registerOn));
-  console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
+  // Remis toutes les 30 min : si une ancienne copie du bot (ancien hébergeur) remet les vieilles commandes, elles repartent
+  const syncCommands = async () => {
+    await c.application.commands.set([]).catch((err) => console.warn('[commandes] globales :', err.message));
+    await Promise.all([...c.guilds.cache.values()].map(registerOn));
+    console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
+  };
+  await syncCommands();
+  setInterval(() => syncCommands().catch(() => {}), 30 * 60_000).unref();
   c.on(Events.GuildCreate, (guild) => registerOn(guild));
   // Résumé des commandes « !! » dans le salon agora (une fois par version)
   if (FULL) import('./features/prefixCommands.js').then((m) => m.postCommandSummary(c)).catch((err) => console.warn('[!!aide]', err.message));
