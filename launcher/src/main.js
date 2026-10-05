@@ -4098,9 +4098,20 @@ async function phoneAct(what, id) {
   if (what === 'sleep') { setTimeout(() => sys('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']), 1500); return { ok: true, msg: '🌙 Le PC se met en veille' }; }
   if (what === 'shutdown') { sys('shutdown', ['/s', '/t', '60', '/c', 'Extinction demandée depuis ton téléphone (History). Annule avec shutdown /a ou depuis le téléphone.']); notify('Extinction dans 60 s', 'Demandée depuis ton téléphone.'); return { ok: true, msg: '⏻ Extinction dans 60 secondes' }; }
   if (what === 'cancel') { sys('shutdown', ['/a']); return { ok: true, msg: 'Extinction annulée' }; }
+  // Veille + réveil : tâche Windows « réveiller l'ordinateur » à l'heure demandée (heure validée, aucun texte du téléphone dans le script)
+  if (what === 'wake') {
+    const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(id)); if (!m) return { ok: false, msg: 'Heure invalide' };
+    const at = new Date(); at.setHours(Number(m[1]), Number(m[2]), 0, 0); if (at <= Date.now()) at.setDate(at.getDate() + 1);
+    const iso = new Date(at.getTime() - at.getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
+    const ps = `$t=New-ScheduledTaskTrigger -Once -At '${iso}';$s=New-ScheduledTaskSettingsSet -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries;$a=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c exit';Register-ScheduledTask -TaskName 'History - reveil du PC' -Trigger $t -Settings $s -Action $a -Force | Out-Null`;
+    const ok = await new Promise((r) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, timeout: 20_000 }, (err) => r(!err)));
+    if (!ok) return { ok: false, msg: 'Réveil impossible à programmer : veille annulée' };
+    setTimeout(() => sys('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']), 1500);
+    return { ok: true, msg: `🌙 En veille, réveil à ${m[1]}:${m[2]}` };
+  }
   return { ok: false };
 }
-// Appli téléphone : le PC envoie son état au serveur et exécute les ordres reçus (20 s, 3 s quand le téléphone regarde)
+// Appli téléphone : le PC envoie son état au serveur et exécute les ordres reçus (10 s, 3 s quand le téléphone regarde)
 let phoneMsg = '';
 async function phoneSync() {
   const token = secret('account');
@@ -4122,7 +4133,7 @@ async function phoneSync() {
   };
   const r = await api('/api/compte/pc/etat', { method: 'POST', token, body: { pc: store.data.deviceId, nom: os.hostname(), etat } }).catch(() => null);
   for (const o of r?.ordres ?? []) phoneMsg = (await phoneAct(o.do, o.id).catch((e) => ({ msg: e.message })))?.msg ?? '';
-  if (r?.ordres?.length) setTimeout(phoneSync, 800); else setTimeout(phoneSync, r?.rapide ? 3000 : 20_000);
+  if (r?.ordres?.length) setTimeout(phoneSync, 800); else setTimeout(phoneSync, r?.rapide ? 3000 : 10_000);
 }
 app.whenReady().then(() => setTimeout(phoneSync, 8000));
 // QR de connexion : scanné, il connecte l'appli au compte ET à ce PC (code à usage unique, 2 min)

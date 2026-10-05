@@ -7,5 +7,6 @@ assert.equal((await call('POST', '/api/compte/pc/etat', { pc: 'p1', nom: 'PC sal
 const list = await call('GET', '/api/compte/pc'); assert.equal(list.pcs[0].enLigne, true); assert.equal(list.pcs[0].etat.cpu, '50 °C');
 assert.equal((await call('POST', '/api/compte/pc/ordre', { pc: 'p1', do: 'rm -rf' })).code, 400);
 assert.equal((await call('POST', '/api/compte/pc/ordre', { pc: 'p1', do: 'launch', id: 'steam-730' })).ok, true);
+assert.equal((await call('POST', '/api/compte/pc/ordre', { pc: 'p1', do: 'wake', id: '25:00; calc' })).code, 400, 'heure de réveil validée');
 const r = await call('POST', '/api/compte/pc/etat', { pc: 'p1', nom: 'PC salon' }); assert.deepEqual(r.ordres.map((o) => o.do), ['launch']); assert.equal(r.rapide, true);
 console.log('✅ Relais téléphone ↔ PC');
