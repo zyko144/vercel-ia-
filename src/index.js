@@ -18,7 +18,7 @@ import { startCasinho } from './casinho/index.js';
 import { startClipsBot } from './clips/bot.js';
 import { startVoiceAssistant } from './voice-ai/assistant.js';
 import { config } from './config.js';
-import { commandDefinitions, guildCommandDefinitions } from './commands/definitions.js';
+import { guildCommandDefinitions } from './commands/definitions.js';
 import { onInteraction } from './handlers/interactions.js';
 import { onMessage } from './handlers/messages.js';
 import { putSiteInBio } from './features/bio.js';
@@ -87,12 +87,13 @@ client.once(Events.ClientReady, async (c) => {
   });
 
   const old = false; // /serveur, /pannel, /ia, /jeux, /musique… supprimées : seulement /play (et /launcher sur le serveur du launcher)
-  try {
-    await c.application.commands.set(old ? commandDefinitions.map((cmd) => cmd.toJSON()) : []);
-    console.log(old ? `📜 ${commandDefinitions.length} commandes enregistrées` : '📜 Commandes globales retirées : seulement /play (et /launcher)');
-  } catch (err) {
-    console.error('❌ Enregistrement des commandes impossible :', err);
-  }
+  // Commandes globales supprimées une par une : le « point d'entrée » de l'Activité (type 4) ne peut pas être retiré en bloc
+  const clearGlobal = async () => {
+    const all = await c.application.commands.fetch();
+    let n = 0;
+    for (const cmd of all.values()) if (cmd.type !== 4) { await cmd.delete(); n++; }
+    if (n) console.log(`📜 ${n} ancienne(s) commande(s) globale(s) retirée(s) : seulement /play (et /launcher)`);
+  };
   // /play sur chaque serveur : visible tout de suite, sans attendre la mise à jour globale de Discord
   const { HOME_GUILD } = await import('./features/launcherServers.js');
   const pick = (name) => guildCommandDefinitions.filter((cmd) => cmd.name === name).map((cmd) => cmd.toJSON());
@@ -101,7 +102,7 @@ client.once(Events.ClientReady, async (c) => {
   const registerOn = (guild) => guild.commands.set(payloadFor(guild)).catch((err) => console.warn(`[commandes] ${guild.name} :`, err.message));
   // Remis toutes les 30 min : si une ancienne copie du bot (ancien hébergeur) remet les vieilles commandes, elles repartent
   const syncCommands = async () => {
-    await c.application.commands.set([]).catch((err) => console.warn('[commandes] globales :', err.message));
+    await clearGlobal().catch((err) => console.warn('[commandes] globales :', err.message));
     await Promise.all([...c.guilds.cache.values()].map(registerOn));
     console.log(`▶️ /play et /launcher enregistrées sur ${c.guilds.cache.size} serveur(s)`);
   };
