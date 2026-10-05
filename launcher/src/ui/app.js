@@ -1607,6 +1607,10 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.34': [
+    ['🖱', 'Plus de saut de page', 'Opti Pro : la page ne remonte plus toute seule. Le ticket se met à jour seulement quand il y a du nouveau.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']],
+    ['📏', 'Plus de place', 'Les messages du technicien et le détail pas à pas prennent toute la hauteur de la fenêtre. Les boutons « Passer » sont retirés : chaque étape se valide avec « Fait ».']
+  ],
   '0.53.33': [
     ['🖱', 'Défilement réparé', 'Opti Pro : la molette fait défiler seulement les messages du technicien, plus toute la page, et la page ne saute plus toute seule pendant que tu lis.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
   ],
@@ -3188,7 +3192,7 @@ const PRO_STEPS = [
   ['🏁', 'Test & validation', 'On remesure et on valide chaque réglage.', [['bench', '🏁 Mesurer mes performances']]]
 ];
 const PRO_COLORS = ['#619fff', '#36c995', '#9b8cff', '#f5a623', '#ff6b6b', '#2ee07a', '#ffc439'];
-let pro = null, proBusy = false, proPoll = 0, proHuman = false;
+let pro = null, proBusy = false, proPoll = 0, proHuman = false, proSeen = '';
 const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt=""><b>Technicien History</b><span>Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][1]}</span>` : m.who === 'staff' ? '<b>Équipe History</b>' : '<b>Toi</b>'}</div><div class="reporttxt rich">${proLinks(richText(m.text))}</div>${m.who === 'bot' ? `<div class="embbar"><i style="width:${Math.round(((m.step + 1) / 7) * 100)}%"></i></div>` : ''}</div>`;
 // Mode concentration : une tâche à la fois dans le dernier message du technicien, les autres floutées
 const proFocus = {}, proDetail = {};
@@ -3212,20 +3216,21 @@ function renderProTicket(jump = true) {
   }
   $('proTicket').innerHTML = `<div class="embs" id="proLog">${s.log.map((m, k) => proEmbed(m, k)).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
     <div class="emb human" id="proHuman" style="--ec:#5865f2" ${proHuman ? '' : 'hidden'}><div class="emba"><img src="logo.png" alt="">👤 Parler à un humain</div><p>L’équipe Opti Pro répond <b>sur Discord</b>, pas dans le support de l’appli. Rejoins le serveur History, va dans le salon <b>#🚀・opti-pro</b> : ton ticket y est dans ton fil privé${s.thread ? '' : ' (lie ton compte Discord dans Paramètres › Compte, puis tape <b>/launcher opti</b>)'}. Clique sur <b>👤 Parler à un humain</b> dans le fil : un membre de l’équipe arrive.</p><div class="row"><button class="btn play" data-pa="discordgo">🎮 Ouvrir Discord</button></div></div>
-    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${nx && opt(s.step + 1) ? `<button class="btn" data-pa="skip" ${proBusy ? 'disabled' : ''}>⏭ Passer ${nx[1]}</button>` : ''}${nx && opt(s.step + 1) && opt(s.step + 2) ? `<button class="btn" data-pa="skip2" ${proBusy ? 'disabled' : ''}>⏭ Passer jusqu’à ${PRO_STEPS[s.step + 3][1]}</button>` : ''}<button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
+    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button><button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
     ${s.links?.length ? `<div class="row prolinks">${s.links.map(([l, u]) => `<button class="btn sm ghost" data-url="${esc(u)}">${esc(l)} ↗</button>`).join('')}</div>` : ''}
     ${s.thread ? '<small class="hint">💬 Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
   proFocusUi(); const log = $('proLog'), on = log.querySelector('.emb.focus li.on'); // défile seulement dans le ticket, jamais toute la page
   log.scrollTop = !jump && prev != null ? prev : on ? log.scrollTop + on.getBoundingClientRect().top - log.getBoundingClientRect().top - 60 : log.scrollHeight;
 }
 async function renderPro(refresh = true) {
-  if (refresh) { const r = await api.proSession?.().catch(() => null); if (r && !r.error) pro = r.session; }
+  if (refresh) { const r = await api.proSession?.().catch(() => null); if (r && !r.error) { if (proSeen && JSON.stringify(r.session) === proSeen) return; pro = r.session; } }
+  proSeen = JSON.stringify(pro);
   const step = pro && !pro.closed ? pro.step : pro?.done ? 7 : 0;
   $('proBar').style.width = `${Math.round((100 * step) / PRO_STEPS.length)}%`;
   $('proProg').textContent = pro?.done ? 'Ton PC est prêt 🚀' : pro && !pro.closed ? `Étape ${step + 1} / 7 · ${PRO_STEPS[step][1]}` : 'Ouvre ton ticket pour commencer';
   // Une étape s'ouvre seulement quand la précédente est terminée (ou passée avec le bouton « Passer »)
   const open = pro && !pro.closed, lock = (i) => (pro?.done ? false : i > step || (!open && i > 0));
-  $('proSteps').innerHTML = PRO_STEPS.map(([ic, t, d, tools], i) => `<li class="${i < step ? 'done' : i === step && open ? 'now' : lock(i) ? 'locked' : ''}"><span class="pron">${i < step ? '✓' : lock(i) ? '🔒' : i + 1}</span><div><b>${ic} ${t}</b><small>${lock(i) ? `🔒 Termine d’abord l’étape ${i} (${PRO_STEPS[i - 1][1]})${[2, 3, 4].includes(i) ? ' ou passe-la avec « ⏭ Passer »' : ''}.` : d}</small>${tools ? `<div class="row">${tools.map(([k, l]) => `<button class="btn sm${k === 'final' ? ' play' : ''}" data-pt="${k}" ${lock(i) ? 'disabled' : ''}>${l}</button>`).join('')}</div>` : ''}</div></li>`).join('');
+  $('proSteps').innerHTML = PRO_STEPS.map(([ic, t, d, tools], i) => `<li class="${i < step ? 'done' : i === step && open ? 'now' : lock(i) ? 'locked' : ''}"><span class="pron">${i < step ? '✓' : lock(i) ? '🔒' : i + 1}</span><div><b>${ic} ${t}</b><small>${lock(i) ? `🔒 Termine d’abord l’étape ${i} (${PRO_STEPS[i - 1][1]}).` : d}</small>${tools ? `<div class="row">${tools.map(([k, l]) => `<button class="btn sm${k === 'final' ? ' play' : ''}" data-pt="${k}" ${lock(i) ? 'disabled' : ''}>${l}</button>`).join('')}</div>` : ''}</div></li>`).join('');
   renderProTicket(!refresh || !$('proLog'));
   clearInterval(proPoll);
   if (pro && !pro.closed) proPoll = setInterval(() => { if ($('view-optimisation').offsetParent && !proBusy && !document.getElementById('proAskDlg')?.open) renderPro(); }, 10000);
@@ -4830,7 +4835,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.33',
+    version: async () => '0.53.34',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
