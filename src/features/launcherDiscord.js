@@ -48,6 +48,7 @@ export const launcherCommand = new SlashCommandBuilder().setName('launcher').set
     .addUserOption((o) => o.setName('avec').setDescription('Comparer deux autres membres (sinon : toi)')))
   .addSubcommand((s) => s.setName('fps').setDescription('FPS mesurés par les joueurs History sur un jeu, avec leur PC')
     .addStringOption((o) => o.setName('jeu').setDescription('Le jeu').setRequired(true).setAutocomplete(true).setMaxLength(80)))
+  .addSubcommand((s) => s.setName('opti').setDescription('🚀 Ticket Opti Pro : ton PC optimisé pas à pas par l’IA (BIOS, overclocking, Windows, NVIDIA)'))
   .addSubcommand((s) => s.setName('aide').setDescription('Un souci avec History Launcher ? Écris au support (réponse dans l’appli)'))
   .addSubcommand((s) => s.setName('telecharger').setDescription('Lien de la dernière version de History Launcher'))
   .addSubcommand((s) => s.setName('installer').setDescription('Admin : crée les salons infos, nouveautés et jeux gratuits ici'));
@@ -79,6 +80,7 @@ export async function handleLauncherCommand(client, interaction) {
     const setup = (rel?.assets ?? []).find((a) => /\.exe$/i.test(a.name));
     return interaction.reply({ content: `# 🚀 History Launcher${rel?.tag_name ? ` ${rel.tag_name}` : ''}\n${setup ? `**[📥 Télécharger l’installateur](${setup.browser_download_url})** · ` : ''}[Site](${SITE})`, ...PRIVATE });
   }
+  if (sub === 'opti') return (await import('./optiPro.js')).onOptiProInteraction(Object.assign(interaction, { customId: 'opro:open' }));
   if (sub === 'aide') {
     if (!(await accountByDiscord(interaction.user.id))) return interaction.reply({ content: `🔗 Lie d’abord ton compte History dans <#${LINK_CHANNEL}> : la réponse du support arrive dans ton launcher.`, ...PRIVATE });
     const { ModalBuilder, TextInputBuilder, TextInputStyle } = await import('discord.js');
