@@ -14,6 +14,8 @@ export function supportEmbed(t) {
   const labels={received:'Reçue',investigating:'En cours',resolved:'Résolue'};
   const embed=new EmbedBuilder().setColor(t.status==='resolved'?0x36c995:0x619fff).setTitle(`${t.app==='clips'?'History Clips':'History Launcher'} · ${t.title}`.slice(0,256)).setDescription(t.description).setAuthor({name:t.displayName||t.name,...(t.avatar?{iconURL:t.avatar}:{})}).addFields({name:'Statut',value:labels[t.status]??t.status,inline:true},{name:'Compte',value:t.discordId?`Discord lié · ${t.discordId}`:'Compte History',inline:true}).setFooter({text:`Support privé · ${t.id}`});
   if(t.avatar)embed.setThumbnail(t.avatar);
+  const d=t.diagnostic??{};const pc=[d.cpu&&`🧠 ${d.cpu}`,d.gpu&&`🎮 ${d.gpu}${d.driver?` · pilote ${d.driver}`:''}`,d.memoryGB&&`💾 ${d.memoryGB} Go de RAM${d.diskFreeGB!=null?` · ${d.diskFreeGB} Go libres sur C:`:''}`,d.windows&&`🪟 ${d.windows}${d.uptimeDays!=null?` · allumé depuis ${d.uptimeDays} j`:''}`,(d.cpuTempMax||d.gpuTempMax)&&`🌡️ Max 24 h : CPU ${d.cpuTempMax??'?'}°C · GPU ${d.gpuTempMax??'?'}°C`,d.health&&`❤️ Santé ${d.health}/100`,d.version&&`📦 Launcher ${d.version}`].filter(Boolean);
+  if(pc.length)embed.addFields({name:'🖥️ Analyse du PC',value:pc.join('\n').slice(0,1024)});
   if(t.reply)embed.addFields({name:'Réponse de l’équipe',value:t.reply.slice(0,1024)});
   return embed;
 }
@@ -24,38 +26,50 @@ async function deliver(id) {
     const identity=await supportIdentity({id:t.owner,pseudo:t.name,profile:account?profileOf(account):{}},t.app);
     Object.assign(t,identity);await mutateSupport(all=>{if(all[id])Object.assign(all[id],identity);});
   }
-  // Chaque demande a son fil dans le salon privé #support-launcher (plus en MP) ; un message du chef dans le fil = la réponse
-  const ch=await supportChannel(); if(!ch)return;
+  // Chaque demande a son fil dans le salon privé #support-launcher du serveur History Launcher ET de DDV ; un message du chef dans un fil = la réponse
+  const [home,ddv]=await supportChannels(); if(!home)return;
   const components=[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`support:reply:${id}`).setLabel('Répondre').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`support:resolve:${id}`).setLabel('Marquer résolue').setStyle(ButtonStyle.Success))];
-  const payload={embeds:[supportEmbed(t)],components,allowedMentions:{parse:[]}};
-  if(t.discordThread) { const msg=await ch.messages.fetch(t.discordMessage);if(t.img)payload.embeds[0].setImage(msg.embeds[0]?.image?.url ?? null);await msg.edit(payload);await mutateSupport(all=>{if(all[id])all[id].discordSyncedAt=t.updatedAt;});return; }
-  if(t.img) {const [header,data]=t.img.split(',');const ext=header.includes('png')?'png':header.includes('webp')?'webp':'jpg';payload.files=[{attachment:Buffer.from(data,'base64'),name:`capture.${ext}`}];payload.embeds[0].setImage(`attachment://capture.${ext}`);}
-  const sent=await ch.send({...payload,nonce:id.replaceAll('-','').slice(0,25),enforceNonce:true});
-  const thread=await sent.startThread({name:`${t.displayName||t.name} · ${t.title}`.slice(0,100),autoArchiveDuration:10080}).catch(()=>null);
-  await thread?.send({content:'✍️ Écris ta réponse ici : elle arrive tout de suite dans l’appli de la personne.',allowedMentions:{parse:[]}}).catch(()=>{});
-  await mutateSupport(all=>{if(all[id]){all[id].discordMessage=sent.id;all[id].discordThread=thread?.id??'aucun';all[id].discordSyncedAt=t.updatedAt;}});
+  const post=async(ch,msgId,nonce)=>{
+    const payload={embeds:[supportEmbed(t)],components,allowedMentions:{parse:[]}};
+    if(msgId){const msg=await ch.messages.fetch(msgId);if(t.img)payload.embeds[0].setImage(msg.embeds[0]?.image?.url ?? null);await msg.edit(payload);return null;}
+    if(t.img){const [header,data]=t.img.split(',');const ext=header.includes('png')?'png':header.includes('webp')?'webp':'jpg';payload.files=[{attachment:Buffer.from(data,'base64'),name:`capture.${ext}`}];payload.embeds[0].setImage(`attachment://capture.${ext}`);}
+    const sent=await ch.send({...payload,nonce,enforceNonce:true});
+    const thread=await sent.startThread({name:`${t.displayName||t.name} · ${t.title}`.slice(0,100),autoArchiveDuration:10080}).catch(()=>null);
+    await thread?.send({content:'✍️ Écris ta réponse ici : elle arrive tout de suite dans l’appli de la personne.',allowedMentions:{parse:[]}}).catch(()=>{});
+    return {message:sent.id,thread:thread?.id??'aucun'};
+  };
+  const nonce=id.replaceAll('-','').slice(0,24);
+  const main=await post(home,t.discordThread&&t.discordMessage,`h${nonce}`);
+  const mirror=ddv?await post(ddv,t.discordMirror?.message,`d${nonce}`).catch(()=>null):null;
+  await mutateSupport(all=>{if(all[id]){if(main){all[id].discordMessage=main.message;all[id].discordThread=main.thread;}if(mirror)all[id].discordMirror=mirror;all[id].discordSyncedAt=t.updatedAt;}});
 }
 async function flush(){if(running||!client)return;running=true;try{for(const id of [...pending].slice(0,10)){try{await deliver(id);pending.delete(id);}catch{ /* The saved report remains accessible; retry on next tick. */ }}}finally{running=false;}}
 export function queueSupport(id){pending.add(id);void flush();}
 const SUPPORT_SALON='🎫・support-launcher';
-let supportCh=null;
-async function supportChannel(){
-  if(supportCh)return supportCh;
-  const { HOME_GUILD }=await import('./launcherServers.js');
-  const guild=await client.guilds.fetch(HOME_GUILD).catch(()=>null);if(!guild)return null;
+const DDV_SALON='1550190589255880784'; // un salon de DDV : sert à retrouver le serveur
+let supportChs=null;
+async function makeSupport(guild){
+  if(!guild)return null;
   const { ChannelType, PermissionFlagsBits }=await import('discord.js');
   await guild.channels.fetch().catch(()=>{});
-  supportCh=guild.channels.cache.find((c)=>c.name===SUPPORT_SALON)??await guild.channels.create({name:SUPPORT_SALON,type:ChannelType.GuildText,reason:'Demandes de support History Launcher',
+  return guild.channels.cache.find((c)=>c.name===SUPPORT_SALON)??await guild.channels.create({name:SUPPORT_SALON,type:ChannelType.GuildText,reason:'Demandes de support History Launcher',
     permissionOverwrites:[{id:guild.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]},{id:config.ownerId,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessagesInThreads]},{id:client.user.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.CreatePublicThreads,PermissionFlagsBits.SendMessagesInThreads,PermissionFlagsBits.ManageThreads]}]}).catch(()=>null);
-  return supportCh;
+}
+async function supportChannels(){
+  if(supportChs?.[0]&&supportChs[1])return supportChs;
+  const { HOME_GUILD }=await import('./launcherServers.js');
+  const home=await client.guilds.fetch(HOME_GUILD).catch(()=>null);
+  const ddv=(await client.channels.fetch(DDV_SALON).catch(()=>null))?.guild??null;
+  supportChs=[await makeSupport(home),ddv&&ddv.id!==home?.id?await makeSupport(ddv):null];
+  return supportChs;
 }
 // Réponse écrite dans le fil d'une demande (par l'équipe) : enregistrée comme réponse, visible dans l'appli et sur le site
 async function onThreadMessage(m){
-  if(m.author.bot||!m.channel?.isThread?.()||m.channel.parentId!==supportCh?.id||!isAllowed(m.author.id)||!m.content.trim())return;
-  const t=(await supportList()).find((x)=>x.discordThread===m.channel.id);if(!t)return;
+  if(m.author.bot||!m.channel?.isThread?.()||!supportChs?.some((c)=>c?.id===m.channel.parentId)||!isAllowed(m.author.id)||!m.content.trim())return;
+  const t=(await supportList()).find((x)=>x.discordThread===m.channel.id||x.discordMirror?.thread===m.channel.id);if(!t)return;
   await supportUpdate({id:t.id,status:t.status==='resolved'?'resolved':'investigating',reply:m.content.slice(0,2000)}).then(()=>m.react('✅')).catch(()=>m.react('⚠️').catch(()=>{}));
 }
-export function startSupportDiscord(c){if(client)return;client=c;c.on('messageCreate',(m)=>{onThreadMessage(m).catch(()=>{});});const retry=async()=>{try{await supportChannel();for(const t of await supportList()){if(!t.discordThread&&t.status==='resolved')continue;if(!t.discordThread||(t.discordSyncedAt??0)<t.updatedAt)pending.add(t.id);}await flush();}catch{}};void retry();setInterval(retry,60000).unref();}
+export function startSupportDiscord(c){if(client)return;client=c;c.on('messageCreate',(m)=>{onThreadMessage(m).catch(()=>{});});const retry=async()=>{try{await supportChannels();for(const t of await supportList()){if(!t.discordThread&&t.status==='resolved')continue;if(!t.discordThread||(!t.discordMirror&&t.status!=='resolved'&&supportChs?.[1])||(t.discordSyncedAt??0)<t.updatedAt)pending.add(t.id);}await flush();}catch{}};void retry();setInterval(retry,60000).unref();}
 export async function onSupportInteraction(interaction){
   const parts=String(interaction.customId??'').split(':');if(parts[0]!=='support')return false;
   if(!isAllowed(interaction.user.id)){await interaction.reply({content:'Accès réservé à l’équipe de support.',ephemeral:true});return true;}
