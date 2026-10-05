@@ -269,16 +269,20 @@
       <div class="panel"><h3>🧹 Anciens pilotes graphiques</h3><p class="hint">Chaque mise à jour NVIDIA / AMD / Intel laisse l’ancienne version sur le disque. Seuls les pilotes qui ne servent plus sont retirés, après un point de restauration.</p><div id="careDrv" class="upl"></div><button class="btn" type="button" id="careDrvGo">Nettoyer les anciens pilotes</button></div>
     </div>
     <div class="pctab" data-pctab="verifs" hidden>
-      <div class="panel"><h3>🧪 Vérifications <button class="btn ghost sm" type="button" id="mvRecheck">Relancer</button></h3><p class="hint">Écran, carte graphique, RAM (double canal, XMP), Secure Boot, TPM, pilotes, BIOS, disques, écrans bleus : lus sur ton PC, rien n’est modifié.</p><div id="mvChecks"></div></div>
-      <div class="pcgrid">
-        <div class="panel"><h3>💶 Ton PC en chiffres</h3><div id="mvNumbers" class="hint">Calcul…</div></div>
-        <div class="panel"><h3>🌡 30 derniers jours</h3><div id="mvTemps"></div><div id="mvDust"></div></div>
+      <div class="panel vfhero"><div class="vfsum" id="vfSum"><b>…</b></div><div class="vfhead"><h3 id="vfTitle">Vérification de ton PC…</h3><p class="hint">Écran, mémoire, BIOS, pilotes, disques : on regarde tout, on ne touche à rien sans toi.</p></div><button class="btn ghost" type="button" id="mvRecheck">↻ Revérifier</button></div>
+      <div id="mvChecks"></div>
+      <div class="pcgrid vfgrid">
+        <div class="panel"><h3>💶 Ce que vaut ton PC</h3><div id="mvNumbers" class="hint">Calcul…</div></div>
+        <div class="panel"><h3>🌡 Températures sur 30 jours</h3><div id="mvTemps"></div><div id="mvDust"></div></div>
       </div>
-      <div class="pcgrid">
-        <div class="panel"><h3>🧰 Tests</h3><div class="row"><button class="btn" type="button" id="mvStress">🔥 Test de stabilité 10 min</button><button class="btn" type="button" id="mvMem">🧠 Test de la RAM</button><button class="btn" type="button" id="mvMouse">🖱 Test de la souris</button><button class="btn ghost" type="button" id="mvRestore">🧹 Vieux points de restauration</button></div></div>
+      <div class="panel"><h3>🧰 Tests</h3><div class="vftests">
+        <button class="vftest" type="button" id="mvStress"><i>🔥</i><b>Stabilité</b><small>10 min à fond, températures surveillées</small></button>
+        <button class="vftest" type="button" id="mvMem"><i>🧠</i><b>Mémoire vive</b><small>Cherche les erreurs de RAM au redémarrage</small></button>
+        <button class="vftest" type="button" id="mvMouse"><i>🖱</i><b>Souris</b><small>Mesure sa vraie fréquence (Hz)</small></button>
+        <button class="vftest" type="button" id="mvRestore"><i>🧹</i><b>Points de restauration</b><small>Supprime les plus anciens</small></button>
+      </div></div>
+      <div class="pcgrid vfgrid">
         <div class="panel"><h3>📈 FPS, pilotes et batterie</h3><div id="mvPerf"></div></div>
-      </div>
-      <div class="pcgrid">
         <div class="panel"><h3>↩ Journal des optimisations</h3><div id="mvJournal"></div></div>
         <div class="panel"><h3>📦 À réinstaller</h3><div id="mvReinstall"></div></div>
       </div>
@@ -638,7 +642,7 @@
 <section class="setpane" id="set-telephone" data-pane="telephone" aria-labelledby="set-title-telephone" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / TÉLÉPHONE</span><h3 id="set-title-telephone">Téléphone</h3><p>Ton PC, à portée de main.</p></header><div class="setcard"><h4>Connexion à distance</h4>
 <label class="toggle"><input type="checkbox" id="remoteOn"><span></span>📱 Contrôle depuis le téléphone (même Wi-Fi) : voir le PC et lancer un jeu</label>
 <p class="hint sethint" id="remoteInfo" hidden></p>
-</div><div class="setcard"><h4>📱 Appli History sur ton téléphone</h4><p class="hint sethint">Gratuite, sans store : ouvre <b>zyko144.github.io/vercel-ia-/app</b> sur ton téléphone, connecte-toi, puis « Installer l’appli » (Android) ou Partager › « Sur l’écran d’accueil » (iPhone). Amis et messages, ticket Opti Pro, accès à ce PC.</p><img class="dcqr" id="appQr" alt="QR de l’appli mobile" hidden></div></section>
+</div><div class="setcard"><h4>📱 Appli History sur ton téléphone</h4><p class="hint sethint">Scanne ce QR avec l’appareil photo du téléphone : l’appli s’ouvre, déjà connectée à ton compte <b>et à ce PC</b>. Ensuite tu lances tes jeux, vois tes températures, mets le PC en veille… même en 4G. Gratuit, sans store : « Installer l’appli » (Android) ou Partager › « Sur l’écran d’accueil » (iPhone).</p><div class="phoneqr"><img class="dcqr" id="appQr" alt="QR de connexion" hidden><small class="hint" id="appQrTxt">Ouvre cette page pour afficher ton QR.</small></div><label class="toggle"><input type="checkbox" id="phoneOn" checked><span></span>Autoriser le contrôle de ce PC depuis l’appli</label></div></section>
 <section class="setpane" id="set-avis" data-pane="avis" aria-labelledby="set-title-avis" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / TON AVIS</span><h3 id="set-title-avis">Ton avis</h3><p>La suite de History se construit avec toi.</p></header><div class="setcard"><h4>Partage ton expérience</h4>
 <div class="set-review-mark" aria-hidden="true">✦</div><p class="set-review-title">Un petit avis.<br>Une grande différence.</p><p class="set-description">Ce que tu aimes, ce qui te manque, ce qu’on peut améliorer : on veut tout savoir.</p><div class="set-review-steps"><span>01 <b>Une note</b></span><span>02 <b>Tes mots</b></span><span>03 <b>Une capture</b></span></div><button type="button" class="btn play" id="openReview">Donner mon avis <span aria-hidden="true">↗</span></button><p class="set-note">Ton avis sera public sur le site, avec ton pseudo. Commentaire et capture facultatifs. Un compte History est nécessaire.</p>
 </div></section>
