@@ -1607,6 +1607,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.53.33': [
+    ['🖱', 'Défilement réparé', 'Opti Pro : la molette fait défiler seulement les messages du technicien, plus toute la page, et la page ne saute plus toute seule pendant que tu lis.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
+  ],
   '0.53.32': [
     ['🎯', 'Concentration totale', 'Opti Pro : les titres des autres parties (Mémoire, Mets à jour ton BIOS…) sont floutés aussi. Seuls la tâche en cours et son titre restent nets.', ['[data-view=optimisation]', 'wait600', '#optTabs [data-ot=pro]', 'wait1500']]
   ],
@@ -3200,7 +3203,8 @@ function proFocusUi() {
 }
 
 const proLinks = (html) => html.replace(/\[([^\]]+)\]\((https:\/\/[^\s)<]+)\)|(https:\/\/[^\s<)]+)/g, (_, t, u, bare) => `<a href="#" class="plink" data-url="${u ?? bare}">${t ?? bare}</a>`);
-function renderProTicket() {
+function renderProTicket(jump = true) {
+  const prev = $('proLog')?.scrollTop;
   const s = pro, last = s && s.step >= PRO_STEPS.length - 1, nx = s && PRO_STEPS[s.step + 1], opt = (i) => [2, 3, 4].includes(i);
   if (!s || s.closed) {
     $('proTicket').innerHTML = `${s?.done ? '<div class="emb bot" style="--ec:#ffc439"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro</div><h3>Ton PC est prêt 🚀</h3></div>' : ''}<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
@@ -3211,7 +3215,8 @@ function renderProTicket() {
     <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${nx && opt(s.step + 1) ? `<button class="btn" data-pa="skip" ${proBusy ? 'disabled' : ''}>⏭ Passer ${nx[1]}</button>` : ''}${nx && opt(s.step + 1) && opt(s.step + 2) ? `<button class="btn" data-pa="skip2" ${proBusy ? 'disabled' : ''}>⏭ Passer jusqu’à ${PRO_STEPS[s.step + 3][1]}</button>` : ''}<button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
     ${s.links?.length ? `<div class="row prolinks">${s.links.map(([l, u]) => `<button class="btn sm ghost" data-url="${esc(u)}">${esc(l)} ↗</button>`).join('')}</div>` : ''}
     ${s.thread ? '<small class="hint">💬 Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
-  proFocusUi(); const log = $('proLog'), on = log.querySelector('.emb.focus li.on'); if (on) on.scrollIntoView({ block: 'nearest' }); else log.scrollTop = log.scrollHeight;
+  proFocusUi(); const log = $('proLog'), on = log.querySelector('.emb.focus li.on'); // défile seulement dans le ticket, jamais toute la page
+  log.scrollTop = !jump && prev != null ? prev : on ? log.scrollTop + on.getBoundingClientRect().top - log.getBoundingClientRect().top - 60 : log.scrollHeight;
 }
 async function renderPro(refresh = true) {
   if (refresh) { const r = await api.proSession?.().catch(() => null); if (r && !r.error) pro = r.session; }
@@ -3221,7 +3226,7 @@ async function renderPro(refresh = true) {
   // Une étape s'ouvre seulement quand la précédente est terminée (ou passée avec le bouton « Passer »)
   const open = pro && !pro.closed, lock = (i) => (pro?.done ? false : i > step || (!open && i > 0));
   $('proSteps').innerHTML = PRO_STEPS.map(([ic, t, d, tools], i) => `<li class="${i < step ? 'done' : i === step && open ? 'now' : lock(i) ? 'locked' : ''}"><span class="pron">${i < step ? '✓' : lock(i) ? '🔒' : i + 1}</span><div><b>${ic} ${t}</b><small>${lock(i) ? `🔒 Termine d’abord l’étape ${i} (${PRO_STEPS[i - 1][1]})${[2, 3, 4].includes(i) ? ' ou passe-la avec « ⏭ Passer »' : ''}.` : d}</small>${tools ? `<div class="row">${tools.map(([k, l]) => `<button class="btn sm${k === 'final' ? ' play' : ''}" data-pt="${k}" ${lock(i) ? 'disabled' : ''}>${l}</button>`).join('')}</div>` : ''}</div></li>`).join('');
-  renderProTicket();
+  renderProTicket(!refresh || !$('proLog'));
   clearInterval(proPoll);
   if (pro && !pro.closed) proPoll = setInterval(() => { if ($('view-optimisation').offsetParent && !proBusy && !document.getElementById('proAskDlg')?.open) renderPro(); }, 10000);
   if ($('proPc').dataset.done) return;
@@ -4825,7 +4830,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.53.32',
+    version: async () => '0.53.33',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
