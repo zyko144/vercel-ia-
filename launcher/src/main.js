@@ -4107,14 +4107,16 @@ async function phoneSync() {
   if (!token || store.data.settings.phone === false || process.env.LAUNCHER_DEMO) return setTimeout(phoneSync, 60_000);
   store.data.deviceId ??= randomUUID();
   const s = await snapshot().catch(() => null), deg = (t) => (t == null ? null : Math.round(t));
-  const art = (i) => [i.art?.cover, i.art?.header, i.art?.hero].find((u) => /^https:\/\//.test(u ?? '')) ?? null;
+  // Le téléphone ne lit que des images en ligne : pochettes https, sinon celles de Steam (jaquette puis bannière)
+  const steam = (i, f) => (i.source === 'steam' && /^\d+$/.test(i.steamId ?? '') ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${i.steamId}/${f}` : null);
+  const art = (i) => [i.art?.cover, i.art?.header, i.art?.hero, steam(i, 'library_600x900.jpg'), steam(i, 'header.jpg')].filter((u) => /^https:\/\//.test(u ?? '')).slice(0, 2);
   const games = items.filter((i) => i.kind === 'game');
   const recent = [...new Set((store.data.sessions ?? []).slice().reverse().map((x) => x.id))].map((id) => games.find((g) => g.id === id && g.installed)).filter(Boolean);
   const etat = {
     cpu: s ? Math.round(s.cpu?.usage ?? 0) : null, cpuT: deg(s?.cpu?.temp), gpu: s?.gpu?.usage != null ? Math.round(s.gpu.usage) : null, gpuT: deg(s?.gpu?.temp), ram: s?.ram ? Math.round((100 * s.ram.used) / s.ram.total) : null,
     jeu: currentSession()?.name ?? null, msg: phoneMsg,
-    jeux: [...recent, ...games.filter((g) => g.installed).sort((a, b) => b.minutes - a.minutes)].filter((g, k, a) => a.indexOf(g) === k).slice(0, 18).map((g) => ({ id: g.id, name: g.name, art: art(g), h: Math.round(g.minutes / 60) })),
-    installer: games.filter((i) => !i.installed && ['steam', 'epic'].includes(i.source)).sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((g) => ({ id: g.id, name: g.name, art: art(g) })),
+    jeux: [...recent, ...games.filter((g) => g.installed).sort((a, b) => b.minutes - a.minutes)].filter((g, k, a) => a.indexOf(g) === k).slice(0, 18).map((g) => ({ id: g.id, name: g.name, art: art(g)[0] ?? null, art2: art(g)[1] ?? null, h: Math.round(g.minutes / 60) })),
+    installer: games.filter((i) => !i.installed && ['steam', 'epic'].includes(i.source)).sort((a, b) => b.minutes - a.minutes).slice(0, 8).map((g) => ({ id: g.id, name: g.name, art: art(g)[0] ?? null, art2: art(g)[1] ?? null })),
     notifs: (store.data.notifLog ?? []).slice(-6).reverse().map(({ id, icon, title, body, at }) => ({ id, icon, title, body, at })),
     sante: diagCache?.data?.score ?? store.data.diagHistory?.at(-1)?.score ?? null,
   };
