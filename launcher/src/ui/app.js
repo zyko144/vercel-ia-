@@ -3981,6 +3981,7 @@ function applySeason(mode) {
   const on = mode !== 'off' && (new Date().getMonth() === 9 || mode === 'halloween');
   document.body.dataset.season = on ? 'halloween' : '';
   document.getElementById('halloween')?.remove();
+  for (const img of document.querySelectorAll('img[src="logo.png"], img[data-logo]')) { img.dataset.logo = '1'; img.src = on ? 'halloween/logo.png' : 'logo.png'; } // logo d'Halloween
   if (!on) return;
   const web = (cls, s, rot) => { // toile en coin : rayons + fils en arc
     const rays = 7, rings = 6, R = 100; let d = '';
@@ -3994,7 +3995,7 @@ function applySeason(mode) {
   };
   const bat = (cls) => `<svg class="bat ${cls}" viewBox="0 0 64 28"><path d="M32 8c2-4 4-4 5 0 4-6 14-8 27-2-7 1-10 5-9 11-4-3-8-3-10 1-2-3-5-4-8-2-1 3-3 4-5 4s-4-1-5-4c-3-2-6-1-8 2-2-4-6-4-10-1 1-6-2-10-9-11 13-6 23-4 27 2 1-4 3-4 5 0z"/></svg>`;
   const spider = (x, h, d) => `<div class="spider" style="left:${x};--h:${h}px;--d:${d}s"><i></i><img src="halloween/spider.png" alt=""></div>`;
-  document.body.insertAdjacentHTML('beforeend', `<div id="halloween" aria-hidden="true">${web('tr', 170, 'translate(100 0) scale(-1 1)')}${web('bl', 130, 'translate(0 100) scale(1 -1)')}${web('br', 170, 'translate(100 100) scale(-1 -1)')}${spider('calc(232px + 44%)', 60, 5.5)}${spider('calc(100% - 70px)', 150, 7)}${bat('b1')}${bat('b2')}<img class="lantern" src="halloween/pumpkin-lantern.png" alt=""></div>`);
+  document.body.insertAdjacentHTML('beforeend', `<div id="halloween" aria-hidden="true">${web('tr', 170, 'translate(100 0) scale(-1 1)')}${web('bl', 130, 'translate(0 100) scale(1 -1)')}${web('br', 170, 'translate(100 100) scale(-1 -1)')}${spider('calc(232px + 44%)', 60, 5.5)}${spider('calc(100% - 70px)', 150, 7)}${bat('b1')}${bat('b2')}</div>`);
 }
 $('season').addEventListener('change', (e) => { applySeason(e.target.value); api.setSettings({ season: e.target.value }); });
 api.settings?.().then((s) => { $('season').value = s?.season === 'off' ? 'off' : 'auto'; applySeason($('season').value); }).catch(() => applySeason('auto'));

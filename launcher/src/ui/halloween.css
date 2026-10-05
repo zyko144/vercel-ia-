@@ -2,11 +2,16 @@
 body[data-season="halloween"] {
   --bg: #0e0906; --panel: #1a110b; --panel-2: #22160e; --line: rgba(255, 150, 70, .07); --line-2: rgba(255, 150, 70, .12);
   --text: #f6ece2; --muted: #a8917f; --blue: #ff7a1a; --blue-2: #b4470c; --cyan: #ffb067; --accent: #ff7a1a; --accent-2: #b4470c;
-  background: radial-gradient(900px 500px at 75% 110%, rgba(255, 110, 20, .13), transparent 60%), radial-gradient(800px 500px at 10% -10%, rgba(120, 40, 160, .12), transparent 60%), var(--bg);
+  --bg: #070403;
+  background: radial-gradient(1100px 520px at 78% 115%, rgba(255, 95, 10, .16), transparent 62%), radial-gradient(900px 600px at 5% -15%, rgba(95, 30, 140, .14), transparent 60%), radial-gradient(700px 400px at 50% 50%, rgba(60, 25, 8, .25), transparent 70%), linear-gradient(180deg, #0b0604 0%, #070403 55%, #0d0603 100%);
 }
-body[data-season="halloween"] .side { background: linear-gradient(170deg, rgba(60, 30, 12, .55), rgba(14, 9, 6, .85)); border-right-color: rgba(255, 140, 60, .12); }
-body[data-season="halloween"] .brandmark img { filter: drop-shadow(0 0 14px rgba(255, 122, 26, .55)); }
-body[data-season="halloween"] .side .grow { background: url("halloween/pumpkins.png") center bottom / min(190px, 100%) auto no-repeat; min-height: 120px; opacity: .95; }
+body[data-season="halloween"] .side { background: linear-gradient(175deg, rgba(48, 22, 8, .6) 0%, rgba(12, 7, 4, .92) 45%, rgba(8, 4, 2, .96) 100%); border-right-color: rgba(255, 140, 60, .12); }
+/* Citrouilles (rendu Blender) posées sur le bouton History Clips */
+body[data-season="halloween"] .side .grow { min-height: 118px; }
+body[data-season="halloween"] .cliplink { position: relative; }
+body[data-season="halloween"] .cliplink::before { content: ""; position: absolute; left: 50%; bottom: calc(100% - 26px); width: 196px; height: 113px; transform: translateX(-50%); background: url("halloween/pumpkins.png") center bottom / contain no-repeat; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(255, 100, 20, .18)); }
+body[data-season="halloween"] .brandmark { padding: 0 0 10px; }
+body[data-season="halloween"] .brandmark img { width: 82px; height: 82px; filter: brightness(1.2) drop-shadow(0 0 12px rgba(255, 110, 20, .65)); }
 #halloween { position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
 #halloween > * { position: absolute; }
 #halloween .web { width: var(--s); height: var(--s); opacity: .32; animation: hweb 7s ease-in-out infinite alternate; }
@@ -20,8 +25,6 @@ body[data-season="halloween"] .side .grow { background: url("halloween/pumpkins.
 #halloween .spider img { width: 40px; margin-top: -4px; animation: hwiggle 1.6s ease-in-out infinite alternate; }
 @keyframes hdrop { 0% { transform: translateY(calc(var(--h, 110px) * -.35)) rotate(-2deg); } 100% { transform: translateY(0) rotate(2deg); } }
 @keyframes hwiggle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
-#halloween .lantern { left: 152px; top: 22px; width: 50px; filter: drop-shadow(0 0 22px rgba(255, 120, 20, .55)); animation: hglow 2.8s ease-in-out infinite alternate; }
-@keyframes hglow { from { filter: drop-shadow(0 0 14px rgba(255, 120, 20, .35)); } to { filter: drop-shadow(0 0 28px rgba(255, 130, 30, .7)); } }
 #halloween .bat { top: 70px; left: -60px; width: 46px; opacity: .8; animation: hbat 26s linear infinite; }
 #halloween .bat.b2 { top: 140px; width: 30px; animation-duration: 34s; animation-delay: -14s; opacity: .55; }
 #halloween .bat path { fill: #120b07; stroke: rgba(255, 140, 60, .35); stroke-width: .8; animation: hflap .22s ease-in-out infinite alternate; transform-origin: center; }
@@ -44,3 +47,6 @@ body[data-season="halloween"] .setnav { background: linear-gradient(170deg, #1f1
 body[data-season="halloween"] .setsearch { background: rgba(10, 6, 3, .6); border-color: rgba(255, 140, 60, .2); }
 body[data-season="halloween"] .setpane .setrow select, body[data-season="halloween"] select { background-color: #140c07; border-color: rgba(255, 140, 60, .2); }
 body[data-season="halloween"] .setfooter { background: #120b07; }
+/* Vignette sombre sur les bords */
+#halloween::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 55% 45%, transparent 58%, rgba(0, 0, 0, .38) 100%); }
+body[data-season="halloween"] .letter { color: #ffb067 !important; text-shadow: 0 0 18px rgba(255, 110, 20, .7) !important; }
