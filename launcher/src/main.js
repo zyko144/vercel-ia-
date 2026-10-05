@@ -888,7 +888,7 @@ ipcMain.handle('ai:gametips', async (_e, id) => {
   if (!brain) return { error: 'Connecte-toi à ton compte History pour les conseils de l’IA.' };
   const diag = await runDiag().catch(() => null);
   const pcTxt = diag && !diag.error ? `Processeur ${diag.cpu.name}, ${diag.ramGb} Go de mémoire, carte ${diag.gpus.map((g) => `${g.name}${g.vram ? ` ${Math.round(g.vram / 1024 ** 3)} Go` : ''}`).join(' + ')}, écran ${diag.gpus[0]?.width ?? '?'}×${diag.gpus[0]?.height ?? '?'} à ${diag.gpus[0]?.hz ?? '?'} Hz` : `Processeur ${os.cpus()[0]?.model}, ${Math.round(os.totalmem() / 1024 ** 3)} Go de mémoire`;
-  const text = await brain.ask({ system: 'Tu es un coach gaming et expert en réglages PC. Français, tutoiement. Structure : « Réglages conseillés » (liste courte des options du jeu avec la valeur à choisir), « Pour gagner des FPS » (3 points), « Astuces de jeu » (3 conseils utiles pour progresser). Pas de chiffres de FPS inventés.', text: `Jeu : ${item.name}\nPC : ${pcTxt}\nTemps de jeu : ${Math.round((item.minutes || 0) / 60)} h` }).catch((err) => ({ error: err.message }));
+  const text = await brain.ask({ system: 'Tu es un coach gaming et expert en réglages PC. Français, tutoiement. Réponds en Markdown simple et aéré, exactement 3 sections avec un titre « ## » : « ## 🎛️ Réglages conseillés » (liste « - Option : **valeur** », 5 à 8 lignes), « ## 🚀 Pour gagner des FPS » (3 puces courtes, le point clé en **gras**), « ## 🎯 Astuces de jeu » (3 puces). Phrases courtes, pas de pavé. Pas de chiffres de FPS inventés.', text: `Jeu : ${item.name}\nPC : ${pcTxt}\nTemps de jeu : ${Math.round((item.minutes || 0) / 60)} h` }).catch((err) => ({ error: err.message }));
   return typeof text === 'string' ? { text } : { error: text?.error ?? 'IA indisponible' };
 });
 
@@ -1262,14 +1262,28 @@ ipcMain.handle('opti:sysApply', async (_e, changes) => {
 const jobFile = (id) => path.join(os.tmpdir(), `history-${id}-${Date.now()}.json`);
 const jobSend = (id) => (p) => send('job:progress', { id, ...p });
 // 🛒 Upgrade : carte graphique actuelle, simulation avec une autre et conseil d'achat selon le budget (estimations)
-ipcMain.handle('upgrade:get', async (_e, budget = 400, target = null) => {
-  const d = process.env.LAUNCHER_DEMO ? { gpus: [{ name: 'NVIDIA GeForce GTX 1660 SUPER' }], ram: [{ size: 8 * 1024 ** 3 }], disks: [{ system: true, media: 'HDD' }] } : diagCache?.data ?? await runDiag().catch(() => null);
-  const gpuName = (d?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? d?.gpus?.[0])?.name ?? '';
+async function upgradeData(budget = 600, target = null) {
+  const d = process.env.LAUNCHER_DEMO ? { cpu: { name: 'AMD Ryzen 5 3600 6-Core Processor' }, gpus: [{ name: 'NVIDIA GeForce GTX 1660 SUPER', width: 1920, hz: 144 }], ram: [{ size: 8 * 1024 ** 3 }, { size: 8 * 1024 ** 3 }], disks: [{ system: true, media: 'SSD' }] } : diagCache?.data ?? await runDiag().catch(() => null);
+  const gpu = d?.gpus?.find((g) => !/intel|uhd|iris/i.test(g.name)) ?? d?.gpus?.[0];
   const ramGb = d?.ram?.length ? Math.round(d.ram.reduce((a, m) => a + (m.size ?? 0), 0) / 1024 ** 3) : null;
-  const games = Object.entries(store.data.perf ?? {}).map(([id, l]) => { const w = l.filter((r) => r.avg).slice(-5); const it = items.find((i) => i.id === id); return w.length && it ? { name: it.name, avg: w.reduce((a, r) => a + r.avg, 0) / w.length, bound: w.at(-1).bound, gpuAvg: w.at(-1).gpuAvg, minutes: it.minutes ?? 0 } : null; }).filter(Boolean).sort((a, b) => b.minutes - a.minutes).slice(0, 6);
-  if (process.env.LAUNCHER_DEMO && !games.length) games.push({ name: 'Fortnite', avg: 92, bound: 'gpu' }, { name: 'Rocket League', avg: 160, bound: 'cpu' }, { name: 'GTA V', avg: 74, bound: 'gpu' });
-  const cur = matchGpu(gpuName); const tgt = GPUS.find((g) => g.name === target);
-  return { gpuName, current: cur, gpus: GPUS, advice: budgetAdvice({ gpuName, ramGb, systemHdd: d?.disks?.some((x) => x.system && x.media === 'HDD'), budget: Number(budget) || 400 }), sim: cur && tgt ? simulate(cur, tgt, games) : null };
+  // Tes vrais FPS : moyenne des 5 dernières parties mesurées de chaque jeu
+  const games = Object.entries(store.data.perf ?? {}).map(([id, l]) => { const w = l.filter((r) => r.avg).slice(-5); const it = items.find((i) => i.id === id); return w.length && it ? { id, name: it.name, avg: w.reduce((a, r) => a + r.avg, 0) / w.length, bound: w.at(-1).bound, gpuAvg: w.at(-1).gpuAvg, minutes: it.minutes ?? 0, parts: w.length } : null; }).filter(Boolean).sort((a, b) => b.minutes - a.minutes).slice(0, 8);
+  if (process.env.LAUNCHER_DEMO && !games.length) for (const [n, avg, bound] of [['Fortnite', 92, 'gpu'], ['Rocket League', 160, 'cpu'], ['Grand Theft Auto V', 74, 'gpu'], ['Counter-Strike 2', 180, 'cpu']]) { const it = items.find((i) => i.name === n); games.push({ id: it?.id ?? n, name: n, avg, bound, parts: 5 }); }
+  const cpuBoundShare = games.length ? games.filter((g) => g.bound === 'cpu').length / games.length : 0;
+  const advice = budgetAdvice({ gpuName: gpu?.name ?? '', ramGb, systemHdd: d?.disks?.some((x) => x.system && x.media === 'HDD'), budget: Number(budget) || 600, cpuName: d?.cpu?.name ?? '', width: gpu?.width, hz: gpu?.hz, cpuBoundShare });
+  const cur = matchGpu(gpu?.name ?? ''); const tgt = GPUS.find((g) => g.name === target) ?? advice.best;
+  return { gpuName: gpu?.name ?? '', cpuName: d?.cpu?.name ?? '', ramGb, width: gpu?.width ?? null, hz: gpu?.hz ?? null, current: cur, target: tgt ?? null, gpus: GPUS, advice, games, sim: cur && tgt ? simulate(cur, tgt, games, advice.balance.cap) : [] };
+}
+ipcMain.handle('upgrade:get', (_e, budget, target) => upgradeData(budget, target));
+// Premium History IA : avis détaillé et rédigé sur l'upgrade, à partir des vraies mesures
+ipcMain.handle('upgrade:ai', async (_e, budget, target) => {
+  if (!(await premium()).ia) return { error: 'premium' };
+  const u = await upgradeData(budget, target);
+  const brain = await getAi().catch(() => null);
+  if (!brain) return { error: 'Connecte-toi à ton compte History.' };
+  const facts = `Budget : ${budget} €\nProcesseur : ${u.cpuName}\nCarte graphique : ${u.gpuName}\nRAM : ${u.ramGb ?? '?'} Go\nÉcran : ${u.width ?? '?'} px à ${u.hz ?? '?'} Hz\nCarte envisagée : ${u.target?.name ?? 'aucune'} (~${u.target?.price ?? '?'} €)\nConseil calculé : ${u.advice.items.map((x) => `${x.title} ~${x.price} €`).join(' + ') || 'rien'}\nJeux (FPS moyens mesurés, limité par) : ${u.games.map((g) => `${g.name} ${Math.round(g.avg)} FPS (${g.bound === 'cpu' ? 'processeur' : g.bound === 'gpu' ? 'carte graphique' : 'mixte'})`).join(' ; ') || 'aucune mesure'}\nEstimation après achat : ${u.sim.map((g) => `${g.name} ${g.now}→${g.after} FPS`).join(' ; ') || '—'}`;
+  const text = await brain.ask({ system: 'Tu es un expert hardware gaming qui conseille un joueur. Français, tutoiement, ton clair et honnête. Réponds en Markdown aéré avec ces sections « ## » : « ## 🎯 Mon verdict » (2 phrases nettes : quoi acheter ou ne pas acheter), « ## 🎮 Ce que ça change dans tes jeux » (une puce par jeu avec FPS avant → après, en **gras**), « ## ⚖️ Équilibre avec ton PC » (processeur, écran, RAM : ce qui suivra ou bloquera), « ## 💡 Alternatives » (2 options : moins chère / plus puissante, avec prix), « ## ⚠️ À vérifier avant d’acheter » (alimentation, place dans le boîtier, connecteurs). Utilise seulement les chiffres fournis, dis clairement que ce sont des estimations.', text: facts }).catch((err) => ({ error: err.message }));
+  return typeof text === 'string' ? { text } : { error: text?.error ?? 'IA indisponible' };
 });
 // 🩺 Entretien : santé des disques (SMART) et anciens pilotes graphiques
 ipcMain.handle('care:get', async () => ({ disks: (diagCache?.data ?? (process.env.LAUNCHER_DEMO ? null : await runDiag().catch(() => null)))?.disks?.map((x) => ({ name: x.name, media: x.media, health: x.health, size: x.size })) ?? (process.env.LAUNCHER_DEMO ? [{ name: 'Samsung SSD 980 1TB', media: 'SSD', health: 'Healthy', size: 1e12 }, { name: 'ST2000DM008', media: 'HDD', health: 'Warning', size: 2e12 }] : []), drivers: process.env.LAUNCHER_DEMO ? { count: 3, bytes: 4.2e9 } : process.platform === 'win32' ? await oldGpuDrivers() : { count: 0, bytes: 0 } }));
@@ -1672,11 +1686,6 @@ async function doAction(id, action) {
   if (action === 'folder' && item.installDir) return shell.openPath(item.installDir).then(() => ({ ok: true }));
   if (action === 'store' && item.source === 'steam') return openLink(steamActions(item.steamId).store).then(() => ({ ok: true }));
   // Réparer avec la plateforme : Steam / Epic revérifient chaque fichier et retéléchargent ce qui est abîmé
-  if (action === 'repair') {
-    if (item.source === 'steam' && await runSilentSteam([`steam://validate/${item.steamId}`])) return { ok: true };
-    if (item.source === 'epic') return openLink(epicActions(item.epicKey).verify).then(() => ({ ok: true }));
-    throw new Error('réparation possible seulement pour Steam et Epic');
-  }
   // Vider le cache de shaders de ce jeu seulement (Steam) : il se recrée, les premières minutes peuvent saccader
   if (action === 'cache' && item.source === 'steam' && item.steamLibrary) {
     const dir = path.join(item.steamLibrary, 'shadercache', String(item.steamId));
@@ -1779,6 +1788,7 @@ async function startVerify(id) {
   send('verify:progress', { id, name: item.name, phase: 'start' });
   try {
     const result = await verifyGame(item, { signal: controller.signal, onProgress: (p) => send('verify:progress', { id, name: item.name, phase: 'run', ...p }) });
+    lastVerify = { id, result };
     send('verify:progress', { id, name: item.name, phase: 'done', result, canRepair: ['steam', 'epic'].includes(item.source) });
     return result;
   } catch (err) {
@@ -1791,10 +1801,36 @@ async function startVerify(id) {
 ipcMain.handle('verify:start', (_e, id) => startVerify(String(id)).catch((err) => ({ ok: false, error: err.message })));
 ipcMain.handle('verify:cancel', () => { verifyJob?.controller.abort(); return { ok: true }; });
 // Réparation : Steam (en fond) ou Epic re-téléchargent SEULEMENT les fichiers abîmés ou manquants
+// Réparation faite par History (sans ouvrir Steam) : nos fichiers abîmés sont retirés, le jeu est marqué « à mettre à jour »,
+// puis Steam (relancé en arrière-plan, sans fenêtre) re-télécharge seulement ces fichiers ; l'avancement s'affiche dans History.
+let lastVerify = null;
+async function repairSteam(item) {
+  const r = lastVerify?.id === item.id ? lastVerify.result : null;
+  if (!r) throw new Error('lance d’abord la vérification');
+  if ((await runningGameExes(item).catch(() => [])).length) throw new Error(`ferme ${item.name} d’abord`);
+  const base = path.resolve(item.installDir);
+  let removed = 0;
+  for (const f of [...(r.corrupt ?? []), ...(r.sizes ?? [])].filter((x) => !x.startsWith('Il manque'))) {
+    const full = path.resolve(base, ...String(f).split('/'));
+    if (!full.startsWith(base + path.sep)) continue; // jamais en dehors du dossier du jeu
+    await rm(full, { force: true }).catch(() => {}); removed++;
+  }
+  if (!item.manifest || !/appmanifest_\d+\.acf$/i.test(item.manifest)) throw new Error('fiche Steam introuvable');
+  // Steam ouvert : fermé proprement le temps de modifier sa fiche (il réécrit ses fiches en tournant), puis relancé sans fenêtre
+  const steamOn = async () => (await runningPaths(0).catch(() => [])).some((p) => /\\steam\.exe$/i.test(p));
+  const exe = await steamExe();
+  if (await steamOn() && exe) { spawn(exe, ['-shutdown'], { detached: true, stdio: 'ignore', windowsHide: true }).unref(); for (let i = 0; i < 30 && await steamOn(); i++) await new Promise((res) => setTimeout(res, 1000)); }
+  const acf = await readFile(item.manifest, 'utf8');
+  await writeFile(`${item.manifest}.history-bak`, acf);
+  await writeFile(item.manifest, acf.replace(/("StateFlags"\s*")\d+(")/, (_m, a, b) => `${a}6${b}`)); // 6 = installé + mise à jour à faire
+  item.updatePending = true;
+  await runSilentSteam([]);
+  return { ok: true, removed, missing: (r.missing ?? []).length, track: true };
+}
 ipcMain.handle('verify:repair', async (_e, id) => {
   const item = items.find((i) => i.id === String(id));
   if (!item) return { ok: false, error: 'élément inconnu' };
-  if (item.source === 'steam' && await runSilentSteam([`steam://validate/${item.steamId}`])) return { ok: true };
+  if (item.source === 'steam') return repairSteam(item).catch((err) => ({ ok: false, error: err.message }));
   if (item.source === 'epic') return openLink(epicActions(item.epicKey).verify).then(() => ({ ok: true }));
   return { ok: false, error: 'réparation automatique impossible pour ce jeu : réinstalle-le depuis son launcher' };
 });

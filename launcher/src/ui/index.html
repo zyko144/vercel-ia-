@@ -249,10 +249,16 @@
     </div>
 
     <div class="pctab" data-pctab="upgrade" hidden>
-      <div class="panel"><h3>🛒 Que changer avec ton budget ?</h3><p class="hint">D’après ton PC (carte graphique, RAM, disque). Prix et gains indicatifs : ce sont des estimations, pas des mesures.</p>
-        <div class="row"><label for="upBudget">Budget</label><select id="upBudget"><option>150</option><option>250</option><option>400</option><option selected>600</option><option>900</option><option>1300</option></select> €</div><div id="upAdvice" class="upl"></div></div>
-      <div class="panel"><h3>🎮 Simulateur de carte graphique</h3><p class="hint" id="upCur">…</p>
-        <div class="row"><label for="upGpu">Avec la carte</label><select id="upGpu"></select></div><div id="upSim" class="upl"></div></div>
+      <div class="upwrap">
+        <div class="uphead"><div><h3>🛒 Ton prochain upgrade</h3><small>Calculé sur tes vrais FPS, ton processeur et ton écran. Prix et gains : estimations.</small></div>
+          <div class="upchips" id="upBudget"><button data-b="150">150 €</button><button data-b="300">300 €</button><button data-b="450">450 €</button><button data-b="600" class="on">600 €</button><button data-b="900">900 €</button><button data-b="1300">1 300 €</button></div></div>
+        <div class="uphero" id="upHero"></div>
+        <div class="upbal" id="upBal"></div>
+        <div class="upextra" id="upExtra"></div>
+        <div class="uprowh"><h4>🎮 Tes jeux avec cette carte</h4><label class="upcmp">Comparer avec <select id="upGpu"></select></label></div>
+        <div class="upgames" id="upGames"></div>
+        <div class="upai"><button class="btn premgo" type="button" id="upAiBtn">🤖 Avis détaillé de l’IA</button><small>Premium History IA : verdict, jeu par jeu, équilibre du PC et points à vérifier avant d’acheter.</small><div class="reporttxt rich" id="upAiOut" hidden></div></div>
+      </div>
     </div>
     <div class="pctab" data-pctab="entretien" hidden>
       <div class="panel"><h3>💽 Santé des disques</h3><p class="hint">L’état SMART que Windows lit dans chaque disque. Si un disque faiblit, tu es prévenu (une fois par semaine) pour sauvegarder tes fichiers à temps.</p><div id="careDisks" class="upl"></div></div>

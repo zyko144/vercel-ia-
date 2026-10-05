@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer, webUtils, webFrame } = require('electron');
 ipcRenderer.on('ui:trim', () => { try { webFrame.clearCache(); } catch { /* rien */ } });
 
 contextBridge.exposeInMainWorld('launcher', {
-  platform: process.platform,
+  platform: process.env.LAUNCHER_DEMO && process.env.LAUNCHER_PLATFORM ? process.env.LAUNCHER_PLATFORM : process.platform, // bancs d'essai : voir l'interface Windows sous Linux
   premiumGet: (fresh) => ipcRenderer.invoke('premium:get', fresh),
   premiumBuy: (pack) => ipcRenderer.invoke('premium:buy', pack),
   premiumNote: (pack, code, gift) => ipcRenderer.invoke('premium:note', pack, code, gift),
@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('launcher', {
   modsList: (id) => ipcRenderer.invoke('mods:list', id),
   friendGift: (to, item) => ipcRenderer.invoke('friend:gift', to, item),
   upgrade: (budget, target) => ipcRenderer.invoke('upgrade:get', budget, target),
+  upgradeAi: (budget, target) => ipcRenderer.invoke('upgrade:ai', budget, target),
   care: () => ipcRenderer.invoke('care:get'),
   careDrivers: () => ipcRenderer.invoke('care:drivers'),
   modsToggle: (id, dir, name, on) => ipcRenderer.invoke('mods:toggle', id, dir, name, on),
