@@ -1006,7 +1006,7 @@ let gameActList = [];
 let lastScan = null;
 const scoreOf = (r) => healthScore({
   junkBytes: r.junk.reduce((n, x) => n + x.bytes, 0) + r.recycle, orphanBytes: r.orphans.reduce((n, x) => n + x.bytes, 0),
-  heavyStartup: r.startup.filter((x) => x.enabled && x.heavy).length, tweaksOff: r.tweaks.filter((t) => !t.on && !t.optional && !t.retired).length,
+  heavyStartup: r.startup.filter((x) => x.enabled && x.heavy).length, tweaksOff: r.tweaks.filter((t) => !t.on && !t.optional && !t.retired && !t.comfort).length,
   freeRatio: r.free && r.disk ? r.free / r.disk : null,
 });
 async function optiScan(progress = () => {}) {
@@ -1069,8 +1069,9 @@ async function optiApply(plan, progress = () => {}) {
       journal.done.push(st.label);
     } catch (err) {
       // Un élément bloqué (jeu ouvert, fichier en lecture seule, droits) s'arrête seul : le reste continue
-      journal.errors.push(`${st.label} : ${err.message}`);
-      progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'erreur', error: err.message, freed });
+      const msg = /^Command failed/.test(err.message) ? 'Windows a refusé la modification (accès refusé)' : err.message;
+      journal.errors.push(`${st.label} : ${msg}`);
+      progress({ phase: 'run', index: i, total: steps.length, label: st.label, status: 'erreur', error: msg, freed });
       continue;
     }
     freed += got;
@@ -1078,7 +1079,7 @@ async function optiApply(plan, progress = () => {}) {
   }
   if (journal.entries.length || journal.tweaks.length) { store.data.optiJournal = [journal, ...(store.data.optiJournal ?? [])].slice(0, 20); store.save(); }
   const after = await freeSpace();
-  return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: tweaks.length, games: games.length, errors: journal.errors, undo: Boolean(journal.entries.length || journal.tweaks.length) };
+  return { ok: true, freed: before != null && after != null ? Math.max(freed, after - before) : freed, steps: steps.length, tweaks: GAME_TWEAKS.filter((t) => tweaks.includes(t.id) && journal.done.includes(t.label)).length, games: games.length, errors: journal.errors, undo: Boolean(journal.entries.length || journal.tweaks.length) };
 }
 ipcMain.handle('opti:run', async (_e, plan) => {
   if (OPTI_PAUSED) return { error: 'L’optimisation est en pause le temps qu’on la termine.' };

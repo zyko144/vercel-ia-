@@ -1531,7 +1531,7 @@ $('ncList').addEventListener('click', async (e) => {
 });
 api.onNotifs?.((d) => {
   if (typeof d?.unread === 'number') bellCount(d.unread);
-  if (d?.entry) { nc.list = [d.entry, ...nc.list.filter((x) => x.id !== d.entry.id)].slice(0, 150); $('bellBtn').classList.remove('ring'); void $('bellBtn').offsetWidth; $('bellBtn').classList.add('ring'); }
+  if (d?.entry) { nc.list = [d.entry, ...nc.list.filter((x) => x.id !== d.entry.id)].slice(0, 150); $('bellBtn').classList.remove('ding'); void $('bellBtn').offsetWidth; $('bellBtn').classList.add('ding'); }
   if ($('notifCenter').matches(':popover-open')) (d?.entry ? renderNotifs() : loadNotifs());
 });
 loadNotifs();
@@ -1608,6 +1608,9 @@ api.settings?.().then((s) => {
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
   '0.53.29': [
+    ['🔔', 'Cloche des notifications réparée', 'Quand une notification arrive, la cloche sonne sans se tourner ni grossir : elle reste visible et cliquable.', ['#bellBtn', 'wait900']],
+    ['📊', 'Score plus logique', 'Les nouveaux réglages de confort et de confidentialité ne font plus baisser la note de santé de ton PC. Seuls les réglages qui jouent sur les performances comptent.'],
+    ['🛠', 'Optimisation plus fiable', 'Réglage Copilot retiré (Windows le bloque sans droits administrateur) ; le nombre de changements affiché ne compte plus ceux que Windows a refusés, et l’erreur est écrite clairement.'],
     ['🎃', 'Halloween plus calme', 'Plus d’araignées qui descendent ni de chauves-souris qui traversent l’écran : il reste les toiles et les citrouilles.', ['.side nav button:nth-child(1)', 'wait900']]
   ],
   '0.53.28': [
