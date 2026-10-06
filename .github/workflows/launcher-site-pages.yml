@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/configure-pages@v5
       # Démo jouable dans le navigateur : l'interface du launcher avec ses données d'exemple (aucune donnée réelle)
       - run: mkdir -p launcher-site/demo && cp -r launcher/src/ui launcher/src/core launcher-site/demo/
