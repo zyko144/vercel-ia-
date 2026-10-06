@@ -1617,6 +1617,10 @@ api.settings?.().then((s) => {
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
   '0.59.0': [
+    ['🏆', 'Rubrique E-sport', 'Nouvelle catégorie à gauche : 95 équipes de Rocket League, Rainbow Six, CS2, VALORANT et League of Legends avec leur logo et un fond aux couleurs du club, Gentle Mates, Karmine Corp et Vitality à la une, et le calendrier des grandes compétitions.', ['[data-view=esport]', 'wait1500']],
+    ['📰', 'Fiche d’équipe', 'Clique sur une équipe : ses dernières actus lues par l’IA sur les sites e-sport, son effectif, son calendrier. Suis tes équipes : elles passent en premier.'],
+  ],
+  '0.59.0': [
     ['🏆', 'Rubrique E-sport', 'Nouvelle catégorie à gauche : les équipes de Rocket League, Rainbow Six, CS2, VALORANT et League of Legends aux couleurs de leur club, le calendrier des grandes compétitions et, pour chaque équipe, sa fiche avec son calendrier. Suis tes équipes : elles passent en premier.', ['[data-view=esport]', 'wait1500']],
   ],
   '0.58.1': [
