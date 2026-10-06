@@ -3892,15 +3892,33 @@ const ES_DEMO = {
 ipcMain.handle('more:esportFollow', (_e, list) => { store.data.esFollow = (Array.isArray(list) ? list : []).slice(0, 12).map((t) => ({ nom: String(t.nom ?? '').slice(0, 50), jeu: String(t.jeu ?? '').slice(0, 40) })); store.save(); esportWatch(); return true; });
 let esLive = { matches: [], at: 0 };
 ipcMain.handle('more:esportLive', () => esLive);
+// Fiches e-sport lues sur Liquipedia toutes les heures par GitHub (tools/esport-data.mjs) : affichées tout de suite, sans IA
+let esStats = { at: 0, data: null, players: {} };
+async function esportStats() {
+  if (esStats.data && Date.now() - esStats.at < 10 * 60_000) return esStats;
+  const get = (f) => (process.env.LAUNCHER_DEMO ? readFile(path.join(here, '..', 'test', 'fixtures', 'esport', f), 'utf8').then(JSON.parse) : fetch(`https://zyko144.github.io/vercel-ia-/esport/${f}`, { signal: AbortSignal.timeout(15_000) }).then((r) => (r.ok ? r.json() : null))).catch(() => null);
+  const [data, players] = await Promise.all([get('data.json'), get('players.json')]);
+  if (data?.teams) esStats = { at: Date.now(), data, players: players ?? {} };
+  return esStats;
+}
+ipcMain.handle('more:esportStats', () => esportStats().then(({ data, players }) => ({ data, players })));
 async function esportWatch() {
   const teams = store.data.esFollow ?? [];
-  if (process.env.LAUNCHER_DEMO) { esLive = { at: Date.now(), matches: teams.length ? [{ team: teams[0].nom, game: teams[0].jeu, opponent: 'G2 Esports', event: 'Match de démo', start: new Date().toISOString(), live: true, score: '2-1', stream: 'https://www.twitch.tv/rocketleague' }] : [] }; send('more:esportLive', esLive); return; }
   if (!teams.length) { esLive = { matches: [], at: Date.now() }; return; }
-  const r = await api('/api/compte/esport/direct', { method: 'POST', body: { teams }, timeout: 90_000 }).catch(() => null);
-  if (!Array.isArray(r?.matches)) return;
-  esLive = { matches: r.matches, at: Date.now() }; send('more:esportLive', esLive);
+  // Matchs des équipes suivies : en cours (commencé il y a moins de 4 h) ou dans les 48 h
+  const { data } = await esportStats(), local = JSON.parse(await readFile(path.join(here, 'ui', 'esport.json'), 'utf8'));
+  const names = new Map();
+  for (const f of teams) for (const t of local.teams.filter((x) => x.name === f.nom)) for (const n of [t.name, data?.teams?.[t.id]?.title]) if (n) names.set(n.toLowerCase(), t.name);
+  const now = Date.now(), matches = [];
+  for (const [gid, g] of Object.entries(data?.games ?? {})) for (const m of g.matches ?? []) {
+    const mine = names.get(m.a.toLowerCase()) ? 'a' : names.get(m.b.toLowerCase()) ? 'b' : null, t0 = Date.parse(m.start);
+    if (!mine || m.finished || now - t0 > 4 * 3_600_000 || t0 - now > 48 * 3_600_000) continue;
+    matches.push({ team: names.get(m[mine].toLowerCase()), opponent: mine === 'a' ? m.b : m.a, game: local.games.find((x) => x.id === gid)?.name ?? '', event: m.event, start: m.start, live: t0 <= now, score: m.score, stream: m.stream });
+  }
+  if (process.env.LAUNCHER_DEMO && !matches.length) matches.push({ team: teams[0].nom, game: teams[0].jeu, opponent: 'G2 Esports', event: 'Match de démo', start: new Date().toISOString(), live: true, score: '2-1', stream: 'https://www.twitch.tv/rocketleague' });
+  esLive = { matches, at: now }; send('more:esportLive', esLive);
   const seen = (store.data.esNotified ??= {});
-  for (const m of r.matches) {
+  for (const m of matches) {
     const k = `${m.team}|${m.opponent}|${m.start.slice(0, 13)}`, mins = (Date.parse(m.start) - Date.now()) / 60_000;
     const open = () => m.stream && openLink(m.stream).catch(() => {});
     const pop = (title, body) => { if (!Notification.isSupported()) return; const n = new Notif({ title, body, icon: icon(), silent: false }); n.on('click', open); n.show(); };

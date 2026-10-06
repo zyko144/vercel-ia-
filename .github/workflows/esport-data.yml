@@ -1,0 +1,44 @@
+# Fiches e-sport : GitHub lit Liquipedia toutes les heures (équipes, joueurs, matchs) et les publie avec le site.
+# Le launcher les affiche tout de suite, sans IA ni attente. Liquipedia : 1 page complète toutes les 30 s.
+name: E-sport - données Liquipedia
+on:
+  schedule: [{ cron: '23 * * * *' }]
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/esport-data.mjs', 'src/features/liquipedia.js', '.github/workflows/esport-data.yml']
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency: { group: esport-data, cancel-in-progress: false }
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Reprendre les données déjà publiées
+        run: for f in data players; do curl -sfL "https://zyko144.github.io/vercel-ia-/esport/$f.json" -o "/tmp/$f.json" && mv "/tmp/$f.json" "launcher-site/esport/$f.json" || true; done
+      - run: node tools/esport-data.mjs launcher-site/esport
+      - uses: actions/upload-artifact@v4
+        with: { name: esport-data, path: launcher-site/esport/, retention-days: 2 }
+  deploy:
+    needs: data
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: { group: pages, cancel-in-progress: false }
+    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/download-artifact@v4
+        with: { name: esport-data, path: launcher-site/esport }
+      - uses: actions/configure-pages@v5
+      - run: mkdir -p launcher-site/demo && cp -r launcher/src/ui launcher/src/core launcher-site/demo/
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: launcher-site }
+      - id: d
+        uses: actions/deploy-pages@v4

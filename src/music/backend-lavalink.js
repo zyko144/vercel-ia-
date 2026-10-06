@@ -431,6 +431,7 @@ export class LavalinkBackend {
       this.startedAt = Date.now();
       if (!this.watchdog) this.startWatchdog();
       this.lastState = { position: seek * 1000, at: Date.now() };
+      this.startSeek = seek;
 
       this.node.updatePlayer(this.guild.id, {
         track: { encoded: item.encoded },
@@ -519,6 +520,7 @@ export class LavalinkBackend {
     switch (message.type) {
       case 'TrackStartEvent':
         if (sameTrack) this.player.onAudioStart?.(this.player.current);
+        if (sameTrack) this.lastState = { position: (this.startSeek ?? 0) * 1000, at: Date.now() }; // le son démarre vraiment maintenant : les paroles partent d'ici
         if (pending && sameTrack) {
           pending.announced = true;
           pending.graceTimer = setTimeout(() => pending.finish(), START_GRACE_MS);
