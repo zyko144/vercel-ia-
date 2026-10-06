@@ -3,12 +3,12 @@
 // Usage : node tools/esport-data.mjs <dossier de sortie> [--fixtures <dossier de pages déjà récupérées>]
 import { execFile } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { parseMatches, parsePlayer, parseTeam } from '../src/features/liquipedia.js';
+import { parseEvent, parseMatches, parsePlayer, parseTeam } from '../src/features/liquipedia.js';
 
 const OUT = process.argv[2] ?? 'launcher-site/esport';
 const FIX = process.argv.includes('--fixtures') ? process.argv[process.argv.indexOf('--fixtures') + 1] : '';
 const UA = 'HistoryLauncher/1.0 (https://zyko144.github.io/vercel-ia-/; esport data)';
-const { games, teams, featured = [] } = JSON.parse(readFileSync(new URL('../launcher/src/ui/esport.json', import.meta.url)));
+const { games, teams, events = [], featured = [] } = JSON.parse(readFileSync(new URL('../launcher/src/ui/esport.json', import.meta.url)));
 const load = (f) => { try { return JSON.parse(readFileSync(`${OUT}/${f}`)); } catch { return null; } };
 const data = load('data.json') ?? { teams: {}, games: {} }, players = load('players.json') ?? {};
 const started = Date.now(), budget = Number(process.env.ESPORT_BUDGET_MIN || (Object.keys(data.teams).length < teams.length / 2 ? 75 : 22)) * 60_000;
@@ -44,6 +44,20 @@ for (const g of games) {
   const all = parseMatches(p.html), ours = all.filter((m) => known.has(m.a.toLowerCase()) || known.has(m.b.toLowerCase()));
   data.games[g.id] = { at: new Date().toISOString(), url: `https://liquipedia.net/${g.wiki}/Liquipedia:Matches`, matches: (ours.length >= 8 ? ours : all).slice(-60) };
   console.log(`✓ ${g.name} : ${all.length} matchs, ${ours.length} pour nos équipes`);
+}
+
+// 1 bis. Compétitions du calendrier : infos, équipes, classement, matchs (en cours / proches : toutes les 2 h)
+data.events ??= {};
+for (const e of events) {
+  const g = G[e.game], soon = Date.parse(e.end) > Date.now() - 2 * 86_400_000 && Date.parse(e.start) < Date.now() + 45 * 86_400_000;
+  if (!g?.wiki || !left() || age(data.events[e.id]) < (soon ? 2 * 3_600_000 : 7 * 86_400_000)) continue;
+  let t = e.lp ?? data.events[e.id]?.title;
+  if (!t && !FIX) { const r = await get(`https://liquipedia.net/${g.wiki}/api.php?action=query&list=search&format=json&formatversion=2&srlimit=1&srsearch=${encodeURIComponent(e.q ?? e.name)}`); try { t = JSON.parse(r.body).query.search[0]?.title; } catch { /* pas trouvé */ } }
+  if (!t) { console.log(`✗ compétition ${e.name} : page introuvable`); continue; }
+  const p = await page(g.wiki, title(t)); if (!p) continue;
+  const d = parseEvent(p.html);
+  data.events[e.id] = { at: new Date().toISOString(), title: p.title, url: `https://liquipedia.net/${g.wiki}/${title(p.title)}`, ...d };
+  console.log(`✓ compétition ${e.name} → ${p.title} : ${d.teams.length} équipes, ${d.matches.length} matchs, vainqueur ${d.winner || '—'}`);
 }
 
 // 2. Équipes : jamais lues d'abord, puis les plus anciennes ; les équipes à la une passent devant

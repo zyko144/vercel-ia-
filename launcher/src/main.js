@@ -1808,6 +1808,8 @@ async function doAction(id, action) {
     throw new Error('exécutable introuvable');
   }
 
+  // Epic n'a pas de lien « mettre à jour seulement » : un lancement par Epic installe d'abord la mise à jour
+  if (action === 'update' && item.source === 'epic') return openLink(`com.epicgames.launcher://apps/${item.epicKey}?action=launch`).then(() => ({ ok: true }));
   if (action === 'update' && item.source === 'steam') {
     // Demande de téléchargement uniquement : ne jamais utiliser -applaunch ici.
     const before = await readUpdateProgress(item);
@@ -2036,7 +2038,7 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('sidebar' in patch) {
     const sb = patch.sidebar ?? {};
     const ids = (v, re) => [...new Set((Array.isArray(v) ? v : []).map(String).filter((x) => re.test(x)))].slice(0, 40);
-    store.data.settings.sidebar = { hiddenPlatforms: ids(sb.hiddenPlatforms, /^[\w-]{1,30}$/), hiddenNav: ids(sb.hiddenNav, /^(jeux|applis|favoris|stats|classement|amis|pc|optimisation|ia)$/) };
+    store.data.settings.sidebar = { hiddenPlatforms: ids(sb.hiddenPlatforms, /^[\w-]{1,30}$/), hiddenNav: ids(sb.hiddenNav, /^(jeux|applis|favoris|stats|classement|amis|pc|optimisation|ia)$/), v: Number(sb.v) || 0 };
   }
   if ('dailyLimit' in patch) store.data.settings.dailyLimit = Math.max(0, Math.min(1440, Number(patch.dailyLimit) || 0));
   if ('breakEvery' in patch) store.data.settings.breakEvery = Math.max(0, Math.min(600, Number(patch.breakEvery) || 0));
