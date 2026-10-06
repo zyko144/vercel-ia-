@@ -3912,9 +3912,9 @@ async function esportWatch() {
 }
 setTimeout(() => { esportWatch().catch(() => {}); setInterval(() => esportWatch().catch(() => {}), 5 * 60_000); }, 90_000);
 ipcMain.handle('more:esportFiche', (_e, type, args = {}) => {
-  if (process.env.LAUNCHER_DEMO) return ES_DEMO[type] ?? null;
+  if (process.env.LAUNCHER_DEMO) return type === 'actus' && args.jeu !== 'Rocket League' ? { news: [], results: [], upcoming: [] } : ES_DEMO[type] ?? null;
   const q = new URLSearchParams({ type: String(type), nom: String(args.nom ?? ''), equipe: String(args.equipe ?? ''), jeu: String(args.jeu ?? '') });
-  return api(`/api/compte/esport/fiche?${q}`, { timeout: 90_000 }).catch(() => null);
+  return api(`/api/compte/esport/fiche?${q}`, { timeout: 90_000 }).then((r) => (r.status === 200 ? r : null), () => null);
 });
 ipcMain.handle('more:esportOpen', (_e, url) => openLink(String(url)).then(() => true, () => false));
 ipcMain.handle('more:dustDone', () => { store.data.dustAt = Date.now(); store.save(); return true; });

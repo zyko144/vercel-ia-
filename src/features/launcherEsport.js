@@ -55,6 +55,13 @@ async function lpGet(wiki, q) {
   return r?.ok ? r.json().catch(() => null) : null;
 }
 const lpCache = new Map();
+const lpUrl = (jeu, nom) => { const w = WIKI[String(jeu).toLowerCase().split(',')[0].trim()]; return w && nom ? `https://liquipedia.net/${w}/${encodeURI(String(nom).trim().replace(/ /g, '_'))}` : ''; };
+/** JSON de la réponse IA, même entouré de texte, de ``` ou de renvois [1] en fin. */
+export function looseJson(t) {
+  const s = String(t ?? '').replace(/```(json)?/gi, ''), i = s.indexOf('{'); if (i < 0) return null;
+  for (let j = s.lastIndexOf('}'), n = 0; j > i && n < 60; j = s.lastIndexOf('}', j - 1), n++) { try { return JSON.parse(s.slice(i, j + 1)); } catch { /* on raccourcit */ } }
+  return null;
+}
 // Sites officiels lus pour les actus de chaque jeu
 const OFFICIAL = { 'rocket league': 'https://www.rocketleague.com/competitive', 'rainbow six siege': 'https://www.ubisoft.com/en-us/esports/rainbow-six/siege', 'counter-strike 2': 'https://www.hltv.org/', valorant: 'https://valorantesports.com/', 'league of legends': 'https://lolesports.com/' };
 async function pageCtx(url) {
@@ -73,16 +80,17 @@ async function lpImage(jeu, nom) {
   return r?.query?.pages?.[0]?.original?.source ?? '';
 }
 /** Page Liquipedia la plus proche de « nom » sur le wiki du jeu : texte lisible + images. */
-export async function liquipedia(jeu, nom, exact = false) {
+export async function liquipedia(jeu, nom) {
   const wiki = WIKI[String(jeu).toLowerCase().split(',')[0].trim()]; if (!wiki || !nom) return null;
   const key = `${wiki}|${slug(nom)}`, hit = lpCache.get(key);
   if (hit && Date.now() - hit.at < 3_600_000) return hit.data;
-  const title = exact ? nom : (await lpGet(wiki, `action=opensearch&limit=1&search=${encodeURIComponent(nom)}`))?.[1]?.[0]; if (!title) return null;
+  const title = String(nom).trim().replace(/ /g, '_');
+  if (lpNext.parse - Date.now() > 8000) return null; // file d'attente trop longue : l'IA lira la page elle-même
   const page = await lpGet(wiki, `action=parse&redirects=1&prop=text&page=${encodeURIComponent(title)}`);
   const html = String(page?.parse?.text ?? ''); if (!html) return null;
   const images = [...new Set([...html.matchAll(/src="(\/commons\/images\/[^"]+\.(?:png|jpe?g|webp))"/gi)].map((m) => `https://liquipedia.net${m[1].replace(/\/thumb(\/.+?\.(?:png|jpe?g|webp))\/[^/]+$/i, '$1')}`))].slice(0, 30);
   const main = html.match(/infobox-image[\s\S]{0,600}?src="(\/commons\/images\/[^"]+)"/i)?.[1]?.replace(/\/thumb(\/.+?\.(?:png|jpe?g|webp))\/[^/]+$/i, '$1');
-  const text = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').replace(/<(br|\/tr|\/p|\/li|\/h\d|\/div)[^>]*>/gi, '\n').replace(/<\/t[dh]>/gi, ' | ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#\d+;/g, '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').slice(0, 40_000);
+  const text = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').replace(/<(br|\/tr|\/p|\/li|\/h\d|\/div)[^>]*>/gi, '\n').replace(/<\/t[dh]>/gi, ' | ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#\d+;/g, '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').slice(0, 20_000);
   const data = { url: `https://liquipedia.net/${wiki}/${encodeURIComponent(title.replace(/ /g, '_'))}`, title, text, images, main: main ? `https://liquipedia.net${main}` : '' };
   lpCache.set(key, { at: Date.now(), data });
   return data;
@@ -142,23 +150,29 @@ export async function esportFiche(kind, args = {}, { ai = null } = {}) {
   const K = KINDS[kind]; if (!K) return null;
   const a = Object.fromEntries(['nom', 'equipe', 'jeu'].map((k) => [k, S(args[k], 60)]));
   if (!a.nom) return null;
-  const key = `${kind}|${slug(a.nom)}|${slug(a.equipe)}|${slug(a.jeu)}`, hit = infoCache.get(key);
+  const key = `${kind}|${slug(a.nom)}|${slug(a.equipe)}|${slug(a.jeu)}`, file = `esport/fiche-${slug(key.replace(/\|/g, '-'))}.json`;
+  if (!infoCache.has(key)) { const b = await getBlob(file).catch(() => null); const saved = b && looseJson(b.buf.toString('utf8')); if (saved?.at) infoCache.set(key, { at: saved.at, data: saved }); } // fiche sauvegardée
+  const hit = infoCache.get(key);
   if (hit && Date.now() - hit.at < K.ttl) return hit.data;
   if (busy.has(key)) return hit?.data ?? busy.get(key);
   const job = (async () => {
     const chat = ai ?? (await import('../ai/gemini.js')).chat;
     const one = !a.jeu.includes(',') && a.jeu.toLowerCase();
-    const lp = kind === 'actus' ? (one ? await liquipedia(a.jeu, 'Main Page', true).catch(() => null) : null) : await liquipedia(a.jeu, a.nom).catch(() => null);
+    const lp = kind === 'actus' ? (one ? await liquipedia(a.jeu, 'Main Page').catch(() => null) : null) : await liquipedia(a.jeu, a.nom).catch(() => null);
     const off = kind === 'actus' && OFFICIAL[one] ? await pageCtx(OFFICIAL[one]) : '';
-    const ctx = lp ? `\n\nPage Liquipedia « ${lp.title} » (${lp.url}), source fiable à utiliser en priorité (effectif, palmarès, résultats, matchs) :\n${lp.text}\n\nImages de la page (logo, photos des joueurs) : ${lp.images.join(' ')}\nComplète avec une recherche web pour ce qui manque (actus, matchs à venir).` : '';
-    const r = await chat({ tag: 'esport-fiches', web: true, system: `Tu es un journaliste e-sport à fond sur l’actu, nous sommes le ${new Date().toISOString().slice(0, 10)}. Toujours l’info la plus récente (résultats, effectifs, transferts du jour) et des images en grand format (og:image de l’article, pas de miniature). Réponds uniquement en JSON valide, en français. Uniquement des faits vérifiés sur le web ; laisse un champ vide plutôt que d’inventer.`, content: [{ type: 'text', text: K.ask(a) + ctx + off }] }).catch(() => null);
+    const read = (kind === 'actus' ? [OFFICIAL[one], one && lpUrl(one, 'Main_Page'), one && lpUrl(one, 'Liquipedia:Matches')] : kind === 'equipe' ? [lpUrl(a.jeu, a.nom), lpUrl(a.jeu, `${a.nom}/Results`)] : [lpUrl(a.jeu, a.nom)]).filter(Boolean);
+    const urls = read.length ? `\n\nLis d'abord ces pages (outil de lecture d'URL), elles contiennent la réponse : ${read.join(' ')}` : '';
+    const ctx = lp ? `\n\nPage Liquipedia « ${lp.title} » (${lp.url}) déjà lue pour toi, source fiable à utiliser en priorité (effectif, palmarès, résultats, matchs) :\n${lp.text}\n\nImages de la page (logo, photos des joueurs) : ${lp.images.join(' ')}\nComplète avec une recherche web pour ce qui manque (actus, matchs à venir).` : '';
+    const r = await chat({ tag: 'esport-fiches', web: true, thinking: 'low', system: `Tu es un journaliste e-sport à fond sur l’actu, nous sommes le ${new Date().toISOString().slice(0, 10)}. Toujours l’info la plus récente (résultats, effectifs, transferts du jour) et des images en grand format (og:image de l’article, pas de miniature). Réponds uniquement en JSON valide, en français. Uniquement des faits vérifiés sur le web ; laisse un champ vide plutôt que d’inventer.`, content: [{ type: 'text', text: K.ask(a) + urls + ctx + off }] }).catch(() => null);
     let d = null;
-    try { d = JSON.parse(String(r?.text ?? '').replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')); } catch { /* réponse illisible */ }
+    d = looseJson(r?.text);
+    if (!d) console.warn(`[esport] fiche ${kind} « ${a.nom} » : ${r ? 'réponse IA illisible' : 'IA indisponible'}`);
     if (!d) return hit?.data ?? null;
     if (lp?.main && kind === 'joueur') d.photo = lp.main;
     const data = { ...K.clean(d), ...(lp ? { liquipedia: lp.url } : {}), sources: (r?.sources ?? []).slice(0, 6).map((x) => ({ url: URL_OK(x.url), title: S(x.title, 60) })).filter((x) => x.url), at: Date.now() };
     const empty = kind === 'equipe' ? !data.players.length : kind === 'actus' ? !data.news.length : false;
     infoCache.set(key, { at: empty ? Date.now() - K.ttl + 300_000 : Date.now(), data }); // vide : on réessaie dans 5 min
+    if (!empty) await putBlob(file, Buffer.from(JSON.stringify(data)), 'application/json').catch(() => {}); // sauvegardée : survit aux redémarrages
     return data;
   })().finally(() => busy.delete(key));
   busy.set(key, job);
@@ -177,7 +191,7 @@ export async function esportLive(teams = [], { ai = null } = {}) {
     const r = await chat({ tag: 'esport-direct', web: true, system: 'Tu suis l’e-sport en direct. Réponds uniquement en JSON valide. N’invente rien : pas de match = ne le mets pas.', content: [{ type: 'text', text: `Nous sommes le ${new Date().toISOString()}. Pour chacune de ces équipes, trouve son match en cours ou son prochain match officiel dans les 48 h (Liquipedia, HLTV, VLR.gg, sites officiels) : ${list.map((t) => `${t.nom} (${t.jeu})`).join(' ; ')}.
 Pour chaque match : équipe suivie, jeu, adversaire, compétition, heure de début exacte en ISO 8601 UTC, en direct maintenant (true/false), score actuel si en direct, et le lien https de la chaîne Twitch officielle qui le diffuse (sinon YouTube).
 JSON : {"matches":[{"team":"","game":"","opponent":"","event":"","start":"","live":false,"score":"","stream":""}]}` }] }).catch(() => null);
-    let d = null; try { d = JSON.parse(String(r?.text ?? '').replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')); } catch { /* illisible */ }
+    const d = looseJson(r?.text);
     if (!d) return hit?.data ?? { matches: [] };
     const known = new Set(list.map((t) => t.nom.toLowerCase()));
     const data = { matches: (Array.isArray(d.matches) ? d.matches : []).slice(0, 20).map((m) => ({ team: S(m.team, 50), game: S(m.game, 40), opponent: S(m.opponent, 50), event: S(m.event, 80), start: Number.isNaN(Date.parse(m.start)) ? '' : new Date(m.start).toISOString(), live: m.live === true, score: S(m.score, 15), stream: /^https:\/\/(www\.)?(twitch\.tv|youtube\.com|youtu\.be)\//.test(String(m.stream)) ? String(m.stream).slice(0, 200) : '' })).filter((m) => known.has(m.team.toLowerCase()) && (m.live || m.start)) };

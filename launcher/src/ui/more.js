@@ -679,8 +679,10 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
   const ES_PICS = ['news1', 'news2', 'news3', 'news4'];
   const ES_BAN = { gentlemates: 'news2', karminecorp: 'news3', teamvitality: 'news4' }, esBan = (t) => `url('esport/${ES_BAN[esOrg(t)]}.jpg')`;
   const ES_VID = { rl: 'esport/rl.mp4' }, esNews = {};
+  const ES_LEAGUE = { r6: 'Six Invitational', cs2: 'Counter-Strike Major Championship', val: 'VALORANT Champions', lol: 'League of Legends World Championship' };
+  const esHero = (id) => { const g = esData?.games?.find((x) => x.id === id); return g ? [`esport/${id}-hero.jpg`, esSrv('event', ES_LEAGUE[id] ?? `${g.name} esports`, g.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ') : ''; };
   let esRotI = 0, esRotT = 0;
-  const esRotHtml = () => { const n = esNews[esGame]?.d?.news?.filter((x) => x.image) ?? [], l = [ES_VID[esGame] ? { video: ES_VID[esGame] } : { image: 'esport/arena.jpg' }, ...(n.length ? n : esGame === 'all' ? ES_PICS.map((f) => ({ image: `esport/${f}.jpg` })) : [])]; return `<div class="esrot" id="esRot">${l.map((n, i) => `<button type="button" class="esslide ${i === esRotI % l.length ? 'on' : ''}" ${n.url ? `data-esurl="${esc(n.url)}"` : ''} ${n.image ? `style="background-image:url('${esc(n.image)}')"` : ''}>${n.video ? `<video src="${esc(n.video)}" autoplay muted loop playsinline></video>` : ''}${n.title ? `<span>${n.game ? `<small>${esc(n.game)}${n.date ? ` · ${esc(n.date)}` : ''}</small>` : ''}<b>${esc(n.title)}</b>${n.summary ? `<em>${esc(n.summary)}</em>` : ''}</span>` : ''}</button>`).join('')}${l.length > 1 ? `<div class="esdots">${l.map((_, i) => `<i data-esrot="${i}" class="${i === esRotI % l.length ? 'on' : ''}"></i>`).join('')}</div>` : ''}</div>`; };
+  const esRotHtml = () => { const n = esNews[esGame]?.d?.news?.filter((x) => x.image) ?? [], l = [ES_VID[esGame] ? { video: ES_VID[esGame] } : esGame === 'all' ? { image: 'esport/arena.jpg' } : { bg: esHero(esGame) }, ...(n.length ? n : esGame === 'all' ? ES_PICS.map((f) => ({ image: `esport/${f}.jpg` })) : [])]; return `<div class="esrot" id="esRot">${l.map((n, i) => `<button type="button" class="esslide ${i === esRotI % l.length ? 'on' : ''}" ${n.url ? `data-esurl="${esc(n.url)}"` : ''} ${n.image || n.bg ? `style="background-image:${n.bg ?? `url('${esc(n.image)}')`}"` : ''}>${n.video ? `<video src="${esc(n.video)}" autoplay muted loop playsinline></video>` : ''}${n.title ? `<span>${n.game ? `<small>${esc(n.game)}${n.date ? ` · ${esc(n.date)}` : ''}</small>` : ''}<b>${esc(n.title)}</b>${n.summary ? `<em>${esc(n.summary)}</em>` : ''}</span>` : ''}</button>`).join('')}${l.length > 1 ? `<div class="esdots">${l.map((_, i) => `<i data-esrot="${i}" class="${i === esRotI % l.length ? 'on' : ''}"></i>`).join('')}</div>` : ''}</div>`; };
   const esRotGo = (i) => { const r = document.getElementById('esRot'); if (!r) return; const s = r.querySelectorAll('.esslide'); esRotI = (i + s.length) % s.length; s.forEach((x, k) => x.classList.toggle('on', k === esRotI)); r.querySelectorAll('[data-esrot]').forEach((x, k) => x.classList.toggle('on', k === esRotI)); clearInterval(esRotT); esRotT = setInterval(() => (document.getElementById('esRot')?.offsetParent ? esRotGo(esRotI + 1) : clearInterval(esRotT)), 6000); };
   const esML = (n) => { const k = String(n).toLowerCase().replace(/^team /, ''), is = (x) => [x.name, x.tag, x.name.replace(/^team /i, '')].some((v) => String(v).toLowerCase() === k), t = esData?.teams?.find((x) => is(x) && (esGame === 'all' || x.game === esGame)) ?? esData?.teams?.find(is); return t ? esLogo(t) : ''; };
   const esM = (m, res) => `<div class="esmatch esgm"><small>${esc(res ? m.date : new Date(m.date).toString() === 'Invalid Date' ? m.date : new Date(m.date).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</small><b>${esML(m.a)}${esc(m.a)} <strong>${res ? esc(m.score) : 'vs'}</strong> ${esc(m.b)}${esML(m.b)}</b><span>${esc([m.event, m.stage].filter(Boolean).join(' · '))}</span></div>`;
@@ -743,7 +745,7 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
     const c = esCur, box = document.getElementById('esTabBody'); if (!c || !box) return;
     c.tab = tab; document.querySelectorAll('[data-estab]').forEach((b) => b.classList.toggle('on', b.dataset.estab === tab));
     const D = c.data;
-    if (!D) { box.innerHTML = c.data === null ? esWait : '<div class="empty">Infos indisponibles pour le moment, réessaie plus tard.</div>'; return; }
+    if (!D || D.error) { box.innerHTML = c.data === null ? esWait : '<div class="empty">Infos indisponibles pour le moment, réessaie plus tard.</div>'; return; }
     const fol = c.t && esFollow().includes(c.t.id);
     const H = {
       apercu: () => `<div class="row">${`<button type="button" class="btn ${fol ? 'ghost' : 'play'}" data-esfollow="${esc(c.t.id)}">${fol ? '★ Suivie' : '☆ Suivre cette équipe'}</button>`}${esLinks(D.team?.links)}</div>
@@ -765,7 +767,9 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
       matchs_e: () => '',
     };
     const k = c.kind === 'event' && tab === 'matchs' ? null : tab;
-    box.innerHTML = (k ? H[k]() : `<div class="esmatches">${(D.matches ?? []).map((m) => `<div class="esmatch"><small>${esc(m.date)} · ${esc(m.stage)}</small><b>${esc(m.a)} vs ${esc(m.b)}</b><strong>${esc(m.score)}</strong></div>`).join('') || '<div class="empty">Pas de match trouvé.</div>'}</div>`) + esSrc(D);
+    try {
+      box.innerHTML = (k ? H[k]() : `<div class="esmatches">${(D.matches ?? []).map((m) => `<div class="esmatch"><small>${esc(m.date)} · ${esc(m.stage)}</small><b>${esc(m.a)} vs ${esc(m.b)}</b><strong>${esc(m.score)}</strong></div>`).join('') || '<div class="empty">Pas de match trouvé.</div>'}</div>`) + esSrc(D);
+    } catch { box.innerHTML = '<div class="empty">Infos incomplètes pour le moment, réessaie dans quelques minutes.</div>'; }
   }
   document.getElementById('esSearch')?.addEventListener('input', () => esportView());
   document.addEventListener('click', (e) => {
