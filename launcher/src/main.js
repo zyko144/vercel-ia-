@@ -421,7 +421,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|steam:\/\/url\/(CommunityFilePage\/\d{6,12}|SteamWorkshopPage\/4000)|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey)|https:\/\/historylauncher\.vercel\.app\/)$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|steam:\/\/url\/(CommunityFilePage\/\d{6,12}|SteamWorkshopPage\/4000)|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey)|https:\/\/historylauncher\.vercel\.app\/|https:\/\/(lolesports\.com|valorantesports\.com|esports\.rocketleague\.com|liquipedia\.net\/[a-z]+\/))$/;
 const isDriverLink = (u) => DRIVER_LINKS.includes(u) || /^https:\/\/(www\.nvidia\.com\/[\w/.%?=&-]*|[\w-]+\.download\.nvidia\.com\/[\w/.%-]+\.exe)$/.test(String(u));
 const openLink = (url) => (SAFE_LINK.test(url) || isDriverLink(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
@@ -3113,6 +3113,23 @@ function loggedIn(r) {
   }
   return { ok: Boolean(r.token), compte: r.compte ?? null, error: r.token ? null : r.error ?? 'Erreur.', recoveryLeft: r.recoveryLeft };
 }
+// Connexion par le navigateur : passkey (Windows Hello, téléphone) sur l'appli web, puis le launcher récupère sa session
+let devLogin = null;
+ipcMain.handle('more:devStart', async () => {
+  const r = await api('/api/compte/lien/appareil', { method: 'POST', body: {} }).catch(() => null);
+  if (!r?.code) return { error: r?.error ?? 'Serveur injoignable.' };
+  devLogin = r.code; shell.openExternal(`https://zyko144.github.io/vercel-ia-/app/#launcher=${r.code}`).catch(() => {});
+  return { check: r.check };
+});
+ipcMain.handle('more:devWait', async () => {
+  for (const code = devLogin, end = Date.now() + 5 * 60_000; code === devLogin && Date.now() < end;) {
+    const r = await api('/api/compte/lien/appareil/attendre', { method: 'POST', body: { code } }).catch(() => null);
+    if (r?.token) { devLogin = null; return loggedIn(r); }
+    if (r?.status === 410) break;
+    await new Promise((ok) => setTimeout(ok, 2000));
+  }
+  return { ok: false, error: 'Connexion non validée à temps : réessaie.' };
+});
 // Sécurité du compte : double authentification (QR code), vérification de l'e-mail, mot de passe oublié
 const code6 = (v) => String(v ?? '').replace(/[^\w-]/g, '').slice(0, 20);
 const secu = async (pathname, body, auth = true) => {
@@ -3859,6 +3876,8 @@ ipcMain.handle('more:storageDel', async (_e, paths = []) => {
   if (list.some((x) => x.id)) scan().then((lib) => send('lib:update', lib)).catch(() => {});
   return { ok, freed, failed };
 });
+ipcMain.handle('more:translate', async (_e, texts) => (process.env.LAUNCHER_DEMO ? { en: {} } : api('/api/compte/traduire', { method: 'POST', body: { texts: (Array.isArray(texts) ? texts : []).slice(0, 60) }, timeout: 60_000 }).catch(() => null)));
+ipcMain.handle('more:esportOpen', (_e, url) => openLink(String(url)).then(() => true, () => false));
 ipcMain.handle('more:dustDone', () => { store.data.dustAt = Date.now(); store.save(); return true; });
 ipcMain.handle('more:speed', () => (process.env.LAUNCHER_DEMO ? { down: 412, up: 48 } : speedTest((u, o) => net.fetch(u, o)).catch((err) => ({ error: err.message }))));
 ipcMain.handle('more:dns', async (_e, name) => {

@@ -68,8 +68,8 @@
   <section id="view-liste" class="view">
     <div class="list-head">
       <h2 id="listTitle">Bibliothèque</h2><span id="count"></span>
-      <div class="seg" id="installed"><button data-inst="tout" class="on" title="Jeux installés ou joués, applis connues ou utilisées">Principaux</button><button data-inst="oui" title="Tout ce qui est installé">Tous les installés</button><button data-inst="non">Non installés</button><button data-inst="jamais" title="Installés mais jamais lancés : ta pile de jeux à commencer">🕹 Jamais lancés</button></div>
-      <button class="btn ghost" id="showHidden" type="button" title="Éléments masqués">👁 Masqués</button>
+      <div class="seg" id="installed"><button data-inst="tout" class="on" title="Jeux installés ou joués, applis connues ou utilisées">Principaux</button><button data-inst="oui" title="Tout ce qui est installé">Tous les installés</button><button data-inst="non">Non installés</button><button data-inst="jamais" title="Installés mais jamais lancés : ta pile de jeux à commencer">Jamais lancés</button></div>
+      <button class="btn ghost" id="showHidden" type="button" title="Éléments masqués">Masqués</button>
       <button class="btn" id="addGame" type="button" title="Ajouter un jeu (ou glisse son .exe dans la fenêtre)">+ Ajouter un jeu</button>
       <select id="sort"><option value="joues">Les plus joués</option><option value="recents">Joués récemment</option><option value="nom">Nom (A → Z)</option><option value="taille">Taille</option></select>
     </div>
@@ -77,13 +77,13 @@
   </section>
 
   <section id="view-stats" class="view">
-    <div class="list-head"><h2>Statistiques</h2><button class="btn" type="button" id="openRecap">📅 Résumé de la semaine</button><div class="tabs" id="periods"><button data-p="semaine" class="on">Semaine</button><button data-p="mois">Mois</button><button data-p="annee">Année</button></div></div>
+    <div class="list-head"><h2>Statistiques</h2><button class="btn" type="button" id="openRecap">Résumé de la semaine</button><div class="tabs" id="periods"><button data-p="semaine" class="on">Semaine</button><button data-p="mois">Mois</button><button data-p="annee">Année</button></div></div>
     <div class="progress-card glass-p" id="progCard"></div>
     <div class="statsgrid">
-      <div class="panel"><h3>🕒 Quand tu joues <small class="hint">30 derniers jours</small></h3><div class="hourly" id="hourly"></div></div>
-      <div class="panel"><h3>🎮 Sessions récentes</h3><div class="sessions" id="sessions"></div></div>
+      <div class="panel"><h3>Quand tu joues <small class="hint">30 derniers jours</small></h3><div class="hourly" id="hourly"></div></div>
+      <div class="panel"><h3>Sessions récentes</h3><div class="sessions" id="sessions"></div></div>
     </div>
-    <h3 class="pch">🏅 Badges <small class="hint" id="badgeCount"></small></h3>
+    <h3 class="pch">Badges <small class="hint" id="badgeCount"></small></h3>
     <div class="badges" id="badges"></div>
     <div class="statsgrid">
       <div class="panel donutCard"><h3>Répartition du temps</h3><div class="donutWrap"><svg id="donut" viewBox="0 0 120 120"></svg><div class="legend" id="legend"></div></div></div>
@@ -98,7 +98,7 @@
         <nav class="fxnav" id="fxNav"><button type="button" data-fx="amis" class="on">Amis<em id="fxnAmis"></em></button><button type="button" data-fx="groupes">Groupes<em id="fxnGroupes"></em></button><button type="button" data-fx="soirees">Soirées<em id="fxnSoirees"></em></button></nav>
         <div class="fxgrow"></div>
         <button type="button" class="fxcode" id="copyCode" title="Copier ton code ami"><small>Ton code ami</small><b id="myCode">…</b></button>
-        <button type="button" class="btn" id="lfgBtn" title="Trouver des joueurs pour ta prochaine partie">🎯 Coéquipiers</button><button type="button" class="btn play" id="fAddBtn">＋ Ajouter un ami</button>
+        <button type="button" class="btn" id="lfgBtn" title="Trouver des joueurs pour ta prochaine partie">Coéquipiers</button><button type="button" class="btn play" id="fAddBtn">＋ Ajouter un ami</button>
       </div>
       <div class="fxbody">
         <div class="fxleft">
@@ -106,7 +106,7 @@
             <div class="fxadd" id="fxAdd" hidden>
               <b>Ajouter un ami</b>
               <div class="finput"><input id="addCode" placeholder="Son code (ex. Max#3F9A2C)" maxlength="40"><button class="btn play sm" type="button" id="addFriend">Envoyer</button></div>
-              <button type="button" class="linkbtn" id="copyInvite">🔗 Copier mon lien d’invitation</button>
+              <button type="button" class="linkbtn" id="copyInvite">Copier mon lien d’invitation</button>
             </div>
             <div class="fxtools">
               <label class="fxsearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="fSearch" type="search" placeholder="Rechercher" autocomplete="off"></label>
@@ -117,7 +117,7 @@
               <div id="hFriends"></div>
               <div id="friendsBody" hidden></div>
             </div>
-            <div class="fxme"><span class="pav sm" id="meAv">?</span><div><b id="meName">Toi</b><input id="myStatus" placeholder="Ton statut…" maxlength="60"></div><button class="btn ghost sm" type="button" id="saveStatus" title="Mettre ce statut">OK</button></div><div class="stchips" id="stChips"><button type="button" data-st="🟢 Dispo pour jouer">🟢 Dispo</button><button type="button" data-st="⛔ Ne pas déranger">⛔ Ne pas déranger</button><button type="button" data-st="🎧 En vocal">🎧 En vocal</button><button type="button" data-st="💤 AFK">💤 AFK</button></div>
+            <div class="fxme"><span class="pav sm" id="meAv">?</span><div><b id="meName">Toi</b><input id="myStatus" placeholder="Ton statut…" maxlength="60"></div><button class="btn ghost sm" type="button" id="saveStatus" title="Mettre ce statut">OK</button></div><div class="stchips" id="stChips"><button type="button" data-st="🟢 Dispo pour jouer">Dispo</button><button type="button" data-st="⛔ Ne pas déranger">Ne pas déranger</button><button type="button" data-st="🎧 En vocal">En vocal</button><button type="button" data-st="💤 AFK">AFK</button></div>
           </div>
           <div class="fxpane" data-fx="groupes" hidden>
             <div class="fxlhead"><b>Tes groupes</b><button type="button" class="btn sm" id="groupNew">＋ Nouveau</button></div>
@@ -139,7 +139,7 @@
           </div>
           <div class="fxchat" id="fxGroup" hidden>
             <div class="chathead"><span class="gstack big" id="gAv"></span><div class="chatwho"><b id="gWho">…</b><small id="gSub"></small></div>
-              <div class="chatacts"><button type="button" class="btn sm" id="gNotify" title="Envoie une notification à tout le groupe">🔔 Prévenir</button><button type="button" class="btn sm" id="gParty">Discord</button><button type="button" class="btn sm" id="gMembersBtn">👥 Membres</button><button type="button" class="btn ghost sm" id="gMore" title="Plus">•••</button></div></div>
+              <div class="chatacts"><button type="button" class="btn sm" id="gNotify" title="Envoie une notification à tout le groupe">Prévenir</button><button type="button" class="btn sm" id="gParty">Discord</button><button type="button" class="btn sm" id="gMembersBtn">Membres</button><button type="button" class="btn ghost sm" id="gMore" title="Plus">•••</button></div></div>
             <div class="gmembers" id="gMembers" hidden></div>
             <div class="chatfil" id="gFil"></div>
             <div class="ctyping" id="gTyping"></div><div class="cscheds" id="gScheds"></div><div class="creplybar" id="gReplyBar" hidden></div>
@@ -164,7 +164,7 @@
   <section id="view-pc" class="view">
     <div class="list-head"><h2>Mon PC</h2>
       <div class="tabs pctabs" id="pcTabs">
-        <button data-pctab="apercu" class="on">Vue d’ensemble</button><button data-pctab="analyse">🔬 Analyse pro</button><button data-pctab="maj">⬆ Windows Update<em class="navcount warnc" id="wuBadge"></em></button><button data-pctab="composants">🧩 Composants</button><button data-pctab="securite">🛡 Sécurité</button><button data-pctab="perf">🏁 Performances</button><button data-pctab="reseau">🌐 Réseau</button><button data-pctab="upgrade">🛒 Upgrade</button><button data-pctab="entretien">🩺 Entretien</button><button data-pctab="stockage">💾 Stockage</button><button data-pctab="verifs">🧪 Vérifs</button>
+        <button data-pctab="apercu" class="on">Vue d’ensemble</button><button data-pctab="analyse">Analyse pro</button><button data-pctab="maj">Windows Update<em class="navcount warnc" id="wuBadge"></em></button><button data-pctab="composants">Composants</button><button data-pctab="securite">Sécurité</button><button data-pctab="perf">Performances</button><button data-pctab="reseau">Réseau</button><button data-pctab="upgrade">Upgrade</button><button data-pctab="entretien">Entretien</button><button data-pctab="stockage">Stockage</button><button data-pctab="verifs">Vérifs</button>
       </div>
     </div>
 
@@ -172,18 +172,18 @@
       <div class="healthcard glass-p" id="healthCard">
         <div class="ring small" id="pcRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="val" id="pcRingVal"/></svg><div><b id="pcRingNum">–</b><small id="pcRingLabel">Calcul…</small></div></div>
         <div class="hinfo2"><b>Score de santé du PC</b><small class="hint" id="pcOs">Le même score que dans Optimisation : matériel et sécurité, entretien, fichiers et stabilité de Windows.</small><div class="hparts" id="healthParts"></div></div>
-        <div class="hacts"><button class="btn play" type="button" data-gotab="analyse">🔬 Analyse pro</button><button class="btn" type="button" data-view="optimisation">🚀 Optimiser</button><button class="btn ghost" type="button" id="pcReportBtn">📄 Rapport</button></div>
+        <div class="hacts"><button class="btn play" type="button" data-gotab="analyse">Analyse pro</button><button class="btn" type="button" data-view="optimisation">Optimiser</button><button class="btn ghost" type="button" id="pcReportBtn">Rapport</button></div>
       </div>
       <div class="gauges" id="pcGauges"></div>
       <div class="pcgrid">
-        <div class="panel"><h3>🌡 Dernières 24 h <small class="hint">processeur, carte graphique, mémoire</small></h3><div id="pcTemps" class="tchart"><div class="empty">Les mesures s’enregistrent chaque minute.</div></div></div>
-        <div class="panel"><h3>💡 À faire en priorité</h3><div class="advice compact" id="pcTop"><div class="empty">Calcul…</div></div></div>
+        <div class="panel"><h3>Dernières 24 h</h3><small class="hint" style="margin-top:-8px">Processeur, carte graphique et mémoire</small><div id="pcTemps" class="tchart"><div class="empty">Les mesures s’enregistrent chaque minute.</div></div></div>
+        <div class="panel"><h3>À faire en priorité</h3><div class="advice compact" id="pcTop"><div class="empty">Calcul…</div></div></div>
       </div>
     </div>
 
     <div class="pctab" data-pctab="analyse" hidden>
       <div class="scanhero glass-p">
-        <div><b>🔬 Analyse pro de tout le PC</b><small class="hint">Chaque fichier de chaque disque est lu un par un. Les doublons sont confirmés par l’empreinte SHA-256 de leur contenu, chaque fichier louche est vérifié (signature numérique + antivirus de Windows) et le journal de Windows est passé au crible (écrans bleus, arrêts brutaux, erreurs disque et matériel). Compte 10 à 30 minutes selon le nombre de fichiers : tu peux continuer à utiliser le PC.</small><small class="hint" id="scanLast"></small></div>
+        <div><b>Analyse pro de tout le PC</b><small class="hint">Chaque fichier de chaque disque est lu un par un. Les doublons sont confirmés par l’empreinte SHA-256 de leur contenu, chaque fichier louche est vérifié (signature numérique + antivirus de Windows) et le journal de Windows est passé au crible (écrans bleus, arrêts brutaux, erreurs disque et matériel). Compte 10 à 30 minutes selon le nombre de fichiers : tu peux continuer à utiliser le PC.</small><small class="hint" id="scanLast"></small></div>
         <div class="scandrives" id="scanDrives"></div>
         <div class="row"><button class="btn play big" type="button" id="scanBtn">Lancer l’analyse pro</button><button class="btn ghost" type="button" id="scanStop" hidden>Arrêter</button></div>
       </div>
@@ -193,7 +193,7 @@
 
     <div class="pctab" data-pctab="maj" hidden>
       <div class="scanhero glass-p">
-        <div><b>⬆ Windows Update</b><small class="hint">Recherche avec l’agent officiel de Windows, puis téléchargement et installation ici même (Windows demande l’autorisation administrateur).</small><small class="hint" id="wuLast"></small></div>
+        <div><b>Windows Update</b><small class="hint">Recherche avec l’agent officiel de Windows, puis téléchargement et installation ici même (Windows demande l’autorisation administrateur).</small><small class="hint" id="wuLast"></small></div>
         <div class="row"><button class="btn play big" type="button" id="wuSearch">Rechercher les mises à jour</button></div>
       </div>
       <div id="wuLive" hidden></div>
@@ -202,40 +202,40 @@
 
     <div class="pctab" data-pctab="composants" hidden>
       <div class="panel pcshow" id="pcShow" hidden><div class="psstage" id="psStage"></div><div class="psthumbs" id="psThumbs"></div></div>
-      <div class="panel"><h3>💽 Santé des disques</h3><p class="hint">Usure des SSD, température et erreurs de lecture, lues sans rien modifier.</p><div id="diskHealth"><button class="btn" type="button" id="diskHealthBtn">Vérifier mes disques</button></div></div>
-      <div class="row pcactions"><button class="btn" type="button" id="pcDiagBtn">⚡ Relire les composants</button></div>
+      <div class="panel"><h3>Santé des disques</h3><p class="hint">Usure des SSD, température et erreurs de lecture, lues sans rien modifier.</p><div id="diskHealth"><button class="btn" type="button" id="diskHealthBtn">Vérifier mes disques</button></div></div>
+      <div class="row pcactions"><button class="btn" type="button" id="pcDiagBtn">Relire les composants</button></div>
       <div id="pcDriver"></div>
       <div class="comps" id="pcComps"><div class="empty">Lecture des composants…</div></div>
-      <h3 class="pch">💡 Améliorations conseillées</h3>
+      <h3 class="pch">Améliorations conseillées</h3>
       <div class="advice" id="pcAdvice"><div class="empty">Les conseils apparaîtront après la lecture des composants.</div></div>
     </div>
 
     <div class="pctab" data-pctab="securite" hidden>
       <div class="pcgrid">
         <div class="panel">
-          <h3>🛡 Antivirus de Windows</h3>
+          <h3>Antivirus de Windows</h3>
           <div id="pcAv" class="hint">Lecture de l’état de la protection…</div>
           <div class="row"><button class="btn" type="button" data-avscan="quick">Analyse rapide</button><button class="btn" type="button" data-avscan="full">Analyse complète</button><button class="btn ghost" type="button" id="avRemove">Supprimer les menaces</button></div>
         </div>
         <div class="panel">
-          <h3>🛟 Point de restauration</h3>
+          <h3>Point de restauration</h3>
           <p class="hint">Une photo de Windows pour revenir en arrière si un pilote ou un réglage pose problème. History en crée un tout seul avant chaque optimisation système.</p>
           <div class="row"><button class="btn" type="button" id="restoreBtn">Créer un point de restauration</button></div>
         </div>
       </div>
-      <h3 class="pch">🧠 Programmes qui tournent <button class="btn ghost sm" type="button" id="procRefresh">Actualiser</button></h3>
+      <h3 class="pch">Programmes qui tournent <button class="btn ghost sm" type="button" id="procRefresh">Actualiser</button></h3>
       <div class="procs" id="pcProcs"><div class="empty">Clique sur Actualiser pour voir ce qui tourne et qui l’a signé.</div></div>
     </div>
 
     <div class="pctab" data-pctab="perf" hidden>
       <div class="pcgrid">
         <div class="panel">
-          <h3>🏁 Benchmark History</h3>
+          <h3>Benchmark History</h3>
           <div id="pcBench" class="hint">Mesure réelle du processeur, de la mémoire, du disque et de la carte graphique. 1000 = PC de jeu milieu de gamme.</div>
-          <div class="row"><button class="btn play" type="button" id="pcBenchBtn">Lancer le benchmark</button><button class="btn ghost" type="button" id="rankBtn">🌍 Classement mondial</button></div>
+          <div class="row"><button class="btn play" type="button" id="pcBenchBtn">Lancer le benchmark</button><button class="btn ghost" type="button" id="rankBtn">Classement mondial</button></div>
         </div>
         <div class="panel">
-          <h3>⚡ Boost de jeu</h3>
+          <h3>Boost de jeu</h3>
           <p class="hint">Pendant une partie lancée ici : Windows en « Performances élevées » et les applis cochées sont fermées. Tout est remis à la fin.</p>
           <label class="toggle"><input type="checkbox" id="boostOn"><span></span>Activer le boost</label>
           <label class="toggle"><input type="checkbox" id="boostPower"><span></span>Mode d’alimentation « Performances élevées »</label>
@@ -251,54 +251,54 @@
 
     <div class="pctab" data-pctab="upgrade" hidden>
       <div class="upwrap">
-        <div class="uphead"><div><h3>🛒 Ton prochain upgrade</h3><small>Calculé sur ton PC, ce qui est compatible et tes jeux. Prix et gains : estimations ; tes FPS mesurés sont réels.</small></div>
+        <div class="uphead"><div><h3>Ton prochain upgrade</h3><small>Calculé sur ton PC, ce qui est compatible et tes jeux. Prix et gains : estimations ; tes FPS mesurés sont réels.</small></div>
           <div class="upchips" id="upBudget"><button data-b="150">150 €</button><button data-b="300">300 €</button><button data-b="450">450 €</button><button data-b="600" class="on">600 €</button><button data-b="900">900 €</button><button data-b="1300">1 300 €</button></div></div>
-        <div class="upmodes" id="upModes"><button data-mode="gpu" class="on">🎮 Carte graphique</button><button data-mode="cpu">🧠 Processeur &amp; carte mère</button><button data-mode="ram">💾 Mémoire (RAM)</button><button data-mode="disk">💽 Stockage</button></div>
+        <div class="upmodes" id="upModes"><button data-mode="gpu" class="on">Carte graphique</button><button data-mode="cpu">Processeur &amp; carte mère</button><button data-mode="ram">Mémoire (RAM)</button><button data-mode="disk">Stockage</button></div>
         <div class="upchips sm" id="upBrands"><button data-brand="all" class="on">Toutes les marques</button><button data-brand="nvidia">NVIDIA</button><button data-brand="amd">AMD</button><button data-brand="intel">Intel</button></div>
         <div class="uphero" id="upHero"></div>
         <div class="upbal" id="upBal"></div>
         <h4 class="upsub">Ce que tu peux acheter <small>(compatible avec ton PC)</small></h4>
         <div class="upopts" id="upOpts"></div>
-        <div class="uprowh" id="upGamesHead"><h4>🎮 Tes jeux avant / après</h4><button class="btn sm" type="button" id="upPick">＋ Choisir mes jeux</button></div>
+        <div class="uprowh" id="upGamesHead"><h4>Tes jeux avant / après</h4><button class="btn sm" type="button" id="upPick">＋ Choisir mes jeux</button></div>
         <div class="upgames" id="upGames"></div>
-        <div class="upai"><button class="btn premgo" type="button" id="upAiBtn">🤖 Avis détaillé de l’IA</button><small>Premium History IA : verdict, jeu par jeu, compatibilité et points à vérifier avant d’acheter.</small><div class="reporttxt rich" id="upAiOut" hidden></div></div>
+        <div class="upai"><button class="btn premgo" type="button" id="upAiBtn">Avis détaillé de l’IA</button><small>Premium History IA : verdict, jeu par jeu, compatibilité et points à vérifier avant d’acheter.</small><div class="reporttxt rich" id="upAiOut" hidden></div></div>
       </div>
     </div>
     <div class="pctab" data-pctab="entretien" hidden>
-      <div class="panel"><h3>💽 Santé des disques</h3><p class="hint">L’état SMART que Windows lit dans chaque disque. Si un disque faiblit, tu es prévenu (une fois par semaine) pour sauvegarder tes fichiers à temps.</p><div id="careDisks" class="upl"></div></div>
-      <div class="panel"><h3>🧹 Anciens pilotes graphiques</h3><p class="hint">Chaque mise à jour NVIDIA / AMD / Intel laisse l’ancienne version sur le disque. Seuls les pilotes qui ne servent plus sont retirés, après un point de restauration.</p><div id="careDrv" class="upl"></div><button class="btn" type="button" id="careDrvGo">Nettoyer les anciens pilotes</button></div>
+      <div class="panel"><h3>Santé des disques</h3><p class="hint">L’état SMART que Windows lit dans chaque disque. Si un disque faiblit, tu es prévenu (une fois par semaine) pour sauvegarder tes fichiers à temps.</p><div id="careDisks" class="upl"></div></div>
+      <div class="panel"><h3>Anciens pilotes graphiques</h3><p class="hint">Chaque mise à jour NVIDIA / AMD / Intel laisse l’ancienne version sur le disque. Seuls les pilotes qui ne servent plus sont retirés, après un point de restauration.</p><div id="careDrv" class="upl"></div><button class="btn" type="button" id="careDrvGo">Nettoyer les anciens pilotes</button></div>
     </div>
     <div class="pctab" data-pctab="stockage" hidden>
       <div class="stdrives" id="stDrives"></div>
       <div class="panel stpanel">
-        <div class="sttools"><input id="stSearch" class="minput" type="search" placeholder="Rechercher un jeu, une appli, un fichier…"><select id="stSort" class="minput"><option value="size">Plus gros d’abord</option><option value="old">Moins utilisés d’abord</option><option value="name">Nom</option></select><button class="btn" type="button" id="stOld">🕰 Fichiers anciens</button><button class="btn ghost" type="button" id="stScan">↻ Analyser</button></div>
+        <div class="sttools"><input id="stSearch" class="minput" type="search" placeholder="Rechercher un jeu, une appli, un fichier…"><select id="stSort" class="minput"><option value="size">Plus gros d’abord</option><option value="old">Moins utilisés d’abord</option><option value="name">Nom</option></select><button class="btn" type="button" id="stOld">Fichiers anciens</button><button class="btn ghost" type="button" id="stScan">Analyser</button></div>
         <div class="stchips" id="stChips"></div>
         <div id="stList"><div class="empty">Ouvre cet onglet pour mesurer ce qui prend de la place sur tes disques.</div></div>
       </div>
     </div>
     <div class="pctab" data-pctab="verifs" hidden>
-      <div class="panel vfhero"><div class="vfsum" id="vfSum"><b>…</b></div><div class="vfhead"><h3 id="vfTitle">Vérification de ton PC…</h3><p class="hint">Écran, mémoire, BIOS, pilotes, disques : on regarde tout, on ne touche à rien sans toi.</p></div><button class="btn ghost" type="button" id="mvRecheck">↻ Revérifier</button></div>
+      <div class="panel vfhero"><div class="vfsum" id="vfSum"><b>…</b></div><div class="vfhead"><h3 id="vfTitle">Vérification de ton PC…</h3><p class="hint">Écran, mémoire, BIOS, pilotes, disques : on regarde tout, on ne touche à rien sans toi.</p></div><button class="btn ghost" type="button" id="mvRecheck">Revérifier</button></div>
       <div id="mvChecks"></div>
       <div class="pcgrid vfgrid">
-        <div class="panel"><h3>💶 Ce que vaut ton PC</h3><div id="mvNumbers" class="hint">Calcul…</div></div>
-        <div class="panel"><h3>🌡 Températures sur 30 jours</h3><div id="mvTemps"></div><div id="mvDust"></div></div>
+        <div class="panel"><h3>Ce que vaut ton PC</h3><div id="mvNumbers" class="hint">Calcul…</div></div>
+        <div class="panel"><h3>Températures sur 30 jours</h3><div id="mvTemps"></div><div id="mvDust"></div></div>
       </div>
-      <div class="panel"><h3>🧰 Tests</h3><div class="vftests">
+      <div class="panel"><h3>Tests</h3><div class="vftests">
         <button class="vftest" type="button" id="mvStress"><i>🔥</i><b>Stabilité</b><small>10 min à fond, températures surveillées</small></button>
         <button class="vftest" type="button" id="mvMem"><i>🧠</i><b>Mémoire vive</b><small>Cherche les erreurs de RAM au redémarrage</small></button>
         <button class="vftest" type="button" id="mvMouse"><i>🖱</i><b>Souris</b><small>Mesure sa vraie fréquence (Hz)</small></button>
         <button class="vftest" type="button" id="mvRestore"><i>🧹</i><b>Points de restauration</b><small>Supprime les plus anciens</small></button>
       </div></div>
       <div class="pcgrid vfgrid">
-        <div class="panel"><h3>📈 FPS, pilotes et batterie</h3><div id="mvPerf"></div></div>
-        <div class="panel"><h3>↩ Journal des optimisations</h3><div id="mvJournal"></div></div>
-        <div class="panel"><h3>📦 À réinstaller</h3><div id="mvReinstall"></div></div>
+        <div class="panel"><h3>FPS, pilotes et batterie</h3><div id="mvPerf"></div></div>
+        <div class="panel"><h3>Journal des optimisations</h3><div id="mvJournal"></div></div>
+        <div class="panel"><h3>À réinstaller</h3><div id="mvReinstall"></div></div>
       </div>
     </div>
 
     <div class="pctab" data-pctab="reseau" hidden>
-      <div class="panel"><h3>🚀 Test de connexion</h3><p class="hint">Ping, stabilité, paquets perdus, débit et type de connexion (Wi-Fi ou câble), avec un conseil clair. Environ 30 secondes.</p><div class="row"><button class="btn play" type="button" id="netTest">▶ Lancer le test</button></div><div id="netTestOut"></div></div>
-      <div class="panel"><h3>🌐 Réseau</h3><p class="hint">Latence réelle vers les services de jeu et vitesse des serveurs DNS.</p><div class="row"><button class="btn" type="button" id="netPing">📶 Tester la latence</button><button class="btn" type="button" id="netDns">⚡ Trouver le DNS le plus rapide</button></div><div id="netOut"></div></div>
+      <div class="panel"><h3>Test de connexion</h3><p class="hint">Ping, stabilité, paquets perdus, débit et type de connexion (Wi-Fi ou câble), avec un conseil clair. Environ 30 secondes.</p><div class="row"><button class="btn play" type="button" id="netTest">▶ Lancer le test</button></div><div id="netTestOut"></div></div>
+      <div class="panel"><h3>Réseau</h3><p class="hint">Latence réelle vers les services de jeu et vitesse des serveurs DNS.</p><div class="row"><button class="btn" type="button" id="netPing">Tester la latence</button><button class="btn" type="button" id="netDns">Trouver le DNS le plus rapide</button></div><div id="netOut"></div></div>
     </div>
     <div class="pcprog" id="pcProg" hidden><div class="updbar"><i id="pcProgFill"></i></div><small id="pcProgText"></small></div>
     <div id="pcScore" hidden></div>
@@ -320,10 +320,10 @@
         <li class="wip"><span>🎯 <b>Profils par jeu</b> automatiques (FiveM, Fortnite, Rocket League…)</span> <em>en cours</em></li>
       </ul>
       <small>En attendant : bouton ⚡ à côté de « Jouer ». Si un jeu bug depuis une ancienne optimisation, remets Windows comme avant :</small>
-      <button class="btn" type="button" id="maintReset">↩ Remettre Windows comme avant</button>
+      <button class="btn" type="button" id="maintReset">Remettre Windows comme avant</button>
       <div class="mainttape b"></div>
     </div>
-    <div class="list-head"><h2>Optimisation</h2><div class="tabs pctabs" id="optTabs"><button data-ot="rapide" class="on">⚡ Optimisation rapide</button><button data-ot="pro">🚀 Opti Pro accompagnée</button></div></div>
+    <div class="list-head"><h2>Optimisation</h2><div class="tabs pctabs" id="optTabs"><button data-ot="rapide" class="on">Optimisation rapide</button><button data-ot="pro">Opti Pro accompagnée</button></div></div>
     <div class="optitab" data-ot="rapide">
     <div class="optihero">
       <div class="ring" id="optiRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="val" id="ringVal"/></svg><div><b id="ringNum">–</b><small id="ringLabel">Pas encore analysé</small></div></div>
@@ -331,7 +331,7 @@
         <h2>Optimisation du PC</h2>
         <p class="hint" id="optiIntro">Une vraie analyse de tout le PC : fichiers inutiles, restes de jeux désinstallés, programmes au démarrage et réglages Windows pour les jeux. Rien n’est touché sans ton accord.</p>
         <div class="optisum" id="optiSum"></div>
-        <div class="row optibtns"><button class="btn play big" id="optiScan" type="button">Analyser mon PC</button><button class="btn big" id="optiRun" type="button" hidden>⚡ Tout optimiser</button><label class="toggle"><input type="checkbox" id="optiAuto"><span></span>Optimisation automatique chaque semaine</label><label class="toggle"><input type="checkbox" id="optiGain"><span></span>Mesurer le gain (mini-benchmark avant / après)</label></div>
+        <div class="row optibtns"><button class="btn play big" id="optiScan" type="button">Analyser mon PC</button><button class="btn big" id="optiRun" type="button" hidden>Tout optimiser</button><label class="toggle"><input type="checkbox" id="optiAuto"><span></span>Optimisation automatique chaque semaine</label><label class="toggle"><input type="checkbox" id="optiGain"><span></span>Mesurer le gain (mini-benchmark avant / après)</label></div>
       </div>
     </div>
     <div id="optiDiag"></div>
@@ -341,14 +341,14 @@
     <div class="optitab" data-ot="pro" hidden>
       <div class="optihero prohero"><div class="proicon">🚀</div><div class="optiinfo"><h2>Opti Pro : ton PC réglé comme un pro</h2><p class="hint">Un vrai accompagnement, du formatage au BIOS : un technicien History ou l’IA te guide pas à pas. Tout se mesure avant / après, rien n’est forcé et tout se remet comme avant.</p><div class="probar"><i id="proBar"></i></div><small class="hint" id="proProg"></small></div></div>
       <div class="prosvc">
-        <div><b>🧹 Formatage complet</b><small>Remise à zéro propre de Windows</small></div>
-        <div><b>⚙️ Windows complet</b><small>Services, confidentialité, latence, debloat</small></div>
-        <div><b>🟩 Panneau NVIDIA</b><small>Réglages avancés de la carte graphique</small></div>
-        <div><b>🌡 Intégrité & performances</b><small>Températures et stabilité vérifiées</small></div>
-        <div><b>✅ Compatibilité</b><small>Toutes tes applis et tes jeux testés</small></div>
-        <div><b>🧠 BIOS + overclocking</b><small>Processeur poussé si ton matériel le permet</small></div>
-        <div><b>🔒 CPU non débloqué ?</b><small>BIOS réglé pour aller chercher des gains quand même</small></div>
-        <div><b>🧩 RAM : timings & fréquence</b><small>Overclocking de la mémoire, ou optimisée au mieux</small></div>
+        <div><b>Formatage complet</b><small>Remise à zéro propre de Windows</small></div>
+        <div><b>Windows complet</b><small>Services, confidentialité, latence, debloat</small></div>
+        <div><b>Panneau NVIDIA</b><small>Réglages avancés de la carte graphique</small></div>
+        <div><b>Intégrité & performances</b><small>Températures et stabilité vérifiées</small></div>
+        <div><b>Compatibilité</b><small>Toutes tes applis et tes jeux testés</small></div>
+        <div><b>BIOS + overclocking</b><small>Processeur poussé si ton matériel le permet</small></div>
+        <div><b>CPU non débloqué ?</b><small>BIOS réglé pour aller chercher des gains quand même</small></div>
+        <div><b>RAM : timings & fréquence</b><small>Overclocking de la mémoire, ou optimisée au mieux</small></div>
       </div>
       <div class="propc" id="proPc"></div>
       <div class="prolay"><ol class="prosteps" id="proSteps"></ol><div class="proticket" id="proTicket"></div></div>
@@ -363,7 +363,7 @@
 <article class="premcard premium-offer opti" data-pack="opti"><div class="premium-art"><span class="premium-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4m-6-9 3-3 3 3 5-5"/></svg></span></div><div class="premium-copy"><span class="premium-eyebrow">PERFORMANCES PC</span><h3>Opti Pro</h3><p class="premium-desc">Un PC prêt pour ta prochaine partie.</p><div class="premium-price">2,49 €<small> / mois</small></div><p class="premium-period">31 jours d’accès par paiement</p><ul><li>Des corrections selon ton diagnostic</li><li>Boost automatique au lancement du jeu</li><li>Réglages adaptés à tes jeux</li><li>Nettoyage profond et démarrage plus rapide</li><li>Tout est réversible en un clic</li></ul><button type="button" class="btn premgo" data-buy="opti">Acheter avec PayPal</button></div></article>
 <article class="premcard premium-offer pack best" data-pack="pack"><div class="premium-art"><span class="premium-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></span><span class="premium-badge">Le duo · −20 %</span></div><div class="premium-copy"><span class="premium-eyebrow">LE DUO COMPLET</span><h3>Pack Premium</h3><p class="premium-desc">L’assistant et l’optimisation, réunis.</p><div class="premium-price">3,99 €<small> / mois</small></div><p class="premium-period">31 jours d’accès par paiement</p><ul><li>Tout History IA + tout Opti Pro</li><li>Avantages Premium sur le bot Discord</li><li>Un seul accès pour les deux outils</li><li>Réponse prioritaire du support</li><li>Rôle Premium doré sur le serveur History</li></ul><button type="button" class="btn premgo" data-buy="pack">Acheter avec PayPal</button></div></article>
     </div>
-    <section class="premgift" id="premGift"><h3>🎁 Cadeaux &amp; codes</h3><div class="pgrow">
+    <section class="premgift" id="premGift"><h3>Cadeaux &amp; codes</h3><div class="pgrow">
       <div class="pgcard"><b>Essai gratuit</b><small>3 jours de Pack Premium, une fois par compte.</small><button type="button" class="btn premgo" id="pgTrial">Essayer gratuitement</button></div>
       <div class="pgcard"><b>Ton code ami</b><small>−20 % pour ton ami, 7 jours offerts pour toi à chaque filleul, +1 mois au 3e, +3 mois au 10e.</small><small id="pgSponsor"></small><div class="pgcode"><code id="pgCode">…</code><button type="button" class="btn sm" id="pgCopy">Copier</button></div></div>
       <div class="pgcard"><b>Carte cadeau</b><small>Un code CADEAU reçu ? Active-le ici. Pour en offrir une : coche « cadeau » à l’achat.</small><form class="pgcode" id="pgRedeemF"><input id="pgRedeem" placeholder="CADEAU-XXXXXXXX" maxlength="30"><button class="btn sm">Utiliser</button></form></div>
@@ -393,7 +393,7 @@
     <header><span class="pdico"><svg viewBox="0 0 24 24"><path d="m3 8 4.5 3.5L12 5l4.5 6.5L21 8l-1.8 10H4.8zM5 21h14"/></svg></span><div><small>FINALISE TON ACHAT</small><b id="pdTitle">Pack Premium</b></div><span class="pdprice" id="pdPrice">3,99 €</span><button type="button" class="pdx" id="pdClose" aria-label="Fermer">✕</button></header>
     <ol class="pdsteps">
       <li><i>1</i><div><b>Paie sur PayPal</b><small>Envoie <span id="pdAmount">3,99 €</span> à <u>paypal.me/zyko921</u></small>
-        <div class="pdwarn"><b>⚠ Envoie en « Entre proches » (Amis et famille)</b><span>Pas « Biens et services ». Sinon le paiement est refusé.</span></div>
+        <div class="pdwarn"><b>Envoie en « Entre proches » (Amis et famille)</b><span>Pas « Biens et services ». Sinon le paiement est refusé.</span></div>
         <div class="pdnote"><span>Note obligatoire dans le paiement</span><b id="pdNote">…</b><button type="button" class="btn sm" id="pdCopyNote">Copier</button></div></div><button type="button" class="btn sm" id="pdPay">Ouvrir PayPal</button></li>
       <li><i>+</i><div><b>Code ami et cadeau</b><div class="pdopts"><input id="pdCode" maxlength="20" placeholder="Code ami (−20 %)"><label><input type="checkbox" id="pdGift"> 🎁 C’est un cadeau (tu reçois un code à offrir)</label><label><input type="checkbox" id="pdYear"> 📅 1 an : 12 mois pour le prix de 10</label></div></div></li>
       <li><i>2</i><div><b>Ton compte PayPal</b><input id="premPaypal" maxlength="120" placeholder="Nom ou e-mail utilisé pour payer" required></div></li>
@@ -437,7 +437,7 @@
       <label class="field"><span>E-mail</span><input id="aEmail" type="email" autocomplete="email" maxlength="254" placeholder="toi@exemple.fr" required></label>
       <label class="field"><span>Mot de passe</span><div class="passwrap"><input id="aPass" type="password" autocomplete="current-password" maxlength="128" placeholder="8 caractères minimum" required><button type="button" id="aEye" title="Afficher le mot de passe">👁</button></div><small class="passhint" id="passHint"></small></label>
       <p class="autherr" id="authErr"></p>
-      <button class="btn play big" id="authGo">Se connecter</button>
+      <button class="btn play big" id="authGo">Se connecter</button><button type="button" class="btn ghost" id="authDev">Avec une passkey ou mon téléphone</button><p class="hint" id="authDevInfo" hidden></p>
     </form>
     <form id="authStep" class="authstep" hidden autocomplete="off">
       <h2 id="stepTitle"></h2>
@@ -449,8 +449,8 @@
       <button class="btn play big" id="stepGo">Valider</button>
       <div class="steplinks"><button type="button" class="linkbtn" id="stepResend">Renvoyer le code</button><button type="button" class="linkbtn" id="stepBack">Retour</button></div>
     </form>
-    <div class="authpair" id="authPair" hidden><h2>💻 Connexion depuis un autre PC</h2><p class="sub">Sur un PC déjà connecté : clique sur ton nom en bas à gauche › <b>Connecter un autre PC</b>, puis entre ce code.</p><div class="paircode" id="pairCode">····-····</div><small class="hint" id="pairHint">Valable 5 minutes.</small><button type="button" class="linkbtn" id="pairBack">Retour</button></div>
-    <button class="btn ghost" type="button" id="authPairBtn">💻 Se connecter avec un autre PC (sans mot de passe)</button>
+    <div class="authpair" id="authPair" hidden><h2>Connexion depuis un autre PC</h2><p class="sub">Sur un PC déjà connecté : clique sur ton nom en bas à gauche › <b>Connecter un autre PC</b>, puis entre ce code.</p><div class="paircode" id="pairCode">····-····</div><small class="hint" id="pairHint">Valable 5 minutes.</small><button type="button" class="linkbtn" id="pairBack">Retour</button></div>
+    <button class="btn ghost" type="button" id="authPairBtn">Se connecter avec un autre PC (sans mot de passe)</button>
     <button class="linkbtn" id="authForgot">Mot de passe oublié ?</button>
     <button class="linkbtn" id="authSkip">Continuer sans compte</button>
   </div>
@@ -499,7 +499,7 @@
 
 <dialog id="recapDlg">
   <form method="dialog" class="dlg recap">
-    <h2>📅 Ta semaine</h2>
+    <h2>Ta semaine</h2>
     <div id="recapBody"></div>
     <div class="row end"><button class="btn play">Fermer</button></div>
   </form>
@@ -511,7 +511,7 @@
     <div id="odStats" class="odstats"></div>
     <div id="odChecks" class="odchecks"></div>
     <div id="odRun" class="odrun" hidden><div class="odbar"><i id="odFill"></i></div><p id="odStep">Préparation…</p><ul id="odLog"></ul></div>
-    <div class="odfoot" id="odFoot"><button type="button" class="btn ghost" id="odPlain">Jouer sans optimiser</button><button type="button" class="btn play" id="odGo">⚡ Optimiser et jouer</button></div>
+    <div class="odfoot" id="odFoot"><button type="button" class="btn ghost" id="odPlain">Jouer sans optimiser</button><button type="button" class="btn play" id="odGo">Optimiser et jouer</button></div>
   </div>
 </dialog>
 
@@ -550,16 +550,16 @@
 <dialog id="settings" class="setdlg" aria-labelledby="settingsTitle">
   <form method="dialog" class="dlg setbox">
     <header class="settop"><div><span class="set-eyebrow">HISTORY LAUNCHER</span><h2 id="settingsTitle">Paramètres</h2></div><div class="setsearch"><span aria-hidden="true">⌕</span><input type="search" id="settingsSearch" placeholder="Rechercher un réglage…" aria-label="Rechercher un réglage" autocomplete="off"><button type="button" id="settingsClear" aria-label="Effacer la recherche" hidden>×</button></div><button type="submit" class="set-dismiss" aria-label="Fermer les paramètres">×</button></header>
-<aside class="setnav"><div class="setbrand"><img src="logo.png" alt=""><span>HISTORY<small>Ton espace, tes règles.</small></span></div><nav aria-label="Catégories des paramètres"><p class="setnav-label">TON ESPACE</p><button type="button" data-pane="general" aria-controls="set-general" class="on" aria-current="page"><span class="setnav-icon" aria-hidden="true">⚙</span><span>Général</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="apparence" aria-controls="set-apparence"><span class="setnav-icon" aria-hidden="true">◐</span><span>Apparence</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="sons" aria-controls="set-sons"><span class="setnav-icon" aria-hidden="true">♫</span><span>Sons & micro</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><p class="setnav-label">EN JEU</p><button type="button" data-pane="jeux" aria-controls="set-jeux"><span class="setnav-icon" aria-hidden="true">🎮</span><span>Jeux & performances</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="raccourcis" aria-controls="set-raccourcis"><span class="setnav-icon" aria-hidden="true">⌘</span><span>Raccourcis</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="assistant" aria-controls="set-assistant"><span class="setnav-icon" aria-hidden="true">◉</span><span>Assistant vocal</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="clips" aria-controls="set-clips"><span class="setnav-icon" aria-hidden="true">▣</span><span>Clips & captures</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><p class="setnav-label">CONNEXIONS</p><button type="button" data-pane="social" aria-controls="set-social"><span class="setnav-icon" aria-hidden="true">♧</span><span>Amis & partage</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="telephone" aria-controls="set-telephone"><span class="setnav-icon" aria-hidden="true">▯</span><span>Téléphone</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="compte" aria-controls="set-compte"><span class="setnav-icon" aria-hidden="true">♙</span><span>Compte & sauvegarde</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="accueil" aria-controls="set-accueil"><span class="setnav-icon" aria-hidden="true">⌂</span><span>Mon accueil</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="aide" aria-controls="set-aide"><span class="setnav-icon" aria-hidden="true">✉</span><span>Centre d’aide</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><p class="setnav-label">HISTORY & TOI</p><button type="button" data-pane="avis" aria-controls="set-avis"><span class="setnav-icon" aria-hidden="true">☆</span><span>Ton avis</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="about" aria-controls="set-about"><span class="setnav-icon" aria-hidden="true">ⓘ</span><span>À propos</span><span class="setnav-arrow" aria-hidden="true">↗</span></button></nav><p class="setnav-foot"><i></i> À ta façon. Tout simplement.</p></aside><div class="setbody"><section class="setpane" id="set-general" data-pane="general" aria-labelledby="set-title-general"><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / GÉNÉRAL</span><h3 id="set-title-general">Général</h3><p>Un launcher qui suit ton rythme.</p></header><div class="setcard"><h4>Au quotidien</h4>
+<aside class="setnav"><div class="setbrand"><img src="logo.png" alt=""><span>HISTORY<small>Ton espace, tes règles.</small></span></div><nav aria-label="Catégories des paramètres"><p class="setnav-label">TON ESPACE</p><button type="button" data-pane="general" aria-controls="set-general" class="on" aria-current="page"><span class="setnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></span><span>Général</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="apparence" aria-controls="set-apparence"><span class="setnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.3A4.7 4.7 0 0 0 22 9.7C22 5.9 17.5 3 12 3Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="7.5" r="1"/></svg></span><span>Apparence & sons</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="sons" aria-controls="set-sons"><span class="setnav-icon" aria-hidden="true">♫</span><span>Sons & micro</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><p class="setnav-label">EN JEU</p><button type="button" data-pane="jeux" aria-controls="set-jeux"><span class="setnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-4 3.6l-.7 6.2A3 3 0 0 0 7 17l2-2h6l2 2a3 3 0 0 0 5-2.2l-.7-6.2a4 4 0 0 0-4-3.6Z"/></svg></span><span>Jeux & assistant</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="raccourcis" aria-controls="set-raccourcis"><span class="setnav-icon" aria-hidden="true">⌘</span><span>Raccourcis</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="assistant" aria-controls="set-assistant"><span class="setnav-icon" aria-hidden="true">◉</span><span>Assistant vocal</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="clips" aria-controls="set-clips"><span class="setnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></span><span>Clips & captures</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><p class="setnav-label">CONNEXIONS</p><button type="button" data-pane="social" aria-controls="set-social"><span class="setnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg></span><span>Amis & téléphone</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="telephone" aria-controls="set-telephone"><span class="setnav-icon" aria-hidden="true">▯</span><span>Téléphone</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="compte" aria-controls="set-compte"><span class="setnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span>Compte & sauvegarde</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="accueil" aria-controls="set-accueil"><span class="setnav-icon" aria-hidden="true">⌂</span><span>Mon accueil</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="aide" aria-controls="set-aide"><span class="setnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg></span><span>Aide & infos</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><p class="setnav-label">HISTORY & TOI</p><button type="button" data-pane="avis" aria-controls="set-avis"><span class="setnav-icon" aria-hidden="true">☆</span><span>Ton avis</span><span class="setnav-arrow" aria-hidden="true">↗</span></button><button type="button" data-pane="about" aria-controls="set-about"><span class="setnav-icon" aria-hidden="true">ⓘ</span><span>À propos</span><span class="setnav-arrow" aria-hidden="true">↗</span></button></nav><p class="setnav-foot"><i></i> À ta façon. Tout simplement.</p></aside><div class="setbody"><section class="setpane" id="set-general" data-pane="general" aria-labelledby="set-title-general"><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / GÉNÉRAL</span><h3 id="set-title-general">Général</h3><p>Un launcher qui suit ton rythme.</p></header><div class="setcard"><h4>Au quotidien</h4>
 <label class="toggle"><input type="checkbox" id="dnd"><span></span>Ne pas déranger (aucune notification d’amis ni son)</label>
 <label class="toggle"><input type="checkbox" id="autostart"><span></span>Ouvrir au démarrage du PC</label>
 <label class="toggle"><input type="checkbox" id="dealAlerts"><span></span>Me prévenir des promos Steam de ma liste de souhaits</label>
 </div></section>
-<section class="setpane" id="set-apparence" data-pane="apparence" aria-labelledby="set-title-apparence" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / APPARENCE</span><h3 id="set-title-apparence">Apparence</h3><p>Fais de cet espace le tien.</p></header><div class="setcard"><h4>Ton interface</h4>
+<section class="setpane" id="set-apparence" data-pane="apparence" aria-labelledby="set-title-apparence" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / APPARENCE</span><h3 id="set-title-apparence">Apparence &amp; sons</h3><p>Fais de cet espace le tien.</p></header><div class="setcard"><h4>Ton interface</h4>
 <div class="setrow"><label for="textScale">Taille du texte</label><select id="textScale"><option value="0.9">Petite</option><option value="1">Normale</option><option value="1.1">Grande</option><option value="1.25">Très grande</option></select></div>
 <label class="toggle"><input type="checkbox" id="compact"><span></span>Mode compact (plus de jeux à l’écran)</label>
 <div class="setrow"><label for="themeSel">Thème</label><select id="themeSel"><option value="bleu">Bleu</option><option value="violet">Violet</option><option value="rouge">Rouge</option><option value="vert">Vert</option><option value="orange">Orange</option><option value="rose">Rose</option><option value="auto">Auto (couleur du jeu sélectionné)</option><option value="perso">Ma couleur…</option></select><input type="color" aria-label="Couleur personnalisée" id="themeColor" value="#2f8bff" hidden></div>
-<label class="toggle"><input type="checkbox" id="lightMode"><span></span>Mode clair</label>
+<label class="toggle"><input type="checkbox" id="lightMode"><span></span>Mode clair</label><label class="toggle"><input type="checkbox" id="esportOn"><span></span>Thème e-sport pendant les grands tournois de tes jeux</label>
 <div class="setrow"><label for="cbMode">Couleurs pour daltoniens</label><select id="cbMode"><option value="">Non</option><option value="rg">Rouge / vert (deutéranopie, protanopie)</option><option value="by">Bleu / jaune (tritanopie)</option></select></div>
 <label class="toggle"><input type="checkbox" id="lessMotion"><span></span>Réduire les animations</label>
 <label class="toggle"><input type="checkbox" id="saver"><span></span>Économiseur d’écran au bout de 10 min sans rien toucher (images de tes jeux)</label>
@@ -567,7 +567,7 @@
 <div class="setrow"><label for="season">Ambiance de saison</label><select id="season"><option value="auto">Auto (Halloween 🎃 en octobre, Noël 🎄 en décembre)</option><option value="off">Désactivée (thème normal)</option></select></div>
 <div class="setrow"><label for="bgMode">Fond de l’appli</label><select id="bgMode"><option value="jeu">Jaquette floue du jeu sélectionné</option><option value="anime">Dégradé animé</option><option value="sobre">Sobre (noir)</option><option value="trailer">Bande-annonce du jeu sélectionné</option></select></div><div class="setrow"><label for="neonIntensity">Intensité des néons</label><input id="neonIntensity" type="range" min="0" max="100" value="90"><output id="neonValue" for="neonIntensity">90 %</output></div><div class="theme-preview"><span class="set-eyebrow">APERÇU EN DIRECT</span><h4>Ta prochaine session commence ici.</h4><p>Couleurs, ambiance et lumière : essaie avant de choisir.</p><span class="theme-swatch"></span><span class="theme-swatch secondary"></span></div><div class="row"><button type="button" id="themeApply" class="btn play" disabled>Appliquer</button><button type="button" id="themeCancel" class="btn" disabled>Annuler</button><small id="themeStatus" role="status">Ton thème est enregistré.</small></div>
 </div></section>
-<section class="setpane" id="set-jeux" data-pane="jeux" aria-labelledby="set-title-jeux" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / JEUX & PERFORMANCES</span><h3 id="set-title-jeux">Jeux & performances</h3><p>Prépare tes parties, puis profite du jeu.</p></header><div class="setcard"><h4>Lancement & performances</h4>
+<section class="setpane" id="set-jeux" data-pane="jeux" aria-labelledby="set-title-jeux" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / JEUX & PERFORMANCES</span><h3 id="set-title-jeux">Jeux &amp; assistant</h3><p>Prépare tes parties, puis profite du jeu.</p></header><div class="setcard"><h4>Lancement & performances</h4>
 <label class="toggle"><input type="checkbox" id="tournament"><span></span>🏆 Mode tournoi : boost sur chaque partie, aucune notification (sauf la bulle des messages et les appels)</label>
 <label class="toggle"><input type="checkbox" id="directLaunch"><span></span>Lancer les jeux sans ouvrir Steam / Epic (si le jeu le permet)</label>
 <label class="toggle"><input type="checkbox" id="quietGames"><span></span>🔕 Couper les notifications Windows pendant toutes mes parties (rétablies à la fin)</label>
@@ -591,15 +591,15 @@
 </div>
 <div class="setcard"><h4>Budget & pauses</h4>
 <div class="setrow"><label for="dailyLimit">Limite de jeu par jour</label><select id="dailyLimit"><option value="0">Aucune</option><option value="60">1 h</option><option value="120">2 h</option><option value="180">3 h</option><option value="240">4 h</option><option value="360">6 h</option></select></div>
-<div class="row"><button type="button" class="btn" id="priceBtn">💸 Mes alertes de prix</button></div>
+<div class="row"><button type="button" class="btn" id="priceBtn">Mes alertes de prix</button></div>
 <div class="setrow"><label for="breakEvery">Rappel de pause</label><select id="breakEvery"><option value="0">Jamais</option><option value="45">Toutes les 45 min</option><option value="60">Toutes les heures</option><option value="90">Toutes les 1 h 30</option><option value="120">Toutes les 2 h</option></select></div>
 </div></section>
 <section class="setpane" id="set-clips" data-pane="clips" aria-labelledby="set-title-clips" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / CLIPS & CAPTURES</span><h3 id="set-title-clips">Clips & captures</h3><p>Tes meilleurs moments méritent de rester.</p></header><div class="setcard"><h4>History Clips</h4>
 <p class="hint sethint">Les clips ont maintenant leur propre appli, légère et faite pour ça : <b>History Clips</b>. Replay en jeu, découpe, galerie par jeu et partage sur Discord. History Launcher ne filme plus ton écran (beaucoup moins de mémoire).</p>
-<div class="row"><button type="button" class="btn play" id="clipsDownload">🎬 Ouvrir History Clips (ou l’installer)</button></div>
+<div class="row"><button type="button" class="btn play" id="clipsDownload">Ouvrir History Clips (ou l’installer)</button></div>
 </div></section>
 <section class="setpane" id="set-raccourcis" data-pane="raccourcis" aria-labelledby="set-title-raccourcis" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / RACCOURCIS</span><h3 id="set-title-raccourcis">Raccourcis</h3><p>Tes actions préférées, au bout des doigts.</p></header><div class="setcard"><h4>Commandes rapides</h4>
-<b class="sub">⌨ Raccourcis (marchent aussi en jeu) : clique puis appuie sur ta combinaison</b>
+<b class="sub">Raccourcis (marchent aussi en jeu) : clique puis appuie sur ta combinaison</b>
 <div id="hotkeys"></div>
 </div></section>
 <section class="setpane" id="set-assistant" data-pane="assistant" aria-labelledby="set-title-assistant" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / ASSISTANT VOCAL</span><h3 id="set-title-assistant">Assistant vocal</h3><p>Une voix pour t’accompagner.</p></header><div class="setcard"><h4>Voix & réponses</h4>
@@ -612,10 +612,10 @@
 <label class="toggle"><input type="checkbox" id="sfxNotif"><span></span>Son des notifications et des appels</label>
 <div class="setrow"><label for="sfxPack">Pack de sons</label><select id="sfxPack"><option value="verre">Verre (par défaut)</option><option value="doux">Doux</option><option value="retro">Rétro 8 bits</option></select></div>
 <div class="setrow"><label for="sfxVol">Volume</label><input type="range" id="sfxVol" min="0" max="100" step="5"></div>
-<div class="row"><button type="button" class="btn" id="micTest">🎙 Tester mon micro</button><div class="miclvl"><i id="micLvl"></i></div></div>
+<div class="row"><button type="button" class="btn" id="micTest">Tester mon micro</button><div class="miclvl"><i id="micLvl"></i></div></div>
 <div class="row"><button type="button" class="btn ghost" data-sfxtry="launch">▶ Lancement</button><button type="button" class="btn ghost" data-sfxtry="notif">▶ Notification</button><button type="button" class="btn ghost" data-sfxtry="call">▶ Appel</button></div>
 </div></section>
-<section class="setpane" id="set-social" data-pane="social" aria-labelledby="set-title-social" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / AMIS & PARTAGE</span><h3 id="set-title-social">Amis & partage</h3><p>Choisis ce que les autres voient.</p></header><div class="setcard"><h4>Visibilité & notifications</h4>
+<section class="setpane" id="set-social" data-pane="social" aria-labelledby="set-title-social" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / AMIS & TÉLÉPHONE</span><h3 id="set-title-social">Amis & téléphone</h3><p>Choisis ce que les autres voient.</p></header><div class="setcard"><h4>Visibilité & notifications</h4>
 <label class="toggle"><input type="checkbox" id="shareActivity"><span></span>Montrer à mes amis History à quoi je joue et mon temps de la semaine</label>
 <label class="toggle"><input type="checkbox" id="friendNotifs"><span></span>Notifications des amis en bas à gauche (messages, « on joue ? », qui lance un jeu)</label>
 <label class="toggle"><input type="checkbox" id="discordStatus"><span></span>Afficher le jeu en cours sur mon profil Discord</label>
@@ -631,34 +631,34 @@
 <div class="set-import"><div><b>Importer une bibliothèque</b><p>Retrouve tes collections, favoris, réglages et heures depuis une sauvegarde History au format JSON.</p></div><button type="button" class="btn" id="libImport">Choisir un fichier ↗</button></div><div class="row"><button type="button" class="btn ghost" id="libExport">Exporter ma bibliothèque</button></div><p class="hint sethint" id="libImportStatus" role="status"></p>
 </div>
 <div class="setcard"><h4>Protection du compte</h4>
-<div class="secbox"><div><b>🔐 Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">✉ Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">🛡 Double authentification</button><button type="button" class="btn" id="secDiscord">🔗 Lier Discord</button></div></div>
+<div class="secbox"><div><b>Sécurité du compte</b><small id="secState">Connecte-toi pour gérer la sécurité.</small></div><div class="row"><button type="button" class="btn" id="secVerify">Vérifier mon e-mail</button><button type="button" class="btn" id="sec2fa">Double authentification</button><button type="button" class="btn" id="secDiscord">Lier Discord</button></div></div>
 <label class="toggle" id="lock2faRow" hidden><input type="checkbox" id="lock2fa"><span></span>🔒 Demander le code de l’application à chaque ouverture du launcher</label>
 </div>
 <div class="setcard"><h4>Appareils, code PIN et données</h4>
 <div id="secSessions" class="hint">Connecte-toi pour voir tes appareils.</div>
 <div class="row"><button type="button" class="btn ghost sm" id="secRefresh">Actualiser</button><button type="button" class="btn ghost sm" id="secOthers">Déconnecter tous les autres appareils</button></div>
-<div class="setrow"><label for="pinNew">🔒 Code PIN du launcher</label><span class="row"><input class="minput" id="pinOld" type="password" inputmode="numeric" maxlength="8" placeholder="Code actuel" hidden><input class="minput" id="pinNew" type="password" inputmode="numeric" maxlength="8" placeholder="4 à 8 chiffres"><button type="button" class="btn sm" id="pinSave">Enregistrer</button><button type="button" class="btn ghost sm" id="pinClear" hidden>Retirer</button></span></div>
+<div class="setrow"><label for="pinNew">Code PIN du launcher</label><span class="row"><input class="minput" id="pinOld" type="password" inputmode="numeric" maxlength="8" placeholder="Code actuel" hidden><input class="minput" id="pinNew" type="password" inputmode="numeric" maxlength="8" placeholder="4 à 8 chiffres"><button type="button" class="btn sm" id="pinSave">Enregistrer</button><button type="button" class="btn ghost sm" id="pinClear" hidden>Retirer</button></span></div>
 <label class="toggle"><input type="checkbox" id="parental"><span></span>👪 Contrôle parental : la limite de jeu du jour bloque les jeux (le code PIN débloque 1 h)</label>
-<div class="row"><button type="button" class="btn ghost" id="dataExport">📦 Exporter toutes mes données</button><button type="button" class="btn ghost dangerbtn" id="accDelete">🗑 Supprimer mon compte</button></div>
+<div class="row"><button type="button" class="btn ghost" id="dataExport">Exporter toutes mes données</button><button type="button" class="btn ghost dangerbtn" id="accDelete">Supprimer mon compte</button></div>
 </div>
 <div class="setcard"><h4>Sauvegardes & restauration</h4>
 <p class="hint sethint">Tes collections, favoris, réglages et heures sont sauvegardés sur ton compte History toutes les 30 min et à la fermeture.</p>
 <p class="hint sethint">🎮 Tes réglages de jeux (Fortnite, FiveM, GTA V, Rocket League, Minecraft : touches, sensibilité, graphismes) partent aussi dans la sauvegarde.</p>
-<div class="row"><button type="button" class="btn ghost" id="configsRestore">🎮 Remettre mes réglages de jeux sur ce PC</button></div>
-<div class="row updrow"><button type="button" class="btn" id="backupNow">☁ Sauvegarder maintenant</button><button type="button" class="btn ghost" id="backupRestore">Restaurer</button><small class="hint" id="backupStatus"></small></div>
+<div class="row"><button type="button" class="btn ghost" id="configsRestore">Remettre mes réglages de jeux sur ce PC</button></div>
+<div class="row updrow"><button type="button" class="btn" id="backupNow">Sauvegarder maintenant</button><button type="button" class="btn ghost" id="backupRestore">Restaurer</button><small class="hint" id="backupStatus"></small></div>
 </div></section>
 <section class="setpane" id="set-telephone" data-pane="telephone" aria-labelledby="set-title-telephone" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / TÉLÉPHONE</span><h3 id="set-title-telephone">Téléphone</h3><p>Ton PC, à portée de main.</p></header><div class="setcard"><h4>Connexion à distance</h4>
 <label class="toggle"><input type="checkbox" id="remoteOn"><span></span>📱 Contrôle depuis le téléphone (même Wi-Fi) : voir le PC et lancer un jeu</label>
 <p class="hint sethint" id="remoteInfo" hidden></p>
-</div><div class="setcard"><h4>📱 Appli History sur ton téléphone</h4><p class="hint sethint">Scanne ce QR avec l’appareil photo du téléphone : l’appli s’ouvre, déjà connectée à ton compte <b>et à ce PC</b>. Ensuite tu lances tes jeux, vois tes températures, mets le PC en veille… de n’importe où (4G, chez un pote). Pas besoin du QR la prochaine fois : connecte-toi juste avec ton compte. Astuce : « Veille + réveil » le rallume tout seul à l’heure choisie. Gratuit, sans store : « Installer l’appli » (Android) ou Partager › « Sur l’écran d’accueil » (iPhone).</p><div class="phoneqr"><img class="dcqr" id="appQr" alt="QR de connexion" hidden><small class="hint" id="appQrTxt">Ouvre cette page pour afficher ton QR.</small></div><label class="toggle"><input type="checkbox" id="phoneOn" checked><span></span>Autoriser le contrôle de ce PC depuis l’appli</label></div></section>
+</div><div class="setcard"><h4>Appli History sur ton téléphone</h4><p class="hint sethint">Scanne ce QR avec l’appareil photo du téléphone : l’appli s’ouvre, déjà connectée à ton compte <b>et à ce PC</b>. Ensuite tu lances tes jeux, vois tes températures, mets le PC en veille… de n’importe où (4G, chez un pote). Pas besoin du QR la prochaine fois : connecte-toi juste avec ton compte. Astuce : « Veille + réveil » le rallume tout seul à l’heure choisie. Gratuit, sans store : « Installer l’appli » (Android) ou Partager › « Sur l’écran d’accueil » (iPhone).</p><div class="phoneqr"><img class="dcqr" id="appQr" alt="QR de connexion" hidden><small class="hint" id="appQrTxt">Ouvre cette page pour afficher ton QR.</small></div><label class="toggle"><input type="checkbox" id="phoneOn" checked><span></span>Autoriser le contrôle de ce PC depuis l’appli</label></div></section>
 <section class="setpane" id="set-avis" data-pane="avis" aria-labelledby="set-title-avis" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / TON AVIS</span><h3 id="set-title-avis">Ton avis</h3><p>La suite de History se construit avec toi.</p></header><div class="setcard"><h4>Partage ton expérience</h4>
 <div class="set-review-mark" aria-hidden="true">✦</div><p class="set-review-title">Un petit avis.<br>Une grande différence.</p><p class="set-description">Ce que tu aimes, ce qui te manque, ce qu’on peut améliorer : on veut tout savoir.</p><div class="set-review-steps"><span>01 <b>Une note</b></span><span>02 <b>Tes mots</b></span><span>03 <b>Une capture</b></span></div><button type="button" class="btn play" id="openReview">Donner mon avis <span aria-hidden="true">↗</span></button><p class="set-note">Ton avis sera public sur le site, avec ton pseudo. Commentaire et capture facultatifs. Un compte History est nécessaire.</p>
 </div></section>
 <section class="setpane" id="set-accueil" data-pane="accueil" aria-labelledby="homeTitle" hidden><header class="setintro"><span class="set-eyebrow">UN ACCUEIL À TON IMAGE</span><h3 id="homeTitle">L’essentiel, au premier plan.</h3><p>Choisis tes blocs, leur ordre et les jeux que tu veux retrouver.</p></header><div class="setcard"><h4>Les blocs de ton accueil</h4><div id="homeOrder" class="home-order"></div></div><div class="setcard"><h4>Jeux épinglés</h4><label for="homeGameSearch">Chercher dans ta bibliothèque</label><input id="homeGameSearch" type="search" placeholder="Nom du jeu…"><div id="homeGameChoices" class="home-choices"></div></div><div class="setcard"><h4>Raccourcis favoris</h4><div id="homeActionChoices" class="home-choices"></div></div><p id="homeSaveStatus" role="status"></p></section>
 <section class="setpane" id="set-aide" data-pane="aide" aria-labelledby="helpTitle" hidden><header class="setintro"><span class="set-eyebrow">ON EST LÀ POUR TOI</span><h3 id="helpTitle">Un souci ? Parlons-en.</h3><p>Décris le problème et suis la réponse de l’équipe ici.</p></header><div class="setcard"><h4>Avant de nous écrire</h4><details><summary>Un jeu manque dans ma bibliothèque</summary><p>Dans Jeux, utilise « Ajouter un jeu ». Vérifie aussi que le jeu n’est pas masqué.</p></details><details><summary>Le launcher semble lent</summary><p>Choisis un fond sobre et réduis les néons dans Apparence. L’onglet Mon PC permet de consulter la charge du système.</p></details><button class="btn play" type="button" id="newSupport">Signaler un problème ↗</button></div><div class="setcard"><div class="row"><h4>Mes demandes</h4><button class="btn" type="button" id="refreshSupport">Actualiser</button></div><div id="supportTickets" aria-live="polite">Actualise pour retrouver tes demandes.</div></div></section>
 <section class="setpane" id="set-about" data-pane="about" aria-labelledby="set-title-about" hidden><header class="setintro"><span class="set-eyebrow">PRÉFÉRENCES / À PROPOS</span><h3 id="set-title-about">À propos</h3><p>Toutes les infos pour rester à jour.</p></header><div class="setcard"><h4>History Launcher</h4>
-<div class="row updrow"><button type="button" class="btn" id="checkUpd">⬆ Rechercher une mise à jour</button><small class="hint" id="updStatus"></small></div>
-<div class="row"><button type="button" class="btn" id="openKeys">⌨ Raccourcis clavier</button><button type="button" class="btn ghost" id="openNews2">✨ Quoi de neuf</button><button type="button" class="btn ghost" id="openSite">🌐 Site du launcher</button></div>
+<div class="row updrow"><button type="button" class="btn" id="checkUpd">Rechercher une mise à jour</button><small class="hint" id="updStatus"></small></div>
+<div class="row"><button type="button" class="btn" id="openKeys">Raccourcis clavier</button><button type="button" class="btn ghost" id="openNews2">Quoi de neuf</button><button type="button" class="btn ghost" id="openSite">Site du launcher</button></div>
 </div></section>
 <div id="settingsEmpty" class="setempty" hidden><span aria-hidden="true">⌕</span><h3>Aucun réglage trouvé</h3><p>Essaie « son », « sauvegarde » ou « jeux ».</p><button type="button" class="btn" id="settingsReset">Voir tous les paramètres</button></div></div><footer class="setfooter"><span id="settingsResults" role="status">Les réglages s’appliquent dès leur modification.</span><span class="set-escape">Échap pour fermer</span></footer>
   </form>

@@ -453,6 +453,70 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       return send(res, 200, { ok: true, token: tok, compte: publicAccount(a) });
     }
     // QR du launcher : un code à usage unique (2 min) qui connecte le téléphone au compte ET à ce PC, en un scan
+    // ---------- Passkeys (Windows Hello, Face ID, empreinte) sur l'appli web https ----------
+    if (url.pathname.startsWith('/api/compte/passkey')) {
+      const wa = await import('@simplewebauthn/server');
+      const RP = 'zyko144.github.io', ORIGIN = 'https://zyko144.github.io';
+      const d = await data(); d.passkeys ??= {}; d.waChal ??= {};
+      for (const [k, x] of Object.entries(d.waChal)) if (Date.now() > x.exp) delete d.waChal[k];
+      const b = req.method === 'POST' ? await readJson(req) : {};
+      const a = await accountOf(d, token);
+      const mine = () => Object.values(d.passkeys).filter((p) => p.owner === a?.id);
+      if (route === 'GET /api/compte/passkey') return a ? send(res, 200, { passkeys: mine().map((p) => ({ id: p.id, name: p.name, at: p.at, used: p.used ?? null })) }) : send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+      if (route === 'POST /api/compte/passkey/supprimer') { if (!a) return send(res, 401, { error: 'Session expirée.' }); if (d.passkeys[b.id]?.owner === a.id) delete d.passkeys[b.id]; store(d); return send(res, 200, { ok: true }); }
+      if (route === 'POST /api/compte/passkey/options-ajout') {
+        if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+        const o = await wa.generateRegistrationOptions({ rpName: 'History', rpID: RP, userName: a.email ?? a.pseudo, userDisplayName: a.pseudo ?? a.email, attestationType: 'none', excludeCredentials: mine().map((p) => ({ id: p.id })), authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' } });
+        d.waChal[`add:${a.id}`] = { c: o.challenge, exp: Date.now() + 5 * 60_000 }; store(d); return send(res, 200, o);
+      }
+      if (route === 'POST /api/compte/passkey/ajout') {
+        if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
+        const ch = d.waChal[`add:${a.id}`]; delete d.waChal[`add:${a.id}`];
+        const v = ch ? await wa.verifyRegistrationResponse({ response: b.response, expectedChallenge: ch.c, expectedOrigin: ORIGIN, expectedRPID: RP }).catch(() => null) : null;
+        if (!v?.verified) { store(d); return send(res, 400, { error: 'Passkey refusée, réessaie.' }); }
+        const c = v.registrationInfo.credential;
+        d.passkeys[c.id] = { id: c.id, owner: a.id, key: Buffer.from(c.publicKey).toString('base64url'), counter: c.counter, transports: c.transports ?? [], name: String(b.name ?? 'Passkey').slice(0, 40), at: Date.now() };
+        store(d); return send(res, 200, { ok: true });
+      }
+      if (route === 'POST /api/compte/passkey/options-connexion') {
+        if (!allowAttempt('compte-passkey', ip, 30, 10 * 60_000)) return send(res, 429, { error: 'Trop d’essais.' });
+        const o = await wa.generateAuthenticationOptions({ rpID: RP, userVerification: 'preferred' });
+        const ticket = randomBytes(16).toString('base64url'); d.waChal[`in:${ticket}`] = { c: o.challenge, exp: Date.now() + 5 * 60_000 }; store(d);
+        return send(res, 200, { ...o, ticket });
+      }
+      if (route === 'POST /api/compte/passkey/connexion') {
+        const ch = d.waChal[`in:${b.ticket}`]; delete d.waChal[`in:${b.ticket}`];
+        const p = d.passkeys[b.response?.id];
+        const v = ch && p ? await wa.verifyAuthenticationResponse({ response: b.response, expectedChallenge: ch.c, expectedOrigin: ORIGIN, expectedRPID: RP, credential: { id: p.id, publicKey: Buffer.from(p.key, 'base64url'), counter: p.counter, transports: p.transports } }).catch(() => null) : null;
+        if (!v?.verified || !d.accounts[p.owner]) { store(d); return send(res, 401, { error: 'Passkey non reconnue.' }); }
+        p.counter = v.authenticationInfo.newCounter; p.used = Date.now();
+        sessionApp = 'Navigateur (passkey)'; const tok = await newSession(d, p.owner); store(d);
+        return send(res, 200, { ok: true, token: tok, compte: publicAccount(d.accounts[p.owner]) });
+      }
+      return send(res, 404, { error: 'route inconnue' });
+    }
+    // ---------- Connexion du launcher par le navigateur (passkey, ou compte déjà ouvert sur le téléphone) ----------
+    if (route === 'POST /api/compte/lien/appareil') {
+      if (!allowAttempt('compte-appareil', ip, 20, 10 * 60_000)) return send(res, 429, { error: 'Trop d’essais.' });
+      const d = await data(); d.dev ??= {}; for (const [k, x] of Object.entries(d.dev)) if (Date.now() > x.exp) delete d.dev[k];
+      const code = randomBytes(18).toString('base64url'), check = randomBytes(3).toString('hex').toUpperCase();
+      d.dev[sha(code)] = { check, exp: Date.now() + 5 * 60_000, id: null }; store(d);
+      return send(res, 200, { code, check });
+    }
+    if (route === 'POST /api/compte/lien/appareil/infos') { const d = await data(); const x = d.dev?.[sha(String((await readJson(req)).code ?? ''))]; return x && Date.now() < x.exp ? send(res, 200, { check: x.check }) : send(res, 410, { error: 'Lien expiré : relance la connexion depuis le launcher.' }); }
+    if (route === 'POST /api/compte/lien/appareil/valider') {
+      const d = await data(); const a = await accountOf(d, token); if (!a) return send(res, 401, { error: 'Connecte-toi d’abord.' });
+      const x = d.dev?.[sha(String((await readJson(req)).code ?? ''))];
+      if (!x || Date.now() > x.exp) return send(res, 410, { error: 'Lien expiré : relance la connexion depuis le launcher.' });
+      x.id = a.id; store(d); return send(res, 200, { ok: true });
+    }
+    if (route === 'POST /api/compte/lien/appareil/attendre') {
+      const d = await data(); const k = sha(String((await readJson(req)).code ?? '')), x = d.dev?.[k];
+      if (!x || Date.now() > x.exp) return send(res, 410, { error: 'Délai dépassé.' });
+      if (!x.id || !d.accounts[x.id]) return send(res, 200, { waiting: true });
+      delete d.dev[k]; sessionApp = 'History Launcher'; const tok = await newSession(d, x.id); store(d);
+      return send(res, 200, { ok: true, token: tok, compte: publicAccount(d.accounts[x.id]) });
+    }
     if (route === 'POST /api/compte/lien/qr') {
       const d = await data(); const a = await accountOf(d, token);
       if (!a) return send(res, 401, { error: 'Session expirée, reconnecte-toi.' });
@@ -593,6 +657,11 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const b = await readJson(req);
       const r = await (await import('./launcherPremium.js')).requestValidation(compte, String(b.pack ?? ''), b.paypal, b.shot);
       return send(res, r.status, r);
+    }
+    if (route === 'POST /api/compte/traduire') {
+      if (!allowAttempt('compte-traduire', ip, 120, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes.' });
+      const { translate } = await import('./launcherI18n.js');
+      return send(res, 200, { en: await translate((await readJson(req)).texts) });
     }
     if (route === 'POST /api/compte/ia') {
       const { handleLauncherAi } = await import('./launcherAi.js');

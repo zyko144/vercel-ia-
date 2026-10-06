@@ -200,40 +200,38 @@ function renderHero() {
 
 // Menu d'actions d'un jeu ou d'une appli : bouton ▾ du grand bandeau ET clic droit partout
 function menuFor(i) {
-  const isApp = i.kind !== 'game';
-  const m = [];
-  if (!state.active.has(i.id)) m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (isApp ? '▶ Ouvrir' : '▶ Jouer') : '⬇ Installer'}</button>`);
-  if (state.active.has(i.id)) m.push('<button data-action="close">■ Fermer</button>');
-  if (i.updatePending) m.push(`<button data-action="update">⟳ Mettre à jour${i.updateBytes ? ` (${size(i.updateBytes)})` : ''}</button>`);
-  m.push('<hr>');
-  m.push(`<button data-set="favorite">${i.favorite ? '★ Retirer des favoris' : '☆ Ajouter aux favoris'}</button>`);
-  m.push('<button data-cols="1">📚 Collections…</button>');
-  m.push('<button data-sheet="1">≡ Fiche complète</button>');
-  if (i.installed && i.installDir) m.push('<button data-action="folder">📁 Ouvrir le dossier</button>');
-  if (i.installed && ['steam', 'epic'].includes(i.source)) m.push('<button data-action="verify">🛠 Vérifier et réparer les fichiers</button>');
-  if (i.installed && i.source === 'steam' && i.kind === 'game') m.push('<button data-action="cache">🧹 Vider le cache du jeu</button>');
-  if (i.installed && i.installDir && i.kind === 'game') m.push('<button data-mods="1">🧩 Mods du jeu</button>');
-  if (i.source === 'steam') m.push('<button data-action="store">🛈 Page du magasin</button>');
+  // L'essentiel en haut ; tout le reste derrière « Plus d'options »
+  const m = [], more = [];
+  if (!state.active.has(i.id)) m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (i.kind !== 'game' ? 'Ouvrir' : 'Jouer') : 'Installer'}</button>`);
+  if (state.active.has(i.id)) m.push('<button data-action="close">Fermer</button>');
+  if (i.updatePending) m.push(`<button data-action="update">Mettre à jour${i.updateBytes ? ` (${size(i.updateBytes)})` : ''}</button>`);
+  m.push(`<button data-set="favorite">${i.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}</button>`);
+  m.push('<button data-sheet="1">Fiche du jeu</button>');
+  if (i.installed && i.installDir) m.push('<button data-action="folder">Ouvrir le dossier</button>');
+  more.push('<button data-cols="1">Collections…</button>');
+  if (i.installed && ['steam', 'epic'].includes(i.source)) more.push('<button data-action="verify">Vérifier les fichiers</button>');
+  if (i.installed && i.source === 'steam' && i.kind === 'game') more.push('<button data-action="cache">Vider le cache</button>');
+  if (i.installed && i.installDir && i.kind === 'game') more.push('<button data-mods="1">Mods</button>');
+  if (i.source === 'steam') more.push('<button data-action="store">Page du magasin</button>');
   if (i.kind === 'game') {
     const fin = Object.values(state.cols).find((c) => c.name === 'À finir');
-    m.push(`<button data-tofinish="1">${fin?.items.includes(i.id) ? '🏁 Retirer de « À finir »' : '🏁 Ajouter à « À finir »'}</button>`);
-    m.push('<button data-tools="1">🎛 Outils du jeu (profil, sauvegardes, FPS…)</button>');
-    if (i.steamId) m.push('<button data-reqs="1">✅ Mon PC peut-il le faire tourner ?</button>');
-    m.push('<button data-tips="1">🤖 Conseils de l’IA pour ce jeu</button>');
-    m.push('<button data-invgame="1">📨 Inviter un ami à y jouer</button>');
-    if (i.installed && i.installDir) m.push('<button data-modscan="1">🛡 Analyser les mods (antivirus)</button>');
-    if (i.source === 'steam' && i.steamId) m.push('<button data-gift="1">🎁 Offrir ce jeu à un ami</button>');
+    more.push(`<button data-tofinish="1">${fin?.items.includes(i.id) ? 'Retirer de « À finir »' : 'Ajouter à « À finir »'}</button>`);
+    more.push('<button data-tools="1">Outils du jeu</button>');
+    if (i.steamId) more.push('<button data-reqs="1">Configuration requise</button>');
+    more.push('<button data-tips="1">Conseils de l’IA</button>');
+    more.push('<button data-invgame="1">Inviter un ami</button>');
+    if (i.installed && i.installDir) more.push('<button data-modscan="1">Analyser les mods</button>');
+    if (i.source === 'steam' && i.steamId) more.push('<button data-gift="1">Offrir ce jeu</button>');
     const g = boostGames[i.id];
-    m.push(`<button data-boostgame="${g === true ? 'off' : g === false ? 'auto' : 'on'}">${g === true ? '⚡ Opti auto : toujours (changer → jamais)' : g === false ? '⚡ Opti auto : jamais (changer → par défaut)' : '⚡ Toujours optimiser ce jeu'}</button>`);
+    more.push(`<button data-boostgame="${g === true ? 'off' : g === false ? 'auto' : 'on'}">${g === true ? 'Opti auto : toujours' : g === false ? 'Opti auto : jamais' : 'Toujours optimiser ce jeu'}</button>`);
   }
-  if (i.source === 'steam' && String(i.steamId) === '4000') m.push('<button data-gmod="1">🧩 Addons Garry’s Mod</button>');
-  if (i.source === 'fivem') m.push('<button data-fivemsrv="1">🌐 Mes serveurs FiveM</button><button data-fivem="1">🔗 Rejoindre un serveur…</button>');
-  if (i.custom) m.push('<button data-rename="1">✏ Renommer</button>');
-  m.push('<hr>');
-  m.push(`<button data-set="hidden">${i.hidden ? '◉ Afficher dans la bibliothèque' : '◌ Masquer de la bibliothèque'}</button>`);
-  if (i.custom) m.push('<button data-remove="1" class="danger">✕ Retirer de la bibliothèque</button>');
-  if (i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source))) m.push('<button data-action="uninstall" class="danger">🗑 Désinstaller</button>');
-  return m.join('');
+  if (i.source === 'steam' && String(i.steamId) === '4000') more.push('<button data-gmod="1">Addons Garry’s Mod</button>');
+  if (i.source === 'fivem') m.push('<button data-fivemsrv="1">Mes serveurs FiveM</button>'), more.push('<button data-fivem="1">Rejoindre un serveur…</button>');
+  if (i.custom) more.push('<button data-rename="1">Renommer</button>');
+  more.push(`<button data-set="hidden">${i.hidden ? 'Afficher dans la bibliothèque' : 'Masquer de la bibliothèque'}</button>`);
+  if (i.custom) more.push('<button data-remove="1" class="danger">Retirer de la bibliothèque</button>');
+  const un = i.installed && (i.uninstallCmd || ['steam', 'epic'].includes(i.source)) ? '<hr><button data-action="uninstall" class="danger">Désinstaller</button>' : '';
+  return `${m.join('')}<button data-ctxmore="1" class="ctxmorebtn">Plus d’options</button><div class="ctxmore" hidden>${more.join('')}</div>${un}`;
 }
 function openCtx(item, x, y, anchor = null) {
   if (!item) return;
@@ -325,7 +323,7 @@ function card(i, cls = 'gcard') {
 let diskAlerts = [];
 function renderDiskAlert() {
   const el = $('diskAlert'); if (!el) return;
-  el.innerHTML = diskAlerts.map((a) => `<div class="adv ${a.critical ? 'p0' : 'p1'} diskadv"><div><b>💽 Disque ${esc(a.drive)} presque plein : ${gb(a.free)} libres sur ${gb(a.total)}</b><small>${a.idle.length ? 'Ces jeux n’ont pas été lancés depuis plus de 3 mois :' : 'Les jeux risquent de ne plus pouvoir se mettre à jour. Libère de la place (Mon PC › Stockage).'}</small>
+  el.innerHTML = diskAlerts.map((a) => `<div class="adv ${a.critical ? 'p0' : 'p1'} diskadv"><div><b>Disque ${esc(a.drive)} presque plein : ${gb(a.free)} libres sur ${gb(a.total)}</b><small>${a.idle.length ? 'Ces jeux n’ont pas été lancés depuis plus de 3 mois :' : 'Les jeux risquent de ne plus pouvoir se mettre à jour. Libère de la place (Mon PC › Stockage).'}</small>
     ${a.idle.length ? `<div class="diskidle">${a.idle.map((i) => `<span>${esc(i.name)} · ${gb(i.size)}<button type="button" class="btn ghost sm" data-uninst="${esc(i.id)}">Désinstaller</button></span>`).join('')}</div>` : ''}</div></div>`).join('');
 }
 api.onDiskAlerts?.((d) => { diskAlerts = d ?? []; renderDiskAlert(); });
@@ -555,6 +553,11 @@ $('gMore').addEventListener('click', (e) => {
   ctx.classList.remove('show'); void ctx.offsetWidth; ctx.classList.add('show');
   e.stopPropagation();
 });
+$('ctx').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ctxmore]'); if (!b) return;
+  e.stopImmediatePropagation(); b.classList.toggle('open'); b.nextElementSibling.hidden = !b.classList.contains('open');
+  const r = $('ctx').getBoundingClientRect(); if (r.bottom > window.innerHeight - 8) $('ctx').style.top = `${Math.max(8, window.innerHeight - r.height - 8)}px`;
+}, true);
 $('ctx').addEventListener('click', async (e) => {
   const l = e.target.closest('[data-gleave]'); if (!l) return;
   $('ctx').hidden = true;
@@ -690,7 +693,7 @@ function openFriendProfile(id) {
   const f = (state.hist?.amis ?? []).find((a) => a.id === id);
   if (!f) return;
   const live = f.playing ? { cls: 'g', text: `Joue à ${f.playing}` } : f.online ? { cls: 'on', text: 'En ligne' } : { cls: 'off', text: 'Hors ligne' };
-  setModal('wide', 'fp'), $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">💬 Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">📞 Appeler</button>` : ''}<button type="button" class="btn" data-giftfor="${esc(f.id)}">🎁 Offrir</button><button type="button" class="btn play" data-m="1" autofocus>Fermer</button></div><div class="giftpick" id="giftPick" hidden>${Object.entries(GIFTS).map(([k, [e, n]]) => `<button type="button" class="btn sm" data-gift="${k}" data-to="${esc(f.id)}">${e} ${n}</button>`).join('')}</div>`;
+  setModal('wide', 'fp'), $('modalBox').innerHTML = `${profileCard(f, { live })}<div class="row end"><button type="button" class="btn" data-hchat="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">Message</button>${f.online ? `<button type="button" class="btn" data-hcall="${esc(f.id)}" data-name="${esc(f.pseudo)}" data-m="1">Appeler</button>` : ''}<button type="button" class="btn" data-giftfor="${esc(f.id)}">Offrir</button><button type="button" class="btn play" data-m="1" autofocus>Fermer</button></div><div class="giftpick" id="giftPick" hidden>${Object.entries(GIFTS).map(([k, [e, n]]) => `<button type="button" class="btn sm" data-gift="${k}" data-to="${esc(f.id)}">${e} ${n}</button>`).join('')}</div>`;
   $('modal').showModal();
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) setTimeout(() => $('modal').close(), 0); };
 }
@@ -775,13 +778,13 @@ async function openProfileEditor() {
       <div class="pe2scroll">
       <div class="ptabpane" data-ptab="look">
         <b class="sub">Photo</b>
-        <div class="pphoto"><button type="button" class="btn sm" id="pePick">Choisir une photo</button><button type="button" class="btn sm" id="peAvAdj" hidden>✂ Recadrer</button><button type="button" class="btn ghost sm" id="peDel">Retirer</button><input type="file" id="peFile" accept="image/png,image/jpeg,image/webp" hidden></div>
+        <div class="pphoto"><button type="button" class="btn sm" id="pePick">Choisir une photo</button><button type="button" class="btn sm" id="peAvAdj" hidden>Recadrer</button><button type="button" class="btn ghost sm" id="peDel">Retirer</button><input type="file" id="peFile" accept="image/png,image/jpeg,image/webp" hidden></div>
         <b class="sub">Cadre de la photo</b>
         <div class="pframes">${FRAMES.map(([k, l]) => `<button type="button" class="pframe" data-pframe="${k}" title="${l}">${avatar({ pseudo: d.pseudo, avatar: d.avatar, color: d.color, frameColor: d.frameColor }, `sm ${k !== 'aucun' ? `fr-${k}` : ''}`)}<small>${l}</small></button>`).join('')}</div>
         <label class="pframecol" id="peFrameCol" hidden><span>Couleur du cadre</span><input type="color" id="peFrameColor" value="${esc(d.frameColor)}"></label>
         <b class="sub">Bannière</b>
         <div class="pbanners">${BANNERS.map(([k, l]) => `<button type="button" class="pban ban-${k}" data-pban="${k}" title="${l}"></button>`).join('')}<button type="button" class="pban up" id="peBanUp" title="Ta propre image"><span>＋ Ton image</span></button><input type="file" id="peBanFile" accept="image/png,image/jpeg,image/webp" hidden></div>
-        <button type="button" class="btn sm" id="peBanAdj" hidden>✂ Recadrer la bannière</button>
+        <button type="button" class="btn sm" id="peBanAdj" hidden>Recadrer la bannière</button>
         <b class="sub">Fond de la carte</b>
         <div class="pcolors">${['', '#1e1b2e', '#0f172a', '#1e293b', '#3b0764', '#4c0519', '#052e16', '#172554', '#431407', '#18181b', '#e2e8f0'].map((c) => `<button type="button" class="pcol bgpick ${c ? '' : 'auto'}" data-pbg="${c || 'auto'}" style="${c ? `background:${c}` : ''}" title="${c ? c : 'Automatique'}">${c ? '' : 'Auto'}</button>`).join('')}<label class="pcol custom" title="Autre couleur de fond"><input type="color" id="peBg" value="${esc(d.cardBg ?? '#1e1b2e')}"></label></div>
         <b class="sub">Couleur du profil</b>
@@ -1180,7 +1183,7 @@ async function shrinkImage(file) {
 }
 function attachMenu(key, btn) {
   const ctx = $('ctx');
-  ctx.innerHTML = '<div class="ctxhead">Envoyer une image</div><button data-att="shot">📷 Une de mes captures</button><button data-att="file">🖼 Une image du PC</button><button data-att="doc">📎 Un fichier (10 Mo max)</button>';
+  ctx.innerHTML = '<div class="ctxhead">Envoyer une image</div><button data-att="shot">Une de mes captures</button><button data-att="file">Une image du PC</button><button data-att="doc">Un fichier (10 Mo max)</button>';
   ctx.hidden = false;
   const r = btn.getBoundingClientRect();
   ctx.style.left = `${r.left}px`; ctx.style.top = `${Math.max(8, r.top - ctx.offsetHeight - 6)}px`;
@@ -1613,6 +1616,13 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.58.0': [
+    ['🎨', 'Paramètres rangés', '7 catégories au lieu de 14, rangées par couleur, avec des icônes nettes. Tout est toujours là, juste mieux rangé.', ['#openSettings', 'wait800']],
+    ['✨', 'Interface plus pro', 'Moins d’emojis dans les menus, titres et boutons ; clic droit sur un jeu réduit à l’essentiel (le reste dans « Plus d’options »).'],
+    ['🔑', 'Passkeys', 'Connexion sans mot de passe avec Windows Hello, Face ID ou ton empreinte. Ajoute une passkey depuis l’appli téléphone (Moi), puis « Avec une passkey ou mon téléphone » à la connexion du launcher.'],
+    ['🏆', 'Thème e-sport', 'Pendant les grands tournois de tes jeux (Worlds, VALORANT Champions, Major CS2, RLCS…), le launcher prend leurs couleurs avec un lien pour suivre la compétition.'],
+    ['🌍', 'Anglais complet', 'Paramètres › Apparence › Langue : English traduit maintenant toute l’appli, pas seulement les menus.'],
+  ],
   '0.57.3': [
     ['🌍', 'Ton PC de n’importe où', 'Plus besoin d’être chez toi : connecte-toi sur l’appli téléphone avec ton compte (le QR ne sert qu’une fois), choisis ton PC et contrôle-le en 4G. Nouveau : « Veille + réveil » met le PC en veille et le rallume tout seul à l’heure choisie. Les ordres arrivent plus vite.', ['#openSettings', 'wait700', '.setnav [data-pane="telephone"]', 'wait1200']],
   ],
@@ -2243,7 +2253,7 @@ async function openGmod(found = null) {
   hideCtx();
   const r = await api.gmodAddons?.().catch(() => null);
   const list = r?.list ?? [];
-  const card = found && !found.error ? `<div class="wscard">${found.preview ? `<img src="${esc(found.preview)}" alt="">` : ''}<div><b>${esc(found.title)}</b><small>${found.size ? `${(found.size / 1e6).toFixed(1).replace('.', ',')} Mo · ` : ''}${found.subs.toLocaleString('fr-FR')} abonnés${found.tags.length ? ` · ${esc(found.tags.join(', '))}` : ''}</small><button type="button" class="btn play sm" data-gminst="${esc(found.id)}">⬇ Installer (via Steam)</button></div></div>` : found?.error ? `<p class="autherr">${esc(found.error)}</p>` : '';
+  const card = found && !found.error ? `<div class="wscard">${found.preview ? `<img src="${esc(found.preview)}" alt="">` : ''}<div><b>${esc(found.title)}</b><small>${found.size ? `${(found.size / 1e6).toFixed(1).replace('.', ',')} Mo · ` : ''}${found.subs.toLocaleString('fr-FR')} abonnés${found.tags.length ? ` · ${esc(found.tags.join(', '))}` : ''}</small><button type="button" class="btn play sm" data-gminst="${esc(found.id)}">Installer (via Steam)</button></div></div>` : found?.error ? `<p class="autherr">${esc(found.error)}</p>` : '';
   setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🧩</span><h2>Addons Garry’s Mod</h2></div>
     <div class="row"><input id="wsLink" class="wsin" placeholder="Colle le lien d’un addon du Workshop" value="${esc(found?.id ?? '')}"><button type="button" class="btn" id="wsGo">Voir</button></div>
     ${card}
@@ -2269,9 +2279,9 @@ function santeHtml(item, care, w) {
   const sec = (ms) => `${Math.round(ms / 1000)} s`;
   const avgLoad = loads.length ? loads.reduce((a, x) => a + x.ms, 0) / loads.length : null;
   const last = loads.at(-1);
-  return `<b class="sub">⏱ Temps de démarrage</b>
+  return `<b class="sub">Temps de démarrage</b>
     ${loads.length ? `<div class="scansum"><div><b>${sec(last.ms)}</b><small>dernier lancement</small></div><div><b>${sec(avgLoad)}</b><small>en moyenne (${loads.length})</small></div><div class="${last.ms > avgLoad * 1.5 ? 'bad' : ''}"><b>${last.ms > avgLoad * 1.5 ? 'Plus lent' : 'Normal'}</b><small>par rapport à d’habitude</small></div></div>` : '<p class="hint">Lance le jeu depuis History : le temps entre le clic et l’apparition de sa fenêtre sera mesuré (tu es prévenu s’il devient anormalement long).</p>'}
-    <b class="sub">💥 Plantages</b>
+    <b class="sub">Plantages</b>
     ${crashes.length ? `<div class="flist">${crashes.slice(0, 8).map((c) => `<div class="crash"><div><b>${esc(c.cause)}</b><small>${new Date(c.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}${c.module ? ` · module ${esc(c.module)}` : ''}</small><p>${esc(c.fix)}</p></div></div>`).join('')}</div>` : '<p class="hint">Aucun plantage repéré 👍 Si le jeu se ferme brutalement, History lit le journal de Windows et t’explique la cause probable.</p>'}
     <b class="sub">▶ Lancer avec le jeu</b><p class="hint">Ces applis s’ouvrent en même temps que ${esc(item.name)} (si elles ne tournent pas déjà).</p>
     ${w?.apps?.length ? `<div class="checks">${w.apps.map((a) => `<label class="check"><input type="checkbox" data-with="${esc(a.id)}" ${w.with.includes(a.id) ? 'checked' : ''}>${esc(a.name)}</label>`).join('')}</div><div class="row"><button class="btn play" data-tact="with">Enregistrer</button></div>` : '<p class="hint">Aucune appli trouvée sur le PC.</p>'}`;
@@ -2299,23 +2309,23 @@ async function openTools(item, tab = 'profil') {
       <b class="sub">Fermer pendant la partie</b><div class="checks" id="profApps">${d.apps.map((a) => `<label class="check"><input type="checkbox" value="${esc(a.id)}" ${p.close.includes(a.id) ? 'checked' : ''}>${esc(a.label)}</label>`).join('')}</div>`,
     saves: `<p class="hint">Copie de tes parties dans Documents › History › Sauvegardes de jeux (les 5 dernières sont gardées). Avant une restauration, ta partie actuelle est mise de côté.</p>
       <div class="flist">${d.saveDirs.length ? d.saveDirs.map((x) => `<div><div><b>📁 ${esc(x.split(/[\\\\/]/).pop())}</b><small>${esc(x)}</small></div></div>`).join('') : '<div><div><b>Dossier non trouvé</b><small>Choisis-le à la main (Documents, AppData, Saved Games…)</small></div></div>'}</div>
-      <div class="row"><button class="btn play" data-tact="backup" ${d.saveDirs.length ? '' : 'disabled'}>💾 Sauvegarder maintenant</button><button class="btn ghost" data-tact="pick">📁 ${d.savesCustom || d.saveDirs.length ? 'Changer le dossier' : 'Choisir le dossier'}</button><button class="btn ghost" data-tact="openSaves">Ouvrir le dossier des copies</button></div>
-      <div class="row"><button class="btn" data-tact="cloudup" ${d.saveDirs.length ? '' : 'disabled'}>☁ Envoyer en ligne</button><button class="btn ghost" data-tact="clouddown" ${d.saveDirs.length ? '' : 'disabled'}>☁ Récupérer la sauvegarde en ligne</button><small class="hint">Jeux hors Steam : envoyée toute seule après chaque partie (compte History)</small></div>
+      <div class="row"><button class="btn play" data-tact="backup" ${d.saveDirs.length ? '' : 'disabled'}>Sauvegarder maintenant</button><button class="btn ghost" data-tact="pick">📁 ${d.savesCustom || d.saveDirs.length ? 'Changer le dossier' : 'Choisir le dossier'}</button><button class="btn ghost" data-tact="openSaves">Ouvrir le dossier des copies</button></div>
+      <div class="row"><button class="btn" data-tact="cloudup" ${d.saveDirs.length ? '' : 'disabled'}>Envoyer en ligne</button><button class="btn ghost" data-tact="clouddown" ${d.saveDirs.length ? '' : 'disabled'}>Récupérer la sauvegarde en ligne</button><small class="hint">Jeux hors Steam : envoyée toute seule après chaque partie (compte History)</small></div>
       ${d.received?.length ? `<b class="sub">Reçues de tes amis</b><div class="flist">${d.received.map((x) => `<div><div><b>💾 ${esc(x.from)} · ${esc(x.name)}</b><small>${new Date(x.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · valable 24 h</small></div><button class="btn play sm" data-recv="${esc(x.id)}">Recevoir</button></div>`).join('')}</div>` : ''}
-      <div class="row"><button class="btn" data-tact="share" ${d.saveDirs.length ? '' : 'disabled'}>📤 Envoyer ma sauvegarde à un ami</button></div>
+      <div class="row"><button class="btn" data-tact="share" ${d.saveDirs.length ? '' : 'disabled'}>Envoyer ma sauvegarde à un ami</button></div>
       <b class="sub">Copies</b><div class="flist">${d.backups.length ? d.backups.map((b) => `<div><div><b>${new Date(b.at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</b><small>${gb(b.bytes)}</small></div><button class="btn ghost sm" data-restore="${esc(b.id)}">Restaurer</button></div>`).join('') : '<p class="hint">Pas encore de copie.</p>'}</div>`,
-    graph: graphicsHtml(d.graphics) + (d.fortnite ? `<b class="sub">⚡ Mode Performance de Fortnite</b><p class="hint">Le mode officiel du jeu (moteur léger) : beaucoup plus de FPS et moins de freezes, graphismes plus simples. Tes anciens réglages sont gardés et remis si tu le désactives.</p>
+    graph: graphicsHtml(d.graphics) + (d.fortnite ? `<b class="sub">Mode Performance de Fortnite</b><p class="hint">Le mode officiel du jeu (moteur léger) : beaucoup plus de FPS et moins de freezes, graphismes plus simples. Tes anciens réglages sont gardés et remis si tu le désactives.</p>
       <div class="row"><button class="btn ${d.fortnite.on ? 'ghost' : 'play'}" data-tact="fnperf">${d.fortnite.on ? '↩ Revenir à mes réglages' : '⚡ Activer le mode Performance'}</button></div>` : ''),
     sante: santeHtml(item, care, withApps),
     shaders: `<p class="hint">Un cache de shaders abîmé ou trop vieux donne des saccades (surtout après une mise à jour du jeu ou du pilote). Il se recrée tout seul : les premières minutes peuvent saccader le temps qu’il se reconstruise.</p>
       <div class="checks">${d.caches.map((c) => `<label class="check"><input type="checkbox" data-cache="${esc(c.id)}" ${c.own ? 'checked' : ''}><span>${esc(c.label)}</span><em>${gb(c.bytes)}</em></label>`).join('')}</div>
-      <div class="row"><button class="btn play" data-tact="shaders">🧊 Vider la sélection</button></div>`,
+      <div class="row"><button class="btn play" data-tact="shaders">Vider la sélection</button></div>`,
     move: d.canMove ? `<p class="hint">Actuellement dans <b>${esc(d.from)}</b>${d.size ? ` · ${gb(d.size)}` : ''}. Ferme Steam complètement avant de lancer le déplacement.</p>
       <div class="flist">${d.targets.length ? d.targets.map((t) => `<div><div><b>${esc(t.lib)}</b><small>${t.free != null ? `${gb(t.free)} libres` : ''}${d.size && t.free != null && t.free < d.size ? ' · pas assez de place' : ''}</small></div><button class="btn play sm" data-move="${esc(t.lib)}" ${d.size && t.free != null && t.free < d.size ? 'disabled' : ''}>Déplacer ici</button></div>`).join('') : '<p class="hint">Aucune autre bibliothèque Steam : crées-en une dans Steam › Paramètres › Stockage.</p>'}</div><div id="moveProg"></div>` : '',
     perf: `${perf.length ? `<div class="scansum">${recent ? `<div><b>${recent}</b><small>FPS moyens (7 jours)</small></div>` : ''}${older && recent ? `<div class="${recent < older * 0.9 ? 'bad' : ''}"><b>${recent >= older ? '+' : ''}${Math.round((100 * (recent - older)) / older)} %</b><small>vs le mois d’avant (${older} FPS)</small></div>` : ''}<div><b>${perf.length}</b><small>parties suivies</small></div></div>
       <div class="flist">${perf.slice(0, 20).map((x) => `<div><div><b>${new Date(x.at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} · ${x.minutes} min</b><small>${x.avg ? `${x.avg} FPS moy. · 1 % low ${x.low1}${x.stutters ? ` · ${x.stutters} saccades` : ''}` : 'FPS non mesurés'}${x.bound ? ` · ${B[x.bound]}` : ''}${x.gpuAvg != null ? ` · carte graphique ${x.gpuAvg} %` : ''}${x.coreMax != null ? ` · cœur le plus chargé ${x.coreMax} %` : ''}${x.gpuTmax ? ` · 🌡️ GPU ${x.gpuTmax} °C` : ''}${x.cpuTmax ? ` · CPU ${x.cpuTmax} °C` : ''}</small></div></div>`).join('')}</div>`
       : `<p class="hint">Joue une partie de plus de 3 minutes : tes FPS (si la mesure est activée), la charge du processeur et de la carte graphique et le composant qui limite s’afficheront ici.</p>`}
-      ${d.fps ? '' : '<div class="row"><button class="btn" data-tact="fps">📈 Activer la mesure des vrais FPS</button></div>'}`,
+      ${d.fps ? '' : '<div class="row"><button class="btn" data-tact="fps">Activer la mesure des vrais FPS</button></div>'}`,
   };
   setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">🎛</span><h2>${esc(item.name)}</h2></div>
     <div class="tabs toolstabs">${tabs.map(([k, l]) => `<button data-ttab="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div>
@@ -2357,7 +2367,7 @@ async function openTools(item, tab = 'profil') {
 }
 function graphicsHtml(g) {
   if (!g) return '<p class="hint">Réglages conseillés disponibles pour les jeux seulement.</p>';
-  if (g.need === 'benchmark') return '<p class="hint">Lance d’abord le benchmark (Mon PC › Performances) : les conseils se basent sur la vraie puissance de ton PC.</p><div class="row"><button class="btn play" data-tact="bench">🏁 Aller au benchmark</button></div>';
+  if (g.need === 'benchmark') return '<p class="hint">Lance d’abord le benchmark (Mon PC › Performances) : les conseils se basent sur la vraie puissance de ton PC.</p><div class="row"><button class="btn play" data-tact="bench">Aller au benchmark</button></div>';
   return `<p class="hint">D’après ton benchmark${g.measured ? `, tes ${g.measured} FPS mesurés sur ce jeu` : ''} et ton écran.${g.known ? '' : ' Jeu non répertorié : estimation pour un jeu récent moyen.'}</p>
     <div class="scansum"><div><b>${esc(g.preset)}</b><small>Qualité conseillée</small></div><div><b>${esc(g.res)}</b><small>Résolution</small></div><div><b>${esc(g.upscaler)}</b><small>Mise à l’échelle</small></div><div><b>${g.target}</b><small>FPS visés</small></div></div>
     ${g.tips.length ? `<b class="sub">Conseils</b><ul class="tips">${g.tips.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
@@ -2731,7 +2741,7 @@ $('rankBtn').addEventListener('click', async () => {
     ${r?.top ? `<p class="hint">${r.rang ? `Tu es ${r.rang}${r.rang === 1 ? 'er' : 'e'} sur ${r.total}.` : 'Fais un benchmark pour entrer dans le classement.'}</p><div class="ranklist2">${r.top.map((x, n) => `<div class="${x.moi ? 'me' : x.ami ? 'friend' : ''}"><span>${n + 1}</span><b>${esc(x.pseudo)}${x.ami ? ' 👥' : ''}</b><small>${esc([x.cpu, x.gpuName].filter(Boolean).join(' · '))}</small><em>${x.total}</em></div>`).join('')}</div>` : `<p class="hint">${esc(r?.error ?? 'Connecte-toi pour voir le classement.')}</p>`}
     <div class="row end"><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
-  $('modalBox').querySelector('.ranklist2')?.insertAdjacentHTML('beforebegin', '<button type="button" class="btn ghost sm" data-rkf="1">👥 Moi et mes amis seulement</button>');
+  $('modalBox').querySelector('.ranklist2')?.insertAdjacentHTML('beforebegin', '<button type="button" class="btn ghost sm" data-rkf="1">Moi et mes amis seulement</button>');
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-rkf]')) return $('modalBox').querySelector('.ranklist2')?.classList.toggle('amis'); if (e.target.closest('[data-m]')) $('modal').close(); };
 });
 async function renderProcs() {
@@ -2782,7 +2792,7 @@ function richText(t) {
 function showReport(r, title = 'Rapport détaillé') {
   setModal(), $('modalBox').innerHTML = `<div class="mhead"><span class="micon">📄</span><h2>${esc(title)}</h2></div><div class="reporttxt ${r?.text ? 'rich' : ''}">${r?.text ? richText(r.text) : esc(r?.error ?? 'Rapport indisponible.')}</div>
     <small class="hint">${r?.ai ? 'Rédigé par l’IA à partir des vraies mesures de ton PC.' : 'Rapport automatique (connecte-toi pour la version rédigée par l’IA).'}</small>
-    <div class="row end"><button type="button" class="btn" id="repPdf">📄 PDF</button><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
+    <div class="row end"><button type="button" class="btn" id="repPdf">PDF</button><button type="button" class="btn" id="repCopy">Copier</button><button type="button" class="btn play" data-m="1">Fermer</button></div>`;
   $('modal').showModal();
   $('modalBox').onclick = (e) => { if (e.target.closest('[data-m]')) $('modal').close(); if (e.target.closest('#repCopy')) { copyText(r?.text ?? ''); toast('Rapport copié'); } if (e.target.closest('#repPdf')) api.pcPdf(title, r?.text ?? '').then((p) => toast(p?.ok ? '📄 PDF enregistré dans Documents › History' : p?.error ?? 'Impossible')); };
 }
@@ -2863,7 +2873,7 @@ function renderOpti() {
   $('optiRun').classList.add('play'); $('optiScan').classList.remove('play');
   const S = { A: [], B: [], C: [], D: [], E: [] };
   S.E.push(catCard('', '↩', 'Annuler ou tout remettre par défaut', 'Chaque fichier de jeu et chaque valeur du registre modifiés sont sauvegardés avant (même ceux qui n’existaient pas) : reviens exactement à l’état d’avant.', '',
-    '<div class="row"><button class="btn" data-undo="1" type="button">↩ Annuler la dernière optimisation</button><button class="btn play" id="optiReset" type="button">Tout remettre par défaut</button></div><p class="hint">« Tout remettre » annule toutes les optimisations et remet Windows comme avant la première (point de restauration créé avant les réglages système, autorisation administrateur).</p>', { count: 'réparer', open: [...o.tweaks, ...(state.sys ?? [])].some((t) => t.retired) }));
+    '<div class="row"><button class="btn" data-undo="1" type="button">Annuler la dernière optimisation</button><button class="btn play" id="optiReset" type="button">Tout remettre par défaut</button></div><p class="hint">« Tout remettre » annule toutes les optimisations et remet Windows comme avant la première (point de restauration créé avant les réglages système, autorisation administrateur).</p>', { count: 'réparer', open: [...o.tweaks, ...(state.sys ?? [])].some((t) => t.retired) }));
   for (const [key, icon, title, desc] of GROUPS) {
     const list = o.junk.filter((x) => x.group === key);
     if (!list.length) continue;
@@ -2942,7 +2952,7 @@ function openHelp(title, description) {
 function renderOptiDiag(o) {
   const f = optiFindings(o);
   const fixable = f.some(([, , , , k]) => ['junk', 'startup', 'tweaks'].includes(k));
-  $('optiDiag').innerHTML = `<div class="odiag"><div class="odhead"><b>🩺 Ce que l’analyse a trouvé</b>${f.length ? '<button class="btn" type="button" data-fix="help" style="margin-left:auto">🆘 Demander de l’aide</button>' : ''}${fixable ? '<button class="btn play" type="button" data-fix="all">⚡ Tout corriger</button>' : ''}</div>${f.length
+  $('optiDiag').innerHTML = `<div class="odiag"><div class="odhead"><b>Ce que l’analyse a trouvé</b>${f.length ? '<button class="btn" type="button" data-fix="help" style="margin-left:auto">Demander de l’aide</button>' : ''}${fixable ? '<button class="btn play" type="button" data-fix="all">Tout corriger</button>' : ''}</div>${f.length
     ? f.map(([lvl, ico, t, d, k, b]) => `<div class="odrow ${lvl}"><i>${ico}</i><div><b>${esc(t)}</b><small>${esc(d)}</small></div><button class="btn" type="button" data-fix="${k}">${b}</button></div>`).join('')
     : '<p class="hint">✅ Rien à corriger : ton PC est bien réglé.</p>'}</div>`;
 }
@@ -3043,7 +3053,7 @@ async function runOpti(plan = planFromUi(), sys = []) {
   let benchAfter = null;
   if (gain && benchBefore && !benchBefore.error) { showProgress('<div class="oprog"><b>Mesure après optimisation (≈ 10 s)…</b><div class="gbar big indet"><i></i></div></div>'); benchAfter = await api.benchQuick().catch(() => null); }
   const delta = benchAfter?.total && benchBefore?.total ? Math.round((100 * (benchAfter.total - benchBefore.total)) / benchBefore.total) : null;
-  showProgress(`<div class="oprog done"><b>✅ Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks + (r.games ?? 0)}</b><small>changement${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''} appliqué${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div>${delta != null ? `<div><b>${benchBefore.total} → ${benchAfter.total}</b><small>mini-benchmark (${delta >= 0 ? '+' : ''}${delta} %${Math.abs(delta) <= 2 ? ', dans la marge de mesure' : ''})</small></div>` : ''}</div>${r.errors?.length ? `<div class="olog">${r.errors.map((x) => `<div class="err">✗ ${esc(x)}</div>`).join('')}</div>` : ''}<div class="row">${r.undo ? '<button class="btn" data-undo="1" type="button">↩ Annuler cette optimisation</button>' : ''}<button class="btn ghost" data-closeprog="1">Fermer</button></div></div>`);
+  showProgress(`<div class="oprog done"><b>Optimisation terminée</b><div class="odone"><div><b>${gb(r.freed)}</b><small>libérés</small></div><div><b>${r.tweaks + (r.games ?? 0)}</b><small>changement${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''} appliqué${r.tweaks + (r.games ?? 0) > 1 ? 's' : ''}</small></div><div><b>${before} → ${r.score ?? '?'}</b><small>note d’entretien</small></div><div><b>${state.health?.score ?? '–'}</b><small>score de santé global</small></div>${delta != null ? `<div><b>${benchBefore.total} → ${benchAfter.total}</b><small>mini-benchmark (${delta >= 0 ? '+' : ''}${delta} %${Math.abs(delta) <= 2 ? ', dans la marge de mesure' : ''})</small></div>` : ''}</div>${r.errors?.length ? `<div class="olog">${r.errors.map((x) => `<div class="err">✗ ${esc(x)}</div>`).join('')}</div>` : ''}<div class="row">${r.undo ? '<button class="btn" data-undo="1" type="button">Annuler cette optimisation</button>' : ''}<button class="btn ghost" data-closeprog="1">Fermer</button></div></div>`);
   return summary;
 }
 
@@ -3106,13 +3116,13 @@ $('optiBody').addEventListener('click', async (e) => {
     const r = await runJob('repair', e.target, () => api.optiRepair());
     const H = { Healthy: 'saine', Repairable: 'abîmée mais réparable', NonRepairable: 'abîmée et non réparable' };
     const S = { ok: 'aucun fichier système abîmé', repare: 'fichiers abîmés trouvés et réparés', echec: 'fichiers abîmés que Windows n’a pas pu réparer', inconnu: 'contrôle terminé' };
-    $('repairOut').innerHTML = r?.ok ? `<div class="adv ${r.sfc === 'echec' || r.health === 'NonRepairable' ? 'p0' : 'p3'}"><div><b>✅ Vérification terminée</b><small>Image de Windows : ${esc(H[r.health] ?? r.health ?? '?')}${r.dismFixed ? ' (réparée)' : ''} · SFC : ${esc(S[r.sfc] ?? r.sfc)}.</small></div></div>` : `<p class="hint">${esc(r?.error ?? 'Réparation impossible')}</p>`;
+    $('repairOut').innerHTML = r?.ok ? `<div class="adv ${r.sfc === 'echec' || r.health === 'NonRepairable' ? 'p0' : 'p3'}"><div><b>Vérification terminée</b><small>Image de Windows : ${esc(H[r.health] ?? r.health ?? '?')}${r.dismFixed ? ' (réparée)' : ''} · SFC : ${esc(S[r.sfc] ?? r.sfc)}.</small></div></div>` : `<p class="hint">${esc(r?.error ?? 'Réparation impossible')}</p>`;
     return;
   }
   if (e.target.id === 'optiDeep') {
     if (!(await ui.confirm({ title: 'Nettoyage profond de Windows ?', text: 'Windows va demander l’autorisation administrateur. Ça peut prendre plusieurs minutes.', list: ['Fichiers temporaires de Windows', 'Anciennes mises à jour téléchargées', 'Cache d’optimisation de la distribution', 'Rapports d’erreur système', 'TRIM du SSD et nettoyage des composants Windows'], ok: '🛡 Lancer', icon: '🛡' }))) return;
     const r = await runJob('deep', e.target, () => api.optiDeep());
-    showProgress(r?.ok ? `<div class="oprog done"><b>✅ Nettoyage profond terminé</b><div class="odone"><div><b>${r.freed != null ? gb(r.freed) : '—'}</b><small>libérés</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>` : null);
+    showProgress(r?.ok ? `<div class="oprog done"><b>Nettoyage profond terminé</b><div class="odone"><div><b>${r.freed != null ? gb(r.freed) : '—'}</b><small>libérés</small></div></div><button class="btn ghost" data-closeprog="1">Fermer</button></div>` : null);
     if (!r?.ok) toast('Nettoyage profond annulé');
   }
 });
@@ -3231,7 +3241,7 @@ $('upOpts').addEventListener('click', (e) => { const b = e.target.closest('[data
 // Choisir ses jeux : toute la bibliothèque, avec la vraie pochette
 $('upPick').addEventListener('click', () => {
   let d = document.getElementById('upPickDlg');
-  if (!d) { d = document.createElement('dialog'); d.id = 'upPickDlg'; d.innerHTML = '<div class="dlg upick"><h2>🎮 Choisis tes jeux</h2><input id="upPickQ" placeholder="Rechercher un jeu…"><div class="upickl" id="upPickL"></div><div class="row end"><button class="btn play" type="button" id="upPickOk">Voir les FPS</button></div></div>'; document.body.append(d); }
+  if (!d) { d = document.createElement('dialog'); d.id = 'upPickDlg'; d.innerHTML = '<div class="dlg upick"><h2>Choisis tes jeux</h2><input id="upPickQ" placeholder="Rechercher un jeu…"><div class="upickl" id="upPickL"></div><div class="row end"><button class="btn play" type="button" id="upPickOk">Voir les FPS</button></div></div>'; document.body.append(d); }
   const sel = new Set(up.picked);
   const tile = (id, name, c) => `<button type="button" class="upk ${sel.has(id) ? 'on' : ''}" data-pk="${esc(id)}"><span class="upcov"><em>${esc(name[0])}</em>${c ? `<i style="background-image:url('${esc(c)}')"></i>` : ''}</span><b>${esc(name)}</b></button>`;
   const paint = () => {
@@ -3267,7 +3277,7 @@ const PRO_STEPS = [
 ];
 const PRO_COLORS = ['#619fff', '#36c995', '#9b8cff', '#f5a623', '#ff6b6b', '#2ee07a', '#ffc439'];
 let pro = null, proBusy = false, proPoll = 0, proHuman = false, proSeen = '', proPlanOpen = true;
-const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt=""><b>Technicien History</b><span>Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][1]}</span>` : m.who === 'staff' ? '<b>Équipe History</b>' : '<b>Toi</b>'}</div><div class="reporttxt rich">${proLinks(richText(m.text)).replace(/\[\[faire:([a-z_]+)\]\]/g, (_, id) => (PRO_DO[id] ? `<button class="btn sm play pdo" data-do="${id}">⚡ Le faire pour moi</button>` : ''))}</div>${m.who === 'bot' ? `<div class="embbar"><i style="width:${Math.round(((m.step + 1) / 7) * 100)}%"></i></div>` : ''}</div>`;
+const proEmbed = (m, k) => `<div class="emb ${m.who}" data-k="${k}"><div class="emba">${m.who === 'bot' ? `<img src="logo.png" alt=""><b>Technicien History</b><span>Étape ${m.step + 1}/7 · ${PRO_STEPS[m.step][1]}</span>` : m.who === 'staff' ? '<b>Équipe History</b>' : '<b>Toi</b>'}</div><div class="reporttxt rich">${proLinks(richText(m.text)).replace(/\[\[faire:([a-z_]+)\]\]/g, (_, id) => (PRO_DO[id] ? `<button class="btn sm play pdo" data-do="${id}">Le faire pour moi</button>` : ''))}</div>${m.who === 'bot' ? `<div class="embbar"><i style="width:${Math.round(((m.step + 1) / 7) * 100)}%"></i></div>` : ''}</div>`;
 // Mode concentration : une tâche à la fois dans le dernier message du technicien, les autres floutées
 const proFocus = {}, proDetail = {};
 function proFocusUi() {
@@ -3277,7 +3287,7 @@ function proFocusUi() {
   m.classList.add('focus'); m.classList.toggle('detailing', Boolean(d));
   items.forEach((li, j) => { li.classList.toggle('on', j === i); li.classList.toggle('past', j < i); li.dataset.pf = j; });
   let h = (items[i].tagName === 'LI' ? items[i].parentElement : items[i]).previousElementSibling; while (h && h.tagName !== 'H4') h = h.previousElementSibling; h?.classList.add('on');
-  items[i].insertAdjacentHTML('beforeend', `<div class="pfbtns">${items[i].tagName === 'P' && /\?\s*$/.test(items[i].textContent) ? '<button class="btn sm play" data-pa="ask">💬 Répondre</button>' : ''}<button class="btn sm" data-pfa="detail" ${d === 0 ? 'disabled' : ''}>${d === 0 ? '⏳ Le technicien détaille…' : d ? '✕ Fermer le détail' : '📖 Détail pas à pas'}</button>${i < items.length - 1 ? '<button class="btn sm play" data-pfa="next">Continuer ▶</button>' : '<small class="hint">Dernière tâche : clique sur « Fait » en bas quand c’est bon.</small>'}</div>${d ? `<div class="pfdetail reporttxt rich">${proLinks(richText(d))}</div>` : ''}`);
+  items[i].insertAdjacentHTML('beforeend', `<div class="pfbtns">${items[i].tagName === 'P' && /\?\s*$/.test(items[i].textContent) ? '<button class="btn sm play" data-pa="ask">Répondre</button>' : ''}<button class="btn sm" data-pfa="detail" ${d === 0 ? 'disabled' : ''}>${d === 0 ? '⏳ Le technicien détaille…' : d ? '✕ Fermer le détail' : '📖 Détail pas à pas'}</button>${i < items.length - 1 ? '<button class="btn sm play" data-pfa="next">Continuer ▶</button>' : '<small class="hint">Dernière tâche : clique sur « Fait » en bas quand c’est bon.</small>'}</div>${d ? `<div class="pfdetail reporttxt rich">${proLinks(richText(d))}</div>` : ''}`);
 }
 
 const proLinks = (html) => html.replace(/\[([^\]]+)\]\((https:\/\/[^\s)<]+)\)|(https:\/\/[^\s<)]+)/g, (_, t, u, bare) => `<a href="#" class="plink" data-url="${u ?? bare}">${t ?? bare}</a>`);
@@ -3292,15 +3302,15 @@ function proTicketDraw(jump) {
   const prev = $('proLog')?.scrollTop;
   const s = pro, last = s && s.step >= PRO_STEPS.length - 1, nx = s && PRO_STEPS[s.step + 1], opt = (i) => [2, 3, 4].includes(i);
   if (!s || s.closed) {
-    $('proTicket').innerHTML = s?.done && moreUi ? moreUi.proEnd(s) : `<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">🚀 Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
+    $('proTicket').innerHTML = s?.done && moreUi ? moreUi.proEnd(s) : `<div class="emb bot" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">🚀 Opti Pro · Étape 1/7 · 🎫 Ton setup</div><h4>Ouvre ton ticket</h4><p class="hint">Processeur, carte mère, BIOS, RAM, carte graphique et températures sont envoyés tout seuls. Le technicien IA répond tout de suite, à chaque étape, et l’équipe peut intervenir.</p><label class="embl">Tes jeux et ce que tu veux<textarea id="proNeed" rows="3" placeholder="Ex : Fortnite en 1080p 240 Hz, j’ai des chutes de FPS…"></textarea></label><label class="embl">Refroidissement et alimentation<input id="proCool" placeholder="Ex : watercooling 240 mm, alim 750 W"></label><div class="row"><button class="btn play" data-pa="open">Ouvrir mon ticket</button><small class="hint">Aussi sur Discord : <b>/launcher opti</b> (même ticket)</small></div></div>`;
     return;
   }
-  const plan = s.todo?.length ? `<details class="emb proplan" ${proPlanOpen ? 'open' : ''}><summary><b>🎯 Ton plan Opti Pro</b><span class="hint">fait pour ton PC et ta demande · ${s.todo.length} points</span></summary><ul>${s.todo.map((x) => `<li><span>${x.icon}</span><div><b>${esc(x.label)}</b><small>${esc(x.why)}</small></div>${x.auto && PRO_DO[x.auto] ? `<button class="btn sm play" data-do="${x.auto}">⚡ Le faire pour moi</button>` : x.optin ? (s.ocOptIn ? '<em class="ok">✅ Accepté</em>' : '<button class="btn sm danger" data-pa="oc">🔥 Je veux overclocker</button>') : `<em>${x.buy ? 'Achat conseillé' : 'Guidé'}</em>`}</li>`).join('')}</ul></details>` : '';
+  const plan = s.todo?.length ? `<details class="emb proplan" ${proPlanOpen ? 'open' : ''}><summary><b>Ton plan Opti Pro</b><span class="hint">fait pour ton PC et ta demande · ${s.todo.length} points</span></summary><ul>${s.todo.map((x) => `<li><span>${x.icon}</span><div><b>${esc(x.label)}</b><small>${esc(x.why)}</small></div>${x.auto && PRO_DO[x.auto] ? `<button class="btn sm play" data-do="${x.auto}">Le faire pour moi</button>` : x.optin ? (s.ocOptIn ? '<em class="ok">✅ Accepté</em>' : '<button class="btn sm danger" data-pa="oc">Je veux overclocker</button>') : `<em>${x.buy ? 'Achat conseillé' : 'Guidé'}</em>`}</li>`).join('')}</ul></details>` : '';
   $('proTicket').innerHTML = `${moreUi?.proBar(s) ?? ''}${plan}<div class="embs" id="proLog">${s.log.map((m, k) => proEmbed(m, k)).join('')}${proBusy ? '<div class="emb bot typing" style="--ec:#619fff"><div class="emba"><img src="logo.png" alt="">Le technicien écrit…</div><div class="gbar indet"><i></i></div></div>' : ''}</div>
-    <div class="emb human" id="proHuman" style="--ec:#5865f2" ${proHuman ? '' : 'hidden'}><div class="emba"><img src="logo.png" alt="">👤 Parler à un humain</div><p>L’équipe Opti Pro répond <b>sur Discord</b>, pas dans le support de l’appli. Rejoins le serveur History, va dans le salon <b>#🚀・opti-pro</b> : ton ticket y est dans ton fil privé${s.thread ? '' : ' (lie ton compte Discord dans Paramètres › Compte, puis tape <b>/launcher opti</b>)'}. Clique sur <b>👤 Parler à un humain</b> dans le fil : un membre de l’équipe arrive.</p><div class="row"><button class="btn play" data-pa="discordgo">🎮 Ouvrir Discord</button></div></div>
-    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${s.todo?.some((x) => PRO_DO[x.auto]) ? '<button class="btn ghost" data-pexp="1" title="Seulement ce que le launcher fait tout seul">⚡ Express</button>' : ''}<button class="btn ghost" data-pa="ask">💬 Écrire au technicien</button><button class="btn ghost" data-pa="discord">👤 Parler à un humain</button><button class="btn ghost" data-pa="close">🔒 Fermer</button></div>
+    <div class="emb human" id="proHuman" style="--ec:#5865f2" ${proHuman ? '' : 'hidden'}><div class="emba"><img src="logo.png" alt="">👤 Parler à un humain</div><p>L’équipe Opti Pro répond <b>sur Discord</b>, pas dans le support de l’appli. Rejoins le serveur History, va dans le salon <b>#🚀・opti-pro</b> : ton ticket y est dans ton fil privé${s.thread ? '' : ' (lie ton compte Discord dans Paramètres › Compte, puis tape <b>/launcher opti</b>)'}. Clique sur <b>Parler à un humain</b> dans le fil : un membre de l’équipe arrive.</p><div class="row"><button class="btn play" data-pa="discordgo">Ouvrir Discord</button></div></div>
+    <div class="row probtns"><button class="btn play" data-pa="${last ? 'done' : 'next'}" ${proBusy ? 'disabled' : ''}>${last ? '🚀 Terminé' : `✅ Fait · ${nx[0]} ${nx[1]}`}</button>${s.todo?.some((x) => PRO_DO[x.auto]) ? '<button class="btn ghost" data-pexp="1" title="Seulement ce que le launcher fait tout seul">Express</button>' : ''}<button class="btn ghost" data-pa="ask">Écrire au technicien</button><button class="btn ghost" data-pa="discord">Parler à un humain</button><button class="btn ghost" data-pa="close">Fermer</button></div>
     ${s.links?.length ? `<div class="row prolinks">${s.links.map(([l, u]) => `<button class="btn sm ghost" data-url="${esc(u)}">${esc(l)} ↗</button>`).join('')}</div>` : ''}
-    ${s.thread ? '<small class="hint">💬 Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
+    ${s.thread ? '<small class="hint">Le même ticket est sur Discord dans ton fil privé #opti-pro.</small>' : ''}`;
   proFocusUi(); const log = $('proLog'), on = log.querySelector('.emb.focus li.on'); // défile seulement dans le ticket, jamais toute la page
   log.scrollTop = !jump && prev != null ? prev : on ? log.scrollTop + on.getBoundingClientRect().top - log.getBoundingClientRect().top - 60 : log.scrollHeight;
 }
@@ -3320,7 +3330,7 @@ async function renderPro(refresh = true) {
   const p = await api.proGet?.().catch(() => null); if (!p) return;
   $('proPc').dataset.done = '1';
   const oc = { oui: ['ok', 'Overclockable'], limité: ['warn', 'Overclocking limité'], non: ['bad', 'Non débloqué : gains via le BIOS'] }[p.plan.cpuOc];
-  $('proPc').innerHTML = `<div><b>🧠 ${esc(p.cpu || 'Processeur')}</b><em class="${oc[0]}">${oc[1]}</em><ul>${p.plan.cpuHow.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div><div><b>🧩 RAM ${p.ramGb} Go${p.plan.ramType ? ` ${p.plan.ramType}` : ''}${p.plan.ramNow ? ` · ${p.plan.ramNow} MHz` : ''}</b><em class="${p.plan.ramLimited ? 'warn' : 'ok'}">${p.plan.ramLimited ? 'Optimisée via le BIOS' : 'Gain possible'}</em><ul>${p.plan.ramHow.map((x) => `<li>${esc(x)}</li>`).join('') || '<li>Déjà à sa vitesse maximale : on resserre les timings</li>'}</ul></div><small class="hint">Carte mère : ${esc(p.board || 'inconnue')} · le BIOS n’est jamais modifié par l’appli : le technicien te guide.</small>`;
+  $('proPc').innerHTML = `<div><b>🧠 ${esc(p.cpu || 'Processeur')}</b><em class="${oc[0]}">${oc[1]}</em><ul>${p.plan.cpuHow.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div><div><b>RAM ${p.ramGb} Go${p.plan.ramType ? ` ${p.plan.ramType}` : ''}${p.plan.ramNow ? ` · ${p.plan.ramNow} MHz` : ''}</b><em class="${p.plan.ramLimited ? 'warn' : 'ok'}">${p.plan.ramLimited ? 'Optimisée via le BIOS' : 'Gain possible'}</em><ul>${p.plan.ramHow.map((x) => `<li>${esc(x)}</li>`).join('') || '<li>Déjà à sa vitesse maximale : on resserre les timings</li>'}</ul></div><small class="hint">Carte mère : ${esc(p.board || 'inconnue')} · le BIOS n’est jamais modifié par l’appli : le technicien te guide.</small>`;
 }
 async function proAction(action, text = '', imgs = []) {
   if (proBusy) return;
@@ -3384,14 +3394,14 @@ const proShots = [];
 const proShrink = (file) => new Promise((ok) => { const img = new Image(); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.82)); }; img.onerror = () => ok(null); const r = new FileReader(); r.onload = () => { img.src = r.result; }; r.onerror = () => ok(null); r.readAsDataURL(file); });
 async function proAddShots(files) {
   for (const f of [...files].filter((x) => /^image\//.test(x.type)).slice(0, 3 - proShots.length)) { const u = await proShrink(f); if (u) proShots.push(u); }
-  $('proShots').innerHTML = proShots.map((u, i) => `<span><img src="${u}" alt=""><button type="button" data-rm="${i}" title="Retirer">✕</button></span>`).join('') + (proShots.length < 3 ? '<label class="btn sm ghost">📷 Ajouter une capture<input type="file" accept="image/*" multiple hidden></label>' : '');
+  $('proShots').innerHTML = proShots.map((u, i) => `<span><img src="${u}" alt=""><button type="button" data-rm="${i}" title="Retirer">✕</button></span>`).join('') + (proShots.length < 3 ? '<label class="btn sm ghost">Ajouter une capture<input type="file" accept="image/*" multiple hidden></label>' : '');
 }
 // Question au technicien : dans une fenêtre à part pour garder la page concentrée sur l'étape
 function proAsk() {
   let d = document.getElementById('proAskDlg');
   if (!d) {
     d = document.createElement('dialog'); d.id = 'proAskDlg';
-    d.innerHTML = '<form class="dlg proask" method="dialog"><h2>💬 Écrire au technicien</h2><p class="hint">Une question, un souci, une valeur à vérifier. Ajoute des captures ou des photos (écran du BIOS, message d’erreur…) : le technicien les regarde pour mieux t’aider. Tu peux aussi coller une image avec Ctrl+V.</p><textarea id="proMsg" rows="5" maxlength="1500" placeholder="Ex : je ne trouve pas PBO dans mon BIOS, voilà l’écran…"></textarea><div class="proshots" id="proShots"></div><div class="row end"><button class="btn ghost" value="no">Annuler</button><button class="btn play" value="ok">Envoyer</button></div></form>';
+    d.innerHTML = '<form class="dlg proask" method="dialog"><h2>Écrire au technicien</h2><p class="hint">Une question, un souci, une valeur à vérifier. Ajoute des captures ou des photos (écran du BIOS, message d’erreur…) : le technicien les regarde pour mieux t’aider. Tu peux aussi coller une image avec Ctrl+V.</p><textarea id="proMsg" rows="5" maxlength="1500" placeholder="Ex : je ne trouve pas PBO dans mon BIOS, voilà l’écran…"></textarea><div class="proshots" id="proShots"></div><div class="row end"><button class="btn ghost" value="no">Annuler</button><button class="btn play" value="ok">Envoyer</button></div></form>';
     document.body.append(d);
     d.addEventListener('change', (e) => { if (e.target.type === 'file') proAddShots(e.target.files); });
     d.addEventListener('click', (e) => { const r = e.target.closest('[data-rm]'); if (r) { proShots.splice(Number(r.dataset.rm), 1); proAddShots([]); } });
@@ -3468,14 +3478,14 @@ function renderScan(r) {
       <div class="${r.threats ? 'bad' : ''}"><b>${r.threats}</b><small>menace${r.threats > 1 ? 's' : ''} confirmée${r.threats > 1 ? 's' : ''}</small></div>
     </div>
     <div class="pcgrid">
-      <div class="panel"><h3>📊 Ce qui occupe tes disques</h3><div class="catbars">${cats.map((c) => `<div class="bbar"><span>${c.icon} ${esc(c.label)}</span><div class="t"><i style="width:${(100 * c.bytes) / max}%"></i></div><b>${gb(c.bytes)}</b></div>`).join('')}</div></div>
-      <div class="panel"><h3>🗑 Fichiers inutiles <small class="hint">cochés = supprimés</small></h3>${r.junk.length ? `<div class="checks">${r.junk.map((j) => `<label class="check"><input type="checkbox" data-junk="${esc(j.id)}" checked><span>${j.icon} ${esc(j.label)} <small class="hint">· ${num(j.files)} fichiers</small></span><em>${gb(j.bytes)}</em></label>`).join('')}</div><div class="row"><button class="btn play" id="scanClean" type="button">Nettoyer la sélection</button></div><small class="hint">Les installateurs vont à la corbeille (récupérables), le reste se recrée tout seul.</small>` : '<p class="hint">Aucun fichier inutile trouvé 👌</p>'}</div>
+      <div class="panel"><h3>Ce qui occupe tes disques</h3><div class="catbars">${cats.map((c) => `<div class="bbar"><span>${c.icon} ${esc(c.label)}</span><div class="t"><i style="width:${(100 * c.bytes) / max}%"></i></div><b>${gb(c.bytes)}</b></div>`).join('')}</div></div>
+      <div class="panel"><h3>Fichiers inutiles <small class="hint">cochés = supprimés</small></h3>${r.junk.length ? `<div class="checks">${r.junk.map((j) => `<label class="check"><input type="checkbox" data-junk="${esc(j.id)}" checked><span>${j.icon} ${esc(j.label)} <small class="hint">· ${num(j.files)} fichiers</small></span><em>${gb(j.bytes)}</em></label>`).join('')}</div><div class="row"><button class="btn play" id="scanClean" type="button">Nettoyer la sélection</button></div><small class="hint">Les installateurs vont à la corbeille (récupérables), le reste se recrée tout seul.</small>` : '<p class="hint">Aucun fichier inutile trouvé 👌</p>'}</div>
     </div>
-    <div class="panel"><h3>⚠ Fichiers louches <small class="hint">non signés, vérifiés un par un par l’antivirus de Windows</small></h3>${r.suspects.length ? `<div class="flist">${r.suspects.map((x) => `<div class="${x.defender === 'menace' ? 'bad' : ''}"><div><b>${esc(x.path.split(/[\\/]/).pop())}</b> ${x.defender === 'menace' ? '<span class="bad">● menace confirmée</span>' : x.defender === 'propre' ? '<span class="ok">● antivirus : rien trouvé</span>' : ''}<small>${esc(x.reason)} · ${esc(x.path)}</small></div><button class="btn ghost sm" data-show="${esc(x.path)}">Voir</button><button class="btn ghost sm" data-trash="${esc(x.path)}">Corbeille</button></div>`).join('')}</div>` : '<p class="hint">Aucun fichier louche 👍</p>'}</div>
-    <div class="panel"><h3>👯 Doublons <small class="hint">contenu identique octet par octet (SHA-256)</small></h3>${r.duplicates.length ? `<div class="flist">${r.duplicates.slice(0, 30).map((d) => `<div class="dup"><div><b>${esc(d.paths[0].split(/[\\/]/).pop())}</b> <small class="hint">${d.paths.length} copies · ${gb(d.size)} chacune</small>${d.paths.map((p, i) => `<small>${i ? `<button class="linkbtn" data-trash="${esc(p)}">corbeille</button> ` : '<em class="ok">gardé</em> '}${esc(p)}</small>`).join('')}</div></div>`).join('')}</div>` : '<p class="hint">Aucun doublon de plus de 1 Mo dans tes dossiers 👍</p>'}</div>
+    <div class="panel"><h3>Fichiers louches <small class="hint">non signés, vérifiés un par un par l’antivirus de Windows</small></h3>${r.suspects.length ? `<div class="flist">${r.suspects.map((x) => `<div class="${x.defender === 'menace' ? 'bad' : ''}"><div><b>${esc(x.path.split(/[\\/]/).pop())}</b> ${x.defender === 'menace' ? '<span class="bad">● menace confirmée</span>' : x.defender === 'propre' ? '<span class="ok">● antivirus : rien trouvé</span>' : ''}<small>${esc(x.reason)} · ${esc(x.path)}</small></div><button class="btn ghost sm" data-show="${esc(x.path)}">Voir</button><button class="btn ghost sm" data-trash="${esc(x.path)}">Corbeille</button></div>`).join('')}</div>` : '<p class="hint">Aucun fichier louche 👍</p>'}</div>
+    <div class="panel"><h3>Doublons <small class="hint">contenu identique octet par octet (SHA-256)</small></h3>${r.duplicates.length ? `<div class="flist">${r.duplicates.slice(0, 30).map((d) => `<div class="dup"><div><b>${esc(d.paths[0].split(/[\\/]/).pop())}</b> <small class="hint">${d.paths.length} copies · ${gb(d.size)} chacune</small>${d.paths.map((p, i) => `<small>${i ? `<button class="linkbtn" data-trash="${esc(p)}">corbeille</button> ` : '<em class="ok">gardé</em> '}${esc(p)}</small>`).join('')}</div></div>`).join('')}</div>` : '<p class="hint">Aucun doublon de plus de 1 Mo dans tes dossiers 👍</p>'}</div>
     <div class="pcgrid">
-      <div class="panel"><h3>🐘 Plus gros fichiers</h3><div class="flist">${r.largest.slice(0, 12).map((x) => `<div><div><b>${esc(x.path.split(/[\\/]/).pop())}</b><small>${esc(x.path)}</small></div><em>${gb(x.size)}</em><button class="btn ghost sm" data-show="${esc(x.path)}">Voir</button></div>`).join('') || '<p class="hint">—</p>'}</div>${r.old.files ? `<p class="hint">Et ${num(r.old.files)} gros fichiers pas modifiés depuis 2 ans (${gb(r.old.bytes)}).</p>` : ''}</div>
-      <div class="panel"><h3>🧾 Stabilité de Windows <small class="hint">7 derniers jours</small></h3>${ev ? `<div class="evgrid"><div class="${ev.bsod ? 'bad' : ''}"><b>${ev.bsod}</b><small>écrans bleus</small></div><div class="${ev.power ? 'warn' : ''}"><b>${ev.power}</b><small>arrêts brutaux</small></div><div class="${ev.whea ? 'bad' : ''}"><b>${ev.whea}</b><small>erreurs matérielles</small></div><div class="${ev.disk ? 'bad' : ''}"><b>${ev.disk}</b><small>erreurs disque</small></div><div class="${ev.gpu ? 'warn' : ''}"><b>${ev.gpu}</b><small>plantages pilote graphique</small></div></div>${ev.findings.map((f) => `<div class="adv p${f.prio}"><div><b>${esc(f.title)}</b><small>${esc(f.text)}</small></div></div>`).join('')}` : '<p class="hint">Journal de Windows illisible sur ce PC.</p>'}</div>
+      <div class="panel"><h3>Plus gros fichiers</h3><div class="flist">${r.largest.slice(0, 12).map((x) => `<div><div><b>${esc(x.path.split(/[\\/]/).pop())}</b><small>${esc(x.path)}</small></div><em>${gb(x.size)}</em><button class="btn ghost sm" data-show="${esc(x.path)}">Voir</button></div>`).join('') || '<p class="hint">—</p>'}</div>${r.old.files ? `<p class="hint">Et ${num(r.old.files)} gros fichiers pas modifiés depuis 2 ans (${gb(r.old.bytes)}).</p>` : ''}</div>
+      <div class="panel"><h3>Stabilité de Windows <small class="hint">7 derniers jours</small></h3>${ev ? `<div class="evgrid"><div class="${ev.bsod ? 'bad' : ''}"><b>${ev.bsod}</b><small>écrans bleus</small></div><div class="${ev.power ? 'warn' : ''}"><b>${ev.power}</b><small>arrêts brutaux</small></div><div class="${ev.whea ? 'bad' : ''}"><b>${ev.whea}</b><small>erreurs matérielles</small></div><div class="${ev.disk ? 'bad' : ''}"><b>${ev.disk}</b><small>erreurs disque</small></div><div class="${ev.gpu ? 'warn' : ''}"><b>${ev.gpu}</b><small>plantages pilote graphique</small></div></div>${ev.findings.map((f) => `<div class="adv p${f.prio}"><div><b>${esc(f.title)}</b><small>${esc(f.text)}</small></div></div>`).join('')}` : '<p class="hint">Journal de Windows illisible sur ce PC.</p>'}</div>
     </div>
     <small class="hint">${num(r.denied)} éléments protégés par Windows n’ont pas pu être lus (normal sans droits administrateur).</small>`;
 }
@@ -3529,7 +3539,7 @@ function renderWu() {
     ${wu.updates.length ? `<div class="panel"><h3>${wu.updates.length} mise${wu.updates.length > 1 ? 's' : ''} à jour disponible${wu.updates.length > 1 ? 's' : ''} <small class="hint">${gb(wu.updates.reduce((n, u) => n + u.size, 0))} à télécharger au maximum</small></h3>
       ${groups.map(([k, icon, label, l]) => `<b class="sub">${icon} ${esc(label)}</b><div class="checks">${l.map((u) => `<label class="check"><input type="checkbox" data-wu="${esc(u.id)}" ${u.optional ? '' : 'checked'}><span>${esc(u.title)}${u.optional ? ' <small class="opt">facultative</small>' : ''}${u.reboot ? ' <small class="hint">· redémarrage</small>' : ''}</span><em>${u.size ? gb(u.size) : ''}</em></label>`).join('')}</div>`).join('')}
       <div class="row"><button class="btn play big" id="wuInstall" type="button">Installer la sélection</button></div></div>` : '<div class="empty">✅ Windows est à jour.</div>'}
-    ${wu.history.length ? `<div class="panel"><h3>🕘 Dernières installations</h3><div class="flist">${wu.history.slice(0, 10).map((h) => `<div><div><b>${esc(h.title)}</b><small>${h.date ? new Date(h.date).toLocaleDateString('fr-FR') : ''}</small></div><em class="${h.result === 'ok' ? 'ok' : 'bad'}">${{ ok: 'installée', echec: 'échec', annule: 'annulée' }[h.result] ?? h.result}</em></div>`).join('')}</div></div>` : ''}`;
+    ${wu.history.length ? `<div class="panel"><h3>Dernières installations</h3><div class="flist">${wu.history.slice(0, 10).map((h) => `<div><div><b>${esc(h.title)}</b><small>${h.date ? new Date(h.date).toLocaleDateString('fr-FR') : ''}</small></div><em class="${h.result === 'ok' ? 'ok' : 'bad'}">${{ ok: 'installée', echec: 'échec', annule: 'annulée' }[h.result] ?? h.result}</em></div>`).join('')}</div></div>` : ''}`;
   $('wuBadge').textContent = wu.updates.filter((u) => !u.optional).length || '';
 }
 $('wuSearch').addEventListener('click', async () => {
@@ -3759,9 +3769,9 @@ async function assistantOpti() {
   if (!o || o.error) return say(`Je n’ai pas pu analyser ton PC${o?.error ? ` : ${o.error}` : ''}.`);
   opti = o; renderOpti?.();
   const f = optiFindings(o);
-  if (!f.length) return sayHtml('<b>✅ Ton PC est déjà bien réglé.</b><br>Rien à nettoyer ni à corriger pour l’instant.');
+  if (!f.length) return sayHtml('<b>Ton PC est déjà bien réglé.</b><br>Rien à nettoyer ni à corriger pour l’instant.');
   const fixable = f.filter(([, , , , k]) => ['junk', 'startup', 'tweaks'].includes(k));
-  const box = sayHtml(`<b>J’ai trouvé ${f.length} chose${f.length > 1 ? 's' : ''} à améliorer :</b><ul class="aiopti">${f.map(([lvl, ico, t, d]) => `<li class="${lvl}"><i>${ico}</i><div><b>${esc(t)}</b><small>${esc(d)}</small></div></li>`).join('')}</ul>${fixable.length ? `Je peux corriger <b>${fixable.length}</b> point${fixable.length > 1 ? 's' : ''} tout de suite (réversible).<div class="aiacts"><button type="button" class="btn play sm" data-aifix="1">⚡ Oui, corrige tout</button><button type="button" class="btn sm" data-aisee="1">Voir le détail</button></div>` : '<div class="aiacts"><button type="button" class="btn sm" data-aisee="1">Voir le détail</button></div>'}`);
+  const box = sayHtml(`<b>J’ai trouvé ${f.length} chose${f.length > 1 ? 's' : ''} à améliorer :</b><ul class="aiopti">${f.map(([lvl, ico, t, d]) => `<li class="${lvl}"><i>${ico}</i><div><b>${esc(t)}</b><small>${esc(d)}</small></div></li>`).join('')}</ul>${fixable.length ? `Je peux corriger <b>${fixable.length}</b> point${fixable.length > 1 ? 's' : ''} tout de suite (réversible).<div class="aiacts"><button type="button" class="btn play sm" data-aifix="1">Oui, corrige tout</button><button type="button" class="btn sm" data-aisee="1">Voir le détail</button></div>` : '<div class="aiacts"><button type="button" class="btn sm" data-aisee="1">Voir le détail</button></div>'}`);
   box.onclick = async (e) => {
     if (e.target.closest('[data-aisee]')) return go('optimisation');
     if (!e.target.closest('[data-aifix]')) return;
@@ -3772,7 +3782,7 @@ async function assistantOpti() {
     const plan = { games: [], orphans: [], junk: o.junk.filter((x) => !SHADERS.includes(x.id)).map((x) => x.id), recycle: o.recycle > 0, tweaks: o.tweaks.filter((t) => !t.on && !t.optional && !t.retired).map((t) => t.id) };
     const r = (plan.junk.length || plan.tweaks.length || plan.recycle) ? await runOpti(plan) : { done: true, freed: 0, changes: 0 };
     if (!r?.done) return say(startup ? `✅ ${startup} appli(s) lourde(s) retirée(s) du démarrage. Le reste n’a pas été appliqué.` : 'D’accord, je n’ai rien changé.');
-    sayHtml(`<b>✅ C’est fait !</b><ul class="aiopti">${r.freed ? `<li class="ok"><i>🗑</i><div><b>${gb(r.freed)} libérés</b><small>fichiers temporaires, caches et corbeille</small></div></li>` : ''}${startup ? `<li class="ok"><i>⏻</i><div><b>${startup} appli(s) retirée(s) du démarrage</b><small>le PC démarre plus vite</small></div></li>` : ''}${r.changes ? `<li class="ok"><i>🎯</i><div><b>${r.changes} réglage(s) Windows appliqué(s)</b><small>réglés pour le jeu</small></div></li>` : ''}</ul>Tout est <b>réversible</b> dans Optimisation › Annuler.`);
+    sayHtml(`<b>C’est fait !</b><ul class="aiopti">${r.freed ? `<li class="ok"><i>🗑</i><div><b>${gb(r.freed)} libérés</b><small>fichiers temporaires, caches et corbeille</small></div></li>` : ''}${startup ? `<li class="ok"><i>⏻</i><div><b>${startup} appli(s) retirée(s) du démarrage</b><small>le PC démarre plus vite</small></div></li>` : ''}${r.changes ? `<li class="ok"><i>🎯</i><div><b>${r.changes} réglage(s) Windows appliqué(s)</b><small>réglés pour le jeu</small></div></li>` : ''}</ul>Tout est <b>réversible</b> dans Optimisation › Annuler.`);
   };
 }
 async function ask(text) {
@@ -3880,7 +3890,7 @@ async function loadSheetExtras(i) {
     const W = 560; const H = 90; const bw = W / h.days.length;
     const bars = h.days.map((d, n) => { const bh = d.minutes ? Math.max(3, (d.minutes / max) * (H - 14)) : 2; return `<rect x="${(n * bw + 1.5).toFixed(1)}" y="${(H - bh).toFixed(1)}" width="${(bw - 3).toFixed(1)}" height="${bh.toFixed(1)}" rx="2" class="${d.minutes ? 'on' : ''}"><title>${new Date(d.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} : ${d.minutes ? hours(d.minutes) : 'pas joué'}</title></rect>`; }).join('');
     const bestDay = h.best ? new Date(h.best.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
-    $('sxHist').innerHTML = `<h3>📈 Tes 30 derniers jours</h3>
+    $('sxHist').innerHTML = `<h3>Tes 30 derniers jours</h3>
       <svg class="histo" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${bars}</svg>
       <div class="hltb"><div><small>Temps joué</small><b>${hours(h.total)}</b></div><div><small>Jours joués</small><b>${h.daysPlayed} / 30</b></div><div><small>Moyenne par jour joué</small><b>${hours(h.avg)}</b></div></div>
       <p class="fine">${h.best ? `Record : ${hours(h.best.minutes)} le ${bestDay}.` : ''}${h.streak > 1 ? ` 🔥 ${h.streak} jours d’affilée !` : ''}</p>`;
@@ -3891,7 +3901,7 @@ async function loadSheetExtras(i) {
     const played = i.minutes / 60;
     const left = t.main ? Math.max(0, t.main - played) : null;
     const pct = t.main ? Math.min(100, (played / t.main) * 100) : 0;
-    $('sxTime').innerHTML = `<h3>⏱ Durée pour finir <small class="hint">moyennes HowLongToBeat</small></h3>
+    $('sxTime').innerHTML = `<h3>Durée pour finir <small class="hint">moyennes HowLongToBeat</small></h3>
       <div class="hltb">${[['Histoire', t.main], ['+ À côtés', t.extra], ['100 %', t.complete]].map(([k, v]) => `<div><small>${k}</small><b>${v ? `${String(v).replace('.', ',')} h` : '—'}</b></div>`).join('')}</div>
       ${t.main ? `<div class="gbar big"><i style="width:${pct}%"></i></div><p class="fine">${left > 0 ? `Il te reste environ ${hours(left * 60)} pour finir l’histoire.` : 'Tu as déjà dépassé la durée moyenne de l’histoire 🎉'}</p>` : ''}`;
   }).catch(() => {});
@@ -3904,7 +3914,7 @@ async function loadSheetExtras(i) {
     if (!$('sxAch') || !a) return;
     if (a.none) return;
     const row = (x) => `<div class="achi ${x.done ? 'done' : ''}">${x.icon ? `<img src="${esc(x.icon)}" alt="">` : '<span class="noic">🏆</span>'}<div><b>${esc(x.name)}</b><small>${esc(x.desc || (x.hidden ? 'Succès caché' : ''))}</small></div>${x.pct != null ? `<em>${x.pct.toFixed(1).replace('.', ',')} %</em>` : ''}</div>`;
-    $('sxAch').innerHTML = `<h3>🏆 Succès <small class="hint">${a.done} / ${a.total}</small></h3>
+    $('sxAch').innerHTML = `<h3>Succès <small class="hint">${a.done} / ${a.total}</small></h3>
       <div class="gbar big"><i style="width:${(100 * a.done) / a.total}%"></i></div>
       ${a.easy.length ? `<b class="sub">Les plus faciles à débloquer</b>${a.easy.map(row).join('')}` : '<p class="fine">Tous les succès sont débloqués 👑</p>'}
       ${a.recent.length ? `<details><summary>Derniers débloqués</summary>${a.recent.map(row).join('')}</details>` : ''}`;
@@ -3913,9 +3923,9 @@ async function loadSheetExtras(i) {
     if (!$('sxCaps') || !caps?.length) return;
     const imgs = caps.filter((c) => !c.video);
     const vids = caps.filter((c) => c.video).length;
-    $('sxCaps').innerHTML = `<h3>📸 Captures <small class="hint">${imgs.length} image${imgs.length > 1 ? 's' : ''}${vids ? ` · ${vids} vidéo${vids > 1 ? 's' : ''}` : ''}</small></h3>
+    $('sxCaps').innerHTML = `<h3>Captures <small class="hint">${imgs.length} image${imgs.length > 1 ? 's' : ''}${vids ? ` · ${vids} vidéo${vids > 1 ? 's' : ''}` : ''}</small></h3>
       <div class="caps">${imgs.slice(0, 24).map((c) => `<img src="${esc(c.url)}" data-cap="${esc(c.token)}" alt="" loading="lazy">`).join('')}</div>
-      <div class="row"><button class="btn" data-capdir="${esc(caps[0].token)}">Ouvrir le dossier</button><button class="btn ghost" data-capmode="1" title="Clique ensuite sur une capture pour l’envoyer dans le salon des clips">📤 Envoyer sur Discord</button></div>`;
+      <div class="row"><button class="btn" data-capdir="${esc(caps[0].token)}">Ouvrir le dossier</button><button class="btn ghost" data-capmode="1" title="Clique ensuite sur une capture pour l’envoyer dans le salon des clips">Envoyer sur Discord</button></div>`;
   }).catch(() => {});
 }
 
@@ -4313,13 +4323,13 @@ $('pdLink').addEventListener('click', async () => {
   const r = await api.discordCode?.().catch(() => null);
   if (!r?.ok) return toast(r?.error ?? 'Connecte-toi d’abord');
   copyText(`/launcher lier code:${r.code}`);
-  $('pdDisc').innerHTML = `<b>Commande copiée ✓</b><small>Colle-la (Ctrl+V) dans le salon <b>#lier-son-compte</b> du serveur History. Valable 10 min.</small>${r.qr ? `<small>📱 Sur téléphone : scanne pour ouvrir le salon, puis tape <b>/launcher lier code:${esc(r.code)}</b></small><img class="dcqr" src="${r.qr}" alt="QR du salon Discord">` : ''}`;
+  $('pdDisc').innerHTML = `<b>Commande copiée ✓</b><small>Colle-la (Ctrl+V) dans le salon <b>#lier-son-compte</b> du serveur History. Valable 10 min.</small>${r.qr ? `<small>Sur téléphone : scanne pour ouvrir le salon, puis tape <b>/launcher lier code:${esc(r.code)}</b></small><img class="dcqr" src="${r.qr}" alt="QR du salon Discord">` : ''}`;
   $('pdLink').hidden = true;
   clearInterval(linkWatch);
   const until = Date.now() + 600_000;
   linkWatch = setInterval(async () => {
     const a = await api.account?.().catch(() => null);
-    if (a?.compte?.discord) { clearInterval(linkWatch); $('pdDisc').innerHTML = '<b>✅ Ton compte a bien été lié</b><small>Tes avantages Premium arrivent sur Discord dans quelques minutes.</small>'; toast('✅ Ton compte Discord a bien été lié'); }
+    if (a?.compte?.discord) { clearInterval(linkWatch); $('pdDisc').innerHTML = '<b>Ton compte a bien été lié</b><small>Tes avantages Premium arrivent sur Discord dans quelques minutes.</small>'; toast('✅ Ton compte Discord a bien été lié'); }
     else if (Date.now() > until) { clearInterval(linkWatch); $('pdLink').hidden = false; }
   }, 4000);
 });
@@ -4450,7 +4460,7 @@ $('shareActivity').addEventListener('change', (e) => api.setSettings({ shareActi
 $('friendNotifs').addEventListener('change', (e) => api.setSettings({ friendNotifs: e.target.checked }));
 personal = initPersonal(api, { items: () => state.items, card, go, toast });
 initSettings(api);
-moreUi = initMore(api, { $, esc, toast, ui, setModal, state, rich: richText, prem: () => prem, pro: () => pro, redraw: () => renderProTicket(false), setPro: (s) => { pro = s; renderPro(false); } });
+moreUi = initMore(api, { $, esc, toast, ui, setModal, state, rich: richText, prem: () => prem, pro: () => pro, loggedIn: (r) => loggedInUi(r, false), redraw: () => renderProTicket(false), setPro: (s) => { pro = s; renderPro(false); } });
 initQuickSupport(api, 'launcher');
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('ui-paused', document.hidden));
 const sfxSave = () => { const c = { sfxOn: $('sfxOn').checked, sfxNotif: $('sfxNotif').checked, sfxVol: Number($('sfxVol').value) }; window.sfx?.set({ on: c.sfxOn, notif: c.sfxNotif, vol: c.sfxVol / 100 }); api.setSettings(c); };
@@ -4801,7 +4811,7 @@ $('authSkip').addEventListener('click', async () => { await api.skipAccount?.();
 $('profileBtn').addEventListener('click', (e) => {
   if (!state.account) return showAuth(true);
   const ctx = $('ctx');
-  ctx.innerHTML = `<div class="ctxhead">${esc(state.account.pseudo)}</div><button data-pact="edit">🎨 Personnaliser mon profil</button><button data-pact="friends">👥 Mes amis</button><button data-pact="pair">💻 Connecter un autre PC</button><hr><button class="danger" data-pact="logout">Se déconnecter</button>`;
+  ctx.innerHTML = `<div class="ctxhead">${esc(state.account.pseudo)}</div><button data-pact="edit">Personnaliser mon profil</button><button data-pact="friends">Mes amis</button><button data-pact="pair">Connecter un autre PC</button><hr><button class="danger" data-pact="logout">Se déconnecter</button>`;
   ctx.hidden = false;
   const r = $('profileBtn').getBoundingClientRect();
   ctx.style.left = `${r.left}px`;
@@ -4969,7 +4979,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.57.3',
+    version: async () => '0.58.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

@@ -29,7 +29,7 @@ export function initMore(api, h) {
       <div class="vfparts">${pc.resale.parts.map((p) => `<div class="vfpart"><em>${esc(p.type)}</em><b>${esc(p.name)}</b><strong>${euros(p.price)}</strong><i style="--w:${Math.round((p.price / top) * 100)}%"></i></div>`).join('')}</div>
       <p class="hint">Prix moyens de l’occasion, pièce par pièce. Boîte d’origine et garantie font monter le prix.</p>
       <div class="vftiles">${age ? `<div><small>Âge</small><b>${esc(age)}</b></div>` : ''}<div><small>Alimentation conseillée</small><b>${pc.psu.watts} W minimum</b>${pc.psu.gpuW ? `<span>dont ≈ ${pc.psu.gpuW} W pour la carte graphique</span>` : ''}</div>${pc.screen ? `<div><small>Écran idéal</small><b>${esc(pc.screen.res)} · ${esc(pc.screen.hz)}</b><span>${esc(pc.screen.why)}</span></div>` : ''}</div>
-      <div class="row"><button type="button" class="btn" id="mvSell">💶 Préparer la vente</button></div>`;
+      <div class="row"><button type="button" class="btn" id="mvSell">Préparer la vente</button></div>`;
     const days = Object.entries(pc.tempDays ?? {});
     const max = Math.max(90, ...days.map(([, d]) => Math.max(d.cpu ?? 0, d.gpu ?? 0)));
     $('mvTemps').innerHTML = days.length ? `<div class="mvbars">${days.map(([k, d]) => `<i title="${esc(k)} · processeur ${d.cpu ?? '–'} °C · carte graphique ${d.gpu ?? '–'} °C"><b style="height:${((d.cpu ?? 0) / max) * 100}%"></b><em style="height:${((d.gpu ?? 0) / max) * 100}%"></em></i>`).join('')}</div><p class="hint"><b class="dotc">■</b> processeur <b class="dotg">■</b> carte graphique · maximum de chaque jour</p>` : '<div class="empty">Le maximum de chaque jour s’enregistre ici pendant 30 jours.</div>';
@@ -37,7 +37,7 @@ export function initMore(api, h) {
     const bat = pc.battery ?? [];
     $('mvPerf').innerHTML = [
       ...(pc.perf ?? []).flatMap((p) => [['driver', 'pilote'], ['os', 'Windows']].filter(([k]) => p[k]).map(([k, l]) => `<div class="mvline"><b>${esc(p.name)}</b> <span>${l} ${esc(p[k].from)} → ${esc(p[k].to)} : ${p[k].before} → ${p[k].after} FPS</span> <em class="${p[k].delta >= 0 ? 'ok' : 'bad'}">${p[k].delta >= 0 ? '+' : ''}${p[k].delta} %</em></div>`)),
-      bat.length ? `<div class="mvline"><b>🔋 Batterie</b> <span>${bat.length > 1 ? `${Math.round(bat[0].full / 1000)} → ` : ''}${Math.round(bat.at(-1).full / 1000)} Wh sur ${Math.round(bat.at(-1).design / 1000)} Wh d’origine</span></div>` : '',
+      bat.length ? `<div class="mvline"><b>Batterie</b> <span>${bat.length > 1 ? `${Math.round(bat[0].full / 1000)} → ` : ''}${Math.round(bat.at(-1).full / 1000)} Wh sur ${Math.round(bat.at(-1).design / 1000)} Wh d’origine</span></div>` : '',
     ].join('') || '<div class="empty">Après quelques parties, tu verras ici si un nouveau pilote ou une mise à jour de Windows a changé tes FPS.</div>';
   }
 
@@ -45,7 +45,7 @@ export function initMore(api, h) {
     const list = await more('journal');
     $('mvJournal').innerHTML = Array.isArray(list) && list.length ? list.map((j) => `<div class="mvline"><b>${j.at ? new Date(j.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</b> <span>${esc(j.label)} · ${j.n} changement${j.n > 1 ? 's' : ''}</span> <button type="button" class="btn ghost sm" data-mvundo="${j.i}">Annuler celle-ci</button></div>`).join('') : '<div class="empty">Aucune optimisation à annuler.</div>';
     const re = await more('reinstall');
-    $('mvReinstall').innerHTML = Array.isArray(re) && re.length ? `<p class="hint">${re.length} jeu${re.length > 1 ? 'x' : ''} installé${re.length > 1 ? 's' : ''} avant (sauvegardé${re.length > 1 ? 's' : ''} avec ton compte) et absent${re.length > 1 ? 's' : ''} de ce PC :</p>${re.slice(0, 30).map((g) => `<div class="mvline"><b>${esc(g.name)}</b> <span>${esc(g.source ?? '')}</span>${g.canInstall ? ` <button type="button" class="btn sm" data-mvinst="${esc(g.id)}">⬇ Installer</button>` : ''}</div>`).join('')}` : '<div class="empty">Rien à réinstaller : tous tes jeux sont là.</div>';
+    $('mvReinstall').innerHTML = Array.isArray(re) && re.length ? `<p class="hint">${re.length} jeu${re.length > 1 ? 'x' : ''} installé${re.length > 1 ? 's' : ''} avant (sauvegardé${re.length > 1 ? 's' : ''} avec ton compte) et absent${re.length > 1 ? 's' : ''} de ce PC :</p>${re.slice(0, 30).map((g) => `<div class="mvline"><b>${esc(g.name)}</b> <span>${esc(g.source ?? '')}</span>${g.canInstall ? ` <button type="button" class="btn sm" data-mvinst="${esc(g.id)}">Installer</button>` : ''}</div>`).join('')}` : '<div class="empty">Rien à réinstaller : tous tes jeux sont là.</div>';
   }
 
   function sellMode() {
@@ -54,10 +54,10 @@ export function initMore(api, h) {
     const ad = `PC gamer · ${main.map((p) => p.name).join(' · ')}\n\nPrix : ${euros(Math.round(r.total / 10) * 10)} (à débattre)\nWindows réinstallé propre, testé et nettoyé. Captures des performances sur demande.`;
     const steps = [['☁️', 'Sauvegarde ta bibliothèque', 'Paramètres › Compte : tes jeux, temps de jeu et réglages te suivent sur ton prochain PC.'], ['🔑', 'Déconnecte tes comptes', 'Steam, Epic, Discord, navigateur et mots de passe enregistrés.'], ['🧹', 'Réinitialise Windows', '« Supprimer tout » : l’acheteur reçoit un Windows propre, sans tes fichiers.'], ['📸', 'Montre les performances', 'Captures de Mon PC (composants + benchmark) dans l’annonce : ça rassure.']];
     modal(`<div class="sell"><div class="sellhead"><div><small>Prix conseillé</small><b>${euros(r.total)}</b><span>fourchette ${euros(r.low)} – ${euros(r.high)} selon l’état</span></div><span class="sellico">💶</span><button type="button" class="sellx" data-m="1" aria-label="Fermer">✕</button></div>
-      <div class="sellgrid"><section><h3>Ton annonce, prête à coller</h3><pre id="sellAd">${esc(ad)}</pre><button type="button" class="btn" id="sellCopy">📋 Copier l’annonce</button>
+      <div class="sellgrid"><section><h3>Ton annonce, prête à coller</h3><pre id="sellAd">${esc(ad)}</pre><button type="button" class="btn" id="sellCopy">Copier l’annonce</button>
         <h3>Prix pièce par pièce</h3><div class="sellparts">${r.parts.map((p) => `<div><span>${esc(p.type)}</span><b>${esc(p.name)}</b><em>${euros(p.price)}</em></div>`).join('')}</div></section>
       <section><h3>Avant de vendre</h3><ol class="sellsteps">${steps.map(([i, t, d]) => `<li><i>${i}</i><div><b>${t}</b><small>${d}</small></div></li>`).join('')}</ol>
-        <button type="button" class="btn play" data-pcfix="recovery">🧹 Ouvrir « Réinitialiser ce PC »</button></section></div>
+        <button type="button" class="btn play" data-pcfix="recovery">Ouvrir « Réinitialiser ce PC »</button></section></div>
       <div class="row end"><button type="button" class="btn ghost" data-m="1">Fermer</button></div></div>`, true);
     $('modalBox').classList.add('sellbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
     $('sellCopy').onclick = () => (api.copy ? api.copy(ad) : navigator.clipboard.writeText(ad)).then(() => toast('✓ Annonce copiée'), () => toast('Copie impossible'));
@@ -112,8 +112,8 @@ export function initMore(api, h) {
 
   // Réseau : débit réel + DNS en 1 clic (réversible)
   const net = document.querySelector('#view-pc .pctab[data-pctab="reseau"]');
-  net?.insertAdjacentHTML('beforeend', `<div class="panel"><h3>🚀 Débit et DNS</h3><div class="row"><button class="btn" type="button" id="mvSpeedBtn">🚀 Mesurer mon débit</button></div><div id="mvSpeed" class="hint"></div>
-    <p class="hint">Appliquer un DNS (demande administrateur, réversible) :</p><div class="row">${['Cloudflare', 'Google', 'Quad9', 'OpenDNS'].map((n) => `<button class="btn sm" type="button" data-mvdns="${n}">${n}</button>`).join('')}<button class="btn ghost sm" type="button" data-mvdns="auto">↩ Automatique (box)</button></div></div>`);
+  net?.insertAdjacentHTML('beforeend', `<div class="panel"><h3>Débit et DNS</h3><div class="row"><button class="btn" type="button" id="mvSpeedBtn">Mesurer mon débit</button></div><div id="mvSpeed" class="hint"></div>
+    <p class="hint">Appliquer un DNS (demande administrateur, réversible) :</p><div class="row">${['Cloudflare', 'Google', 'Quad9', 'OpenDNS'].map((n) => `<button class="btn sm" type="button" data-mvdns="${n}">${n}</button>`).join('')}<button class="btn ghost sm" type="button" data-mvdns="auto">Automatique (box)</button></div></div>`);
 
   // Fiche de jeu : bande-annonce, avis Steam, versions, options de lancement, fusion, FPS selon le pilote
   async function sheetMore(i) {
@@ -125,8 +125,8 @@ export function initMore(api, h) {
     box.innerHTML = `${m.trailer ? `<video class="sxtrailer" src="${esc(m.trailer)}" controls muted preload="none" poster="${esc(i.details?.background ?? i.art?.hero ?? '')}"></video>` : ''}
       ${m.reviews ? `<p class="fine">⭐ Avis Steam : <b>${esc(m.reviews.label)}</b> · ${m.reviews.pct} % positifs sur ${m.reviews.total.toLocaleString('fr-FR')} avis</p>` : ''}
       ${fps.length ? `<p class="fine">📈 ${fps.join(' · ')}</p>` : ''}
-      ${m.versions.length ? `<details class="sxver"><summary>🕓 Versions installées (${m.versions.length})</summary>${m.versions.slice().reverse().map((v) => `<div class="mvline"><b>${esc(v.v)}</b> <span>${new Date(v.at).toLocaleDateString('fr-FR')}</span></div>`).join('')}</details>` : ''}
-      <details class="sxver"><summary>⚙ Options de lancement et fusion</summary>
+      ${m.versions.length ? `<details class="sxver"><summary>Versions installées (${m.versions.length})</summary>${m.versions.slice().reverse().map((v) => `<div class="mvline"><b>${esc(v.v)}</b> <span>${new Date(v.at).toLocaleDateString('fr-FR')}</span></div>`).join('')}</details>` : ''}
+      <details class="sxver"><summary>Options de lancement et fusion</summary>
         <label class="fine">Options de lancement (ex. -novid -high)</label><div class="row"><input class="minput" id="sxArgs" maxlength="300" value="${esc(m.args)}" placeholder="-novid -fullscreen"><button type="button" class="btn sm" id="sxArgsSave">Enregistrer</button></div>
         <label class="fine">Même jeu qu’une autre fiche (nom différent) ? Fusionner avec :</label><div class="row"><input class="minput" id="sxMerge" list="sxMergeList" value="${esc(m.mergeWith)}" placeholder="Nom de l’autre fiche"><datalist id="sxMergeList">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist><button type="button" class="btn sm" id="sxMergeSave">Fusionner</button></div>
       </details>`;
@@ -147,7 +147,7 @@ export function initMore(api, h) {
   function proBar(s) {
     const min = Math.max(0, Math.round((Date.now() - (s.stepAt ?? Date.now())) / 60000));
     const brand = s.step === 4 && bios?.brand ? bios.brand : null;
-    return `<div class="prochrono">⏱ Étape commencée il y a ${min < 1 ? 'moins d’une minute' : `${min} min`} · ≈ ${STEP_MIN[s.step] ?? 15} min en général${s.step === 4 || s.step === 3 ? ' <button type="button" class="btn sm ghost" data-bsim="1">🎬 Où cliquer dans mon BIOS</button>' : ''}</div>${brand ? biosSim() : ''}`;
+    return `<div class="prochrono">⏱ Étape commencée il y a ${min < 1 ? 'moins d’une minute' : `${min} min`} · ≈ ${STEP_MIN[s.step] ?? 15} min en général${s.step === 4 || s.step === 3 ? ' <button type="button" class="btn sm ghost" data-bsim="1">Où cliquer dans mon BIOS</button>' : ''}</div>${brand ? biosSim() : ''}`;
   }
   function biosSim() {
     const b = bios.paths[bios.brand], path = b.tasks[biosTask];
@@ -174,7 +174,7 @@ export function initMore(api, h) {
         <button type="button" data-proredo="1"><i>🔁</i><b>Refaire l’Opti Pro</b><small>Sans refaire ce qui est déjà validé</small></button>
         ${s.rating ? '' : '<button type="button" data-prorate="1"><i>⭐</i><b>Noter le technicien</b><small>30 secondes, ça nous aide</small></button>'}
       </div>
-      <small class="hint">🛠 Badge « PC optimisé par History » ajouté à ton profil · suivi automatique de ton PC chaque mois.</small></div>`;
+      <small class="hint">Badge « PC optimisé par History » ajouté à ton profil · suivi automatique de ton PC chaque mois.</small></div>`;
   }
   function rateDialog(s) {
     if ($('modal').open) return;
@@ -245,7 +245,7 @@ export function initMore(api, h) {
     } else txt('Joue une partie pour mesurer tes FPS', 656, 350, '#ffffff8c', 500, 22);
     txt('Mesures réelles sur ce PC · History Launcher', 56, 584, '#ffffff66', 500, 20);
     const png = c.toDataURL('image/png');
-    modal(`<div class="mhead"><span class="micon">📸</span><h2>Ta carte avant / après</h2></div><img class="procardimg" src="${png}" alt="Carte avant / après de ton optimisation"><div class="procardbar"><small class="hint">Partage-la sur Discord : copie puis colle dans un salon.</small><button type="button" class="btn ghost" data-m="1">Fermer</button><button type="button" class="btn ghost" id="pcSave">💾 Enregistrer</button><button type="button" class="btn play" id="pcCopy">📋 Copier l’image</button></div>`, true);
+    modal(`<div class="mhead"><span class="micon">📸</span><h2>Ta carte avant / après</h2></div><img class="procardimg" src="${png}" alt="Carte avant / après de ton optimisation"><div class="procardbar"><small class="hint">Partage-la sur Discord : copie puis colle dans un salon.</small><button type="button" class="btn ghost" data-m="1">Fermer</button><button type="button" class="btn ghost" id="pcSave">Enregistrer</button><button type="button" class="btn play" id="pcCopy">Copier l’image</button></div>`, true);
     $('modalBox').classList.add('procardbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
     $('pcSave').onclick = () => Object.assign(document.createElement('a'), { href: png, download: 'history-opti-pro.png' }).click();
     $('pcCopy').onclick = () => (api.copyImage ? api.copyImage(png) : new Promise((ok, ko) => c.toBlob((b) => navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]).then(ok, ko)))).then(() => toast('✓ Image copiée : colle-la sur Discord'), () => toast('Copie impossible : utilise Enregistrer'));
@@ -300,7 +300,7 @@ export function initMore(api, h) {
   const TOOLS = [['erreur', '🧯', 'Expliquer une erreur', 'text'], ['capture', '📷', 'Lire une capture', 'image'], ['reglages', '🎛', 'Réglages graphiques', 'game'], ['guide', '📖', 'Question sur un jeu', 'game text'],
     ['crash', '💥', 'Pourquoi mon jeu plante', 'game'], ['patch', '📰', 'Patch notes en 3 lignes', 'game'], ['comparer', '⚖', 'Comparer 2 composants', 'ab'], ['panne', '🩺', 'Risque de panne', ''], ['arnaque', '🛡', 'Est-ce une arnaque ?', 'text']];
   // Un seul bouton « Outils » dans l'assistant : il ouvre une grille simple (plus de barre qui défile)
-  $('aipop')?.querySelector('.panel-head .fold')?.insertAdjacentHTML('beforebegin', '<button type="button" class="aitoolsbtn" data-aitools="1" title="Outils IA">🧰 Outils</button>');
+  $('aipop')?.querySelector('.panel-head .fold')?.insertAdjacentHTML('beforebegin', '<button type="button" class="aitoolsbtn" data-aitools="1" title="Outils IA">Outils</button>');
   const TOOL_DESC = { erreur: 'Colle un message d’erreur', capture: 'Une capture d’écran à lire', reglages: 'Les meilleurs réglages pour ton PC', guide: 'Une question sur un jeu', crash: 'Trouver la cause d’un plantage', patch: 'Les nouveautés résumées', comparer: 'Deux composants face à face', panne: 'L’état de santé de ton PC', arnaque: 'Vérifier un message louche' };
   const TOOL_GROUPS = [['🛠', 'Dépannage', ['erreur', 'crash', 'capture', 'panne']], ['🎮', 'Tes jeux', ['reglages', 'guide', 'patch']], ['🛡', 'Achat et sécurité', ['comparer', 'arnaque']]];
   function toolsGrid() {
@@ -379,11 +379,11 @@ export function initMore(api, h) {
     const r = await more('stats'); if (!r?.adv) return;
     const p = h.prem?.() ?? {}, a = r.adv, g = r.gains ?? {}, D = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'], max = Math.max(1, ...a.byDay);
     const locked = !(p.ia || p.opti);
-    box.innerHTML = `<div class="panel ${locked ? 'advlock' : ''}"><h3>📊 Statistiques avancées ${locked ? '<small class="hint">⭐ Premium</small>' : ''}</h3>
+    box.innerHTML = `<div class="panel ${locked ? 'advlock' : ''}"><h3>Statistiques avancées ${locked ? '<small class="hint">Premium</small>' : ''}</h3>
       <div class="advgrid"><div><small>Jour préféré</small><b>${D[a.topDay]}</b></div><div><small>Heure de pointe</small><b>${a.topHour} h</b></div><div><small>Session moyenne</small><b>${a.avg} min</b></div><div><small>Record</small><b>${a.longest ? `${Math.round(a.longest.minutes / 6) / 10} h` : '–'}</b><em>${esc(a.longest?.name ?? '')}</em></div><div><small>30 derniers jours</small><b>${a.month} h</b><em class="${a.trend >= 0 ? 'ok' : 'bad'}">${a.trend == null ? '' : `${a.trend >= 0 ? '+' : ''}${a.trend} %`}</em></div></div>
       <div class="advbars">${a.byDay.map((m, i) => `<i title="${D[i]} · ${Math.round(m / 60)} h"><b style="height:${(m / max) * 100}%"></b><small>${D[i][0].toUpperCase()}</small></i>`).join('')}</div>
       ${locked ? '<div class="advcta"><button type="button" class="btn premgo" data-view="premium">Débloquer avec ⭐ Premium</button></div>' : ''}</div>
-      ${locked ? '' : `<div class="panel"><h3>⭐ Ce que Premium t’a apporté</h3><div class="advgrid"><div><small>Questions à l’IA</small><b>${g.ia ?? 0}</b></div><div><small>Optimisations</small><b>${g.optis ?? 0}</b></div><div><small>Place libérée</small><b>${((g.freed ?? 0) / 1e9).toFixed(1).replace('.', ',')} Go</b></div><div><small>Opti Pro</small><b>${g.pro ? '✓ PC optimisé' : '–'}</b></div></div></div>`}`;
+      ${locked ? '' : `<div class="panel"><h3>Ce que Premium t’a apporté</h3><div class="advgrid"><div><small>Questions à l’IA</small><b>${g.ia ?? 0}</b></div><div><small>Optimisations</small><b>${g.optis ?? 0}</b></div><div><small>Place libérée</small><b>${((g.freed ?? 0) / 1e9).toFixed(1).replace('.', ',')} Go</b></div><div><small>Opti Pro</small><b>${g.pro ? '✓ PC optimisé' : '–'}</b></div></div></div>`}`;
   }
   document.querySelector('#view-stats')?.insertAdjacentHTML('beforeend', '<div id="advStats"></div>');
 
@@ -396,13 +396,42 @@ export function initMore(api, h) {
   };
   for (const [id, k, on] of [['lightMode', 'light', '1'], ['lessMotion', 'motion', '0'], ['saver', 'saver', '1']]) { const el = $(id); if (!el) continue; el.checked = pref(k) === on; el.addEventListener('change', () => { pref(k, el.checked ? on : ''); applyPrefs(); }); }
   for (const [id, k, d] of [['cbMode', 'cb', ''], ['langSel', 'lang', 'fr'], ['sfxPack', 'pack', 'verre']]) { const el = $(id); if (!el) continue; el.value = pref(k) ?? d; el.addEventListener('change', () => { pref(k, el.value); applyPrefs(); if (k === 'pack') window.sfx?.play('success'); }); }
-  // Anglais : menus et titres principaux seulement (le reste de l'appli reste en français pour l'instant)
-  const EN = { Accueil: 'Home', Jeux: 'Games', Favoris: 'Favorites', Classement: 'Leaderboard', Amis: 'Friends', 'Mon PC': 'My PC', Optimisation: 'Optimization', Paramètres: 'Settings', Bibliothèque: 'Library', Statistiques: 'Stats', Applications: 'Apps', Support: 'Support', 'Vue d’ensemble': 'Overview', Composants: 'Components', Sécurité: 'Security', Performances: 'Performance', Réseau: 'Network', Entretien: 'Maintenance', Vérifs: 'Checks', 'Jouer': 'Play', 'Installer': 'Install', 'Ouvrir': 'Open' };
-  const FR = Object.fromEntries(Object.entries(EN).map(([a, b]) => [b, a]));
-  function translate(lang) {
-    const dict = lang === 'en' ? EN : FR;
-    const walk = (el) => { for (const n of el.childNodes) { if (n.nodeType === 3) { const t = n.nodeValue.trim(); if (dict[t]) n.nodeValue = n.nodeValue.replace(t, dict[t]); } else if (n.nodeType === 1 && !/^(SCRIPT|STYLE|INPUT|TEXTAREA)$/.test(n.tagName)) walk(n); } };
-    document.querySelectorAll('.side nav, #pcTabs, .setnav, .list-head h2, .playbtn').forEach(walk);
+  // Anglais complet : tout texte affiché (y compris ce qui apparaît ensuite) est traduit ; les nombres sont gardés à part.
+  // Les traductions viennent du serveur (une seule fois pour tout le monde) et restent en mémoire sur ce PC.
+  const EN = { Accueil: 'Home', Jeux: 'Games', Favoris: 'Favorites', Classement: 'Leaderboard', Amis: 'Friends', 'Mon PC': 'My PC', Optimisation: 'Optimization', Paramètres: 'Settings', Jouer: 'Play', Installer: 'Install', Ouvrir: 'Open' };
+  let dict = {}; try { dict = { ...JSON.parse(localStorage.getItem('h.i18n.en') ?? '{}'), ...EN }; } catch { dict = { ...EN }; }
+  const orig = new WeakMap(), pending = new Set();
+  let lang = 'fr', trTimer = null, observer = null;
+  const SKIP = 'script, style, textarea, input, code, kbd, [translate="no"], .chatlog, .msgs, .bubble, .fchat, .ctxhead';
+  const keyOf = (t) => { const nums = []; return { key: t.replace(/\d+(?:[.,  ]\d+)*/g, (n) => `{${nums.push(n) - 1}}`), nums }; };
+  const fill = (t, nums) => t.replace(/\{(\d+)\}/g, (m, i) => nums[i] ?? m);
+  const ATTRS = ['placeholder', 'title', 'aria-label'];
+  function tr(text) { const t = text.trim(); if (!/\p{L}/u.test(t)) return null; const { key, nums } = keyOf(t); if (dict[key] != null) return text.replace(t, fill(dict[key], nums)); pending.add(key); return null; }
+  function walk(el) {
+    if (el.nodeType === 3) { if (el.parentElement?.closest(SKIP)) return; const src = orig.get(el) ?? el.nodeValue; const out = tr(src); if (out != null && out !== el.nodeValue) { orig.set(el, src); el.nodeValue = out; } return; }
+    if (el.nodeType !== 1 || el.closest('[translate="no"]')) return;
+    for (const a of ATTRS) { const v = el.getAttribute(a); if (!v) continue; const src = el.dataset[`i18n${a.replace('-', '')}`] ?? v; const out = tr(src); if (out != null && out !== v) { el.dataset[`i18n${a.replace('-', '')}`] = src; el.setAttribute(a, out); } }
+    if (!el.matches(SKIP)) for (const n of el.childNodes) walk(n);
+  }
+  async function flush() {
+    trTimer = null; if (lang !== 'en' || !pending.size) return;
+    const batch = [...pending].slice(0, 60); batch.forEach((k) => pending.delete(k));
+    const r = await more('translate', batch); if (!r?.en) return;
+    Object.assign(dict, r.en); try { localStorage.setItem('h.i18n.en', JSON.stringify(dict)); } catch { /* plein */ }
+    walk(document.body); if (pending.size) trTimer = setTimeout(flush, 300);
+  }
+  const queue = () => { if (lang === 'en' && pending.size && !trTimer) trTimer = setTimeout(flush, 400); };
+  function translate(l) {
+    lang = l; root.lang = l;
+    if (l === 'en') {
+      walk(document.body); queue();
+      observer ??= new MutationObserver((ms) => { if (lang !== 'en') return; for (const m of ms) { if (m.type === 'characterData') { if (!orig.has(m.target) || m.target.nodeValue !== tr(orig.get(m.target))) { orig.delete(m.target); walk(m.target); } } else m.addedNodes.forEach(walk); } queue(); });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    } else if (observer) {
+      observer.disconnect(); observer = null;
+      const back = (el) => { if (el.nodeType === 3) { if (orig.has(el)) { el.nodeValue = orig.get(el); orig.delete(el); } return; } if (el.nodeType !== 1) return; for (const a of ATTRS) { const k = `i18n${a.replace('-', '')}`; if (el.dataset?.[k]) { el.setAttribute(a, el.dataset[k]); delete el.dataset[k]; } } el.childNodes.forEach(back); };
+      back(document.body);
+    }
   }
   applyPrefs();
   // Mode focus (Ctrl+Maj+F) : menu et décor masqués, seulement le contenu
@@ -437,9 +466,9 @@ export function initMore(api, h) {
   function homeCards() {
     const home = document.querySelector('#view-accueil'); if (!home || $('homeExtras')) return;
     const cards = [];
-    if (pref('tip') !== String(dayN)) cards.push(`<div class="hx tip"><b>💡 Astuce du jour</b><span>${esc(TIPS[dayN % TIPS.length])}</span><button type="button" class="linkbtn" data-hx="tip">OK</button></div>`);
-    if (M === 12 && D <= 24) cards.push(`<div class="hx advent"><b>🎄 Calendrier de l’Avent</b><div class="adv24">${Array.from({ length: 24 }, (_, k) => `<button type="button" data-advent="${k + 1}" class="${k + 1 < D ? 'past' : k + 1 === D ? 'now' : ''}" ${k + 1 > D ? 'disabled' : ''}>${k + 1}</button>`).join('')}</div></div>`);
-    if (M === 12 || (M === 1 && D <= 15)) cards.push('<div class="hx wrap"><b>🎁 Ton année History</b><span>Tes heures, tes jeux préférés, ton record.</span><button type="button" class="btn sm play" data-hx="wrapped">Voir mon récap</button></div>');
+    if (pref('tip') !== String(dayN)) cards.push(`<div class="hx tip"><b>Astuce du jour</b><span>${esc(TIPS[dayN % TIPS.length])}</span><button type="button" class="linkbtn" data-hx="tip">OK</button></div>`);
+    if (M === 12 && D <= 24) cards.push(`<div class="hx advent"><b>Calendrier de l’Avent</b><div class="adv24">${Array.from({ length: 24 }, (_, k) => `<button type="button" data-advent="${k + 1}" class="${k + 1 < D ? 'past' : k + 1 === D ? 'now' : ''}" ${k + 1 > D ? 'disabled' : ''}>${k + 1}</button>`).join('')}</div></div>`);
+    if (M === 12 || (M === 1 && D <= 15)) cards.push('<div class="hx wrap"><b>Ton année History</b><span>Tes heures, tes jeux préférés, ton record.</span><button type="button" class="btn sm play" data-hx="wrapped">Voir mon récap</button></div>');
     if (!cards.length) return;
     home.insertAdjacentHTML('afterbegin', `<div id="homeExtras">${cards.join('')}</div>`);
   }
@@ -558,9 +587,9 @@ export function initMore(api, h) {
       const list = st.items.filter((x) => x.kind !== 'protected' && (x.lastUsed ?? 0) < Date.now() - stMonths * 30 * 86_400_000 && x.size > 0).sort((a, b) => b.size - a.size);
       const sel = list.filter((x) => stSel.has(x.path)), tot = sel.reduce((n, x) => n + x.size, 0);
       $('modalBox').querySelector('.stold').innerHTML = `<div class="stmonths">${[3, 6, 9, 12].map((m) => `<button type="button" class="${m === stMonths ? 'on' : ''}" data-stm="${m}">${m} mois</button>`).join('')}</div>
-        <div class="stwarn"><b>⚠ Vérifie avant de supprimer</b><span>Ces éléments n’ont pas été ouverts ni modifiés depuis plus de ${stMonths} mois. Ça peut être des jeux morts ou de vieux téléchargements… mais aussi des photos ou des sauvegardes que tu gardes exprès. Décoche ce que tu veux garder.</span></div>
+        <div class="stwarn"><b>Vérifie avant de supprimer</b><span>Ces éléments n’ont pas été ouverts ni modifiés depuis plus de ${stMonths} mois. Ça peut être des jeux morts ou de vieux téléchargements… mais aussi des photos ou des sauvegardes que tu gardes exprès. Décoche ce que tu veux garder.</span></div>
         ${list.length ? `<label class="stall"><input type="checkbox" data-stall="1" ${sel.length === list.length ? 'checked' : ''}> Tout sélectionner · ${list.length} élément${list.length > 1 ? 's' : ''}</label><div class="stoldlist">${list.map((x) => `<label class="strow">${`<input type="checkbox" data-stck="${esc(x.path)}" ${stSel.has(x.path) ? 'checked' : ''}>`}${stIcon(x)}<div class="stname"><b>${esc(x.name)}</b><small>${esc(x.where)} · ${ago(x.lastUsed)}</small></div><div class="stsize"><b>${go(x.size)}</b></div></label>`).join('')}</div>` : `<div class="empty">Rien d’inutilisé depuis ${stMonths} mois 👌</div>`}
-        <div class="row end"><button type="button" class="btn ghost" data-m="1">Annuler</button><button type="button" class="btn dangerbtn" data-stgo="1" ${sel.length ? '' : 'disabled'}>🗑 Supprimer la sélection${tot ? ` · ${go(tot)}` : ''}</button></div>`;
+        <div class="row end"><button type="button" class="btn ghost" data-m="1">Annuler</button><button type="button" class="btn dangerbtn" data-stgo="1" ${sel.length ? '' : 'disabled'}>Supprimer la sélection${tot ? ` · ${go(tot)}` : ''}</button></div>`;
     };
     stSel = new Set(); modal('<div class="mhead"><span class="micon">🕰</span><h2>Fichiers anciens</h2></div><div class="stold"></div>', true);
     $('modalBox').classList.add('procardbox'); $('modalBox').querySelector(':scope > .row.end')?.remove(); draw();
@@ -586,6 +615,38 @@ export function initMore(api, h) {
     if (t.dataset.stmore) { stShown += 200; return drawStorage(); }
     if (t.dataset.stshow) return more('storageShow', t.dataset.stshow);
     if (t.dataset.stdel) { const x = st.items.find((i) => i.path === t.dataset.stdel); if (x) stDelete([x]); }
+  });
+
+  // Connexion par passkey : le navigateur s'ouvre, l'utilisateur valide, le launcher récupère la session
+  $('authDev')?.addEventListener('click', async () => {
+    const r = await more('devStart'); if (!r?.check) return toast(r?.error ?? 'Serveur injoignable.');
+    $('authDevInfo').hidden = false; $('authDevInfo').innerHTML = `Valide dans la page qui vient de s’ouvrir (passkey, ou ton compte déjà connecté sur le téléphone). Code de vérification : <b>${esc(r.check)}</b>`;
+    const w = await more('devWait'); $('authDevInfo').hidden = true;
+    if (!w?.ok) return toast(w?.error ?? 'Connexion annulée');
+    h.loggedIn?.(w);
+  });
+
+  // ---------- Thème e-sport (266) : pendant un grand tournoi d'un jeu de ta bibliothèque ----------
+  function applyEsport(ev) {
+    document.getElementById('esportBar')?.remove();
+    if (!ev) { root.style.removeProperty('--accent'); delete root.dataset.esport; return; }
+    root.dataset.esport = ev.id; root.style.setProperty('--accent', ev.color);
+    const left = Math.max(0, Math.ceil((new Date(`${ev.end}T23:59:59`) - Date.now()) / 86_400_000));
+    document.querySelector('#view-accueil')?.insertAdjacentHTML('afterbegin', `<div class="esportbar" id="esportBar" style="--e:${esc(ev.color)}"><span class="esdot"></span><div><b>${esc(ev.name)}</b><small>En cours · encore ${left} jour${left > 1 ? 's' : ''}</small></div><button type="button" class="btn sm" data-esurl="${esc(ev.url)}">Suivre la compétition</button><button type="button" class="esx" data-esoff="${esc(ev.id)}" aria-label="Masquer">✕</button></div>`);
+  }
+  window.historyEsport = applyEsport;
+  async function esport() {
+    if (pref('esport') === '0') return applyEsport(null);
+    const cal = await fetch('https://zyko144.github.io/vercel-ia-/esport.json', { cache: 'no-store' }).then((r) => r.json()).catch(() => null);
+    const today = new Date().toISOString().slice(0, 10), names = state.items.map((i) => i.name.toLowerCase()).join('|');
+    applyEsport((cal?.events ?? []).find((e) => e.start <= today && today <= e.end && names.includes(e.game) && pref(`esoff.${e.id}`) !== '1') ?? null);
+  }
+  if ($('esportOn')) { $('esportOn').checked = pref('esport') !== '0'; $('esportOn').onchange = () => { pref('esport', $('esportOn').checked ? '1' : '0'); esport(); }; }
+  setTimeout(esport, 4000); setInterval(esport, 6 * 3_600_000);
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-esurl], [data-esoff]'); if (!t) return;
+    if (t.dataset.esurl) return more('esportOpen', t.dataset.esurl);
+    pref(`esoff.${t.dataset.esoff}`, '1'); applyEsport(null);
   });
 
   return {

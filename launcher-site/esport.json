@@ -1,0 +1,9 @@
+{
+  "_info": "Calendrier e-sport lu par History Launcher : le thème s'active pendant l'événement si le joueur a le jeu. Dates au format AAAA-MM-JJ (fin incluse).",
+  "events": [
+    { "id": "rlcs-worlds-2026", "name": "RLCS World Championship 2026", "game": "rocket league", "start": "2026-09-15", "end": "2026-09-20", "color": "#3b82f6", "url": "https://esports.rocketleague.com" },
+    { "id": "vct-champions-2026", "name": "VALORANT Champions 2026", "game": "valorant", "start": "2026-09-24", "end": "2026-10-18", "color": "#ff4655", "url": "https://valorantesports.com" },
+    { "id": "lol-worlds-2026", "name": "Worlds 2026", "game": "league of legends", "start": "2026-10-16", "end": "2026-11-14", "color": "#c8aa6e", "url": "https://lolesports.com" },
+    { "id": "cs2-major-singapore-2026", "name": "Major CS2 Singapore 2026", "game": "counter-strike", "start": "2026-11-25", "end": "2026-12-13", "color": "#f5a623", "url": "https://liquipedia.net/counterstrike/" }
+  ]
+}

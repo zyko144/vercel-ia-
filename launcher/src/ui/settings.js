@@ -2,6 +2,16 @@
 export function initSettings(api) {
   const $ = (id) => document.getElementById(id);
   const settings = $('settings');
+  // Moins de catégories : les petites sont rangées dans une plus grande (les anciens liens y mènent toujours)
+  const MERGE = { sons: 'apparence', raccourcis: 'general', accueil: 'general', assistant: 'jeux', telephone: 'social', avis: 'aide', about: 'aide' };
+  for (const [from, to] of Object.entries(MERGE)) {
+    const src = settings.querySelector(`.setpane[data-pane="${from}"]`), dst = settings.querySelector(`.setpane[data-pane="${to}"]`);
+    if (!src || !dst) continue;
+    const sub = document.createElement('h3'); sub.className = 'setsub'; sub.id = `setsub-${from}`; sub.textContent = settings.querySelector(`.setnav [data-pane="${from}"] span:nth-child(2)`)?.textContent ?? '';
+    dst.append(sub, ...[...src.children].filter((c) => !c.matches('.setintro')));
+    settings.querySelector(`.setnav [data-pane="${from}"]`).hidden = true;
+  }
+  settings.querySelector('.setnav nav').append(settings.querySelector('.setnav [data-pane="aide"]')); // Aide sous « History & toi »
   const buttons = [...settings.querySelectorAll('.setnav [data-pane]')];
   const panes = [...settings.querySelectorAll('.setpane')];
   const normalize = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -32,9 +42,10 @@ export function initSettings(api) {
     settings.querySelector('.setbody').scrollTop = 0;
   }
   for (const button of buttons) button.addEventListener('click', () => {
-    active = button.dataset.pane;
+    active = MERGE[button.dataset.pane] ?? button.dataset.pane;
     $('settingsSearch').value = '';
     filterSettings();
+    if (MERGE[button.dataset.pane]) $(`setsub-${button.dataset.pane}`)?.scrollIntoView({ block: 'start' });
     window.sfx?.play('nav');
   });
   $('settingsSearch').addEventListener('input', filterSettings);

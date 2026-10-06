@@ -173,7 +173,7 @@
 .setnav button[data-pane].on { color: #fff; font-weight: 700; background: linear-gradient(100deg, color-mix(in srgb, var(--pc) 24%, #121a2a), #121a2a); border-color: color-mix(in srgb, var(--pc) 45%, transparent); box-shadow: none; }
 .setnav button[data-pane].on .setnav-icon { color: #0b101a; background: var(--pc); }
 .setnav-arrow { color: var(--pc); }
-.setnav button[data-pane=general] { --pc: #5aa9ff; } .setnav button[data-pane=apparence] { --pc: #a78bfa; } .setnav button[data-pane=sons] { --pc: #f472b6; }
+.setnav button[data-pane=general] { --pc: #5aa9ff; } .setnav button[data-pane=apparence] { --pc: #a78bfa; --pc: #a78bfa; } .setnav button[data-pane=sons] { --pc: #f472b6; }
 .setnav button[data-pane=jeux] { --pc: #34d399; } .setnav button[data-pane=raccourcis] { --pc: #fbbf24; } .setnav button[data-pane=assistant] { --pc: #22d3ee; } .setnav button[data-pane=clips] { --pc: #fb923c; }
 .setnav button[data-pane=social] { --pc: #2dd4bf; } .setnav button[data-pane=telephone] { --pc: #38bdf8; } .setnav button[data-pane=compte] { --pc: #818cf8; } .setnav button[data-pane=accueil] { --pc: #a3e635; }
 .setnav button[data-pane=aide] { --pc: #f87171; } .setnav button[data-pane=avis] { --pc: #ffc439; } .setnav button[data-pane=about] { --pc: #94a3b8; }
@@ -190,3 +190,21 @@
 .setpane .setrow select { font-size: 13.5px; }
 .setfooter { font-size: 11.5px; }
 @media (max-height: 820px) and (min-width: 721px) { .setnav button[data-pane] { min-height: 38px; padding: 5px 10px; } .setnav .setnav-icon { width: 26px; height: 26px; } }
+/* Catégories rangées par couleur */
+#settings [data-pane="general"], #settings [data-pane="apparence"] { --c: #5b9dff; --pc: #5b9dff; }
+#settings [data-pane="jeux"], #settings [data-pane="clips"] { --c: #ff8a3d; --pc: #ff8a3d; }
+#settings [data-pane="social"], #settings [data-pane="compte"] { --c: #2fc58f; --pc: #2fc58f; }
+#settings [data-pane="aide"] { --c: #a78bfa; --pc: #a78bfa; }
+.setnav button[data-pane] { justify-content: flex-start; gap: 11px; }
+.setnav button[data-pane] > span:nth-child(2) { flex: 1; }
+.setnav-icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.setnav-icon svg { width: 16px; height: 16px; }
+.setnav button[data-pane].on { background: color-mix(in srgb, var(--c) 14%, #121a28); border-color: color-mix(in srgb, var(--c) 35%, transparent); box-shadow: inset 3px 0 var(--c); }
+.setnav button[data-pane].on .setnav-icon { background: var(--c); color: #0b1019; }
+.setnav-arrow { display: none; }
+.setpane .set-eyebrow { color: var(--c); }
+.setpane .setintro h3 { border-left: 3px solid var(--c); padding-left: 14px; }
+.setpane .setcard::before { display: none; }
+.setpane .setcard { border-color: #ffffff10; border-top: 2px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.setsub { margin: 22px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--c); }
+.setpane .setcard h4::before { background: var(--c); }
