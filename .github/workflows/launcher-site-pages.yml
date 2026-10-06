@@ -21,7 +21,7 @@ jobs:
       - run: mkdir -p launcher-site/demo && cp -r launcher/src/ui launcher/src/core launcher-site/demo/
       # Fiches e-sport publiées par le workflow « E-sport - données Liquipedia » : on les garde
       - run: for f in data players; do curl -sfL "https://zyko144.github.io/vercel-ia-/esport/$f.json" -o "/tmp/$f.json" && mv "/tmp/$f.json" "launcher-site/esport/$f.json" || true; done
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with: { path: launcher-site }
       - id: d
         uses: actions/deploy-pages@v4
