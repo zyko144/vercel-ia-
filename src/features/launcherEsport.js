@@ -25,7 +25,7 @@ export async function esportImage(type, name, { ai = null } = {}) {
     const miss = (await readFresh('esport-img-miss')) ?? {};
     if (Date.now() - (miss[key] ?? 0) < 86_400_000) return null;
     const chat = ai ?? (await import('../ai/gemini.js')).chat;
-    const what = { logo: `the official logo of the esports organisation "${name}" (transparent PNG or SVG preferred)`, bg: `a wide official banner or wallpaper of the esports organisation "${name}"`, event: `an official key art or banner image of the esports competition "${name}"` }[type];
+    const what = { logo: `the official current logo of the esports organisation "${name}" as a transparent PNG or SVG (the crest/emblem alone, no background)`, bg: `a wide official wallpaper, banner or key visual of the esports organisation "${name}" in its brand colours (like their Twitter/X banner or announcement visuals)`, event: `an official key art or banner image of the esports competition "${name}"` }[type];
     const r = await chat({ tag: 'esport-images', web: true, system: 'You find direct image file URLs on the web. Answer only with JSON.', content: [{ type: 'text', text: `Find ${what}. Return {"urls": [...]} with up to 5 DIRECT image file URLs (ending in .png, .jpg, .webp or .svg, or image CDN links), best first. Prefer liquipedia.net, wikimedia, official sites.` }] }).catch(() => null);
     const urls = String(r?.text ?? '').match(/https:\/\/[^\s"'<>)]+/g) ?? [];
     for (const u of [...new Set(urls)].slice(0, 6)) {
