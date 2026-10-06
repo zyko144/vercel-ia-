@@ -662,7 +662,7 @@ export function initMore(api, h) {
   const esOrg = (t) => t.name.toLowerCase().replace(/[^a-z0-9]/g, '');
   // Ordre : image livrée avec le launcher, puis image trouvée par l'IA du serveur, puis couleurs et sigle
   const esSrv = (type, name) => (esData?.api ? `${esData.api}/api/compte/esport/img?type=${type}&nom=${encodeURIComponent(name)}` : '');
-  const esImg = (t, g) => [`esport/${esOrg(t)}-bg.jpg`, esSrv('bg', t.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ');
+  const esImg = (t, g) => [`esport/${esOrg(t)}-bg.jpg`, `esport/${t.id}-bg.jpg`, esSrv('bg', t.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ');
   const esLogo = (t) => `<img class="eslogo" src="esport/${esOrg(t)}-logo.png" data-alt="${esc(esSrv('logo', t.name))}" alt="">`;
   document.addEventListener('error', (e) => { const im = e.target; if (!im?.classList?.contains('eslogo')) return; if (im.dataset.alt) { im.src = im.dataset.alt; im.dataset.alt = ''; } else im.remove(); }, true); // logo absent : on garde le sigle
   const esTeam = (t, g, fol) => `<button type="button" class="esteam" data-esteam="${esc(t.id)}" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><i style="background-image:${esImg(t, g)}"></i><strong>${esc(t.tag)}</strong>${esLogo(t)}<span><b>${esc(t.name)}</b><small>${esc(g?.name ?? '')} · ${esc(t.country)}</small></span>${fol ? '<em>★</em>' : ''}</button>`;
@@ -685,8 +685,14 @@ export function initMore(api, h) {
     const evs = d.events.filter((e) => e.game === t.game).sort((a, b) => (a.end < t0) - (b.end < t0) || a.start.localeCompare(b.start));
     modal(`<div class="esteamdlg" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><div class="estop"><i style="background-image:${esImg(t, g)}"></i>${esLogo(t)}<strong>${esc(t.tag)}</strong><div><small>${esc(g?.name ?? '')} · ${esc(t.country)}</small><h2>${esc(t.name)}</h2></div><button type="button" class="sellx" data-m="1" aria-label="Fermer">✕</button></div>
       <div class="esdlgbody"><div class="row"><button type="button" class="btn ${fol ? 'ghost' : 'play'}" data-esfollow="${esc(id)}">${fol ? '★ Suivie' : '☆ Suivre cette équipe'}</button><button type="button" class="btn ghost" data-esurl="https://liquipedia.net/${esc(g?.wiki ?? '')}/${encodeURIComponent(t.name.replace(/ /g, '_'))}">Effectif et résultats</button></div>
+      <h3 class="essub">Actualités</h3><div class="esnews" id="esNews"><div class="empty">L’IA lit les sites e-sport…</div></div>
+      <h3 class="essub">Effectif</h3><div class="esplayers" id="esPlayers"><div class="empty">Chargement…</div></div>
       <h3 class="essub">Calendrier ${esc(g?.name ?? '')}</h3><div class="esevs">${evs.map((e) => esEvent(e, g)).join('') || '<div class="empty">Aucune compétition annoncée.</div>'}</div></div></div>`, true);
     $('modalBox').classList.add('sellbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
+    const info = await more('esportInfo', t.name, g?.name ?? '');
+    if (!document.getElementById('esNews')) return;
+    document.getElementById('esNews').innerHTML = (info?.news ?? []).map((n) => `<button type="button" class="esnew" ${n.url ? `data-esurl="${esc(n.url)}"` : ''}>${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy">` : `<i style="background-image:${esImg(t, g)}"></i>`}<div><small>${n.date ? esDate(n.date) : ''}</small><b>${esc(n.title)}</b><span>${esc(n.summary)}</span></div></button>`).join('') || '<div class="empty">Pas d’actualité trouvée pour le moment.</div>';
+    document.getElementById('esPlayers').innerHTML = (info?.players ?? []).map((p) => `<div class="esplayer"><b>${esc(p.name)}</b><small>${esc([p.role, p.country].filter(Boolean).join(' · '))}</small></div>`).join('') || '<div class="empty">Effectif indisponible.</div>';
   }
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-esgame], [data-esteam], [data-esfollow]'); if (!t) return;

@@ -119,6 +119,127 @@
    "id": "rl-ssg"
   },
   {
+   "game": "rl",
+   "name": "Ninjas in Pyjamas",
+   "tag": "NIP",
+   "colors": [
+    "#e8e8e8",
+    "#111111"
+   ],
+   "country": "SE",
+   "id": "rl-nip"
+  },
+  {
+   "game": "rl",
+   "name": "Team BDS",
+   "tag": "BDS",
+   "colors": [
+    "#e6007e",
+    "#1a0010"
+   ],
+   "country": "FR",
+   "id": "rl-bds"
+  },
+  {
+   "game": "rl",
+   "name": "FURIA",
+   "tag": "FUR",
+   "colors": [
+    "#e5e5e5",
+    "#0b0b0b"
+   ],
+   "country": "BR",
+   "id": "rl-fur"
+  },
+  {
+   "game": "rl",
+   "name": "Geekay Esports",
+   "tag": "GK",
+   "colors": [
+    "#00e0c6",
+    "#0b1a1f"
+   ],
+   "country": "SA",
+   "id": "rl-gk"
+  },
+  {
+   "game": "rl",
+   "name": "Twisted Minds",
+   "tag": "TM",
+   "colors": [
+    "#ff2a4d",
+    "#14060a"
+   ],
+   "country": "SA",
+   "id": "rl-tm"
+  },
+  {
+   "game": "rl",
+   "name": "Dignitas",
+   "tag": "DIG",
+   "colors": [
+    "#ffcc00",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "rl-dig"
+  },
+  {
+   "game": "rl",
+   "name": "Team Secret",
+   "tag": "TS",
+   "colors": [
+    "#e5e5e5",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "rl-ts"
+  },
+  {
+   "game": "rl",
+   "name": "Gen.G",
+   "tag": "GEN",
+   "colors": [
+    "#aa8a00",
+    "#111111"
+   ],
+   "country": "KR",
+   "id": "rl-gen"
+  },
+  {
+   "game": "rl",
+   "name": "Luminosity Gaming",
+   "tag": "LG",
+   "colors": [
+    "#7b5cff",
+    "#100a24"
+   ],
+   "country": "US",
+   "id": "rl-lg"
+  },
+  {
+   "game": "rl",
+   "name": "Wildcard",
+   "tag": "WC",
+   "colors": [
+    "#00d26a",
+    "#05170d"
+   ],
+   "country": "US",
+   "id": "rl-wc"
+  },
+  {
+   "game": "rl",
+   "name": "Ghost Gaming",
+   "tag": "GG",
+   "colors": [
+    "#d9d9d9",
+    "#141414"
+   ],
+   "country": "US",
+   "id": "rl-gg"
+  },
+  {
    "game": "r6",
    "name": "Team BDS",
    "tag": "BDS",
@@ -196,6 +317,116 @@
    "id": "r6-vp"
   },
   {
+   "game": "r6",
+   "name": "w7m esports",
+   "tag": "W7M",
+   "colors": [
+    "#ff6a00",
+    "#160900"
+   ],
+   "country": "BR",
+   "id": "r6-w7m"
+  },
+  {
+   "game": "r6",
+   "name": "FURIA",
+   "tag": "FUR",
+   "colors": [
+    "#e5e5e5",
+    "#0b0b0b"
+   ],
+   "country": "BR",
+   "id": "r6-fur"
+  },
+  {
+   "game": "r6",
+   "name": "Team Falcons",
+   "tag": "FLCN",
+   "colors": [
+    "#00a651",
+    "#0b1f14"
+   ],
+   "country": "SA",
+   "id": "r6-flcn"
+  },
+  {
+   "game": "r6",
+   "name": "Wolves Esports",
+   "tag": "WOL",
+   "colors": [
+    "#f2c94c",
+    "#14110a"
+   ],
+   "country": "EU",
+   "id": "r6-wol"
+  },
+  {
+   "game": "r6",
+   "name": "Spacestation Gaming",
+   "tag": "SSG",
+   "colors": [
+    "#ffc800",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "r6-ssg"
+  },
+  {
+   "game": "r6",
+   "name": "DarkZero Esports",
+   "tag": "DZ",
+   "colors": [
+    "#7a3cff",
+    "#0d0718"
+   ],
+   "country": "US",
+   "id": "r6-dz"
+  },
+  {
+   "game": "r6",
+   "name": "M80",
+   "tag": "M80",
+   "colors": [
+    "#00b3ff",
+    "#06131c"
+   ],
+   "country": "US",
+   "id": "r6-m80"
+  },
+  {
+   "game": "r6",
+   "name": "Ninjas in Pyjamas",
+   "tag": "NIP",
+   "colors": [
+    "#e8e8e8",
+    "#111111"
+   ],
+   "country": "SE",
+   "id": "r6-nip"
+  },
+  {
+   "game": "r6",
+   "name": "Elevate",
+   "tag": "ELV",
+   "colors": [
+    "#ff3b6b",
+    "#16060c"
+   ],
+   "country": "JP",
+   "id": "r6-elv"
+  },
+  {
+   "game": "r6",
+   "name": "CAG Osaka",
+   "tag": "CAG",
+   "colors": [
+    "#c8102e",
+    "#140407"
+   ],
+   "country": "JP",
+   "id": "r6-cag"
+  },
+  {
    "game": "cs2",
    "name": "Team Vitality",
    "tag": "VIT",
@@ -225,7 +456,7 @@
     "#e43d30",
     "#111111"
    ],
-   "country": "EU",
+   "country": "BR",
    "id": "cs2-faze"
   },
   {
@@ -284,6 +515,149 @@
    "id": "cs2-mglz"
   },
   {
+   "game": "cs2",
+   "name": "Aurora",
+   "tag": "AUR",
+   "colors": [
+    "#9be2ff",
+    "#081420"
+   ],
+   "country": "TR",
+   "id": "cs2-aur"
+  },
+  {
+   "game": "cs2",
+   "name": "Team Liquid",
+   "tag": "TL",
+   "colors": [
+    "#00a3e0",
+    "#0a2240"
+   ],
+   "country": "BR",
+   "id": "cs2-tl"
+  },
+  {
+   "game": "cs2",
+   "name": "FURIA",
+   "tag": "FUR",
+   "colors": [
+    "#e5e5e5",
+    "#0b0b0b"
+   ],
+   "country": "BR",
+   "id": "cs2-fur"
+  },
+  {
+   "game": "cs2",
+   "name": "Astralis",
+   "tag": "AST",
+   "colors": [
+    "#e4002b",
+    "#0d0d0d"
+   ],
+   "country": "DK",
+   "id": "cs2-ast"
+  },
+  {
+   "game": "cs2",
+   "name": "HEROIC",
+   "tag": "HER",
+   "colors": [
+    "#1a1a1a",
+    "#e85a2c"
+   ],
+   "country": "DK",
+   "id": "cs2-her"
+  },
+  {
+   "game": "cs2",
+   "name": "Virtus.pro",
+   "tag": "VP",
+   "colors": [
+    "#ff6a00",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "cs2-vp"
+  },
+  {
+   "game": "cs2",
+   "name": "3DMAX",
+   "tag": "3DM",
+   "colors": [
+    "#00bcd4",
+    "#061416"
+   ],
+   "country": "FR",
+   "id": "cs2-3dm"
+  },
+  {
+   "game": "cs2",
+   "name": "paiN Gaming",
+   "tag": "PAIN",
+   "colors": [
+    "#e30613",
+    "#120203"
+   ],
+   "country": "BR",
+   "id": "cs2-pain"
+  },
+  {
+   "game": "cs2",
+   "name": "Complexity",
+   "tag": "COL",
+   "colors": [
+    "#0057b8",
+    "#06101f"
+   ],
+   "country": "US",
+   "id": "cs2-col"
+  },
+  {
+   "game": "cs2",
+   "name": "Eternal Fire",
+   "tag": "EF",
+   "colors": [
+    "#ff5a1f",
+    "#1a0802"
+   ],
+   "country": "TR",
+   "id": "cs2-ef"
+  },
+  {
+   "game": "cs2",
+   "name": "BIG",
+   "tag": "BIG",
+   "colors": [
+    "#e30613",
+    "#111111"
+   ],
+   "country": "DE",
+   "id": "cs2-big"
+  },
+  {
+   "game": "cs2",
+   "name": "GamerLegion",
+   "tag": "GL",
+   "colors": [
+    "#f0b400",
+    "#121008"
+   ],
+   "country": "EU",
+   "id": "cs2-gl"
+  },
+  {
+   "game": "cs2",
+   "name": "Ninjas in Pyjamas",
+   "tag": "NIP",
+   "colors": [
+    "#e8e8e8",
+    "#111111"
+   ],
+   "country": "SE",
+   "id": "cs2-nip"
+  },
+  {
    "game": "val",
    "name": "Fnatic",
    "tag": "FNC",
@@ -335,7 +709,7 @@
     "#f01e28",
     "#111111"
    ],
-   "country": "US",
+   "country": "EU",
    "id": "val-g2"
   },
   {
@@ -357,7 +731,7 @@
     "#00a3e0",
     "#0a2240"
    ],
-   "country": "EU",
+   "country": "BR",
    "id": "val-tl"
   },
   {
@@ -370,6 +744,138 @@
    ],
    "country": "FR",
    "id": "val-kc"
+  },
+  {
+   "game": "val",
+   "name": "Team Vitality",
+   "tag": "VIT",
+   "colors": [
+    "#f7e400",
+    "#111111"
+   ],
+   "country": "FR",
+   "id": "val-vit"
+  },
+  {
+   "game": "val",
+   "name": "NRG",
+   "tag": "NRG",
+   "colors": [
+    "#ff6b00",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "val-nrg"
+  },
+  {
+   "game": "val",
+   "name": "100 Thieves",
+   "tag": "100T",
+   "colors": [
+    "#ff0000",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "val-100t"
+  },
+  {
+   "game": "val",
+   "name": "LOUD",
+   "tag": "LOUD",
+   "colors": [
+    "#00ff6a",
+    "#06140b"
+   ],
+   "country": "BR",
+   "id": "val-loud"
+  },
+  {
+   "game": "val",
+   "name": "MIBR",
+   "tag": "MIBR",
+   "colors": [
+    "#3aa0ff",
+    "#06101c"
+   ],
+   "country": "BR",
+   "id": "val-mibr"
+  },
+  {
+   "game": "val",
+   "name": "Gen.G",
+   "tag": "GEN",
+   "colors": [
+    "#aa8a00",
+    "#111111"
+   ],
+   "country": "KR",
+   "id": "val-gen"
+  },
+  {
+   "game": "val",
+   "name": "T1",
+   "tag": "T1",
+   "colors": [
+    "#e2012d",
+    "#111111"
+   ],
+   "country": "KR",
+   "id": "val-t1"
+  },
+  {
+   "game": "val",
+   "name": "DRX",
+   "tag": "DRX",
+   "colors": [
+    "#3c6eff",
+    "#060c1f"
+   ],
+   "country": "KR",
+   "id": "val-drx"
+  },
+  {
+   "game": "val",
+   "name": "Natus Vincere",
+   "tag": "NAVI",
+   "colors": [
+    "#ffee00",
+    "#0b0b0b"
+   ],
+   "country": "UA",
+   "id": "val-navi"
+  },
+  {
+   "game": "val",
+   "name": "BBL Esports",
+   "tag": "BBL",
+   "colors": [
+    "#ffd400",
+    "#121006"
+   ],
+   "country": "TR",
+   "id": "val-bbl"
+  },
+  {
+   "game": "val",
+   "name": "Trace Esports",
+   "tag": "TE",
+   "colors": [
+    "#ff5a5a",
+    "#170707"
+   ],
+   "country": "CN",
+   "id": "val-te"
+  },
+  {
+   "game": "val",
+   "name": "FUT Esports",
+   "tag": "FUT",
+   "colors": [
+    "#ff1e3c",
+    "#160307"
+   ],
+   "country": "TR",
+   "id": "val-fut"
   },
   {
    "game": "lol",
@@ -456,8 +962,129 @@
     "#00a3e0",
     "#0a2240"
    ],
-   "country": "US",
+   "country": "BR",
    "id": "lol-tl"
+  },
+  {
+   "game": "lol",
+   "name": "Team Vitality",
+   "tag": "VIT",
+   "colors": [
+    "#f7e400",
+    "#111111"
+   ],
+   "country": "FR",
+   "id": "lol-vit"
+  },
+  {
+   "game": "lol",
+   "name": "Movistar KOI",
+   "tag": "MKOI",
+   "colors": [
+    "#00a0e3",
+    "#06131b"
+   ],
+   "country": "ES",
+   "id": "lol-mkoi"
+  },
+  {
+   "game": "lol",
+   "name": "Top Esports",
+   "tag": "TES",
+   "colors": [
+    "#ff3c3c",
+    "#160606"
+   ],
+   "country": "CN",
+   "id": "lol-tes"
+  },
+  {
+   "game": "lol",
+   "name": "JD Gaming",
+   "tag": "JDG",
+   "colors": [
+    "#c8102e",
+    "#140407"
+   ],
+   "country": "CN",
+   "id": "lol-jdg"
+  },
+  {
+   "game": "lol",
+   "name": "Anyone's Legend",
+   "tag": "AL",
+   "colors": [
+    "#d4af37",
+    "#121008"
+   ],
+   "country": "CN",
+   "id": "lol-al"
+  },
+  {
+   "game": "lol",
+   "name": "FlyQuest",
+   "tag": "FLY",
+   "colors": [
+    "#2ecc71",
+    "#06140c"
+   ],
+   "country": "US",
+   "id": "lol-fly"
+  },
+  {
+   "game": "lol",
+   "name": "Cloud9",
+   "tag": "C9",
+   "colors": [
+    "#00aeef",
+    "#06131b"
+   ],
+   "country": "US",
+   "id": "lol-c9"
+  },
+  {
+   "game": "lol",
+   "name": "Dplus KIA",
+   "tag": "DK",
+   "colors": [
+    "#00c2b2",
+    "#05141a"
+   ],
+   "country": "KR",
+   "id": "lol-dk"
+  },
+  {
+   "game": "lol",
+   "name": "KT Rolster",
+   "tag": "KT",
+   "colors": [
+    "#e30613",
+    "#120203"
+   ],
+   "country": "KR",
+   "id": "lol-kt"
+  },
+  {
+   "game": "lol",
+   "name": "GIANTX",
+   "tag": "GX",
+   "colors": [
+    "#ff6b00",
+    "#160900"
+   ],
+   "country": "ES",
+   "id": "lol-gx"
+  },
+  {
+   "game": "lol",
+   "name": "Team Heretics",
+   "tag": "TH",
+   "colors": [
+    "#d4af37",
+    "#111111"
+   ],
+   "country": "ES",
+   "id": "lol-th"
   }
  ],
  "events": [

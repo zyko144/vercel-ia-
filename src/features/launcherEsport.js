@@ -38,3 +38,28 @@ export async function esportImage(type, name, { ai = null } = {}) {
   busy.set(key, job);
   return job;
 }
+
+// Actus et effectif d'une équipe : l'IA lit les sites e-sport (Liquipedia, HLTV, VLR, sites officiels…), résumé gardé 6 h.
+const infoCache = new Map();
+export async function esportInfo(team, game, { ai = null } = {}) {
+  team = String(team).slice(0, 60); game = String(game).slice(0, 40);
+  if (!team.trim()) return null;
+  const key = `${slug(team)}|${slug(game)}`, hit = infoCache.get(key);
+  if (hit && Date.now() - hit.at < 6 * 3_600_000) return hit.data;
+  const chat = ai ?? (await import('../ai/gemini.js')).chat;
+  const r = await chat({ tag: 'esport-actus', web: true, system: 'Tu es un journaliste e-sport. Tu réponds uniquement en JSON valide, en français, avec des faits vérifiés sur le web (aucune invention).', content: [{ type: 'text', text: `Équipe : ${team} (${game}). Cherche sur les sites e-sport (Liquipedia, HLTV, VLR.gg, Dexerto, sites et réseaux officiels) :
+1) ses 5 dernières actualités (résultats, transferts, annonces) : titre court, résumé d'une phrase, date (AAAA-MM-JJ), lien de l'article, et l'URL directe d'une image de l'article si elle existe ;
+2) son effectif actuel sur ${game} : pseudo, rôle, pays.
+Réponds {"news":[{"title":"","summary":"","date":"","url":"","image":""}],"players":[{"name":"","role":"","country":""}]}` }] }).catch(() => null);
+  let data = null;
+  try { data = JSON.parse(String(r?.text ?? '').replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')); } catch { /* réponse illisible */ }
+  if (!data) return hit?.data ?? null;
+  const https = (u) => (/^https:\/\/[^\s"'<>]+$/.test(String(u ?? '')) ? String(u) : '');
+  data = {
+    news: (Array.isArray(data.news) ? data.news : []).slice(0, 6).map((n) => ({ title: String(n.title ?? '').slice(0, 140), summary: String(n.summary ?? '').slice(0, 300), date: String(n.date ?? '').slice(0, 10), url: https(n.url), image: https(n.image) })).filter((n) => n.title),
+    players: (Array.isArray(data.players) ? data.players : []).slice(0, 8).map((p) => ({ name: String(p.name ?? '').slice(0, 40), role: String(p.role ?? '').slice(0, 30), country: String(p.country ?? '').slice(0, 20) })).filter((p) => p.name),
+    sources: (r?.sources ?? []).slice(0, 5),
+  };
+  infoCache.set(key, { at: Date.now(), data });
+  return data;
+}
