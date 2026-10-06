@@ -16,7 +16,7 @@ jobs:
     environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       # Démo jouable dans le navigateur : l'interface du launcher avec ses données d'exemple (aucune donnée réelle)
       - run: mkdir -p launcher-site/demo && cp -r launcher/src/ui launcher/src/core launcher-site/demo/
       # Fiches e-sport publiées par le workflow « E-sport - données Liquipedia » : on les garde
