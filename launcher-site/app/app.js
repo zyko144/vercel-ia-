@@ -21,12 +21,38 @@
   function logout() { token = null; store.set('h.token', null); $('app').hidden = $('tabs').hidden = $('pcPill').hidden = true; $('welcome').hidden = false; }
 
   // ---------- Connexion : QR du launcher (direct) ou e-mail ----------
+  // Connexion du launcher depuis ce navigateur : lien ouvert par le PC (#launcher=code)
+  let devCode = new URLSearchParams(location.hash.slice(1)).get('launcher');
+  async function approveLauncher() {
+    if (!devCode) return; const code = devCode; devCode = null; history.replaceState(null, '', location.pathname);
+    const i = await call('lien/appareil/infos', { code }).catch((err) => (toast(err.message), null)); if (!i) return;
+    sheet(`<h2>Connecter History Launcher ?</h2><p class="muted">Vérifie que ton PC affiche bien ce code :</p><p class="devcode">${esc(i.check)}</p><p class="muted small">Si tu n’as pas lancé cette connexion toi-même, refuse.</p><button class="main" id="devOk">Oui, connecter mon PC</button><button data-close>Refuser</button>`);
+    $('devOk').onclick = async () => { $('sheet').hidden = true; await call('lien/appareil/valider', { code }).then(() => toast('✅ Ton PC est connecté'), (err) => toast(err.message)); };
+  }
   async function fromQr() {
     const code = new URLSearchParams(location.hash.slice(1)).get('qr'); if (!code) return false;
     history.replaceState(null, '', location.pathname);
     try { const r = await call('lien/qr/utiliser', { code }); token = r.token; pcId = r.pc || null; store.set('h.token', token); store.set('h.pc', pcId); toast('✅ Connecté à ton PC'); return true; }
     catch (err) { toast(err.message); return false; }
   }
+  // ---------- Passkeys : Face ID, empreinte, Windows Hello (WebAuthn) ----------
+  const b64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+  const credJson = (c) => ({ id: c.id, rawId: b64(c.rawId), type: c.type, clientExtensionResults: c.getClientExtensionResults?.() ?? {}, authenticatorAttachment: c.authenticatorAttachment ?? undefined,
+    response: Object.fromEntries(['clientDataJSON', 'attestationObject', 'authenticatorData', 'signature', 'userHandle'].filter((k) => c.response[k]).map((k) => [k, b64(c.response[k])]).concat(c.response.getTransports ? [['transports', c.response.getTransports()]] : [])) });
+  async function passkeyLogin() {
+    const o = await call('passkey/options-connexion', {});
+    const c = await navigator.credentials.get({ publicKey: { ...o, challenge: unb64(o.challenge), allowCredentials: [] } });
+    const r = await call('passkey/connexion', { ticket: o.ticket, response: credJson(c) });
+    token = r.token; store.set('h.token', token); start();
+  }
+  async function passkeyAdd() {
+    const o = await call('passkey/options-ajout', {});
+    const c = await navigator.credentials.create({ publicKey: { ...o, challenge: unb64(o.challenge), user: { ...o.user, id: unb64(o.user.id) }, excludeCredentials: (o.excludeCredentials ?? []).map((x) => ({ ...x, id: unb64(x.id) })) } });
+    await call('passkey/ajout', { response: credJson(c), name: /iphone|ipad/i.test(navigator.userAgent) ? 'iPhone' : /android/i.test(navigator.userAgent) ? 'Android' : 'Ordinateur' });
+  }
+  $('usePasskey').hidden = !window.PublicKeyCredential;
+  $('usePasskey').onclick = () => passkeyLogin().catch((err) => toast(err.name === 'NotAllowedError' ? 'Passkey annulée' : err.message));
   $('useMail').onclick = () => { $('loginForm').hidden = false; $('useMail').hidden = true; };
   $('loginForm').onsubmit = async (e) => {
     e.preventDefault(); const f = e.target; $('loginMsg').textContent = 'Connexion…';
@@ -110,7 +136,12 @@
     const p = await call('premium').catch(() => ({}));
     tab('moi').innerHTML = `<div class="glass section"><div class="friend"><span class="av">${esc(me?.pseudo?.[0]?.toUpperCase() ?? '?')}</span><div><b>${esc(me?.pseudo ?? 'Mon compte')}</b><small>${esc(me?.email ?? '')}</small></div></div>
       <p>${p.ia || p.opti ? `⭐ Premium : ${[p.ia && 'History IA', p.opti && 'Opti Pro'].filter(Boolean).join(' + ')}` : 'Pas de Premium : découvre-le dans le launcher.'}</p>${p.code ? `<p class="muted">Ton code ami : <b>${esc(p.code)}</b> (−20 % pour un ami)</p>` : ''}</div>
+      <div class="glass section"><h2>Passkeys</h2><p class="muted small">Connecte-toi avec Face ID, ton empreinte ou Windows Hello, sans mot de passe.</p><div id="pkList"></div><button id="pkAdd" style="width:100%">Ajouter une passkey sur cet appareil</button></div>
       <div class="glass section"><h2>Ce téléphone</h2><button id="notifOn" style="width:100%">🔔 Prévenir quand un ami lance un jeu</button><button id="out" class="red" style="width:100%;margin-top:8px">Se déconnecter</button></div>`;
+    const pk = async () => { const l = (await call('passkey').catch(() => ({}))).passkeys ?? []; $('pkList').innerHTML = l.map((x) => `<div class="notif"><span>🔑</span><div><b>${esc(x.name)}</b><small>Ajoutée le ${new Date(x.at).toLocaleDateString('fr-FR')}${x.used ? ` · utilisée le ${new Date(x.used).toLocaleDateString('fr-FR')}` : ''}</small></div><button data-pkdel="${esc(x.id)}">Retirer</button></div>`).join('') || '<p class="muted small">Aucune passkey pour l’instant.</p>'; };
+    pk(); $('pkAdd').hidden = !window.PublicKeyCredential;
+    $('pkAdd').onclick = () => passkeyAdd().then(() => { toast('✅ Passkey ajoutée'); pk(); }, (err) => toast(err.name === 'NotAllowedError' ? 'Annulé' : err.name === 'InvalidStateError' ? 'Cet appareil a déjà une passkey' : err.message));
+    $('pkList').onclick = async (e) => { const id = e.target.dataset.pkdel; if (id) { await call('passkey/supprimer', { id }).catch(() => {}); pk(); } };
     $('out').onclick = async () => { await call('deconnexion', {}).catch(() => {}); logout(); };
     $('notifOn').onclick = () => Notification.requestPermission?.().then((v) => toast(v === 'granted' ? '🔔 Activé (quand l’appli est ouverte)' : 'Refusé'));
   }
@@ -134,7 +165,7 @@
 
   async function start() {
     $('welcome').hidden = true; $('app').hidden = $('tabs').hidden = false;
-    me = (await call('moi').catch(() => ({}))).compte ?? null; go('pc');
+    me = (await call('moi').catch(() => ({}))).compte ?? null; go('pc'); approveLauncher();
   }
-  (async () => { await fromQr(); if (token) start(); else $('welcome').hidden = false; })();
+  (async () => { await fromQr(); if (token) start(); else { $('welcome').hidden = false; if (devCode) toast('Connecte-toi pour relier ton PC'); } })();
 })();

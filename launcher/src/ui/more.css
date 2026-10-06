@@ -257,3 +257,14 @@
 .stoldlist { display: grid; gap: 2px; max-height: 46vh; overflow: auto; }
 .stoldlist .strow { grid-template-columns: 20px 40px minmax(0, 1fr) auto; cursor: pointer; }
 .rate #rateSend:disabled { opacity: .45; cursor: default; } .ratestars button:focus { outline: none; }
+/* Clic droit : l'essentiel, le reste replié */
+.ctxmorebtn { color: var(--muted) !important; } .ctxmorebtn::after { content: '›'; float: right; transition: transform .15s; } .ctxmorebtn.open::after { transform: rotate(90deg); }
+.ctxmore { display: grid; max-height: 46vh; overflow: auto; }
+/* Thème e-sport */
+.esportbar { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; padding: 14px 18px; border-radius: 16px; background: linear-gradient(100deg, color-mix(in srgb, var(--e) 22%, transparent), transparent 70%), var(--panel); border: 1px solid color-mix(in srgb, var(--e) 45%, transparent); }
+.esportbar > div { flex: 1; } .esportbar b { display: block; } .esportbar small { color: var(--muted); }
+.esdot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 0 #ef444499; animation: esping 1.6s infinite; }
+@keyframes esping { 70% { box-shadow: 0 0 0 10px #ef444400; } }
+.esportbar .btn { background: var(--e); border-color: transparent; color: #fff; }
+.esx { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; }
+:root[data-esport] .side nav .on, :root[data-esport] .btn.play { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #000)); }

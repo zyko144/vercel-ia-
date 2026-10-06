@@ -149,7 +149,7 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     if (!['GET', 'HEAD', 'POST', 'OPTIONS'].includes(req.method)) return send(res, 405, 'méthode refusée');
     // The public support page uses the existing account authentication (including 2FA).
     // Page support + appli mobile (PWA sur le site) : mêmes comptes, jeton Bearer (aucun cookie), origine du site seulement
-    if (/^\/api\/compte\/(support|connexion(?:\/2fa)?|deconnexion|moi|amis|messages|optipro(?:\/action)?|premium|lfg|pc(?:\/ordre)?|lien\/qr\/utiliser)$/.test(url.pathname)) {
+    if (/^\/api\/compte\/(support|connexion(?:\/2fa)?|deconnexion|moi|amis|messages|optipro(?:\/action)?|premium|lfg|pc(?:\/ordre)?|lien\/qr\/utiliser|lien\/appareil\/(?:infos|valider)|passkey(?:\/[a-z-]+)?)$/.test(url.pathname)) {
       const origin = String(req.headers.origin ?? '');
       if ([...siteOrigins(), 'https://zyko144.github.io'].includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin');

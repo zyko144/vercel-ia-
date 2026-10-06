@@ -139,6 +139,21 @@ await check('double authentification : QR, activation, connexion en 2 étapes, c
   assert.equal((await post('2fa/desactiver', { motDePasse: 'Nouveau-2026!', code: on.recovery[1] }, '7.7.7.7', step2.token)).compte.twoFactor, false);
 });
 
+await check('passkey et connexion du launcher par le navigateur', async () => {
+  const { token } = await post('inscription', { pseudo: 'Passkey', email: 'pk@exemple.fr', motDePasse: 'motdepasse42' }, '7.7.7.6');
+  const o = await post('passkey/options-ajout', {}, '7.7.7.7', token);
+  assert.equal(o.rp.id, 'zyko144.github.io'); assert.ok(o.challenge && o.user.id);
+  assert.equal((await post('passkey/options-ajout', {}, '7.7.7.8')).status, 401, 'ajout refusé sans session');
+  const lo = await post('passkey/options-connexion', {}, '7.7.7.9'); assert.ok(lo.ticket && lo.challenge);
+  assert.equal((await post('passkey/connexion', { ticket: lo.ticket, response: { id: 'inconnue' } }, '7.7.7.9')).status, 401, 'passkey inconnue refusée');
+  const dv = await post('lien/appareil', {}, '7.7.7.10'); assert.ok(dv.code && /^[0-9A-F]{6}$/.test(dv.check));
+  assert.ok((await post('lien/appareil/attendre', { code: dv.code }, '7.7.7.10')).waiting, 'en attente tant que non validé');
+  assert.equal((await post('lien/appareil/valider', { code: dv.code }, '7.7.7.11')).status, 401, 'validation sans compte refusée');
+  assert.equal((await post('lien/appareil/valider', { code: dv.code }, '7.7.7.11', token)).ok, true);
+  const got = await post('lien/appareil/attendre', { code: dv.code }, '7.7.7.10'); assert.ok(got.token && got.compte);
+  assert.equal((await post('lien/appareil/attendre', { code: dv.code }, '7.7.7.10')).status, 410, 'code à usage unique');
+});
+
 server.close();
 await check('e-mails par Brevo (sans nom de domaine) quand BREVO_API_KEY est défini', async () => {
   const { sendMail } = await import('../src/features/launcherSecurity.js');
