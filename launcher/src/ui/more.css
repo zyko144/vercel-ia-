@@ -350,3 +350,6 @@
 .esroster .esplayer > span, .esplayertop > span { position: relative; overflow: hidden; } .esface { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .esplayertop { position: relative; } .esplayertop > img.esface { position: static; width: 120px; height: 120px; border-radius: 16px; flex: none; } .esplayertop > img.esface + span { display: none; }
 .eslive { margin-bottom: 20px; }
+.side [data-view="esport"] { position: relative; white-space: nowrap; }
+.eslivebadge { margin-left: auto; flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font-size: 9px !important; border-radius: 999px; background: #ef4444; color: #fff; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; box-shadow: 0 0 12px #ef444488; }
+.eslivebadge u { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: esping 1.6s infinite; }
