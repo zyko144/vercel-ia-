@@ -352,3 +352,8 @@
 .side [data-view="esport"] { position: relative; white-space: nowrap; }
 .eslivebadge { margin-left: auto; flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font-size: 9px !important; border-radius: 999px; background: #ef4444; color: #fff; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; box-shadow: 0 0 12px #ef444488; }
 .eslivebadge u { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: esping 1.6s infinite; }
+/* E-sport : grande image d'arène à l'entrée */
+#view-esport .list-head { position: relative; overflow: hidden; isolation: isolate; min-height: 280px; justify-content: flex-end; padding: 34px 32px 26px; margin: 0 0 26px; border-radius: 24px; border: 1px solid #ffffff14; background: linear-gradient(180deg, #05061000 0%, #050610aa 55%, #050610f2 100%), url('esport/arena.jpg') center 35% / cover; box-shadow: 0 24px 60px -30px #4c6bff; }
+#view-esport .list-head h2 { font-size: 44px; letter-spacing: -.02em; text-shadow: 0 6px 30px #000c; }
+#view-esport .list-head .minput { background: #0008; backdrop-filter: blur(8px); }
+#view-esport .list-head .stchips button:not(.on) { background: #0007; backdrop-filter: blur(8px); color: #fff; }
