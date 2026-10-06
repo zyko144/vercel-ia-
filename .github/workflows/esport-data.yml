@@ -38,7 +38,7 @@ jobs:
         with: { name: esport-data, path: launcher-site/esport }
       - uses: actions/configure-pages@v5
       - run: mkdir -p launcher-site/demo && cp -r launcher/src/ui launcher/src/core launcher-site/demo/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with: { path: launcher-site }
       - id: d
         uses: actions/deploy-pages@v4
