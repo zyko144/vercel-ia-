@@ -1616,6 +1616,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.58.1': [
+    ['🏆', 'E-sport : Rainbow Six', 'Le thème e-sport s’active aussi pour le BLAST R6 Major au Japon (6-15 novembre) et le Six Invitational 2027 (1er-14 février), si tu as Rainbow Six Siege.', ['[data-view=accueil]', 'wait800']],
+  ],
   '0.58.0': [
     ['🎨', 'Paramètres rangés', '7 catégories au lieu de 14, rangées par couleur, avec des icônes nettes. Tout est toujours là, juste mieux rangé.', ['#openSettings', 'wait800']],
     ['✨', 'Interface plus pro', 'Moins d’emojis dans les menus, titres et boutons ; clic droit sur un jeu réduit à l’essentiel (le reste dans « Plus d’options »).'],
@@ -4979,7 +4982,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.58.0',
+    version: async () => '0.58.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
