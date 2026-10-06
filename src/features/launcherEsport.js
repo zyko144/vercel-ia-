@@ -23,10 +23,10 @@ export async function esportImage(type, name, { ai = null } = {}) {
   if (busy.has(key)) return busy.get(key);
   const job = (async () => {
     const miss = (await readFresh('esport-img-miss')) ?? {};
-    if (Date.now() - (miss[key] ?? 0) < 86_400_000) return null;
+    if (Date.now() - (miss[key] ?? 0) < 6 * 3_600_000) return null;
     const chat = ai ?? (await import('../ai/gemini.js')).chat;
     const what = { logo: `the official current logo of the esports organisation "${name}" as a transparent PNG or SVG (the crest/emblem alone, no background)`, bg: `a wide official wallpaper, banner or key visual of the esports organisation "${name}" in its brand colours (like their Twitter/X banner or announcement visuals)`, event: `an official key art or banner image of the esports competition "${name}"`, joueur: `an official headshot photo of the professional esports player "${name}" (team photoshoot portrait, face visible), as used on Liquipedia, HLTV, VLR.gg or the team's site` }[type];
-    const r = await chat({ tag: 'esport-images', web: true, system: 'You find direct image file URLs on the web. Answer only with JSON.', content: [{ type: 'text', text: `Find ${what}. Return {"urls": [...]} with up to 5 DIRECT image file URLs (ending in .png, .jpg, .webp or .svg, or image CDN links), best first. Prefer liquipedia.net, wikimedia, official sites.` }] }).catch(() => null);
+    const r = await chat({ tag: 'esport-images', web: true, system: 'You find direct image file URLs on the web. Answer only with JSON.', content: [{ type: 'text', text: `Find ${what}. Return {"urls": [...]} with up to 5 DIRECT image file URLs (ending in .png, .jpg, .webp or .svg, or image CDN links), high resolution (at least 1000 px wide for photos and banners), best first. Prefer liquipedia.net, wikimedia, official sites.` }] }).catch(() => null);
     const urls = String(r?.text ?? '').match(/https:\/\/[^\s"'<>)]+/g) ?? [];
     for (const u of [...new Set(urls)].slice(0, 6)) {
       const img = await download(u);
@@ -47,7 +47,7 @@ const URL_OK = (u) => (/^https:\/\/[^\s"'<>]+$/.test(String(u ?? '')) ? String(u
 const list = (v, n, f) => (Array.isArray(v) ? v : []).slice(0, n).map(f).filter((x) => Object.values(x).some(Boolean));
 const KINDS = {
   equipe: {
-    ttl: 6 * 3_600_000,
+    ttl: 2 * 3_600_000,
     ask: ({ nom, jeu }) => `Équipe e-sport « ${nom} » sur ${jeu}. Donne :
 - team : fondation (année), région, pays, coach, manager, gains cumulés sur ce jeu, classement mondial actuel si connu, présentation (3 phrases), palmarès (10 titres max : tournoi + année + place), réseaux (site, twitter/x, twitch, youtube : liens https).
 - players : effectif actuel complet sur ${jeu} (titulaires + remplaçants + coach si rôle) : pseudo, vrai nom, rôle, pays, âge, date d'arrivée dans l'équipe.
@@ -64,19 +64,19 @@ JSON : {"team":{"founded":"","region":"","country":"","coach":"","manager":"","e
     }),
   },
   joueur: {
-    ttl: 24 * 3_600_000,
+    ttl: 12 * 3_600_000,
     ask: ({ nom, equipe, jeu }) => `Joueur e-sport « ${nom} » (${equipe}, ${jeu}). Donne : vrai nom, date de naissance, âge, pays, rôle, équipe actuelle, présentation (3 phrases), parcours (équipes : nom + de + à), palmarès (10 max : tournoi + année + place), stats clés connues (ex. rating, K/D, ACS : libellé + valeur, 6 max), réglages connus (ex. sensibilité, DPI, caméra, résolution : libellé + valeur, 6 max), réseaux (twitter/x, twitch, youtube : liens https), photo (URL https directe d'une photo officielle si elle existe).
 JSON : {"realName":"","born":"","age":"","country":"","role":"","team":"","about":"","photo":"","history":[{"team":"","from":"","to":""}],"titles":[{"event":"","year":"","place":""}],"stats":[{"label":"","value":""}],"settings":[{"label":"","value":""}],"links":{"twitter":"","twitch":"","youtube":""}}`,
     clean: (d) => ({ ...Object.fromEntries(['realName', 'born', 'age', 'country', 'role', 'team'].map((k) => [k, S(d[k], 60)])), about: S(d.about, 700), photo: URL_OK(d.photo), history: list(d.history, 12, (h) => ({ team: S(h.team, 50), from: S(h.from, 12), to: S(h.to, 12) })), titles: list(d.titles, 10, (t) => ({ event: S(t.event, 80), year: S(t.year, 10), place: S(t.place, 20) })), stats: list(d.stats, 6, (x) => ({ label: S(x.label, 30), value: S(x.value, 30) })), settings: list(d.settings, 6, (x) => ({ label: S(x.label, 30), value: S(x.value, 40) })), links: Object.fromEntries(['twitter', 'twitch', 'youtube'].map((k) => [k, URL_OK(d.links?.[k])])) }),
   },
   actus: {
-    ttl: 2 * 3_600_000,
+    ttl: 30 * 60_000,
     ask: ({ jeu }) => `Les 6 actus e-sport les plus récentes (dernières 48 h si possible) sur : ${jeu}. Priorité aux compétitions en cours (résultats, qualifiés, transferts marquants). Pour chacune : titre, résumé d'une phrase, jeu, date AAAA-MM-JJ, lien de l'article, image (URL https directe de la grande image de l'article, og:image, au moins 1200 px de large, pas une miniature).
 JSON : {"news":[{"title":"","summary":"","game":"","date":"","url":"","image":""}]}`,
     clean: (d) => ({ news: list(d.news, 6, (n) => ({ title: S(n.title, 140), summary: S(n.summary, 300), game: S(n.game, 30), date: S(n.date, 10), url: URL_OK(n.url), image: URL_OK(n.image) })).filter((n) => n.title && n.image) }),
   },
   tournoi: {
-    ttl: 3 * 3_600_000,
+    ttl: 3_600_000,
     ask: ({ nom, jeu }) => `Compétition e-sport « ${nom} » (${jeu}). Donne : lieu, dates, cashprize, format (2 phrases), statut (à venir / en cours / terminé), vainqueur s'il y en a un, équipes participantes (nom + résultat/place si connu), derniers matchs joués et prochains matchs (date, équipe A, équipe B, score si joué, phase).
 JSON : {"place":"","dates":"","prize":"","format":"","status":"","winner":"","teams":[{"name":"","result":""}],"matches":[{"date":"","a":"","b":"","score":"","stage":""}]}`,
     clean: (d) => ({ ...Object.fromEntries(['place', 'dates', 'prize', 'status', 'winner'].map((k) => [k, S(d[k], 80)])), format: S(d.format, 400), teams: list(d.teams, 24, (t) => ({ name: S(t.name, 50), result: S(t.result, 30) })), matches: list(d.matches, 16, (m) => ({ date: S(m.date, 16), a: S(m.a, 50), b: S(m.b, 50), score: S(m.score, 15), stage: S(m.stage, 40) })) }),
@@ -88,10 +88,10 @@ export async function esportFiche(kind, args = {}, { ai = null } = {}) {
   if (!a.nom) return null;
   const key = `${kind}|${slug(a.nom)}|${slug(a.equipe)}|${slug(a.jeu)}`, hit = infoCache.get(key);
   if (hit && Date.now() - hit.at < K.ttl) return hit.data;
-  if (busy.has(key)) return busy.get(key);
+  if (busy.has(key)) return hit?.data ?? busy.get(key);
   const job = (async () => {
     const chat = ai ?? (await import('../ai/gemini.js')).chat;
-    const r = await chat({ tag: 'esport-fiches', web: true, system: 'Tu es un journaliste e-sport. Réponds uniquement en JSON valide, en français. Uniquement des faits vérifiés sur le web ; laisse un champ vide plutôt que d’inventer.', content: [{ type: 'text', text: K.ask(a) }] }).catch(() => null);
+    const r = await chat({ tag: 'esport-fiches', web: true, system: `Tu es un journaliste e-sport à fond sur l’actu, nous sommes le ${new Date().toISOString().slice(0, 10)}. Toujours l’info la plus récente (résultats, effectifs, transferts du jour) et des images en grand format (og:image de l’article, pas de miniature). Réponds uniquement en JSON valide, en français. Uniquement des faits vérifiés sur le web ; laisse un champ vide plutôt que d’inventer.`, content: [{ type: 'text', text: K.ask(a) }] }).catch(() => null);
     let d = null;
     try { d = JSON.parse(String(r?.text ?? '').replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')); } catch { /* réponse illisible */ }
     if (!d) return hit?.data ?? null;
@@ -100,15 +100,15 @@ export async function esportFiche(kind, args = {}, { ai = null } = {}) {
     return data;
   })().finally(() => busy.delete(key));
   busy.set(key, job);
-  return job;
+  return hit?.data ?? job; // fiche périmée : réponse immédiate, l'IA la met à jour en fond
 }
 
-// Direct : pour les équipes suivies, match en cours (et sa chaîne Twitch) ou prochain match avec l'heure exacte. Gardé 10 min.
+// Direct : pour les équipes suivies, match en cours (et sa chaîne Twitch) ou prochain match avec l'heure exacte. Gardé 5 min.
 export async function esportLive(teams = [], { ai = null } = {}) {
   const list = (Array.isArray(teams) ? teams : []).slice(0, 12).map((t) => ({ nom: S(t.nom, 50), jeu: S(t.jeu, 40) })).filter((t) => t.nom);
   if (!list.length) return { matches: [] };
   const key = `live|${list.map((t) => `${slug(t.nom)}:${slug(t.jeu)}`).sort().join(',')}`, hit = infoCache.get(key);
-  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.data;
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.data;
   if (busy.has(key)) return busy.get(key);
   const job = (async () => {
     const chat = ai ?? (await import('../ai/gemini.js')).chat;

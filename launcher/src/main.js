@@ -3910,7 +3910,7 @@ async function esportWatch() {
   for (const [k, t] of Object.entries(seen)) if (Date.now() - t > 3 * 86_400_000) delete seen[k];
   store.save();
 }
-setTimeout(() => { esportWatch().catch(() => {}); setInterval(() => esportWatch().catch(() => {}), 10 * 60_000); }, 90_000);
+setTimeout(() => { esportWatch().catch(() => {}); setInterval(() => esportWatch().catch(() => {}), 5 * 60_000); }, 90_000);
 ipcMain.handle('more:esportFiche', (_e, type, args = {}) => {
   if (process.env.LAUNCHER_DEMO) return ES_DEMO[type] ?? null;
   const q = new URLSearchParams({ type: String(type), nom: String(args.nom ?? ''), equipe: String(args.equipe ?? ''), jeu: String(args.jeu ?? '') });

@@ -1616,6 +1616,12 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.60.0': [
+    ['📰', 'Actus e-sport en grand', 'En haut de l’E-sport, les dernières actus des compétitions en cours défilent avec leurs photos, mises à jour par l’IA toutes les 30 minutes. Clique pour lire l’article.', ['[data-view=esport]', 'wait2500']],
+    ['👥', 'Tout sur les équipes et les joueurs', 'Fiche complète sans quitter l’appli : effectif avec la photo des joueurs, matchs, palmarès, actus et calendrier. Fiche joueur avec parcours, stats et réglages. Bannières photo pour Gentle Mates, Karmine Corp et Vitality.'],
+    ['🔴', 'Tes équipes en direct', 'Suis une équipe : alerte 20 minutes avant son match et au lancement du live, lien Twitch direct, et pastille LIVE à côté d’E-sport.'],
+    ['🎨', 'Thème e-sport corrigé', 'Le thème e-sport ne bloque plus les couleurs de l’appli.'],
+  ],
   '0.59.0': [
     ['🏆', 'Rubrique E-sport', 'Nouvelle catégorie à gauche : 95 équipes de Rocket League, Rainbow Six, CS2, VALORANT et League of Legends avec leur logo et un fond aux couleurs du club, Gentle Mates, Karmine Corp et Vitality à la une, et le calendrier des grandes compétitions.', ['[data-view=esport]', 'wait1500']],
     ['📰', 'Fiche d’équipe', 'Clique sur une équipe : ses dernières actus lues par l’IA sur les sites e-sport, son effectif, son calendrier. Suis tes équipes : elles passent en premier.'],
@@ -4990,7 +4996,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.59.0',
+    version: async () => '0.60.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
