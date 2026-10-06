@@ -23,7 +23,7 @@ jobs:
       run:
         working-directory: launcher
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Version du launcher
         id: v
@@ -115,7 +115,7 @@ jobs:
       run:
         working-directory: launcher
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Déjà publiée ?
         id: exists
