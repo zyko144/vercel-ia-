@@ -354,14 +354,18 @@
 .eslivebadge { margin-left: auto; flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font-size: 9px !important; border-radius: 999px; background: #ef4444; color: #fff; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; box-shadow: 0 0 12px #ef444488; }
 .eslivebadge u { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: esping 1.6s infinite; }
 /* E-sport : grande image d'arène à l'entrée */
-#view-esport .list-head { position: relative; overflow: hidden; isolation: isolate; min-height: 280px; justify-content: flex-end; padding: 34px 32px 26px; margin: 0 0 26px; border-radius: 24px; border: 1px solid #ffffff14; background: linear-gradient(180deg, #05061000 0%, #050610aa 55%, #050610f2 100%), url('esport/arena.jpg') center 35% / cover; box-shadow: 0 24px 60px -30px #4c6bff; }
+#view-esport .list-head { position: relative; overflow: hidden; isolation: isolate; min-height: 400px; justify-content: flex-end; padding: 34px 32px 26px; margin: 0 0 26px; border-radius: 24px; border: 1px solid #ffffff14; box-shadow: 0 24px 60px -30px #4c6bff; }
 #view-esport .list-head h2 { font-size: 44px; letter-spacing: -.02em; text-shadow: 0 6px 30px #000c; }
 #view-esport .list-head .minput { background: #0008; backdrop-filter: blur(8px); }
 #view-esport .list-head .stchips button:not(.on) { background: #0007; backdrop-filter: blur(8px); color: #fff; }
-.esrot { position: relative; height: 340px; margin-bottom: 26px; border-radius: 24px; overflow: hidden; background: #000; }
+.esrot { position: absolute; inset: 0; z-index: -1; background: #000; }
 .esslide { position: absolute; inset: 0; padding: 0; border: 0; background: center / cover; color: #fff; font: inherit; text-align: left; opacity: 0; transform: scale(1.04); transition: opacity .9s, transform 6s linear; pointer-events: none; }
 .esslide.on { opacity: 1; transform: scale(1); pointer-events: auto; } .esslide[data-esurl] { cursor: pointer; }
-.esslide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 40%, #000d); }
-.esslide span { position: absolute; z-index: 1; left: 30px; right: 30px; bottom: 34px; display: grid; gap: 6px; }
+.esslide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(#000a, transparent 35%, transparent 45%, #000e); }
+.esslide span { position: absolute; z-index: 1; left: 32px; right: 140px; top: 26px; display: grid; gap: 6px; }
 .esslide small { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); } .esslide b { font-size: 26px; line-height: 1.15; text-shadow: 0 4px 20px #000a; } .esslide em { font-style: normal; opacity: .85; max-width: 760px; }
-.esdots { position: absolute; z-index: 2; right: 24px; bottom: 18px; display: flex; gap: 8px; } .esdots i { width: 8px; height: 8px; border-radius: 99px; background: #fff6; cursor: pointer; transition: width .3s, background .3s; } .esdots i.on { width: 26px; background: #fff; }
+.esdots { position: absolute; z-index: 2; right: 26px; top: 30px; display: flex; gap: 8px; } .esdots i { width: 8px; height: 8px; border-radius: 99px; background: #fff6; cursor: pointer; transition: width .3s, background .3s; } .esdots i.on { width: 26px; background: #fff; }
+.esslide video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.esmatch.esgm { grid-template-columns: 150px 1fr auto; } .esgm b strong { margin: 0 8px; color: var(--blue); }
+.esgame { margin-bottom: 30px; } .esgame .esmatches, .esgame .esnews { margin-bottom: 8px; }
+.esgm b { display: flex; align-items: center; gap: 8px; } .esgm b .eslogo { width: 26px; height: 26px; object-fit: contain; }
