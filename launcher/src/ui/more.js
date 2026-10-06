@@ -629,8 +629,8 @@ export function initMore(api, h) {
   // ---------- Thème e-sport (266) : pendant un grand tournoi d'un jeu de ta bibliothèque ----------
   function applyEsport(ev) {
     document.getElementById('esportBar')?.remove();
-    if (!ev) { root.style.removeProperty('--accent'); delete root.dataset.esport; return; }
-    root.dataset.esport = ev.id; root.style.setProperty('--accent', ev.color);
+    if (!ev) { delete root.dataset.esport; return; }
+    root.dataset.esport = ev.id; // seulement la bannière à la couleur du tournoi : les couleurs du thème choisi ne changent jamais
     const left = Math.max(0, Math.ceil((new Date(`${ev.end}T23:59:59`) - Date.now()) / 86_400_000));
     document.querySelector('#view-accueil')?.insertAdjacentHTML('afterbegin', `<div class="esportbar" id="esportBar" style="--e:${esc(ev.color)}"><span class="esdot"></span><div><b>${esc(ev.name)}</b><small>En cours · encore ${left} jour${left > 1 ? 's' : ''}</small></div><button type="button" class="btn sm" data-esurl="${esc(ev.url)}">Suivre la compétition</button><button type="button" class="esx" data-esoff="${esc(ev.id)}" aria-label="Masquer">✕</button></div>`);
   }
