@@ -104,7 +104,7 @@
     "#f01e28",
     "#111111"
    ],
-   "country": "EU",
+   "country": "US",
    "id": "rl-g2"
   },
   {
@@ -126,7 +126,7 @@
     "#e8e8e8",
     "#111111"
    ],
-   "country": "SE",
+   "country": "BR",
    "id": "rl-nip"
   },
   {
@@ -192,7 +192,7 @@
     "#e5e5e5",
     "#111111"
    ],
-   "country": "EU",
+   "country": "BR",
    "id": "rl-ts"
   },
   {
@@ -203,7 +203,7 @@
     "#aa8a00",
     "#111111"
    ],
-   "country": "KR",
+   "country": "US",
    "id": "rl-gen"
   },
   {
@@ -346,7 +346,7 @@
     "#00a651",
     "#0b1f14"
    ],
-   "country": "SA",
+   "country": "EU",
    "id": "r6-flcn"
   },
   {
@@ -401,7 +401,7 @@
     "#e8e8e8",
     "#111111"
    ],
-   "country": "SE",
+   "country": "BR",
    "id": "r6-nip"
   },
   {
@@ -456,7 +456,7 @@
     "#e43d30",
     "#111111"
    ],
-   "country": "BR",
+   "country": "EU",
    "id": "cs2-faze"
   },
   {
@@ -533,7 +533,7 @@
     "#00a3e0",
     "#0a2240"
    ],
-   "country": "BR",
+   "country": "US",
    "id": "cs2-tl"
   },
   {
@@ -577,7 +577,7 @@
     "#ff6a00",
     "#111111"
    ],
-   "country": "EU",
+   "country": "RU",
    "id": "cs2-vp"
   },
   {
@@ -709,7 +709,7 @@
     "#f01e28",
     "#111111"
    ],
-   "country": "EU",
+   "country": "US",
    "id": "val-g2"
   },
   {
@@ -731,7 +731,7 @@
     "#00a3e0",
     "#0a2240"
    ],
-   "country": "BR",
+   "country": "EU",
    "id": "val-tl"
   },
   {
@@ -962,7 +962,7 @@
     "#00a3e0",
     "#0a2240"
    ],
-   "country": "BR",
+   "country": "US",
    "id": "lol-tl"
   },
   {

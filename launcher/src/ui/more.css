@@ -267,7 +267,6 @@
 @keyframes esping { 70% { box-shadow: 0 0 0 10px #ef444400; } }
 .esportbar .btn { background: var(--e); border-color: transparent; color: #fff; }
 .esx { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; }
-:root[data-esport] .side nav .on, :root[data-esport] .btn.play { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #000)); }
 /* Rubrique E-sport */
 #view-esport .list-head { flex-direction: column; align-items: flex-start; gap: 18px; margin: 12px 2px 26px; } #view-esport .list-head h2 { margin: 0; font-size: 28px; }
 .essub { margin: 26px 0 14px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
@@ -287,8 +286,9 @@
 .esteam span { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px; background: linear-gradient(transparent, #000a); }
 .esteam b { display: block; font-size: 16px; text-shadow: 0 1px 6px #0008; } .esteam small { opacity: .85; font-size: 12px; }
 .esteam em { position: absolute; top: 12px; left: 14px; font-style: normal; color: #ffd54a; text-shadow: 0 0 10px #0008; }
-.esteamdlg .estop { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; gap: 18px; min-height: 170px; padding: 28px 34px; background: linear-gradient(150deg, var(--ta), var(--tb) 75%); color: #fff; }
-.estop > i { position: absolute; inset: 0; z-index: -1; background: center / cover; opacity: .25; mix-blend-mode: luminosity; }
+.esteamdlg .estop { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; gap: 18px; min-height: 240px; padding: 28px 34px; background: linear-gradient(150deg, var(--ta), var(--tb) 75%); color: #fff; }
+.estop > i { position: absolute; inset: 0; z-index: -1; background: center / cover; }
+.estop::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent 30%, #000b); }
 .estop strong { font-size: 64px; font-weight: 900; line-height: 1; letter-spacing: -.04em; text-shadow: 0 4px 20px #0006; }
 .estop h2 { margin: 2px 0 0; font-size: 28px; } .estop small { opacity: .85; }
 .esdlgbody { padding: 24px 34px 30px; }
@@ -313,3 +313,55 @@
 .esplayers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .esplayer { padding: 12px 14px; border-radius: 12px; background: linear-gradient(140deg, color-mix(in srgb, var(--ta) 22%, transparent), var(--panel-2)); border: 1px solid color-mix(in srgb, var(--ta) 30%, transparent); }
 .esplayer b { display: block; } .esplayer small { color: var(--muted); }
+/* Fiches e-sport : équipe, joueur, compétition */
+.estabs { display: flex; gap: 4px; padding: 0 34px; border-bottom: 1px solid var(--line, #ffffff14); background: #0006; }
+.estabs button { padding: 14px 16px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.estabs button.on { color: #fff; border-bottom-color: var(--ta); }
+.esdlgbody { min-height: 260px; display: grid; gap: 14px; align-content: start; }
+.esload { display: flex; align-items: center; gap: 12px; color: var(--muted); padding: 40px 0; justify-content: center; }
+.esload i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ta); border-top-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.esabout { margin: 0; line-height: 1.6; color: var(--text, #fff); opacity: .9; }
+.esfacts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.esfacts > div { padding: 12px 14px; border-radius: 12px; background: var(--panel-2); display: grid; gap: 2px; } .esfacts small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.estitles { display: grid; gap: 6px; }
+.estitles > div { display: grid; grid-template-columns: 54px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--panel-2); }
+.estitles em { font-style: normal; font-weight: 800; color: var(--ta); } .estitles small { color: var(--muted); }
+.esroster { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.esroster .esplayer { display: flex; align-items: center; gap: 12px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.esroster .esplayer:hover { border-color: var(--ta); }
+.esroster .esplayer > span, .esplayertop > span { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 18px; background: linear-gradient(140deg, var(--ta), var(--tb)); color: #fff; }
+.esroster .esplayer > div { flex: 1; min-width: 0; display: grid; } .esroster em { font-style: normal; font-size: 12px; color: var(--muted); } .esroster .esplayer > i { font-style: normal; color: var(--muted); font-size: 20px; }
+.esplayertop { display: flex; gap: 18px; align-items: flex-start; } .esplayertop > img { width: 120px; height: 120px; border-radius: 16px; object-fit: cover; } .esplayertop > span { width: 90px; height: 90px; font-size: 36px; } .esplayertop .esfacts { flex: 1; }
+.esmatches { display: grid; gap: 8px; }
+.esmatch { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 14px; align-items: center; padding: 12px 16px; border-radius: 12px; background: var(--panel-2); border-left: 3px solid var(--line, #ffffff20); }
+.esmatch.win { border-left-color: #22c55e; } .esmatch.loss { border-left-color: #ef4444; } .esmatch small, .esmatch span { color: var(--muted); font-size: 12px; } .esmatch strong { font-size: 16px; }
+.eshist { display: grid; gap: 8px; border-left: 2px solid var(--ta); padding-left: 16px; } .eshist > div { display: grid; } .eshist small { color: var(--muted); }
+.essrc { margin-top: 6px; } .essrc a { color: inherit; }
+.esev { cursor: pointer; } .esev:hover { filter: brightness(1.12); }
+.esgroup { margin-top: 8px; } .esgroup .essub { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--text, #fff); letter-spacing: .04em; }
+.esgroup .essub i { width: 6px; height: 22px; border-radius: 4px; background: var(--gc); } .esgroup .essub small { color: var(--muted); font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.eslive { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.eslivecard { position: relative; display: grid; gap: 4px; padding: 16px 18px; border-radius: 16px; background: linear-gradient(130deg, color-mix(in srgb, var(--ta) 28%, #0b0d14), #0b0d14 80%); border: 1px solid color-mix(in srgb, var(--ta) 40%, transparent); }
+.eslivecard.on { border-color: #ef4444; box-shadow: 0 0 0 1px #ef444455, 0 12px 30px -14px #ef4444; }
+.eslivecard em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--muted); display: flex; align-items: center; gap: 6px; } .eslivecard.on em { color: #f87171; }
+.eslivecard em u { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: esping 1.6s infinite; }
+.eslivecard b { font-size: 17px; } .eslivecard b span { color: var(--muted); font-weight: 500; } .eslivecard small { color: var(--muted); } .eslivecard .btn { justify-self: start; margin-top: 6px; background: #9146ff; border-color: transparent; }
+.esroster .esplayer > span, .esplayertop > span { position: relative; overflow: hidden; } .esface { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.esplayertop { position: relative; } .esplayertop > img.esface { position: static; width: 120px; height: 120px; border-radius: 16px; flex: none; } .esplayertop > img.esface + span { display: none; }
+.eslive { margin-bottom: 20px; }
+.side [data-view="esport"] { position: relative; white-space: nowrap; }
+.eslivebadge { margin-left: auto; flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font-size: 9px !important; border-radius: 999px; background: #ef4444; color: #fff; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; box-shadow: 0 0 12px #ef444488; }
+.eslivebadge u { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: esping 1.6s infinite; }
+/* E-sport : grande image d'arène à l'entrée */
+#view-esport .list-head { position: relative; overflow: hidden; isolation: isolate; min-height: 280px; justify-content: flex-end; padding: 34px 32px 26px; margin: 0 0 26px; border-radius: 24px; border: 1px solid #ffffff14; background: linear-gradient(180deg, #05061000 0%, #050610aa 55%, #050610f2 100%), url('esport/arena.jpg') center 35% / cover; box-shadow: 0 24px 60px -30px #4c6bff; }
+#view-esport .list-head h2 { font-size: 44px; letter-spacing: -.02em; text-shadow: 0 6px 30px #000c; }
+#view-esport .list-head .minput { background: #0008; backdrop-filter: blur(8px); }
+#view-esport .list-head .stchips button:not(.on) { background: #0007; backdrop-filter: blur(8px); color: #fff; }
+.esrot { position: relative; height: 340px; margin-bottom: 26px; border-radius: 24px; overflow: hidden; background: #000; }
+.esslide { position: absolute; inset: 0; padding: 0; border: 0; background: center / cover; color: #fff; font: inherit; text-align: left; opacity: 0; transform: scale(1.04); transition: opacity .9s, transform 6s linear; pointer-events: none; }
+.esslide.on { opacity: 1; transform: scale(1); pointer-events: auto; } .esslide[data-esurl] { cursor: pointer; }
+.esslide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 40%, #000d); }
+.esslide span { position: absolute; z-index: 1; left: 30px; right: 30px; bottom: 34px; display: grid; gap: 6px; }
+.esslide small { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); } .esslide b { font-size: 26px; line-height: 1.15; text-shadow: 0 4px 20px #000a; } .esslide em { font-style: normal; opacity: .85; max-width: 760px; }
+.esdots { position: absolute; z-index: 2; right: 24px; bottom: 18px; display: flex; gap: 8px; } .esdots i { width: 8px; height: 8px; border-radius: 99px; background: #fff6; cursor: pointer; transition: width .3s, background .3s; } .esdots i.on { width: 26px; background: #fff; }

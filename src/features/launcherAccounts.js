@@ -658,10 +658,14 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const r = await (await import('./launcherPremium.js')).requestValidation(compte, String(b.pack ?? ''), b.paypal, b.shot);
       return send(res, r.status, r);
     }
-    if (route === 'GET /api/compte/esport/infos') {
-      if (!allowAttempt('esport-infos', ip, 60, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes.' });
-      const info = await (await import('./launcherEsport.js')).esportInfo(url.searchParams.get('nom') ?? '', url.searchParams.get('jeu') ?? '').catch(() => null);
-      return info ? send(res, 200, info) : send(res, 503, { error: 'Actus indisponibles pour le moment.' });
+    if (route === 'POST /api/compte/esport/direct') {
+      if (!allowAttempt('esport-direct', ip, 40, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes.' });
+      return send(res, 200, await (await import('./launcherEsport.js')).esportLive((await readJson(req)).teams).catch(() => ({ matches: [] })));
+    }
+    if (route === 'GET /api/compte/esport/fiche') {
+      if (!allowAttempt('esport-fiche', ip, 90, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes.' });
+      const q = url.searchParams, info = await (await import('./launcherEsport.js')).esportFiche(q.get('type'), { nom: q.get('nom'), equipe: q.get('equipe'), jeu: q.get('jeu') }).catch(() => null);
+      return info ? send(res, 200, info) : send(res, 503, { error: 'Infos indisponibles pour le moment.' });
     }
     if (route === 'GET /api/compte/esport/img') {
       const type = url.searchParams.get('type'), name = String(url.searchParams.get('nom') ?? '').slice(0, 80);

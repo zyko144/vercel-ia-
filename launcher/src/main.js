@@ -421,7 +421,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|steam:\/\/url\/(CommunityFilePage\/\d{6,12}|SteamWorkshopPage\/4000)|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey)|https:\/\/historylauncher\.vercel\.app\/|https:\/\/(lolesports\.com|valorantesports\.com|esports\.rocketleague\.com|liquipedia\.net\/[a-z]+\/[\w%().-]*|www\.ubisoft\.com\/en-us\/esports\/rainbow-six\/siege))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|steam:\/\/url\/(CommunityFilePage\/\d{6,12}|SteamWorkshopPage\/4000)|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey)|https:\/\/historylauncher\.vercel\.app\/|https:\/\/(www\.)?(twitch\.tv\/\w+|youtube\.com\/[\w/?=&.-]+)|https:\/\/(lolesports\.com|valorantesports\.com|esports\.rocketleague\.com|liquipedia\.net\/[a-z]+\/[\w%().-]*|www\.ubisoft\.com\/en-us\/esports\/rainbow-six\/siege))$/;
 const isDriverLink = (u) => DRIVER_LINKS.includes(u) || /^https:\/\/(www\.nvidia\.com\/[\w/.%?=&-]*|[\w-]+\.download\.nvidia\.com\/[\w/.%-]+\.exe)$/.test(String(u));
 const openLink = (url) => (SAFE_LINK.test(url) || isDriverLink(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
@@ -3882,7 +3882,40 @@ ipcMain.handle('more:esportData', async () => {
   const remote = process.env.LAUNCHER_DEMO ? null : await fetch('https://zyko144.github.io/vercel-ia-/demo/ui/esport.json', { signal: AbortSignal.timeout(6000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   return { ...(remote?.teams ? remote : JSON.parse(await readFile(path.join(here, 'ui', 'esport.json'), 'utf8'))), api: process.env.LAUNCHER_DEMO ? '' : API };
 });
-ipcMain.handle('more:esportInfo', (_e, team, game) => (process.env.LAUNCHER_DEMO ? { news: [{ title: 'Qualifiée pour le prochain Major', summary: 'L’équipe a validé sa place après une série en 5 manches.', date: '2026-10-04', url: 'https://liquipedia.net/', image: '' }, { title: 'Nouveau joueur annoncé', summary: 'Un remplaçant rejoint l’effectif jusqu’à la fin de la saison.', date: '2026-09-28', url: 'https://liquipedia.net/', image: '' }], players: [{ name: 'Joueur1', role: 'Capitaine', country: 'FR' }, { name: 'Joueur2', role: 'Attaquant', country: 'FR' }, { name: 'Joueur3', role: 'Soutien', country: 'BE' }] } : api(`/api/compte/esport/infos?nom=${encodeURIComponent(String(team))}&jeu=${encodeURIComponent(String(game))}`, { timeout: 60_000 }).catch(() => null)));
+const ES_DEMO = {
+  equipe: { team: { founded: '2020', region: 'Europe', country: 'France', coach: 'Coach Démo', manager: '', earnings: '1,2 M$', ranking: '3e mondial', about: 'Exemple de démo : en vrai, la présentation de l’équipe est écrite par l’IA à partir des sites e-sport.', titles: [{ event: 'Major de printemps', year: '2026', place: '1er' }, { event: 'Championnat du monde', year: '2025', place: '2e' }], links: { site: 'https://liquipedia.net/', twitter: '', twitch: '', youtube: '' } }, players: [{ name: 'Joueur1', realName: 'Prénom Nom', role: 'Capitaine', country: 'France', age: '21', joined: '2024-01' }, { name: 'Joueur2', realName: 'Prénom Nom', role: 'Attaquant', country: 'France', age: '19', joined: '2025-06' }, { name: 'Joueur3', realName: 'Prénom Nom', role: 'Soutien', country: 'Belgique', age: '23', joined: '2023-09' }, { name: 'Coach Démo', realName: '', role: 'Coach', country: 'France', age: '', joined: '2024-01' }], results: [{ date: '2026-10-04', event: 'Major', opponent: 'Équipe A', score: '4-2', win: true }, { date: '2026-10-03', event: 'Major', opponent: 'Équipe B', score: '1-4', win: false }], upcoming: [{ date: '2026-10-12', event: 'Major', opponent: 'Équipe C' }], news: [{ title: 'Qualifiée pour le prochain Major', summary: 'L’équipe a validé sa place après une série en 5 manches.', date: '2026-10-04', url: 'https://liquipedia.net/', image: '' }] },
+  joueur: { realName: 'Prénom Nom', born: '2005-03-14', age: '21', country: 'France', role: 'Capitaine', team: 'Équipe', about: 'Exemple de démo : en vrai, la fiche du joueur est remplie par l’IA à partir des sites e-sport.', photo: '', history: [{ team: 'Équipe actuelle', from: '2024', to: '' }, { team: 'Ancienne équipe', from: '2022', to: '2024' }], titles: [{ event: 'Major de printemps', year: '2026', place: '1er' }], stats: [{ label: 'Rating', value: '1.18' }, { label: 'Buts / match', value: '0.9' }], settings: [{ label: 'Sensibilité', value: '1.2' }, { label: 'Caméra', value: '110° FOV' }], links: { twitter: '', twitch: '', youtube: '' } },
+  actus: { news: [] },
+  tournoi: { place: 'Paris', dates: '6-15 nov.', prize: '500 000 $', format: 'Exemple de démo : phase de groupes puis élimination directe.', status: 'à venir', winner: '', teams: [{ name: 'Team Vitality', result: '' }, { name: 'Karmine Corp', result: '' }, { name: 'G2 Esports', result: '' }], matches: [{ date: '2026-11-06', a: 'Team Vitality', b: 'G2 Esports', score: '', stage: 'Groupes' }] },
+};
+// Équipes suivies : alerte 15 min avant un match et au lancement du direct (clic = ouvre le stream)
+ipcMain.handle('more:esportFollow', (_e, list) => { store.data.esFollow = (Array.isArray(list) ? list : []).slice(0, 12).map((t) => ({ nom: String(t.nom ?? '').slice(0, 50), jeu: String(t.jeu ?? '').slice(0, 40) })); store.save(); esportWatch(); return true; });
+let esLive = { matches: [], at: 0 };
+ipcMain.handle('more:esportLive', () => esLive);
+async function esportWatch() {
+  const teams = store.data.esFollow ?? [];
+  if (process.env.LAUNCHER_DEMO) { esLive = { at: Date.now(), matches: teams.length ? [{ team: teams[0].nom, game: teams[0].jeu, opponent: 'G2 Esports', event: 'Match de démo', start: new Date().toISOString(), live: true, score: '2-1', stream: 'https://www.twitch.tv/rocketleague' }] : [] }; send('more:esportLive', esLive); return; }
+  if (!teams.length) { esLive = { matches: [], at: Date.now() }; return; }
+  const r = await api('/api/compte/esport/direct', { method: 'POST', body: { teams }, timeout: 90_000 }).catch(() => null);
+  if (!Array.isArray(r?.matches)) return;
+  esLive = { matches: r.matches, at: Date.now() }; send('more:esportLive', esLive);
+  const seen = (store.data.esNotified ??= {});
+  for (const m of r.matches) {
+    const k = `${m.team}|${m.opponent}|${m.start.slice(0, 13)}`, mins = (Date.parse(m.start) - Date.now()) / 60_000;
+    const open = () => m.stream && openLink(m.stream).catch(() => {});
+    const pop = (title, body) => { if (!Notification.isSupported()) return; const n = new Notif({ title, body, icon: icon(), silent: false }); n.on('click', open); n.show(); };
+    if (m.live && !seen[`${k}|live`]) { seen[`${k}|live`] = Date.now(); pop(`🔴 ${m.team} joue en direct`, `vs ${m.opponent} · ${m.event}${m.score ? ` · ${m.score}` : ''}${m.stream ? ' — clique pour regarder' : ''}`); }
+    else if (!m.live && mins > 0 && mins <= 20 && !seen[`${k}|soon`]) { seen[`${k}|soon`] = Date.now(); pop(`${m.team} joue dans ${Math.round(mins)} min`, `vs ${m.opponent} · ${m.event}${m.stream ? ' — clique pour le stream' : ''}`); }
+  }
+  for (const [k, t] of Object.entries(seen)) if (Date.now() - t > 3 * 86_400_000) delete seen[k];
+  store.save();
+}
+setTimeout(() => { esportWatch().catch(() => {}); setInterval(() => esportWatch().catch(() => {}), 5 * 60_000); }, 90_000);
+ipcMain.handle('more:esportFiche', (_e, type, args = {}) => {
+  if (process.env.LAUNCHER_DEMO) return ES_DEMO[type] ?? null;
+  const q = new URLSearchParams({ type: String(type), nom: String(args.nom ?? ''), equipe: String(args.equipe ?? ''), jeu: String(args.jeu ?? '') });
+  return api(`/api/compte/esport/fiche?${q}`, { timeout: 90_000 }).catch(() => null);
+});
 ipcMain.handle('more:esportOpen', (_e, url) => openLink(String(url)).then(() => true, () => false));
 ipcMain.handle('more:dustDone', () => { store.data.dustAt = Date.now(); store.save(); return true; });
 ipcMain.handle('more:speed', () => (process.env.LAUNCHER_DEMO ? { down: 412, up: 48 } : speedTest((u, o) => net.fetch(u, o)).catch((err) => ({ error: err.message }))));
