@@ -71,7 +71,7 @@ JSON : {"realName":"","born":"","age":"","country":"","role":"","team":"","about
   },
   actus: {
     ttl: 2 * 3_600_000,
-    ask: ({ jeu }) => `Les 6 actus e-sport les plus récentes (dernières 48 h si possible) sur : ${jeu}. Priorité aux compétitions en cours (résultats, qualifiés, transferts marquants). Pour chacune : titre, résumé d'une phrase, jeu, date AAAA-MM-JJ, lien de l'article, image (URL https directe de l'image de l'article).
+    ask: ({ jeu }) => `Les 6 actus e-sport les plus récentes (dernières 48 h si possible) sur : ${jeu}. Priorité aux compétitions en cours (résultats, qualifiés, transferts marquants). Pour chacune : titre, résumé d'une phrase, jeu, date AAAA-MM-JJ, lien de l'article, image (URL https directe de la grande image de l'article, og:image, au moins 1200 px de large, pas une miniature).
 JSON : {"news":[{"title":"","summary":"","game":"","date":"","url":"","image":""}]}`,
     clean: (d) => ({ news: list(d.news, 6, (n) => ({ title: S(n.title, 140), summary: S(n.summary, 300), game: S(n.game, 30), date: S(n.date, 10), url: URL_OK(n.url), image: URL_OK(n.image) })).filter((n) => n.title && n.image) }),
   },
