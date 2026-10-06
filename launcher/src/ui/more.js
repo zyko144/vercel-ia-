@@ -654,52 +654,111 @@ export function initMore(api, h) {
   // ---------- Rubrique E-sport : équipes aux couleurs de leur club, jeux et calendrier ----------
   let esGame = 'all';
   const esFollow = () => { try { return JSON.parse(pref('esfollow') ?? '[]'); } catch { return []; } };
+  const esSync = async () => { const d = await esLoad(); more('esportFollow', esFollow().map((id) => d.teams.find((t) => t.id === id)).filter(Boolean).map((t) => ({ nom: t.name, jeu: d.games.find((g) => g.id === t.game)?.name ?? '' }))); };
+  setTimeout(esSync, 5000);
   const esDate = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   const esState = (e) => { const t = new Date().toISOString().slice(0, 10); if (e.end < t) return ['fini', 'Terminé']; if (e.start <= t) return ['live', 'En cours']; const d = Math.ceil((new Date(`${e.start}T00:00:00`) - Date.now()) / 86_400_000); return ['soon', d <= 1 ? 'Demain' : `Dans ${d} jours`]; };
   const esArt = (g) => (g?.steam ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.steam}/library_hero.jpg` : '');
-  const esEvent = (e, g) => { const [k, l] = esState(e); return `<div class="esev es-${k}" style="--c:${esc(e.color)}"><i style="background-image:${[esSrv('event', e.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ')}"></i><small>${esc(g?.name ?? '')}</small><b>${esc(e.name)}</b><span>${esDate(e.start)} – ${esDate(e.end)}</span><em>${k === 'live' ? '<u></u>' : ''}${l}</em>${k !== 'fini' ? `<button type="button" class="btn sm" data-esurl="${esc(e.url)}">Suivre</button>` : ''}</div>`; };
+  const esEvent = (e, g) => { const [k, l] = esState(e); return `<div class="esev es-${k}" data-esevent="${esc(e.id)}" style="--c:${esc(e.color)}"><i style="background-image:${[esSrv('event', e.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ')}"></i><small>${esc(g?.name ?? '')}</small><b>${esc(e.name)}</b><span>${esDate(e.start)} – ${esDate(e.end)}</span><em>${k === 'live' ? '<u></u>' : ''}${l}</em>${k !== 'fini' ? `<button type="button" class="btn sm" data-esurl="${esc(e.url)}">Suivre</button>` : ''}</div>`; };
   // Images du club (facultatives) : esport/<club>-logo.png et esport/<club>-bg.jpg (club = nom sans espaces), sinon couleurs + sigle
   const esOrg = (t) => t.name.toLowerCase().replace(/[^a-z0-9]/g, '');
   // Ordre : image livrée avec le launcher, puis image trouvée par l'IA du serveur, puis couleurs et sigle
   const esSrv = (type, name) => (esData?.api ? `${esData.api}/api/compte/esport/img?type=${type}&nom=${encodeURIComponent(name)}` : '');
   const esImg = (t, g) => [`esport/${esOrg(t)}-bg.jpg`, `esport/${t.id}-bg.jpg`, esSrv('bg', t.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ');
   const esLogo = (t) => `<img class="eslogo" src="esport/${esOrg(t)}-logo.png" data-alt="${esc(esSrv('logo', t.name))}" alt="">`;
-  document.addEventListener('error', (e) => { const im = e.target; if (!im?.classList?.contains('eslogo')) return; if (im.dataset.alt) { im.src = im.dataset.alt; im.dataset.alt = ''; } else im.remove(); }, true); // logo absent : on garde le sigle
+  document.addEventListener('error', (e) => { const im = e.target; if (!im?.classList?.contains('eslogo') && !im?.classList?.contains('esface')) return; if (im.dataset.alt) { im.src = im.dataset.alt; im.dataset.alt = ''; } else im.remove(); }, true); // logo absent : on garde le sigle
   const esTeam = (t, g, fol) => `<button type="button" class="esteam" data-esteam="${esc(t.id)}" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><i style="background-image:${esImg(t, g)}"></i><strong>${esc(t.tag)}</strong>${esLogo(t)}<span><b>${esc(t.name)}</b><small>${esc(g?.name ?? '')} · ${esc(t.country)}</small></span>${fol ? '<em>★</em>' : ''}</button>`;
+const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Europe', UA: 'Europe', RU: 'Europe', TR: 'Europe', EU: 'Europe', BE: 'Europe', US: 'Amérique du Nord', CA: 'Amérique du Nord', BR: 'Amérique du Sud', SA: 'Moyen-Orient', MN: 'Asie', KR: 'Asie', CN: 'Asie', JP: 'Asie', SG: 'Asie' };
+  let esLiveData = { matches: [] };
+  api.onEsportLive?.((d) => { esLiveData = d; if (state.view === 'esport') esportView(); });
+  const esLiveHtml = (d) => { const now = Date.now(), ms = (esLiveData.matches ?? []).filter((m) => m.live || Date.parse(m.start) - now < 36 * 3_600_000).sort((a, b) => b.live - a.live || Date.parse(a.start) - Date.parse(b.start)); if (!ms.length) return ''; return `<h3 class="essub">Tes équipes en direct et bientôt</h3><div class="eslive">${ms.map((m) => { const t = d.teams.find((x) => x.name === m.team); return `<div class="eslivecard ${m.live ? 'on' : ''}" style="--ta:${esc(t?.colors[0] ?? '#ff4655')}"><em>${m.live ? '<u></u> EN DIRECT' : new Date(m.start).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</em><b>${esc(m.team)} <span>vs</span> ${esc(m.opponent)}</b><small>${esc(m.game)} · ${esc(m.event)}${m.score ? ` · ${esc(m.score)}` : ''}</small>${m.stream ? `<button type="button" class="btn sm play" data-esurl="${esc(m.stream)}">${/twitch/.test(m.stream) ? 'Regarder sur Twitch' : 'Regarder'}</button>` : ''}</div>`; }).join('')}</div>`; };
   async function esportView() {
+    if (!esLiveData.at) more('esportLive').then((d) => { if (d?.at) { esLiveData = d; esportView(); } });
     const d = await esLoad(); const box = document.getElementById('esBody'); if (!box || !d?.teams) return;
-    const fol = esFollow(), G = Object.fromEntries(d.games.map((g) => [g.id, g])), pick = (x) => esGame === 'all' || x.game === esGame;
+    const fol = esFollow(), G = Object.fromEntries(d.games.map((g) => [g.id, g])), pick = (x) => esGame === 'all' || x.game === esGame, q = (document.getElementById('esSearch')?.value ?? '').trim().toLowerCase();
     const t0 = new Date().toISOString().slice(0, 10);
     const evs = d.events.filter((e) => pick(e) && e.end >= t0).sort((a, b) => a.start.localeCompare(b.start));
-    const teams = d.teams.filter(pick).sort((a, b) => fol.includes(b.id) - fol.includes(a.id) || a.name.localeCompare(b.name));
+    const teams = d.teams.filter((x) => pick(x) && (!q || `${x.name} ${x.tag}`.toLowerCase().includes(q))).sort((a, b) => fol.includes(b.id) - fol.includes(a.id) || a.name.localeCompare(b.name));
     document.getElementById('esGames').innerHTML = [['all', 'Tous'], ...d.games.map((g) => [g.id, g.name])].map(([k, l]) => `<button type="button" class="${k === esGame ? 'on' : ''}" data-esgame="${k}">${esc(l)}</button>`).join('');
     const stars = (d.featured ?? []).map((n) => teams.find((t) => t.name === n) ?? (esGame === 'all' ? d.teams.find((t) => t.name === n) : null)).filter(Boolean);
     const hero = stars.map((t) => `<button type="button" class="esstar" data-esteam="${esc(t.id)}" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><i style="background-image:${esImg(t, G[t.game])}"></i>${esLogo(t)}<strong>${esc(t.tag)}</strong><span><b>${esc(t.name)}</b><small>${d.teams.filter((x) => x.name === t.name).map((x) => esc(G[x.game]?.name ?? '')).join(' · ')}</small></span></button>`).join('');
-    box.innerHTML = `${hero ? `<div class="esstars">${hero}</div>` : ''}<h3 class="essub">Calendrier</h3><div class="esevs">${evs.map((e) => esEvent(e, G[e.game])).join('') || '<div class="empty">Aucune compétition annoncée pour l’instant.</div>'}</div>
-      <h3 class="essub">Équipes${fol.length ? ' · tes favorites en premier' : ''}</h3><div class="esteams">${teams.map((t) => esTeam(t, G[t.game], fol.includes(t.id))).join('')}</div>
+    box.innerHTML = `${esLiveHtml(d)}${hero && !q ? `<div class="esstars">${hero}</div>` : ''}<h3 class="essub">Calendrier</h3><div class="esevs">${evs.map((e) => esEvent(e, G[e.game])).join('') || '<div class="empty">Aucune compétition annoncée pour l’instant.</div>'}</div>
+      ${teams.some((t) => fol.includes(t.id)) ? `<h3 class="essub">Tes équipes</h3><div class="esteams">${teams.filter((t) => fol.includes(t.id)).map((t) => esTeam(t, G[t.game], true)).join('')}</div>` : ''}
+      ${(() => { const rest = teams.filter((t) => !fol.includes(t.id)); const by = (k) => rest.reduce((m, t) => ((m[k(t)] ??= []).push(t), m), {}); const groups = esGame === 'all' ? d.games.map((g) => [g.name, by((t) => t.game)[g.id] ?? [], g.color]) : Object.entries(by((t) => ES_REG[t.country] ?? 'Autres')).sort(([a], [b]) => a.localeCompare(b)).map(([r, l]) => [r, l, G[esGame]?.color]); return groups.filter(([, l]) => l.length).map(([n, l, c]) => `<div class="esgroup" style="--gc:${esc(c ?? '#888')}"><h3 class="essub"><i></i>${esc(n)} <small>${l.length} équipe${l.length > 1 ? 's' : ''}</small></h3><div class="esteams">${l.map((t) => esTeam(t, G[t.game], false)).join('')}</div></div>`).join('') || '<div class="empty">Aucune équipe ne correspond.</div>'; })()}
       <p class="hint">Liste des équipes et calendrier mis à jour depuis le site History.</p>`;
+  }
+  const esRow = (k, v) => (v ? `<div><small>${k}</small><b>${esc(v)}</b></div>` : '');
+  const esLinks = (l = {}) => Object.entries({ site: 'Site officiel', twitter: 'X / Twitter', twitch: 'Twitch', youtube: 'YouTube' }).filter(([k]) => l[k]).map(([k, n]) => `<button type="button" class="btn sm ghost" data-esurl="${esc(l[k])}">${n}</button>`).join('');
+  const esTitles = (ts = []) => (ts.length ? `<div class="estitles">${ts.map((x) => `<div><em>${esc(x.place)}</em><b>${esc(x.event)}</b><small>${esc(x.year)}</small></div>`).join('')}</div>` : '<div class="empty">Palmarès non trouvé.</div>');
+  const esSrc = (d) => (d?.sources?.length ? `<p class="hint essrc">Sources : ${d.sources.map((x) => `<a href="#" data-esurl="${esc(x.url)}">${esc(x.title || new URL(x.url).hostname)}</a>`).join(' · ')}</p>` : '');
+  const esWait = '<div class="esload"><i></i><span>L’IA lit les sites e-sport pour toi…</span></div>';
+  let esCur = null;
+  function esDlg(head, tabs) {
+    modal(`<div class="esteamdlg" style="--ta:${esc(head.a)};--tb:${esc(head.b)}"><div class="estop"><i style="background-image:${head.img}"></i>${head.logo ?? ''}<strong>${esc(head.tag ?? '')}</strong><div><small>${esc(head.sub)}</small><h2>${esc(head.title)}</h2></div><button type="button" class="sellx" data-m="1" aria-label="Fermer">✕</button></div>
+      <div class="estabs">${tabs.map(([k, l], i) => `<button type="button" class="${i ? '' : 'on'}" data-estab="${k}">${l}</button>`).join('')}</div><div class="esdlgbody" id="esTabBody">${esWait}</div></div>`, true);
+    $('modalBox').classList.add('sellbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
   }
   async function esTeamOpen(id) {
     const d = await esLoad(), t = d.teams.find((x) => x.id === id); if (!t) return;
-    const g = d.games.find((x) => x.id === t.game), fol = esFollow().includes(id), t0 = new Date().toISOString().slice(0, 10);
-    const evs = d.events.filter((e) => e.game === t.game).sort((a, b) => (a.end < t0) - (b.end < t0) || a.start.localeCompare(b.start));
-    modal(`<div class="esteamdlg" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><div class="estop"><i style="background-image:${esImg(t, g)}"></i>${esLogo(t)}<strong>${esc(t.tag)}</strong><div><small>${esc(g?.name ?? '')} · ${esc(t.country)}</small><h2>${esc(t.name)}</h2></div><button type="button" class="sellx" data-m="1" aria-label="Fermer">✕</button></div>
-      <div class="esdlgbody"><div class="row"><button type="button" class="btn ${fol ? 'ghost' : 'play'}" data-esfollow="${esc(id)}">${fol ? '★ Suivie' : '☆ Suivre cette équipe'}</button><button type="button" class="btn ghost" data-esurl="https://liquipedia.net/${esc(g?.wiki ?? '')}/${encodeURIComponent(t.name.replace(/ /g, '_'))}">Effectif et résultats</button></div>
-      <h3 class="essub">Actualités</h3><div class="esnews" id="esNews"><div class="empty">L’IA lit les sites e-sport…</div></div>
-      <h3 class="essub">Effectif</h3><div class="esplayers" id="esPlayers"><div class="empty">Chargement…</div></div>
-      <h3 class="essub">Calendrier ${esc(g?.name ?? '')}</h3><div class="esevs">${evs.map((e) => esEvent(e, g)).join('') || '<div class="empty">Aucune compétition annoncée.</div>'}</div></div></div>`, true);
-    $('modalBox').classList.add('sellbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
-    const info = await more('esportInfo', t.name, g?.name ?? '');
-    if (!document.getElementById('esNews')) return;
-    document.getElementById('esNews').innerHTML = (info?.news ?? []).map((n) => `<button type="button" class="esnew" ${n.url ? `data-esurl="${esc(n.url)}"` : ''}>${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy">` : `<i style="background-image:${esImg(t, g)}"></i>`}<div><small>${n.date ? esDate(n.date) : ''}</small><b>${esc(n.title)}</b><span>${esc(n.summary)}</span></div></button>`).join('') || '<div class="empty">Pas d’actualité trouvée pour le moment.</div>';
-    document.getElementById('esPlayers').innerHTML = (info?.players ?? []).map((p) => `<div class="esplayer"><b>${esc(p.name)}</b><small>${esc([p.role, p.country].filter(Boolean).join(' · '))}</small></div>`).join('') || '<div class="empty">Effectif indisponible.</div>';
+    const g = d.games.find((x) => x.id === t.game);
+    esCur = { kind: 'team', t, g, data: null, tab: 'apercu' };
+    esDlg({ a: t.colors[0], b: t.colors[1], img: esImg(t, g), logo: esLogo(t), tag: t.tag, sub: `${g?.name ?? ''} · ${t.country}`, title: t.name }, [['apercu', 'Aperçu'], ['effectif', 'Effectif'], ['matchs', 'Matchs'], ['actus', 'Actus'], ['calendrier', 'Calendrier']]);
+    esCur.data = (await more('esportFiche', 'equipe', { nom: t.name, jeu: g?.name ?? '' })) ?? false;
+    if (esCur?.t === t) esTab(esCur.tab);
   }
+  async function esPlayerOpen(name) {
+    const { t, g } = esCur ?? {}; if (!t) return;
+    esCur = { kind: 'player', t, g, name, data: null, tab: 'joueur', back: t.id };
+    esDlg({ a: t.colors[0], b: t.colors[1], img: esImg(t, g), logo: esLogo(t), tag: t.tag, sub: `${t.name} · ${g?.name ?? ''}`, title: name }, [['joueur', 'Profil'], ['parcours', 'Parcours'], ['reglages', 'Stats et réglages']]);
+    esCur.data = (await more('esportFiche', 'joueur', { nom: name, equipe: t.name, jeu: g?.name ?? '' })) ?? false;
+    if (esCur?.name === name) esTab(esCur.tab);
+  }
+  async function esEventOpen(id) {
+    const d = await esLoad(), e = d.events.find((x) => x.id === id); if (!e) return;
+    const g = d.games.find((x) => x.id === e.game);
+    esCur = { kind: 'event', e, g, data: null, tab: 'tournoi' };
+    esDlg({ a: e.color, b: '#0b0d14', img: [esSrv('event', e.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', '), sub: `${g?.name ?? ''} · ${esDate(e.start)} – ${esDate(e.end)}`, title: e.name }, [['tournoi', 'Infos'], ['equipes', 'Équipes'], ['matchs', 'Matchs']]);
+    esCur.data = (await more('esportFiche', 'tournoi', { nom: e.name, jeu: g?.name ?? '' })) ?? false;
+    if (esCur?.e === e) esTab(esCur.tab);
+  }
+  function esTab(tab) {
+    const c = esCur, box = document.getElementById('esTabBody'); if (!c || !box) return;
+    c.tab = tab; document.querySelectorAll('[data-estab]').forEach((b) => b.classList.toggle('on', b.dataset.estab === tab));
+    const D = c.data;
+    if (!D) { box.innerHTML = c.data === null ? esWait : '<div class="empty">Infos indisponibles pour le moment, réessaie plus tard.</div>'; return; }
+    const fol = c.t && esFollow().includes(c.t.id);
+    const H = {
+      apercu: () => `<div class="row">${`<button type="button" class="btn ${fol ? 'ghost' : 'play'}" data-esfollow="${esc(c.t.id)}">${fol ? '★ Suivie' : '☆ Suivre cette équipe'}</button>`}${esLinks(D.team?.links)}</div>
+        ${D.team?.about ? `<p class="esabout">${esc(D.team.about)}</p>` : ''}
+        <div class="esfacts">${esRow('Fondée', D.team?.founded)}${esRow('Région', D.team?.region)}${esRow('Pays', D.team?.country)}${esRow('Coach', D.team?.coach)}${esRow('Manager', D.team?.manager)}${esRow('Gains', D.team?.earnings)}${esRow('Classement', D.team?.ranking)}</div>
+        <h3 class="essub">Palmarès</h3>${esTitles(D.team?.titles)}`,
+      effectif: () => `<div class="esroster">${(D.players ?? []).map((p) => `<button type="button" class="esplayer" data-esplayer="${esc(p.name)}"><span>${esc(p.name[0] ?? '?')}${esSrv('joueur', `${p.name} ${c.t.name}`) ? `<img class="esface" src="${esc(esSrv('joueur', `${p.name} ${c.t.name}`))}" alt="" loading="lazy">` : ''}</span><div><b>${esc(p.name)}</b><small>${esc([p.role, p.country].filter(Boolean).join(' · '))}</small>${p.realName || p.age ? `<em>${esc([p.realName, p.age && `${p.age} ans`].filter(Boolean).join(' · '))}</em>` : ''}${p.joined ? `<em>Depuis ${esc(p.joined)}</em>` : ''}</div><i>›</i></button>`).join('') || '<div class="empty">Effectif non trouvé.</div>'}</div>`,
+      matchs: () => `${(D.upcoming ?? []).length ? `<h3 class="essub">À venir</h3><div class="esmatches">${D.upcoming.map((m) => `<div class="esmatch"><small>${esc(m.date)}</small><b>vs ${esc(m.opponent)}</b><span>${esc(m.event)}</span></div>`).join('')}</div>` : ''}
+        <h3 class="essub">Derniers résultats</h3><div class="esmatches">${(D.results ?? []).map((m) => `<div class="esmatch ${m.win ? 'win' : 'loss'}"><small>${esc(m.date)}</small><b>vs ${esc(m.opponent)}</b><span>${esc(m.event)}</span><strong>${esc(m.score)}</strong></div>`).join('') || '<div class="empty">Pas de résultat trouvé.</div>'}</div>`,
+      actus: () => `<div class="esnews">${(D.news ?? []).map((n) => `<button type="button" class="esnew" ${n.url ? `data-esurl="${esc(n.url)}"` : ''}>${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy">` : `<i style="background-image:${esImg(c.t, c.g)}"></i>`}<div><small>${n.date ? esc(n.date) : ''}</small><b>${esc(n.title)}</b><span>${esc(n.summary)}</span></div></button>`).join('') || '<div class="empty">Pas d’actualité trouvée.</div>'}</div>`,
+      calendrier: () => { const t0 = new Date().toISOString().slice(0, 10); const evs = (esData?.events ?? []).filter((e) => e.game === c.t.game).sort((a, b) => (a.end < t0) - (b.end < t0) || a.start.localeCompare(b.start)); return `<div class="esevs">${evs.map((e) => esEvent(e, c.g)).join('') || '<div class="empty">Aucune compétition annoncée.</div>'}</div>`; },
+      joueur: () => `<div class="esplayertop">${D.photo || esSrv('joueur', `${c.name} ${c.t.name}`) ? `<img class="esface" src="${esc(D.photo || esSrv('joueur', `${c.name} ${c.t.name}`))}" data-alt="${esc(D.photo ? esSrv('joueur', `${c.name} ${c.t.name}`) : '')}" alt="">` : ''}<span>${esc(c.name[0] ?? '?')}</span><div class="esfacts">${esRow('Vrai nom', D.realName)}${esRow('Né le', D.born)}${esRow('Âge', D.age && `${D.age} ans`)}${esRow('Pays', D.country)}${esRow('Rôle', D.role)}${esRow('Équipe', D.team)}</div></div>
+        ${D.about ? `<p class="esabout">${esc(D.about)}</p>` : ''}<div class="row"><button type="button" class="btn ghost" data-esteam="${esc(c.back)}">‹ Retour à l’équipe</button>${esLinks(D.links)}</div>
+        <h3 class="essub">Palmarès</h3>${esTitles(D.titles)}`,
+      parcours: () => `<div class="eshist">${(D.history ?? []).map((x) => `<div><b>${esc(x.team)}</b><small>${esc(x.from)} → ${esc(x.to || 'aujourd’hui')}</small></div>`).join('') || '<div class="empty">Parcours non trouvé.</div>'}</div>`,
+      reglages: () => `<h3 class="essub">Stats</h3><div class="esfacts">${(D.stats ?? []).map((x) => esRow(x.label, x.value)).join('') || '<div class="empty">Pas de stats trouvées.</div>'}</div><h3 class="essub">Réglages</h3><div class="esfacts">${(D.settings ?? []).map((x) => esRow(x.label, x.value)).join('') || '<div class="empty">Réglages non publiés.</div>'}</div>`,
+      tournoi: () => `<div class="row"><button type="button" class="btn play" data-esurl="${esc(c.e.url)}">Regarder en direct</button></div><div class="esfacts">${esRow('Lieu', D.place)}${esRow('Dates', D.dates)}${esRow('Cashprize', D.prize)}${esRow('Statut', D.status)}${esRow('Vainqueur', D.winner)}</div>${D.format ? `<p class="esabout">${esc(D.format)}</p>` : ''}`,
+      equipes: () => `<div class="esroster">${(D.teams ?? []).map((x) => { const tm = esData.teams.find((y) => y.game === c.e.game && y.name.toLowerCase() === x.name.toLowerCase()); return `<button type="button" class="esplayer" ${tm ? `data-esteam="${esc(tm.id)}"` : ''}><span>${esc(x.name[0] ?? '?')}</span><div><b>${esc(x.name)}</b><small>${esc(x.result)}</small></div>${tm ? '<i>›</i>' : ''}</button>`; }).join('') || '<div class="empty">Équipes non trouvées.</div>'}</div>`,
+      matchs_e: () => '',
+    };
+    const k = c.kind === 'event' && tab === 'matchs' ? null : tab;
+    box.innerHTML = (k ? H[k]() : `<div class="esmatches">${(D.matches ?? []).map((m) => `<div class="esmatch"><small>${esc(m.date)} · ${esc(m.stage)}</small><b>${esc(m.a)} vs ${esc(m.b)}</b><strong>${esc(m.score)}</strong></div>`).join('') || '<div class="empty">Pas de match trouvé.</div>'}</div>`) + esSrc(D);
+  }
+  document.getElementById('esSearch')?.addEventListener('input', () => esportView());
   document.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-esgame], [data-esteam], [data-esfollow]'); if (!t) return;
+    const t = e.target.closest('[data-esgame], [data-esteam], [data-esfollow], [data-estab], [data-esplayer], [data-esevent]'); if (!t) return;
+    if (t.dataset.estab) return esTab(t.dataset.estab);
+    if (t.dataset.esplayer) return esPlayerOpen(t.dataset.esplayer);
+    if (t.dataset.esevent && !e.target.closest('[data-esurl]')) return esEventOpen(t.dataset.esevent);
     if (t.dataset.esgame) { esGame = t.dataset.esgame; return esportView(); }
     if (t.dataset.esteam) return esTeamOpen(t.dataset.esteam);
-    const f = esFollow(), id = t.dataset.esfollow; pref('esfollow', JSON.stringify(f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
-    toast(f.includes(id) ? 'Équipe retirée' : '★ Équipe suivie'); esTeamOpen(id); esportView();
+    const f = esFollow(), id = t.dataset.esfollow; pref('esfollow', JSON.stringify(f.includes(id) ? f.filter((x) => x !== id) : [...f, id])); esSync();
+    toast(f.includes(id) ? 'Équipe retirée' : '★ Équipe suivie'); esTab('apercu'); esportView();
   });
 
   return {

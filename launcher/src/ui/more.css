@@ -313,3 +313,40 @@
 .esplayers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .esplayer { padding: 12px 14px; border-radius: 12px; background: linear-gradient(140deg, color-mix(in srgb, var(--ta) 22%, transparent), var(--panel-2)); border: 1px solid color-mix(in srgb, var(--ta) 30%, transparent); }
 .esplayer b { display: block; } .esplayer small { color: var(--muted); }
+/* Fiches e-sport : équipe, joueur, compétition */
+.estabs { display: flex; gap: 4px; padding: 0 34px; border-bottom: 1px solid var(--line, #ffffff14); background: #0006; }
+.estabs button { padding: 14px 16px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.estabs button.on { color: #fff; border-bottom-color: var(--ta); }
+.esdlgbody { min-height: 260px; display: grid; gap: 14px; align-content: start; }
+.esload { display: flex; align-items: center; gap: 12px; color: var(--muted); padding: 40px 0; justify-content: center; }
+.esload i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ta); border-top-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.esabout { margin: 0; line-height: 1.6; color: var(--text, #fff); opacity: .9; }
+.esfacts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.esfacts > div { padding: 12px 14px; border-radius: 12px; background: var(--panel-2); display: grid; gap: 2px; } .esfacts small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.estitles { display: grid; gap: 6px; }
+.estitles > div { display: grid; grid-template-columns: 54px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--panel-2); }
+.estitles em { font-style: normal; font-weight: 800; color: var(--ta); } .estitles small { color: var(--muted); }
+.esroster { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.esroster .esplayer { display: flex; align-items: center; gap: 12px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.esroster .esplayer:hover { border-color: var(--ta); }
+.esroster .esplayer > span, .esplayertop > span { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 18px; background: linear-gradient(140deg, var(--ta), var(--tb)); color: #fff; }
+.esroster .esplayer > div { flex: 1; min-width: 0; display: grid; } .esroster em { font-style: normal; font-size: 12px; color: var(--muted); } .esroster .esplayer > i { font-style: normal; color: var(--muted); font-size: 20px; }
+.esplayertop { display: flex; gap: 18px; align-items: flex-start; } .esplayertop > img { width: 120px; height: 120px; border-radius: 16px; object-fit: cover; } .esplayertop > span { width: 90px; height: 90px; font-size: 36px; } .esplayertop .esfacts { flex: 1; }
+.esmatches { display: grid; gap: 8px; }
+.esmatch { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 14px; align-items: center; padding: 12px 16px; border-radius: 12px; background: var(--panel-2); border-left: 3px solid var(--line, #ffffff20); }
+.esmatch.win { border-left-color: #22c55e; } .esmatch.loss { border-left-color: #ef4444; } .esmatch small, .esmatch span { color: var(--muted); font-size: 12px; } .esmatch strong { font-size: 16px; }
+.eshist { display: grid; gap: 8px; border-left: 2px solid var(--ta); padding-left: 16px; } .eshist > div { display: grid; } .eshist small { color: var(--muted); }
+.essrc { margin-top: 6px; } .essrc a { color: inherit; }
+.esev { cursor: pointer; } .esev:hover { filter: brightness(1.12); }
+.esgroup { margin-top: 8px; } .esgroup .essub { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--text, #fff); letter-spacing: .04em; }
+.esgroup .essub i { width: 6px; height: 22px; border-radius: 4px; background: var(--gc); } .esgroup .essub small { color: var(--muted); font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.eslive { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.eslivecard { position: relative; display: grid; gap: 4px; padding: 16px 18px; border-radius: 16px; background: linear-gradient(130deg, color-mix(in srgb, var(--ta) 28%, #0b0d14), #0b0d14 80%); border: 1px solid color-mix(in srgb, var(--ta) 40%, transparent); }
+.eslivecard.on { border-color: #ef4444; box-shadow: 0 0 0 1px #ef444455, 0 12px 30px -14px #ef4444; }
+.eslivecard em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--muted); display: flex; align-items: center; gap: 6px; } .eslivecard.on em { color: #f87171; }
+.eslivecard em u { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: esping 1.6s infinite; }
+.eslivecard b { font-size: 17px; } .eslivecard b span { color: var(--muted); font-weight: 500; } .eslivecard small { color: var(--muted); } .eslivecard .btn { justify-self: start; margin-top: 6px; background: #9146ff; border-color: transparent; }
+.esroster .esplayer > span, .esplayertop > span { position: relative; overflow: hidden; } .esface { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.esplayertop { position: relative; } .esplayertop > img.esface { position: static; width: 120px; height: 120px; border-radius: 16px; flex: none; } .esplayertop > img.esface + span { display: none; }
+.eslive { margin-bottom: 20px; }

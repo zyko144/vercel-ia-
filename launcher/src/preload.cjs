@@ -303,4 +303,5 @@ contextBridge.exposeInMainWorld('launcher', {
   more: (name, ...args) => ipcRenderer.invoke(`more:${name}`, ...args),
   onMore: (fn) => ipcRenderer.on('more:stress', (_e, p) => fn(p)),
   onStorage: (fn) => ipcRenderer.on('more:storage', (_e, p) => fn(p)),
+  onEsportLive: (fn) => ipcRenderer.on('more:esportLive', (_e, p) => fn(p)),
 });
