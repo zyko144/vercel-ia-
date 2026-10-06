@@ -1725,7 +1725,7 @@ const epicLauncherInstalled = () => path.join(process.env.ProgramData ?? 'C:\\Pr
 ipcMain.handle('gameUpdate:progress', async (_e, id) => {
   const item=items.find(i=>i.id===id);
   if(!item)return {error:'Jeu introuvable.'};
-  try { const result=await readUpdateProgress(item);if(result.phase==='done'&&item.updatePending){item.updatePending=false;send('lib:update',library());}return result; }
+  try { const result=await readUpdateProgress(item);if(item.updateKick&&result.phase!=='done')result.label=`${result.label} · Steam ne démarrait pas la mise à jour : le jeu a été lancé par Steam pour la forcer, il s’ouvrira une fois à jour.`;if(result.phase==='done')item.updateKick=false;if(result.phase==='done'&&item.updatePending){item.updatePending=false;send('lib:update',library());}return result; }
   catch(e){return {error:e.message};}
 });
 // Mods d'un jeu : fichiers des dossiers mods / plugins ; désactiver = renommer en .disabled (réversible)
@@ -1813,9 +1813,9 @@ async function doAction(id, action) {
     const before = await readUpdateProgress(item);
     if(before.phase === 'done')return {ok:true};
     if (!(await runSilentSteam(updateCommand(item)))) throw new Error('Plateforme de téléchargement introuvable');
-    // Jeu déjà installé : Steam ignore souvent « install ». Sans téléchargement au bout de 20 s, on lui fait vérifier
-    // les fichiers du jeu, ce qui télécharge la mise à jour en attente.
-    setTimeout(async () => { const p = await readUpdateProgress(item).catch(() => null); if (p?.phase === 'waiting' && !p.bytes) runSilentSteam([`steam://validate/${item.steamId}`]).catch(() => {}); }, 20_000);
+    // Mise à jour en file mais jamais démarrée (0 octet au bout de 20 s) : Steam ne la télécharge souvent qu'au lancement
+    // du jeu. On lance donc le jeu par Steam : la mise à jour passe en premier, le jeu s'ouvre une fois à jour.
+    setTimeout(async () => { const p = await readUpdateProgress(item).catch(() => null); if (p && ['waiting', 'download'].includes(p.phase) && !p.bytes) { item.updateKick = true; runSilentSteam(['-applaunch', item.steamId]).catch(() => {}); } }, 20_000);
     return { ok: true };
   }
 
