@@ -1812,8 +1812,11 @@ async function doAction(id, action) {
     // Demande de téléchargement uniquement : ne jamais utiliser -applaunch ici.
     const before = await readUpdateProgress(item);
     if(before.phase === 'done')return {ok:true};
-    if (await runSilentSteam(updateCommand(item))) return { ok: true };
-    throw new Error('Plateforme de téléchargement introuvable');
+    if (!(await runSilentSteam(updateCommand(item)))) throw new Error('Plateforme de téléchargement introuvable');
+    // Jeu déjà installé : Steam ignore souvent « install ». Sans téléchargement au bout de 20 s, on lui fait vérifier
+    // les fichiers du jeu, ce qui télécharge la mise à jour en attente.
+    setTimeout(async () => { const p = await readUpdateProgress(item).catch(() => null); if (p?.phase === 'waiting' && !p.bytes) runSilentSteam([`steam://validate/${item.steamId}`]).catch(() => {}); }, 20_000);
+    return { ok: true };
   }
 
   if (action === 'verify') {
