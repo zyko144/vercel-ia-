@@ -1616,6 +1616,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.62.2': [
+    ['⟳', 'Mises à jour bloquées à 0 %', 'Quand Steam met la mise à jour d’un jeu en file sans jamais la démarrer, History lance le jeu par Steam pour la forcer : la mise à jour passe en premier et le jeu s’ouvre une fois à jour.', ['[data-view=jeux]', 'wait1500']],
+  ],
   '0.62.1': [
     ['⟳', 'Mises à jour des jeux réparées', 'Le bouton « Mettre à jour » d’un jeu Steam lance vraiment le téléchargement : si Steam ne démarre pas tout seul, History lui fait vérifier les fichiers du jeu, ce qui télécharge la mise à jour.', ['[data-view=jeux]', 'wait1500']],
   ],
@@ -5013,7 +5016,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.62.1',
+    version: async () => '0.62.2',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

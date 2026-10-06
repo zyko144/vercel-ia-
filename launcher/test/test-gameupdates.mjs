@@ -14,5 +14,5 @@ assert.throws(()=>parseUpdateProgress(acf({StateFlags:4}),'456'));
 assert.throws(()=>parseUpdateProgress('"AppState" { "appid" "123" "StateFlags" "4"','123'));
 assert.throws(()=>parseUpdateProgress(acf({}),'123'));
 const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');const branch=main.slice(main.indexOf("if (action === 'update'"),main.indexOf("if (action === 'verify')"));
-assert.ok(branch.includes('runSilentSteam(updateCommand(item))'));assert.ok(!branch.includes('gameMode(item)'));assert.ok(!branch.includes("['-applaunch'"));
-console.log('✓ Mises à jour : téléchargement sans lancement, octets réels, installation, attente, erreur, manifeste incomplet');
+assert.ok(branch.includes('runSilentSteam(updateCommand(item))'));assert.ok(!branch.includes('gameMode(item)'));assert.ok(!branch.includes("['-applaunch'") || /updateKick = true; runSilentSteam\(\['-applaunch'/.test(branch)); // lancement seulement si Steam laisse la mise à jour à 0 octet
+console.log('✓ Mises à jour : téléchargement sans lancement (sauf mise à jour bloquée à 0 %), octets réels, installation, attente, erreur, manifeste incomplet');
