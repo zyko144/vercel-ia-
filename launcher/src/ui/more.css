@@ -369,3 +369,9 @@
 .esmatch.esgm { grid-template-columns: 150px 1fr auto; } .esgm b strong { margin: 0 8px; color: var(--blue); }
 .esgame { margin-bottom: 30px; } .esgame .esmatches, .esgame .esnews { margin-bottom: 8px; }
 .esgm b { display: flex; align-items: center; gap: 8px; } .esgm b .eslogo { width: 26px; height: 26px; object-fit: contain; }
+.esslide[data-hero=val] { background-size: auto 100%; background-position: right center; background-repeat: no-repeat; background-color: #5e0a10; }
+.esslide[data-hero=val]::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #5e0a10 27%, #5e0a1000 42%); }
+.esmatch.esgm { grid-template-columns: 150px 1fr auto auto; } .esgm.live { border-left: 3px solid #ef4444; } .esgm em { font-style: normal; color: #f87171; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; } .esgm em u { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: esping 1.6s infinite; }
+.esmatch.esplace { grid-template-columns: 110px 1fr auto auto; } .esplace.win strong { color: #facc15; }
+.estl > div { padding: 12px 16px; } .estl span { color: var(--text); font-size: 14px; }
+.esmatch > b { display: flex; align-items: center; gap: 8px; } .esmatch > b .eslogo { width: 24px; height: 24px; object-fit: contain; }

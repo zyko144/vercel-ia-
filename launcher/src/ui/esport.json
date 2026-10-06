@@ -517,6 +517,7 @@
   {
    "game": "cs2",
    "name": "Aurora",
+   "lp": "Aurora Gaming",
    "tag": "AUR",
    "colors": [
     "#9be2ff",
@@ -1045,6 +1046,7 @@
   {
    "game": "lol",
    "name": "Dplus KIA",
+   "lp": "Dplus",
    "tag": "DK",
    "colors": [
     "#00c2b2",

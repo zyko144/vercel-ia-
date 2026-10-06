@@ -1616,6 +1616,11 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.62.0': [
+    ['🏆', 'Fiches e-sport instantanées', 'Effectif avec vrais noms, palmarès, classements, derniers matchs avec scores et historique de chaque équipe : lus sur Liquipedia toutes les heures et affichés tout de suite, sans attendre l’IA.', ['[data-view=esport]', 'wait1500', '.esstar[data-esteam]', 'wait1500', '[data-estab=matchs]', 'wait800']],
+    ['👤', 'Fiches joueurs complètes', 'Photo, âge, parcours, palmarès, gains et réglages (caméra, souris, sensibilité) de chaque joueur.'],
+    ['📅', 'Matchs de chaque jeu', 'Résultats et prochains matchs de Rocket League, R6, CS2, VALORANT et LoL, avec le direct et le lien du stream. Les alertes de tes équipes suivies utilisent ces horaires.'],
+  ],
   '0.61.1': [
     ['🔧', 'Fiches e-sport réparées', 'Plus de chargement sans fin : si une info n’est pas encore trouvée, la fiche le dit. L’IA lit directement Liquipedia pour l’effectif, le palmarès et les résultats, répond plus vite, et chaque fiche trouvée est gardée.', ['[data-view=esport]', 'wait1500', '.esstar[data-esteam]', 'wait1500', '[data-estab=matchs]', 'wait800']],
     ['🖼️', 'Une image pour chaque jeu', 'R6, CS2, VALORANT et LoL ont maintenant leur image en tête de page.'],
@@ -5005,7 +5010,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.61.1',
+    version: async () => '0.62.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
