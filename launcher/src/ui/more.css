@@ -286,8 +286,9 @@
 .esteam span { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px; background: linear-gradient(transparent, #000a); }
 .esteam b { display: block; font-size: 16px; text-shadow: 0 1px 6px #0008; } .esteam small { opacity: .85; font-size: 12px; }
 .esteam em { position: absolute; top: 12px; left: 14px; font-style: normal; color: #ffd54a; text-shadow: 0 0 10px #0008; }
-.esteamdlg .estop { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; gap: 18px; min-height: 170px; padding: 28px 34px; background: linear-gradient(150deg, var(--ta), var(--tb) 75%); color: #fff; }
-.estop > i { position: absolute; inset: 0; z-index: -1; background: center / cover; opacity: .25; mix-blend-mode: luminosity; }
+.esteamdlg .estop { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; gap: 18px; min-height: 240px; padding: 28px 34px; background: linear-gradient(150deg, var(--ta), var(--tb) 75%); color: #fff; }
+.estop > i { position: absolute; inset: 0; z-index: -1; background: center / cover; }
+.estop::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent 30%, #000b); }
 .estop strong { font-size: 64px; font-weight: 900; line-height: 1; letter-spacing: -.04em; text-shadow: 0 4px 20px #0006; }
 .estop h2 { margin: 2px 0 0; font-size: 28px; } .estop small { opacity: .85; }
 .esdlgbody { padding: 24px 34px 30px; }
@@ -357,3 +358,10 @@
 #view-esport .list-head h2 { font-size: 44px; letter-spacing: -.02em; text-shadow: 0 6px 30px #000c; }
 #view-esport .list-head .minput { background: #0008; backdrop-filter: blur(8px); }
 #view-esport .list-head .stchips button:not(.on) { background: #0007; backdrop-filter: blur(8px); color: #fff; }
+.esrot { position: relative; height: 340px; margin-bottom: 26px; border-radius: 24px; overflow: hidden; background: #000; }
+.esslide { position: absolute; inset: 0; padding: 0; border: 0; background: center / cover; color: #fff; font: inherit; text-align: left; opacity: 0; transform: scale(1.04); transition: opacity .9s, transform 6s linear; pointer-events: none; }
+.esslide.on { opacity: 1; transform: scale(1); pointer-events: auto; } .esslide[data-esurl] { cursor: pointer; }
+.esslide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 40%, #000d); }
+.esslide span { position: absolute; z-index: 1; left: 30px; right: 30px; bottom: 34px; display: grid; gap: 6px; }
+.esslide small { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); } .esslide b { font-size: 26px; line-height: 1.15; text-shadow: 0 4px 20px #000a; } .esslide em { font-style: normal; opacity: .85; max-width: 760px; }
+.esdots { position: absolute; z-index: 2; right: 24px; bottom: 18px; display: flex; gap: 8px; } .esdots i { width: 8px; height: 8px; border-radius: 99px; background: #fff6; cursor: pointer; transition: width .3s, background .3s; } .esdots i.on { width: 26px; background: #fff; }

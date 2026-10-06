@@ -69,6 +69,12 @@ JSON : {"team":{"founded":"","region":"","country":"","coach":"","manager":"","e
 JSON : {"realName":"","born":"","age":"","country":"","role":"","team":"","about":"","photo":"","history":[{"team":"","from":"","to":""}],"titles":[{"event":"","year":"","place":""}],"stats":[{"label":"","value":""}],"settings":[{"label":"","value":""}],"links":{"twitter":"","twitch":"","youtube":""}}`,
     clean: (d) => ({ ...Object.fromEntries(['realName', 'born', 'age', 'country', 'role', 'team'].map((k) => [k, S(d[k], 60)])), about: S(d.about, 700), photo: URL_OK(d.photo), history: list(d.history, 12, (h) => ({ team: S(h.team, 50), from: S(h.from, 12), to: S(h.to, 12) })), titles: list(d.titles, 10, (t) => ({ event: S(t.event, 80), year: S(t.year, 10), place: S(t.place, 20) })), stats: list(d.stats, 6, (x) => ({ label: S(x.label, 30), value: S(x.value, 30) })), settings: list(d.settings, 6, (x) => ({ label: S(x.label, 30), value: S(x.value, 40) })), links: Object.fromEntries(['twitter', 'twitch', 'youtube'].map((k) => [k, URL_OK(d.links?.[k])])) }),
   },
+  actus: {
+    ttl: 2 * 3_600_000,
+    ask: ({ jeu }) => `Les 6 actus e-sport les plus récentes (dernières 48 h si possible) sur : ${jeu}. Priorité aux compétitions en cours (résultats, qualifiés, transferts marquants). Pour chacune : titre, résumé d'une phrase, jeu, date AAAA-MM-JJ, lien de l'article, image (URL https directe de l'image de l'article).
+JSON : {"news":[{"title":"","summary":"","game":"","date":"","url":"","image":""}]}`,
+    clean: (d) => ({ news: list(d.news, 6, (n) => ({ title: S(n.title, 140), summary: S(n.summary, 300), game: S(n.game, 30), date: S(n.date, 10), url: URL_OK(n.url), image: URL_OK(n.image) })).filter((n) => n.title && n.image) }),
+  },
   tournoi: {
     ttl: 3 * 3_600_000,
     ask: ({ nom, jeu }) => `Compétition e-sport « ${nom} » (${jeu}). Donne : lieu, dates, cashprize, format (2 phrases), statut (à venir / en cours / terminé), vainqueur s'il y en a un, équipes participantes (nom + résultat/place si connu), derniers matchs joués et prochains matchs (date, équipe A, équipe B, score si joué, phase).

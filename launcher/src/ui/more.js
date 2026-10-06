@@ -675,6 +675,12 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
   api.onEsportLive?.((d) => { esLiveData = d; esBadge(); if (state.view === 'esport') esportView(); });
   setTimeout(() => more('esportLive').then((d) => { if (d?.at) { esLiveData = d; esBadge(); } }), 8000);
   const esLiveHtml = (d) => { const now = Date.now(), ms = (esLiveData.matches ?? []).filter((m) => m.live || Date.parse(m.start) - now < 36 * 3_600_000).sort((a, b) => b.live - a.live || Date.parse(a.start) - Date.parse(b.start)); if (!ms.length) return ''; return `<h3 class="essub">Tes équipes en direct et bientôt</h3><div class="eslive">${ms.map((m) => { const t = d.teams.find((x) => x.name === m.team); return `<div class="eslivecard ${m.live ? 'on' : ''}" style="--ta:${esc(t?.colors[0] ?? '#ff4655')}"><em>${m.live ? '<u></u> EN DIRECT' : new Date(m.start).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</em><b>${esc(m.team)} <span>vs</span> ${esc(m.opponent)}</b><small>${esc(m.game)} · ${esc(m.event)}${m.score ? ` · ${esc(m.score)}` : ''}</small>${m.stream ? `<button type="button" class="btn sm play" data-esurl="${esc(m.stream)}">${/twitch/.test(m.stream) ? 'Regarder sur Twitch' : 'Regarder'}</button>` : ''}</div>`; }).join('')}</div>`; };
+  // Défilement d'actus en tête : actus des compétitions en cours trouvées par l'IA, sinon nos photos
+  const ES_PICS = [['news1', 'Karmine Corp et Team Vitality sur scène'], ['news2', 'Les fans de Gentle Mates'], ['news3', 'Karmine Corp, sacrée en Rocket League'], ['news4', 'Team Vitality soulève le trophée']];
+  const ES_BAN = { gentlemates: 'news2', karminecorp: 'news3', teamvitality: 'news4' }, esBan = (t) => `url('esport/${ES_BAN[esOrg(t)]}.jpg')`;
+  let esNews = null, esRotI = 0, esRotT = 0;
+  const esRotHtml = () => { const l = esNews?.length ? esNews : ES_PICS.map(([f, t]) => ({ title: t, image: `esport/${f}.jpg` })); return `<div class="esrot" id="esRot">${l.map((n, i) => `<button type="button" class="esslide ${i === esRotI % l.length ? 'on' : ''}" ${n.url ? `data-esurl="${esc(n.url)}"` : ''} style="background-image:url('${esc(n.image)}')"><span>${n.game ? `<small>${esc(n.game)}${n.date ? ` · ${esc(n.date)}` : ''}</small>` : ''}<b>${esc(n.title)}</b>${n.summary ? `<em>${esc(n.summary)}</em>` : ''}</span></button>`).join('')}<div class="esdots">${l.map((_, i) => `<i data-esrot="${i}" class="${i === esRotI % l.length ? 'on' : ''}"></i>`).join('')}</div></div>`; };
+  const esRotGo = (i) => { const r = document.getElementById('esRot'); if (!r) return; const s = r.querySelectorAll('.esslide'); esRotI = (i + s.length) % s.length; s.forEach((x, k) => x.classList.toggle('on', k === esRotI)); r.querySelectorAll('[data-esrot]').forEach((x, k) => x.classList.toggle('on', k === esRotI)); clearInterval(esRotT); esRotT = setInterval(() => (document.getElementById('esRot')?.offsetParent ? esRotGo(esRotI + 1) : clearInterval(esRotT)), 6000); };
   async function esportView() {
     if (!esLiveData.at) more('esportLive').then((d) => { if (d?.at) { esLiveData = d; esBadge(); esportView(); } });
     const d = await esLoad(); const box = document.getElementById('esBody'); if (!box || !d?.teams) return;
@@ -685,10 +691,12 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
     document.getElementById('esGames').innerHTML = [['all', 'Tous'], ...d.games.map((g) => [g.id, g.name])].map(([k, l]) => `<button type="button" class="${k === esGame ? 'on' : ''}" data-esgame="${k}">${esc(l)}</button>`).join('');
     const stars = (d.featured ?? []).map((n) => teams.find((t) => t.name === n) ?? (esGame === 'all' ? d.teams.find((t) => t.name === n) : null)).filter(Boolean);
     const hero = stars.map((t) => `<button type="button" class="esstar" data-esteam="${esc(t.id)}" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><i style="background-image:${esImg(t, G[t.game])}"></i>${esLogo(t)}<strong>${esc(t.tag)}</strong><span><b>${esc(t.name)}</b><small>${d.teams.filter((x) => x.name === t.name).map((x) => esc(G[x.game]?.name ?? '')).join(' · ')}</small></span></button>`).join('');
-    box.innerHTML = `${esLiveHtml(d)}${hero && !q ? `<div class="esstars">${hero}</div>` : ''}<h3 class="essub">Calendrier</h3><div class="esevs">${evs.map((e) => esEvent(e, G[e.game])).join('') || '<div class="empty">Aucune compétition annoncée pour l’instant.</div>'}</div>
+    if (!esNews) { esNews = []; const now = d.events.filter((e) => e.start <= t0 && e.end >= t0).map((e) => G[e.game]?.name).filter(Boolean); more('esportFiche', 'actus', { nom: 'actus', jeu: [...new Set(now)].join(', ') || 'e-sport (VALORANT, CS2, LoL, Rocket League, R6)' }).then((r) => { if (r?.news?.length) { esNews = r.news; esRotI = 0; document.getElementById('esRot')?.replaceWith(Object.assign(document.createElement('div'), { innerHTML: esRotHtml() }).firstChild); esRotGo(0); } }); }
+    box.innerHTML = `${q ? '' : esRotHtml()}${esLiveHtml(d)}${hero && !q ? `<div class="esstars">${hero}</div>` : ''}<h3 class="essub">Calendrier</h3><div class="esevs">${evs.map((e) => esEvent(e, G[e.game])).join('') || '<div class="empty">Aucune compétition annoncée pour l’instant.</div>'}</div>
       ${teams.some((t) => fol.includes(t.id)) ? `<h3 class="essub">Tes équipes</h3><div class="esteams">${teams.filter((t) => fol.includes(t.id)).map((t) => esTeam(t, G[t.game], true)).join('')}</div>` : ''}
       ${(() => { const rest = teams.filter((t) => !fol.includes(t.id)); const by = (k) => rest.reduce((m, t) => ((m[k(t)] ??= []).push(t), m), {}); const groups = esGame === 'all' ? d.games.map((g) => [g.name, by((t) => t.game)[g.id] ?? [], g.color]) : Object.entries(by((t) => ES_REG[t.country] ?? 'Autres')).sort(([a], [b]) => a.localeCompare(b)).map(([r, l]) => [r, l, G[esGame]?.color]); return groups.filter(([, l]) => l.length).map(([n, l, c]) => `<div class="esgroup" style="--gc:${esc(c ?? '#888')}"><h3 class="essub"><i></i>${esc(n)} <small>${l.length} équipe${l.length > 1 ? 's' : ''}</small></h3><div class="esteams">${l.map((t) => esTeam(t, G[t.game], false)).join('')}</div></div>`).join('') || '<div class="empty">Aucune équipe ne correspond.</div>'; })()}
       <p class="hint">Liste des équipes et calendrier mis à jour depuis le site History.</p>`;
+    esRotGo(esRotI);
   }
   const esRow = (k, v) => (v ? `<div><small>${k}</small><b>${esc(v)}</b></div>` : '');
   const esLinks = (l = {}) => Object.entries({ site: 'Site officiel', twitter: 'X / Twitter', twitch: 'Twitch', youtube: 'YouTube' }).filter(([k]) => l[k]).map(([k, n]) => `<button type="button" class="btn sm ghost" data-esurl="${esc(l[k])}">${n}</button>`).join('');
@@ -705,14 +713,14 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
     const d = await esLoad(), t = d.teams.find((x) => x.id === id); if (!t) return;
     const g = d.games.find((x) => x.id === t.game);
     esCur = { kind: 'team', t, g, data: null, tab: 'apercu' };
-    esDlg({ a: t.colors[0], b: t.colors[1], img: esImg(t, g), logo: esLogo(t), tag: t.tag, sub: `${g?.name ?? ''} · ${t.country}`, title: t.name }, [['apercu', 'Aperçu'], ['effectif', 'Effectif'], ['matchs', 'Matchs'], ['actus', 'Actus'], ['calendrier', 'Calendrier']]);
+    esDlg({ a: t.colors[0], b: t.colors[1], img: ES_BAN[esOrg(t)] ? esBan(t) : esImg(t, g), logo: esLogo(t), tag: t.tag, sub: `${g?.name ?? ''} · ${t.country}`, title: t.name }, [['apercu', 'Aperçu'], ['effectif', 'Effectif'], ['matchs', 'Matchs'], ['actus', 'Actus'], ['calendrier', 'Calendrier']]);
     esCur.data = (await more('esportFiche', 'equipe', { nom: t.name, jeu: g?.name ?? '' })) ?? false;
     if (esCur?.t === t) esTab(esCur.tab);
   }
   async function esPlayerOpen(name) {
     const { t, g } = esCur ?? {}; if (!t) return;
     esCur = { kind: 'player', t, g, name, data: null, tab: 'joueur', back: t.id };
-    esDlg({ a: t.colors[0], b: t.colors[1], img: esImg(t, g), logo: esLogo(t), tag: t.tag, sub: `${t.name} · ${g?.name ?? ''}`, title: name }, [['joueur', 'Profil'], ['parcours', 'Parcours'], ['reglages', 'Stats et réglages']]);
+    esDlg({ a: t.colors[0], b: t.colors[1], img: ES_BAN[esOrg(t)] ? esBan(t) : esImg(t, g), logo: esLogo(t), tag: t.tag, sub: `${t.name} · ${g?.name ?? ''}`, title: name }, [['joueur', 'Profil'], ['parcours', 'Parcours'], ['reglages', 'Stats et réglages']]);
     esCur.data = (await more('esportFiche', 'joueur', { nom: name, equipe: t.name, jeu: g?.name ?? '' })) ?? false;
     if (esCur?.name === name) esTab(esCur.tab);
   }
@@ -754,7 +762,8 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
   }
   document.getElementById('esSearch')?.addEventListener('input', () => esportView());
   document.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-esgame], [data-esteam], [data-esfollow], [data-estab], [data-esplayer], [data-esevent]'); if (!t) return;
+    const t = e.target.closest('[data-esgame], [data-esteam], [data-esfollow], [data-estab], [data-esplayer], [data-esevent], [data-esrot]'); if (!t) return;
+    if (t.dataset.esrot) return esRotGo(+t.dataset.esrot);
     if (t.dataset.estab) return esTab(t.dataset.estab);
     if (t.dataset.esplayer) return esPlayerOpen(t.dataset.esplayer);
     if (t.dataset.esevent && !e.target.closest('[data-esurl]')) return esEventOpen(t.dataset.esevent);
