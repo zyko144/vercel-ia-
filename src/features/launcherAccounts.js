@@ -658,6 +658,14 @@ export async function handleAccountApi(req, res, url, { readJson, readBinary, se
       const r = await (await import('./launcherPremium.js')).requestValidation(compte, String(b.pack ?? ''), b.paypal, b.shot);
       return send(res, r.status, r);
     }
+    if (route === 'GET /api/compte/esport/img') {
+      const type = url.searchParams.get('type'), name = String(url.searchParams.get('nom') ?? '').slice(0, 80);
+      if (!allowAttempt('esport-img', ip, 300, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes.' });
+      const img = await (await import('./launcherEsport.js')).esportImage(type, name).catch(() => null);
+      if (!img) return send(res, 404, { error: 'Pas d’image.' });
+      res.writeHead(200, { 'Content-Type': img.mime, 'Cache-Control': 'public, max-age=604800', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" });
+      return res.end(img.buf);
+    }
     if (route === 'POST /api/compte/traduire') {
       if (!allowAttempt('compte-traduire', ip, 120, 10 * 60_000)) return send(res, 429, { error: 'Trop de demandes.' });
       const { translate } = await import('./launcherI18n.js');

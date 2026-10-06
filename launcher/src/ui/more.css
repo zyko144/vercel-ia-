@@ -268,3 +268,40 @@
 .esportbar .btn { background: var(--e); border-color: transparent; color: #fff; }
 .esx { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; }
 :root[data-esport] .side nav .on, :root[data-esport] .btn.play { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #000)); }
+/* Rubrique E-sport */
+#view-esport .list-head { flex-direction: column; align-items: flex-start; gap: 18px; margin: 12px 2px 26px; } #view-esport .list-head h2 { margin: 0; font-size: 28px; }
+.essub { margin: 26px 0 14px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.esevs { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px; }
+.esev { position: relative; overflow: hidden; display: grid; gap: 4px; padding: 18px; border-radius: 18px; background: linear-gradient(140deg, color-mix(in srgb, var(--c) 30%, #0b0d14), #0b0d14 75%); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); isolation: isolate; }
+.esev > i { position: absolute; inset: 0; z-index: -1; background: center / cover; opacity: .18; mask: linear-gradient(90deg, transparent, #000); }
+.esev small { color: color-mix(in srgb, var(--c) 70%, #fff); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+.esev b { font-size: 17px; } .esev span { color: var(--muted); font-size: 13px; }
+.esev em { font-style: normal; font-weight: 700; font-size: 12px; display: flex; align-items: center; gap: 6px; margin-top: 6px; } .esev.es-live em { color: #f87171; } .esev.es-fini { opacity: .5; }
+.esev em u { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: esping 1.6s infinite; text-decoration: none; }
+.esev .btn { position: absolute; right: 14px; bottom: 14px; }
+.esteams { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.esteam { position: relative; overflow: hidden; isolation: isolate; height: 150px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--ta) 40%, transparent); background: linear-gradient(150deg, var(--ta), var(--tb) 70%); color: #fff; font: inherit; text-align: left; cursor: pointer; padding: 0; transition: transform .2s, box-shadow .2s; }
+.esteam:hover { transform: translateY(-3px); box-shadow: 0 16px 36px -12px var(--ta); }
+.esteam > i { position: absolute; inset: 0; z-index: -1; background: center / cover; opacity: .22; mix-blend-mode: luminosity; }
+.esteam strong { position: absolute; right: -6px; top: -14px; font-size: 76px; font-weight: 900; letter-spacing: -.04em; opacity: .22; line-height: 1; }
+.esteam span { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px; background: linear-gradient(transparent, #000a); }
+.esteam b { display: block; font-size: 16px; text-shadow: 0 1px 6px #0008; } .esteam small { opacity: .85; font-size: 12px; }
+.esteam em { position: absolute; top: 12px; left: 14px; font-style: normal; color: #ffd54a; text-shadow: 0 0 10px #0008; }
+.esteamdlg .estop { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; gap: 18px; min-height: 170px; padding: 28px 34px; background: linear-gradient(150deg, var(--ta), var(--tb) 75%); color: #fff; }
+.estop > i { position: absolute; inset: 0; z-index: -1; background: center / cover; opacity: .25; mix-blend-mode: luminosity; }
+.estop strong { font-size: 64px; font-weight: 900; line-height: 1; letter-spacing: -.04em; text-shadow: 0 4px 20px #0006; }
+.estop h2 { margin: 2px 0 0; font-size: 28px; } .estop small { opacity: .85; }
+.esdlgbody { padding: 24px 34px 30px; }
+.esteam .eslogo { position: absolute; right: 14px; top: 12px; width: 74px; height: 74px; object-fit: contain; filter: drop-shadow(0 6px 14px #0008); }
+.esteam:has(.eslogo) strong { display: none; }
+.estop .eslogo { width: 110px; height: 110px; object-fit: contain; filter: drop-shadow(0 8px 20px #0008); } .estop:has(.eslogo) strong { display: none; }
+/* E-sport : les clubs à la une */
+.esstars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 10px; }
+.esstar { position: relative; overflow: hidden; isolation: isolate; height: 260px; padding: 0; border-radius: 22px; border: 1px solid color-mix(in srgb, var(--ta) 50%, transparent); background: linear-gradient(160deg, var(--ta), var(--tb) 65%); color: #fff; font: inherit; text-align: left; cursor: pointer; transition: transform .25s, box-shadow .25s; }
+.esstar:hover { transform: translateY(-4px); box-shadow: 0 22px 50px -16px var(--ta); }
+.esstar > i { position: absolute; inset: 0; z-index: -1; background: center / cover; transition: transform .6s; } .esstar:hover > i { transform: scale(1.06); }
+.esstar::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent 35%, #000c); }
+.esstar .eslogo { position: absolute; left: 50%; top: 42%; width: 120px; height: 120px; object-fit: contain; transform: translate(-50%, -50%); filter: drop-shadow(0 10px 26px #000a); }
+.esstar strong { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font-size: 84px; font-weight: 900; letter-spacing: -.04em; opacity: .9; text-shadow: 0 8px 30px #0008; } .esstar:has(.eslogo) strong { display: none; }
+.esstar span { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 20px; } .esstar b { display: block; font-size: 22px; } .esstar small { opacity: .85; }
+@media (max-width: 1100px) { .esstars { grid-template-columns: 1fr; } }

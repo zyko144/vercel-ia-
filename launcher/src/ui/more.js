@@ -635,13 +635,15 @@ export function initMore(api, h) {
     document.querySelector('#view-accueil')?.insertAdjacentHTML('afterbegin', `<div class="esportbar" id="esportBar" style="--e:${esc(ev.color)}"><span class="esdot"></span><div><b>${esc(ev.name)}</b><small>En cours · encore ${left} jour${left > 1 ? 's' : ''}</small></div><button type="button" class="btn sm" data-esurl="${esc(ev.url)}">Suivre la compétition</button><button type="button" class="esx" data-esoff="${esc(ev.id)}" aria-label="Masquer">✕</button></div>`);
   }
   window.historyEsport = applyEsport;
+  let esData = null;
+  const esLoad = async () => (esData ??= await more('esportData'));
   async function esport() {
     if (pref('esport') === '0') return applyEsport(null);
-    const cal = await fetch('https://zyko144.github.io/vercel-ia-/esport.json', { cache: 'no-store' }).then((r) => r.json()).catch(() => null);
+    const cal = await esLoad();
     const today = new Date().toISOString().slice(0, 10), names = state.items.map((i) => i.name.toLowerCase()).join('|');
-    applyEsport((cal?.events ?? []).find((e) => e.start <= today && today <= e.end && names.includes(e.game) && pref(`esoff.${e.id}`) !== '1') ?? null);
+    const has = (gid) => names.includes(cal?.games?.find((g) => g.id === gid)?.match ?? '§');
+    applyEsport((cal?.events ?? []).find((e) => e.start <= today && today <= e.end && has(e.game) && pref(`esoff.${e.id}`) !== '1') ?? null);
   }
-  if ($('esportOn')) { $('esportOn').checked = pref('esport') !== '0'; $('esportOn').onchange = () => { pref('esport', $('esportOn').checked ? '1' : '0'); esport(); }; }
   setTimeout(esport, 4000); setInterval(esport, 6 * 3_600_000);
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-esurl], [data-esoff]'); if (!t) return;
@@ -649,8 +651,53 @@ export function initMore(api, h) {
     pref(`esoff.${t.dataset.esoff}`, '1'); applyEsport(null);
   });
 
+  // ---------- Rubrique E-sport : équipes aux couleurs de leur club, jeux et calendrier ----------
+  let esGame = 'all';
+  const esFollow = () => { try { return JSON.parse(pref('esfollow') ?? '[]'); } catch { return []; } };
+  const esDate = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const esState = (e) => { const t = new Date().toISOString().slice(0, 10); if (e.end < t) return ['fini', 'Terminé']; if (e.start <= t) return ['live', 'En cours']; const d = Math.ceil((new Date(`${e.start}T00:00:00`) - Date.now()) / 86_400_000); return ['soon', d <= 1 ? 'Demain' : `Dans ${d} jours`]; };
+  const esArt = (g) => (g?.steam ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.steam}/library_hero.jpg` : '');
+  const esEvent = (e, g) => { const [k, l] = esState(e); return `<div class="esev es-${k}" style="--c:${esc(e.color)}"><i style="background-image:${[esSrv('event', e.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ')}"></i><small>${esc(g?.name ?? '')}</small><b>${esc(e.name)}</b><span>${esDate(e.start)} – ${esDate(e.end)}</span><em>${k === 'live' ? '<u></u>' : ''}${l}</em>${k !== 'fini' ? `<button type="button" class="btn sm" data-esurl="${esc(e.url)}">Suivre</button>` : ''}</div>`; };
+  // Images du club (facultatives) : esport/<club>-logo.png et esport/<club>-bg.jpg (club = nom sans espaces), sinon couleurs + sigle
+  const esOrg = (t) => t.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Ordre : image livrée avec le launcher, puis image trouvée par l'IA du serveur, puis couleurs et sigle
+  const esSrv = (type, name) => (esData?.api ? `${esData.api}/api/compte/esport/img?type=${type}&nom=${encodeURIComponent(name)}` : '');
+  const esImg = (t, g) => [`esport/${esOrg(t)}-bg.jpg`, esSrv('bg', t.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', ');
+  const esLogo = (t) => `<img class="eslogo" src="esport/${esOrg(t)}-logo.png" data-alt="${esc(esSrv('logo', t.name))}" alt="">`;
+  document.addEventListener('error', (e) => { const im = e.target; if (!im?.classList?.contains('eslogo')) return; if (im.dataset.alt) { im.src = im.dataset.alt; im.dataset.alt = ''; } else im.remove(); }, true); // logo absent : on garde le sigle
+  const esTeam = (t, g, fol) => `<button type="button" class="esteam" data-esteam="${esc(t.id)}" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><i style="background-image:${esImg(t, g)}"></i><strong>${esc(t.tag)}</strong>${esLogo(t)}<span><b>${esc(t.name)}</b><small>${esc(g?.name ?? '')} · ${esc(t.country)}</small></span>${fol ? '<em>★</em>' : ''}</button>`;
+  async function esportView() {
+    const d = await esLoad(); const box = document.getElementById('esBody'); if (!box || !d?.teams) return;
+    const fol = esFollow(), G = Object.fromEntries(d.games.map((g) => [g.id, g])), pick = (x) => esGame === 'all' || x.game === esGame;
+    const t0 = new Date().toISOString().slice(0, 10);
+    const evs = d.events.filter((e) => pick(e) && e.end >= t0).sort((a, b) => a.start.localeCompare(b.start));
+    const teams = d.teams.filter(pick).sort((a, b) => fol.includes(b.id) - fol.includes(a.id) || a.name.localeCompare(b.name));
+    document.getElementById('esGames').innerHTML = [['all', 'Tous'], ...d.games.map((g) => [g.id, g.name])].map(([k, l]) => `<button type="button" class="${k === esGame ? 'on' : ''}" data-esgame="${k}">${esc(l)}</button>`).join('');
+    const stars = (d.featured ?? []).map((n) => teams.find((t) => t.name === n) ?? (esGame === 'all' ? d.teams.find((t) => t.name === n) : null)).filter(Boolean);
+    const hero = stars.map((t) => `<button type="button" class="esstar" data-esteam="${esc(t.id)}" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><i style="background-image:${esImg(t, G[t.game])}"></i>${esLogo(t)}<strong>${esc(t.tag)}</strong><span><b>${esc(t.name)}</b><small>${d.teams.filter((x) => x.name === t.name).map((x) => esc(G[x.game]?.name ?? '')).join(' · ')}</small></span></button>`).join('');
+    box.innerHTML = `${hero ? `<div class="esstars">${hero}</div>` : ''}<h3 class="essub">Calendrier</h3><div class="esevs">${evs.map((e) => esEvent(e, G[e.game])).join('') || '<div class="empty">Aucune compétition annoncée pour l’instant.</div>'}</div>
+      <h3 class="essub">Équipes${fol.length ? ' · tes favorites en premier' : ''}</h3><div class="esteams">${teams.map((t) => esTeam(t, G[t.game], fol.includes(t.id))).join('')}</div>
+      <p class="hint">Liste des équipes et calendrier mis à jour depuis le site History.</p>`;
+  }
+  async function esTeamOpen(id) {
+    const d = await esLoad(), t = d.teams.find((x) => x.id === id); if (!t) return;
+    const g = d.games.find((x) => x.id === t.game), fol = esFollow().includes(id), t0 = new Date().toISOString().slice(0, 10);
+    const evs = d.events.filter((e) => e.game === t.game).sort((a, b) => (a.end < t0) - (b.end < t0) || a.start.localeCompare(b.start));
+    modal(`<div class="esteamdlg" style="--ta:${esc(t.colors[0])};--tb:${esc(t.colors[1])}"><div class="estop"><i style="background-image:${esImg(t, g)}"></i>${esLogo(t)}<strong>${esc(t.tag)}</strong><div><small>${esc(g?.name ?? '')} · ${esc(t.country)}</small><h2>${esc(t.name)}</h2></div><button type="button" class="sellx" data-m="1" aria-label="Fermer">✕</button></div>
+      <div class="esdlgbody"><div class="row"><button type="button" class="btn ${fol ? 'ghost' : 'play'}" data-esfollow="${esc(id)}">${fol ? '★ Suivie' : '☆ Suivre cette équipe'}</button><button type="button" class="btn ghost" data-esurl="https://liquipedia.net/${esc(g?.wiki ?? '')}/${encodeURIComponent(t.name.replace(/ /g, '_'))}">Effectif et résultats</button></div>
+      <h3 class="essub">Calendrier ${esc(g?.name ?? '')}</h3><div class="esevs">${evs.map((e) => esEvent(e, g)).join('') || '<div class="empty">Aucune compétition annoncée.</div>'}</div></div></div>`, true);
+    $('modalBox').classList.add('sellbox'); $('modalBox').querySelector(':scope > .row.end')?.remove();
+  }
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-esgame], [data-esteam], [data-esfollow]'); if (!t) return;
+    if (t.dataset.esgame) { esGame = t.dataset.esgame; return esportView(); }
+    if (t.dataset.esteam) return esTeamOpen(t.dataset.esteam);
+    const f = esFollow(), id = t.dataset.esfollow; pref('esfollow', JSON.stringify(f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
+    toast(f.includes(id) ? 'Équipe retirée' : '★ Équipe suivie'); esTeamOpen(id); esportView();
+  });
+
   return {
-    heroTrailer, renderAdv, premExtras, proBar, proEnd, pc3d,
+    heroTrailer, esportView, renderAdv, premExtras, proBar, proEnd, pc3d,
     verifs() { renderChecks(); renderPcExtra(); renderJournal(); },
     storage: () => storage(),
     sheetMore, genreCols,

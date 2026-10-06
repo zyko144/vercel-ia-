@@ -1,0 +1,524 @@
+{
+ "_info": "E-sport de History Launcher : jeux, équipes (couleurs, pays) et calendrier. Modifiable : le launcher relit ce fichier depuis le site. Dates AAAA-MM-JJ, fin incluse.",
+ "games": [
+  {
+   "id": "rl",
+   "name": "Rocket League",
+   "match": "rocket league",
+   "steam": "252950",
+   "color": "#3b82f6",
+   "wiki": "rocketleague"
+  },
+  {
+   "id": "r6",
+   "name": "Rainbow Six Siege",
+   "match": "rainbow six",
+   "steam": "359550",
+   "color": "#4f8cff",
+   "wiki": "rainbowsix"
+  },
+  {
+   "id": "cs2",
+   "name": "Counter-Strike 2",
+   "match": "counter-strike",
+   "steam": "730",
+   "color": "#f5a623",
+   "wiki": "counterstrike"
+  },
+  {
+   "id": "val",
+   "name": "VALORANT",
+   "match": "valorant",
+   "color": "#ff4655",
+   "wiki": "valorant"
+  },
+  {
+   "id": "lol",
+   "name": "League of Legends",
+   "match": "league of legends",
+   "color": "#c8aa6e",
+   "wiki": "leagueoflegends"
+  }
+ ],
+ "teams": [
+  {
+   "game": "rl",
+   "name": "Team Vitality",
+   "tag": "VIT",
+   "colors": [
+    "#f7e400",
+    "#111111"
+   ],
+   "country": "FR",
+   "id": "rl-vit"
+  },
+  {
+   "game": "rl",
+   "name": "Karmine Corp",
+   "tag": "KC",
+   "colors": [
+    "#00c8ff",
+    "#071a2e"
+   ],
+   "country": "FR",
+   "id": "rl-kc"
+  },
+  {
+   "game": "rl",
+   "name": "Gentle Mates",
+   "tag": "M8",
+   "colors": [
+    "#e47de0",
+    "#1f1b2e"
+   ],
+   "country": "FR",
+   "id": "rl-m8"
+  },
+  {
+   "game": "rl",
+   "name": "Team Falcons",
+   "tag": "FLCN",
+   "colors": [
+    "#00a651",
+    "#0b1f14"
+   ],
+   "country": "SA",
+   "id": "rl-flcn"
+  },
+  {
+   "game": "rl",
+   "name": "NRG",
+   "tag": "NRG",
+   "colors": [
+    "#ff6b00",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "rl-nrg"
+  },
+  {
+   "game": "rl",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "colors": [
+    "#f01e28",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "rl-g2"
+  },
+  {
+   "game": "rl",
+   "name": "Spacestation Gaming",
+   "tag": "SSG",
+   "colors": [
+    "#ffc800",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "rl-ssg"
+  },
+  {
+   "game": "r6",
+   "name": "Team BDS",
+   "tag": "BDS",
+   "colors": [
+    "#e6007e",
+    "#1a0010"
+   ],
+   "country": "FR",
+   "id": "r6-bds"
+  },
+  {
+   "game": "r6",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "colors": [
+    "#f01e28",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "r6-g2"
+  },
+  {
+   "game": "r6",
+   "name": "FaZe Clan",
+   "tag": "FaZe",
+   "colors": [
+    "#e43d30",
+    "#111111"
+   ],
+   "country": "BR",
+   "id": "r6-faze"
+  },
+  {
+   "game": "r6",
+   "name": "Team Liquid",
+   "tag": "TL",
+   "colors": [
+    "#00a3e0",
+    "#0a2240"
+   ],
+   "country": "BR",
+   "id": "r6-tl"
+  },
+  {
+   "game": "r6",
+   "name": "Shopify Rebellion",
+   "tag": "SR",
+   "colors": [
+    "#95bf47",
+    "#0f1a07"
+   ],
+   "country": "US",
+   "id": "r6-sr"
+  },
+  {
+   "game": "r6",
+   "name": "Team Secret",
+   "tag": "TS",
+   "colors": [
+    "#e5e5e5",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "r6-ts"
+  },
+  {
+   "game": "r6",
+   "name": "Virtus.pro",
+   "tag": "VP",
+   "colors": [
+    "#ff6a00",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "r6-vp"
+  },
+  {
+   "game": "cs2",
+   "name": "Team Vitality",
+   "tag": "VIT",
+   "colors": [
+    "#f7e400",
+    "#111111"
+   ],
+   "country": "FR",
+   "id": "cs2-vit"
+  },
+  {
+   "game": "cs2",
+   "name": "Natus Vincere",
+   "tag": "NAVI",
+   "colors": [
+    "#ffee00",
+    "#0b0b0b"
+   ],
+   "country": "UA",
+   "id": "cs2-navi"
+  },
+  {
+   "game": "cs2",
+   "name": "FaZe Clan",
+   "tag": "FaZe",
+   "colors": [
+    "#e43d30",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "cs2-faze"
+  },
+  {
+   "game": "cs2",
+   "name": "Team Spirit",
+   "tag": "TS",
+   "colors": [
+    "#d4d4d8",
+    "#0b0b0b"
+   ],
+   "country": "RU",
+   "id": "cs2-ts"
+  },
+  {
+   "game": "cs2",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "colors": [
+    "#f01e28",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "cs2-g2"
+  },
+  {
+   "game": "cs2",
+   "name": "MOUZ",
+   "tag": "MOUZ",
+   "colors": [
+    "#e30613",
+    "#111111"
+   ],
+   "country": "DE",
+   "id": "cs2-mouz"
+  },
+  {
+   "game": "cs2",
+   "name": "Team Falcons",
+   "tag": "FLCN",
+   "colors": [
+    "#00a651",
+    "#0b1f14"
+   ],
+   "country": "SA",
+   "id": "cs2-flcn"
+  },
+  {
+   "game": "cs2",
+   "name": "The MongolZ",
+   "tag": "MGLZ",
+   "colors": [
+    "#c8102e",
+    "#1a0508"
+   ],
+   "country": "MN",
+   "id": "cs2-mglz"
+  },
+  {
+   "game": "val",
+   "name": "Fnatic",
+   "tag": "FNC",
+   "colors": [
+    "#ff5900",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "val-fnc"
+  },
+  {
+   "game": "val",
+   "name": "Team Heretics",
+   "tag": "TH",
+   "colors": [
+    "#d4af37",
+    "#111111"
+   ],
+   "country": "ES",
+   "id": "val-th"
+  },
+  {
+   "game": "val",
+   "name": "Sentinels",
+   "tag": "SEN",
+   "colors": [
+    "#ce0037",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "val-sen"
+  },
+  {
+   "game": "val",
+   "name": "Paper Rex",
+   "tag": "PRX",
+   "colors": [
+    "#e83e8c",
+    "#2a0f3d"
+   ],
+   "country": "SG",
+   "id": "val-prx"
+  },
+  {
+   "game": "val",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "colors": [
+    "#f01e28",
+    "#111111"
+   ],
+   "country": "US",
+   "id": "val-g2"
+  },
+  {
+   "game": "val",
+   "name": "EDward Gaming",
+   "tag": "EDG",
+   "colors": [
+    "#d4af37",
+    "#1e1e1e"
+   ],
+   "country": "CN",
+   "id": "val-edg"
+  },
+  {
+   "game": "val",
+   "name": "Team Liquid",
+   "tag": "TL",
+   "colors": [
+    "#00a3e0",
+    "#0a2240"
+   ],
+   "country": "EU",
+   "id": "val-tl"
+  },
+  {
+   "game": "val",
+   "name": "Karmine Corp",
+   "tag": "KC",
+   "colors": [
+    "#00c8ff",
+    "#071a2e"
+   ],
+   "country": "FR",
+   "id": "val-kc"
+  },
+  {
+   "game": "lol",
+   "name": "T1",
+   "tag": "T1",
+   "colors": [
+    "#e2012d",
+    "#111111"
+   ],
+   "country": "KR",
+   "id": "lol-t1"
+  },
+  {
+   "game": "lol",
+   "name": "Gen.G",
+   "tag": "GEN",
+   "colors": [
+    "#aa8a00",
+    "#111111"
+   ],
+   "country": "KR",
+   "id": "lol-gen"
+  },
+  {
+   "game": "lol",
+   "name": "G2 Esports",
+   "tag": "G2",
+   "colors": [
+    "#f01e28",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "lol-g2"
+  },
+  {
+   "game": "lol",
+   "name": "Fnatic",
+   "tag": "FNC",
+   "colors": [
+    "#ff5900",
+    "#111111"
+   ],
+   "country": "EU",
+   "id": "lol-fnc"
+  },
+  {
+   "game": "lol",
+   "name": "Karmine Corp",
+   "tag": "KC",
+   "colors": [
+    "#00c8ff",
+    "#071a2e"
+   ],
+   "country": "FR",
+   "id": "lol-kc"
+  },
+  {
+   "game": "lol",
+   "name": "Hanwha Life Esports",
+   "tag": "HLE",
+   "colors": [
+    "#f37321",
+    "#111111"
+   ],
+   "country": "KR",
+   "id": "lol-hle"
+  },
+  {
+   "game": "lol",
+   "name": "Bilibili Gaming",
+   "tag": "BLG",
+   "colors": [
+    "#00a1d6",
+    "#0a1a2a"
+   ],
+   "country": "CN",
+   "id": "lol-blg"
+  },
+  {
+   "game": "lol",
+   "name": "Team Liquid",
+   "tag": "TL",
+   "colors": [
+    "#00a3e0",
+    "#0a2240"
+   ],
+   "country": "US",
+   "id": "lol-tl"
+  }
+ ],
+ "events": [
+  {
+   "id": "rlcs-worlds-2026",
+   "name": "RLCS World Championship 2026",
+   "game": "rl",
+   "start": "2026-09-15",
+   "end": "2026-09-20",
+   "color": "#3b82f6",
+   "url": "https://esports.rocketleague.com"
+  },
+  {
+   "id": "vct-champions-2026",
+   "name": "VALORANT Champions 2026",
+   "game": "val",
+   "start": "2026-09-24",
+   "end": "2026-10-18",
+   "color": "#ff4655",
+   "url": "https://valorantesports.com"
+  },
+  {
+   "id": "lol-worlds-2026",
+   "name": "Worlds 2026",
+   "game": "lol",
+   "start": "2026-10-16",
+   "end": "2026-11-14",
+   "color": "#c8aa6e",
+   "url": "https://lolesports.com"
+  },
+  {
+   "id": "r6-major-japan-2026",
+   "name": "BLAST R6 Major Japon 2026",
+   "game": "r6",
+   "start": "2026-11-06",
+   "end": "2026-11-15",
+   "color": "#4f8cff",
+   "url": "https://www.ubisoft.com/en-us/esports/rainbow-six/siege"
+  },
+  {
+   "id": "cs2-major-singapore-2026",
+   "name": "Major CS2 Singapore 2026",
+   "game": "cs2",
+   "start": "2026-11-25",
+   "end": "2026-12-13",
+   "color": "#f5a623",
+   "url": "https://liquipedia.net/counterstrike/"
+  },
+  {
+   "id": "r6-six-invitational-2027",
+   "name": "Six Invitational 2027",
+   "game": "r6",
+   "start": "2027-02-01",
+   "end": "2027-02-14",
+   "color": "#f2c94c",
+   "url": "https://www.ubisoft.com/en-us/esports/rainbow-six/siege"
+  }
+ ],
+ "featured": [
+  "Gentle Mates",
+  "Karmine Corp",
+  "Team Vitality"
+ ]
+}
