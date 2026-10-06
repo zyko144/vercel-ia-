@@ -38,7 +38,7 @@ jobs:
         run: |
           if gh release view "clips-v${{ steps.v.outputs.version }}" --json assets -q '.assets[].name' 2>/dev/null | grep -qx latest.yml; then echo "yes=true" >> "$GITHUB_OUTPUT"; else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.exists.outputs.yes == 'false'
         with:
           node-version: 22

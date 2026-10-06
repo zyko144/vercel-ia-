@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 22 }
       - name: Reprendre les données déjà publiées
         run: for f in data players; do curl -sfL "https://zyko144.github.io/vercel-ia-/esport/$f.json" -o "/tmp/$f.json" && mv "/tmp/$f.json" "launcher-site/esport/$f.json" || true; done
