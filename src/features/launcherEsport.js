@@ -16,7 +16,7 @@ async function download(url) {
 }
 
 /** type : logo (équipe) | bg (fond d'équipe) | event (compétition). */
-export async function esportImage(type, name, { ai = null } = {}) {
+export async function esportImage(type, name, { ai = null, jeu = '', pseudo = '' } = {}) {
   if (!['logo', 'bg', 'event', 'joueur'].includes(type) || !String(name).trim()) return null;
   const key = `esport/${type}-${slug(name)}`;
   const have = await getBlob(key).catch(() => null); if (have) return have;
@@ -24,6 +24,12 @@ export async function esportImage(type, name, { ai = null } = {}) {
   const job = (async () => {
     const miss = (await readFresh('esport-img-miss')) ?? {};
     if (Date.now() - (miss[key] ?? 0) < 6 * 3_600_000) return null;
+    if (jeu && (type === 'joueur' || type === 'event')) { // d'abord la photo / l'affiche de sa page Liquipedia
+      for (const u of [await lpImage(jeu, type === 'joueur' ? pseudo || name : name).catch(() => '')].filter(Boolean)) {
+        const img = await download(u);
+        if (img) { await putBlob(key, img.buf, img.mime).catch(() => {}); return img; }
+      }
+    }
     const chat = ai ?? (await import('../ai/gemini.js')).chat;
     const what = { logo: `the official current logo of the esports organisation "${name}" as a transparent PNG or SVG (the crest/emblem alone, no background)`, bg: `a wide official wallpaper, banner or key visual of the esports organisation "${name}" in its brand colours (like their Twitter/X banner or announcement visuals)`, event: `an official key art or banner image of the esports competition "${name}"`, joueur: `an official headshot photo of the professional esports player "${name}" (team photoshoot portrait, face visible), as used on Liquipedia, HLTV, VLR.gg or the team's site` }[type];
     const r = await chat({ tag: 'esport-images', web: true, system: 'You find direct image file URLs on the web. Answer only with JSON.', content: [{ type: 'text', text: `Find ${what}. Return {"urls": [...]} with up to 5 DIRECT image file URLs (ending in .png, .jpg, .webp or .svg, or image CDN links), high resolution (at least 1000 px wide for photos and banners), best first. Prefer liquipedia.net, wikimedia, official sites.` }] }).catch(() => null);
@@ -37,6 +43,49 @@ export async function esportImage(type, name, { ai = null } = {}) {
   })().finally(() => busy.delete(key));
   busy.set(key, job);
   return job;
+}
+
+// Liquipedia (API publique : 1 requête / 2 s, « parse » 1 / 30 s, gzip + User-Agent obligatoires) : source fiable donnée à l'IA
+const WIKI = { 'rocket league': 'rocketleague', 'rainbow six': 'rainbowsix', 'rainbow six siege': 'rainbowsix', 'counter-strike 2': 'counterstrike', cs2: 'counterstrike', valorant: 'valorant', 'league of legends': 'leagueoflegends' };
+const lpNext = { q: 0, parse: 0 };
+async function lpGet(wiki, q) {
+  const k = q.startsWith('action=parse') ? 'parse' : 'q', wait = Math.max(0, lpNext[k] - Date.now()); lpNext[k] = Date.now() + wait + (k === 'parse' ? 30_500 : 2100);
+  if (wait) await new Promise((r) => setTimeout(r, wait));
+  const r = await fetch(`https://liquipedia.net/${wiki}/api.php?format=json&formatversion=2&${q}`, { signal: AbortSignal.timeout(15_000), headers: { 'User-Agent': 'HistoryLauncher/1.0 (https://zyko144.github.io/vercel-ia-/)', 'Accept-Encoding': 'gzip' } }).catch(() => null);
+  return r?.ok ? r.json().catch(() => null) : null;
+}
+const lpCache = new Map();
+// Sites officiels lus pour les actus de chaque jeu
+const OFFICIAL = { 'rocket league': 'https://www.rocketleague.com/competitive', 'rainbow six siege': 'https://www.ubisoft.com/en-us/esports/rainbow-six/siege', 'counter-strike 2': 'https://www.hltv.org/', valorant: 'https://valorantesports.com/', 'league of legends': 'https://lolesports.com/' };
+async function pageCtx(url) {
+  const r = await fetch(url, { signal: AbortSignal.timeout(12_000), headers: { 'User-Agent': 'Mozilla/5.0 HistoryLauncher/1.0' } }).catch(() => null);
+  const html = r?.ok ? await r.text().catch(() => '') : ''; if (!html) return '';
+  const abs = (u) => { try { return new URL(u.replace(/&amp;/g, '&'), url).href; } catch { return ''; } };
+  const imgs = [...new Set([...html.matchAll(/(?:src|content|data-src)="([^"]+\.(?:jpe?g|png|webp)[^"]*)"/gi)].map((m) => abs(m[1])).filter((u) => u.startsWith('https://')))].slice(0, 40);
+  const text = html.replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, '').replace(/<a [^>]*href="([^"]+)"[^>]*>/gi, (_, h) => ` [${abs(h)}] `).replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').slice(0, 25_000);
+  return `\n\nPage officielle ${url} :\n${text}\nImages de la page : ${imgs.join(' ')}`;
+}
+/** Image principale d'une page (photo du joueur, affiche de la compétition), sans lire toute la page. */
+async function lpImage(jeu, nom) {
+  const wiki = WIKI[String(jeu).toLowerCase().trim()]; if (!wiki || !nom) return '';
+  const title = (await lpGet(wiki, `action=opensearch&limit=1&search=${encodeURIComponent(nom)}`))?.[1]?.[0]; if (!title) return '';
+  const r = await lpGet(wiki, `action=query&prop=pageimages&piprop=original&redirects=1&titles=${encodeURIComponent(title)}`);
+  return r?.query?.pages?.[0]?.original?.source ?? '';
+}
+/** Page Liquipedia la plus proche de « nom » sur le wiki du jeu : texte lisible + images. */
+export async function liquipedia(jeu, nom, exact = false) {
+  const wiki = WIKI[String(jeu).toLowerCase().split(',')[0].trim()]; if (!wiki || !nom) return null;
+  const key = `${wiki}|${slug(nom)}`, hit = lpCache.get(key);
+  if (hit && Date.now() - hit.at < 3_600_000) return hit.data;
+  const title = exact ? nom : (await lpGet(wiki, `action=opensearch&limit=1&search=${encodeURIComponent(nom)}`))?.[1]?.[0]; if (!title) return null;
+  const page = await lpGet(wiki, `action=parse&redirects=1&prop=text&page=${encodeURIComponent(title)}`);
+  const html = String(page?.parse?.text ?? ''); if (!html) return null;
+  const images = [...new Set([...html.matchAll(/src="(\/commons\/images\/[^"]+\.(?:png|jpe?g|webp))"/gi)].map((m) => `https://liquipedia.net${m[1].replace(/\/thumb(\/.+?\.(?:png|jpe?g|webp))\/[^/]+$/i, '$1')}`))].slice(0, 30);
+  const main = html.match(/infobox-image[\s\S]{0,600}?src="(\/commons\/images\/[^"]+)"/i)?.[1]?.replace(/\/thumb(\/.+?\.(?:png|jpe?g|webp))\/[^/]+$/i, '$1');
+  const text = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').replace(/<(br|\/tr|\/p|\/li|\/h\d|\/div)[^>]*>/gi, '\n').replace(/<\/t[dh]>/gi, ' | ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#\d+;/g, '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').slice(0, 40_000);
+  const data = { url: `https://liquipedia.net/${wiki}/${encodeURIComponent(title.replace(/ /g, '_'))}`, title, text, images, main: main ? `https://liquipedia.net${main}` : '' };
+  lpCache.set(key, { at: Date.now(), data });
+  return data;
 }
 
 // Fiches e-sport (équipe, joueur, compétition) : l'IA lit les sites e-sport (Liquipedia, HLTV, VLR, Dexerto, sites officiels)
@@ -71,9 +120,16 @@ JSON : {"realName":"","born":"","age":"","country":"","role":"","team":"","about
   },
   actus: {
     ttl: 30 * 60_000,
-    ask: ({ jeu }) => `Les 6 actus e-sport les plus récentes (dernières 48 h si possible) sur : ${jeu}. Priorité aux compétitions en cours (résultats, qualifiés, transferts marquants). Pour chacune : titre, résumé d'une phrase, jeu, date AAAA-MM-JJ, lien de l'article, image (URL https directe de la grande image de l'article, og:image, au moins 1200 px de large, pas une miniature).
-JSON : {"news":[{"title":"","summary":"","game":"","date":"","url":"","image":""}]}`,
-    clean: (d) => ({ news: list(d.news, 6, (n) => ({ title: S(n.title, 140), summary: S(n.summary, 300), game: S(n.game, 30), date: S(n.date, 10), url: URL_OK(n.url), image: URL_OK(n.image) })).filter((n) => n.title && n.image) }),
+    ask: ({ jeu }) => `E-sport ${jeu}, nous sommes le ${new Date().toISOString().slice(0, 10)}. Donne :
+- news : les 8 actus les plus récentes (dernières 48 h si possible, priorité aux compétitions en cours, résultats, transferts) : titre, résumé d'une phrase, jeu, date AAAA-MM-JJ, lien de l'article, image (URL https directe de la grande image de l'article, og:image, au moins 1200 px de large).
+- results : les 12 derniers matchs pros joués (date, compétition, équipe A, équipe B, score « 4-2 », phase).
+- upcoming : les 10 prochains matchs pros (date et heure ISO 8601 UTC, compétition, équipe A, équipe B, phase).
+JSON : {"news":[{"title":"","summary":"","game":"","date":"","url":"","image":""}],"results":[{"date":"","event":"","a":"","b":"","score":"","stage":""}],"upcoming":[{"date":"","event":"","a":"","b":"","stage":""}]}`,
+    clean: (d) => ({
+      news: list(d.news, 8, (n) => ({ title: S(n.title, 140), summary: S(n.summary, 300), game: S(n.game, 30), date: S(n.date, 10), url: URL_OK(n.url), image: URL_OK(n.image) })).filter((n) => n.title),
+      results: list(d.results, 12, (m) => ({ date: S(m.date, 16), event: S(m.event, 80), a: S(m.a, 50), b: S(m.b, 50), score: S(m.score, 15), stage: S(m.stage, 40) })).filter((m) => m.a && m.b),
+      upcoming: list(d.upcoming, 10, (m) => ({ date: S(m.date, 25), event: S(m.event, 80), a: S(m.a, 50), b: S(m.b, 50), stage: S(m.stage, 40) })).filter((m) => m.a && m.b),
+    }),
   },
   tournoi: {
     ttl: 3_600_000,
@@ -91,12 +147,18 @@ export async function esportFiche(kind, args = {}, { ai = null } = {}) {
   if (busy.has(key)) return hit?.data ?? busy.get(key);
   const job = (async () => {
     const chat = ai ?? (await import('../ai/gemini.js')).chat;
-    const r = await chat({ tag: 'esport-fiches', web: true, system: `Tu es un journaliste e-sport à fond sur l’actu, nous sommes le ${new Date().toISOString().slice(0, 10)}. Toujours l’info la plus récente (résultats, effectifs, transferts du jour) et des images en grand format (og:image de l’article, pas de miniature). Réponds uniquement en JSON valide, en français. Uniquement des faits vérifiés sur le web ; laisse un champ vide plutôt que d’inventer.`, content: [{ type: 'text', text: K.ask(a) }] }).catch(() => null);
+    const one = !a.jeu.includes(',') && a.jeu.toLowerCase();
+    const lp = kind === 'actus' ? (one ? await liquipedia(a.jeu, 'Main Page', true).catch(() => null) : null) : await liquipedia(a.jeu, a.nom).catch(() => null);
+    const off = kind === 'actus' && OFFICIAL[one] ? await pageCtx(OFFICIAL[one]) : '';
+    const ctx = lp ? `\n\nPage Liquipedia « ${lp.title} » (${lp.url}), source fiable à utiliser en priorité (effectif, palmarès, résultats, matchs) :\n${lp.text}\n\nImages de la page (logo, photos des joueurs) : ${lp.images.join(' ')}\nComplète avec une recherche web pour ce qui manque (actus, matchs à venir).` : '';
+    const r = await chat({ tag: 'esport-fiches', web: true, system: `Tu es un journaliste e-sport à fond sur l’actu, nous sommes le ${new Date().toISOString().slice(0, 10)}. Toujours l’info la plus récente (résultats, effectifs, transferts du jour) et des images en grand format (og:image de l’article, pas de miniature). Réponds uniquement en JSON valide, en français. Uniquement des faits vérifiés sur le web ; laisse un champ vide plutôt que d’inventer.`, content: [{ type: 'text', text: K.ask(a) + ctx + off }] }).catch(() => null);
     let d = null;
     try { d = JSON.parse(String(r?.text ?? '').replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')); } catch { /* réponse illisible */ }
     if (!d) return hit?.data ?? null;
-    const data = { ...K.clean(d), sources: (r?.sources ?? []).slice(0, 6).map((x) => ({ url: URL_OK(x.url), title: S(x.title, 60) })).filter((x) => x.url), at: Date.now() };
-    infoCache.set(key, { at: Date.now(), data });
+    if (lp?.main && kind === 'joueur') d.photo = lp.main;
+    const data = { ...K.clean(d), ...(lp ? { liquipedia: lp.url } : {}), sources: (r?.sources ?? []).slice(0, 6).map((x) => ({ url: URL_OK(x.url), title: S(x.title, 60) })).filter((x) => x.url), at: Date.now() };
+    const empty = kind === 'equipe' ? !data.players.length : kind === 'actus' ? !data.news.length : false;
+    infoCache.set(key, { at: empty ? Date.now() - K.ttl + 300_000 : Date.now(), data }); // vide : on réessaie dans 5 min
     return data;
   })().finally(() => busy.delete(key));
   busy.set(key, job);
