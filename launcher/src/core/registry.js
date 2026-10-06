@@ -84,12 +84,20 @@ export function programsFromRegistry(entries) {
     if (!name || v.SystemComponent === 1 || v.ParentKeyName || /update|hotfix|security/i.test(v.ReleaseType ?? '') || NOISE.test(name)) continue;
     const uninstall = String(v.QuietUninstallString || v.UninstallString || '');
     // Jeux Steam et Epic : déjà trouvés par leurs propres scanners
-    if (/steam:\/\/uninstall|Steam App \d+/i.test(`${uninstall} ${key}`) || /EpicGamesLauncher.*-uninstall|com\.epicgames/i.test(uninstall)) continue;
+    if (/steam:\/\/uninstall|Steam App \d+/i.test(`${uninstall} ${key}`)) continue;
+    // Jeu Epic inscrit dans Windows : gardé comme jeu Epic (utile si le lecteur Epic ne le trouve pas)
+    const epicApp = uninstall.match(/com\.epicgames\.launcher:\/\/apps\/([^?"\s]+)/i)?.[1];
+    if (epicApp || /EpicGamesLauncher.*-uninstall/i.test(uninstall)) {
+      if (!epicApp || LAUNCHERS.test(name)) continue;
+      const installDir = String(v.InstallLocation ?? '').replace(/^"|"$/g, '');
+      seen.set(`epic:${epicApp}`, { id: `epic:${decodeURIComponent(epicApp)}`, source: 'epic', kind: 'game', category: 'jeu', name, installed: true, installDir, exe: exeFrom(v.DisplayIcon), size: Number(v.EstimatedSize ?? 0) * 1024, minutes: 0, lastPlayed: 0, art: {}, epicKey: epicApp, known: true });
+      continue;
+    }
     const installDir = String(v.InstallLocation ?? '').replace(/^"|"$/g, '');
     const publisher = String(v.Publisher ?? '');
     const launcher = LAUNCHERS.test(name);
     const game = !launcher && !NOT_GAME.test(name) && (GAME_PUBLISHERS.test(publisher) || GAME_PATHS.test(`${installDir}\\`) || /^Riot Game /i.test(key.split('\\').pop()));
-    const source = /rockstar/i.test(publisher) ? 'rockstar' : /riot/i.test(publisher) ? 'riot' : /ubisoft/i.test(publisher) ? 'ubisoft' : /electronic arts/i.test(publisher) ? 'ea' : /blizzard/i.test(publisher) ? 'battlenet' : /gog/i.test(publisher) ? 'gog' : 'pc';
+    const source = /rockstar/i.test(publisher) ? 'rockstar' : /riot/i.test(publisher) ? 'riot' : /ubisoft/i.test(publisher) || /\\ubisoft game launcher\\/i.test(installDir) ? 'ubisoft' : /electronic arts/i.test(publisher) || /\\(ea games|origin games)\\/i.test(installDir) ? 'ea' : /blizzard/i.test(publisher) ? 'battlenet' : /gog/i.test(publisher) ? 'gog' : 'pc';
     const item = {
       id: `reg:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, source, kind: launcher ? 'launcher' : game ? 'game' : 'app',
       category: game ? 'jeu' : categoryOf(name), name, publisher, installed: true, installDir,

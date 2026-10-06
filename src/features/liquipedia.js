@@ -171,7 +171,7 @@ export function parsePlayer(html) {
 /** Page « Liquipedia:Matches » → matchs à venir, en cours et terminés. */
 export function parseMatches(html, now = Date.now()) {
   const out = [];
-  for (const m of byCls(dom(html), 'match-info')) {
+  for (const m of all(dom(html), (n) => hasCls(n, 'match-info') || hasCls(n, 'brkts-match-info-popup'))) { // page des matchs ou arbre d'un tournoi
     const timer = first(m, (n) => n.attrs['data-timestamp']); const ts = Number(timer?.attrs['data-timestamp']) * 1000; if (!ts) continue;
     const ops = m.kids.find((k) => hasCls(k, 'match-info-header'))?.kids.filter((k) => hasCls(k, 'match-info-header-opponent')) ?? [];
     if (ops.length !== 2) continue;
@@ -188,4 +188,30 @@ export function parseMatches(html, now = Date.now()) {
   }
   const seen = new Set();
   return out.filter((x) => { const k = `${x.a}|${x.b}|${x.start}`; if (seen.has(k)) return false; seen.add(k); return true; }).sort((x, y) => x.start.localeCompare(y.start));
+}
+
+/** Page d'une compétition → infos, équipes (avec joueurs), classement final, matchs. */
+export function parseEvent(html, now = Date.now()) {
+  const root = dom(html), { cells } = infobox(root);
+  const cell = (...names) => { for (const n of names) if (cells[n]) return tx(cells[n]).replace(/\s*\n\s*/g, ', ').replace(/^Expand Collapse\s*/, ''); return ''; };
+  const info = {
+    place: [cell('Location'), cell('Venue')].filter(Boolean).join(' · '), start: cell('Start Date'), end: cell('End Date'), prize: cell('Prize Pool').replace(/\s*USD$/, ''),
+    tier: cell('Liquipedia Tier'), teams: cell('Number of teams', 'Teams'), format: cell('Format').slice(0, 300), organizer: cell('Organizers', 'Organizer'), type: cell('Type'),
+  };
+  const teams = byCls(root, 'team-participant-card').map((c) => ({
+    name: teamName(first(c, (n) => hasCls(n, 'team-participant-card__opponent-full')) ?? first(c, (n) => hasCls(n, 'team-participant-card__opponent')) ?? c),
+    players: byCls(c, 'team-participant-card__member-name').map(tx).filter(Boolean).slice(0, 8),
+  })).filter((t) => t.name);
+  const standings = [];
+  for (const table of all(root, (n) => n.tag === 'table' && hasCls(n, 'prizepooltable'))) {
+    let place = '';
+    for (const tr of all(table, (n) => n.tag === 'tr')) {
+      const pc = tr.kids.find((k) => k.tag === 'td' && hasCls(k, 'prizepooltable-place')); if (pc) place = tx(pc);
+      const team = tr.kids.find((k) => k.tag === 'td' && hasCls(k, 'prizepooltable-col-team')); if (!team) continue;
+      const name = teamName(first(team, (n) => hasCls(n, 'name')) ?? team); if (!name || /^TBD$/i.test(name)) continue;
+      standings.push({ place, team: name, prize: tx(tr.kids.filter((k) => k.tag === 'td').find((k) => /\$/.test(tx(k)) && k !== team)) });
+    }
+  }
+  const seen = new Set(standings.map((s) => s.team));
+  return { info, teams: teams.slice(0, 40), standings: standings.filter((s, i) => standings.findIndex((x) => x.team === s.team) === i).slice(0, 40), winner: standings.find((s) => /^1(st)?$/.test(s.place))?.team ?? '', matches: parseMatches(html, now).slice(-80), known: seen.size };
 }

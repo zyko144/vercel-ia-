@@ -647,13 +647,84 @@ export function initMore(api, h) {
   const esMoney = (v) => String(v ?? '').replace(/^\$([\d,]+)$/, (_, n) => `${n.replace(/,/g, ' ')} $`);
   const esRank = (v) => { const m = String(v ?? '').match(/^([\d.]+)\s*\(Rank #(\d+)\)/); return m ? `${m[2]}e (${m[1]} pts)` : v; };
   const esBorn = (v) => (Number.isNaN(Date.parse(v)) ? v : new Date(Date.parse(v)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }));
+  const ES_PAYS = { France: 'France', Belgium: 'Belgique', Switzerland: 'Suisse', Germany: 'Allemagne', Spain: 'Espagne', Italy: 'Italie', Portugal: 'Portugal', 'United Kingdom': 'Royaume-Uni', England: 'Angleterre', Scotland: 'Écosse', Wales: 'Pays de Galles', Ireland: 'Irlande', Netherlands: 'Pays-Bas', Denmark: 'Danemark', Sweden: 'Suède', Norway: 'Norvège', Finland: 'Finlande', Poland: 'Pologne', 'Czech Republic': 'Tchéquie', Czechia: 'Tchéquie', Slovakia: 'Slovaquie', Austria: 'Autriche', Hungary: 'Hongrie', Romania: 'Roumanie', Bulgaria: 'Bulgarie', Serbia: 'Serbie', Croatia: 'Croatie', Slovenia: 'Slovénie', Bosnia: 'Bosnie', Greece: 'Grèce', Turkey: 'Turquie', Ukraine: 'Ukraine', Russia: 'Russie', Belarus: 'Biélorussie', Estonia: 'Estonie', Latvia: 'Lettonie', Lithuania: 'Lituanie', Israel: 'Israël', Morocco: 'Maroc', Algeria: 'Algérie', Tunisia: 'Tunisie', Egypt: 'Égypte', 'Saudi Arabia': 'Arabie saoudite', 'United Arab Emirates': 'Émirats arabes unis', Kazakhstan: 'Kazakhstan', Mongolia: 'Mongolie', 'United States': 'États-Unis', Canada: 'Canada', Mexico: 'Mexique', Brazil: 'Brésil', Argentina: 'Argentine', Chile: 'Chili', Uruguay: 'Uruguay', Peru: 'Pérou', Colombia: 'Colombie', 'South Korea': 'Corée du Sud', Korea: 'Corée du Sud', Japan: 'Japon', China: 'Chine', Taiwan: 'Taïwan', 'Hong Kong': 'Hong Kong', Vietnam: 'Viêt Nam', Thailand: 'Thaïlande', Philippines: 'Philippines', Indonesia: 'Indonésie', Malaysia: 'Malaisie', Singapore: 'Singapour', India: 'Inde', Australia: 'Australie', 'New Zealand': 'Nouvelle-Zélande', 'South Africa': 'Afrique du Sud', Europe: 'Europe', 'North America': 'Amérique du Nord', 'South America': 'Amérique du Sud', Asia: 'Asie', 'Middle East': 'Moyen-Orient', Oceania: 'Océanie', 'Non-representing': '—' };
+  const esPays = (v) => String(v ?? '').split(/\n|, /).map((x) => ES_PAYS[x.trim()] ?? x.trim()).filter(Boolean).join(', ');
+  // Historique Liquipedia (phrases types en anglais) → français ; une phrase inconnue reste telle quelle
+  const ES_ROLES = { inactive: 'inactif', 'strategic coach': 'coach stratégique', 'head of coaching development': 'responsable du coaching', 'stand-in': 'remplaçant', 'general manager': 'directeur général', 'team manager': 'manager', coach: 'coach', 'head coach': 'coach principal', 'assistant coach': 'coach adjoint', 'performance coach': 'coach performance', analyst: 'analyste', manager: 'manager', substitute: 'remplaçant', player: 'joueur', captain: 'capitaine' };
+  const esRole = (r) => ES_ROLES[String(r).toLowerCase().trim()] ?? r;
+  const esEt = (x) => String(x).replace(/ and /g, ' et ');
+  const PL = (x) => / and |, /.test(x);
+  const ES_PHRASES = [
+    [/^(.+?) benche?s? (.+?) and acquires? (.+?) from (.+?) as (?:his|her|their) replacement$/i, (m) => `${m[1]} met ${esEt(m[2])} sur le banc et recrute ${m[3]} (venu de ${m[4]}) pour le remplacer`],
+    [/^(.+?) acquires? (.+?) from (.+?)(?: as (?:his|her|their) replacement)?$/i, (m) => `${m[1]} recrute ${esEt(m[2])} (venu de ${m[3]})`],
+    [/^(.+?) loans? (.+?) to (.+?)(?: until (?:the end of )?(.+))?$/i, (m) => `${m[1]} prête ${m[2]} à ${m[3]}${m[4] ? ` jusqu’à ${m[4]}` : ''}`],
+    [/^(.+?) (?:officially )?releases? (?:their |its )?roster$/i, (m) => `${m[1]} se sépare de son équipe`],
+    [/^(.+?) releases? (.+)$/i, (m) => `${m[1]} libère ${esEt(m[2])}`],
+    [/^(.+?) (?:is|are) released from (.+)$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'sont libérés' : 'est libéré'} par ${m[2]}`],
+    [/^(.+?) rebrands? (?:to|as) (.+)$/i, (m) => `${m[1]} devient ${m[2]}`],
+    [/^(.+?) departs? (.+)$/i, (m) => `${m[1]} quitte ${m[2]}`],
+    [/^(.+?) changes? position from (.+?) to (.+)$/i, (m) => `${m[1]} passe de ${esRole(m[2])} à ${esRole(m[3])}`],
+    [/^(.+?) (?:sign|signs) (?:a )?contract extensions? with (.+?), keeping (?:him|her|them) tied to the organi[sz]ation until (?:the end of )?(\d{4})$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'prolongent' : 'prolonge'} avec ${m[2]} jusqu’à fin ${m[3]}`],
+    [/^(.+?) extends? (?:his|her|their) contract(?: with (.+?))?(?: until (?:the end of )?(\d{4}))?$/i, (m) => `${m[1]} prolonge son contrat${m[2] ? ` avec ${m[2]}` : ''}${m[3] ? ` jusqu’à fin ${m[3]}` : ''}`],
+    [/^(.+?)'s? contracts? (?:is|are) extended, expiring at the end of (\d{4})$/i, (m) => `Contrat de ${esEt(m[1])} prolongé jusqu’à fin ${m[2]}`],
+    [/^(.+?) joins? (.+?) as (?:a |an |the )?(.+)$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'rejoignent' : 'rejoint'} ${m[2]} comme ${esRole(m[3])}`],
+    [/^(.+?) joins? as (?:a |an |the )?(.+)$/i, (m) => `${esEt(m[1])} arrive comme ${esRole(m[2])}`],
+    [/^(.+?) join$/i, (m) => `${esEt(m[1])} rejoignent l’équipe`],
+    [/^(.+?) joins$/i, (m) => `${m[1]} rejoint l’équipe`],
+    [/^(.+?) join (.+)$/i, (m) => `${esEt(m[1])} rejoignent ${m[2]}`],
+    [/^(.+?) joins (.+)$/i, (m) => `${m[1]} rejoint ${m[2]}`],
+    [/^(.+?) leaves? for (.+)$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'partent' : 'part'} chez ${m[2]}`],
+    [/^(.+?) leaves? (?:the )?(.+?) position$/i, (m) => `${esEt(m[1])} quitte son poste de ${esRole(m[2])}`],
+    [/^(.+?) leaves?(?: the (?:squad|team|roster))?$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'quittent' : 'quitte'} l’équipe`],
+    [/^(.+?) leaves? (.+)$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'quittent' : 'quitte'} ${m[2]}`],
+    [/^(.+?) changes? role from (.+?) to (.+)$/i, (m) => `${m[1]} passe de ${esRole(m[2])} à ${esRole(m[3])}`],
+    [/^(.+?) moves? to an? inactive (?:position|role)$/i, (m) => `${esEt(m[1])} passe dans les inactifs`],
+    [/^(.+?) (?:is|are) moved to (?:the )?inactive(?: roster)?$/i, (m) => `${esEt(m[1])} passe dans les inactifs`],
+    [/^(.+?) moves? to an? (.+?) role$/i, (m) => `${m[1]} devient ${esRole(m[2])}`],
+    [/^(.+?) moves? (.+?) to the academy team as (.+)$/i, (m) => `${m[1]} envoie ${m[2]} dans l’équipe académie comme ${esRole(m[3])}`],
+    [/^(.+?) moves? to (.+)$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'passent' : 'passe'} chez ${m[2]}`],
+    [/^(.+?) (?:is|are) benched$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'sont mis' : 'est mis'} sur le banc`],
+    [/^(.+?) benche?s? (.+)$/i, (m) => `${m[1]} met ${esEt(m[2])} sur le banc`],
+    [/^(.+?) (?:is|are) released$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'sont libérés' : 'est libéré'}`],
+    [/^(.+?) releases? the roster$/i, (m) => `${m[1]} se sépare de son équipe`],
+    [/^(.+?) parts? ways with (.+)$/i, (m) => `${m[1]} se sépare de ${esEt(m[2])}`],
+    [/^(.+?) (?:is|are) removed from the starting roster$/i, (m) => `${esEt(m[1])} sort de l’équipe titulaire`],
+    [/^(.+?) (?:is|are) acquired by (.+)$/i, (m) => `${esEt(m[1])} ${PL(m[1]) ? 'sont recrutés' : 'est recruté'} par ${m[2]}`],
+    [/^(.+?) acquires? the former (.+?) (?:lineup|roster)$/i, (m) => `${m[1]} rachète l’ancienne équipe de ${m[2]}`],
+    [/^(.+?) acquires? (.+)$/i, (m) => `${m[1]} recrute ${esEt(m[2])}`],
+    [/^(.+?) (?:retires?|announces? (?:his|her|their) retirement)(?: from competitive play)?$/i, (m) => `${m[1]} prend sa retraite`],
+    [/^(.+?) wins? the (.+?), defeating (.+?) (\d+-\d+) in the grand final$/i, (m) => `${m[1]} remporte ${m[2]} en battant ${m[3]} ${m[4]} en finale`],
+    [/^(.+?) wins? (?:the )?(.+)$/i, (m) => `${m[1]} remporte ${m[2]}`],
+    [/^(.+?) signs? (.+?) as (?:a |an |the )?(.+)$/i, (m) => `${m[1]} recrute ${esEt(m[2])} comme ${esRole(m[3])}`],
+    [/^(.+?) signs? (.+)$/i, (m) => `${m[1]} recrute ${esEt(m[2])}`],
+    [/^(.+?) (?:is|are) loaned to (.+)$/i, (m) => `${esEt(m[1])} prêté à ${m[2]}`],
+    [/^(.+?) returns?$/i, (m) => `${esEt(m[1])} revient`],
+    [/^(.+?) (?:is|are) promoted from (.+)$/i, (m) => `${esEt(m[1])} promu depuis ${m[2]}`],
+  ];
+  const ES_EN = /\b(from|until|as (?:his|her|their)|later|undisclosed|thus|with the|which|who|and (?:acquire|add|sign|bench)|to complete|following|returns? to|the roster of|mutually|expiration)\b/i;
+  const ES_RESTE = /\b(the|to|and|as|with|from|of|is|are|was|his|her|their|along|for|on|moves?|joins?|leaves?|changes?|position|roster|terminates?|reinstates?|bench|acquires?|traded|season)\b/; // mot anglais restant : phrase gardée telle quelle
+  // Phrases : coupe après chaque point, sauf derrière un pseudo à point (« rise. », « Atow. ») suivi de « and », « join »…
+  const esPhrases = (t) => String(t ?? '').split(/(?<=\.)\s+/).reduce((acc, p) => { const prev = acc[acc.length - 1]; if (prev !== undefined && (!/\s/.test(prev.trim()) || /^(and|join|joins|leave|leaves|is|are|to)\b/.test(p))) acc[acc.length - 1] = `${prev} ${p}`; else acc.push(p); return acc; }, []);
+  const esFrText = (t) => esPhrases(t).map((ph) => { const x = ph.replace(/\.$/, '').trim(); for (const [re, f] of ES_PHRASES) { const m = x.match(re); if (m && !m.slice(1).some((g) => g && ES_EN.test(g))) { const fr = f(m); if (!ES_RESTE.test(fr.replace(/\(venu de [^)]*\)/g, ''))) return `${fr}.`; } } return ph; }).join(' ');
+  const esAbout = (t, st) => { const T = st.team ?? {}; const parts = [`${t.name} est une équipe ${esPays(T.country) ? `basée en ${esPays(T.country)}` : 'e-sport'}${T.region ? ` (${esPays(T.region)})` : ''}${T.founded ? `, fondée en ${T.founded}` : ''}.`];
+    if (st.titles?.length) parts.push(`${st.titles.length} titre${st.titles.length > 1 ? 's' : ''} ${st.titles.length > 1 ? 'dont' : ':'} ${st.titles[0].event} (${st.titles[0].year}).`);
+    if (st.results?.[0]) parts.push(`Dernier tournoi : ${st.results[0].event}, ${esPlace(st.results[0].place)}.`);
+    return parts.join(' '); };
   const esPlace = (p) => String(p ?? '').replace(/(\d+)(st|nd|rd|th)/g, (_, n) => (n === '1' ? '1er' : `${n}e`)).replace(/\s*-\s*/, '-');
   const esTeamData = (st, t) => {
     const me = new Set([t.name, st.title].filter(Boolean)), now = Date.now();
     const up = (esSt?.data?.games?.[t.game]?.matches ?? []).filter((m) => !m.finished && (me.has(m.a) || me.has(m.b)) && Date.parse(m.start) > now - 4 * 3_600_000);
-    return { team: { ...st.team, titles: st.titles, earnings: esMoney(st.team.earnings), ranking: esRank(st.team.ranking) }, players: st.players.map((p) => ({ ...p, role: esFr(p.role), age: esPl(p)?.age ?? '' })), placements: st.results.map((r) => ({ ...r, prize: esMoney(r.prize) })), news: st.news ?? [],
+    return { team: { ...st.team, about: esAbout(t, st), country: esPays(st.team.country), region: esPays(st.team.region), titles: st.titles, earnings: esMoney(st.team.earnings), ranking: esRank(st.team.ranking) }, players: st.players.map((p) => ({ ...p, country: esPays(p.country), role: esRole(esFr(p.role)), age: esPl(p)?.age ?? '' })), placements: st.results.map((r) => ({ ...r, prize: esMoney(r.prize) })), news: (st.news ?? []).map((n) => ({ ...n, text: esFrText(n.text) })),
       results: st.matches.map((m) => ({ date: m.date.slice(0, 10), event: m.event, opponent: m.opponent, score: m.score, win: m.win })),
       upcoming: up.map((m) => ({ date: Date.parse(m.start) <= now ? 'En direct' : esWhen(m.start), opponent: me.has(m.a) ? m.b : m.a, event: m.event })), sources: [{ url: st.url, title: 'Liquipedia' }] };
+  };
+  const esEventData = (ev, e) => {
+    const I = ev.info ?? {}, now = Date.now(), st = I.start || e.start, en = I.end || e.end, place = (n) => ev.standings?.find((x) => x.team === n)?.place;
+    const status = Date.parse(st) > now ? 'À venir' : Date.parse(en) + 86_400_000 < now ? 'Terminé' : 'En cours';
+    const m = (x) => ({ date: x.finished ? x.start.slice(0, 10) : x.start, a: x.a, b: x.b, score: x.score, stage: x.bo, live: !x.finished && Date.parse(x.start) <= now, stream: x.stream });
+    return { place: I.place, dates: `${esDate(st)} – ${esDate(en)}`, prize: esMoney(I.prize), status, winner: ev.winner, format: [I.tier, I.teams && `${I.teams} équipes`, I.type === 'Offline' ? 'En LAN' : I.type === 'Online' ? 'En ligne' : '', I.organizer && `organisé par ${I.organizer}`].filter(Boolean).join(' · '),
+      teams: (ev.teams?.length ? ev.teams : (ev.standings ?? []).map((x) => ({ name: x.team, players: [] }))).map((t) => ({ name: t.name, players: t.players ?? [], result: place(t.name) ? String(place(t.name)).replace(/\d+/g, (n) => (n === '1' ? '1er' : `${n}e`)) : '' })),
+      results: (ev.matches ?? []).filter((x) => x.finished).reverse().slice(0, 30).map(m), upcoming: (ev.matches ?? []).filter((x) => !x.finished).slice(0, 20).map(m), sources: [{ url: ev.url, title: 'Liquipedia' }] };
   };
   const esGameStats = (gid) => {
     const g = esSt?.data?.games?.[gid], now = Date.now(); if (!g?.matches?.length) return {};
@@ -757,7 +828,7 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
     const p = (esCur?.data?.players ?? []).find((x) => x.name === name), P = esPl(p);
     esCur = { kind: 'player', t, g, name, data: null, tab: 'joueur', back: t.id };
     esDlg({ a: t.colors[0], b: t.colors[1], img: ES_BAN[esOrg(t)] ? esBan(t) : esImg(t, g), logo: esLogo(t), tag: t.tag, sub: `${t.name} · ${g?.name ?? ''}`, title: name }, [['joueur', 'Profil'], ['parcours', 'Parcours'], ['reglages', 'Stats et réglages']]);
-    esCur.data = p ? { ...P, born: esBorn(P?.born), realName: P?.realName || p.realName, country: P?.country || p.country, role: (P?.role || p.role || '').split(', ').map(esFr).join(', '), team: P?.team || t.name, settings: (P?.settings ?? []).map((x) => ({ label: esFr(x.label), value: esFr(x.value.replace(/\n/g, ' ')) })), stats: [['Gains', esMoney(P?.earnings)], ['Statut', esFr(P?.status)], ['Dans l’équipe depuis', p.joined]].filter(([, v]) => v).map(([label, value]) => ({ label, value })), sources: p.page ? [{ url: p.page, title: 'Liquipedia' }] : [] }
+    esCur.data = p ? { ...P, born: esBorn(P?.born), realName: P?.realName || p.realName, country: esPays(P?.country || p.country), role: (P?.role || p.role || '').split(', ').map(esFr).join(', '), team: P?.team || t.name, settings: (P?.settings ?? []).map((x) => ({ label: esFr(x.label), value: esFr(x.value.replace(/\n/g, ' ')) })), stats: [['Gains', esMoney(P?.earnings)], ['Statut', esFr(P?.status)], ['Dans l’équipe depuis', p.joined]].filter(([, v]) => v).map(([label, value]) => ({ label, value })), sources: p.page ? [{ url: p.page, title: 'Liquipedia' }] : [] }
       : (await more('esportFiche', 'joueur', { nom: name, equipe: t.name, jeu: g?.name ?? '' })) ?? false;
     if (esCur?.name === name) esTab(esCur.tab);
   }
@@ -766,7 +837,8 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
     const g = d.games.find((x) => x.id === e.game);
     esCur = { kind: 'event', e, g, data: null, tab: 'tournoi' };
     esDlg({ a: e.color, b: '#0b0d14', img: [esSrv('event', e.name, g?.name), esArt(g)].filter(Boolean).map((u) => `url('${esc(u)}')`).join(', '), sub: `${g?.name ?? ''} · ${esDate(e.start)} – ${esDate(e.end)}`, title: e.name }, [['tournoi', 'Infos'], ['equipes', 'Équipes'], ['matchs', 'Matchs']]);
-    esCur.data = (await more('esportFiche', 'tournoi', { nom: e.name, jeu: g?.name ?? '' })) ?? false;
+    const ev = (await esStats())?.data?.events?.[e.id];
+    esCur.data = ev ? esEventData(ev, e) : (await more('esportFiche', 'tournoi', { nom: e.name, jeu: g?.name ?? '' })) ?? false;
     if (esCur?.e === e) esTab(esCur.tab);
   }
   function esTab(tab) {
@@ -781,7 +853,7 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
         <div class="esfacts">${esRow('Fondée', D.team?.founded)}${esRow('Région', D.team?.region)}${esRow('Pays', D.team?.country)}${esRow('Coach', D.team?.coach)}${esRow('Manager', D.team?.manager)}${esRow('Gains', D.team?.earnings)}${esRow('Classement', D.team?.ranking)}</div>
         <h3 class="essub">Palmarès</h3>${esTitles(D.team?.titles)}
         ${(D.placements ?? []).length ? `<h3 class="essub">Derniers classements</h3><div class="esmatches">${D.placements.slice(0, 10).map((r) => `<div class="esmatch esplace ${/^1/.test(r.place) ? 'win' : ''}"><small>${esc(r.date)}</small><b>${esc(r.event)}</b><span>${esc([r.tier, r.prize].filter((x) => x && x !== '-').join(' · '))}</span><strong>${esc(esPlace(r.place))}</strong></div>`).join('')}</div>` : ''}`,
-      effectif: () => `<div class="esroster">${(D.players ?? []).map((p) => `<button type="button" class="esplayer" data-esplayer="${esc(p.name)}"><span>${esc(p.name[0] ?? '?')}${esPl(p)?.photo ? `<img class="esface" src="${esc(esPl(p).photo)}" alt="" loading="lazy">` : ''}</span><div><b>${esc(p.name)}</b><small>${esc([p.role, p.country].filter(Boolean).join(' · '))}</small>${p.realName || p.age ? `<em>${esc([p.realName, p.age && `${p.age} ans`].filter(Boolean).join(' · '))}</em>` : ''}${p.joined ? `<em>Depuis ${esc(p.joined)}</em>` : ''}</div><i>›</i></button>`).join('') || '<div class="empty">Effectif non trouvé.</div>'}</div>`,
+      effectif: () => `<div class="esroster">${(D.players ?? []).map((p) => `<button type="button" class="esplayer" data-esplayer="${esc(p.name)}"><span>${esc(p.name[0] ?? '?')}${esPl(p)?.photo ? `<img class="esface" src="${esc(esPl(p).photo)}" alt="" loading="lazy">` : ''}</span><div><b>${esc(p.name)}</b><small>${esc([p.role, p.country].filter(Boolean).join(' · '))}</small>${p.realName || p.age ? `<em>${esc([p.realName, p.age && `${p.age} ans`].filter(Boolean).join(' · '))}</em>` : ''}${p.joined ? `<em>Depuis ${esc(p.joined)}</em>` : ''}</div><i>›</i></button>`).join('') || '<div class="empty">Aucun joueur actif annoncé pour le moment (d’après Liquipedia).</div>'}</div>`,
       matchs: () => `${(D.upcoming ?? []).length ? `<h3 class="essub">À venir</h3><div class="esmatches">${D.upcoming.map((m) => `<div class="esmatch"><small>${esc(m.date)}</small><b>vs ${esc(m.opponent)}</b><span>${esc(m.event)}</span></div>`).join('')}</div>` : ''}
         <h3 class="essub">Derniers résultats</h3><div class="esmatches">${(D.results ?? []).map((m) => `<div class="esmatch ${m.win ? 'win' : 'loss'}"><small>${esc(m.date)}</small><b>vs ${esML(m.opponent)}${esc(m.opponent)}</b><span>${esc(m.event)}</span><strong>${esc(m.score)}</strong></div>`).join('') || '<div class="empty">Pas de résultat trouvé.</div>'}</div>`,
       actus: () => `<div class="esnews">${(D.news ?? []).map((n) => n.text ? `<div class="esnew estl"><div><small>${esc(n.date)}</small><span>${esc(n.text)}</span></div></div>` : `<button type="button" class="esnew" ${n.url ? `data-esurl="${esc(n.url)}"` : ''}>${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy">` : `<i style="background-image:${esImg(c.t, c.g)}"></i>`}<div><small>${n.date ? esc(n.date) : ''}</small><b>${esc(n.title)}</b><span>${esc(n.summary)}</span></div></button>`).join('') || '<div class="empty">Pas d’actualité trouvée.</div>'}</div>`,
@@ -792,12 +864,12 @@ const ES_REG = { FR: 'Europe', DE: 'Europe', ES: 'Europe', DK: 'Europe', SE: 'Eu
       parcours: () => `<div class="eshist">${(D.history ?? []).map((x) => `<div><b>${esc(x.team)}</b><small>${esc(x.from)} → ${esc(x.to || 'aujourd’hui')}</small></div>`).join('') || '<div class="empty">Parcours non trouvé.</div>'}</div>`,
       reglages: () => `<h3 class="essub">Stats</h3><div class="esfacts">${(D.stats ?? []).map((x) => esRow(x.label, x.value)).join('') || '<div class="empty">Pas de stats trouvées.</div>'}</div><h3 class="essub">Réglages</h3><div class="esfacts">${(D.settings ?? []).map((x) => esRow(x.label, x.value)).join('') || '<div class="empty">Réglages non publiés.</div>'}</div>`,
       tournoi: () => `<div class="row"><button type="button" class="btn play" data-esurl="${esc(c.e.url)}">Regarder en direct</button></div><div class="esfacts">${esRow('Lieu', D.place)}${esRow('Dates', D.dates)}${esRow('Cashprize', D.prize)}${esRow('Statut', D.status)}${esRow('Vainqueur', D.winner)}</div>${D.format ? `<p class="esabout">${esc(D.format)}</p>` : ''}`,
-      equipes: () => `<div class="esroster">${(D.teams ?? []).map((x) => { const tm = esData.teams.find((y) => y.game === c.e.game && y.name.toLowerCase() === x.name.toLowerCase()); return `<button type="button" class="esplayer" ${tm ? `data-esteam="${esc(tm.id)}"` : ''}><span>${esc(x.name[0] ?? '?')}</span><div><b>${esc(x.name)}</b><small>${esc(x.result)}</small></div>${tm ? '<i>›</i>' : ''}</button>`; }).join('') || '<div class="empty">Équipes non trouvées.</div>'}</div>`,
+      equipes: () => `<div class="esroster">${(D.teams ?? []).map((x) => { const tm = esData.teams.find((y) => y.game === c.e.game && y.name.toLowerCase() === x.name.toLowerCase()); return `<button type="button" class="esplayer" ${tm ? `data-esteam="${esc(tm.id)}"` : ''}><span>${esc(x.name[0] ?? '?')}${tm ? esLogo(tm) : ''}</span><div><b>${esc(x.name)}</b><small>${esc(x.result ? `Classement : ${x.result}` : '')}</small>${x.players?.length ? `<em>${esc(x.players.join(', '))}</em>` : ''}</div>${tm ? '<i>›</i>' : ''}</button>`; }).join('') || '<div class="empty">Équipes non trouvées.</div>'}</div>`,
       matchs_e: () => '',
     };
     const k = c.kind === 'event' && tab === 'matchs' ? null : tab;
     try {
-      box.innerHTML = (k ? H[k]() : `<div class="esmatches">${(D.matches ?? []).map((m) => `<div class="esmatch"><small>${esc(m.date)} · ${esc(m.stage)}</small><b>${esc(m.a)} vs ${esc(m.b)}</b><strong>${esc(m.score)}</strong></div>`).join('') || '<div class="empty">Pas de match trouvé.</div>'}</div>`) + esSrc(D);
+      box.innerHTML = (k ? H[k]() : D.results || D.upcoming ? esGameHtml({ results: D.results, upcoming: D.upcoming }) || '<div class="empty">Pas encore de match annoncé.</div>' : `<div class="esmatches">${(D.matches ?? []).map((m) => `<div class="esmatch"><small>${esc(m.date)} · ${esc(m.stage)}</small><b>${esc(m.a)} vs ${esc(m.b)}</b><strong>${esc(m.score)}</strong></div>`).join('') || '<div class="empty">Pas de match trouvé.</div>'}</div>`) + esSrc(D);
     } catch { box.innerHTML = '<div class="empty">Infos incomplètes pour le moment, réessaie dans quelques minutes.</div>'; }
   }
   document.getElementById('esSearch')?.addEventListener('input', () => esportView());

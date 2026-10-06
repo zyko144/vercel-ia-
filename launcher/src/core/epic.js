@@ -51,7 +51,7 @@ export async function readEpicCatalog(catalogDir) {
   })).filter((c) => c.appName);
 }
 
-export async function scanEpic(manifestDir, catalogDir = null) {
+export async function scanEpic(manifestDir, catalogDir = null, roots = []) {
   const catalog = catalogDir ? await readEpicCatalog(catalogDir) : [];
   // Un jeu installé retrouve sa fiche par son identifiant de catalogue ou n'importe lequel de ses AppName
   const byApp = new Map(catalog.flatMap((c) => [[c.catalogId, c], ...c.appIds.map((a) => [a, c])]));
@@ -59,7 +59,7 @@ export async function scanEpic(manifestDir, catalogDir = null) {
   for (const file of await readdir(manifestDir).catch(() => [])) {
     if (!file.endsWith('.item')) continue;
     let m;
-    try { m = JSON.parse(await readFile(path.join(manifestDir, file), 'utf8')); } catch { continue; }
+    try { m = JSON.parse((await readFile(path.join(manifestDir, file), 'utf8')).replace(/^\uFEFF/, '')); } catch { continue; }
     if (!m.DisplayName || !m.AppName || m.bIsIncompleteInstall) continue;
     // Les modules (DLC, plugins Unreal) ne sont pas des jeux à part
     if ((m.AppCategories ?? []).some((c) => /plugins|engines|addons/i.test(c)) && !(m.AppCategories ?? []).includes('games')) continue;
@@ -74,13 +74,27 @@ export async function scanEpic(manifestDir, catalogDir = null) {
   // Jeux installés qui n'ont pas (ou plus) de fichier .item : la liste d'installation d'Epic les connaît quand même
   const datFile = path.join(path.dirname(path.dirname(path.dirname(manifestDir))), 'UnrealEngineLauncher', 'LauncherInstalled.dat');
   let dat = null;
-  try { dat = JSON.parse(await readFile(datFile, 'utf8')); } catch { /* pas de liste */ }
+  try { dat = JSON.parse((await readFile(datFile, 'utf8')).replace(/^\uFEFF/, '')); } catch { /* pas de liste */ }
   const have = new Set(items.map((i) => i.id));
   for (const x of dat?.InstallationList ?? []) {
     if (!x.AppName || !x.InstallLocation || have.has(`epic:${x.AppName}`) || /^(UE_|UnrealEngine)/i.test(x.AppName)) continue;
     const cat = byApp.get(x.ItemId) ?? byApp.get(x.AppName);
     items.push({ id: `epic:${x.AppName}`, source: 'epic', kind: 'game', name: cat?.title ?? path.basename(x.InstallLocation), installed: true, installDir: x.InstallLocation, exe: null, size: 0, minutes: 0, lastPlayed: 0, art: cat?.art ?? {}, details: cat?.details ?? null, epicKey: `${x.NamespaceId ?? ''}%3A${x.ItemId ?? ''}%3A${x.AppName}` });
     have.add(`epic:${x.AppName}`);
+  }
+  // Dernier recours : dossiers « Epic Games » des disques, chaque jeu y garde sa fiche dans .egstore\*.mancpn
+  for (const root of roots) {
+    for (const d of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+      if (!d.isDirectory() || /^(launcher|directxredist)$/i.test(d.name)) continue;
+      const eg = path.join(root, d.name, '.egstore');
+      const man = (await readdir(eg).catch(() => [])).find((f) => f.endsWith('.mancpn'));
+      let x = null;
+      try { x = man ? JSON.parse((await readFile(path.join(eg, man), 'utf8')).replace(/^\uFEFF/, '')) : null; } catch { /* fiche illisible */ }
+      if (!x?.AppName || have.has(`epic:${x.AppName}`)) continue;
+      const cat = byApp.get(x.CatalogItemId) ?? byApp.get(x.AppName);
+      items.push({ id: `epic:${x.AppName}`, source: 'epic', kind: 'game', name: cat?.title ?? d.name, installed: true, installDir: path.join(root, d.name), exe: null, size: 0, minutes: 0, lastPlayed: 0, art: cat?.art ?? {}, details: cat?.details ?? null, epicKey: `${x.CatalogNamespace ?? ''}%3A${x.CatalogItemId ?? ''}%3A${x.AppName}` });
+      have.add(`epic:${x.AppName}`);
+    }
   }
   // Jeux possédés mais pas installés
   const installed = new Set(items.map((i) => i.id));

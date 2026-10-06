@@ -449,4 +449,16 @@ HKEY_CURRENT_USER\\X\\roblox-player
   assert.equal(fromReg.find((i) => i.source === 'roblox')?.name, 'Roblox');
 });
 
+await check('Epic : fiche avec BOM, dossier .egstore et entrée Windows retrouvés', async () => {
+  const { scanEpic } = await import('../src/core/epic.js');
+  const E = mkdtempSync(path.join(os.tmpdir(), 'epic-'));
+  mkdirSync(path.join(E, 'man')); mkdirSync(path.join(E, 'root', 'Fortnite', '.egstore'), { recursive: true });
+  writeFileSync(path.join(E, 'man', 'a.item'), '\uFEFF' + JSON.stringify({ DisplayName: 'Rocket League', AppName: 'Sugar', InstallLocation: 'C:\\RL', CatalogNamespace: 'x', CatalogItemId: 'y' }));
+  writeFileSync(path.join(E, 'root', 'Fortnite', '.egstore', 'a.mancpn'), JSON.stringify({ AppName: 'Fortnite', CatalogNamespace: 'fn', CatalogItemId: 'z' }));
+  const found = await scanEpic(path.join(E, 'man'), null, [path.join(E, 'root')]);
+  assert.deepEqual(found.map((i) => i.id).sort(), ['epic:Fortnite', 'epic:Sugar']);
+  const reg = programsFromRegistry([{ key: 'HKLM\\x\\Fortnite', values: { DisplayName: 'Fortnite', UninstallString: '"C:\\EpicGamesLauncher.exe" com.epicgames.launcher://apps/Fortnite?action=uninstall' } }]);
+  assert.equal(reg[0]?.source, 'epic'); assert.equal(reg[0]?.kind, 'game'); assert.equal(reg[0]?.epicKey, 'Fortnite');
+});
+
 console.log(`\n${passed} vérifications passées.`);

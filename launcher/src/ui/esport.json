@@ -1092,6 +1092,7 @@
  "events": [
   {
    "id": "rlcs-worlds-2026",
+   "lp": "Rocket League Championship Series/2026",
    "name": "RLCS World Championship 2026",
    "game": "rl",
    "start": "2026-09-15",
@@ -1101,6 +1102,7 @@
   },
   {
    "id": "vct-champions-2026",
+   "q": "VALORANT Champions 2026",
    "name": "VALORANT Champions 2026",
    "game": "val",
    "start": "2026-09-24",
@@ -1110,6 +1112,7 @@
   },
   {
    "id": "lol-worlds-2026",
+   "lp": "World Championship/2026",
    "name": "Worlds 2026",
    "game": "lol",
    "start": "2026-10-16",
@@ -1119,6 +1122,7 @@
   },
   {
    "id": "r6-major-japan-2026",
+   "q": "Major 2026 Japan",
    "name": "BLAST R6 Major Japon 2026",
    "game": "r6",
    "start": "2026-11-06",
@@ -1128,6 +1132,7 @@
   },
   {
    "id": "cs2-major-singapore-2026",
+   "q": "Major 2026 Singapore",
    "name": "Major CS2 Singapore 2026",
    "game": "cs2",
    "start": "2026-11-25",
@@ -1137,6 +1142,7 @@
   },
   {
    "id": "r6-six-invitational-2027",
+   "lp": "Six Invitational/2027",
    "name": "Six Invitational 2027",
    "game": "r6",
    "start": "2027-02-01",

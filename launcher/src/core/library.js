@@ -37,6 +37,13 @@ export async function steamPath() {
 }
 
 const epicData = () => path.join(process.env.ProgramData ?? 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data');
+// Dossier de données Epic indiqué par le launcher Epic lui-même (sinon l'emplacement par défaut)
+async function epicDataDir() {
+  const reg = await readRegValue('HKLM\\SOFTWARE\\WOW6432Node\\Epic Games\\EpicGamesLauncher', 'AppDataPath').catch(() => null);
+  return reg ? reg.replace(/[\\/]+$/, '') : epicData();
+}
+// Dossiers où Epic installe les jeux, sur chaque disque
+const EPIC_ROOTS = () => 'CDEFGH'.split('').flatMap((d) => [`${d}:\\Program Files\\Epic Games`, `${d}:\\Epic Games`, `${d}:\\Games\\Epic Games`]);
 export const epicManifests = () => path.join(epicData(), 'Manifests');
 export const epicCatalog = () => path.join(epicData(), 'Catalog');
 
@@ -47,7 +54,7 @@ export async function scanAll(paths = {}, { steamApiKey = null, fetchImpl = fetc
   const steamDir = paths.steam ?? await steamPath();
   const [steam, epic, reg, owned, roblox] = await Promise.all([
     scanSteam(steamDir),
-    scanEpic(paths.epic ?? epicManifests(), paths.epicCatalog ?? epicCatalog()),
+    paths.epic ? scanEpic(paths.epic, paths.epicCatalog ?? null, []) : epicDataDir().then((d) => scanEpic(path.join(d, 'Manifests'), path.join(d, 'Catalog'), process.platform === 'win32' ? EPIC_ROOTS() : [])),
     paths.registry ? Promise.resolve(paths.registry) : Promise.all(UNINSTALL_KEYS.map(readRegistry)).then((l) => l.flat()),
     steamApiKey ? lastSteamUser(steamDir).then((id) => ownedSteamGames(steamApiKey, id, fetchImpl)) : Promise.resolve([]),
     paths.roblox ? scanRoblox(paths.roblox) : paths.registry ? Promise.resolve([]) : scanRoblox(),
@@ -71,8 +78,9 @@ export async function scanAll(paths = {}, { steamApiKey = null, fetchImpl = fetc
   else programs = programs.map((p) => (/^roblox( player)?$/i.test(p.name) ? { ...p, id: 'roblox:player', name: 'Roblox', source: 'roblox', kind: 'game', category: 'jeu', known: true, brand: ROBLOX_BRAND } : p));
   // Un jeu Steam/Epic peut aussi apparaître dans le registre : on garde la version du launcher
   const known = new Set([...steam, ...epic].filter((i) => i.name).map((i) => norm(i.name)));
+  const knownIds = new Set(epic.map((i) => i.id));
   for (const r of roblox) r.brand = ROBLOX_BRAND;
-  return [...steam, ...epic, ...roblox, ...programs.filter((p) => !known.has(norm(p.name)))];
+  return [...steam, ...epic, ...roblox, ...programs.filter((p) => !known.has(norm(p.name)) && !knownIds.has(p.id))];
 }
 
 /** Ajoute le temps suivi par le launcher, les images et fiches trouvées en ligne, et les réglages de l'utilisateur. */

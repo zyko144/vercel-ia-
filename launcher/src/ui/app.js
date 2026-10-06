@@ -115,6 +115,7 @@ document.addEventListener('error', (e) => {
 function renderPlatforms() {
   const counts = {};
   for (const i of state.items) if (!i.hidden && i.kind === 'game') counts[i.source] = (counts[i.source] ?? 0) + 1;
+  for (const k of ['epic', 'ea', 'ubisoft']) counts[k] ??= 0; // toujours là, même sans jeu trouvé
   for (const k of sidebar.hiddenPlatforms) delete counts[k];
   $('platforms').innerHTML = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => {
     const s = state.sources[k] ?? { label: k, color: '#999' };
@@ -205,6 +206,7 @@ function menuFor(i) {
   if (!state.active.has(i.id)) m.push(`<button data-action="${i.installed ? 'launch' : 'install'}" class="primary">${i.installed ? (i.kind !== 'game' ? 'Ouvrir' : 'Jouer') : 'Installer'}</button>`);
   if (state.active.has(i.id)) m.push('<button data-action="close">Fermer</button>');
   if (i.updatePending) m.push(`<button data-action="update">Mettre à jour${i.updateBytes ? ` (${size(i.updateBytes)})` : ''}</button>`);
+  else if (i.source === 'epic' && i.installed) m.push('<button data-action="update">Mettre à jour via Epic</button>');
   m.push(`<button data-set="favorite">${i.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}</button>`);
   m.push('<button data-sheet="1">Fiche du jeu</button>');
   if (i.installed && i.installDir) m.push('<button data-action="folder">Ouvrir le dossier</button>');
@@ -1616,6 +1618,12 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.63.0': [
+    ['🎮', 'Tous tes jeux Epic', 'Fortnite, Rocket League et tous les jeux Epic sont retrouvés même quand le lanceur Epic range ses fichiers ailleurs : liste de Windows, dossier « Epic Games » de chaque disque. Epic Games, EA et Ubisoft sont toujours à gauche (réaffichés s’ils étaient masqués).', ['[data-view=jeux]', 'wait1500']],
+    ['⟳', 'Mises à jour Epic', 'Clic droit sur un jeu Epic › « Mettre à jour via Epic » : Epic installe la mise à jour puis lance le jeu.'],
+    ['🏆', 'Fiches des compétitions', 'Lieu, cashprize, dates, vainqueur, toutes les équipes avec leurs joueurs, classement final et tous les matchs avec les scores, lus sur Liquipedia.', ['[data-view=esport]', 'wait1500', '.esstar[data-esteam]', 'wait1500', '[data-estab=calendrier]', 'wait800']],
+    ['🇫🇷', 'E-sport en français', 'Présentation des équipes écrite en français, pays traduits, et historique des équipes (arrivées, départs, prolongations…) traduit.'],
+  ],
   '0.62.2': [
     ['⟳', 'Mises à jour bloquées à 0 %', 'Quand Steam met la mise à jour d’un jeu en file sans jamais la démarrer, History lance le jeu par Steam pour la forcer : la mise à jour passe en premier et le jeu s’ouvre une fois à jour.', ['[data-view=jeux]', 'wait1500']],
   ],
@@ -4058,6 +4066,7 @@ async function openMods(item) {
 async function act(action) {
   const item = state.sel;
   if (!item) return;
+  if (action === 'update' && item.source === 'epic') { const r = await api.action(item.id, 'update'); return toast(r?.ok ? 'Epic installe la mise à jour, puis le jeu se lance' : `Impossible : ${r?.error ?? 'Epic introuvable'}`); }
   if (action === 'update') return startGameUpdate(item);
   if (action === 'optiplay') return openOptiPlay(item);
   if (action === 'verify') { api.verify(item.id).then((r) => r?.error && toast(`Impossible : ${r.error}`)); return; }
@@ -4244,6 +4253,8 @@ $('openKeys').addEventListener('click', (e) => { e.preventDefault(); $('settings
 // Réglages
 function showKeys(s) {
   Object.assign(sidebar, { hiddenPlatforms: [], hiddenNav: [] }, s.sidebar ?? {});
+  // 0.63 : Epic, EA et Ubisoft masqués avant ne pouvaient plus revenir : on les réaffiche une fois
+  if (!sidebar.v) { sidebar.hiddenPlatforms = sidebar.hiddenPlatforms.filter((k) => !['epic', 'ea', 'ubisoft'].includes(k)); sidebar.v = 1; saveSidebar(); }
   applySidebar();
   $('autostart').checked = Boolean(s.autostart);
   $('directLaunch').checked = s.directLaunch !== false;
@@ -5016,7 +5027,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.62.2',
+    version: async () => '0.63.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},
