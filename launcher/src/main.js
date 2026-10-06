@@ -421,7 +421,7 @@ async function enrichInBackground() {
 }
 
 // Liens autorisés vers d'autres programmes : seulement ceux des launchers et des pages de magasin
-const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|steam:\/\/url\/(CommunityFilePage\/\d{6,12}|SteamWorkshopPage\/4000)|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey)|https:\/\/historylauncher\.vercel\.app\/|https:\/\/(lolesports\.com|valorantesports\.com|esports\.rocketleague\.com|liquipedia\.net\/[a-z]+\/|www\.ubisoft\.com\/en-us\/esports\/rainbow-six\/siege))$/;
+const SAFE_LINK = /^(steam:\/\/(rungameid|install|uninstall|validate)\/\d+|com\.epicgames\.launcher:\/\/(apps\/[\w%.-]+\?action=(launch|verify|install)(&silent=true)?|store\/library)|https:\/\/store\.steampowered\.com\/app\/\d+|https:\/\/store\.epicgames\.com\/fr\/p\/[\w-]+|https:\/\/steamcommunity\.com\/profiles\/\d{17}|https:\/\/store\.steampowered\.com\/news\/app\/\d+\/view\/\d+|steam:\/\/url\/(CommunityFilePage\/\d{6,12}|SteamWorkshopPage\/4000)|fivem:\/\/connect\/(cfx\.re\/join\/[a-z0-9]{4,10}|\d{1,3}(\.\d{1,3}){3}:\d{2,5})|https:\/\/(www\.steamgriddb\.com\/profile\/preferences\/api|steamcommunity\.com\/dev\/apikey)|https:\/\/historylauncher\.vercel\.app\/|https:\/\/(lolesports\.com|valorantesports\.com|esports\.rocketleague\.com|liquipedia\.net\/[a-z]+\/[\w%().-]*|www\.ubisoft\.com\/en-us\/esports\/rainbow-six\/siege))$/;
 const isDriverLink = (u) => DRIVER_LINKS.includes(u) || /^https:\/\/(www\.nvidia\.com\/[\w/.%?=&-]*|[\w-]+\.download\.nvidia\.com\/[\w/.%-]+\.exe)$/.test(String(u));
 const openLink = (url) => (SAFE_LINK.test(url) || isDriverLink(url) ? shell.openExternal(url) : Promise.reject(new Error('lien refusé')));
 
@@ -3877,6 +3877,12 @@ ipcMain.handle('more:storageDel', async (_e, paths = []) => {
   return { ok, freed, failed };
 });
 ipcMain.handle('more:translate', async (_e, texts) => (process.env.LAUNCHER_DEMO ? { en: {} } : api('/api/compte/traduire', { method: 'POST', body: { texts: (Array.isArray(texts) ? texts : []).slice(0, 60) }, timeout: 60_000 }).catch(() => null)));
+// E-sport : équipes et calendrier (fichier livré avec le launcher, mis à jour depuis le site quand il est joignable)
+ipcMain.handle('more:esportData', async () => {
+  const remote = process.env.LAUNCHER_DEMO ? null : await fetch('https://zyko144.github.io/vercel-ia-/demo/ui/esport.json', { signal: AbortSignal.timeout(6000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return { ...(remote?.teams ? remote : JSON.parse(await readFile(path.join(here, 'ui', 'esport.json'), 'utf8'))), api: process.env.LAUNCHER_DEMO ? '' : API };
+});
+ipcMain.handle('more:esportInfo', (_e, team, game) => (process.env.LAUNCHER_DEMO ? { news: [{ title: 'Qualifiée pour le prochain Major', summary: 'L’équipe a validé sa place après une série en 5 manches.', date: '2026-10-04', url: 'https://liquipedia.net/', image: '' }, { title: 'Nouveau joueur annoncé', summary: 'Un remplaçant rejoint l’effectif jusqu’à la fin de la saison.', date: '2026-09-28', url: 'https://liquipedia.net/', image: '' }], players: [{ name: 'Joueur1', role: 'Capitaine', country: 'FR' }, { name: 'Joueur2', role: 'Attaquant', country: 'FR' }, { name: 'Joueur3', role: 'Soutien', country: 'BE' }] } : api(`/api/compte/esport/infos?nom=${encodeURIComponent(String(team))}&jeu=${encodeURIComponent(String(game))}`, { timeout: 60_000 }).catch(() => null)));
 ipcMain.handle('more:esportOpen', (_e, url) => openLink(String(url)).then(() => true, () => false));
 ipcMain.handle('more:dustDone', () => { store.data.dustAt = Date.now(); store.save(); return true; });
 ipcMain.handle('more:speed', () => (process.env.LAUNCHER_DEMO ? { down: 412, up: 48 } : speedTest((u, o) => net.fetch(u, o)).catch((err) => ({ error: err.message }))));

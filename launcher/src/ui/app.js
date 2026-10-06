@@ -1616,6 +1616,13 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.59.0': [
+    ['🏆', 'Rubrique E-sport', 'Nouvelle catégorie à gauche : 95 équipes de Rocket League, Rainbow Six, CS2, VALORANT et League of Legends avec leur logo et un fond aux couleurs du club, Gentle Mates, Karmine Corp et Vitality à la une, et le calendrier des grandes compétitions.', ['[data-view=esport]', 'wait1500']],
+    ['📰', 'Fiche d’équipe', 'Clique sur une équipe : ses dernières actus lues par l’IA sur les sites e-sport, son effectif, son calendrier. Suis tes équipes : elles passent en premier.'],
+  ],
+  '0.59.0': [
+    ['🏆', 'Rubrique E-sport', 'Nouvelle catégorie à gauche : les équipes de Rocket League, Rainbow Six, CS2, VALORANT et League of Legends aux couleurs de leur club, le calendrier des grandes compétitions et, pour chaque équipe, sa fiche avec son calendrier. Suis tes équipes : elles passent en premier.', ['[data-view=esport]', 'wait1500']],
+  ],
   '0.58.1': [
     ['🏆', 'E-sport : Rainbow Six', 'Le thème e-sport s’active aussi pour le BLAST R6 Major au Japon (6-15 novembre) et le Six Invitational 2027 (1er-14 février), si tu as Rainbow Six Siege.', ['[data-view=accueil]', 'wait800']],
   ],
@@ -3845,6 +3852,7 @@ function go(view) {
   if (state.view === 'liste') renderList();
   if (state.view === 'stats') { renderStats(); moreUi?.renderAdv(); }
   if (state.view === 'classement') renderRanking();
+  if (state.view === 'esport') moreUi?.esportView();
   if (state.view === 'amis') showFriendTab(state.ftab);
   if (state.view === 'pc') openPc();
   if (state.view === 'optimisation') openOpti();
@@ -4982,7 +4990,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.58.1',
+    version: async () => '0.59.0',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

@@ -1,0 +1,6 @@
+Images des équipes e-sport (facultatives) : dépose ici, pour chaque équipe,
+  <id>-logo.png  (logo détouré, fond transparent, ~512 px)
+  <id>-bg.jpg    (image de fond, ~1280 px de large)
+L'id de chaque équipe est dans ../esport.json (ex. rl-m8 = Gentle Mates Rocket League).
+Sans image, la carte utilise les couleurs et le sigle de l'équipe.
+Logos des clubs (hors Vitality, Karmine Corp, Gentle Mates) : dépôt public github.com/lootmarket/esport-team-logos.
