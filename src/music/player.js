@@ -140,6 +140,7 @@ export class GuildPlayer {
       }
       if (token !== this.playToken || this.current !== track) return;
       this.failures = 0;
+      track.startRetried = false;
       if (newTrack) {
         countEvent(this.guild.id, 'musique');
         await this.sendNewPanel();
@@ -168,6 +169,14 @@ export class GuildPlayer {
       }
 
       console.warn(`[musique] impossible de lire "${track.title}" :`, err.message);
+      // Souvent un raté passager (serveur audio, lien expiré) : un 2e essai à neuf avant de passer au suivant
+      if (!this.blind && !track.startRetried && this.backend) {
+        track.startRetried = true;
+        this.backend.invalidate?.(track);
+        await new Promise((r) => setTimeout(r, 1_500));
+        if (token === this.playToken && this.current === track) return this.startCurrent(seek, { newTrack });
+        return undefined;
+      }
       if (this.blind) {
         this.current = null;
         return this.onBlindEnd?.({ failed: true, error: err });
@@ -500,11 +509,17 @@ export class GuildPlayer {
 
   refreshPanel(force = false) {
     if (!this.panel || !this.current || this.blind) return;
+    // Une seule modif à la fois : sinon Discord les met en file (limite de débit) et tout le reste du bot attend derrière
+    if (this.editing) { this.editAgain ||= force; return; }
     if (!force && Date.now() - this.lastPanelEdit < 1_000) return;
+    this.editing = true;
     this.lastPanelEdit = Date.now();
     const t0 = Date.now();
-    this.panel.edit(nowPlayingPayload(this)).then(() => { const ms = Date.now() - t0; this.editMs = this.editMs ? this.editMs * 0.7 + ms * 0.3 : ms; }).catch((err) => {
+    this.panel.edit(nowPlayingPayload(this)).then(() => { const ms = Math.min(Date.now() - t0, 1_500); this.editMs = this.editMs ? this.editMs * 0.7 + ms * 0.3 : ms; }).catch((err) => {
       if (err.code === 10008) this.panel = null; // message supprimé
+    }).finally(() => {
+      this.editing = false;
+      if (this.editAgain) { this.editAgain = false; this.refreshPanel(true); }
     });
   }
 
