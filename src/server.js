@@ -209,6 +209,16 @@ export function startHttpServer(getStatus, adminRoutes = {}, publicFile = () => 
     // La salle de jeux cliquable du casino (pages, API, et entrée de l'Activité Discord)
     if (await handleSalleWeb(req, res, url)) return;
 
+    // Le PC du chef branche son serveur audio (tunnel trycloudflare) : clé tirée du token du bot
+    if (url.pathname === '/api/audio-pc' && req.method === 'POST') {
+      const { streamKey } = await import('./features/livestream.js');
+      if (req.headers['x-key'] !== streamKey()) return send(res, 401, { error: 'clé invalide' });
+      const { host, password } = await readJson(req);
+      if (!/^[a-z0-9-]+\.trycloudflare\.com$/.test(host ?? '') || typeof password !== 'string' || password.length > 100) return send(res, 400, { error: 'données invalides' });
+      (await import('./music/lavalink.js')).lavalink.setPcNode({ host, password });
+      return send(res, 200, { ok: true });
+    }
+
     // Son du PC diffusé en direct (le serveur audio vient le chercher ici)
     if (url.pathname.startsWith('/live/') && liveRoute) return liveRoute(req, res, url);
 

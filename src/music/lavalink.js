@@ -41,6 +41,7 @@ class LavalinkNode {
   }
 
   connect() {
+    if (this.stopped) return;
     const headers = {
       Authorization: this.password,
       'User-Id': this.manager.userId,
@@ -71,6 +72,7 @@ class LavalinkNode {
       // Pourquoi on n'arrive pas à s'y connecter (utile quand un serveur public nous bloque)
       else if (limited || this.attempts % 4 === 0) this.manager.log(`${this.name} injoignable (code ${code}${this.lastError ? ' · ' + this.lastError.slice(0, 80) : ''})${limited ? ` · nouvelle tentative dans ${RATE_LIMITED_MS / 60_000} min` : ''}`);
       this.manager.nodeDown(this);
+      if (this.stopped) return; // serveur retiré (PC éteint) : on ne s'y reconnecte plus
       // Session refusée (déjà expirée côté serveur) : on repart de zéro au lieu de boucler dans le vide
       if (code === 4000 || this.attempts >= 1) this.sessionId = null;
       const delay = limited ? RATE_LIMITED_MS : Math.min(RECONNECT_MAX_MS, RECONNECT_MIN_MS * 2 ** Math.min(this.attempts++, 6));
@@ -191,8 +193,35 @@ class LavalinkManager {
   init(client) {
     if (this.userId || config.music.engine === 'local') return;
     this.userId = client.user.id;
-    this.nodes = config.music.lavalinkNodes.map((options, i) => new LavalinkNode(options, this, i));
+    this.nodes = [...this.nodes.filter((n) => n.pc), ...config.music.lavalinkNodes.map((options, i) => new LavalinkNode(options, this, i))];
     for (const node of this.nodes) node.connect();
+  }
+
+  /** Serveur audio du PC du chef (via un tunnel) : passe devant les autres tant que le PC donne signe de vie. */
+  setPcNode({ host, password }) {
+    clearTimeout(this.pcTimer);
+    this.pcTimer = setTimeout(() => this.dropPcNode(), 150_000);
+    const current = this.nodes.find((n) => n.pc);
+    if (current?.host === host && current.password === password) return;
+    this.dropPcNode();
+    const node = new LavalinkNode({ name: 'PC', host, port: 443, password, secure: true }, this, -1);
+    node.pc = true;
+    this.nodes.unshift(node);
+    this.log(`Serveur audio du PC branché (${host})`);
+    if (this.userId) node.connect();
+  }
+
+  dropPcNode() {
+    const node = this.nodes.find((n) => n.pc);
+    if (!node) return;
+    node.stopped = true;
+    this.nodes = this.nodes.filter((n) => n !== node);
+    node.ws?.close();
+    this.log('Serveur audio du PC débranché');
+  }
+
+  get pcOnline() {
+    return this.nodes.some((n) => n.pc && n.usable);
   }
 
   get available() {

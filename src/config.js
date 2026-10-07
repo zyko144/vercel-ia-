@@ -244,6 +244,8 @@ export const config = {
     // auto = Lavalink si dispo, sinon lecteur local · lavalink = uniquement Lavalink · local = uniquement local
     engine: str('MUSIC_ENGINE', 'auto'),
     lavalinkNodes: parseNodes(str('LAVALINK_NODES')),
+    // En attendant un vrai serveur audio : sur Render, la musique ne marche que si le PC du chef fait tourner le sien (tools/serveur-audio-pc.mjs)
+    pcOnly: str('MUSIC_PC_ONLY', process.env.RENDER ? '1' : '0') === '1',
     // Rafraîchissement de la barre de progression (3 s minimum : Discord limite les modifications)
     panelRefreshMs: Math.max(3, int('MUSIC_PANEL_REFRESH_SECONDS', 4)) * 1000,
     // Décalage des paroles : négatif = elles s'affichent plus tard (compense le retard du son)
