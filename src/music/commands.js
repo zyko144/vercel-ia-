@@ -5,7 +5,7 @@ import { FILTERS } from './filters.js';
 const guildOnly = (builder) => builder.setContexts(InteractionContextType.Guild);
 const searchOption = (o, required = true) => o
   .setName('recherche')
-  .setDescription('Nom, lien (Spotify, YouTube, Deezer…) ou « paroles: un bout des paroles »')
+  .setDescription('Nom du son ou lien Spotify, Apple Music, YouTube, SoundCloud, Deezer')
   .setRequired(required)
   .setAutocomplete(true)
   .setMaxLength(500);

@@ -9,7 +9,6 @@ import { MusicError } from './ytdlp.js';
 
 const START_TIMEOUT_MS = 25_000;
 const START_GRACE_MS = 2_500; // certains serveurs annoncent le démarrage puis échouent juste après
-const FROZEN_MS = 3_500; // son immobile côté serveur audio ~4 s : coupé (vérifié toutes les 2 s)
 const NODE_BROKEN_MS = 10 * 60_000;
 const NODE_STALLS_BEFORE_BREAK = 2; // coupures en pleine lecture sur un serveur avant de le mettre de côté
 const YOUTUBE_TROUBLE_MS = 5 * 60_000; // YouTube bloque parfois les serveurs publics : on passe par SoundCloud pendant ce temps
@@ -331,10 +330,9 @@ export class LavalinkBackend {
     }
 
     // Son déjà préparé pendant le précédent : on démarre tout de suite (enchaînement quasi instantané)
-    const ready = [track.lavalinkReady, track.lavalinkSpare].find((r) => r?.node === this.node?.name && !track.badItems?.has(this.itemKey(r.item)));
-    if (ready) {
-      if (track.lavalinkReady === ready) track.lavalinkReady = null;
-      else track.lavalinkSpare = null;
+    if (track.lavalinkReady?.node === this.node?.name) {
+      const ready = track.lavalinkReady;
+      track.lavalinkReady = null;
       try {
         await this.start(ready.item, seek);
         this.applyMetadata(track, ready.item);
@@ -400,7 +398,7 @@ export class LavalinkBackend {
     }
 
     if (!serverError && this.node?.usable) throw new MusicError("pas de version d'origine fiable trouvée pour ce son");
-    throw new NoAudioNodeError(lastError ? `aucun serveur audio n'a pu le lire (${shortError(lastError.message)})` : 'aucun serveur audio disponible');
+    throw new MusicError(lastError ? `aucun serveur audio n'a pu le lire (${shortError(lastError.message)})` : 'aucun serveur audio disponible');
   }
 
   /** Code ISRC du son (Deezer) : c'est la recherche la plus sûre pour tomber sur l'enregistrement d'origine. */
@@ -433,7 +431,6 @@ export class LavalinkBackend {
       this.startedAt = Date.now();
       if (!this.watchdog) this.startWatchdog();
       this.lastState = { position: seek * 1000, at: Date.now() };
-      this.startSeek = seek;
 
       this.node.updatePlayer(this.guild.id, {
         track: { encoded: item.encoded },
@@ -452,38 +449,21 @@ export class LavalinkBackend {
   startWatchdog() {
     this.watchdog = setInterval(async () => {
       const track = this.player.current;
-      const busy = () => !track || this.player.current !== track || this.pending || this.player.paused || !this.currentEncoded || this.recovering;
-      if (this.player.paused) this.frozen = null; // après une pause, la position n'a pas bougé : normal
-      if (busy()) return;
+      if (!track || this.pending || this.player.paused || !this.currentEncoded || this.recovering) return;
+      // Le son avance côté serveur mais plus rien n'arrive dans Discord : on refait la connexion vocale
+      if (await this.voiceLinkDead()) {
+        lavalink.log(`${this.node?.name} : le son n'arrive plus dans le vocal, reconnexion`);
+        this.voiceDeadSince = 0;
+        return this.recover('son bloqué avant Discord');
+      }
+      if (Date.now() - this.lastState.at < 12_000) return;
       const state = await this.fetchState().catch(() => undefined);
       // Pas de réponse (serveur injoignable) = on ne sait pas : on ne touche à rien
-      if (!state || busy()) return;
-      if (state.track) {
-        // Le son avance côté serveur mais plus rien n'arrive dans Discord : on refait la connexion vocale
-        if (this.voiceLinkDead(state)) {
-          lavalink.log(`${this.node?.name} : le son n'arrive plus dans le vocal, reconnexion`);
-          this.voiceDeadSince = 0;
-          return this.recover('son bloqué avant Discord');
-        }
-        // Le son ne bouge plus côté serveur (flux à sec) : on reprend tout de suite au même endroit, sans attendre ~10 s
-        const pos = state.track.info?.position ?? state.state?.position ?? 0;
-        const f = this.frozen;
-        if (f?.encoded !== this.currentEncoded || Math.abs(pos - f.pos) > 300 || Date.now() - (this.startedAt ?? 0) < 3_000) {
-          this.frozen = { pos, at: Date.now(), encoded: this.currentEncoded };
-        } else if (Date.now() - f.at > FROZEN_MS) {
-          lavalink.log(`${this.node?.name} : "${track.title}" figé à ${Math.round(pos / 1000)}s, reprise`);
-          this.frozen = null;
-          this.lastState = { position: pos, at: Date.now() };
-          this.currentEncoded = null;
-          return this.player.onTrackEnd({ failed: true, error: new Error('le son s\'est figé') });
-        }
-        return undefined;
-      }
-      if (Date.now() - this.lastState.at < 8_000) return undefined;
+      if (!state || state.track || this.player.current !== track || this.pending || !this.currentEncoded) return;
       lavalink.log(`${this.node?.name} : "${track.title}" n'est plus joué, passage à la suite`);
       this.currentEncoded = null;
-      return this.player.onTrackEnd({ failed: false });
-    }, 2_000);
+      this.player.onTrackEnd({ failed: false });
+    }, 5_000);
     this.watchdog.unref?.();
   }
 
@@ -491,14 +471,16 @@ export class LavalinkBackend {
    * Le serveur audio joue mais Discord ne reçoit rien : sa connexion vocale répond plus (ping -1)
    * ou il se dit déconnecté. Vrai seulement si ça dure (pour ne pas couper sur un simple à-coup).
    */
-  voiceLinkDead(state) {
-    const broken = state.state?.connected === false || state.state?.ping < 0;
+  async voiceLinkDead() {
+    const state = await this.fetchState().catch(() => null);
+    if (!state?.track) return false;
+    const broken = state.state.connected === false || state.state.ping < 0;
     if (!broken) {
       this.voiceDeadSince = 0;
       return false;
     }
     this.voiceDeadSince ||= Date.now();
-    return Date.now() - this.voiceDeadSince > 4_000;
+    return Date.now() - this.voiceDeadSince > 6_000;
   }
 
   async switchNode(exclude) {
@@ -537,7 +519,6 @@ export class LavalinkBackend {
     switch (message.type) {
       case 'TrackStartEvent':
         if (sameTrack) this.player.onAudioStart?.(this.player.current);
-        if (sameTrack) this.lastState = { position: (this.startSeek ?? 0) * 1000, at: Date.now() }; // le son démarre vraiment maintenant : les paroles partent d'ici
         if (pending && sameTrack) {
           pending.announced = true;
           pending.graceTimer = setTimeout(() => pending.finish(), START_GRACE_MS);
@@ -816,19 +797,16 @@ export class LavalinkBackend {
   /** Prépare le son suivant pendant que le son actuel joue : le passage devient instantané. */
   async preload(track) {
     if (!track || !this.node?.usable || track.preloading) return;
+    if (track.lavalinkReady?.node === this.node.name) return;
     track.preloading = true;
     try {
-      // Prêt sur le serveur du moment ET sur un 2e : si le premier lâche, le son repart tout de suite sur l'autre
-      for (const [key, node] of [['lavalinkReady', this.node], ['lavalinkSpare', lavalink.bestNode([this.node.name])]]) {
-        if (!node || track[key]?.node === node.name) continue;
-        for (const identifier of this.candidates(track)) {
-          const result = await node.loadTracks(identifier).catch(() => null);
-          const item = result && this.pick(result, track, /^\w+search:/.test(identifier), identifier);
-          if (item) {
-            track[key] = { node: node.name, item };
-            if (key === 'lavalinkReady') this.applyMetadata(track, item);
-            break;
-          }
+      for (const identifier of this.candidates(track)) {
+        const result = await this.node.loadTracks(identifier).catch(() => null);
+        const item = result && this.pick(result, track, /^\w+search:/.test(identifier), identifier);
+        if (item) {
+          track.lavalinkReady = { node: this.node.name, item };
+          this.applyMetadata(track, item);
+          return;
         }
       }
     } finally {
@@ -845,8 +823,6 @@ export class LavalinkBackend {
     const node = this.node;
     if (!node) return;
     const now = Date.now();
-    // Journal des coupures (1 h) : un serveur qui coupe souvent passe derrière les autres
-    node.cuts = [...(node.cuts ?? []).filter((at) => now - at < 3_600_000), now];
     node.stalls = (node.stalls ?? []).filter((at) => now - at < NODE_BROKEN_MS);
     node.stalls.push(now);
     if (node.stalls.length >= NODE_STALLS_BEFORE_BREAK) {
