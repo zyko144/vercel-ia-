@@ -160,7 +160,7 @@ export async function handleJukeboxMessage(client, message) {
     if (!result.tracks.length) throw new MusicError('rien trouvé');
     const player = getOrCreatePlayer(client, message.guild);
     player.textChannelId = message.channelId;
-    await player.connect(voiceChannel);
+    if (!player.current || !player.backend) await player.connect(voiceChannel); // déjà en lecture : ne pas couper le son
     player.add(result.tracks);
     await removeHourglass();
     await message.react('✅').catch(() => {});

@@ -125,6 +125,11 @@ export class GuildPlayer {
     if (this.volume > MAX_VOLUME) this.volume = MAX_VOLUME;
     const start = next.seekTo ?? 0;
     delete next.seekTo;
+    // Repli sur le lecteur local après un son illisible : il saccade sur le petit serveur, on revient sur Lavalink dès le son suivant
+    if (this.backend instanceof LocalBackend && config.music.engine === 'auto' && lavalink.available) {
+      const channel = this.guild.channels.cache.get(this.backend.voiceChannelId);
+      if (channel) await this.connect(channel, { force: true }).catch((err) => console.warn('[musique] retour sur Lavalink impossible :', err.message));
+    }
     return this.startCurrent(start, { newTrack: true });
   }
 
@@ -140,6 +145,7 @@ export class GuildPlayer {
       }
       if (token !== this.playToken || this.current !== track) return;
       this.failures = 0;
+      track.startRetried = false;
       if (newTrack) {
         countEvent(this.guild.id, 'musique');
         await this.sendNewPanel();
@@ -168,6 +174,14 @@ export class GuildPlayer {
       }
 
       console.warn(`[musique] impossible de lire "${track.title}" :`, err.message);
+      // Souvent un raté passager (serveur audio, lien expiré) : un 2e essai à neuf avant de passer au suivant
+      if (!this.blind && !track.startRetried && this.backend) {
+        track.startRetried = true;
+        this.backend.invalidate?.(track);
+        await new Promise((r) => setTimeout(r, 1_500));
+        if (token === this.playToken && this.current === track) return this.startCurrent(seek, { newTrack });
+        return undefined;
+      }
       if (this.blind) {
         this.current = null;
         return this.onBlindEnd?.({ failed: true, error: err });
@@ -237,7 +251,8 @@ export class GuildPlayer {
   }
 
   preloadNext() {
-    this.backend?.preload?.(this.queue[0]);
+    // Le suivant, et le son en cours sur un 2e serveur (reprise instantanée s'il coupe)
+    for (const track of [this.queue[0], this.current]) this.backend?.preload?.(track);
   }
 
   /** Un son n'a pas pu être joué : le chef est prévenu (MP + ping, comme pour les questions sans réponse). */
@@ -500,11 +515,17 @@ export class GuildPlayer {
 
   refreshPanel(force = false) {
     if (!this.panel || !this.current || this.blind) return;
+    // Une seule modif à la fois : sinon Discord les met en file (limite de débit) et tout le reste du bot attend derrière
+    if (this.editing) { this.editAgain ||= force; return; }
     if (!force && Date.now() - this.lastPanelEdit < 1_000) return;
+    this.editing = true;
     this.lastPanelEdit = Date.now();
     const t0 = Date.now();
-    this.panel.edit(nowPlayingPayload(this)).then(() => { const ms = Date.now() - t0; this.editMs = this.editMs ? this.editMs * 0.7 + ms * 0.3 : ms; }).catch((err) => {
+    this.panel.edit(nowPlayingPayload(this)).then(() => { const ms = Math.min(Date.now() - t0, 1_500); this.editMs = this.editMs ? this.editMs * 0.7 + ms * 0.3 : ms; }).catch((err) => {
       if (err.code === 10008) this.panel = null; // message supprimé
+    }).finally(() => {
+      this.editing = false;
+      if (this.editAgain) { this.editAgain = false; this.refreshPanel(true); }
     });
   }
 
