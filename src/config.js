@@ -115,7 +115,8 @@ function parseNodes(raw) {
   if (!raw) return DEFAULT_LAVALINK_NODES;
   try {
     const nodes = JSON.parse(raw);
-    return Array.isArray(nodes) && nodes.length ? nodes : DEFAULT_LAVALINK_NODES;
+    // Serveurs perso d'abord, les publics restent en secours
+    return Array.isArray(nodes) && nodes.length ? [...nodes, ...DEFAULT_LAVALINK_NODES.filter((d) => !nodes.some((n) => n.host === d.host))] : DEFAULT_LAVALINK_NODES;
   } catch {
     console.error('❌ LAVALINK_NODES doit être du JSON : [{"host":"...","port":443,"password":"...","secure":true}]');
     return DEFAULT_LAVALINK_NODES;
