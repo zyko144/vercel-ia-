@@ -121,7 +121,7 @@ export const musicCommands = [
     .addBooleanOption((o) => o.setName('suivre').setDescription('Le bot joue la même chose en vocal, au même moment'))
     .addBooleanOption((o) => o.setName('arreter').setDescription('Arrête le partage')),
 
-  new SlashCommandBuilder().setName('karaoke').setDescription('Joue un son sans la voix, avec les paroles en direct')
+  new SlashCommandBuilder().setName('karaoke').setDescription('Joue un son avec les paroles en direct')
     .addStringOption((o) => searchOption(o, false)),
 
   new SlashCommandBuilder().setName('radio').setDescription('Lance une radio non-stop (le bot enchaîne tout seul)')

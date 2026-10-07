@@ -4,9 +4,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
-  StringSelectMenuBuilder,
 } from 'discord.js';
-import { FILTERS, filtersLabel, speedOf } from './filters.js';
+import { filtersLabel, speedOf } from './filters.js';
 import { SOURCES } from './sources.js';
 
 const LOOP_LABELS = { off: 'Désactivée', track: '🔂 Ce son', queue: '🔁 Toute la file' };
@@ -101,17 +100,6 @@ function controlRows(player) {
     button('queue', '📜', ButtonStyle.Secondary, 'File'),
   );
 
-  const effects = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('music:filters')
-      .setPlaceholder(`🎛️ Effets audio : ${filtersLabel(player.filters).replace(/[^\p{L}\p{N} ,+.]/gu, '').replace(/\s+/g, ' ').trim() || 'aucun'}`)
-      .setMinValues(0)
-      .setMaxValues(Object.keys(FILTERS).length)
-      .addOptions(Object.entries(FILTERS).map(([value, f]) => ({
-        label: f.label, value, description: f.description, emoji: f.emoji, default: player.filters.includes(value),
-      }))),
-  );
-
   const extra = new ActionRowBuilder().addComponents(
     button('lyrics', '🎤', ButtonStyle.Secondary, 'Paroles'),
     button('add', '➕', ButtonStyle.Secondary, 'Ajouter'),
@@ -119,7 +107,7 @@ function controlRows(player) {
     button('autoplay', '♾️', player.autoplay ? ButtonStyle.Success : ButtonStyle.Secondary, 'Autoplay'),
   );
 
-  return [main, sound, effects, extra];
+  return [main, sound, extra];
 }
 
 export function endedPayload(lastTrack) {
