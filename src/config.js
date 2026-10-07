@@ -103,19 +103,17 @@ if (missing.length) {
   process.exit(1);
 }
 
-// Serveurs audio publics gratuits Lavalink v4 (liste DarrenOfficial/lavalink-list + stackryze, relevée le 07/10/2026),
-// les mieux équipés d'abord (plugin YouTube à jour, qualité audio haute). Le bot écarte tout seul ceux qui coupent.
+// Serveurs audio publics gratuits Lavalink v4 (liste DarrenOfficial/lavalink-list, relevée le 07/10/2026,
+// seuls ceux qui répondaient depuis Render) ; le bot écarte tout seul ceux qui coupent.
 const DEFAULT_LAVALINK_NODES = [
-  { name: 'g3v', host: 'lava.g3v.co.uk', port: 9008, password: 'lavalinklol', secure: false },
-  { name: 'east112', host: '157.254.192.15', port: 2333, password: 'youshallnotpass', secure: false },
-  { name: 'minecuta', host: 'lavav4.minecuta.com', port: 2333, password: 'discord.gg/gKuXdHs', secure: false },
-  { name: 'jirayu', host: 'lavalink.jirayu.net', port: 443, password: 'youshallnotpass', secure: true },
   { name: 'nazha', host: 'lavalink.nazha.online', port: 443, password: 'nazhafreelava', secure: true },
   { name: 'serenetia', host: 'lavalinkv4.serenetia.com', port: 443, password: 'https://seretia.link/discord', secure: true },
-  { name: 'stackryze', host: '188.245.207.225', port: 2333, password: 'youshallnotpass', secure: false },
-  { name: 'nexcloud', host: 'n3.nexcloud.in', port: 2026, password: 'nexcloud', secure: false },
   { name: 'trinium', host: 'lavalink.triniumhost.com', port: 4333, password: 'free', secure: false },
-  { name: 'kasawa', host: 'lava2.kasawa.pro', port: 2334, password: 'youshallnotpass', secure: false },
+  { name: 'nazha-sg1', host: 'sg-1.nazha.online', port: 443, password: 'https://discord.gg/XeSCnk57ZF', secure: true },
+  { name: 'nazha-sg2', host: 'sg-2.nazha.online', port: 443, password: 'https://discord.gg/XeSCnk57ZF', secure: true },
+  { name: 'nazha-sg3', host: 'sg-3.nazha.online', port: 443, password: 'https://discord.gg/XeSCnk57ZF', secure: true },
+  { name: 'millohost', host: 'lava-v4.millohost.my.id', port: 443, password: 'https://discord.gg/mjS5J2K3ep', secure: true },
+  { name: 'trinium-2', host: 'lavalink.triniumhost.com', port: 2333, password: 'kirito', secure: false },
 ];
 
 function parseNodes(raw) {
