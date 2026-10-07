@@ -13,6 +13,7 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import { config } from '../config.js';
+import { lavalink } from './lavalink.js';
 import { reportProblem } from '../features/alerts.js';
 import { isLive, liveDevices, liveInfo, setLiveDevice, stopLive } from '../features/livestream.js';
 import { setShare, shareNow, spotifyActivity } from '../features/spotify.js';
@@ -75,11 +76,19 @@ function joinProblem(interaction) {
   return { channel };
 }
 
+// En attendant le vrai serveur audio, la musique passe par le PC du chef : PC éteint = message dans le salon
+const MUSIC_OFF = "🔧 La musique est en travaux : le chef bosse dessus ! Pour l'instant elle marche seulement quand son PC est allumé, réessaie plus tard.";
+const musicOff = () => config.music.pcOnly && !lavalink.pcOnline;
+
 async function queueTracks(client, interaction, result, { next = false, shuffle = false, label = '' } = {}) {
   if (blindTestActive(interaction.guildId)) return interaction.editReply('🎧 Un blind test est en cours ! Attends la fin (ou **/jeux** › Arrêter le jeu musical).');
   const { channel, error } = joinProblem(interaction);
   if (error) return interaction.editReply(error);
   if (!result.tracks.length) return interaction.editReply("😕 J'ai rien trouvé, essaie avec un autre nom ou un lien.");
+  if (musicOff()) {
+    await interaction.channel?.send({ content: MUSIC_OFF, allowedMentions: { parse: [] } }).catch(() => {});
+    return interaction.editReply(MUSIC_OFF);
+  }
 
   const player = getOrCreatePlayer(client, interaction.guild);
   player.textChannelId = interaction.channelId;
@@ -158,6 +167,10 @@ export async function handleJukeboxMessage(client, message) {
   try {
     const result = await resolveQuery(text, { requestedBy: message.author.id });
     if (!result.tracks.length) throw new MusicError('rien trouvé');
+    if (musicOff()) {
+      await removeHourglass();
+      return message.reply({ content: MUSIC_OFF, allowedMentions: { parse: [] } }).catch(() => {});
+    }
     const player = getOrCreatePlayer(client, message.guild);
     player.textChannelId = message.channelId;
     if (!player.current || !player.backend) await player.connect(voiceChannel); // déjà en lecture : ne pas couper le son
