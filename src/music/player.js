@@ -246,7 +246,8 @@ export class GuildPlayer {
   }
 
   preloadNext() {
-    this.backend?.preload?.(this.queue[0]);
+    // Le suivant, et le son en cours sur un 2e serveur (reprise instantanée s'il coupe)
+    for (const track of [this.queue[0], this.current]) this.backend?.preload?.(track);
   }
 
   /** Un son n'a pas pu être joué : le chef est prévenu (MP + ping, comme pour les questions sans réponse). */
