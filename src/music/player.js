@@ -125,6 +125,11 @@ export class GuildPlayer {
     if (this.volume > MAX_VOLUME) this.volume = MAX_VOLUME;
     const start = next.seekTo ?? 0;
     delete next.seekTo;
+    // Repli sur le lecteur local après un son illisible : il saccade sur le petit serveur, on revient sur Lavalink dès le son suivant
+    if (this.backend instanceof LocalBackend && config.music.engine === 'auto' && lavalink.available) {
+      const channel = this.guild.channels.cache.get(this.backend.voiceChannelId);
+      if (channel) await this.connect(channel, { force: true }).catch((err) => console.warn('[musique] retour sur Lavalink impossible :', err.message));
+    }
     return this.startCurrent(start, { newTrack: true });
   }
 
