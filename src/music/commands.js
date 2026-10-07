@@ -77,7 +77,7 @@ export const musicCommands = [
     .addIntegerOption((o) => o.setName('de').setDescription('Position actuelle').setRequired(true).setMinValue(1))
     .addIntegerOption((o) => o.setName('vers').setDescription('Nouvelle position').setRequired(true).setMinValue(1)),
   new SlashCommandBuilder().setName('clearqueue').setDescription("Vide la file d'attente (garde le son en cours)"),
-  new SlashCommandBuilder().setName('filter').setDescription('Active / désactive un effet audio (8D, bass boost, nightcore...)')
+  new SlashCommandBuilder().setName('filter').setDescription('Active / désactive l’effet 8D')
     .addStringOption((o) => o.setName('effet').setDescription("L'effet").setRequired(true).addChoices(
       { name: '❌ Enlever tous les effets', value: 'none' },
       ...Object.entries(FILTERS).map(([value, f]) => ({ name: `${f.emoji} ${f.label}`, value })),

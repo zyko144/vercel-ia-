@@ -71,7 +71,7 @@ export const PANELS = {
         { id: 'remove', label: 'Retirer un son de la file', emoji: '➖', cmd: 'remove', fields: [f.int('position', 'Position', { req: true, min: 1, top: 10000 })] },
         { id: 'move', label: 'Déplacer un son', emoji: '↕️', cmd: 'move', fields: [f.int('de', 'Position actuelle', { req: true, min: 1, top: 10000 }), f.int('vers', 'Nouvelle position', { req: true, min: 1, top: 10000 })] },
         { id: 'clearqueue', label: 'Vider la file', emoji: '🗑️', cmd: 'clearqueue' },
-        { id: 'filter', label: 'Effet audio', emoji: '🎛️', desc: '8D, bass boost, nightcore…', cmd: 'filter', fields: [f.choice('effet', 'Effet', [{ label: 'Enlever tous les effets', value: 'none', emoji: '❌' }, ...Object.entries(FILTERS).map(([value, x]) => ({ label: x.label, value, emoji: x.emoji }))].slice(0, 25), { req: true })] },
+        { id: 'filter', label: 'Effet audio', emoji: '🎛️', desc: '8D', cmd: 'filter', fields: [f.choice('effet', 'Effet', [{ label: 'Enlever tous les effets', value: 'none', emoji: '❌' }, ...Object.entries(FILTERS).map(([value, x]) => ({ label: x.label, value, emoji: x.emoji }))].slice(0, 25), { req: true })] },
         { id: 'autoplay', label: 'Lecture auto', emoji: '♾️', desc: 'Enchaîne des sons du même style', cmd: 'autoplay' },
         { id: 'lyrics', label: 'Paroles', emoji: '📝', cmd: 'lyrics', fields: [f.text('recherche', 'Son (vide = celui en cours)', { max: 500 })] },
         { id: 'karaoke', label: 'Karaoké', emoji: '🎤', cmd: 'karaoke', fields: [f.text('recherche', 'Son (vide = celui en cours)', { max: 500 })] },
