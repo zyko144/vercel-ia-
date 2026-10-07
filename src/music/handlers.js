@@ -92,7 +92,7 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
 
   const player = getOrCreatePlayer(client, interaction.guild);
   player.textChannelId = interaction.channelId;
-  if (!player.current || !player.backend) await player.connect(channel); // déjà en lecture : ne pas recréer le moteur (ça coupait le son et la file)
+  await player.connect(channel);
 
   const tracks = shuffle ? shuffled(result.tracks) : result.tracks;
   const wasPlaying = Boolean(player.current);
@@ -173,7 +173,7 @@ export async function handleJukeboxMessage(client, message) {
     }
     const player = getOrCreatePlayer(client, message.guild);
     player.textChannelId = message.channelId;
-    if (!player.current || !player.backend) await player.connect(voiceChannel); // déjà en lecture : ne pas couper le son
+    await player.connect(voiceChannel);
     player.add(result.tracks);
     await removeHourglass();
     await message.react('✅').catch(() => {});

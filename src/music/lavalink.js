@@ -174,8 +174,7 @@ class LavalinkNode {
     // Trames perdues / en retard = micro-coupures qu'on entend dans le vocal
     const frames = this.stats?.frameStats;
     const lossy = frames?.sent ? Math.min(40, ((frames.nulled + frames.deficit) / frames.sent) * 400) : 0;
-    const cuts = (this.cuts ?? []).filter((at) => Date.now() - at < 3_600_000).length;
-    return this.priority * 10 + (Date.now() < this.brokenUntil ? 1000 : 0) + (cpu > 0.9 ? 50 : 0) + players * 0.01 + lossy + cuts * 15;
+    return this.priority * 10 + (Date.now() < this.brokenUntil ? 1000 : 0) + (cpu > 0.9 ? 50 : 0) + players * 0.01 + lossy;
   }
 }
 
@@ -199,6 +198,7 @@ class LavalinkManager {
 
   /** Serveur audio du PC du chef (via un tunnel) : passe devant les autres tant que le PC donne signe de vie. */
   setPcNode({ host, password }) {
+    if (!config.music.pcOnly) return; // mode serveurs publics : le PC n'est pas utilisé
     clearTimeout(this.pcTimer);
     this.pcTimer = setTimeout(() => this.dropPcNode(), 150_000);
     const current = this.nodes.find((n) => n.pc);
@@ -347,7 +347,6 @@ class LavalinkManager {
       connected: node.connected,
       incompatible: node.incompatible,
       broken: Date.now() < node.brokenUntil,
-      cuts: (node.cuts ?? []).filter((at) => Date.now() - at < 3_600_000).length,
       version: node.version,
       players: node.stats?.playingPlayers ?? 0,
       cpu: node.stats?.cpu?.systemLoad ?? null,

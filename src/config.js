@@ -103,12 +103,19 @@ if (missing.length) {
   process.exit(1);
 }
 
-// Serveurs audio publics gratuits (testés le 16/09/2026), essayés dans cet ordre
+// Serveurs audio publics gratuits Lavalink v4 (liste DarrenOfficial/lavalink-list + stackryze, relevée le 07/10/2026),
+// les mieux équipés d'abord (plugin YouTube à jour, qualité audio haute). Le bot écarte tout seul ceux qui coupent.
 const DEFAULT_LAVALINK_NODES = [
-  { name: 'kasawa', host: 'lava2.kasawa.pro', port: 2334, password: 'youshallnotpass', secure: false },
+  { name: 'g3v', host: 'lava.g3v.co.uk', port: 9008, password: 'lavalinklol', secure: false },
+  { name: 'east112', host: '157.254.192.15', port: 2333, password: 'youshallnotpass', secure: false },
+  { name: 'minecuta', host: 'lavav4.minecuta.com', port: 2333, password: 'discord.gg/gKuXdHs', secure: false },
+  { name: 'jirayu', host: 'lavalink.jirayu.net', port: 443, password: 'youshallnotpass', secure: true },
+  { name: 'nazha', host: 'lavalink.nazha.online', port: 443, password: 'nazhafreelava', secure: true },
   { name: 'serenetia', host: 'lavalinkv4.serenetia.com', port: 443, password: 'https://seretia.link/discord', secure: true },
-  { name: 'nodelink', host: 'nodelink.triniumhost.com', port: 443, password: 'free', secure: true },
-  { name: 'trinium', host: 'lavalink-v4.triniumhost.com', port: 443, password: 'free', secure: true },
+  { name: 'stackryze', host: '188.245.207.225', port: 2333, password: 'youshallnotpass', secure: false },
+  { name: 'nexcloud', host: 'n3.nexcloud.in', port: 2026, password: 'nexcloud', secure: false },
+  { name: 'trinium', host: 'lavalink.triniumhost.com', port: 4333, password: 'free', secure: false },
+  { name: 'kasawa', host: 'lava2.kasawa.pro', port: 2334, password: 'youshallnotpass', secure: false },
 ];
 
 function parseNodes(raw) {
@@ -244,8 +251,8 @@ export const config = {
     // auto = Lavalink si dispo, sinon lecteur local · lavalink = uniquement Lavalink · local = uniquement local
     engine: str('MUSIC_ENGINE', 'auto'),
     lavalinkNodes: parseNodes(str('LAVALINK_NODES')),
-    // En attendant un vrai serveur audio : sur Render, la musique ne marche que si le PC du chef fait tourner le sien (tools/serveur-audio-pc.mjs)
-    pcOnly: str('MUSIC_PC_ONLY', process.env.RENDER ? '1' : '0') === '1',
+    // MUSIC_PC_ONLY=1 : la musique passe uniquement par le serveur audio du PC du chef (tools/serveur-audio-pc.mjs)
+    pcOnly: str('MUSIC_PC_ONLY', '0') === '1',
     // Rafraîchissement de la barre de progression (3 s minimum : Discord limite les modifications)
     panelRefreshMs: Math.max(3, int('MUSIC_PANEL_REFRESH_SECONDS', 4)) * 1000,
     // Décalage des paroles : négatif = elles s'affichent plus tard (compense le retard du son)
