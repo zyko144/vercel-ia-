@@ -198,6 +198,7 @@ class LavalinkManager {
 
   /** Serveur audio du PC du chef (via un tunnel) : passe devant les autres tant que le PC donne signe de vie. */
   setPcNode({ host, password }) {
+    if (!config.music.pcOnly) return; // mode serveurs publics : le PC n'est pas utilisé
     clearTimeout(this.pcTimer);
     this.pcTimer = setTimeout(() => this.dropPcNode(), 150_000);
     const current = this.nodes.find((n) => n.pc);
