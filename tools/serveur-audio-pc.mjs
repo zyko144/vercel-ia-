@@ -16,6 +16,23 @@ const win = process.platform === 'win32';
 const PORT = 2333;
 mkdirSync(dir, { recursive: true });
 
+// Déjà lancé (en arrière-plan) : on ne double pas
+if (await fetch(`http://127.0.0.1:${PORT}/version`).then(() => true, () => false)) {
+  console.log('✅ Le serveur audio tourne déjà sur ce PC.');
+  process.exit(0);
+}
+
+// --installer (Windows) : se lance caché à chaque ouverture de session, relancé tout seul s'il s'arrête
+if (process.argv.includes('--installer') && win) {
+  const run = path.join(dir, 'run.cmd');
+  writeFileSync(run, `@echo off\r\ncd /d "${root}"\r\n:boucle\r\nnode tools\\serveur-audio-pc.mjs >> data\\audio-pc\\log.txt 2>&1\r\ntimeout /t 30 /nobreak >nul\r\ngoto boucle\r\n`);
+  const vbs = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'musique-history.vbs');
+  writeFileSync(vbs, `CreateObject("WScript.Shell").Run """${run}""", 0, False\r\n`);
+  spawn('wscript', [vbs], { detached: true, stdio: 'ignore' }).unref();
+  console.log(`✅ Installé : la musique tourne maintenant en arrière-plan et se relancera à chaque démarrage du PC.\n   Journal : ${path.join(dir, 'log.txt')}\n   Pour l'enlever : supprime ${vbs}`);
+  process.exit(0);
+}
+
 const env = (key) => readFileSync(path.join(root, '.env'), 'utf8').split(/\r?\n/).find((l) => l.startsWith(`${key}=`))?.slice(key.length + 1).trim() ?? '';
 const token = env('DISCORD_TOKEN').split(';')[0].trim();
 if (!token) { console.error('❌ DISCORD_TOKEN introuvable dans .env'); process.exit(1); }
