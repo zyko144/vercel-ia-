@@ -109,9 +109,6 @@ const DEFAULT_LAVALINK_NODES = [
   { name: 'nazha', host: 'lavalink.nazha.online', port: 443, password: 'nazhafreelava', secure: true },
   { name: 'serenetia', host: 'lavalinkv4.serenetia.com', port: 443, password: 'https://seretia.link/discord', secure: true },
   { name: 'trinium', host: 'lavalink.triniumhost.com', port: 4333, password: 'free', secure: false },
-  { name: 'nazha-sg1', host: 'sg-1.nazha.online', port: 443, password: 'https://discord.gg/XeSCnk57ZF', secure: true },
-  { name: 'nazha-sg2', host: 'sg-2.nazha.online', port: 443, password: 'https://discord.gg/XeSCnk57ZF', secure: true },
-  { name: 'nazha-sg3', host: 'sg-3.nazha.online', port: 443, password: 'https://discord.gg/XeSCnk57ZF', secure: true },
   { name: 'millohost', host: 'lava-v4.millohost.my.id', port: 443, password: 'https://discord.gg/mjS5J2K3ep', secure: true },
   { name: 'trinium-2', host: 'lavalink.triniumhost.com', port: 2333, password: 'kirito', secure: false },
 ];

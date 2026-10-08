@@ -96,6 +96,7 @@ class LavalinkNode {
       }
       case 'stats':
         this.stats = message;
+        for (const backend of this.manager.players.values()) if (backend.node === this) backend.onNodeStats();
         break;
       case 'playerUpdate':
         this.manager.players.get(message.guildId)?.onPlayerUpdate(message.state ?? {});
