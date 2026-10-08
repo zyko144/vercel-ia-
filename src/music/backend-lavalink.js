@@ -10,6 +10,7 @@ import { MusicError } from './ytdlp.js';
 const START_TIMEOUT_MS = 25_000;
 const START_GRACE_MS = 2_500; // certains serveurs annoncent le démarrage puis échouent juste après
 const NODE_BROKEN_MS = 10 * 60_000;
+const CHOPPY_LOSS = 0.1; // trames perdues par le serveur audio : au-delà, le son est haché (sans aucune erreur)
 const NODE_STALLS_BEFORE_BREAK = 2; // coupures en pleine lecture sur un serveur avant de le mettre de côté
 const YOUTUBE_TROUBLE_MS = 5 * 60_000; // YouTube bloque parfois les serveurs publics : on passe par SoundCloud pendant ce temps
 const FAST_PLAYBACK_BAN_MS = 60 * 60_000;
@@ -615,6 +616,30 @@ export class LavalinkBackend {
       this.lastState = { position: state.position, at: Date.now() };
     }
     this.watchEnd();
+  }
+
+  /** Stats du serveur audio (chaque minute) : s'il perd trop de trames, le son est haché sans erreur, on passe sur un autre au même endroit. */
+  onNodeStats() {
+    const node = this.node;
+    const frames = node?.stats?.frameStats;
+    if (!frames?.sent || frames.sent < 1000 || this.pending || this.recovering || this.player.paused || !this.player.current) return;
+    const loss = (frames.nulled + frames.deficit) / frames.sent;
+    if (loss < 0.03) return;
+    if (loss < CHOPPY_LOSS) return lavalink.log(`${node.name} : ${Math.round(loss * 100)} % de trames perdues (son un peu haché)`);
+    // Seulement s'il existe un serveur en meilleur état (sinon on changerait sans arrêt pour rien)
+    const other = lavalink.bestNode([node.name]);
+    const f = other?.stats?.frameStats;
+    if (!other || Date.now() < other.brokenUntil || (f?.sent >= 1000 && (f.nulled + f.deficit) / f.sent >= CHOPPY_LOSS)) {
+      return lavalink.log(`${node.name} hache le son (${Math.round(loss * 100)} % de trames perdues), aucun autre serveur en meilleur état`);
+    }
+    lavalink.log(`${node.name} hache le son (${Math.round(loss * 100)} % de trames perdues) : passage sur ${other.name}`);
+    node.brokenUntil = Date.now() + NODE_BROKEN_MS;
+    const resumeAt = Math.max(0, this.position() - 1);
+    this.recovering = true;
+    this.switchNode(new Set([node.name]))
+      .then((switched) => (switched ? this.player.startCurrent(resumeAt) : undefined))
+      .catch((err) => this.player.onTrackEnd({ failed: true, error: err }))
+      .finally(() => { this.recovering = false; });
   }
 
   /** Certains serveurs audio se mettent à jouer le son en accéléré : on le repère et on change de serveur. */
