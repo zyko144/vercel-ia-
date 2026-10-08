@@ -762,12 +762,10 @@ const MORE_COMMANDS = {
       return interaction.editReply('🎤 Lance un son ou précise-le dans `recherche`.');
     }
 
-    // On attend que le son démarre, puis on enlève la voix et on affiche les paroles
+    // On attend que le son démarre, puis on affiche les paroles
     const ready = getPlayer(interaction.guildId);
     for (let i = 0; i < 20 && !ready?.current; i++) await new Promise((r) => setTimeout(r, 500));
     if (!ready?.current) return interaction.editReply('🎤 Le son a pas démarré, réessaie.');
-    ready.setFilters([...new Set([...ready.filters, 'karaoke'])]);
-    ready.refreshPanel(true);
     return interaction.editReply(await showLyrics(interaction, ready, ready.current));
   },
 
