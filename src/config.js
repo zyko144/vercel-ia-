@@ -104,13 +104,13 @@ if (missing.length) {
 }
 
 // Serveurs audio publics gratuits Lavalink v4 (liste DarrenOfficial/lavalink-list, relevée le 07/10/2026,
-// seuls ceux qui répondaient depuis Render) ; le bot écarte tout seul ceux qui coupent.
+// seuls ceux qui répondaient depuis Render) ; millohost et trinium d'abord (nazha hachait le son : 62 % perdu le 08/10).
 const DEFAULT_LAVALINK_NODES = [
+  { name: 'millohost', host: 'lava-v4.millohost.my.id', port: 443, password: 'https://discord.gg/mjS5J2K3ep', secure: true },
+  { name: 'trinium', host: 'lavalink.triniumhost.com', port: 4333, password: 'free', secure: false },
+  { name: 'trinium-2', host: 'lavalink.triniumhost.com', port: 2333, password: 'kirito', secure: false },
   { name: 'nazha', host: 'lavalink.nazha.online', port: 443, password: 'nazhafreelava', secure: true },
   { name: 'serenetia', host: 'lavalinkv4.serenetia.com', port: 443, password: 'https://seretia.link/discord', secure: true },
-  { name: 'trinium', host: 'lavalink.triniumhost.com', port: 4333, password: 'free', secure: false },
-  { name: 'millohost', host: 'lava-v4.millohost.my.id', port: 443, password: 'https://discord.gg/mjS5J2K3ep', secure: true },
-  { name: 'trinium-2', host: 'lavalink.triniumhost.com', port: 2333, password: 'kirito', secure: false },
 ];
 
 function parseNodes(raw) {
