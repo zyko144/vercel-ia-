@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { csvReader, frameStats } from '../src/core/fps.js';
+import { captureFps, csvReader, frameStats } from '../src/core/fps.js';
 import { nvidiaProduct } from '../src/core/gametools.js';
 import { backupSaves, clearDir, findSaveDirs, listBackups, moveSteamGame, newerVersion, nvidiaVersion, packSaves, priceAlert, readPack, restoreBackup, safeRel, shaderCaches, unpackSaves } from '../src/core/gametools.js';
 import { gameDemand, graphicsAdvice } from '../src/core/graphics.js';
@@ -21,6 +21,16 @@ const feed = csvReader((f, g) => got.push([f, g]));
 feed('Application,ProcessID,SwapChainAddress,PresentRuntime,CPUStartTime,FrameTime,CPUBusy,CPUWait,GPULatency,GPUTime,GPUBusy\ngame.exe,1,0,DXGI,1,16.5,4,1,2,10,9.5\ngame.exe,1,0,DXGI,2,1');
 feed('7.0,5,1,2,10,12\n');
 ok(got.length === 2 && got[0][0] === 16.5 && got[0][1] === 9.5 && got[1][0] === 17, 'lecture CSV de PresentMon au fil de l’eau');
+// Jeu avec anti-triche (nom caché, « <error> ») : retrouvé par son numéro de processus, les autres applis ignorées
+if (process.platform !== 'win32') {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'pm-'));
+  const rows = [...Array(30)].map(() => '<error>,4242,0,DXGI,1,8.0,1,1,1,1,7\nchrome.exe,77,0,DXGI,1,33.0,1,1,1,1,9').join('\n');
+  const fake = path.join(dir, 'pm.sh');
+  await writeFile(fake, `#!/bin/sh\necho "$*" > "${dir}/args"\nprintf 'Application,ProcessID,SwapChainAddress,PresentRuntime,CPUStartTime,FrameTime,CPUBusy,CPUWait,GPULatency,GPUTime,GPUBusy\n${rows}\n'\n`, { mode: 0o755 });
+  const r = await captureFps(fake, ['RocketLeague.exe'], () => {}, [4242]).done;
+  const args = await readFile(path.join(dir, 'args'), 'utf8');
+  ok(r.frames === 30 && r.avg === 125 && !args.includes('--process_name'), `FPS d’un jeu anti-triche par numéro de processus ${JSON.stringify(r)} ${args}`);
+}
 
 // Sauvegardes : repérage, copie, liste, restauration
 const home = await mkdtemp(path.join(os.tmpdir(), 'saves-'));
