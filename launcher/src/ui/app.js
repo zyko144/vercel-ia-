@@ -1619,6 +1619,7 @@ api.settings?.().then((s) => {
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
   '0.63.1': [
+    ['📈', 'FPS des jeux avec anti-triche', 'Rocket League, Fortnite et les autres jeux qui cachent leur nom à Windows ont enfin leurs FPS dans l’overlay (Ctrl+Alt+O) : ils sont retrouvés par leur numéro de processus. Si les FPS manquent, l’overlay dit pourquoi.'],
     ['🚀', 'Overlay Rocket League', 'Les FPS du jeu s’affichent dans l’overlay Rocket League (ou la raison s’ils manquent). À chaque victoire ou défaite, l’overlay se met à jour tout de suite et s’ouvre 15 s s’il était fermé ; le gain de MMR arrive plus vite.', ['[data-view=jeux]', 'wait1500']],
   ],
   '0.63.0': [

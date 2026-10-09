@@ -1502,6 +1502,7 @@ async function toggleOverlay() {
       boost: Boolean(boosted),
       // Vrais FPS du jeu (mesurés image par image, comme le compteur du jeu) et leur couleur
       fps: sess?.live?.avg ? { now: Math.round(sess.live.avg), low1: sess.live.low1, tone: fpsTone(sess.live.avg, sess.fpsHist, perfBaseline(store.data.perf?.[sess.id] ?? [])?.avg ?? null) } : null,
+      fpsWhy: sess && !sess.live ? (sess.fpsState ?? 'wait') : null,
     });
   };
   push();
@@ -1933,6 +1934,8 @@ async function runningGameExes(item) {
   const running = await new Promise((resolve) => execFile('tasklist.exe', ['/FO', 'CSV', '/NH'], { windowsHide: true, timeout: 10_000 }, (_e, o) => resolve(String(o ?? '').split(/\r?\n/).map((l) => l.split('","')[0].replace(/^"/, '').toLowerCase()))));
   return [...new Set(running.filter((n) => own.has(n)))];
 }
+/** Numéros des processus du jeu (les jeux avec anti-triche cachent leur nom aux outils de mesure, pas leur numéro). */
+const gamePids = (exes) => new Promise((resolve) => execFile('tasklist.exe', ['/FO', 'CSV', '/NH'], { windowsHide: true, timeout: 10_000 }, (_e, o) => resolve(String(o ?? '').split(/\r?\n/).map((l) => l.replace(/^"|"$/g, '').split('","')).filter(([n]) => exes.includes(String(n).toLowerCase())).map(([, pid]) => Number(pid)).filter((n) => n > 0))));
 async function closeItem(item) {
   if (process.platform !== 'win32') return false;
   const dir = String(item.installDir ?? '').toLowerCase().replace(/\\+$/, '');
@@ -3637,7 +3640,7 @@ async function sessionStart(s) {
     if (sess !== me) return;
     if (!exes.length) { me.fpsState = 'nogame'; perfbarPush(); return; }
     me.fpsState = me.live ? me.fpsState : 'wait'; me.lastLive = Date.now();
-    const cap = captureFps(pm, exes, (live) => { if (sess === me) { me.lastLive = Date.now(); me.live = live; me.fpsHist = [...(me.fpsHist ?? []), live.avg].slice(-15); me.fpsState = 'ok'; widgetPush(); perfbarPush(); rlPush(); } });
+    const cap = captureFps(pm, exes, (live) => { if (sess === me) { me.lastLive = Date.now(); me.live = live; me.fpsHist = [...(me.fpsHist ?? []), live.avg].slice(-15); me.fpsState = 'ok'; widgetPush(); perfbarPush(); rlPush(); } }, await gamePids(exes));
     me.cap = cap;
     const dog = setInterval(() => { if (sess !== me || Date.now() - me.lastLive > 20_000) cap.stop(); }, 5000);
     const r = await cap.done;
