@@ -9,6 +9,8 @@ const catOf = (g) => (g.ranked === true ? 'ranked' : g.ranked === false ? 'casua
 // Logos des rangs fournis (ui/rl/) ; sinon celui du profil
 const rankIcon = (rk) => { const m = /^(bronze|silver|gold|platinum|diamond|champion|grand champion) (i{1,3})$|^supersonic legend$/i.exec(rk.tier); return m ? `rl/${(m[1] ?? 'supersonic-legend').toLowerCase().replace(' ', '-')}${m[2] ? `-${m[2].length}` : ''}.webp` : rk.icon; };
 const TIER = [[/grand/i, '#ff6b6b'], [/supersonic/i, '#f3f0ff'], [/champion/i, '#c7a8ff'], [/diamond/i, '#5aa8ff'], [/platinum/i, '#7fe0ff'], [/gold/i, '#f5c542'], [/silver/i, '#c9d3e0'], [/bronze/i, '#d08a4f']];
+const FPS_WHY = { off: 'FPS off', droits: 'FPS ⚠', wait: 'FPS…' };
+const FPS_TIP = { off: 'Active « Vrais FPS » dans les réglages du launcher', droits: 'Reconnecte-toi à Windows pour mesurer les FPS', wait: 'Mesure des FPS…' };
 let open = false; let tab = null; let last = null;
 
 function draw(d) {
@@ -17,6 +19,9 @@ function draw(d) {
   const s = d.sum; const g = d.games[0]; const cat = tab ?? (g ? catOf(g) : 'ranked');
   $('card').style.setProperty('--c', g ? (g.win ? '#39ff8a' : '#ff5a4f') : '#5aa8ff'); // néon : vert si la dernière partie est gagnée, rouge si perdue
   $('live').className = `dot ${d.live ? 'on' : ''}`;
+  // FPS du jeu (mesurés image par image), ou pourquoi ils manquent
+  $('fps').textContent = d.fps ? `${d.fps} FPS` : FPS_WHY[d.fpsWhy] ?? '';
+  $('fps').title = d.fps ? '' : FPS_TIP[d.fpsWhy] ?? '';
   $('streak').className = s.streak > 0 ? 'up' : 'ice';
   $('streak').innerHTML = s.streak ? `<i class="${s.streak > 0 ? 'flame' : ''}">${s.streak > 0 ? '🔥' : '🧊'}</i> ${Math.abs(s.streak)}` : '';
   const ranked = d.profile?.ranked ?? {}; const rk = ranked[g?.mode] ?? ranked['3v3'] ?? Object.values(ranked)[0];

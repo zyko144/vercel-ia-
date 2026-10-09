@@ -1618,6 +1618,9 @@ api.settings?.().then((s) => {
 // ---------- Quoi de neuf (après chaque mise à jour) ----------
 // Nouveautés par version : après une mise à jour, un court message avec l'essentiel (titres seulement)
 const CHANGELOG = {
+  '0.63.1': [
+    ['🚀', 'Overlay Rocket League', 'Les FPS du jeu s’affichent dans l’overlay Rocket League (ou la raison s’ils manquent). À chaque victoire ou défaite, l’overlay se met à jour tout de suite et s’ouvre 15 s s’il était fermé ; le gain de MMR arrive plus vite.', ['[data-view=jeux]', 'wait1500']],
+  ],
   '0.63.0': [
     ['🎮', 'Tous tes jeux Epic', 'Fortnite, Rocket League et tous les jeux Epic sont retrouvés même quand le lanceur Epic range ses fichiers ailleurs : liste de Windows, dossier « Epic Games » de chaque disque. Epic Games, EA et Ubisoft sont toujours à gauche (réaffichés s’ils étaient masqués).', ['[data-view=jeux]', 'wait1500']],
     ['⟳', 'Mises à jour Epic', 'Clic droit sur un jeu Epic › « Mettre à jour via Epic » : Epic installe la mise à jour puis lance le jeu.'],
@@ -5027,7 +5030,7 @@ function demoApi() {
     cleanRun: async () => ({ ok: true, freed: 4.9e9 }),
     deals: async () => [{ appid: '1', name: 'Jeu en promo', pct: 75, price: '4,99€', before: '19,99€', image: img('h1.jpg') }],
     premiumGet: async () => ({ ia: false, opti: false, logged: true, code: 'AMI-7KQ2PX', trialUsed: false }), premiumBuy: async () => ({ ok: true }), premiumTrial: async () => ({ ok: true }), premiumRedeem: async () => ({ ok: true, pack: 'pack' }),
-    version: async () => '0.63.0',
+    version: async () => '0.63.1',
     storeSearch: async () => [{ name: 'Fortnite', src: 'epic', img: null, url: 'https://store.epicgames.com/fr/p/fortnite' }],
     scanDrives: async () => [{ letter: 'C', size: 1e12, used: 6.2e11, system: true }, { letter: 'D', size: 2e12, used: 9e11, system: false }],
     freeGames: async () => [{ name: 'Jeu gratuit', slug: 'jeu', image: img('h2.jpg'), now: true, until: Date.now() + 5 * 86_400_000 }, { name: 'Prochain jeu', slug: 'prochain', image: img('h1.jpg'), now: false, from: Date.now() + 5 * 86_400_000 }], openFree: async () => {},

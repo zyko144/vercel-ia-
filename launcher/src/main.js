@@ -1515,7 +1515,7 @@ let rlSock = null; let rlTrack = null; let rlOv = null; let rlHideTimer = null; 
 function rlData() {
   const r = rl();
   const cur = rlTrack?.match();
-  return { current: cur ? { mode: cur.mode, cat: rlLive?.guid === cur.guid ? rlLive.cat : null } : null, player: r.player, profile: r.profile, profileOk: r.profileOk !== false, style: store.data.ovStyle?.rl ?? 'card', zoom: store.data.ovZoom?.rl ?? 1, games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false };
+  return { current: cur ? { mode: cur.mode, cat: rlLive?.guid === cur.guid ? rlLive.cat : null } : null, player: r.player, profile: r.profile, profileOk: r.profileOk !== false, style: store.data.ovStyle?.rl ?? 'card', zoom: store.data.ovZoom?.rl ?? 1, games: r.games.slice(0, 30), sum: rlSummary(r.games), live: Boolean(rlSock), statsOff: r.statsOff ?? false, fps: sess?.live?.avg ? Math.round(sess.live.avg) : null, fpsWhy: sess && !sess.live ? (sess.fpsState ?? null) : null };
 }
 const rlPush = () => { if (rlOv && !rlOv.isDestroyed()) rlOv.webContents.send('rl:data', rlData()); };
 /** Profil public : requête directe, sinon via une fenêtre de navigateur cachée (le site bloque les requêtes hors navigateur). */
@@ -1549,7 +1549,7 @@ async function rlProfile(force = false, retry = 0) {
   // Classé ou occa, et gain de MMR : les modes dont le profil a bougé depuis la dernière lecture (le jeu ne le dit pas)
   // Pas encore à jour après la partie : une seule nouvelle lecture 2 min 30 plus tard
   classifyAll(r.games, r.profile, p);
-  if (retry > 0 && r.games.some((g) => (g.ranked == null || g.mmr == null) && g.ranked !== false && Date.now() - g.at < 600_000)) setTimeout(() => rlProfile(true, retry - 1).catch(() => {}), 30_000);
+  if (retry > 0 && r.games.some((g) => (g.ranked == null || g.mmr == null) && g.ranked !== false && Date.now() - g.at < 600_000)) setTimeout(() => rlProfile(true, retry - 1).catch(() => {}), 20_000);
   p.at = Date.now(); r.profile = p; store.save(); rlPush();
 }
 /** Connexion à l'API du jeu (le jeu doit tourner, API activée) ; retente toutes les 10 s tant qu'il tourne. */
@@ -1571,7 +1571,9 @@ function rlConnect() {
     if (rlTrack.player && rlTrack.player.name !== r.player?.name) { r.player = rlTrack.player; store.save(); rlProfile(true).catch(() => {}); }
     if (res) {
       r.games = [res, ...r.games].slice(0, 50); store.save(); rlPush();
-      setTimeout(() => rlProfile(true, 5).catch(() => {}), 25_000); // gain de MMR au plus vite : relu toutes les 30 s jusqu'à ce que le profil bouge
+      // Victoire / défaite affichée tout de suite : l'overlay s'ouvre 15 s s'il était fermé
+      if (!rlOv || rlOv.isDestroyed()) toggleRlOverlay(true).catch(() => {});
+      setTimeout(() => rlProfile(true, 8).catch(() => {}), 10_000); // gain de MMR au plus vite : relu toutes les 20 s jusqu'à ce que le profil bouge
     }
   });
   sock.setEncoding('utf8');
@@ -3635,7 +3637,7 @@ async function sessionStart(s) {
     if (sess !== me) return;
     if (!exes.length) { me.fpsState = 'nogame'; perfbarPush(); return; }
     me.fpsState = me.live ? me.fpsState : 'wait'; me.lastLive = Date.now();
-    const cap = captureFps(pm, exes, (live) => { if (sess === me) { me.lastLive = Date.now(); me.live = live; me.fpsHist = [...(me.fpsHist ?? []), live.avg].slice(-15); me.fpsState = 'ok'; widgetPush(); perfbarPush(); } });
+    const cap = captureFps(pm, exes, (live) => { if (sess === me) { me.lastLive = Date.now(); me.live = live; me.fpsHist = [...(me.fpsHist ?? []), live.avg].slice(-15); me.fpsState = 'ok'; widgetPush(); perfbarPush(); rlPush(); } });
     me.cap = cap;
     const dog = setInterval(() => { if (sess !== me || Date.now() - me.lastLive > 20_000) cap.stop(); }, 5000);
     const r = await cap.done;
