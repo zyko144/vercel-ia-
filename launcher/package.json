@@ -78,7 +78,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.22.0",
-    "electron-updater": "^6.8.9",
+    "electron-updater": "^6.8.11",
     "qrcode": "^1.5.4"
   }
 }
