@@ -60,7 +60,7 @@ export function csvReader(onFrame) {
       if (!head) { if (cols.includes('Application')) head = Object.fromEntries(cols.map((c, i) => [c.trim(), i])); continue; }
       const ft = Number(cols[head.FrameTime ?? head.MsBetweenPresents]);
       const gb = Number(cols[head.GPUBusy ?? head.MsGPUBusy]);
-      if (Number.isFinite(ft)) onFrame(ft, Number.isFinite(gb) ? gb : -1);
+      if (Number.isFinite(ft)) onFrame(ft, Number.isFinite(gb) ? gb : -1, String(cols[head.Application] ?? '').toLowerCase(), Number(cols[head.ProcessID]));
     }
   };
 }
@@ -68,15 +68,22 @@ export function csvReader(onFrame) {
 /**
  * Mesure les images d'un jeu (nom de l'exécutable) jusqu'à sa fermeture.
  * onLive(stats) toutes les 2 s ; renvoie { stop(), done: Promise<stats|{error}> }.
+ * pids : numéros des processus du jeu. Les jeux avec anti-triche (Rocket League, Fortnite…) cachent leur nom à Windows :
+ * PresentMon ne les retrouve pas par leur nom, alors on mesure tout et on garde les images de ces processus.
  */
-export function captureFps(exePath, processName, onLive = () => {}) {
+export function captureFps(exePath, processName, onLive = () => {}, pids = []) {
   // Un jeu peut avoir plusieurs exe (ex. Fortnite : le jeu + son anti-triche) : on les mesure tous
   const names = [processName].flat().filter((n) => /^[\w .()-]{1,80}\.exe$/i.test(String(n))).slice(0, 6);
   if (!names.length) return { stop() {}, done: Promise.resolve({ error: 'nom de jeu invalide' }) };
   const frames = []; const gpu = [];
-  const p = spawn(exePath, [...names.flatMap((n) => ['--process_name', n]), '--output_stdout', '--no_console_stats', '--terminate_on_proc_exit', '--stop_existing_session', '--session_name', 'HistoryFPS', '--no_track_display', '--no_track_input'], { windowsHide: true });
+  const byPid = new Set(pids.map(Number).filter((n) => n > 0)); const byName = new Set(names.map((n) => n.toLowerCase()));
+  const filter = byPid.size ? [] : [...names.flatMap((n) => ['--process_name', n]), '--terminate_on_proc_exit'];
+  const p = spawn(exePath, [...filter, '--output_stdout', '--no_console_stats', '--stop_existing_session', '--session_name', 'HistoryFPS', '--no_track_display', '--no_track_input'], { windowsHide: true });
   let err = '';
-  const read = csvReader((ft, gb) => { frames.push(ft); gpu.push(gb); if (frames.length > 200_000) { frames.splice(0, 50_000); gpu.splice(0, 50_000); } });
+  const read = csvReader((ft, gb, app, pid) => {
+    if (byPid.size && !byPid.has(pid) && !byName.has(app)) return;
+    frames.push(ft); gpu.push(gb); if (frames.length > 200_000) { frames.splice(0, 50_000); gpu.splice(0, 50_000); }
+  });
   p.stdout.setEncoding('utf8'); p.stdout.on('data', read);
   p.stderr?.setEncoding('utf8'); p.stderr?.on('data', (c) => { err += c; });
   let last = 0;

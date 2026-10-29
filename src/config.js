@@ -103,12 +103,14 @@ if (missing.length) {
   process.exit(1);
 }
 
-// Serveurs audio publics gratuits (testés le 16/09/2026), essayés dans cet ordre
+// Serveurs audio publics gratuits Lavalink v4 (liste DarrenOfficial/lavalink-list, relevée le 07/10/2026,
+// seuls ceux qui répondaient depuis Render) ; millohost et trinium d'abord (nazha hachait le son : 62 % perdu le 08/10).
 const DEFAULT_LAVALINK_NODES = [
-  { name: 'kasawa', host: 'lava2.kasawa.pro', port: 2334, password: 'youshallnotpass', secure: false },
+  { name: 'millohost', host: 'lava-v4.millohost.my.id', port: 443, password: 'https://discord.gg/mjS5J2K3ep', secure: true },
+  { name: 'trinium', host: 'lavalink.triniumhost.com', port: 4333, password: 'free', secure: false },
+  { name: 'trinium-2', host: 'lavalink.triniumhost.com', port: 2333, password: 'kirito', secure: false },
+  { name: 'nazha', host: 'lavalink.nazha.online', port: 443, password: 'nazhafreelava', secure: true },
   { name: 'serenetia', host: 'lavalinkv4.serenetia.com', port: 443, password: 'https://seretia.link/discord', secure: true },
-  { name: 'nodelink', host: 'nodelink.triniumhost.com', port: 443, password: 'free', secure: true },
-  { name: 'trinium', host: 'lavalink-v4.triniumhost.com', port: 443, password: 'free', secure: true },
 ];
 
 function parseNodes(raw) {
@@ -244,8 +246,8 @@ export const config = {
     // auto = Lavalink si dispo, sinon lecteur local · lavalink = uniquement Lavalink · local = uniquement local
     engine: str('MUSIC_ENGINE', 'auto'),
     lavalinkNodes: parseNodes(str('LAVALINK_NODES')),
-    // En attendant un vrai serveur audio : sur Render, la musique ne marche que si le PC du chef fait tourner le sien (tools/serveur-audio-pc.mjs)
-    pcOnly: str('MUSIC_PC_ONLY', process.env.RENDER ? '1' : '0') === '1',
+    // MUSIC_PC_ONLY=1 : la musique passe uniquement par le serveur audio du PC du chef (tools/serveur-audio-pc.mjs)
+    pcOnly: str('MUSIC_PC_ONLY', '0') === '1',
     // Rafraîchissement de la barre de progression (3 s minimum : Discord limite les modifications)
     panelRefreshMs: Math.max(3, int('MUSIC_PANEL_REFRESH_SECONDS', 4)) * 1000,
     // Décalage des paroles : négatif = elles s'affichent plus tard (compense le retard du son)

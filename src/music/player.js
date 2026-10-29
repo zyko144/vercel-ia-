@@ -7,13 +7,11 @@ import { followedChannel, heldChannel, lockedChannel } from '../features/voice.j
 import { LavalinkBackend } from './backend-lavalink.js';
 import { LocalBackend } from './backend-local.js';
 import { lavalink, NoAudioNodeError } from './lavalink.js';
-import { normalizeFilters, speedOf } from './filters.js';
+import { normalizeFilters } from './filters.js';
 import { recommendNext } from './sources.js';
 import { recordPlay } from './stats.js';
 import { saveSession, clearSession } from './session.js';
 import { endedPayload, nowPlayingPayload } from './ui.js';
-import { findLyrics } from './lyrics.js';
-import { currentLineIndex, parseLrc } from './livelyrics.js';
 
 const DEFAULT_VOLUME = 100;
 const MAX_VOLUME = 100; // au-dessus, le serveur audio amplifie le son et il sature (voix déformées)
@@ -125,11 +123,6 @@ export class GuildPlayer {
     if (this.volume > MAX_VOLUME) this.volume = MAX_VOLUME;
     const start = next.seekTo ?? 0;
     delete next.seekTo;
-    // Repli sur le lecteur local après un son illisible : il saccade sur le petit serveur, on revient sur Lavalink dès le son suivant
-    if (this.backend instanceof LocalBackend && config.music.engine === 'auto' && lavalink.available) {
-      const channel = this.guild.channels.cache.get(this.backend.voiceChannelId);
-      if (channel) await this.connect(channel, { force: true }).catch((err) => console.warn('[musique] retour sur Lavalink impossible :', err.message));
-    }
     return this.startCurrent(start, { newTrack: true });
   }
 
@@ -145,7 +138,6 @@ export class GuildPlayer {
       }
       if (token !== this.playToken || this.current !== track) return;
       this.failures = 0;
-      track.startRetried = false;
       if (newTrack) {
         countEvent(this.guild.id, 'musique');
         await this.sendNewPanel();
@@ -154,7 +146,6 @@ export class GuildPlayer {
       this.preloadNext();
       // Sert au blind test : le chrono ne démarre qu'une fois le son vraiment lancé
       if (newTrack) this.onStarted?.(track);
-      this.startLyrics(track, newTrack);
     } catch (err) {
       if (token !== this.playToken) return;
 
@@ -174,14 +165,6 @@ export class GuildPlayer {
       }
 
       console.warn(`[musique] impossible de lire "${track.title}" :`, err.message);
-      // Souvent un raté passager (serveur audio, lien expiré) : un 2e essai à neuf avant de passer au suivant
-      if (!this.blind && !track.startRetried && this.backend) {
-        track.startRetried = true;
-        this.backend.invalidate?.(track);
-        await new Promise((r) => setTimeout(r, 1_500));
-        if (token === this.playToken && this.current === track) return this.startCurrent(seek, { newTrack });
-        return undefined;
-      }
       if (this.blind) {
         this.current = null;
         return this.onBlindEnd?.({ failed: true, error: err });
@@ -251,8 +234,7 @@ export class GuildPlayer {
   }
 
   preloadNext() {
-    // Le suivant, et le son en cours sur un 2e serveur (reprise instantanée s'il coupe)
-    for (const track of [this.queue[0], this.current]) this.backend?.preload?.(track);
+    this.backend?.preload?.(this.queue[0]);
   }
 
   /** Un son n'a pas pu être joué : le chef est prévenu (MP + ping, comme pour les questions sans réponse). */
@@ -411,7 +393,7 @@ export class GuildPlayer {
     return undefined;
   }
 
-  /** Sans musique pendant 3 min : le bot quitte le vocal. */
+  /** Sans musique pendant 3 min : le bot retourne dans son vocal habituel (sans se déconnecter). */
   scheduleIdle() {
     clearTimeout(this.timers.idle);
     this.timers.idle = setTimeout(() => {
@@ -422,8 +404,7 @@ export class GuildPlayer {
   /** Retour au vocal habituel en gardant la connexion : le prochain /play démarre tout de suite. */
   async goHome() {
     clearSession(this.guild.id).catch(() => {});
-    // Le bot ne reste plus en vocal 24/24 : sans musique, il quitte le salon (sauf BOT_FULL=1)
-    if (this.backend?.moveToHome && config.voice.enabled && process.env.BOT_FULL === '1') {
+    if (this.backend?.moveToHome && config.voice.enabled) {
       await this.backend.moveToHome().catch((err) => console.warn('[musique] retour au vocal :', err.message));
       return;
     }
@@ -487,45 +468,12 @@ export class GuildPlayer {
     this.timers.session = setInterval(() => saveSession(this).catch(() => {}), 15_000);
   }
 
-  // Paroles en direct dans le panneau (tout le monde les voit) : le panneau est modifié pile à l'heure de chaque ligne
-  async startLyrics(track, newTrack) {
-    clearTimeout(this.timers.lyrics);
-    if (newTrack) {
-      this.lyrics = null; this.lyricIndex = -1;
-      const found = this.blind || track.isLive ? null : await findLyrics(track).catch(() => null);
-      if (this.current !== track) return;
-      const lines = parseLrc(found?.syncedLyrics ?? '').filter((l) => l.text);
-      this.lyrics = lines.length ? lines : null;
-    }
-    if (!this.lyrics) return;
-    const tick = () => {
-      if (this.current !== track || !this.lyrics) return;
-      const speed = speedOf(this.filters) || 1;
-      // Avance calée sur le vrai délai d'affichage : la modif Discord met editMs à arriver, le son ~250 ms à sortir du vocal
-      const lead = Math.min(600, Math.max(0, (this.editMs ?? 400) - 250));
-      const pos = this.position() * 1000 + lead * speed;
-      const i = currentLineIndex(this.lyrics, pos);
-      if (i !== this.lyricIndex && !this.paused) { this.lyricIndex = i; this.refreshPanel(true); }
-      const next = this.lyrics[i + 1];
-      const wait = this.paused || !next ? 1000 : Math.max(1100 - (Date.now() - (this.lastPanelEdit ?? 0)), (next.at - pos) / speed);
-      this.timers.lyrics = setTimeout(tick, Math.max(60, wait));
-    };
-    tick();
-  }
-
   refreshPanel(force = false) {
     if (!this.panel || !this.current || this.blind) return;
-    // Une seule modif à la fois : sinon Discord les met en file (limite de débit) et tout le reste du bot attend derrière
-    if (this.editing) { this.editAgain ||= force; return; }
     if (!force && Date.now() - this.lastPanelEdit < 1_000) return;
-    this.editing = true;
     this.lastPanelEdit = Date.now();
-    const t0 = Date.now();
-    this.panel.edit(nowPlayingPayload(this)).then(() => { const ms = Math.min(Date.now() - t0, 1_500); this.editMs = this.editMs ? this.editMs * 0.7 + ms * 0.3 : ms; }).catch((err) => {
+    this.panel.edit(nowPlayingPayload(this)).catch((err) => {
       if (err.code === 10008) this.panel = null; // message supprimé
-    }).finally(() => {
-      this.editing = false;
-      if (this.editAgain) { this.editAgain = false; this.refreshPanel(true); }
     });
   }
 

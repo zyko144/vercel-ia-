@@ -4,9 +4,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
-  StringSelectMenuBuilder,
 } from 'discord.js';
-import { FILTERS, filtersLabel, speedOf } from './filters.js';
+import { filtersLabel, speedOf } from './filters.js';
 import { SOURCES } from './sources.js';
 
 const LOOP_LABELS = { off: 'Désactivée', track: '🔂 Ce son', queue: '🔁 Toute la file' };
@@ -28,10 +27,11 @@ export function parseTime(input) {
   return parts.reduce((total, n) => total * 60 + n, 0);
 }
 
-function progressBar(position, duration, size = 18) {
+function progressBar(position, duration, size = 16) {
   if (!duration) return '';
-  const index = Math.round(Math.min(Math.max(position / duration, 0), 1) * (size - 1));
-  return Array.from({ length: size }, (_, i) => (i < index ? '━' : i === index ? '●' : '─')).join('');
+  const ratio = Math.min(Math.max(position / duration, 0), 1);
+  const index = Math.min(size - 1, Math.round(ratio * (size - 1)));
+  return Array.from({ length: size }, (_, i) => (i < index ? '▬' : i === index ? '🔘' : '─')).join('');
 }
 
 const requester = (track) => (track.requestedBy === 'autoplay' ? '♾️ Autoplay' : track.requestedBy ? `<@${track.requestedBy}>` : '—');
@@ -48,29 +48,31 @@ export function nowPlayingPayload(player) {
 
   const source = SOURCES[track.source] ?? SOURCES.web;
   const position = player.position();
+  const next = player.queue[0];
   const queueDuration = player.queue.reduce((sum, t) => sum + (t.duration || 0), 0);
   // Minuterie de fin : Discord la fait défiler tout seul chez chaque personne, sans rien renvoyer
   const speed = speedOf(player.filters) || 1;
   const endsAt = Math.floor((Date.now() + Math.max(0, (track.duration - position) / speed) * 1000) / 1000);
   const timeLine = track.isLive
     ? '🔴 **EN DIRECT**'
-    : `\`${formatTime(position)}\` ${progressBar(position, track.duration)} \`${formatTime(track.duration)}\`\n${player.paused ? '⏸️ En pause' : `Fin <t:${endsAt}:R>`}`;
-  // Une seule ligne de réglages (plus de grille de 6 cases), les 3 prochains sons, la pochette en grand
-  const infos = [`🔊 ${player.volume}%`, `🔁 ${LOOP_LABELS[player.loop]}`, `🎛️ ${filtersLabel(player.filters)}`, player.autoplay ? '♾️ Autoplay' : null].filter(Boolean).join('  ·  ');
-  // Paroles en direct (ligne en cours en gras, la précédente et la suivante en gris)
-  const L = player.lyrics; const li = player.lyricIndex ?? -1;
-  const lyricBlock = L ? `\n\n${[L[li - 1], L[li], L[li + 1]].map((l, k) => (!l ? null : k === 1 ? `> 🎤 **${escape(l.text)}**` : `> -# ${escape(l.text)}`)).filter(Boolean).join('\n') || '> -# 🎤 Les paroles arrivent…'}` : '';
-  const upNext = player.queue.slice(0, 3).map((t, i) => `\`${i + 1}\` ${trackLine(t)}`).join('\n');
+    : `${progressBar(position, track.duration)}\n\`${formatTime(position)} / ${formatTime(track.duration)}\`${player.paused ? ' · ⏸️ en pause' : ` · fin <t:${endsAt}:R>`}`;
 
   const embed = new EmbedBuilder()
     .setColor(source.color)
-    .setAuthor({ name: `${player.paused ? '⏸️ En pause' : '🎶 En cours'} · ${source.label}` })
+    .setAuthor({ name: player.paused ? '⏸️ En pause' : '🎶 En cours de lecture' })
     .setTitle(cut(track.title, 250))
-    .setDescription(`${track.artist ? `### ${escape(cut(track.artist, 80))}\n` : ''}${timeLine}${lyricBlock}\n\n${infos}\nDemandé par ${requester(track)}`)
-    .addFields({ name: '⏭️ À suivre', value: upNext || (player.autoplay ? 'L’autoplay choisit la suite ♾️' : 'File vide : ajoute un son avec ➕') })
-    .setFooter({ text: `${player.queue.length} son${player.queue.length > 1 ? 's' : ''} dans la file${queueDuration ? ` · ${formatTime(queueDuration)}` : ''}` });
+    .setDescription(`${track.artist ? `**${escape(track.artist)}**\n\n` : ''}${timeLine}`)
+    .addFields(
+      { name: '👤 Demandé par', value: requester(track), inline: true },
+      { name: '🔊 Volume', value: `${player.volume}%`, inline: true },
+      { name: '🔁 Boucle', value: LOOP_LABELS[player.loop], inline: true },
+      { name: '🎛️ Effets', value: filtersLabel(player.filters), inline: true },
+      { name: '📜 File', value: `${player.queue.length} son(s)${queueDuration ? ` · ${formatTime(queueDuration)}` : ''}`, inline: true },
+      { name: '♾️ Autoplay', value: player.autoplay ? 'Activé' : 'Désactivé', inline: true },
+    )
+    .setFooter({ text: cut(`${source.label}${player.backend ? ` · ${player.backend.name}` : ''}${next ? ` · Ensuite : ${next.title}${next.artist ? ` — ${next.artist}` : ''}` : ''}`, 200) });
   if (track.url) embed.setURL(track.url);
-  if (track.thumbnail) embed.setImage(track.thumbnail);
+  if (track.thumbnail) embed.setThumbnail(track.thumbnail);
 
   return { content: '', embeds: [embed], components: controlRows(player), allowedMentions: { parse: [] } };
 }
@@ -98,17 +100,6 @@ function controlRows(player) {
     button('queue', '📜', ButtonStyle.Secondary, 'File'),
   );
 
-  const effects = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('music:filters')
-      .setPlaceholder(`🎛️ Effets audio : ${filtersLabel(player.filters).replace(/[^\p{L}\p{N} ,+.]/gu, '').replace(/\s+/g, ' ').trim() || 'aucun'}`)
-      .setMinValues(0)
-      .setMaxValues(Object.keys(FILTERS).length)
-      .addOptions(Object.entries(FILTERS).map(([value, f]) => ({
-        label: f.label, value, description: f.description, emoji: f.emoji, default: player.filters.includes(value),
-      }))),
-  );
-
   const extra = new ActionRowBuilder().addComponents(
     button('lyrics', '🎤', ButtonStyle.Secondary, 'Paroles'),
     button('add', '➕', ButtonStyle.Secondary, 'Ajouter'),
@@ -116,7 +107,7 @@ function controlRows(player) {
     button('autoplay', '♾️', player.autoplay ? ButtonStyle.Success : ButtonStyle.Secondary, 'Autoplay'),
   );
 
-  return [main, sound, effects, extra];
+  return [main, sound, extra];
 }
 
 export function endedPayload(lastTrack) {

@@ -92,7 +92,7 @@ async function queueTracks(client, interaction, result, { next = false, shuffle 
 
   const player = getOrCreatePlayer(client, interaction.guild);
   player.textChannelId = interaction.channelId;
-  if (!player.current || !player.backend) await player.connect(channel); // déjà en lecture : ne pas recréer le moteur (ça coupait le son et la file)
+  await player.connect(channel);
 
   const tracks = shuffle ? shuffled(result.tracks) : result.tracks;
   const wasPlaying = Boolean(player.current);
@@ -173,7 +173,7 @@ export async function handleJukeboxMessage(client, message) {
     }
     const player = getOrCreatePlayer(client, message.guild);
     player.textChannelId = message.channelId;
-    if (!player.current || !player.backend) await player.connect(voiceChannel); // déjà en lecture : ne pas couper le son
+    await player.connect(voiceChannel);
     player.add(result.tracks);
     await removeHourglass();
     await message.react('✅').catch(() => {});
@@ -762,12 +762,10 @@ const MORE_COMMANDS = {
       return interaction.editReply('🎤 Lance un son ou précise-le dans `recherche`.');
     }
 
-    // On attend que le son démarre, puis on enlève la voix et on affiche les paroles
+    // On attend que le son démarre, puis on affiche les paroles
     const ready = getPlayer(interaction.guildId);
     for (let i = 0; i < 20 && !ready?.current; i++) await new Promise((r) => setTimeout(r, 500));
     if (!ready?.current) return interaction.editReply('🎤 Le son a pas démarré, réessaie.');
-    ready.setFilters([...new Set([...ready.filters, 'karaoke'])]);
-    ready.refreshPanel(true);
     return interaction.editReply(await showLyrics(interaction, ready, ready.current));
   },
 

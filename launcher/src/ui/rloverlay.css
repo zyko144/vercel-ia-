@@ -8,6 +8,7 @@ html, body { margin: 0; background: transparent; overflow: hidden; font: 12px/1.
 .logo { width: 20px; height: 23px; object-fit: contain; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: #56627a; }
 .dot.on { background: #39ff8a; box-shadow: 0 0 8px #39ff8a; }
+.fps { font-size: 11px; font-weight: 800; color: #9fb3d1; white-space: nowrap; }
 #streak { margin-left: auto; font-weight: 800; font-size: 13px; }
 .up { color: #39ff8a; } .dn { color: #ff5a4f; } .ice { color: #8fdcff; }
 .rank img { width: 62px; height: 62px; object-fit: contain; margin-top: -14px; filter: drop-shadow(0 0 12px color-mix(in srgb, currentColor 40%, transparent)) drop-shadow(0 2px 6px rgba(0, 0, 0, .5)); }
