@@ -1,19 +1,22 @@
 import { spawn } from 'node:child_process';
 
 // Desktop Duplication Windows + encodeur matériel ; aucun encodeur CPU continu en secours.
-export function nativeCaptureArgs({ height = 1080, fps = 60, enc, width = 1920, sourceHeight = 1080, adapter = 0, output = 0 }) {
+export function nativeCaptureArgs({ height = 1080, fps = 60, enc, width = 1920, sourceHeight = 1080, adapter = 0, output = 0, quality = 'high' }) {
   if (!['h264_nvenc', 'h264_amf', 'h264_qsv'].includes(enc)) throw Error('Encodeur matériel indisponible');
   fps = fps === 30 ? 30 : 60;
   height = [720,1080,1440].includes(height) ? height : 1080;
   const scale = Math.min(1, height/sourceHeight, (height*16/9)/width);
   const w = Math.max(2, Math.floor(width*scale/2)*2), h = Math.max(2, Math.floor(sourceHeight*scale/2)*2);
   if (!Number.isInteger(adapter) || adapter < 0 || !Number.isInteger(output) || output < 0) throw Error('Écran de capture invalide');
-  const rate = Math.round((h > 1080 ? 40 : h > 720 ? 24 : 12) * (fps === 60 ? 1 : .65));
+  const high = quality !== 'standard';
+  const rate = Math.round((h > 1080 ? (high ? 64 : 40) : h > 720 ? (high ? 40 : 24) : (high ? 20 : 12)) * (fps === 60 ? 1 : .65));
   // Le transfert BGRA -> NV12 est nécessaire pour AMD/Intel et le redimensionnement.
   const direct = enc === 'h264_nvenc' && w === width && h === sourceHeight;
   const resize = w !== width || h !== sourceHeight;
   const filters = `ddagrab=output_idx=${output}:framerate=${fps}:draw_mouse=1` + (direct ? '' : ',hwdownload,format=bgra' + (resize ? `,scale=${w}:${h}:flags=bicubic` : '') + ',format=nv12');
-  const encoder = enc === 'h264_nvenc' ? ['-preset','p3','-tune','hq','-rc','vbr','-cq','18'] : enc === 'h264_amf' ? ['-quality','balanced','-rc','vbr_peak'] : ['-preset','veryfast'];
+  // Conserver le preset rapide : les détails supplémentaires viennent du débit et de
+  // la répartition adaptative des bits, sans activer une préanalyse GPU coûteuse.
+  const encoder = enc === 'h264_nvenc' ? ['-preset','p3','-tune','hq','-rc','vbr','-cq',high ? '16' : '18'] : enc === 'h264_amf' ? ['-quality','balanced','-rc','vbr_peak','-vbaq',high ? '1' : '0','-preanalysis','0'] : ['-preset','veryfast'];
   // Sur un pipe non seekable FFmpeg limite sinon les clusters à 32 Ko :
   // à 24 Mb/s cela produit près d'un fichier par image et sature les écritures du replay.
   return ['-hide_banner','-loglevel','warning','-stats_period','1','-progress','pipe:2','-nostats','-init_hw_device',`d3d11va=desktop:${adapter}`,'-filter_hw_device','desktop','-f','lavfi','-i',filters,'-an','-c:v',enc,...encoder,'-profile:v','high','-b:v',`${rate}M`,'-maxrate',`${rate*2}M`,'-bufsize',`${rate*2}M`,'-g',String(fps),'-bf','0','-fps_mode','cfr','-f','matroska','-cluster_time_limit','1000','-cluster_size_limit','16777216','-flush_packets','1','pipe:1'];

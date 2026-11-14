@@ -501,6 +501,7 @@ async function paintSettings() {
   const s = settings;
   $('captureStats').textContent = s.captureBackend === 'native' && s.captureStats ? `Encodeur : ${Math.round(s.captureStats.fps)} i/s mesurées (cible ${s.fps})` : s.nativeFailure ? 'Mode compatible actif après une interruption de capture : la fluidité peut être réduite.' : 'La cadence mesurée apparaît pendant la capture native.';
   $('sReplay').checked = s.replay; $('sSeconds').value = String(s.seconds); $('sHeight').value = String(s.height); $('sFps').value = String(s.fps);
+  $('sQuality').value = s.quality ?? 'high';
   $('sAudio').checked = s.audio; $('sMic').checked = Boolean(s.mic); $('sMicVol').value = String(s.micVol ?? 100); $('oMicVol').textContent = `${s.micVol ?? 100} %`; $('sSound').checked = s.sound; $('sOnlyGame').checked = s.onlyGame; $('sPriority').checked = s.gamePriority; $('sAuto').checked = s.autostart;
   $('sGameVol').value = String(s.gameVol ?? 100); $('oGameVol').textContent = `${s.gameVol ?? 100} %`;
   $('sMax').value = String(s.maxGB ?? 0); $('sDir').textContent = s.dir; $('sVer').textContent = `History Clips ${s.version}`;
@@ -512,6 +513,7 @@ async function paintSettings() {
 }
 const setP = async (p, msg) => { const r = await api.setSettings(p); if (r?.ok === false) toast(r.error); else if (msg) toast(msg); settings = await api.settings() ?? settings; paintPill(); render(); return r; };
 $('sReplay').addEventListener('change', (e) => setP({ replay: e.target.checked }, e.target.checked ? '🔴 Replay actif' : '⏸ Replay en pause'));
+$('sQuality').addEventListener('change', e => setP({ quality: e.target.value }, '✅ Qualité de compression enregistrée'));
 for (const [id, k] of [['sSeconds', 'seconds'], ['sHeight', 'height'], ['sFps', 'fps'], ['sMax', 'maxGB']]) $(id).addEventListener('change', (e) => setP({ [k]: Number(e.target.value) }, '✅ Réglage enregistré'));
 $('sMicVol').addEventListener('input', (e) => { $('oMicVol').textContent = `${e.target.value} %`; });
 $('sMicVol').addEventListener('change', (e) => setP({ micVol: Number(e.target.value) }, '🎙 Volume du micro enregistré'));

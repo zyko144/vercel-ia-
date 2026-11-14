@@ -13,7 +13,8 @@ window.rec.onStart(async (id, o = {}) => {
     streams.push(stream); return stream;
   };
   const h = [720, 1080, 1440].includes(o.height) ? o.height : 1080, fps = o.fps === 30 ? 30 : 60;
-  const bitrate = Math.round((h === 1440 ? 40 : h === 1080 ? 24 : 12) * (fps === 60 ? 1 : 0.65) * 1_000_000);
+  const high = o.quality === 'high';
+  const bitrate = Math.round((h === 1440 ? (high ? 64 : 40) : h === 1080 ? (high ? 40 : 24) : (high ? 20 : 12)) * (fps === 60 ? 1 : 0.65) * 1_000_000);
   try {
     const captureHeight = o.nativeVideo ? 16 : h;
     const video = { width: { ideal: Math.round(captureHeight * 16 / 9), max: Math.round(captureHeight * 16 / 9) }, height: { ideal: captureHeight, max: captureHeight }, frameRate: { ideal: fps, max: fps } };

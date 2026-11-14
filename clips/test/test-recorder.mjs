@@ -48,3 +48,10 @@ assert.equal(made[count].opts.audioBitsPerSecond,320000);
 assert.equal(nativeScreen.getAudioTracks()[0].constraints.autoGainControl,false);
 assert.equal(states.at(-1),'on');stop();
 console.log('✅ Native : capture vidéo navigateur arrêtée, audio stéréo 48 kHz sans gain automatique');
+
+const detailedScreen=stream([track('video')]);
+context.navigator.mediaDevices.getDisplayMedia=async()=>detailedScreen;
+const detailedIndex=made.length;
+await start('screen:1',{quality:'high',height:1080,fps:60,audio:false});
+assert.equal(made[detailedIndex].opts.videoBitsPerSecond,40000000,'détails élevés également transmis au mode compatible');
+stop();

@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.9.5",
-  "releaseNotes": "Retour automatique à la capture native après une interruption temporaire, profil H.264 High pour le mode natif, clip visible immédiatement dans la bibliothèque avec son état de préparation. Sauvegarde accélérée par analyses parallèles et sans doublon, miniatures allégées.",
+  "version": "0.9.6",
+  "releaseNotes": "Nouveau mode Détails élevés activé par défaut : débit supérieur et compression adaptative AMD pour mieux préserver les textures et les mouvements rapides. Choix Standard pour des fichiers plus légers. Résolution native conservée, sans agrandissement artificiel.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

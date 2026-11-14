@@ -55,7 +55,7 @@ app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256');
 protocol.registerSchemesAsPrivileged([{ scheme: 'clip', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 // ---------- Réglages (fichier JSON dans le dossier de l'appli) ----------
-const DEFAULTS = { replay: true, seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', hotMark: 'F7', markers: [], autostart: true, favs: [], names: {},
+const DEFAULTS = { replay: true, seconds: 30, height: 1080, fps: 60, quality: 'high', audio: true, hotClip: 'F8', hotShot: 'F9', hotMark: 'F7', markers: [], autostart: true, favs: [], names: {},
   source: 'screen', mic: false, micVol: 100, gameVol: 100, onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art2: {}, exes: {} };
 const SET_FILE = () => path.join(app.getPath('userData'), 'reglages.json');
 let st = { ...DEFAULTS };
@@ -234,7 +234,7 @@ async function setReplay(on, keepSetting = false) {
         if (!output) throw Error('Sortie Windows ambiguë');
         const bin = await FFMPEG();
         if (generation !== replayGeneration) return;
-        const handle = startNativeCapture(bin, { height: st.height, fps: st.fps, enc, adapter: output.adapter, output: output.output, width: output.width, sourceHeight: output.height,
+        const handle = startNativeCapture(bin, { height: st.height, fps: st.fps, quality: st.quality, enc, adapter: output.adapter, output: output.output, width: output.width, sourceHeight: output.height,
           onStats: stats => {
             if (generation !== replayGeneration) return;
             captureStats = { ...stats, encoder: enc, target: st.fps, at: Date.now() };
@@ -259,7 +259,7 @@ async function setReplay(on, keepSetting = false) {
     }
   }
   if (generation !== replayGeneration || me.isDestroyed()) return;
-  me.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, audio: st.audio, mic: st.mic, nativeVideo: captureBackend === 'native' });
+  me.webContents.send('rec:start', src.id, { seconds: st.seconds, height: st.height, fps: st.fps, quality: st.quality, audio: st.audio, mic: st.mic, nativeVideo: captureBackend === 'native' });
   tray?.setToolTip(`History Clips · replay actif (${st.hotClip} pour garder les ${st.seconds} dernières secondes)`);
 }
 let restarting = null;
@@ -789,6 +789,7 @@ ipcMain.handle('settings:set', (_e, p) => {
   if ([15, 30, 60, 120].includes(Number(p.seconds))) { st.seconds = Number(p.seconds); restart = true; }
   if ([720, 1080, 1440].includes(Number(p.height))) { st.height = Number(p.height); restart = true; }
   if ([30, 60].includes(Number(p.fps))) { st.fps = Number(p.fps); restart = true; }
+  if (['standard', 'high'].includes(p.quality)) { st.quality = p.quality; restart = true; }
   if (['screen', 'game'].includes(p.source)) { st.source = p.source; restart = true; }
   if ([0, 10, 20, 50, 100].includes(Number(p.maxGB))) { st.maxGB = Number(p.maxGB); prune().catch(() => {}); }
   if (['jaune', 'bleu', 'rouge', 'violet', 'vert', 'rose'].includes(p.theme)) st.theme = p.theme;
