@@ -1,0 +1,11 @@
+:root { color-scheme: dark; font-family: "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 6px; background: transparent; overflow: hidden; }
+aside { position: relative; display: flex; align-items: center; gap: 14px; height: 100px; padding: 18px; overflow: hidden; border: 1px solid #f8d66b60; border-radius: 18px; background: #17131cf5; color: #faf7ed; box-shadow: 0 4px 12px #0005; }
+img { border-radius: 12px; }
+div { min-width: 0; flex: 1; }
+small { display: block; color: #f8d66b; font-size: 10px; font-weight: 700; letter-spacing: 1.6px; }
+span { float: right; color: #a7e9b0; }
+strong { display: block; margin-top: 5px; font-size: 17px; }
+p { margin: 4px 0 0; color: #bdb5c5; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+i { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: #f8d66b; }

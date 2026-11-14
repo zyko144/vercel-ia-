@@ -15,7 +15,7 @@ const context = { MediaRecorder: Recorder, navigator: { mediaDevices: { getDispl
 vm.runInNewContext(source, context);
 await start('screen:1', { audio: true, mic: true });
 assert.equal(made[0].opts.mimeType, 'video/webm;codecs=vp8,opus', 'aucun repli H264 sans audio');
-assert.equal(made[0].opts.videoBitsPerSecond, 24000000);
+assert.equal(made[0].opts.videoBitsPerSecond, 32000000);
 assert.equal(screen.getVideoTracks()[0].contentHint, 'motion');
 assert.equal(screen.getVideoTracks()[0].constraints.frameRate.ideal, 60);
 assert.equal(screen.getVideoTracks()[0].constraints.height.ideal, 1080);

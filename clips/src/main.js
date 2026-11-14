@@ -69,6 +69,32 @@ const notify = (title, body) => { if (Notification.isSupported()) new Notificati
 const send = (ch, v) => { if (win && !win.isDestroyed()) win.webContents.send(ch, v); };
 const changed = () => send('clips:changed');
 
+// Confirmation indépendante de la galerie, qui reste visible sans interrompre le jeu.
+let clipNotice = null;
+function notifyClipSaved(label) {
+  try {
+    clipNotice?.destroy();
+    const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const notice = new BrowserWindow({ width: 360, height: 116, x: workArea.x + workArea.width - 380, y: workArea.y + 20,
+      frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true, show: false,
+      alwaysOnTop: true, hasShadow: false, autoHideMenuBar: true,
+      webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, autoplayPolicy: 'no-user-gesture-required' } });
+    clipNotice = notice;
+    notice.setAlwaysOnTop(true, 'screen-saver');
+    notice.setIgnoreMouseEvents(true);
+    let timer;
+    notice.on('closed', () => { clearTimeout(timer); if (clipNotice === notice) clipNotice = null; });
+    timer = setTimeout(() => { if (!notice.isDestroyed()) notice.destroy(); }, 6500);
+    notice.once('ready-to-show', () => notice.showInactive());
+    void notice.loadFile(path.join(here, 'ui', 'clip-notice.html'), { query: { game: label, sound: st.sound ? '1' : '0' } }).catch(() => {
+      if (!notice.isDestroyed()) notice.destroy();
+      notify('Clip bien enregistré', label);
+    });
+  } catch {
+    notify('Clip bien enregistré', label);
+  }
+}
+
 // ---------- Fenêtre (sans cadre Windows, comme le launcher ; libérée 2 min après avoir été cachée) ----------
 function createWindow() {
   win = new BrowserWindow({ width: 1280, height: 800, minWidth: 960, minHeight: 600, frame: false, backgroundColor: '#0b090e', icon: ICON, title: 'History Clips', show: false,
@@ -287,7 +313,7 @@ async function saveClipWork(game) {
     if (!result.dur || ((audioWanted || micWanted) && !result.audio)) throw Error('Le clip produit est incomplet : il n’a pas été ajouté à la galerie.');
     const out = path.join(dir, clipName(label, 'mp4').replace('.mp4', `-${randomUUID().slice(0, 6)}.mp4`));
     await rename(encoded, out);
-    notify('🎬 Clip enregistré', `${label} · ouvre History Clips pour le couper ou l’envoyer.`);
+    notifyClipSaved(label);
     changed(); await saveSt(); void prune().catch(() => {});
     return { ok: true };
   } catch (err) { notify('Clip non enregistré', err.message); return { ok: false, error: err.message }; }

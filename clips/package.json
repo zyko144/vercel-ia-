@@ -9,7 +9,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs && node test/test-game-art.mjs && node test/test-native.mjs",
+    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs && node test/test-game-art.mjs && node test/test-native.mjs && node test/test-clip-notice.mjs",
     "dist": "electron-builder --win",
     "test:media": "node test/test-media.mjs"
   },
