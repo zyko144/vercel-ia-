@@ -71,29 +71,35 @@ const send = (ch, v) => { if (win && !win.isDestroyed()) win.webContents.send(ch
 const changed = () => send('clips:changed');
 
 // Confirmation indépendante de la galerie, qui reste visible sans interrompre le jeu.
-let clipNotice = null;
-function notifyClipSaved(label) {
+let clipNotice = null, clipNoticeReady = null, clipNoticeTimer = null, clipNoticeSerial = 0;
+function prepareClipNotice() {
+  if (clipNotice && !clipNotice.isDestroyed()) return clipNoticeReady;
+  const notice = new BrowserWindow({ width: 360, height: 116,
+    frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true, show: false,
+    alwaysOnTop: true, hasShadow: false, autoHideMenuBar: true,
+    webPreferences: { preload: path.join(here, 'clipNotice.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } });
+  clipNotice = notice;
+  notice.setAlwaysOnTop(true, 'screen-saver'); notice.setIgnoreMouseEvents(true);
+  notice.on('closed', () => { if (clipNotice === notice) { clipNotice = null; clipNoticeReady = null; clearTimeout(clipNoticeTimer); } });
+  clipNoticeReady = notice.loadFile(path.join(here, 'ui', 'clip-notice.html')).then(() => notice);
+  return clipNoticeReady;
+}
+function notifyClip(label, phase = 'saving', detail = '') {
+  const serial = ++clipNoticeSerial;
+  const sound = phase === 'saving' && st.sound;
+  const title = phase === 'saving' ? 'Clip pris — enregistrement en cours' : phase === 'saved' ? 'Clip bien enregistré' : 'Clip non enregistré';
+  const fallback = () => { if (Notification.isSupported()) new Notification({ title, body: detail || label, icon: ICON, silent: !sound }).show(); };
   try {
-    clipNotice?.destroy();
-    const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    const notice = new BrowserWindow({ width: 360, height: 116, x: workArea.x + workArea.width - 380, y: workArea.y + 20,
-      frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true, show: false,
-      alwaysOnTop: true, hasShadow: false, autoHideMenuBar: true,
-      webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, autoplayPolicy: 'no-user-gesture-required' } });
-    clipNotice = notice;
-    notice.setAlwaysOnTop(true, 'screen-saver');
-    notice.setIgnoreMouseEvents(true);
-    let timer;
-    notice.on('closed', () => { clearTimeout(timer); if (clipNotice === notice) clipNotice = null; });
-    timer = setTimeout(() => { if (!notice.isDestroyed()) notice.destroy(); }, 6500);
-    notice.once('ready-to-show', () => notice.showInactive());
-    void notice.loadFile(path.join(here, 'ui', 'clip-notice.html'), { query: { game: label, sound: st.sound ? '1' : '0' } }).catch(() => {
-      if (!notice.isDestroyed()) notice.destroy();
-      notify('Clip bien enregistré', label);
-    });
-  } catch {
-    notify('Clip bien enregistré', label);
-  }
+    void prepareClipNotice().then(notice => {
+      if (serial !== clipNoticeSerial || notice.isDestroyed() || app.quitting) return;
+      const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      notice.setPosition(workArea.x + workArea.width - 380, workArea.y + 20);
+      notice.webContents.send('clip-notice:show', { game: label, phase, detail, sound });
+      notice.showInactive();
+      clearTimeout(clipNoticeTimer);
+      clipNoticeTimer = setTimeout(() => { if (!notice.isDestroyed()) notice.hide(); }, 4500);
+    }).catch(fallback);
+  } catch { fallback(); }
 }
 
 // ---------- Fenêtre (sans cadre Windows, comme le launcher ; libérée 2 min après avoir été cachée) ----------
@@ -314,6 +320,8 @@ async function saveClipWork(game) {
   const native = captureBackend === 'native';
   try {
     if (!buffer) throw Error('Le replay n’est pas encore prêt.');
+    if (buffer.tracks.video.files.length < 2) throw Error('Clip pas encore prêt : quelques secondes d’enregistrement sont nécessaires.');
+    notifyClip(label);
     await mkdir(dir, { recursive: true });
     const snap = await buffer.snapshot(tmp, micWanted ? micTmp : null, native && audioWanted ? gameTmp : null);
     const source = await probe(tmp);
@@ -336,10 +344,10 @@ async function saveClipWork(game) {
     if (!result.dur || ((audioWanted || micWanted) && !result.audio)) throw Error('Le clip produit est incomplet : il n’a pas été ajouté à la galerie.');
     const out = path.join(dir, clipName(label, 'mp4').replace('.mp4', `-${randomUUID().slice(0, 6)}.mp4`));
     await rename(encoded, out);
-    notifyClipSaved(label);
+    notifyClip(label, 'saved');
     changed(); await saveSt(); void prune().catch(() => {});
     return { ok: true };
-  } catch (err) { notify('Clip non enregistré', err.message); return { ok: false, error: err.message }; }
+  } catch (err) { notifyClip(label, 'error', err.message); return { ok: false, error: err.message }; }
   finally { await Promise.all([tmp, micTmp, gameTmp, encoded].map(f => rm(f, { force: true }).catch(() => {}))); }
 }
 /** Clip avec micro : piste 1 = jeu + micro (volume réglable), piste 2 = micro seul (pour le montage). */
@@ -843,6 +851,7 @@ app.on('before-quit', (e) => {
 });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.whenReady().then(async () => {
+  void prepareClipNotice().catch(() => {});
   try { st = { ...DEFAULTS, ...JSON.parse(await readFile(SET_FILE(), 'utf8')) }; } catch { /* premier lancement */ }
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb((perm === 'media' && wc === recWin?.webContents) || (perm === 'fullscreen' && wc === win?.webContents) || (perm === 'clipboard-sanitized-write' && wc === win?.webContents)));
   // Capture pour l'enregistreur : la source choisie (écran ou fenêtre du jeu), avec le son du PC en « loopback »

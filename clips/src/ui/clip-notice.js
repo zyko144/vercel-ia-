@@ -1,7 +1,9 @@
-const params = new URLSearchParams(location.search);
-document.getElementById('game').textContent = params.get('game') || 'Ton moment est prêt dans la galerie';
+window.clipNotice.onShow(({ game, phase, detail, sound }) => {
+document.getElementById('title').textContent = phase === 'saving' ? 'Clip pris !' : phase === 'saved' ? 'Clip bien enregistré' : 'Clip non enregistré';
+document.getElementById('state').textContent = phase === 'saving' ? '●' : phase === 'saved' ? '✓' : '!';
+document.getElementById('game').textContent = phase === 'saving' ? `${game} · Enregistrement en cours…` : detail || game || 'Ton moment est prêt dans la galerie';
 // Un seul carillon, sans dépendre des sons ou du mode concentration Windows.
-if (params.get('sound') === '1') {
+if (sound && phase === 'saving') {
   try {
     const audio = new AudioContext();
     void audio.resume().then(() => {
@@ -19,3 +21,4 @@ if (params.get('sound') === '1') {
     }).catch(() => { void audio.close(); });
   } catch { /* La confirmation visuelle reste disponible sans sortie audio. */ }
 }
+});
