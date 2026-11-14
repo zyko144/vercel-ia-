@@ -1,15 +1,15 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.9.4",
-  "releaseNotes": "Notification et son dès la prise du clip, sans attendre l’export MP4. Carte History préchargée pour un affichage rapide, confirmation finale silencieuse après sauvegarde et message en cas d’erreur.",
+  "version": "0.9.5",
+  "releaseNotes": "Retour automatique à la capture native après une interruption temporaire, profil H.264 High pour le mode natif, clip visible immédiatement dans la bibliothèque avec son état de préparation. Sauvegarde accélérée par analyses parallèles et sans doublon, miniatures allégées.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs && node test/test-game-art.mjs && node test/test-native.mjs && node test/test-clip-notice.mjs && node test/test-capture-display.mjs",
+    "test": "node test/test-clips.mjs && node test/test-updates.mjs && node test/test-replay.mjs && node test/test-recorder.mjs && node test/test-mediafile.mjs && node test/test-game-art.mjs && node test/test-native.mjs && node test/test-clip-notice.mjs && node test/test-capture-display.mjs && node test/test-capture-recovery.mjs && node test/test-save-flow.mjs",
     "dist": "electron-builder --win",
     "test:media": "node test/test-media.mjs"
   },

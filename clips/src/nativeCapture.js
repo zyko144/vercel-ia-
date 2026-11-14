@@ -16,7 +16,7 @@ export function nativeCaptureArgs({ height = 1080, fps = 60, enc, width = 1920, 
   const encoder = enc === 'h264_nvenc' ? ['-preset','p3','-tune','hq','-rc','vbr','-cq','18'] : enc === 'h264_amf' ? ['-quality','balanced','-rc','vbr_peak'] : ['-preset','veryfast'];
   // Sur un pipe non seekable FFmpeg limite sinon les clusters à 32 Ko :
   // à 24 Mb/s cela produit près d'un fichier par image et sature les écritures du replay.
-  return ['-hide_banner','-loglevel','warning','-stats_period','1','-progress','pipe:2','-nostats','-init_hw_device',`d3d11va=desktop:${adapter}`,'-filter_hw_device','desktop','-f','lavfi','-i',filters,'-an','-c:v',enc,...encoder,'-b:v',`${rate}M`,'-maxrate',`${rate*2}M`,'-bufsize',`${rate*2}M`,'-g',String(fps),'-bf','0','-fps_mode','cfr','-f','matroska','-cluster_time_limit','1000','-cluster_size_limit','16777216','-flush_packets','1','pipe:1'];
+  return ['-hide_banner','-loglevel','warning','-stats_period','1','-progress','pipe:2','-nostats','-init_hw_device',`d3d11va=desktop:${adapter}`,'-filter_hw_device','desktop','-f','lavfi','-i',filters,'-an','-c:v',enc,...encoder,'-profile:v','high','-b:v',`${rate}M`,'-maxrate',`${rate*2}M`,'-bufsize',`${rate*2}M`,'-g',String(fps),'-bf','0','-fps_mode','cfr','-f','matroska','-cluster_time_limit','1000','-cluster_size_limit','16777216','-flush_packets','1','pipe:1'];
 }
 export function startNativeCapture(bin, options, onChunk, onFailure, spawnImpl = spawn) {
   const child = spawnImpl(bin, nativeCaptureArgs(options), { windowsHide: true, stdio: ['ignore','pipe','pipe'] });

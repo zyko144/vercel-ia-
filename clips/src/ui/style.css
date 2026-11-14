@@ -213,6 +213,8 @@ dialog::backdrop { background: rgba(4, 3, 6, .7); backdrop-filter: blur(8px); }
 .modal input { width: 100%; margin: 4px 0; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .35); color: var(--text); }
 .pick { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); padding: 10px 18px; border-radius: 14px; background: rgba(30, 25, 20, .92); backdrop-filter: blur(16px); border: 1px solid var(--line-2); box-shadow: 0 20px 40px -20px #000; z-index: 90; }
+.card.pending { cursor: progress; opacity: .85; }
+.pending-label { display: flex; align-items: center; justify-content: center; height: 100%; padding: 20px; color: var(--accent, #ffc233); }
 
 /* ---------- Connexion (comme le launcher) ---------- */
 .auth { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: radial-gradient(900px 600px at 50% 0%, rgba(var(--rgb), .2), transparent 60%), rgba(8, 6, 11, .96); backdrop-filter: blur(10px); -webkit-app-region: drag; }

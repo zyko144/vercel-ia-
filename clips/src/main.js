@@ -15,6 +15,7 @@ import { promisify } from 'node:util';
 import { localGameArt } from './gameArt.js';
 import { serveMedia } from './mediaFile.js';
 import { startNativeCapture } from './nativeCapture.js';
+import { createCaptureRecovery } from './captureRecovery.js';
 import { readCaptureDisplays, matchCaptureDisplay } from './captureDisplay.js';
 import { ReplayBuffer } from './replay.js';
 import { createUpdateController, createMediaJobs } from './updateController.js';
@@ -173,6 +174,15 @@ const inGame = () => fg.full && fg.game !== 'Bureau' && !/^(History Clips|Histor
 
 // ---------- Replay ----------
 let nativeCapture = null, nativeFailed = false, captureBackend = 'compatible';
+let nativeFailure = null, nativeStableAt = 0;
+const captureRecovery = createCaptureRecovery(() => {
+  if (!st.replay || app.quitting || mediaJobs.closing || st.source !== 'screen') return;
+  nativeFailed = false; restartReplay();
+});
+function recordNativeFailure(err) {
+  nativeFailed = true; nativeFailure = err.message; nativeStableAt = 0;
+  void writeFile(path.join(app.getPath('userData'), 'capture-diagnostic.json'), JSON.stringify({ backend: 'compatible', reason: nativeFailure, target: st.fps, at: Date.now() })).catch(() => {});
+}
 let captureStats = null, lastCaptureLog = 0;
 let recSource = null, recDisplayId = null, replayGeneration = 0, replayStarting = false;
 function gameDisplay() {
@@ -228,20 +238,24 @@ async function setReplay(on, keepSetting = false) {
           onStats: stats => {
             if (generation !== replayGeneration) return;
             captureStats = { ...stats, encoder: enc, target: st.fps, at: Date.now() };
+            if (nativeStableAt && Date.now() - nativeStableAt > 10000) captureRecovery.reset();
             send('clips:captureStats', captureStats);
             if (Date.now() - lastCaptureLog > 5000) {
               lastCaptureLog = Date.now();
               void writeFile(path.join(app.getPath('userData'), 'capture-diagnostic.json'), JSON.stringify(captureStats)).catch(() => {});
             }
-          } }, chunk => buffer.push('video', chunk), () => {
+          } }, chunk => buffer.push('video', chunk), err => {
           if (generation !== replayGeneration) return;
-          nativeFailed = true; notify('Capture de secours', 'La capture native s’est arrêtée. Reprise avec la source compatible.'); restartReplay();
+          recordNativeFailure(err);
+          notify('Capture de secours', 'Reprise temporaire en mode compatible. Nouvelle tentative de capture native dans quelques secondes.');
+          restartReplay(); captureRecovery.failed();
         });
         nativeCapture = handle;
         await handle.ready;
         if (generation !== replayGeneration) { handle.stop(); return; }
         captureBackend = 'native';
-      } catch { if (generation !== replayGeneration) return; nativeCapture?.stop(); nativeCapture = null; nativeFailed = true; resetRing(); }
+        nativeFailure = null; nativeStableAt = Date.now();
+      } catch (err) { if (generation !== replayGeneration) return; nativeCapture?.stop(); nativeCapture = null; recordNativeFailure(err); resetRing(); captureRecovery.failed(); }
     }
   }
   if (generation !== replayGeneration || me.isDestroyed()) return;
@@ -299,6 +313,7 @@ async function probe(f) {
   return { dur: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : 0, start: st0 ? Number(st0[1]) : 0, audio: /Stream #.*Audio:/.test(out), h264: /Video: h264\b/.test(out) };
 }
 let savingClip = null;
+const pendingClips = new Map();
 const saveClip = (game) => {
   if (!savingClip) savingClip = mediaJobs.run(() => saveClipWork(game)).catch(err => { notify('Clip non enregistré', err.message); return { ok: false, error: err.message }; }).finally(() => { savingClip = null; });
   return savingClip;
@@ -318,41 +333,55 @@ async function saveClipWork(game) {
   const dir = path.join(ROOT(), label);
   const tmp = path.join(dir, `.${randomUUID()}.webm`), micTmp = `${tmp}.micro.webm`, gameTmp = `${tmp}.game.webm`, encoded = `${tmp}.mp4`;
   const native = captureBackend === 'native';
+  const pendingToken = `pending-${randomUUID()}`;
+  const markPending = stage => {
+    pendingClips.set(pendingToken, { token: pendingToken, game: label, name: 'Nouveau clip', at: Date.now(), size: 0, image: false, fav: false, url: '', pending: true, stage });
+    changed();
+  };
   try {
     if (!buffer) throw Error('Le replay n’est pas encore prêt.');
     if (buffer.tracks.video.files.length < 2) throw Error('Clip pas encore prêt : quelques secondes d’enregistrement sont nécessaires.');
     notifyClip(label);
+    markPending('Copie du replay…');
     await mkdir(dir, { recursive: true });
     const snap = await buffer.snapshot(tmp, micWanted ? micTmp : null, native && audioWanted ? gameTmp : null);
-    const source = await probe(tmp);
+    markPending('Préparation audio et vidéo…');
+    const [source, gameInfo, micInfo] = await Promise.all([
+      probe(tmp), native && snap.game ? probe(gameTmp) : null, snap.mic ? probe(micTmp) : null,
+    ]);
     if (audioWanted && !(native ? snap.game : source.audio)) throw Error('Le son du PC manque dans l’enregistrement. Relance le replay et vérifie la sortie audio Windows.');
     if (micWanted && !snap.mic) throw Error('Le micro n’a pas encore fourni de son. Vérifie son autorisation puis relance le replay.');
     if (native) {
       const audio = [];
       for (const [file, kind, volume] of [[snap.game && gameTmp, 'game', Math.max(0, Math.min(2, (gameVolume ?? 100)/100))], [snap.mic && micTmp, 'mic', Math.max(0, Math.min(2, (micVolume ?? 100)/100))]]) if (file) {
-        const p = await probe(file); if (!p.audio) throw Error('Piste audio native illisible');
+        const p = kind === 'game' ? gameInfo : micInfo; if (!p.audio) throw Error('Piste audio native illisible');
         audio.push({ file, kind, delta: p.start - source.start + buffer.offsets[kind]/1000, volume });
       }
       // Les segments du replay peuvent commencer après zéro : conserver seulement leur durée utile.
       if (!(snap.duration > 0)) throw Error('Durée native indisponible');
       await runFfmpeg(nativeMixArgs(tmp, audio, encoded, snap.duration));
     }
-    else if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume, gameVolume);
+    else if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume, gameVolume, { video: source, mic: micInfo });
     else if (source.h264) await toMp4(tmp, encoded, { fixup: true, gameVolume: (gameVolume ?? 100)/100 });
     else await clean(tmp, encoded, { fixup: true, gameVolume: (gameVolume ?? 100)/100 });
+    markPending('Finalisation du clip…');
     const result = await probe(encoded);
     if (!result.dur || ((audioWanted || micWanted) && !result.audio)) throw Error('Le clip produit est incomplet : il n’a pas été ajouté à la galerie.');
     const out = path.join(dir, clipName(label, 'mp4').replace('.mp4', `-${randomUUID().slice(0, 6)}.mp4`));
     await rename(encoded, out);
+    pendingClips.delete(pendingToken);
     notifyClip(label, 'saved');
     changed(); await saveSt(); void prune().catch(() => {});
     return { ok: true };
   } catch (err) { notifyClip(label, 'error', err.message); return { ok: false, error: err.message }; }
-  finally { await Promise.all([tmp, micTmp, gameTmp, encoded].map(f => rm(f, { force: true }).catch(() => {}))); }
+  finally {
+    if (pendingClips.delete(pendingToken)) changed();
+    await Promise.all([tmp, micTmp, gameTmp, encoded].map(f => rm(f, { force: true }).catch(() => {})));
+  }
 }
 /** Clip avec micro : piste 1 = jeu + micro (volume réglable), piste 2 = micro seul (pour le montage). */
-async function withMic(video, mic, out, micVolume, gameVolume = 100) {
-  const [pv, pm] = await Promise.all([probe(video), probe(mic)]);
+async function withMic(video, mic, out, micVolume, gameVolume = 100, known = null) {
+  const [pv, pm] = known ? [known.video, known.mic] : await Promise.all([probe(video), probe(mic)]);
   if (!pm.audio) throw Error('La piste micro est illisible. Relance le replay avant de réessayer.');
   const opts = { videoAudio: pv.audio, delta: pm.start - pv.start, volume: Math.max(0, Math.min(2, (micVolume ?? 100) / 100)), gameVolume: Math.max(0, Math.min(2, gameVolume / 100)) };
   if (pv.h264) {
@@ -436,12 +465,12 @@ async function listFiles() {
   }
   return out;
 }
-ipcMain.handle('clips:list', async () => (await listFiles()).map(({ file, dir, f, s }) => {
+ipcMain.handle('clips:list', async () => [...pendingClips.values(), ...(await listFiles()).map(({ file, dir, f, s }) => {
   const t = tokenOf(file);
   // Marqueurs (touche F7 en jeu : kill, victoire…) tombés dans ce clip : secondes avant la fin du clip
   const marks = (st.markers ?? []).filter((m) => m <= s.mtimeMs && m >= s.mtimeMs - ((st.seconds ?? 30) + 3) * 1000).map((m) => Math.round((s.mtimeMs - m) / 100) / 10);
   return { marks, token: t, game: dir, name: st.names[file] ?? f.replace(/\.(mp4|webm|png)$/i, ''), file: f, at: s.mtimeMs, size: s.size, image: /\.png$/i.test(f), fav: st.favs.includes(file), url: `clip://f/${t}${path.extname(f)}`, thumb: /\.png$/i.test(f) ? null : `clip://t/${t}.jpg?v=${Math.round(s.mtimeMs)}` };
-}).sort((a, b) => b.at - a.at));
+})].sort((a, b) => b.at - a.at));
 // Espace maximum : les plus vieux clips (hors favoris) partent à la corbeille
 async function prune() {
   if (!st.maxGB) return;
@@ -466,7 +495,7 @@ function thumbOf(f) {
       const [a, b] = await Promise.all([stat(jpg).catch(() => null), stat(f).catch(() => null)]);
       if (a && b && a.mtimeMs >= b.mtimeMs) return jpg;
       await mkdir(path.dirname(jpg), { recursive: true });
-      await runFfmpeg(['-y', '-ss', '1', '-t', '8', '-i', f, '-frames:v', '1', '-vf', 'thumbnail=240,scale=480:-2', '-q:v', '5', jpg]) /* meilleure image choisie automatiquement (la plus représentative, pas floue ni noire) */.catch(() => runFfmpeg(['-y', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]));
+      await runFfmpeg(['-y', '-ss', '1', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]).catch(() => runFfmpeg(['-y', '-i', f, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '5', jpg]));
       return jpg;
     })).catch(() => null).finally(() => setTimeout(() => thumbJobs.delete(jpg), 60_000));
     thumbChain = job; thumbJobs.set(jpg, job);
@@ -753,7 +782,7 @@ mediaHandle('clips:discord', async (_e, t, to, guild) => {
 });
 
 // ---------- Réglages ----------
-ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), noMic: Boolean(st.noMic), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, captureBackend, captureStats, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
+ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), noMic: Boolean(st.noMic), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, captureBackend, captureStats, nativeFailure, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
 ipcMain.handle('settings:set', (_e, p) => {
   let replayChanged = false; let restart = false;
   if ('replay' in p) { st.replay = Boolean(p.replay); replayChanged = true; }
@@ -774,6 +803,7 @@ ipcMain.handle('settings:set', (_e, p) => {
     if (registerHotkeys().includes(k)) { st[k] = old; registerHotkeys(); return { ok: false, error: 'Cette touche est déjà prise par une autre appli.' }; }
   }
   saveSt();
+  if (replayChanged || restart) { nativeFailed = false; captureRecovery.reset(); }
   if (replayChanged) setReplay(st.replay).catch(() => {}); else if (restart) restartReplay();
   return { ok: true };
 });
@@ -849,7 +879,7 @@ app.on('before-quit', (e) => {
   }
   app.quitting = true; fgProc?.kill();
 });
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => { captureRecovery.stop(); globalShortcut.unregisterAll(); });
 app.whenReady().then(async () => {
   void prepareClipNotice().catch(() => {});
   try { st = { ...DEFAULTS, ...JSON.parse(await readFile(SET_FILE(), 'utf8')) }; } catch { /* premier lancement */ }

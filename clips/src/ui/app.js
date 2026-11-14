@@ -35,6 +35,7 @@ const gameBackground = g => /^bureau$/i.test(g) ? 'brands/windows-background.svg
 const gamePicture = g => { const src = gameBackground(g); return src ? `<img class="game-backdrop" src="${esc(src)}" loading="lazy" decoding="async" alt=""><img class="game-picture" src="${esc(src)}" loading="lazy" decoding="async" alt="">` : gamePlaceholder(g); };
 const gbg = g => `background:${gameBackground(g) ? `linear-gradient(#0006,#0006),url('${esc(gameBackground(g))}') center / cover, ` : ''}linear-gradient(135deg,hsl(${hue(g)} 70% 45%),#120e0a)`;
 function card(c) {
+  if (c.pending) return `<button class="card glass pending" disabled aria-busy="true"><div class="thumb"><span class="pending-label">🎬 ${esc(c.stage)}</span><span class="tag">${gico(c.game)}${esc(c.game)}</span></div><div class="info"><b>Clip pris · préparation en cours</b><small>Disponible à la fin de la sauvegarde</small></div></button>`;
   const poster = !c.url && art[c.game]?.img ? ` style="background-image:url('${esc(art[c.game].img)}')"` : '';
   return `<button class="card glass" data-t="${esc(c.token)}"><div class="thumb"${poster}>${c.image ? `<img src="${esc(c.url)}" alt="" loading="lazy" decoding="async">` : c.thumb ? `<img src="${esc(c.thumb)}" alt="" loading="lazy" decoding="async">` : ''}<span class="tag">${gico(c.game)}${esc(c.game)}</span>${c.fav ? '<span class="star">⭐</span>' : ''}${c.image ? '<span class="dur">📸</span>' : ''}</div>
     <div class="info"><b>${esc(c.name)}</b><small>${when(c.at)} · ${size(c.size)}</small></div></button>`;
@@ -43,9 +44,12 @@ const emptyMsg = (t = 'Aucun clip ici pour l’instant') => `<div class="empty">
 const games = () => [...new Set(clips.map((c) => c.game))].sort((a, b) => clips.filter((c) => c.game === b).length - clips.filter((c) => c.game === a).length);
 
 // ---------- Chargement ----------
-let artQueue = Promise.resolve();
+let artQueue = Promise.resolve(), loadGeneration = 0;
 async function load() {
-  clips = await api.list().catch(() => []) ?? [];
+  const generation = ++loadGeneration;
+  const listed = await api.list().catch(() => []) ?? [];
+  if (generation !== loadGeneration) return;
+  clips = listed;
   const gs = games();
   const missing = gs.filter((g) => !art[g]);
   // Afficher les clips immédiatement ; une seule recherche d’image à la fois en arrière-plan.
@@ -158,7 +162,7 @@ api.onMax((m) => { document.querySelector('[data-win=max]').textContent = m ? '�
 
 // ---------- Lecteur + découpe ----------
 function openViewer(c) {
-  if (!c) return;
+  if (!c || c.pending) return;
   releaseClipMedia(); cur = c;
   $('vStatus').hidden = true;
   $('vTitle').textContent = `${c.name} · ${c.game}`;
@@ -495,6 +499,7 @@ $('setnav').addEventListener('click', (e) => { const b = e.target.closest('[data
 async function paintSettings() {
   settings = await api.settings() ?? settings;
   const s = settings;
+  $('captureStats').textContent = s.captureBackend === 'native' && s.captureStats ? `Encodeur : ${Math.round(s.captureStats.fps)} i/s mesurées (cible ${s.fps})` : s.nativeFailure ? 'Mode compatible actif après une interruption de capture : la fluidité peut être réduite.' : 'La cadence mesurée apparaît pendant la capture native.';
   $('sReplay').checked = s.replay; $('sSeconds').value = String(s.seconds); $('sHeight').value = String(s.height); $('sFps').value = String(s.fps);
   $('sAudio').checked = s.audio; $('sMic').checked = Boolean(s.mic); $('sMicVol').value = String(s.micVol ?? 100); $('oMicVol').textContent = `${s.micVol ?? 100} %`; $('sSound').checked = s.sound; $('sOnlyGame').checked = s.onlyGame; $('sPriority').checked = s.gamePriority; $('sAuto').checked = s.autostart;
   $('sGameVol').value = String(s.gameVol ?? 100); $('oGameVol').textContent = `${s.gameVol ?? 100} %`;

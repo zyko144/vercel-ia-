@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { createCaptureRecovery } from '../src/captureRecovery.js';
+let timer, retries=0;const delays=[];
+const recovery=createCaptureRecovery(()=>retries++,{schedule:(fn,delay)=>{timer=fn;delays.push(delay);return fn;},cancel:()=>timer=null});
+recovery.failed();recovery.failed();assert.deepEqual(delays,[2000],'une seule reprise programmée');
+timer();assert.equal(retries,1);
+recovery.failed();timer();recovery.failed();timer();recovery.failed();
+assert.equal(retries,3,'pas de boucle infinie si le matériel reste indisponible');
+assert.deepEqual(delays,[2000,5000,15000]);
+recovery.reset();recovery.failed();assert.equal(delays.at(-1),2000,'nouvelle série après capture stable');
+recovery.stop();assert.equal(timer,null,'arrêt propre');
+console.log('✅ Récupération : interruption transitoire, délai progressif, tentatives bornées et annulation');
