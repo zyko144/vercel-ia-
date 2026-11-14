@@ -151,6 +151,9 @@ $('saveNow').addEventListener('click', async () => {
 $('profile').addEventListener('click', () => (compte ? (show('reglages'), pane('acct')) : openAuth()));
 api.onChanged(async () => { settings = await api.settings() ?? settings; paintPill(); load(); });
 api.onFocus((f) => document.body.classList.toggle('idle', !f));
+api.onCaptureStats?.(stats => {
+  $('captureStats').textContent = stats ? `Encodeur : ${Math.round(stats.fps)} i/s mesurées (cible ${stats.target}) · ${stats.duplicates} images répétées sur le dernier relevé` : 'La cadence mesurée apparaît pendant la capture native.';
+});
 api.onMax((m) => { document.querySelector('[data-win=max]').textContent = m ? '❐' : '▢'; });
 
 // ---------- Lecteur + découpe ----------

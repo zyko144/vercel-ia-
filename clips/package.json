@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.9.2",
-  "releaseNotes": "Capture native Windows sur plusieurs écrans et GPU, réduction des traitements vidéo inutiles et sauvegarde sans bloquer la capture. Audio 48 kHz à débit élevé, volumes jeu/musique et micro indépendants, pistes audio séparées conservées dans le MP4.",
+  "version": "0.9.3",
+  "releaseNotes": "Correction des saccades du replay natif : regroupement des images en segments d’une seconde au lieu de multiplier les petits fichiers disque. Ajout de la cadence réelle de l’encodeur dans les réglages et d’un diagnostic local.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",

@@ -1,10 +1,11 @@
 // Test d’intégration réel : deux sons synthétiques, aucun micro ou écran de l’utilisateur.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { ReplayBuffer } from '../src/replay.js';
+import { ReplayBuffer, WebmClusters } from '../src/replay.js';
+import { nativeCaptureArgs } from '../src/nativeCapture.js';
 import { ffmpegArgs, micMixArgs, nativeMixArgs } from '../src/core.js';
 const bin = process.env.FFMPEG_TEST_BIN;
 if (!bin) throw Error('Définis FFMPEG_TEST_BIN pour exécuter les tests audio/vidéo.');
@@ -88,3 +89,14 @@ assert.ok(tone('muted-mic.mp4',1,880)>0.015,'micro original conservé');
 assert.ok(tone('muted-mic.mp4',2,440)>0.015,'jeu original conservé en mode compatible');
 assert.deepEqual(frames('muted-mic.mp4'),frames('h264.webm'),'aucune perte vidéo avec pistes séparées');
 console.log('✅ Audio : musique stéréo gauche/droite, volumes indépendants, pistes originales sans contamination et vidéo inchangée');
+
+// Régression : un pipe Matroska utilise par défaut des clusters de 32 Ko.
+// Vérifier le vrai muxeur FFmpeg, pas seulement la présence du paramètre.
+const captureArgs = nativeCaptureArgs({ enc:'h264_amf' });
+const pipeData = run(['-i',file('native.mkv'),'-map','0:v:0','-c:v','copy',...captureArgs.slice(captureArgs.lastIndexOf('-f'))]);
+const clusterParser = new WebmClusters(); let clusterCount = 0;
+for(let at=0;at<pipeData.length;at+=65536) clusterCount += clusterParser.push(pipeData.subarray(at,at+65536)).length;
+assert.ok(clusterCount >= 2 && clusterCount <= 4, `3 secondes doivent produire environ 3 segments, obtenu ${clusterCount}`);
+await writeFile(file('pipe-replay.mkv'),pipeData);
+assert.deepEqual(frames('pipe-replay.mkv'),frames('native.mkv'),'la réduction des écritures préserve chaque image');
+console.log(`✅ Fluidité : pipe 1080p60, ${clusterCount} segments pour 3 secondes, toutes les images inchangées`);

@@ -12,5 +12,6 @@ contextBridge.exposeInMainWorld('hc', {
   settings: inv('settings:get'), setSettings: inv('settings:set'), pickFolder: inv('settings:folder'), site: inv('app:site'),
   updGet: inv('update:get'), updCheck: inv('update:check'), updNow: inv('update:now'), updLater: inv('update:later'),
   win: (what) => ipcRenderer.send('win', what),
+  onCaptureStats: on('clips:captureStats'),
   onChanged: on('clips:changed'), onAccount: on('account:changed'), onUpdate: on('update:state'), onMax: on('win:max'), onFocus: on('win:focus'), onLinkLauncher: on('link:launcher'),
 });

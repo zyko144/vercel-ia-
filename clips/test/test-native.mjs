@@ -14,6 +14,7 @@ const secondary = nativeCaptureArgs({...opts, adapter:1, output:2});
 assert.ok(secondary.includes('d3d11va=desktop:1'));
 assert.ok(secondary.some(s => s.includes('ddagrab=output_idx=2')));
 assert.equal(args[args.indexOf('-maxrate') + 1], '48M', 'marge pour les scènes rapides');
+assert.equal(args[args.indexOf('-cluster_size_limit') + 1], '16777216', 'clusters de replay bornés par la durée, pas 32 Ko');
 assert.throws(() => nativeCaptureArgs({...opts, output:-1}));
 assert.throws(()=>nativeCaptureArgs({...opts,enc:'libx264'}));
 assert.ok(!nativeCaptureArgs({...opts,width:1280,sourceHeight:720,enc:'h264_amf'}).some(s => s.includes('scale=')), 'pas de redimensionnement inutile ni agrandissement');
@@ -28,3 +29,19 @@ const rejected=assert.rejects(stopped.ready,/arrêtée/);stopped.stop();await re
 p=child();const failed=startNativeCapture('fake',opts,()=>{},()=>failures++,()=>p);
 const unavailable=assert.rejects(failed.ready,/indisponible/);p.emit('error',Error('indisponible'));await unavailable;
 console.log('✅ Native : source DDA, encodeur matériel, sans upscale, arrêt et erreur de démarrage');
+
+// Relevés progress fragmentés : FPS encodées réellement pendant l'intervalle.
+const realNow = Date.now; let now = 0, measured;
+try {
+  Date.now = () => now;
+  p=child();
+  const monitored=startNativeCapture('fake',{...opts,onStats:s=>measured=s},()=>{},()=>{},()=>p);
+  p.stdout.emit('data',Buffer.from('header')); await monitored.ready;
+  p.stderr.emit('data',Buffer.from('frame=0\ndup_frames=0\ndrop_frames=0\nprogress=continue\n'));
+  now=1000;
+  p.stderr.emit('data',Buffer.from('frame=60\ndup_fra'));
+  p.stderr.emit('data',Buffer.from('mes=2\ndrop_frames=1\nprogress=continue\n'));
+  assert.equal(measured.fps,60); assert.equal(measured.duplicates,2); assert.equal(measured.dropped,1);
+  monitored.stop();
+} finally { Date.now = realNow; }
+console.log('✅ Cadence : relevés fragmentés, FPS, répétitions et pertes mesurées');

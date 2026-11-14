@@ -167,6 +167,7 @@ const inGame = () => fg.full && fg.game !== 'Bureau' && !/^(History Clips|Histor
 
 // ---------- Replay ----------
 let nativeCapture = null, nativeFailed = false, captureBackend = 'compatible';
+let captureStats = null, lastCaptureLog = 0;
 let recSource = null, recDisplayId = null, replayGeneration = 0, replayStarting = false;
 function gameDisplay() {
   if (inGame() && fg.monitor) return screen.getDisplayMatching(screen.screenToDipRect(null, fg.monitor));
@@ -185,7 +186,7 @@ async function pickSource() {
 async function setReplay(on, keepSetting = false) {
   if (on && (mediaJobs.closing || app.quitting)) return;
   if (!on) {
-    replayGeneration++; replayStarting = false;
+    replayGeneration++; replayStarting = false; captureStats = null; send('clips:captureStats', null);
     nativeCapture?.stop(); nativeCapture = null;
     if (recWin && !recWin.isDestroyed()) { recWin.webContents.send('rec:stop'); const w = recWin; setTimeout(() => { if (!w.isDestroyed()) w.destroy(); }, 500); }
     recWin = null; recSource = null; recState = keepSetting && st.replay ? 'wait' : 'off'; changed(); resetRing();
@@ -217,7 +218,16 @@ async function setReplay(on, keepSetting = false) {
         if (!output) throw Error('Sortie Windows ambiguë');
         const bin = await FFMPEG();
         if (generation !== replayGeneration) return;
-        const handle = startNativeCapture(bin, { height: st.height, fps: st.fps, enc, adapter: output.adapter, output: output.output, width: output.width, sourceHeight: output.height }, chunk => buffer.push('video', chunk), () => {
+        const handle = startNativeCapture(bin, { height: st.height, fps: st.fps, enc, adapter: output.adapter, output: output.output, width: output.width, sourceHeight: output.height,
+          onStats: stats => {
+            if (generation !== replayGeneration) return;
+            captureStats = { ...stats, encoder: enc, target: st.fps, at: Date.now() };
+            send('clips:captureStats', captureStats);
+            if (Date.now() - lastCaptureLog > 5000) {
+              lastCaptureLog = Date.now();
+              void writeFile(path.join(app.getPath('userData'), 'capture-diagnostic.json'), JSON.stringify(captureStats)).catch(() => {});
+            }
+          } }, chunk => buffer.push('video', chunk), () => {
           if (generation !== replayGeneration) return;
           nativeFailed = true; notify('Capture de secours', 'La capture native s’est arrêtée. Reprise avec la source compatible.'); restartReplay();
         });
@@ -735,7 +745,7 @@ mediaHandle('clips:discord', async (_e, t, to, guild) => {
 });
 
 // ---------- Réglages ----------
-ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), noMic: Boolean(st.noMic), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, captureBackend, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
+ipcMain.handle('settings:get', () => ({ ...st, noAudio: Boolean(st.noAudio), noMic: Boolean(st.noMic), token: undefined, art: undefined, art2: undefined, exes: undefined, names: undefined, favs: undefined, rec: recState, captureBackend, captureStats, inGame: inGame() ? fg.game : null, dir: ROOT(), version: app.getVersion() }));
 ipcMain.handle('settings:set', (_e, p) => {
   let replayChanged = false; let restart = false;
   if ('replay' in p) { st.replay = Boolean(p.replay); replayChanged = true; }
