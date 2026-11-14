@@ -1,8 +1,8 @@
 {
   "name": "history-clips",
   "productName": "History Clips",
-  "version": "0.9.0",
-  "releaseNotes": "Marqueurs en jeu (F7) affichés sur la timeline, recherche par date, envoi d’un clip à un ami History, statistiques de vues des liens, clip côte à côte (2 points de vue) et liens de partage réparés avec un meilleur aperçu.",
+  "version": "0.9.1",
+  "releaseNotes": "Confirmation « Clip bien enregistré » au style History Clips par-dessus le jeu, avec un carillon désactivable. Qualité vidéo améliorée avec un débit supérieur et un redimensionnement plus net.",
   "description": "Garde tes meilleurs moments de jeu : replay en fond, découpe, galerie par jeu et partage sur Discord",
   "main": "src/main.js",
   "type": "module",
