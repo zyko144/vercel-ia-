@@ -29,7 +29,7 @@ export function encArgs(enc = 'libx264') {
   return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p'];
 }
 /** Arguments ffmpeg : remise en MP4 (durée et avance rapide corrects), avec ou sans découpe. */
-export function ffmpegArgs(src, out, { start = null, end = null, reencode = false, fixup = false, enc = 'libx264' } = {}) {
+export function ffmpegArgs(src, out, { start = null, end = null, reencode = false, fixup = false, enc = 'libx264', gameVolume = 1 } = {}) {
   // fixup : replay recollé (en-tête + dernières secondes) → début abîmé ignoré, horodatage propre
   const a = fixup ? ['-y', '-fflags', '+genpts+discardcorrupt', '-err_detect', 'ignore_err'] : ['-y'];
   if (start != null) a.push('-ss', String(Math.max(0, start)));
@@ -38,14 +38,14 @@ export function ffmpegArgs(src, out, { start = null, end = null, reencode = fals
   a.push('-map', '0:v:0', '-map', '0:a:0?');
   if (reencode) a.push(...encArgs(enc), '-vf', 'setpts=PTS-STARTPTS', '-fps_mode', 'vfr');
   else a.push('-c:v', 'copy');
-  a.push('-af', 'asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0', '-c:a', 'aac', '-b:a', '256k', '-disposition:a:0', 'default', '-movflags', '+faststart', out);
+  a.push('-af', `asetpts=PTS-STARTPTS,aresample=48000:async=1:first_pts=0,volume=${Math.max(0, Math.min(2, gameVolume))}` + (gameVolume > 1 ? ',alimiter=limit=0.95:level=false:latency=true' : ''), '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-disposition:a:0', 'default', '-movflags', '+faststart', out);
   return a;
 }
 /** Jeu + micro audibles sur la piste par défaut ; micro isolé conservé pour le montage. */
-export function micMixArgs(video, mic, out, { videoAudio, delta = 0, volume = 1, enc = 'libx264', copyVideo = false }) {
+export function micMixArgs(video, mic, out, { videoAudio, delta = 0, volume = 1, gameVolume = 1, enc = 'libx264', copyVideo = false }) {
   const shift = delta >= 0 ? `adelay=${Math.round(delta * 1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
-  const graph = (copyVideo ? '' : '[0:v:0]setpts=PTS-STARTPTS[v];') + `[1:a:0]asetpts=PTS-STARTPTS,${shift},volume=${volume}[m];` + (videoAudio ? '[m]asplit[m1][m2];[0:a:0]asetpts=PTS-STARTPTS[a];[a][m1]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=false:latency=true[mix]' : '[m]asplit[mix][m2]');
-  return ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic, '-filter_complex', graph, '-map', copyVideo ? '0:v:0' : '[v]', '-map', '[mix]', '-map', '[m2]', ...(copyVideo ? ['-c:v', 'copy'] : encArgs(enc)), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '256k', '-disposition:a:0', 'default', '-disposition:a:1', '0', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', '-movflags', '+faststart', out];
+  const graph = (copyVideo ? '' : '[0:v:0]setpts=PTS-STARTPTS[v];') + `[1:a:0]asetpts=PTS-STARTPTS,${shift},aresample=48000,asplit[mraw][m2];[mraw]volume=${volume}[m];` + (videoAudio ? `[0:a:0]asetpts=PTS-STARTPTS,aresample=48000,asplit[graw][game];[graw]volume=${gameVolume}[a];[a][m]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=false:latency=true[mix]` : '[m]alimiter=limit=0.95:level=false:latency=true[mix]');
+  return ['-y', '-fflags', '+genpts+discardcorrupt', '-i', video, '-fflags', '+genpts+discardcorrupt', '-i', mic, '-filter_complex', graph, '-map', copyVideo ? '0:v:0' : '[v]', '-map', '[mix]', '-map', '[m2]', ...(videoAudio ? ['-map', '[game]', '-metadata:s:a:2', 'title=Jeu + musique seuls', '-disposition:a:2', '0'] : []), ...(copyVideo ? ['-c:v', 'copy'] : encArgs(enc)), '-fps_mode', 'vfr', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-disposition:a:0', 'default', '-disposition:a:1', '0', '-metadata:s:a:0', 'title=Jeu + micro', '-metadata:s:a:1', 'title=Micro seul', '-movflags', '+faststart', out];
 }
 /** Chemin de ffmpeg dans l'appli installée (hors de l'archive asar). */
 export const unpacked = (p) => String(p ?? '').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
@@ -61,7 +61,9 @@ export function validAccel(accel) {
 export function parseFg(line) {
   const m = String(line ?? '').split('|');
   if (m[0] !== 'FG' || m.length < 8) return null;
-  return { hwnd: m[1], pid: Number(m[2]), full: m[3] === '1', desc: m[4], title: m[5], proc: m[6], exe: m.slice(7).join('|') };
+  const rect = m.slice(8, 12).map(Number);
+  const monitor = rect.length === 4 && rect.every(Number.isFinite) && rect[2] > rect[0] && rect[3] > rect[1] ? { x: rect[0], y: rect[1], width: rect[2]-rect[0], height: rect[3]-rect[1] } : null;
+  return { hwnd: m[1], pid: Number(m[2]), full: m[3] === '1', desc: m[4], title: m[5], proc: m[6], exe: m[7], ...(monitor ? { monitor } : {}) };
 }
 /** Nom à chercher sur Steam pour l'image du jeu (sans « (64-bit) », ® ou suffixes techniques). FiveM = GTA V. */
 export function artTerm(name) {
@@ -82,12 +84,15 @@ export function nativeMixArgs(video, audio, out, duration) {
   const shift = delta => delta >= 0 ? `adelay=${Math.round(delta*1000)}:all=1` : `atrim=start=${(-delta).toFixed(3)},asetpts=PTS-STARTPTS`;
   audio.forEach((a,i) => {
     args.push('-i',a.file);
-    graph.push(`[${i+1}:a:0]asetpts=PTS-STARTPTS,${shift(a.delta)},volume=${a.volume ?? 1},apad` + (a.kind === 'mic' ? `,asplit[a${i}][mic]` : `[a${i}]`));
+    graph.push(`[${i+1}:a:0]asetpts=PTS-STARTPTS,${shift(a.delta)},aresample=48000,apad,asplit[raw${i}][${a.kind === 'mic' ? 'mic' : 'game'}];[raw${i}]volume=${a.volume ?? 1}[a${i}]`);
   });
   if (audio.length) {
     graph.push(`${audio.map((_,i)=>`[a${i}]`).join('')}amix=inputs=${audio.length}:duration=longest:normalize=0,alimiter=limit=0.95:level=false:latency=true[mix]`);
-    args.push('-filter_complex',graph.join(';'),'-map','0:v:0','-map','[mix]','-c:a','aac','-b:a','256k');
-    if (audio.some(a => a.kind === 'mic')) args.push('-map','[mic]','-disposition:a:0','default','-disposition:a:1','0','-metadata:s:a:1','title=Micro seul');
+    args.push('-filter_complex',graph.join(';'),'-map','0:v:0','-map','[mix]','-c:a','aac','-b:a','320k','-ar','48000','-disposition:a:0','default','-metadata:s:a:0','title=Jeu + micro');
+    let track = 1;
+    for (const [kind, title] of [['mic', 'Micro seul'], ['game', 'Jeu + musique seuls']]) if (audio.some(a => a.kind === kind)) {
+      args.push('-map',`[${kind}]`,`-disposition:a:${track}`,'0',`-metadata:s:a:${track}`,'title='+title); track++;
+    }
   } else args.push('-map','0:v:0','-an');
   return [...args,'-c:v','copy','-t',String(duration),'-movflags','+faststart',out];
 }

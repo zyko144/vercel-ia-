@@ -78,6 +78,7 @@ export class WebmClusters {
 }
 
 export class ReplayBuffer {
+  pins = new Map(); retired = new Set(); snapshots = new Set();
   offsets = { video: 0, mic: 0, game: 0 };
   tracks = { game: { parser: new WebmClusters(), files: [], next: 0 }, video: { parser: new WebmClusters(), files: [], next: 0 }, mic: { parser: new WebmClusters(), files: [], next: 0 } };
   closed = false;
@@ -90,29 +91,64 @@ export class ReplayBuffer {
       for (const part of t.parser.push(bytes)) {
         const file = path.join(this.dir, `${kind}-${t.next++}.webm`);
         await writeFile(file, part.data); t.files.push({ file, time: part.time, end: part.end });
-        while (t.files.length > 2 && t.files[1].time < part.time - (this.seconds + 5) * 1000) await rm(t.files.shift().file, { force: true });
+        while (t.files.length > 2 && t.files[1].time < part.time - (this.seconds + 5) * 1000) {
+          const old = t.files.shift().file;
+          if (this.pins.has(old)) this.retired.add(old);
+          else await rm(old, { force: true });
+        }
       }
     });
   }
   snapshot(video, mic, game) {
     if (this.closed) return Promise.reject(Error('Le replay a redémarré. Réessaie dans quelques secondes.'));
-    return this.run(async () => {
+    // Épingler les segments rapidement, puis copier hors de la file de capture.
+    // Un clip long ne doit pas bloquer l'arrivée de nouvelles images pendant sa sauvegarde.
+    const plan = this.run(() => {
       const v = this.tracks.video;
       if (v.files.length < 2) throw Error('Clip pas encore prêt : quelques secondes d’enregistrement sont nécessaires.');
       const cutoff = v.files.at(-1).time - this.seconds * 1000;
       let micSaved = false, gameSaved = false, duration = 0;
+      const tracks = [];
       for (const [kind, dest] of [['video', video], ['mic', mic], ['game', game]]) {
         const t = this.tracks[kind]; if (!t.files.length || !dest) continue;
         let first = t.files.findLastIndex(f => f.time + this.offsets[kind] <= cutoff);
         first = Math.max(0, first);
         if (kind === 'video') duration = (t.files.at(-1).end - t.files[first].time)/1000 + 1/this.fps;
-        await writeFile(dest, t.parser.header);
-        for (const part of t.files.slice(first)) await appendFile(dest, await readFile(part.file));
+        const files = t.files.slice(first).map(part => part.file);
+        for (const file of files) this.pins.set(file, (this.pins.get(file) ?? 0) + 1);
+        tracks.push({ dest, header: t.parser.header, files });
         if (kind === 'mic') micSaved = true;
         if (kind === 'game') gameSaved = true;
       }
-      return { mic: micSaved, game: gameSaved, duration };
+      return { tracks, result: { mic: micSaved, game: gameSaved, duration } };
     });
+    const job = plan.then(async ({ tracks, result }) => {
+      try {
+        for (const { dest, header, files } of tracks) {
+          await writeFile(dest, header);
+          for (const file of files) await appendFile(dest, await readFile(file));
+        }
+        return result;
+      } finally {
+        await this.run(async () => {
+          for (const { files } of tracks) for (const file of files) {
+            const count = this.pins.get(file) - 1;
+            if (count) this.pins.set(file, count);
+            else {
+              this.pins.delete(file);
+              if (this.retired.delete(file)) await rm(file, { force: true });
+            }
+          }
+        });
+      }
+    });
+    this.snapshots.add(job);
+    void job.finally(() => this.snapshots.delete(job)).catch(() => {});
+    return job;
   }
-  close() { this.closed = true; return this.run(() => rm(this.dir, { recursive: true, force: true })); }
+  async close() {
+    this.closed = true;
+    await Promise.allSettled([...this.snapshots]);
+    return this.run(() => rm(this.dir, { recursive: true, force: true }));
+  }
 }

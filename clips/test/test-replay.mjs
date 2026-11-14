@@ -21,6 +21,15 @@ const buffer = new ReplayBuffer(path.join(dir, 'session'), 1);
 // Les deux pistes n’arrivent pas au même rythme et les écritures sont concurrentes.
 await Promise.all([buffer.push('video', stream.subarray(0, 8)), buffer.push('mic', stream), buffer.push('video', stream.subarray(8))]);
 const video = path.join(dir, 'video.webm'), mic = path.join(dir, 'mic.webm');
+let snapshotDone = false;
+const duringCapture = buffer.snapshot(path.join(dir, 'concurrent.webm'), mic).then(() => { snapshotDone = true; });
+await buffer.run(() => {
+  assert.equal(snapshotDone, false, 'la copie ne monopolise pas la file de capture');
+  assert.ok(buffer.pins.size > 0, 'segments protégés pendant la copie');
+});
+await Promise.all([duringCapture, buffer.push('video', Buffer.concat([cluster(15000), cluster(16000)]))]);
+assert.equal(buffer.pins.size, 0, 'segments libérés après copie');
+assert.equal(buffer.retired.size, 0, 'anciens segments épinglés nettoyés');
 const snapshot = buffer.snapshot(video, mic); const closing = buffer.close();
 assert.equal((await snapshot).mic, true); await closing;
 assert.ok((await readFile(video)).length > 0 && (await readFile(mic)).length > 0, 'fermeture attend la copie du clip');

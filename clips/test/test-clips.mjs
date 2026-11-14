@@ -20,6 +20,7 @@ import { artTerm, parseFg } from '../src/core.js';
 const fgv = parseFg('FG|1234|88|1|Rocket League|Rocket League (64-bit, DX11)|RocketLeague|C:\\Jeux\\RL.exe');
 assert.equal(fgv.hwnd, '1234'); assert.equal(fgv.full, true); assert.equal(fgv.exe, 'C:\\Jeux\\RL.exe');
 assert.equal(parseFg('bruit'), null);
+assert.deepEqual(parseFg('FG|1234|88|1|Game|Game|game|C:\\game.exe|-1920|0|0|1080').monitor, { x:-1920, y:0, width:1920, height:1080 });
 assert.equal(artTerm('Rocket League (64-bit, DX11, Cooked)'), 'Rocket League');
 assert.equal(artTerm('FiveM® by Cfx.re'), 'Grand Theft Auto V');
 console.log('✅ History Clips : veilleur de jeu et images');

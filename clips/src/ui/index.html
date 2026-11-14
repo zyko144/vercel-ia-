@@ -57,14 +57,16 @@
           <div class="row"><span>Qualité</span><select id="sHeight"><option value="720">720p (léger)</option><option value="1080">1080p</option><option value="1440">1440p (lourd)</option></select></div>
           <div class="row"><span>Images par seconde</span><select id="sFps"><option value="30">30 i/s (léger)</option><option value="60">60 i/s (fluide)</option></select></div>
           <label class="toggle"><input type="checkbox" id="sAudio"><span></span>Enregistrer le son du PC</label>
+          <div class="row"><span>Volume jeu et musique dans le clip</span><span class="rng"><input type="range" id="sGameVol" min="0" max="200" step="10"><output id="oGameVol">100 %</output></span></div>
           <label class="toggle"><input type="checkbox" id="sMic"><span></span>Enregistrer mon micro (sur une piste à part : coupable au montage)</label>
           <div class="row"><span>Volume du micro dans le clip</span><span class="rng"><input type="range" id="sMicVol" min="0" max="200" step="10"><output id="oMicVol">100 %</output></span></div>
+          <p class="fine">Audio à 48 kHz : musique stéréo préservée, sans réduction de bruit ni gain automatique. Avec le micro, le MP4 conserve aussi les pistes micro seul et jeu + musique seuls, à leur volume d’origine.</p>
           <label class="toggle"><input type="checkbox" id="sSound"><span></span>Petit son de confirmation quand un clip est gardé</label>
         </div>
         <div class="pane glass" data-p="perf">
           <h3>⚡ Performance <small>(pour ne pas perdre de FPS en jeu)</small></h3>
           <label class="toggle"><input type="checkbox" id="sOnlyGame"><span></span>Enregistrer seulement quand un jeu est en plein écran (0 ressource utilisée le reste du temps)</label>
-          <label class="toggle"><input type="checkbox" id="sPriority"><span></span>Priorité au jeu (l’enregistrement passe après le jeu)</label>
+          <label class="toggle"><input type="checkbox" id="sPriority"><span></span>Priorité au jeu pendant les exports et le montage</label>
           <div class="row"><span>Réglage rapide</span><div class="seg" id="sPreset"><button data-val="perf">🚀 Max FPS (720p 30)</button><button data-val="eq">⚖ Équilibré (1080p 60)</button><button data-val="qual">💎 Qualité (1440p 60)</button></div></div>
           <p class="fine">L’encodage utilise la carte graphique quand elle le permet. Le mode « Max FPS » coûte le moins en jeu.</p>
         </div>

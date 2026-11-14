@@ -64,3 +64,27 @@ assert.ok(tone('native.mp4',0,440)>0.015);assert.ok(tone('native.mp4',0,880)>0.0
 assert.ok(tone('native.mp4',1,880)>0.015);
 await nativeBuffer.close();
 console.log('✅ Capture native simulée : replay 1080p60, durée bornée, vidéo identique, jeu + micro et piste isolée');
+// Musique stéréo : deux canaux distincts, volumes du mix et pistes originales indépendants.
+run(['-y','-f','lavfi','-i','aevalsrc=0.12*sin(2*PI*440*t)|0.12*sin(2*PI*660*t):s=48000:d=3','-c:a','libopus','-b:a','320k',file('stereo.webm')]);
+run(nativeMixArgs(file('h264.webm'),[
+  {file:file('stereo.webm'),kind:'game',delta:0,volume:0},
+  {file:file('micro.webm'),kind:'mic',delta:0,volume:1},
+],file('stereo-mix.mp4'),3));
+assert.ok(tone('stereo-mix.mp4',0,440)<0.001,'volume jeu à zéro dans le mix');
+assert.ok(tone('stereo-mix.mp4',0,880)>0.015,'micro audible dans le mix');
+assert.ok(tone('stereo-mix.mp4',2,440)>0.015,'musique originale préservée même si volume jeu à zéro');
+assert.ok(tone('stereo-mix.mp4',2,880)<0.001,'aucun micro dans la piste musique');
+const stereo = run(['-i',file('stereo-mix.mp4'),'-map','0:a:2','-vn','-ac','2','-ar','48000','-f','f32le','pipe:1']);
+function channelTone(channel, frequency) {
+  const n=Math.min(stereo.length/8,48000);let real=0,imag=0;
+  for(let i=0;i<n;i++){const v=stereo.readFloatLE(i*8+channel*4);real+=v*Math.cos(2*Math.PI*frequency*i/48000);imag+=v*Math.sin(2*Math.PI*frequency*i/48000);}
+  return Math.hypot(real,imag)/n;
+}
+assert.ok(channelTone(0,440)>0.04 && channelTone(0,660)<0.001,'canal gauche intact');
+assert.ok(channelTone(1,660)>0.04 && channelTone(1,440)<0.001,'canal droit intact');
+run(micMixArgs(file('h264.webm'),file('micro.webm'),file('muted-mic.mp4'),{videoAudio:true,copyVideo:true,volume:0,gameVolume:0.5}));
+assert.ok(tone('muted-mic.mp4',0,880)<0.001,'micro coupé seulement dans le mix');
+assert.ok(tone('muted-mic.mp4',1,880)>0.015,'micro original conservé');
+assert.ok(tone('muted-mic.mp4',2,440)>0.015,'jeu original conservé en mode compatible');
+assert.deepEqual(frames('muted-mic.mp4'),frames('h264.webm'),'aucune perte vidéo avec pistes séparées');
+console.log('✅ Audio : musique stéréo gauche/droite, volumes indépendants, pistes originales sans contamination et vidéo inchangée');

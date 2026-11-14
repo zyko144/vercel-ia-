@@ -13,12 +13,13 @@ window.rec.onStart(async (id, o = {}) => {
     streams.push(stream); return stream;
   };
   const h = [720, 1080, 1440].includes(o.height) ? o.height : 1080, fps = o.fps === 30 ? 30 : 60;
-  const bitrate = Math.round((h === 1440 ? 56 : h === 1080 ? 32 : 16) * (fps === 60 ? 1 : 0.65) * 1_000_000);
+  const bitrate = Math.round((h === 1440 ? 40 : h === 1080 ? 24 : 12) * (fps === 60 ? 1 : 0.65) * 1_000_000);
   try {
     const captureHeight = o.nativeVideo ? 16 : h;
     const video = { width: { ideal: Math.round(captureHeight * 16 / 9), max: Math.round(captureHeight * 16 / 9) }, height: { ideal: captureHeight, max: captureHeight }, frameRate: { ideal: fps, max: fps } };
     const legacy = { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: Math.round(captureHeight * 16 / 9), maxHeight: captureHeight, maxFrameRate: fps } };
-    const screen = own(await navigator.mediaDevices.getDisplayMedia({ video, audio: o.audio !== false })
+    const desktopAudio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 48000, channelCount: 2, suppressLocalAudioPlayback: false };
+    const screen = own(await navigator.mediaDevices.getDisplayMedia({ video, audio: o.audio !== false ? desktopAudio : false })
       .catch(() => navigator.mediaDevices.getUserMedia({ audio: o.audio === false ? false : { mandatory: { chromeMediaSource: 'desktop' } }, video: legacy }))
       .catch(() => navigator.mediaDevices.getDisplayMedia({ video, audio: false })));
     const videoTrack = screen.getVideoTracks()[0];
@@ -32,7 +33,7 @@ window.rec.onStart(async (id, o = {}) => {
       if (alt) { own(alt); const track = alt.getAudioTracks()[0]; alt.getVideoTracks().forEach(t => t.stop()); if (track) screen.addTrack(track); }
     }
     for (const track of screen.getAudioTracks()) if (track.applyConstraints) await track.applyConstraints({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 48000, channelCount: 2 }).catch(() => {});
-    const mic = o.mic ? await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 48000 } }).catch(() => null) : null;
+    const mic = o.mic ? await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 48000, channelCount: 1 } }).catch(() => null) : null;
     if (mic) own(mic);
     if (gen !== generation) return;
     // Un profil h264 SEUL peut être annoncé compatible tout en supprimant l’audio.
@@ -42,9 +43,9 @@ window.rec.onStart(async (id, o = {}) => {
     let v;
     if (o.nativeVideo) {
       screen.getVideoTracks().forEach(t => t.stop());
-      if (screen.getAudioTracks().length) v = new MediaRecorder(new MediaStream(screen.getAudioTracks()), { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 256_000 });
-    } else v = new MediaRecorder(screen, { mimeType, videoBitsPerSecond: bitrate, audioBitsPerSecond: 256_000, videoKeyFrameIntervalDuration: 1000 });
-    const m = mic?.getAudioTracks().length ? new MediaRecorder(mic, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 160_000 }) : null;
+      if (screen.getAudioTracks().length) v = new MediaRecorder(new MediaStream(screen.getAudioTracks()), { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 320_000 });
+    } else v = new MediaRecorder(screen, { mimeType, videoBitsPerSecond: bitrate, audioBitsPerSecond: 320_000, videoKeyFrameIntervalDuration: 1000 });
+    const m = mic?.getAudioTracks().length ? new MediaRecorder(mic, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 256_000 }) : null;
     for (const [r, kind] of [[v, o.nativeVideo ? 'game' : 'video'], [m, 'mic']]) {
       if (!r) continue;
       let pending = Promise.resolve();

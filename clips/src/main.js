@@ -15,6 +15,7 @@ import { promisify } from 'node:util';
 import { localGameArt } from './gameArt.js';
 import { serveMedia } from './mediaFile.js';
 import { startNativeCapture } from './nativeCapture.js';
+import { readCaptureDisplays, matchCaptureDisplay } from './captureDisplay.js';
 import { ReplayBuffer } from './replay.js';
 import { createUpdateController, createMediaJobs } from './updateController.js';
 
@@ -54,7 +55,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'clip', privileges: { standard: 
 
 // ---------- Réglages (fichier JSON dans le dossier de l'appli) ----------
 const DEFAULTS = { replay: true, seconds: 30, height: 1080, fps: 60, audio: true, hotClip: 'F8', hotShot: 'F9', hotMark: 'F7', markers: [], autostart: true, favs: [], names: {},
-  source: 'screen', mic: false, micVol: 100, onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art2: {}, exes: {} };
+  source: 'screen', mic: false, micVol: 100, gameVol: 100, onlyGame: true, gamePriority: true, maxGB: 0, sound: true, theme: 'jaune', art2: {}, exes: {} };
 const SET_FILE = () => path.join(app.getPath('userData'), 'reglages.json');
 let st = { ...DEFAULTS };
 const saveSt = () => writeFile(SET_FILE(), JSON.stringify(st)).catch(() => {});
@@ -126,7 +127,9 @@ while ($true) {
   $mi=New-Object U.W+MONITORINFO; $mi.cb=40; [void][U.W]::GetMonitorInfo([U.W]::MonitorFromWindow($h,2),[ref]$mi)
   $full = [int]($r.L -le $mi.M.L -and $r.T -le $mi.M.T -and $r.R -ge $mi.M.R -and $r.B -ge $mi.M.B)
   $line = "$h|$p|$full"
-  if ($line -ne $last) { $x=Get-Process -Id $p; $last=$line; [Console]::WriteLine("FG|$line|" + $x.MainModule.FileVersionInfo.FileDescription + '|' + $x.MainWindowTitle + '|' + $x.ProcessName + '|' + $x.Path) }
+  $monitor = "$($mi.M.L)|$($mi.M.T)|$($mi.M.R)|$($mi.M.B)"
+  $key = "$line|$monitor"
+  if ($key -ne $last) { $x=Get-Process -Id $p; $last=$key; [Console]::WriteLine("FG|$line|" + $x.MainModule.FileVersionInfo.FileDescription + '|' + $x.MainWindowTitle + '|' + $x.ProcessName + '|' + $x.Path + '|' + $monitor) }
   Start-Sleep -Milliseconds 3000
 }`;
 let fg = { hwnd: '0', full: false, game: 'Bureau', exe: '' };
@@ -152,7 +155,8 @@ function onForeground(v) {
   if (isGame) {
     clearTimeout(noGameTimer);
     // « Jeu seulement » : on capture la fenêtre du jeu, on redémarre si on change de jeu
-    if (!recWin || (st.source === 'game' && recSource !== `window:${fg.hwnd}:0`)) restartReplay();
+    const movedScreen = st.source === 'screen' && fg.monitor && recDisplayId !== gameDisplay().id;
+    if (!recWin || movedScreen || (st.source === 'game' && recSource !== `window:${fg.hwnd}:0`)) restartReplay();
   } else if (wasGame && st.onlyGame) {
     // Revenu sur le bureau : on arrête après 1 min (le replay rend sa mémoire et ne coûte plus rien)
     clearTimeout(noGameTimer);
@@ -163,14 +167,20 @@ const inGame = () => fg.full && fg.game !== 'Bureau' && !/^(History Clips|Histor
 
 // ---------- Replay ----------
 let nativeCapture = null, nativeFailed = false, captureBackend = 'compatible';
-let recSource = null, replayGeneration = 0, replayStarting = false;
+let recSource = null, recDisplayId = null, replayGeneration = 0, replayStarting = false;
+function gameDisplay() {
+  if (inGame() && fg.monitor) return screen.getDisplayMatching(screen.screenToDipRect(null, fg.monitor));
+  return screen.getPrimaryDisplay();
+}
 async function pickSource() {
   if (st.source === 'game' && inGame()) {
     const id = `window:${fg.hwnd}:0`;
     const w = (await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }).catch(() => [])).find((s) => s.id === id);
     if (w) return w;
   }
-  return (await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }).catch(() => []))[0] ?? null;
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }).catch(() => []);
+  const display = gameDisplay();
+  return sources.find(s => String(s.display_id) === String(display.id)) ?? sources[0] ?? null;
 }
 async function setReplay(on, keepSetting = false) {
   if (on && (mediaJobs.closing || app.quitting)) return;
@@ -188,22 +198,26 @@ async function setReplay(on, keepSetting = false) {
   if (generation !== replayGeneration || mediaJobs.closing || app.quitting) return;
   if (!src) { recState = 'error:aucun écran trouvé'; changed(); return; }
   recSource = src.id;
+  recDisplayId = screen.getAllDisplays().find(d => String(d.id) === String(src.display_id))?.id ?? null;
   recWin = new BrowserWindow({ show: false, width: 200, height: 100, webPreferences: { preload: path.join(here, 'recorder.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   const me = recWin; recWin.on('closed', () => { if (recWin === me) recWin = null; });
   resetRing();
   await me.loadFile(path.join(here, 'ui', 'recorder.html'));
   if (generation !== replayGeneration || recWin !== me || me.isDestroyed()) return;
   captureBackend = 'compatible';
-  // DDA output 0 n’est pas un identifiant Electron : activer seulement avec un écran pour éviter de filmer le mauvais.
-  if (process.platform === 'win32' && !nativeFailed && src.id.startsWith('screen:') && screen.getAllDisplays().length === 1) {
+  // Mapper l'écran choisi à sa vraie sortie DXGI, même avec plusieurs écrans / GPU.
+  if (process.platform === 'win32' && !nativeFailed && src.id.startsWith('screen:')) {
     const enc = await bestEncoder();
     if (generation !== replayGeneration) return;
     if (enc !== 'libx264') {
-      const display = screen.getAllDisplays()[0], buffer = replayBuffer;
+      const display = screen.getAllDisplays().find(d => String(d.id) === String(src.display_id)), buffer = replayBuffer;
       try {
+        if (!display) throw Error('Écran introuvable');
+        const output = matchCaptureDisplay(await readCaptureDisplays(), display.bounds, r => screen.screenToDipRect(null, r));
+        if (!output) throw Error('Sortie Windows ambiguë');
         const bin = await FFMPEG();
         if (generation !== replayGeneration) return;
-        const handle = startNativeCapture(bin, { height: st.height, fps: st.fps, enc, width: Math.round(display.size.width * display.scaleFactor), sourceHeight: Math.round(display.size.height * display.scaleFactor) }, chunk => buffer.push('video', chunk), () => {
+        const handle = startNativeCapture(bin, { height: st.height, fps: st.fps, enc, adapter: output.adapter, output: output.output, width: output.width, sourceHeight: output.height }, chunk => buffer.push('video', chunk), () => {
           if (generation !== replayGeneration) return;
           nativeFailed = true; notify('Capture de secours', 'La capture native s’est arrêtée. Reprise avec la source compatible.'); restartReplay();
         });
@@ -220,12 +234,11 @@ async function setReplay(on, keepSetting = false) {
 }
 let restarting = null;
 const restartReplay = () => { clearTimeout(restarting); if (!st.replay) return; setReplay(false); restarting = setTimeout(() => setReplay(true).catch(() => {}), 800); };
-// Priorité au jeu : l'enregistreur et l'encodage vidéo passent après le jeu (moins de FPS perdus)
+// Garder le processus temps réel à priorité normale : le rétrograder peut hacher vidéo et audio en jeu.
 function lowerPriority() {
-  if (!st.gamePriority) return;
   // Ne pas rétrograder le processus GPU : il porte aussi la capture et l’encodeur.
   const pids = [recWin?.webContents.getOSProcessId()].filter(Boolean);
-  for (const pid of pids) { try { os.setPriority(pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } }
+  for (const pid of pids) { try { os.setPriority(pid, os.constants.priority.PRIORITY_NORMAL); } catch { /* pas grave */ } }
 }
 ipcMain.on('rec:state', (e, s) => {
   if (e.sender !== recWin?.webContents) return;
@@ -284,7 +297,7 @@ async function saveClipWork(game) {
     notify('Replay activé', message);
     return { ok: false, error: message };
   }
-  const buffer = replayBuffer, audioWanted = st.audio, micWanted = st.mic, micVolume = st.micVol;
+  const buffer = replayBuffer, audioWanted = st.audio, micWanted = st.mic, micVolume = st.micVol, gameVolume = st.gameVol;
   const label = safeName(game ?? (inGame() ? fg.game : 'Bureau')) || 'Clip';
   const dir = path.join(ROOT(), label);
   const tmp = path.join(dir, `.${randomUUID()}.webm`), micTmp = `${tmp}.micro.webm`, gameTmp = `${tmp}.game.webm`, encoded = `${tmp}.mp4`;
@@ -298,7 +311,7 @@ async function saveClipWork(game) {
     if (micWanted && !snap.mic) throw Error('Le micro n’a pas encore fourni de son. Vérifie son autorisation puis relance le replay.');
     if (native) {
       const audio = [];
-      for (const [file, kind, volume] of [[snap.game && gameTmp, 'game', 1], [snap.mic && micTmp, 'mic', Math.max(0, Math.min(2, (micVolume ?? 100)/100))]]) if (file) {
+      for (const [file, kind, volume] of [[snap.game && gameTmp, 'game', Math.max(0, Math.min(2, (gameVolume ?? 100)/100))], [snap.mic && micTmp, 'mic', Math.max(0, Math.min(2, (micVolume ?? 100)/100))]]) if (file) {
         const p = await probe(file); if (!p.audio) throw Error('Piste audio native illisible');
         audio.push({ file, kind, delta: p.start - source.start + buffer.offsets[kind]/1000, volume });
       }
@@ -306,9 +319,9 @@ async function saveClipWork(game) {
       if (!(snap.duration > 0)) throw Error('Durée native indisponible');
       await runFfmpeg(nativeMixArgs(tmp, audio, encoded, snap.duration));
     }
-    else if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume);
-    else if (source.h264) await toMp4(tmp, encoded, { fixup: true });
-    else await clean(tmp, encoded, { fixup: true });
+    else if (snap.mic) await withMic(tmp, micTmp, encoded, micVolume, gameVolume);
+    else if (source.h264) await toMp4(tmp, encoded, { fixup: true, gameVolume: (gameVolume ?? 100)/100 });
+    else await clean(tmp, encoded, { fixup: true, gameVolume: (gameVolume ?? 100)/100 });
     const result = await probe(encoded);
     if (!result.dur || ((audioWanted || micWanted) && !result.audio)) throw Error('Le clip produit est incomplet : il n’a pas été ajouté à la galerie.');
     const out = path.join(dir, clipName(label, 'mp4').replace('.mp4', `-${randomUUID().slice(0, 6)}.mp4`));
@@ -320,10 +333,10 @@ async function saveClipWork(game) {
   finally { await Promise.all([tmp, micTmp, gameTmp, encoded].map(f => rm(f, { force: true }).catch(() => {}))); }
 }
 /** Clip avec micro : piste 1 = jeu + micro (volume réglable), piste 2 = micro seul (pour le montage). */
-async function withMic(video, mic, out, micVolume) {
+async function withMic(video, mic, out, micVolume, gameVolume = 100) {
   const [pv, pm] = await Promise.all([probe(video), probe(mic)]);
   if (!pm.audio) throw Error('La piste micro est illisible. Relance le replay avant de réessayer.');
-  const opts = { videoAudio: pv.audio, delta: pm.start - pv.start, volume: Math.max(0, Math.min(2, (micVolume ?? 100) / 100)) };
+  const opts = { videoAudio: pv.audio, delta: pm.start - pv.start, volume: Math.max(0, Math.min(2, (micVolume ?? 100) / 100)), gameVolume: Math.max(0, Math.min(2, gameVolume / 100)) };
   if (pv.h264) {
     try { await runFfmpeg(micMixArgs(video, mic, out, { ...opts, copyVideo: true })); return; } catch { /* Repli si la source ne se remuxe pas. */ }
   }
@@ -332,7 +345,7 @@ async function withMic(video, mic, out, micVolume) {
   catch { await runFfmpeg(micMixArgs(video, mic, out, opts)); }
 }
 const FFMPEG = async () => unpacked((await import('ffmpeg-static')).default);
-const runFfmpeg = async (args) => { const bin = await FFMPEG(); return new Promise((resolve, reject) => { const p = spawn(bin, args, { windowsHide: true, stdio: 'ignore' }); try { os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`)))); }); };
+const runFfmpeg = async (args) => { const bin = await FFMPEG(); return new Promise((resolve, reject) => { const p = spawn(bin, args, { windowsHide: true, stdio: 'ignore' }); try { if (st.gamePriority) os.setPriority(p.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* pas grave */ } p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`)))); }); };
 /** WebM du navigateur → MP4 (durée connue, lecture partout) ; vidéo copiée si possible, sinon réencodée. */
 async function toMp4(src, out, opts = {}) {
   try { await runFfmpeg(ffmpegArgs(src, out, opts)); } catch { await clean(src, out, opts); }
@@ -734,6 +747,7 @@ ipcMain.handle('settings:set', (_e, p) => {
   if (['jaune', 'bleu', 'rouge', 'violet', 'vert', 'rose'].includes(p.theme)) st.theme = p.theme;
   for (const k of ['audio', 'mic', 'onlyGame', 'gamePriority', 'sound']) if (k in p) { st[k] = Boolean(p[k]); if (k !== 'sound') restart = true; }
   if ('micVol' in p) st.micVol = Math.max(0, Math.min(200, Math.round(Number(p.micVol) || 0)));
+  if ('gameVol' in p) st.gameVol = Math.max(0, Math.min(200, Math.round(Number(p.gameVol) || 0)));
   if ('autostart' in p) { st.autostart = Boolean(p.autostart); if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: st.autostart, args: ['--demarrage'] }); }
   for (const k of ['hotClip', 'hotShot', 'hotMark']) {
     if (!(k in p)) continue;

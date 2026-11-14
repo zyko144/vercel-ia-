@@ -494,6 +494,7 @@ async function paintSettings() {
   const s = settings;
   $('sReplay').checked = s.replay; $('sSeconds').value = String(s.seconds); $('sHeight').value = String(s.height); $('sFps').value = String(s.fps);
   $('sAudio').checked = s.audio; $('sMic').checked = Boolean(s.mic); $('sMicVol').value = String(s.micVol ?? 100); $('oMicVol').textContent = `${s.micVol ?? 100} %`; $('sSound').checked = s.sound; $('sOnlyGame').checked = s.onlyGame; $('sPriority').checked = s.gamePriority; $('sAuto').checked = s.autostart;
+  $('sGameVol').value = String(s.gameVol ?? 100); $('oGameVol').textContent = `${s.gameVol ?? 100} %`;
   $('sMax').value = String(s.maxGB ?? 0); $('sDir').textContent = s.dir; $('sVer').textContent = `History Clips ${s.version}`;
   document.querySelectorAll('#sSource button').forEach((b) => b.classList.toggle('on', b.dataset.val === s.source));
   document.querySelectorAll('[data-hk]').forEach((b) => { b.innerHTML = keyText(s[b.dataset.hk]); });
@@ -506,6 +507,8 @@ $('sReplay').addEventListener('change', (e) => setP({ replay: e.target.checked }
 for (const [id, k] of [['sSeconds', 'seconds'], ['sHeight', 'height'], ['sFps', 'fps'], ['sMax', 'maxGB']]) $(id).addEventListener('change', (e) => setP({ [k]: Number(e.target.value) }, '✅ Réglage enregistré'));
 $('sMicVol').addEventListener('input', (e) => { $('oMicVol').textContent = `${e.target.value} %`; });
 $('sMicVol').addEventListener('change', (e) => setP({ micVol: Number(e.target.value) }, '🎙 Volume du micro enregistré'));
+$('sGameVol').addEventListener('input', (e) => { $('oGameVol').textContent = `${e.target.value} %`; });
+$('sGameVol').addEventListener('change', (e) => setP({ gameVol: Number(e.target.value) }, '🎵 Volume du jeu et de la musique enregistré'));
 for (const [id, k] of [['sMic', 'mic'], ['sAudio', 'audio'], ['sSound', 'sound'], ['sOnlyGame', 'onlyGame'], ['sPriority', 'gamePriority'], ['sAuto', 'autostart']]) $(id).addEventListener('change', (e) => setP({ [k]: e.target.checked }, '✅ Réglage enregistré'));
 $('sSource').addEventListener('click', async (e) => { const b = e.target.closest('[data-val]'); if (b) { await setP({ source: b.dataset.val }, b.dataset.val === 'game' ? '🎮 Seul le jeu sera filmé' : '🖥 Tout l’écran sera filmé'); paintSettings(); } });
 $('sPreset').addEventListener('click', async (e) => {
